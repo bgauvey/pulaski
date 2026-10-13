@@ -1,23 +1,51 @@
 @inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
-
-    <main>
-        <div class="top-row px-4">
-            <span class="text-muted small">Pre-alpha</span>
+<div class="shell">
+    <header class="app-header">
+        <button type="button" class="icon-button" aria-label="Toggle navigation" onclick="pulaski.toggleSidebar()">
+            <Icon Name="menu" />
+        </button>
+        <a class="brand" href="">
+            @* Placeholder mark: Pulaski is a working codename. *@
+            <svg class="brand-mark" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="12" />
+                @* A right-pointing arrow turned 30° up, so it points to 2 o'clock. *@
+                <path d="M6.5 12H17M12.5 7.5L17 12l-4.5 4.5" transform="rotate(-30 12 12)" />
+            </svg>
+            <span>Pulaski</span>
+        </a>
+        <span class="chip">Pre-alpha</span>
+        <div class="header-end">
+            <button type="button" class="icon-button" aria-label="Switch light or dark theme" onclick="pulaski.toggleTheme()">
+                <span class="when-light"><Icon Name="moon" /></span>
+                <span class="when-dark"><Icon Name="sun" /></span>
+            </button>
         </div>
+    </header>
 
-        <article class="content px-4">
+    <aside class="app-sidebar">
+        <NavMenu />
+    </aside>
+
+    <main class="app-main">
+        <article class="content">
             @Body
         </article>
     </main>
+
+    <footer class="app-footer">
+        <span>Pulaski @Version</span>
+        <span>Apache 2.0</span>
+    </footer>
 </div>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+    <button type="button" class="dismiss" aria-label="Dismiss"><Icon Name="close" Size="16" /></button>
 </div>
+
+@code {
+    private static readonly string Version =
+        typeof(MainLayout).Assembly.GetName().Version?.ToString(3) ?? "dev";
+}

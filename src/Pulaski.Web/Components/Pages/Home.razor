@@ -23,8 +23,8 @@ else
             <div class="col-6 col-md-4 col-xl-2">
                 <a class="card text-decoration-none h-100" href="work-orders?status=@status">
                     <div class="card-body">
-                        <div class="small text-muted">@Display.Label(status)</div>
-                        <div class="fs-2 fw-semibold">@count</div>
+                        <div class="metric @(count == 0 ? "is-zero" : "")">@count</div>
+                        <div class="fw-semibold">@Display.Label(status)</div>
                     </div>
                 </a>
             </div>
@@ -44,7 +44,7 @@ else
                 var open = _workOrders.Count(w => w.TargetEquipmentId == line.Id && w.Status is "released" or "in_progress");
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     <span><span class="fw-semibold">@line.Code</span> · @line.Name</span>
-                    <span class="badge text-bg-primary rounded-pill" title="Released or in-progress work orders">@open</span>
+                    <span class="chip" title="Released or in-progress work orders">@open open</span>
                 </li>
             }
         </ul>

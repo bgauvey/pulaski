@@ -62,15 +62,16 @@ public static class Display
         return new DateTimeOffset(unspecified, zone.GetUtcOffset(unspecified));
     }
 
-    public static string StatusBadge(string status) => status switch
+    /// <summary>
+    /// Chip classes for a work order status. Work order status is not machine state, so it stays
+    /// neutral: only in-progress orders get the running dot.
+    /// </summary>
+    public static string StatusChip(string status) => status switch
     {
-        "planned" => "text-bg-secondary",
-        "released" => "text-bg-primary",
-        "in_progress" => "text-bg-success",
-        "completed" => "text-bg-info",
-        "closed" => "text-bg-dark",
-        "cancelled" => "text-bg-light border",
-        _ => "text-bg-secondary",
+        "released" => "chip chip-strong",
+        "in_progress" => "chip chip-strong chip-live",
+        "closed" or "cancelled" => "chip chip-muted",
+        _ => "chip",
     };
 
     private static TimeZoneInfo? TryFindZone(string? timeZone) =>

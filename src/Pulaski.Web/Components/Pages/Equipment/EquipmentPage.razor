@@ -28,42 +28,44 @@
         }
         else
         {
-            <table class="table table-hover align-middle">
-                <thead>
-                    <tr>
-                        <th>Code</th>
-                        <th>Name</th>
-                        <th>Level · role</th>
-                        <th>Capabilities</th>
-                        <th class="text-end"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var e in _equipment)
-                    {
-                        <tr class="@(e.IsActive ? "" : "text-muted") @(e.Id == _selectedId ? "table-active" : "")">
-                            <td style="padding-left: @(0.5 + (e.Depth * 1.25))rem">
-                                <span class="fw-semibold">@e.Code</span>
-                            </td>
-                            <td>@e.Name</td>
-                            <td class="small">@Display.Label(e.Level) · @Display.Label(e.EquipmentRole)</td>
-                            <td>
-                                @if (e.TracksState) { <span class="badge text-bg-light border me-1">State</span> }
-                                @if (e.IsSchedulable) { <span class="badge text-bg-light border me-1">Schedulable</span> }
-                                @if (e.HoldsInventory) { <span class="badge text-bg-light border me-1">Inventory</span> }
-                                @if (!e.IsActive) { <span class="badge text-bg-warning">Inactive</span> }
-                            </td>
-                            <td class="text-end text-nowrap">
-                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => StartEdit(e)">Edit</button>
-                                @if (e.Level != "control_module")
-                                {
-                                    <button class="btn btn-sm btn-outline-primary ms-1" @onclick="() => StartCreate(e)">Add child</button>
-                                }
-                            </td>
+            <div class="table-panel">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>Level · role</th>
+                            <th>Capabilities</th>
+                            <th class="text-end"></th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in _equipment)
+                        {
+                            <tr class="@(e.IsActive ? "" : "text-muted") @(e.Id == _selectedId ? "table-active" : "")">
+                                <td style="padding-left: @(1 + (e.Depth * 1.25))rem">
+                                    <span class="fw-semibold">@e.Code</span>
+                                </td>
+                                <td>@e.Name</td>
+                                <td class="small">@Display.Label(e.Level) · @Display.Label(e.EquipmentRole)</td>
+                                <td>
+                                    @if (e.TracksState) { <span class="chip me-1">State</span> }
+                                    @if (e.IsSchedulable) { <span class="chip me-1">Schedulable</span> }
+                                    @if (e.HoldsInventory) { <span class="chip me-1">Inventory</span> }
+                                    @if (!e.IsActive) { <span class="chip chip-muted">Inactive</span> }
+                                </td>
+                                <td class="text-end text-nowrap">
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => StartEdit(e)">Edit</button>
+                                    @if (e.Level != "control_module")
+                                    {
+                                        <button class="btn btn-sm btn-outline-primary ms-1" @onclick="() => StartCreate(e)">Add child</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         }
     </div>
 

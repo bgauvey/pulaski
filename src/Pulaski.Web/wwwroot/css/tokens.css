@@ -1,0 +1,107 @@
+/* Pulaski design tokens. Generated from the Pulaski design system tokens.json
+   (https://claude.ai/artifact/W2uXWs19hqAUfwcnsgsg7k). Edit the design system, then regenerate. */
+
+:root {
+    color-scheme: light;
+    --bg: #eef1f4;
+    --surface: #ffffff;
+    --surface-2: #f6f8fa;
+    --border: #d8dee5;
+    --border-strong: #7d8995;
+    --text: #16202b;
+    --text-muted: #4f5d6b;
+    --text-faint: #5e6b78;
+    --accent: #0b6662;
+    --accent-ink: #ffffff;
+    --accent-soft: #e2f1ef;
+    --focus-ring: var(--accent);
+    --state-producing: #2a9455;
+    --state-waiting: #a86a0b;
+    --state-held: #6a4bb5;
+    --state-stopped: #6e120d;
+    --state-ready: #2d5791;
+    --state-nosignal: #7a848e;
+    --state-unscheduled: #e4e8ec;
+    --success: #1e7d46;
+    --warning: #94600a;
+    --danger: #b3261e;
+    --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+    --type-page-title: 600 26px/32px var(--font-sans);
+    --type-section-title: 600 15px/20px var(--font-sans);
+    --type-body: 400 14px/20px var(--font-sans);
+    --type-body-strong: 600 14px/20px var(--font-sans);
+    --type-label: 600 12px/16px var(--font-sans);
+    --type-caption: 400 12px/16px var(--font-sans);
+    --type-metric: 600 28px/34px var(--font-sans);
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 10px;
+    --radius-full: 999px;
+    --header-height: 60px;
+    --footer-height: 36px;
+    --sidebar-width: 248px;
+    --sidebar-rail: 72px;
+    --touch-target: 44px;
+    --content-max: 1360px;
+}
+
+/* Dark: chosen explicitly, or following the OS when no choice is stored. */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0e1317;
+    --surface: #151c22;
+    --surface-2: #1b242b;
+    --border: #26323c;
+    --border-strong: #63727f;
+    --text: #e5eaee;
+    --text-muted: #a3b0bc;
+    --text-faint: #8593a0;
+    --accent: #4cc2b8;
+    --accent-ink: #0e1317;
+    --accent-soft: #163331;
+    --focus-ring: var(--accent);
+    --state-producing: #7ef0a8;
+    --state-waiting: #e0a23a;
+    --state-held: #9c83e6;
+    --state-stopped: #dc4034;
+    --state-ready: #86b4f0;
+    --state-nosignal: #6d7884;
+    --state-unscheduled: #222c34;
+    --success: #3fb56c;
+    --warning: #e0a23a;
+    --danger: #ef5b4f;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --bg: #0e1317;
+        --surface: #151c22;
+        --surface-2: #1b242b;
+        --border: #26323c;
+        --border-strong: #63727f;
+        --text: #e5eaee;
+        --text-muted: #a3b0bc;
+        --text-faint: #8593a0;
+        --accent: #4cc2b8;
+        --accent-ink: #0e1317;
+        --accent-soft: #163331;
+        --focus-ring: var(--accent);
+        --state-producing: #7ef0a8;
+        --state-waiting: #e0a23a;
+        --state-held: #9c83e6;
+        --state-stopped: #dc4034;
+        --state-ready: #86b4f0;
+        --state-nosignal: #6d7884;
+        --state-unscheduled: #222c34;
+        --success: #3fb56c;
+        --warning: #e0a23a;
+        --danger: #ef5b4f;
+    }
+}

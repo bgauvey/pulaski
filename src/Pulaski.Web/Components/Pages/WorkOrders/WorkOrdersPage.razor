@@ -33,7 +33,7 @@ else if (_workOrders.Count == 0)
 }
 else
 {
-    <div class="table-responsive">
+    <div class="table-panel">
         <table class="table align-middle">
             <thead>
                 <tr>
@@ -70,7 +70,7 @@ else
                             }
                         </td>
                         <td class="small text-nowrap">@Display.SiteTime(wo.DueAt, tz)</td>
-                        <td><span class="badge @Display.StatusBadge(wo.Status)">@Display.Label(wo.Status)</span></td>
+                        <td><span class="@Display.StatusChip(wo.Status)">@Display.Label(wo.Status)</span></td>
                         <td class="text-end text-nowrap">
                             @foreach (var next in wo.NextStatuses)
                             {
