@@ -1,0 +1,120 @@
+@* The equipment hierarchy as a tree grid (WAI-ARIA treegrid): one tab stop, arrow keys move and
+   expand, a click selects, the chevron or a double-click expands. The owner keeps the selection
+   and the expanded set. *@
+@inject IJSRuntime JS
+
+<div class="tree-scroll">
+    <table class="tree-grid" role="treegrid" aria-label="Equipment hierarchy" tabindex="0" data-arrow-keys
+           aria-activedescendant="@(SelectedId is { } id ? RowId(id) : null)"
+           @onkeydown="OnKeyDownAsync">
+        <colgroup>
+            <col class="col-code" />
+            <col class="col-name" />
+            <col class="col-level" />
+            <col class="col-role" />
+            <col class="col-caps" />
+        </colgroup>
+        <thead>
+            <tr>
+                <th scope="col">Code</th>
+                <th scope="col">Name</th>
+                <th scope="col">Level</th>
+                <th scope="col">Role</th>
+                <th scope="col">Capabilities</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Rows)
+            {
+                var item = row.Item;
+                var isDraft = item.Id == DraftId;
+                <tr id="@RowId(item.Id)" role="row"
+                    class="@(item.Id == SelectedId ? "is-selected" : "") @(item.IsActive ? "" : "is-inactive") @(isDraft ? "is-draft" : "") @(row.IsMatch ? "is-match" : "")"
+                    aria-level="@(row.Depth + 1)"
+                    aria-selected="@(item.Id == SelectedId ? "true" : "false")"
+                    aria-expanded="@(row.HasChildren ? (row.IsExpanded ? "true" : "false") : null)"
+                    @key="item.Id"
+                    @onclick="() => OnSelect.InvokeAsync(item.Id)"
+                    @ondblclick="() => ToggleAsync(row)">
+                    <td role="gridcell">
+                        <div class="tree-code" style="padding-left: @(row.Depth * 20)px">
+                            @if (row.HasChildren)
+                            {
+                                <button type="button" class="tree-toggle @(row.IsExpanded ? "is-open" : "")" tabindex="-1"
+                                        aria-label="@(row.IsExpanded ? "Collapse" : "Expand") @item.Code"
+                                        @onclick="() => ToggleAsync(row)" @onclick:stopPropagation="true">
+                                    <Icon Name="chevron-right" Size="16" />
+                                </button>
+                            }
+                            else
+                            {
+                                <span class="tree-toggle-spacer"></span>
+                            }
+                            <span class="tree-code-text">@(isDraft && string.IsNullOrWhiteSpace(item.Code) ? "New equipment" : item.Code)</span>
+                        </div>
+                    </td>
+                    <td role="gridcell" class="cell-text">@item.Name</td>
+                    <td role="gridcell" class="cell-small">@Display.Label(item.Level)</td>
+                    <td role="gridcell" class="cell-small">@Display.Label(item.EquipmentRole)</td>
+                    <td role="gridcell" class="cell-chips">
+                        @if (isDraft)
+                        {
+                            <span class="chip chip-strong">Unsaved</span>
+                        }
+                        else
+                        {
+                            @if (item.TracksState) { <span class="chip">State</span> }
+                            @if (item.IsSchedulable) { <span class="chip">Schedulable</span> }
+                            @if (item.HoldsInventory) { <span class="chip">Inventory</span> }
+                            @if (!item.IsActive) { <span class="chip chip-muted">Inactive</span> }
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    /// <summary>Id of the unsaved row added by "Add child".</summary>
+    public static readonly Guid DraftId = Guid.Empty;
+
+    [Parameter, EditorRequired] public IReadOnlyList<TreeRow> Rows { get; set; } = [];
+    [Parameter] public Guid? SelectedId { get; set; }
+    [Parameter] public EventCallback<Guid> OnSelect { get; set; }
+    [Parameter] public EventCallback<(Guid Id, bool Expanded)> OnExpandedChanged { get; set; }
+
+    private Guid? _revealed;
+
+    private static string RowId(Guid id) => $"eq-{id:N}";
+
+    private Task ToggleAsync(TreeRow row) =>
+        row.HasChildren ? OnExpandedChanged.InvokeAsync((row.Item.Id, !row.IsExpanded)) : Task.CompletedTask;
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        var move = EquipmentTree.Navigate(Rows, SelectedId, e.Key);
+        if (move.Select is { } select)
+        {
+            await OnSelect.InvokeAsync(select);
+        }
+        else if (move.Expand is { } expand)
+        {
+            await OnExpandedChanged.InvokeAsync((expand, true));
+        }
+        else if (move.Collapse is { } collapse)
+        {
+            await OnExpandedChanged.InvokeAsync((collapse, false));
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Keep the selected row in view when it changes (keyboard moves, new rows).
+        if (SelectedId != _revealed && SelectedId is { } id)
+        {
+            _revealed = id;
+            await JS.InvokeVoidAsync("pulaski.ui.reveal", RowId(id));
+        }
+    }
+}

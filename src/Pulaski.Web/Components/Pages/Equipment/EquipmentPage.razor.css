@@ -1,0 +1,87 @@
+/* Tree grid on the left, properties on the right, both filling the viewport and scrolling inside. */
+
+.equipment-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    gap: var(--space-4);
+    height: calc(100vh - var(--header-height) - var(--footer-height) - 2 * var(--space-6) - 56px);
+    min-height: 480px;
+}
+
+.tree-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.tree-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+}
+
+.tree-filter {
+    width: 260px;
+    max-width: 100%;
+    min-height: 32px;
+    margin-left: auto;
+}
+
+.tree-body {
+    flex: 1;
+    min-height: 0;
+}
+
+.tree-empty {
+    margin: 0;
+    padding: var(--space-5) var(--space-4);
+    color: var(--text-muted);
+}
+
+.tree-status {
+    padding: var(--space-1) var(--space-3);
+    border-top: 1px solid var(--border);
+    font: var(--type-caption);
+    color: var(--text-muted);
+}
+
+.props-panel {
+    min-height: 0;
+}
+
+.props-banner {
+    padding: var(--space-3) var(--space-3) 0;
+}
+
+    .props-banner ::deep .alert {
+        margin-bottom: 0;
+    }
+
+@media (max-width: 1099.98px) {
+    .equipment-workspace {
+        grid-template-columns: minmax(0, 1fr);
+        height: auto;
+    }
+
+    .tree-panel {
+        height: 55vh;
+        min-height: 360px;
+    }
+
+    .props-panel {
+        height: 640px;
+    }
+
+    .tree-filter {
+        width: 100%;
+        margin-left: 0;
+    }
+}

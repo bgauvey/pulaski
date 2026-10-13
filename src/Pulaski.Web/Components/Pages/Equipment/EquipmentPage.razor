@@ -3,144 +3,291 @@
 
 <PageTitle>Equipment · Pulaski</PageTitle>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="mb-0">Equipment</h1>
-    @if (_equipment is { Count: 0 })
+<h1>Equipment</h1>
+
+<ProblemAlert Error="_loadError" />
+
+@if (_equipment is null || _types is null)
+{
+    @if (_loadError is null)
     {
-        <button class="btn btn-primary" @onclick="() => StartCreate(null)">Add enterprise</button>
+        <p class="text-muted">Loading…</p>
     }
-</div>
+}
+else
+{
+    var rows = _tree.VisibleRows(_expanded, _filter);
+    var properties = PropertiesForSelection();
 
-<ProblemAlert Error="_error" />
-
-<div class="row g-4">
-    <div class="@(_editorOpen ? "col-lg-7" : "col-12")">
-        @if (_equipment is null)
-        {
-            @if (_error is null)
-            {
-                <p class="text-muted">Loading…</p>
-            }
-        }
-        else if (_equipment.Count == 0)
-        {
-            <p class="text-muted">No equipment yet. Start with the enterprise, then add a site under it.</p>
-        }
-        else
-        {
-            <div class="table-panel">
-                <table class="table table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th>Code</th>
-                            <th>Name</th>
-                            <th>Level · role</th>
-                            <th>Capabilities</th>
-                            <th class="text-end"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var e in _equipment)
-                        {
-                            <tr class="@(e.IsActive ? "" : "text-muted") @(e.Id == _selectedId ? "table-active" : "")">
-                                <td style="padding-left: @(1 + (e.Depth * 1.25))rem">
-                                    <span class="fw-semibold">@e.Code</span>
-                                </td>
-                                <td>@e.Name</td>
-                                <td class="small">@Display.Label(e.Level) · @Display.Label(e.EquipmentRole)</td>
-                                <td>
-                                    @if (e.TracksState) { <span class="chip me-1">State</span> }
-                                    @if (e.IsSchedulable) { <span class="chip me-1">Schedulable</span> }
-                                    @if (e.HoldsInventory) { <span class="chip me-1">Inventory</span> }
-                                    @if (!e.IsActive) { <span class="chip chip-muted">Inactive</span> }
-                                </td>
-                                <td class="text-end text-nowrap">
-                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => StartEdit(e)">Edit</button>
-                                    @if (e.Level != "control_module")
-                                    {
-                                        <button class="btn btn-sm btn-outline-primary ms-1" @onclick="() => StartCreate(e)">Add child</button>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+    <div class="equipment-workspace">
+        <section class="tree-panel" aria-label="Equipment hierarchy">
+            <div class="tree-toolbar" role="toolbar" aria-label="Equipment">
+                <button type="button" class="btn btn-primary btn-sm btn-with-icon" disabled="@(!CanAdd)" @onclick="AddChild">
+                    <Icon Name="plus" Size="16" />@(_equipment.Count == 0 ? "Add enterprise" : "Add child")
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm btn-square" title="Expand all" aria-label="Expand all"
+                        disabled="@(IsFiltering)" @onclick="ExpandAll">
+                    <Icon Name="expand-all" Size="16" />
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm btn-square" title="Collapse all" aria-label="Collapse all"
+                        disabled="@(IsFiltering)" @onclick="CollapseAll">
+                    <Icon Name="collapse-all" Size="16" />
+                </button>
+                <input type="search" class="form-control tree-filter" placeholder="Filter by code or name"
+                       aria-label="Filter equipment by code or name" @bind="_filter" @bind:event="oninput" />
             </div>
-        }
-    </div>
 
-    @if (_editorOpen && _types is not null)
-    {
-        <div class="col-lg-5">
-            <EquipmentEditor @key="_editorKey"
-                             Parent="_parent"
-                             Existing="_existing"
-                             Types="_types"
-                             OnSaved="OnSavedAsync"
-                             OnCancel="CloseEditor" />
+            <div class="tree-body">
+                @if (_equipment.Count == 0 && _draft is null)
+                {
+                    <p class="tree-empty">No equipment yet. Start with the enterprise, then add a site under it.</p>
+                }
+                else if (rows.Count == 0)
+                {
+                    <p class="tree-empty">Nothing matches “@_filter”.</p>
+                }
+                else
+                {
+                    <EquipmentTreeGrid Rows="rows" SelectedId="_selectedId"
+                                       OnSelect="Select" OnExpandedChanged="SetExpanded" />
+                }
+            </div>
+
+            <div class="tree-status">
+                @_equipment.Count items@(IsFiltering ? $" · {rows.Count(r => r.IsMatch)} match" : "")
+            </div>
+        </section>
+
+        <div class="props-panel">
+            <PropertyGrid Items="properties.Items" Title="@properties.Title" Subtitle="@properties.Subtitle"
+                          EmptyText="Select equipment to see its properties."
+                          Disabled="_saving" Revision="_revision" OnChange="OnPropertyChangeAsync"
+                          Banner="@(_propError is null ? null : ErrorBanner)"
+                          Footer="@(_draft is not null && _selectedId == EquipmentTreeGrid.DraftId ? DraftFooter : null)" />
         </div>
-    }
-</div>
+    </div>
+}
 
 @code {
     private IReadOnlyList<EquipmentDto>? _equipment;
     private IReadOnlyList<EquipmentTypeDto>? _types;
-    private ApiException? _error;
-
-    private bool _editorOpen;
-    private int _editorKey;
-    private EquipmentDto? _parent;
-    private EquipmentDto? _existing;
+    private EquipmentTree _tree = new([]);
+    private readonly HashSet<Guid> _expanded = [];
     private Guid? _selectedId;
+    private EquipmentDraft? _draft;
+    private string _filter = "";
+
+    private ApiException? _loadError;
+    private ApiException? _propError;
+    private bool _saving;
+    private int _revision;
+
+    private bool IsFiltering => !string.IsNullOrWhiteSpace(_filter);
+
+    private EquipmentDto? SelectedExisting =>
+        _selectedId is { } id && id != EquipmentTreeGrid.DraftId ? _tree.Find(id) : null;
+
+    private bool CanAdd =>
+        !_saving && _types is not null && _equipment is not null
+        && (_equipment.Count == 0
+            ? _draft is null
+            : SelectedExisting is { } parent && EquipmentProperties.LevelsUnder(parent, _types).Count > 0);
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             _types = await Api.ListEquipmentTypesAsync();
+            await LoadAsync();
+
+            // Open the top of the hierarchy down to the work centers, and select the root.
+            ExpandToDepth(_tree.Roots, depth: 0, maxDepth: 2);
+            _selectedId = _tree.Roots.FirstOrDefault()?.Id;
         }
         catch (ApiException ex)
         {
-            _error = ex;
+            _loadError = ex;
         }
-
-        await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
+        _equipment = await Api.ListEquipmentAsync();
+        RebuildTree();
+    }
+
+    private void RebuildTree()
+    {
+        var items = _equipment ?? [];
+        _tree = new EquipmentTree(_draft is null ? items : [.. items, _draft.AsRow()]);
+    }
+
+    private void ExpandToDepth(IEnumerable<EquipmentDto> nodes, int depth, int maxDepth)
+    {
+        foreach (var node in nodes)
+        {
+            var children = _tree.ChildrenOf(node.Id);
+            if (depth <= maxDepth && children.Count > 0)
+            {
+                _expanded.Add(node.Id);
+                ExpandToDepth(children, depth + 1, maxDepth);
+            }
+        }
+    }
+
+    // ---- Tree ----
+
+    private void Select(Guid id)
+    {
+        if (id != _selectedId)
+        {
+            _selectedId = id;
+            _propError = null;
+        }
+    }
+
+    private void SetExpanded((Guid Id, bool Expanded) change)
+    {
+        if (change.Expanded)
+        {
+            _expanded.Add(change.Id);
+            return;
+        }
+
+        _expanded.Remove(change.Id);
+        if (_selectedId is { } selected && _tree.AncestorsOf(selected).Any(a => a.Id == change.Id))
+        {
+            _selectedId = change.Id;
+        }
+    }
+
+    private void ExpandAll() => _expanded.UnionWith(_tree.Branches());
+
+    private void CollapseAll()
+    {
+        _expanded.Clear();
+        if (_selectedId is { } selected && _tree.AncestorsOf(selected).LastOrDefault() is { } root)
+        {
+            _selectedId = root.Id;
+        }
+    }
+
+    // ---- Properties ----
+
+    private (IReadOnlyList<PropertyItem> Items, string? Title, string? Subtitle) PropertiesForSelection()
+    {
+        if (_selectedId == EquipmentTreeGrid.DraftId && _draft is not null)
+        {
+            var title = string.IsNullOrWhiteSpace(_draft.Code) ? "New equipment" : _draft.Code;
+            return (EquipmentProperties.ForDraft(_draft, _types!), title, $"{Display.Label(_draft.Role)} · unsaved");
+        }
+
+        return SelectedExisting is { } e
+            ? (EquipmentProperties.ForExisting(e, _tree), e.Code, Display.Label(e.EquipmentRole))
+            : ([], null, null);
+    }
+
+    private async Task OnPropertyChangeAsync(PropertyChange change)
+    {
+        if (_selectedId == EquipmentTreeGrid.DraftId && _draft is not null)
+        {
+            EquipmentProperties.ApplyChange(_draft, change, _types!);
+            RebuildTree();
+            return;
+        }
+
+        if (SelectedExisting is not { } equipment || EquipmentProperties.ApplyChange(equipment, change) is not { } request)
+        {
+            return;
+        }
+
+        _saving = true;
+        _propError = null;
         try
         {
-            _equipment = await Api.ListEquipmentAsync();
+            await Api.UpdateEquipmentAsync(equipment.Id, request);
+            await RefreshAsync(equipment.Id);
         }
         catch (ApiException ex)
         {
-            _error = ex;
+            _propError = ex;
+            if (ex.IsConflict)
+            {
+                // Someone else changed it: show their version so the edit can be redone on it.
+                await RefreshAsync(equipment.Id);
+            }
+        }
+        finally
+        {
+            _saving = false;
+            _revision++;
         }
     }
 
-    private void StartCreate(EquipmentDto? parent) => OpenEditor(parent, existing: null);
-
-    private void StartEdit(EquipmentDto existing) => OpenEditor(parent: null, existing);
-
-    private void OpenEditor(EquipmentDto? parent, EquipmentDto? existing)
+    private async Task RefreshAsync(Guid id)
     {
-        _parent = parent;
-        _existing = existing;
-        _selectedId = (existing ?? parent)?.Id;
-        _editorKey++;
-        _editorOpen = true;
+        var fresh = await Api.GetEquipmentAsync(id);
+        _equipment = [.. _equipment!.Select(e => e.Id == id ? fresh : e)];
+        RebuildTree();
     }
 
-    private void CloseEditor()
+    // ---- New equipment ----
+
+    private void AddChild()
     {
-        _editorOpen = false;
-        _selectedId = null;
+        var parent = _equipment!.Count == 0 ? null : SelectedExisting;
+        if (EquipmentProperties.NewDraft(parent, _types!) is not { } draft)
+        {
+            return;
+        }
+
+        _draft = draft;
+        _filter = "";
+        _propError = null;
+        if (parent is not null)
+        {
+            _expanded.Add(parent.Id);
+        }
+
+        RebuildTree();
+        _selectedId = EquipmentTreeGrid.DraftId;
     }
 
-    private async Task OnSavedAsync()
+    private async Task CreateAsync()
     {
-        CloseEditor();
-        await LoadAsync();
+        _saving = true;
+        _propError = null;
+        try
+        {
+            var created = await Api.CreateEquipmentAsync(_draft!.ToRequest());
+            _draft = null;
+            await LoadAsync();
+            _selectedId = created.Id;
+        }
+        catch (ApiException ex)
+        {
+            _propError = ex;
+        }
+        finally
+        {
+            _saving = false;
+            _revision++;
+        }
     }
+
+    private void CancelDraft()
+    {
+        _selectedId = _draft?.Parent?.Id ?? _tree.Roots.FirstOrDefault(r => r.Id != EquipmentTreeGrid.DraftId)?.Id;
+        _draft = null;
+        _propError = null;
+        RebuildTree();
+    }
+
+    private RenderFragment ErrorBanner => @<div class="props-banner"><ProblemAlert Error="_propError" /></div>;
+
+    private RenderFragment DraftFooter =>
+        @<text>
+            <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_saving" @onclick="CancelDraft">Cancel</button>
+            <button type="button" class="btn btn-primary btn-sm" disabled="@_saving" @onclick="CreateAsync">Create</button>
+        </text>;
 }

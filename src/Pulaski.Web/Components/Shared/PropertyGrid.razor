@@ -1,0 +1,197 @@
+@* A property editor in the style of Visual Studio's Properties window: the object's name and type,
+   categorized or alphabetical rows, a search box, inline editors and a description pane.
+   Text edits commit on Enter or blur and Esc reverts; choices commit on selection. The owner
+   applies each change and passes new Items back; bump Revision to reset editors after a failure. *@
+
+<section class="property-grid" aria-label="Properties">
+    <header class="pg-header">
+        <span class="pg-object">@Title</span>
+        @if (!string.IsNullOrEmpty(Subtitle))
+        {
+            <span class="pg-type">@Subtitle</span>
+        }
+    </header>
+
+    <div class="pg-toolbar" role="toolbar" aria-label="Property view">
+        <button type="button" class="pg-tool @(_categorized ? "is-on" : "")" aria-pressed="@_categorized"
+                title="Categorized" aria-label="Categorized" @onclick="() => _categorized = true">
+            <Icon Name="categorized" Size="18" />
+        </button>
+        <button type="button" class="pg-tool @(!_categorized ? "is-on" : "")" aria-pressed="@(!_categorized)"
+                title="Alphabetical" aria-label="Alphabetical" @onclick="() => _categorized = false">
+            <Icon Name="alphabetical" Size="18" />
+        </button>
+        <input type="search" class="pg-search" placeholder="Search properties" aria-label="Search properties"
+               @bind="_search" @bind:event="oninput" />
+    </div>
+
+    @Banner
+
+    <div class="pg-body">
+        @if (Items.Count == 0)
+        {
+            <p class="pg-empty">@EmptyText</p>
+        }
+        else
+        {
+            <table class="pg-table">
+                <colgroup>
+                    <col class="pg-col-name" />
+                    <col />
+                </colgroup>
+                @if (_categorized)
+                {
+                    @foreach (var group in Filtered().GroupBy(i => i.Category))
+                    {
+                        var open = !_collapsed.Contains(group.Key);
+                        <tbody>
+                            <tr class="pg-category">
+                                <th colspan="2" scope="rowgroup">
+                                    <button type="button" class="pg-category-toggle" aria-expanded="@open"
+                                            @onclick="() => ToggleCategory(group.Key)">
+                                        <span class="pg-chevron @(open ? "is-open" : "")"><Icon Name="chevron-right" Size="14" /></span>
+                                        @group.Key
+                                    </button>
+                                </th>
+                            </tr>
+                            @if (open)
+                            {
+                                @foreach (var item in group)
+                                {
+                                    @Row(item)
+                                }
+                            }
+                        </tbody>
+                    }
+                }
+                else
+                {
+                    <tbody>
+                        @foreach (var item in Filtered().OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase))
+                        {
+                            @Row(item)
+                        }
+                    </tbody>
+                }
+            </table>
+        }
+    </div>
+
+    <div class="pg-description" aria-live="polite">
+        @if (Selected is { } selected)
+        {
+            <div class="pg-description-name">@selected.Name</div>
+            <div class="pg-description-text">@selected.Description</div>
+        }
+    </div>
+
+    @if (Footer is not null)
+    {
+        <footer class="pg-footer">@Footer</footer>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<PropertyItem> Items { get; set; } = [];
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string EmptyText { get; set; } = "Nothing selected.";
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>Change it to rebuild every editor from Items (e.g. after a failed save).</summary>
+    [Parameter] public int Revision { get; set; }
+
+    [Parameter] public EventCallback<PropertyChange> OnChange { get; set; }
+    [Parameter] public RenderFragment? Banner { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+
+    private readonly HashSet<string> _collapsed = [];
+    private readonly string _idPrefix = $"pg-{Guid.NewGuid():N}"[..11];
+    private bool _categorized = true;
+    private string _search = "";
+    private string? _selectedKey;
+    private int _localRevision;
+
+    private PropertyItem? Selected => Items.FirstOrDefault(i => i.Key == _selectedKey);
+
+    private IEnumerable<PropertyItem> Filtered() =>
+        string.IsNullOrWhiteSpace(_search)
+            ? Items
+            : Items.Where(i => i.Name.Contains(_search.Trim(), StringComparison.CurrentCultureIgnoreCase));
+
+    private void ToggleCategory(string category)
+    {
+        if (!_collapsed.Remove(category))
+        {
+            _collapsed.Add(category);
+        }
+    }
+
+    private string EditorKey(PropertyItem item) => $"{item.Key}:{Revision}:{_localRevision}";
+
+    private string InputId(PropertyItem item) => $"{_idPrefix}-{item.Key}";
+
+    private async Task CommitAsync(PropertyItem item, string? value)
+    {
+        if (value == item.Value || (string.IsNullOrEmpty(value) && string.IsNullOrEmpty(item.Value)))
+        {
+            return;
+        }
+
+        await OnChange.InvokeAsync(new PropertyChange(item.Key, value));
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            // Recreate the editors so they show the committed values again.
+            _localRevision++;
+        }
+    }
+
+    private RenderFragment Row(PropertyItem item) => __builder =>
+    {
+        var readOnly = item.Editor == PropertyEditor.ReadOnly;
+        <tr class="pg-row @(item.Key == _selectedKey ? "is-selected" : "") @(readOnly ? "is-readonly" : "")"
+            @onclick="() => _selectedKey = item.Key">
+            <th scope="row" class="pg-name">
+                @if (readOnly)
+                {
+                    <span>@item.Name</span>
+                }
+                else
+                {
+                    <label for="@InputId(item)">@item.Name</label>
+                }
+            </th>
+            <td class="pg-value">
+                @switch (item.Editor)
+                {
+                    case PropertyEditor.Text:
+                        <input @key="EditorKey(item)" id="@InputId(item)" class="pg-input" value="@item.Value"
+                               placeholder="@item.Placeholder" maxlength="@item.MaxLength" disabled="@Disabled"
+                               autocomplete="off" spellcheck="false"
+                               @onfocus="() => _selectedKey = item.Key"
+                               @onkeydown="OnKeyDown"
+                               @onchange="e => CommitAsync(item, e.Value as string)" />
+                        break;
+                    case PropertyEditor.Choice:
+                        <select @key="EditorKey(item)" id="@InputId(item)" class="pg-input" value="@item.Value"
+                                disabled="@Disabled"
+                                @onfocus="() => _selectedKey = item.Key"
+                                @onchange="e => CommitAsync(item, e.Value as string)">
+                            @foreach (var choice in item.Choices)
+                            {
+                                <option value="@choice.Value">@choice.Label</option>
+                            }
+                        </select>
+                        break;
+                    default:
+                        <span class="pg-readonly" title="@item.DisplayValue">@item.DisplayValue</span>
+                        break;
+                }
+            </td>
+        </tr>
+    };
+}

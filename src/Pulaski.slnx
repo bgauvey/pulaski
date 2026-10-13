@@ -4,6 +4,7 @@
     <Project Path="../Tests/Pulaski.Application.Tests/Pulaski.Application.Tests.csproj" />
     <Project Path="../Tests/Pulaski.Infrastructure.Tests/Pulaski.Infrastructure.Tests.csproj" />
     <Project Path="../Tests/Pulaski.Testing/Pulaski.Testing.csproj" />
+    <Project Path="../Tests/Pulaski.Web.Tests/Pulaski.Web.Tests.csproj" />
   </Folder>
   <Project Path="Pulaski.Api/Pulaski.Api.csproj" />
   <Project Path="Pulaski.Application/Pulaski.Application.csproj" />
