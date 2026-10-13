@@ -1,0 +1,73 @@
+@page "/"
+@inject PulaskiApiClient Api
+
+<PageTitle>Overview · Pulaski</PageTitle>
+
+<h1>Overview</h1>
+
+<ProblemAlert Error="_error" />
+
+@if (_workOrders is null || _equipment is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    <div class="row g-3 mb-4">
+        @foreach (var status in Display.WorkOrderStatuses)
+        {
+            var count = _workOrders.Count(w => w.Status == status);
+            <div class="col-6 col-md-4 col-xl-2">
+                <a class="card text-decoration-none h-100" href="work-orders?status=@status">
+                    <div class="card-body">
+                        <div class="small text-muted">@Display.Label(status)</div>
+                        <div class="fs-2 fw-semibold">@count</div>
+                    </div>
+                </a>
+            </div>
+        }
+    </div>
+
+    <h2 class="h5">Lines</h2>
+    @if (_lines.Count == 0)
+    {
+        <p class="text-muted">No production lines yet. <a href="equipment">Add equipment</a>.</p>
+    }
+    else
+    {
+        <ul class="list-group mb-4">
+            @foreach (var line in _lines)
+            {
+                var open = _workOrders.Count(w => w.TargetEquipmentId == line.Id && w.Status is "released" or "in_progress");
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><span class="fw-semibold">@line.Code</span> · @line.Name</span>
+                    <span class="badge text-bg-primary rounded-pill" title="Released or in-progress work orders">@open</span>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private IReadOnlyList<WorkOrderDto>? _workOrders;
+    private IReadOnlyList<EquipmentDto>? _equipment;
+    private List<EquipmentDto> _lines = [];
+    private ApiException? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _workOrders = await Api.ListWorkOrdersAsync();
+            _equipment = await Api.ListEquipmentAsync();
+            _lines = [.. _equipment.Where(e => e.EquipmentRole == "production_line")];
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+}

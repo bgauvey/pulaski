@@ -1,0 +1,39 @@
+using Dapper;
+using Npgsql;
+using Pulaski.Application.ReferenceData;
+using Pulaski.Contracts.ReferenceData;
+
+namespace Pulaski.Infrastructure.ReferenceData;
+
+/// <summary>Read side for units and materials.</summary>
+internal sealed class ReferenceDataQueries(NpgsqlDataSource dataSource) : IReferenceDataReadStore
+{
+    private const string Uoms = """
+        SELECT id, code, name, dimension
+        FROM core.uom
+        ORDER BY dimension, code
+        """;
+
+    private const string Materials = """
+        SELECT m.id, m.code, m.name, m.material_type, m.base_uom_id, u.code AS base_uom_code, m.is_active
+        FROM core.material m
+        JOIN core.uom u ON u.id = m.base_uom_id
+        WHERE @IncludeInactive OR m.is_active
+        ORDER BY m.code
+        """;
+
+    public async Task<IReadOnlyList<UomDto>> ListUomsAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<UomDto>(new CommandDefinition(Uoms, cancellationToken: cancellationToken));
+        return rows.AsList();
+    }
+
+    public async Task<IReadOnlyList<MaterialDto>> ListMaterialsAsync(bool includeInactive, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<MaterialDto>(
+            new CommandDefinition(Materials, new { IncludeInactive = includeInactive }, cancellationToken: cancellationToken));
+        return rows.AsList();
+    }
+}

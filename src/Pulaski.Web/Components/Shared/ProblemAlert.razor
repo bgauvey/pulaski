@@ -1,0 +1,29 @@
+@* Shows an API problem: title, detail and any field errors. Renders nothing when Error is null. *@
+
+@if (Error is not null)
+{
+    <div class="alert @(Error.IsConflict ? "alert-warning" : "alert-danger")" role="alert">
+        <strong>@Error.Title</strong>
+        @if (!string.IsNullOrEmpty(Error.Detail))
+        {
+            <div>@Error.Detail</div>
+        }
+        @if (Error.Errors.Count > 0)
+        {
+            <ul class="mb-0 mt-1">
+                @foreach (var (field, messages) in Error.Errors)
+                {
+                    foreach (var message in messages)
+                    {
+                        <li><span class="fw-semibold">@Display.Label(field)</span>: @message</li>
+                    }
+                }
+            </ul>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public ApiException? Error { get; set; }
+}

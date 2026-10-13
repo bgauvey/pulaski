@@ -1,0 +1,57 @@
+namespace Pulaski.Domain.WorkOrders;
+
+/// <summary>A work order (ISA-95 work request): a quantity of one material, routed to an area or line (D-003).</summary>
+public sealed record WorkOrder(
+    Guid Id,
+    Guid SiteId,
+    string OrderNumber,
+    Guid MaterialId,
+    decimal PlannedQty,
+    Guid UomId,
+    Guid? TargetEquipmentId,
+    DateTimeOffset? PlannedStart,
+    DateTimeOffset? PlannedEnd,
+    DateTimeOffset? DueAt,
+    int Priority,
+    string Status,
+    string Origin)
+{
+    public const string LocalOrigin = "local";
+
+    /// <summary>A work order entered in Pulaski rather than imported from the ERP.</summary>
+    /// <exception cref="DomainRuleException">The quantity or planned window is invalid.</exception>
+    public static WorkOrder CreateLocal(
+        Guid id,
+        Guid siteId,
+        string orderNumber,
+        Guid materialId,
+        decimal plannedQty,
+        Guid uomId,
+        Guid? targetEquipmentId,
+        DateTimeOffset? plannedStart,
+        DateTimeOffset? plannedEnd,
+        DateTimeOffset? dueAt,
+        int priority)
+    {
+        if (plannedQty <= 0)
+        {
+            throw new DomainRuleException("Planned quantity must be greater than zero.");
+        }
+
+        if (plannedStart is not null && plannedEnd is not null && plannedEnd <= plannedStart)
+        {
+            throw new DomainRuleException("Planned end must be after planned start.");
+        }
+
+        return new WorkOrder(
+            id, siteId, orderNumber, materialId, plannedQty, uomId, targetEquipmentId,
+            plannedStart, plannedEnd, dueAt, priority, WorkOrderStatus.Planned, LocalOrigin);
+    }
+
+    /// <exception cref="DomainRuleException">The transition is not allowed.</exception>
+    public WorkOrder WithStatus(string status)
+    {
+        WorkOrderStatus.EnsureCanTransition(Status, status);
+        return this with { Status = status };
+    }
+}

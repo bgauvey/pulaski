@@ -1,0 +1,157 @@
+@page "/work-orders"
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>Work orders · Pulaski</PageTitle>
+
+<div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+    <h1 class="mb-0">Work orders</h1>
+    <div class="d-flex gap-2">
+        <select class="form-select" aria-label="Filter by status" value="@Status" @onchange="OnFilterChanged">
+            <option value="">All statuses</option>
+            @foreach (var status in Display.WorkOrderStatuses)
+            {
+                <option value="@status">@Display.Label(status)</option>
+            }
+        </select>
+        <a class="btn btn-primary text-nowrap" href="work-orders/new">New work order</a>
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+
+@if (_workOrders is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_workOrders.Count == 0)
+{
+    <p class="text-muted">No work orders@(string.IsNullOrEmpty(Status) ? "" : $" with status {Display.Label(Status).ToLowerInvariant()}").</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Order</th>
+                    <th>Material</th>
+                    <th class="text-end">Planned qty</th>
+                    <th>Line</th>
+                    <th>Planned window</th>
+                    <th>Due</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var wo in _workOrders)
+                {
+                    var tz = SiteZone(wo.SiteId);
+                    <tr>
+                        <td>
+                            <span class="fw-semibold">@wo.OrderNumber</span>
+                            <div class="small text-muted">@wo.SiteCode</div>
+                        </td>
+                        <td>
+                            @wo.MaterialCode
+                            <div class="small text-muted">@wo.MaterialName</div>
+                        </td>
+                        <td class="text-end text-nowrap">@wo.PlannedQty.ToString("#,##0.###") @wo.UomCode</td>
+                        <td>@wo.TargetEquipmentCode</td>
+                        <td class="small text-nowrap">
+                            @Display.SiteTime(wo.PlannedStart, tz)
+                            @if (wo.PlannedEnd is not null)
+                            {
+                                <br />@Display.SiteTime(wo.PlannedEnd, tz)
+                            }
+                        </td>
+                        <td class="small text-nowrap">@Display.SiteTime(wo.DueAt, tz)</td>
+                        <td><span class="badge @Display.StatusBadge(wo.Status)">@Display.Label(wo.Status)</span></td>
+                        <td class="text-end text-nowrap">
+                            @foreach (var next in wo.NextStatuses)
+                            {
+                                <button class="btn btn-sm @(next == "cancelled" ? "btn-outline-danger" : "btn-outline-primary") ms-1"
+                                        disabled="@(_busyId == wo.Id)"
+                                        @onclick="() => ChangeStatusAsync(wo, next)">
+                                    @Display.StatusAction(wo.Status, next)
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? Status { get; set; }
+
+    private IReadOnlyList<WorkOrderDto>? _workOrders;
+    private Dictionary<Guid, string?> _siteZones = [];
+    private ApiException? _error;
+    private Guid? _busyId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var equipment = await Api.ListEquipmentAsync();
+            _siteZones = equipment.Where(e => e.Level == "site").ToDictionary(e => e.Id, e => e.TimeZone);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _workOrders = await Api.ListWorkOrdersAsync(Status);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private string? SiteZone(Guid siteId) => _siteZones.GetValueOrDefault(siteId);
+
+    private void OnFilterChanged(ChangeEventArgs e)
+    {
+        var status = e.Value as string;
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("status", string.IsNullOrEmpty(status) ? null : status));
+    }
+
+    private async Task ChangeStatusAsync(WorkOrderDto workOrder, string status)
+    {
+        _busyId = workOrder.Id;
+        _error = null;
+        try
+        {
+            await Api.ChangeWorkOrderStatusAsync(
+                workOrder.Id,
+                new ChangeWorkOrderStatusRequest { Version = workOrder.Version, Status = status });
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busyId = null;
+        }
+
+        // Reload either way: after a conflict the user needs the current row and version.
+        await LoadAsync();
+    }
+}

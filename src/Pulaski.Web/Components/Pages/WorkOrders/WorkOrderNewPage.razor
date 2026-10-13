@@ -1,0 +1,191 @@
+@page "/work-orders/new"
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>New work order · Pulaski</PageTitle>
+
+<h1>New work order</h1>
+
+<ProblemAlert Error="_error" />
+
+@if (_sites is null || _materials is null || _uoms is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_sites.Count == 0)
+{
+    <p class="text-muted">Create a site under <a href="equipment">Equipment</a> before adding work orders.</p>
+}
+else
+{
+    <EditForm Model="_form" OnSubmit="SaveAsync" FormName="work-order" class="col-lg-8 col-xl-6">
+        <div class="row g-3">
+            <div class="col-sm-6">
+                <label class="form-label" for="site">Site</label>
+                <InputSelect id="site" class="form-select" @bind-Value="_form.SiteId">
+                    @foreach (var site in _sites)
+                    {
+                        <option value="@site.Id">@site.Code · @site.Name</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label" for="number">Order number</label>
+                <InputText id="number" class="form-control" @bind-Value="_form.OrderNumber" maxlength="50" />
+            </div>
+
+            <div class="col-12">
+                <label class="form-label" for="material">Material</label>
+                <InputSelect id="material" class="form-select" Value="_form.MaterialId" ValueExpression="() => _form.MaterialId"
+                             ValueChanged="(Guid id) => OnMaterialChanged(id)">
+                    <option value="@Guid.Empty">Choose a material…</option>
+                    @foreach (var m in _materials)
+                    {
+                        <option value="@m.Id">@m.Code · @m.Name</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="col-sm-6">
+                <label class="form-label" for="qty">Planned quantity</label>
+                <InputNumber id="qty" class="form-control" @bind-Value="_form.PlannedQty" min="0" step="any" />
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label" for="uom">Unit</label>
+                <InputSelect id="uom" class="form-select" @bind-Value="_form.UomId">
+                    <option value="@Guid.Empty">Choose a unit…</option>
+                    @foreach (var u in _uoms)
+                    {
+                        <option value="@u.Id">@u.Code · @u.Name</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="col-sm-6">
+                <label class="form-label" for="target">Line or area</label>
+                <InputSelect id="target" class="form-select" @bind-Value="_form.TargetEquipmentId">
+                    <option value="">Not routed yet</option>
+                    @foreach (var e in TargetsFor(_form.SiteId))
+                    {
+                        <option value="@e.Id">@e.Code · @e.Name</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label" for="priority">Priority</label>
+                <InputNumber id="priority" class="form-control" @bind-Value="_form.Priority" />
+            </div>
+
+            <div class="col-sm-6">
+                <label class="form-label" for="start">Planned start</label>
+                <InputDate id="start" Type="InputDateType.DateTimeLocal" class="form-control" @bind-Value="_form.PlannedStart" />
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label" for="end">Planned end</label>
+                <InputDate id="end" Type="InputDateType.DateTimeLocal" class="form-control" @bind-Value="_form.PlannedEnd" />
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label" for="due">Due</label>
+                <InputDate id="due" Type="InputDateType.DateTimeLocal" class="form-control" @bind-Value="_form.DueAt" />
+            </div>
+            <div class="col-12 small text-muted">
+                Times are in the site's time zone (@(SiteZone(_form.SiteId) ?? "UTC")).
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary" disabled="@_saving">Create</button>
+            <a class="btn btn-link" href="work-orders">Cancel</a>
+        </div>
+    </EditForm>
+}
+
+@code {
+    private List<EquipmentDto>? _sites;
+    private IReadOnlyList<EquipmentDto> _equipment = [];
+    private IReadOnlyList<MaterialDto>? _materials;
+    private IReadOnlyList<UomDto>? _uoms;
+    private readonly FormModel _form = new();
+    private ApiException? _error;
+    private bool _saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _equipment = await Api.ListEquipmentAsync();
+            _materials = await Api.ListMaterialsAsync();
+            _uoms = await Api.ListUomsAsync();
+            _sites = [.. _equipment.Where(e => e.Level == "site" && e.IsActive)];
+            _form.SiteId = _sites.FirstOrDefault()?.Id ?? Guid.Empty;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    // Work orders route to an area or work center (D-003); jobs later pick the unit.
+    private IEnumerable<EquipmentDto> TargetsFor(Guid siteId) =>
+        _equipment.Where(e => e.SiteId == siteId && e.IsActive && e.Level is "area" or "work_center");
+
+    private string? SiteZone(Guid siteId) => _sites?.FirstOrDefault(s => s.Id == siteId)?.TimeZone;
+
+    private void OnMaterialChanged(Guid materialId)
+    {
+        _form.MaterialId = materialId;
+        if (_materials?.FirstOrDefault(m => m.Id == materialId) is { } material)
+        {
+            _form.UomId = material.BaseUomId;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        var tz = SiteZone(_form.SiteId);
+        try
+        {
+            await Api.CreateWorkOrderAsync(new CreateWorkOrderRequest
+            {
+                SiteId = _form.SiteId,
+                OrderNumber = _form.OrderNumber,
+                MaterialId = _form.MaterialId,
+                PlannedQty = _form.PlannedQty,
+                UomId = _form.UomId,
+                TargetEquipmentId = _form.TargetEquipmentId,
+                PlannedStart = Display.FromSiteLocal(_form.PlannedStart, tz),
+                PlannedEnd = Display.FromSiteLocal(_form.PlannedEnd, tz),
+                DueAt = Display.FromSiteLocal(_form.DueAt, tz),
+                Priority = _form.Priority,
+            });
+            Navigation.NavigateTo("work-orders");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private sealed class FormModel
+    {
+        public Guid SiteId { get; set; }
+        public string OrderNumber { get; set; } = "";
+        public Guid MaterialId { get; set; }
+        public decimal PlannedQty { get; set; }
+        public Guid UomId { get; set; }
+        public Guid? TargetEquipmentId { get; set; }
+        public DateTime? PlannedStart { get; set; }
+        public DateTime? PlannedEnd { get; set; }
+        public DateTime? DueAt { get; set; }
+        public int Priority { get; set; }
+    }
+}

@@ -1,0 +1,16 @@
+# Build output
+bin/
+obj/
+TestResults/
+*.binlog
+
+# IDE and OS
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+.DS_Store
+
+# Local settings that may hold secrets
+appsettings.*.local.json
