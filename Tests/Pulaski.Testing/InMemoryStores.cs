@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.ReferenceData;
+using Pulaski.Application.Scheduling;
 using Pulaski.Application.WorkOrders;
 
 namespace Pulaski.Testing;
@@ -23,6 +24,8 @@ public sealed class InMemoryStores
 
     public InMemoryMaterials Materials { get; } = new();
 
+    public InMemoryScheduling Scheduling { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -34,6 +37,7 @@ public sealed class InMemoryStores
         services.RemoveAll<IWorkOrderReadStore>();
         services.RemoveAll<IMaterialRepository>();
         services.RemoveAll<IReferenceDataReadStore>();
+        services.RemoveAll<ISchedulingReadStore>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -43,6 +47,7 @@ public sealed class InMemoryStores
         services.AddSingleton<IWorkOrderReadStore>(WorkOrders);
         services.AddSingleton<IMaterialRepository>(Materials);
         services.AddSingleton<IReferenceDataReadStore>(Materials);
+        services.AddSingleton<ISchedulingReadStore>(Scheduling);
         return services;
     }
 }

@@ -28,7 +28,8 @@ SELECT v.code, v.name, v.material_type, mc.id, u.id
 FROM (VALUES
     ('PVC-K67',     'PVC compound K67, white',      'raw',      'RESIN',   'kg'),
     ('TIO2-MB',     'TiO2 masterbatch',             'raw',      'RESIN',   'kg'),
-    ('PRF-4410-WH', 'Window frame profile 4410, white', 'finished', 'PROFILE', 'm')
+    ('PRF-4410-WH', 'Window frame profile 4410, white', 'finished', 'PROFILE', 'm'),
+    ('PRF-4410-GY', 'Window frame profile 4410, grey',  'finished', 'PROFILE', 'm')
 ) AS v(code, name, material_type, class_code, uom_code)
 JOIN core.material_class mc ON mc.code = v.class_code
 JOIN core.uom u ON u.code = v.uom_code;
@@ -60,3 +61,31 @@ WITH RECURSIVE pairs AS (
     JOIN core.equipment c ON c.parent_id = p.descendant_id
 )
 SELECT ancestor_id, descendant_id, depth FROM pairs;
+
+-- Scheduling master data (D-014..D-016): what EXT-01 can run and how fast,
+-- run standards seeded from the ideal rate, and a light-to-dark changeover
+-- matrix. The site keeps the default auto changeover policy.
+INSERT INTO core.equipment_capability (equipment_id, material_id, ideal_rate_per_hour, rate_uom_id,
+                                       standard_changeover, is_preferred, effective_from)
+SELECT e.id, m.id, v.rate, u.id, v.changeover, true, '2026-01-01'
+FROM (VALUES
+    ('PRF-4410-WH', 900, interval '45 minutes'),
+    ('PRF-4410-GY', 850, interval '45 minutes')
+) AS v(material_code, rate, changeover)
+JOIN core.material m  ON m.code = v.material_code
+JOIN core.equipment e ON e.code = 'EXT-01'
+JOIN core.uom u       ON u.code = 'm';
+
+INSERT INTO core.run_standard (equipment_id, material_id, uom_id, calculated_rate_per_hour, calculation_basis, calculated_at)
+SELECT c.equipment_id, c.material_id, c.rate_uom_id, c.ideal_rate_per_hour, 'ideal_rate', now()
+FROM core.equipment_capability c;
+
+INSERT INTO core.changeover_rule (site_id, from_material_id, to_material_id, duration, note)
+SELECT site.id, f.id, t.id, v.duration, v.note
+FROM (VALUES
+    ('PRF-4410-WH', 'PRF-4410-GY', interval '30 minutes', 'Light to dark: purge only'),
+    ('PRF-4410-GY', 'PRF-4410-WH', interval '2 hours',    'Dark to light: full purge and screen change')
+) AS v(from_code, to_code, duration, note)
+JOIN core.material f ON f.code = v.from_code
+JOIN core.material t ON t.code = v.to_code
+JOIN core.equipment site ON site.code = 'PLT1' AND site.level = 'site';

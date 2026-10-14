@@ -551,6 +551,8 @@ CREATE TABLE core.job (
     planned_end         timestamptz,
     sequence_rank       numeric(20,10) NOT NULL DEFAULT 0,     -- fractional rank: insert between jobs without renumbering
     is_locked           boolean NOT NULL DEFAULT false,         -- pinned; resequencing skips it
+    earliest_start      timestamptz,                            -- hold until (material arrival, customer window)
+    planned_duration    interval CHECK (planned_duration > interval '0'),  -- non-production jobs; production uses the run standard
     counts_as_planned_downtime boolean NOT NULL DEFAULT false,  -- e.g. planned maintenance excluded from OEE
     status              text NOT NULL DEFAULT 'planned' CHECK (status IN (
                             'planned','scheduled','dispatched','running','paused','completed','closed','cancelled')),
@@ -597,6 +599,64 @@ CREATE TABLE core.job_run (
     CONSTRAINT job_run_no_overlap EXCLUDE USING gist (
         equipment_id WITH =, tstzrange(started_at, ended_at) WITH &&)
 );
+
+-- Per-site scheduling policy (D-015). A site without a row uses the defaults.
+CREATE TABLE core.scheduling_policy (
+    site_id             uuid PRIMARY KEY REFERENCES core.equipment(id),
+    changeover_mode     text NOT NULL DEFAULT 'auto' CHECK (changeover_mode IN ('auto','scheduler')),
+    updated_at          timestamptz NOT NULL DEFAULT now()
+);
+
+-- Planning rate per line and material (D-016). Pulaski writes the calculated
+-- rate (first from the ideal rate, later from run history); a person may set
+-- a modified rate, which is the gold standard until cleared. Runtime of a job
+-- = remaining qty / effective rate. History of changes lives in evt.event.
+CREATE TABLE core.run_standard (
+    id                          uuid PRIMARY KEY DEFAULT uuidv7(),
+    equipment_id                uuid NOT NULL REFERENCES core.equipment(id),
+    material_id                 uuid NOT NULL REFERENCES core.material(id),
+    uom_id                      uuid NOT NULL REFERENCES core.uom(id),          -- rate is uom per hour
+    calculated_rate_per_hour    numeric(18,6) NOT NULL CHECK (calculated_rate_per_hour > 0),
+    calculation_basis           text NOT NULL CHECK (calculation_basis IN ('ideal_rate','run_history')),
+    calculated_at               timestamptz NOT NULL,
+    modified_rate_per_hour      numeric(18,6) CHECK (modified_rate_per_hour > 0),
+    modified_at                 timestamptz,
+    modified_by                 text,
+    modified_note               text,
+    rate_source                 text GENERATED ALWAYS AS (
+                                    CASE WHEN modified_rate_per_hour IS NULL THEN 'calculated' ELSE 'modified' END) STORED,
+    effective_rate_per_hour     numeric(18,6) GENERATED ALWAYS AS (
+                                    coalesce(modified_rate_per_hour, calculated_rate_per_hour)) STORED,
+    created_at                  timestamptz NOT NULL DEFAULT now(),
+    updated_at                  timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT run_standard_uq UNIQUE (equipment_id, material_id),
+    CONSTRAINT run_standard_modified_ck CHECK (
+        (modified_rate_per_hour IS NULL) = (modified_at IS NULL)
+        AND (modified_rate_per_hour IS NULL) = (modified_by IS NULL))
+);
+
+-- Sequence-dependent changeover matrix (D-015). Each side matches a material,
+-- a material class or anything (both NULL); equipment_id NULL means every line
+-- in the site. The most specific active rule wins (see ChangeoverMatrix).
+CREATE TABLE core.changeover_rule (
+    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
+    equipment_id            uuid REFERENCES core.equipment(id),
+    from_material_id        uuid REFERENCES core.material(id),
+    from_material_class_id  uuid REFERENCES core.material_class(id),
+    to_material_id          uuid REFERENCES core.material(id),
+    to_material_class_id    uuid REFERENCES core.material_class(id),
+    duration                interval NOT NULL CHECK (duration >= interval '0'),
+    note                    text,
+    is_active               boolean NOT NULL DEFAULT true,
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    updated_at              timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT changeover_rule_from_ck CHECK (from_material_id IS NULL OR from_material_class_id IS NULL),
+    CONSTRAINT changeover_rule_to_ck   CHECK (to_material_id IS NULL OR to_material_class_id IS NULL)
+);
+CREATE UNIQUE INDEX changeover_rule_uq ON core.changeover_rule
+    (site_id, equipment_id, from_material_id, from_material_class_id, to_material_id, to_material_class_id)
+    NULLS NOT DISTINCT WHERE is_active;
 
 -- =====================================================================
 -- 9. INVENTORY AND GENEALOGY

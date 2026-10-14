@@ -21,6 +21,9 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-011 | UI: Blazor Web App (interactive server) that talks only to the API | Decided | 2026-10-12 |
 | D-012 | Data access: Dapper with parameterized SQL; reads are SELECTs (functions only for complex reused queries), writes run in the command handler's transaction; no procedures from the app | Decided | 2026-10-12 |
 | D-013 | API: CQRS with separate Domain, Application, Contracts, Infrastructure and Api projects | Decided | 2026-10-12 |
+| D-014 | Scheduling: the planner owns line and sequence; Pulaski projects times forward through the calendar. No solver, no automatic assignment | Decided | 2026-10-13 |
+| D-015 | Changeovers: auto-placed placeholders by default; a per-site policy switches to scheduler-placed changeover jobs | Decided | 2026-10-13 |
+| D-016 | Run standards: one line/material row holds a calculated rate and an optional modified rate; a modified rate is the gold standard | Decided | 2026-10-13 |
 
 ## Order hierarchy
 
@@ -139,6 +142,54 @@ PostgreSQL holds both relational and time-series data; there is no TimescaleDB a
 - **Time-partitioned tables:** machine state changes (PackML transitions, modes, stop reasons); job and run state changes; spec and quality samples; lot events (created, consumed, transferred, split, merged, status changed); production counts; the audit event log; and continuous process values (assumed, with shorter retention).
 - **Techniques:** native range partitioning by day or month, BRIN indexes on time columns, rollup tables maintained by a Pulaski worker, and retention by dropping old telemetry partitions. `pg_partman` is optional for partition automation.
 - **Schemas:** relational and time-series data in separate schemas, so a large site can later move telemetry to its own instance.
+
+## Scheduling
+
+The plan is a sequence; times are calculated. The planner decides which line a job runs on and in what order. Pulaski works out when each job will happen and keeps that answer current from live production (D-014, D-015, D-016).
+
+**What the planner owns**
+
+- The line: `job.equipment_id`, which must be schedulable.
+- The order: `job.sequence_rank`, a fractional rank, so a move writes one row.
+- Pins: `is_locked` keeps a job's position when others are resequenced; `earliest_start` holds a job until a time, for example when material arrives.
+
+**What Pulaski calculates: the timeline projection**
+
+A pure function in `Pulaski.Domain.Scheduling` takes one line's open jobs in sequence and returns a segment for each job and each changeover, with warnings. It has no I/O, makes one pass and is recalculated on every read, so the timeline is never stale.
+
+1. The cursor starts at *now*. The running job is projected from its remaining quantity (planned minus good) at its run rate.
+2. Production time = remaining quantity ÷ the line/material run rate (D-016).
+3. Time accrues only inside staffed shift instances, minus calendar exceptions. Shift instances come from the nearest ancestor of the line that has any. If no instances exist, the line is treated as running 24/7 and the timeline says so. Past the last generated shift, the projection continues around the clock and flags the segments.
+4. Changeover time between consecutive production jobs comes from the changeover matrix (below).
+5. Warnings never block: late against the work order due date, no run standard, unit-of-measure mismatch, a missing changeover in scheduler mode, no duration on a non-production job, and beyond the calendar.
+
+The projection is not stored. **Publish** copies the projected times into `job.planned_start` and `planned_end` as the baseline, so schedule adherence (baseline against projection against actual) is a KPI next to OEE.
+
+**Boundary with the charter non-goal (D-014).** Pulaski never picks a line, never reorders jobs on its own and never optimises. The non-goal excludes finite-capacity optimisation. A forward pass over a sequence the planner chose is a calculator, not a scheduler.
+
+**Changeovers (D-015).** `core.scheduling_policy.changeover_mode` is set per site:
+
+| Mode | Behaviour |
+| --- | --- |
+| `auto` (default) | The projection inserts a changeover placeholder wherever the material changes, sized from the matrix. When the next production job is dispatched, the placeholder becomes a real `changeover` job, so its runs and downtime attach somewhere. A changeover job the planner placed explicitly suppresses the placeholder. |
+| `scheduler` | Planners place changeover jobs themselves. The projection sizes them from the matrix unless the job has its own `planned_duration`. It warns where the material changes with no changeover job in between. |
+
+`core.changeover_rule` is the matrix. Each side matches a specific material, a material class or anything. A rule may be limited to one line, and the most specific rule wins. Two consecutive jobs on the same material need no changeover. If no rule matches, the capability's `standard_changeover` for the incoming material applies.
+
+**Run standards (D-016).** `core.run_standard` holds one row per line and material:
+
+- `calculated_rate_per_hour` is written by Pulaski only: first from the capability's ideal rate, later from run history.
+- `modified_rate_per_hour` is written by a person. While it is set, it is the gold standard: recalculation keeps updating the calculated value, so drift stays visible, but never replaces the modified one.
+- `rate_source` is a generated column, `modified` or `calculated`, that tells every reader which value is in force. Clearing the modification returns the row to `calculated`.
+
+A rate rather than a fixed duration is stored, because a job's runtime scales with its quantity. Runtime = quantity ÷ effective rate.
+
+**Build passes**
+
+1. Foundation: decisions, schema, the domain projector, and a read-only timeline API.
+2. Commands: create and sequence jobs, lock, run-standard modify and clear, the scheduling policy, dispatch with changeover materialization, and publish.
+3. Calculated rates from run history (a worker), with drift against the modified standard.
+4. Blazor scheduling board: per-line timeline with drag-to-sequence.
 
 ## Application architecture
 

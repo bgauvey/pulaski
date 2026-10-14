@@ -2,7 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc;
 using Pulaski.Contracts.Common;
+using Pulaski.Application.Scheduling;
 using Pulaski.Contracts.EquipmentModel;
+using Pulaski.Contracts.Scheduling;
 using Pulaski.Contracts.WorkOrders;
 
 namespace Pulaski.Api.Tests;
@@ -92,5 +94,30 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
         var rows = await _client.GetFromJsonAsync<List<WorkOrderDto>>("/api/work-orders");
 
         Assert.Contains(rows!, w => w.Status == "released" && w.NextStatuses.Contains("in_progress"));
+    }
+
+    [Fact]
+    public async Task Line_timeline_returns_projected_segments_and_maps_errors()
+    {
+        var line = factory.Stores.Scheduling.Add(new LinePlanSource
+        {
+            Line = new SchedulingLineRow { Id = Guid.CreateVersion7(), Code = "EXT-01", Name = "Line 1", IsSchedulable = true, ChangeoverMode = "auto" },
+            Jobs =
+            [
+                new PlanJobRow { JobId = Guid.CreateVersion7(), JobNumber = "J-1", JobType = "maintenance", Status = "planned", PlannedDuration = TimeSpan.FromHours(2) },
+            ],
+        }).Line;
+
+        var timeline = await _client.GetFromJsonAsync<LineTimelineDto>($"/api/scheduling/lines/{line.Id}/timeline");
+
+        var segment = Assert.Single(timeline!.Segments);
+        Assert.Equal(("J-1", TimeSpan.FromHours(2)), (segment.JobNumber, segment.End - segment.Start));
+        Assert.Equal("no_shift_calendar", Assert.Single(timeline.Warnings).Code);
+
+        var missing = await _client.GetAsync(new Uri($"/api/scheduling/lines/{Guid.CreateVersion7()}/timeline", UriKind.Relative));
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+
+        var badHorizon = await _client.GetAsync(new Uri($"/api/scheduling/lines/{line.Id}/timeline?horizonDays=0", UriKind.Relative));
+        Assert.Equal(HttpStatusCode.BadRequest, badHorizon.StatusCode);
     }
 }

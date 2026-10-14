@@ -52,6 +52,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   stored; OEE categories are a per-site mapping.
 - Event-first: a command updates relational state and appends a CloudEvents event in the same
   transaction (D-007, D-008). `evt.event` is append-only; corrections are new events.
+- Scheduling (D-014…D-016): the planner owns line + `sequence_rank`; times come from the pure
+  projector in `Pulaski.Domain.Scheduling`, computed on read and stored only on publish.
+  Rates come from `core.run_standard`, where a modified rate beats the calculated one.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
 
 ## Database (`db/schema-draft.sql`)
@@ -76,7 +79,6 @@ Treat these as working assumptions; confirm with Bill before building anything t
 
 - One `core.equipment` table for work centers, work units, machines and storage, typed by ISA-95
   level + role, with capability flags (`tracks_state`, `is_schedulable`, `holds_inventory`).
-- v1 scheduling is dispatch sequencing (`sequence_rank`, planned times), not finite capacity.
 - PackML state 0 `Undefined` records no-signal time so it stays visible in OEE.
 - `ts.process_value` keys on `(equipment_tag_id, occurred_at)` with no surrogate id or FKs.
 - Outbox ordering uses `xid8` transaction ids.
