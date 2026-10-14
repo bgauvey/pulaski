@@ -41,10 +41,10 @@ else
         <ul class="list-group mb-4">
             @foreach (var line in _lines)
             {
-                var open = _workOrders.Count(w => w.TargetEquipmentId == line.Id && w.Status is "released" or "in_progress");
+                var open = _workOrders.Count(w => w.TargetEquipmentId == line.Id && w.Status is "dispatched" or "firmed" or "in_progress");
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     <span><span class="fw-semibold">@line.Code</span> · @line.Name</span>
-                    <span class="chip" title="Released or in-progress work orders">@open open</span>
+                    <span class="chip" title="Dispatched, firmed or in-progress work orders">@open open</span>
                 </li>
             }
         </ul>

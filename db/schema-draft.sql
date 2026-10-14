@@ -253,7 +253,9 @@ CREATE TABLE core.bom_item (
     CONSTRAINT bom_item_uq UNIQUE (bom_id, line_no)
 );
 
--- What a work center / unit can run, and how fast. ideal_rate drives OEE performance.
+-- What a work center / unit can run, and how fast (D-020). A job may only be
+-- placed on a line with a current row for its material. ideal_rate drives OEE
+-- performance and seeds the run standard; standard_crew_size is the labor estimate.
 CREATE TABLE core.equipment_capability (
     id                      uuid PRIMARY KEY DEFAULT uuidv7(),
     equipment_id            uuid NOT NULL REFERENCES core.equipment(id),
@@ -519,7 +521,8 @@ CREATE TABLE core.work_order (
     planned_end                 timestamptz,
     due_at                      timestamptz,
     priority                    integer NOT NULL DEFAULT 0,
-    status                      text NOT NULL DEFAULT 'planned' CHECK (status IN ('planned','released','in_progress','completed','closed','cancelled')),
+    -- plan → dispatch (publish the baseline) → firm (frozen in time) → execute → complete  [D-018]
+    status                      text NOT NULL DEFAULT 'planned' CHECK (status IN ('planned','dispatched','firmed','in_progress','completed','closed','cancelled')),
     origin                      text NOT NULL DEFAULT 'local' CHECK (origin IN ('erp','local')),
     external_system             text,
     external_key                text,
@@ -554,9 +557,12 @@ CREATE TABLE core.job (
     earliest_start      timestamptz,                            -- hold until (material arrival, customer window)
     planned_duration    interval CHECK (planned_duration > interval '0'),  -- non-production jobs; production uses the run standard
     counts_as_planned_downtime boolean NOT NULL DEFAULT false,  -- e.g. planned maintenance excluded from OEE
+    -- planned/dispatched/firmed follow the work order (D-018); the rest is execution
     status              text NOT NULL DEFAULT 'planned' CHECK (status IN (
-                            'planned','scheduled','dispatched','running','paused','completed','closed','cancelled')),
+                            'planned','dispatched','firmed','running','paused','completed','closed','cancelled')),
     dispatched_at       timestamptz,
+    firmed_at           timestamptz,                            -- planned_start is frozen from here on (D-019)
+    replaces_job_id     uuid REFERENCES core.job(id),           -- set on the replacement for a cancelled, started job
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT job_number_uq UNIQUE (site_id, job_number),

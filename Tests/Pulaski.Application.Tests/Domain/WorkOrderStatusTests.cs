@@ -6,15 +6,20 @@ namespace Pulaski.Application.Tests.Domain;
 public class WorkOrderStatusTests
 {
     [Theory]
-    [InlineData(WorkOrderStatus.Planned, WorkOrderStatus.Released)]
-    [InlineData(WorkOrderStatus.Released, WorkOrderStatus.InProgress)]
+    [InlineData(WorkOrderStatus.Planned, WorkOrderStatus.Dispatched)]
+    [InlineData(WorkOrderStatus.Dispatched, WorkOrderStatus.Planned)]
+    [InlineData(WorkOrderStatus.Dispatched, WorkOrderStatus.Firmed)]
+    [InlineData(WorkOrderStatus.Firmed, WorkOrderStatus.InProgress)]
     [InlineData(WorkOrderStatus.InProgress, WorkOrderStatus.Completed)]
     [InlineData(WorkOrderStatus.Completed, WorkOrderStatus.Closed)]
-    [InlineData(WorkOrderStatus.Released, WorkOrderStatus.Cancelled)]
-    public void Allows_forward_transitions(string from, string to) =>
+    [InlineData(WorkOrderStatus.Firmed, WorkOrderStatus.Cancelled)]
+    public void Allows_the_plan_dispatch_firm_execute_complete_path(string from, string to) =>
         Assert.True(WorkOrderStatus.CanTransition(from, to));
 
     [Theory]
+    [InlineData(WorkOrderStatus.Firmed, WorkOrderStatus.Dispatched)]
+    [InlineData(WorkOrderStatus.Firmed, WorkOrderStatus.Planned)]
+    [InlineData(WorkOrderStatus.Dispatched, WorkOrderStatus.InProgress)]
     [InlineData(WorkOrderStatus.Planned, WorkOrderStatus.Closed)]
     [InlineData(WorkOrderStatus.InProgress, WorkOrderStatus.Cancelled)]
     [InlineData(WorkOrderStatus.Closed, WorkOrderStatus.InProgress)]
@@ -36,4 +41,13 @@ public class WorkOrderStatusTests
         Assert.Empty(WorkOrderStatus.NextStatuses(WorkOrderStatus.Closed));
         Assert.Empty(WorkOrderStatus.NextStatuses(WorkOrderStatus.Cancelled));
     }
+
+    [Theory]
+    [InlineData(WorkOrderStatus.Planned, WorkOrderStatus.Dispatched, true)]
+    [InlineData(WorkOrderStatus.Dispatched, WorkOrderStatus.Planned, true)]
+    [InlineData(WorkOrderStatus.Dispatched, WorkOrderStatus.Firmed, true)]
+    [InlineData(WorkOrderStatus.Dispatched, WorkOrderStatus.Cancelled, false)]
+    [InlineData(WorkOrderStatus.Firmed, WorkOrderStatus.InProgress, false)]
+    public void Dispatch_undispatch_and_firm_are_planning_transitions(string from, string to, bool planning) =>
+        Assert.Equal(planning, WorkOrderStatus.IsPlanningTransition(from, to));
 }

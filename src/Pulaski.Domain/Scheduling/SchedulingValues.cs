@@ -12,12 +12,15 @@ public static class JobType
     public static IReadOnlyList<string> All { get; } = [Production, Changeover, Cleaning, Trial, Maintenance];
 }
 
-/// <summary>Job lifecycle values. Values match <c>core.job.status</c>.</summary>
+/// <summary>
+/// Job lifecycle values (D-018). Planned, dispatched and firmed follow the work order; the rest
+/// is execution. Values match <c>core.job.status</c>.
+/// </summary>
 public static class JobStatus
 {
     public const string Planned = "planned";
-    public const string Scheduled = "scheduled";
     public const string Dispatched = "dispatched";
+    public const string Firmed = "firmed";
     public const string Running = "running";
     public const string Paused = "paused";
     public const string Completed = "completed";
@@ -25,13 +28,10 @@ public static class JobStatus
     public const string Cancelled = "cancelled";
 
     /// <summary>Statuses with work still ahead of them; these are the jobs on a line's timeline.</summary>
-    public static IReadOnlyList<string> Open { get; } = [Planned, Scheduled, Dispatched, Running, Paused];
+    public static IReadOnlyList<string> Open { get; } = [Planned, Dispatched, Firmed, Running, Paused];
 
-    /// <summary>Jobs the planner may still move or dispatch.</summary>
-    public static IReadOnlyList<string> Resequenceable { get; } = [Planned, Scheduled];
-
-    /// <summary>Jobs that have not started, so publish may (re)baseline them.</summary>
-    public static IReadOnlyList<string> Publishable { get; } = [Planned, Scheduled, Dispatched];
+    /// <summary>Execution has begun; the job can only be cancelled and replaced (D-019).</summary>
+    public static IReadOnlyList<string> Started { get; } = [Running, Paused];
 }
 
 /// <summary>How changeovers get onto the timeline (D-015). Values match <c>core.scheduling_policy.changeover_mode</c>.</summary>

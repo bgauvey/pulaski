@@ -24,16 +24,16 @@ public sealed record CreateJobCommand(
     DateTimeOffset? EarliestStart,
     Guid? BeforeJobId) : ICommand<CreatedResponse>;
 
-/// <summary>Moves a job before <see cref="BeforeJobId"/> on <see cref="LineId"/>, or to the end of that line (D-014).</summary>
+/// <summary>
+/// Moves a job before <see cref="BeforeJobId"/> on <see cref="LineId"/>, or to the end of that line
+/// (D-014). A firmed job may only change line; it keeps its time, which decides its place (D-019).
+/// </summary>
 public sealed record SequenceJobCommand(Guid Id, long ExpectedVersion, Guid LineId, Guid? BeforeJobId) : ICommand<VersionResponse>;
 
 public sealed record PinJobCommand(Guid Id, long ExpectedVersion, bool IsLocked, DateTimeOffset? EarliestStart) : ICommand<VersionResponse>;
 
-/// <summary>Releases a job to the floor; in auto mode its changeover placeholder becomes a job (D-015).</summary>
-public sealed record DispatchJobCommand(Guid Id, long ExpectedVersion) : ICommand<DispatchJobResponse>;
-
-/// <summary>Copies the line's projected times into the jobs' baseline (D-014).</summary>
-public sealed record PublishScheduleCommand(Guid LineId, int? HorizonDays = null) : ICommand<PublishScheduleResponse>;
+/// <summary>Cancels a job; with <see cref="Replace"/>, a new job takes its slot for the quantity it did not make (D-019).</summary>
+public sealed record CancelJobCommand(Guid Id, long ExpectedVersion, string? Reason, bool Replace) : ICommand<CancelJobResponse>;
 
 internal sealed class CreateJobHandler(
     IUnitOfWork unitOfWork,
@@ -44,9 +44,6 @@ internal sealed class CreateJobHandler(
     IIdGenerator ids,
     TimeProvider timeProvider) : ICommandHandler<CreateJobCommand, CreatedResponse>
 {
-    /// <summary>Work order statuses that may still get jobs.</summary>
-    private static readonly string[] PlannableWorkOrders = [WorkOrderStatus.Planned, WorkOrderStatus.Released, WorkOrderStatus.InProgress];
-
     public async Task<CreatedResponse> HandleAsync(CreateJobCommand command, CancellationToken cancellationToken)
     {
         var production = command.JobType == JobType.Production;
@@ -69,33 +66,34 @@ internal sealed class CreateJobHandler(
         var line = SchedulingRules.RequireLine(
             await scheduling.LockLinesAsync([command.LineId], cancellationToken), command.LineId);
         var at = timeProvider.GetUtcNow();
-        var rank = await SchedulingRules.RankAsync(scheduling, line.Id, command.BeforeJobId, null, at, cancellationToken);
 
-        Job job;
+        WorkOrder? workOrder = null;
         if (production)
         {
-            var workOrder = (await workOrders.GetForShareAsync(command.WorkOrderId!.Value, cancellationToken))?.Value
+            workOrder = (await workOrders.GetForShareAsync(command.WorkOrderId!.Value, cancellationToken))?.Value
                 ?? throw new DomainRuleException($"Work order {command.WorkOrderId} not found.");
             if (workOrder.SiteId != line.SiteId)
             {
                 throw new DomainRuleException($"Work order {workOrder.OrderNumber} belongs to another site than {line.Code}.");
             }
 
-            if (!PlannableWorkOrders.Contains(workOrder.Status))
+            // A dispatched order's plan is published; un-dispatch it to change its jobs (D-018).
+            if (workOrder.Status != WorkOrderStatus.Planned)
             {
-                throw new DomainRuleException($"Work order {workOrder.OrderNumber} is {workOrder.Status}; it cannot get new jobs.");
+                throw new DomainRuleException($"Work order {workOrder.OrderNumber} is {workOrder.Status}; only planned orders get new jobs.");
             }
 
-            job = Job.CreateProduction(
-                ids.NewId(), workOrder.SiteId, workOrder.Id, command.JobNumber.Trim(), line.Id,
-                workOrder.MaterialId, command.PlannedQty!.Value, workOrder.UomId, rank, command.EarliestStart);
+            await SchedulingRules.EnsureEligibleAsync(scheduling, line, workOrder.MaterialId, at, cancellationToken);
         }
-        else
-        {
-            job = Job.CreateActivity(
+
+        var rank = await SchedulingRules.RankAsync(scheduling, line.Id, command.BeforeJobId, null, at, cancellationToken);
+        var job = workOrder is not null
+            ? Job.CreateProduction(
+                ids.NewId(), workOrder.SiteId, workOrder.Id, command.JobNumber.Trim(), line.Id,
+                workOrder.MaterialId, command.PlannedQty!.Value, workOrder.UomId, rank, command.EarliestStart)
+            : Job.CreateActivity(
                 ids.NewId(), line.SiteId!.Value, command.JobType, command.JobNumber.Trim(), line.Id,
                 command.PlannedDuration, command.CountsAsPlannedDowntime, rank, command.EarliestStart);
-        }
 
         var envelope = events.Create(EventTypes.JobCreated, "job", job.Id, new { After = job });
         var version = await scheduling.InsertJobAsync(job, envelope.OccurredAt, cancellationToken);
@@ -125,16 +123,25 @@ internal sealed class SequenceJobHandler(
 
         var (current, lines) = await SchedulingRules.LockJobAsync(
             scheduling, command.Id, command.ExpectedVersion, command.LineId, cancellationToken);
+        var job = current.Value;
         var target = SchedulingRules.RequireLine(lines, command.LineId);
-        if (target.SiteId != current.Value.SiteId)
+        if (target.SiteId != job.SiteId)
         {
             throw new DomainRuleException($"{target.Code} is in another site; jobs cannot move between sites.");
         }
 
-        current.Value.EnsureMovable();
+        job.EnsureMovable(target.Id);
         var at = timeProvider.GetUtcNow();
-        var rank = await SchedulingRules.RankAsync(scheduling, target.Id, command.BeforeJobId, command.Id, at, cancellationToken);
-        var moved = current.Value.MoveTo(target.Id, rank);
+        if (job.MaterialId is { } material)
+        {
+            await SchedulingRules.EnsureEligibleAsync(scheduling, target, material, at, cancellationToken);
+        }
+
+        var before = job.IsFirmed
+            ? await BeforeFirmedStartAsync(target.Id, job.PlannedStart!.Value, at, cancellationToken)
+            : command.BeforeJobId;
+        var rank = await SchedulingRules.RankAsync(scheduling, target.Id, before, job.Id, at, cancellationToken);
+        var moved = job.MoveTo(target.Id, rank);
 
         var envelope = events.Create(
             EventTypes.JobSequenced,
@@ -142,14 +149,27 @@ internal sealed class SequenceJobHandler(
             moved.Id,
             new
             {
-                Before = new { current.Value.EquipmentId, current.Value.SequenceRank },
-                After = new { moved.EquipmentId, moved.SequenceRank, command.BeforeJobId },
+                Before = new { job.EquipmentId, job.SequenceRank },
+                After = new { moved.EquipmentId, moved.SequenceRank, BeforeJobId = before },
             });
         var version = await scheduling.UpdateJobAsync(moved, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return new VersionResponse(version);
+    }
+
+    /// <summary>
+    /// A firmed job keeps its time on the new line, so it goes before the first job projected to
+    /// start after its firmed start (D-019); null puts it at the end.
+    /// </summary>
+    private async Task<Guid?> BeforeFirmedStartAsync(Guid lineId, DateTimeOffset firmedStart, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var source = await scheduling.GetLinePlanAsync(
+            lineId, now, now.AddDays(GetLineTimelineHandler.DefaultHorizonDays), cancellationToken);
+        var timeline = TimelineProjector.Project(TimelineMapping.ToPlan(source!, now));
+        return timeline.Segments
+            .FirstOrDefault(s => s.Kind == SegmentKind.Job && s.Start > firmedStart)?.JobId;
     }
 }
 
@@ -187,173 +207,65 @@ internal sealed class PinJobHandler(
     }
 }
 
-internal sealed class DispatchJobHandler(
+internal sealed class CancelJobHandler(
     IUnitOfWork unitOfWork,
     ISchedulingRepository scheduling,
     IWorkOrderRepository workOrders,
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    TimeProvider timeProvider) : ICommandHandler<DispatchJobCommand, DispatchJobResponse>
+    TimeProvider timeProvider) : ICommandHandler<CancelJobCommand, CancelJobResponse>
 {
-    /// <summary>Work order statuses whose jobs may go to the floor.</summary>
-    private static readonly string[] DispatchableWorkOrders = [WorkOrderStatus.Released, WorkOrderStatus.InProgress];
-
-    public async Task<DispatchJobResponse> HandleAsync(DispatchJobCommand command, CancellationToken cancellationToken)
+    public async Task<CancelJobResponse> HandleAsync(CancelJobCommand command, CancellationToken cancellationToken)
     {
-        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
-
-        var (current, lines) = await SchedulingRules.LockJobAsync(
-            scheduling, command.Id, command.ExpectedVersion, null, cancellationToken);
-        var line = SchedulingRules.RequireLine(lines, current.Value.EquipmentId);
-        var at = timeProvider.GetUtcNow();
-        var dispatched = current.Value.Dispatch(at);
-
-        if (current.Value.WorkOrderId is { } workOrderId)
-        {
-            var workOrder = (await workOrders.GetForShareAsync(workOrderId, cancellationToken))!.Value;
-            if (!DispatchableWorkOrders.Contains(workOrder.Status))
-            {
-                throw new DomainRuleException($"Work order {workOrder.OrderNumber} is {workOrder.Status}; release it before dispatching its jobs.");
-            }
-        }
-
-        Guid? changeoverJobId = null;
-        if (line.ChangeoverMode == ChangeoverMode.Auto && current.Value.JobType == JobType.Production)
-        {
-            changeoverJobId = await MaterializeChangeoverAsync(line, current.Value, at, cancellationToken);
-        }
-
-        var envelope = events.Create(
-            EventTypes.JobDispatched,
-            "job",
-            dispatched.Id,
-            new
-            {
-                Before = new { current.Value.Status },
-                After = new { dispatched.Status, dispatched.DispatchedAt },
-                ChangeoverJobId = changeoverJobId,
-            });
-        var version = await scheduling.UpdateJobAsync(dispatched, envelope.OccurredAt, cancellationToken);
-        await scheduling.AppendStatusChangeAsync(dispatched.Id, current.Value.Status, dispatched.Status, envelope.OccurredAt, cancellationToken);
-        await eventLog.AppendAsync(envelope, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-
-        return new DispatchJobResponse(version, changeoverJobId);
-    }
-
-    /// <summary>
-    /// Turns the placeholder the projection puts in front of <paramref name="job"/> into a dispatched
-    /// changeover job ranked just before it, so the changeover's runs and downtime attach somewhere
-    /// (D-015). It has no fixed duration, so the projection keeps sizing it from the matrix.
-    /// </summary>
-    private async Task<Guid?> MaterializeChangeoverAsync(SchedulingLine line, Job job, DateTimeOffset at, CancellationToken cancellationToken)
-    {
-        var source = await scheduling.GetLinePlanAsync(
-            line.Id, at, at.AddDays(GetLineTimelineHandler.DefaultHorizonDays), cancellationToken);
-        var timeline = TimelineProjector.Project(TimelineMapping.ToPlan(source!, at));
-        var placeholder = timeline.Segments.FirstOrDefault(
-            s => s.Kind == SegmentKind.ChangeoverPlaceholder && s.JobId == job.Id);
-        if (placeholder is null)
-        {
-            return null;
-        }
-
-        var rank = await SchedulingRules.RankAsync(scheduling, line.Id, job.Id, null, at, cancellationToken);
-        var changeover = Job.CreateActivity(
-                ids.NewId(), job.SiteId, JobType.Changeover, job.JobNumber + "-CO", line.Id, null, false, rank, null)
-            .Dispatch(at);
-
-        var envelope = events.Create(
-            EventTypes.JobCreated,
-            "job",
-            changeover.Id,
-            new
-            {
-                After = changeover,
-                ForJobId = job.Id,
-                FromMaterialId = placeholder.FromMaterial?.Id,
-                ToMaterialId = job.MaterialId,
-                placeholder.Changeover,
-            });
-        await scheduling.InsertJobAsync(changeover, envelope.OccurredAt, cancellationToken);
-        await scheduling.AppendStatusChangeAsync(changeover.Id, null, changeover.Status, envelope.OccurredAt, cancellationToken);
-        await eventLog.AppendAsync(envelope, cancellationToken);
-        return changeover.Id;
-    }
-}
-
-internal sealed class PublishScheduleHandler(
-    IUnitOfWork unitOfWork,
-    ISchedulingRepository scheduling,
-    IEventLog eventLog,
-    IEventFactory events,
-    TimeProvider timeProvider) : ICommandHandler<PublishScheduleCommand, PublishScheduleResponse>
-{
-    public async Task<PublishScheduleResponse> HandleAsync(PublishScheduleCommand command, CancellationToken cancellationToken)
-    {
-        var horizon = command.HorizonDays ?? GetLineTimelineHandler.DefaultHorizonDays;
         new Validator()
-            .Require(
-                horizon is > 0 and <= GetLineTimelineHandler.MaxHorizonDays,
-                nameof(command.HorizonDays),
-                $"Must be between 1 and {GetLineTimelineHandler.MaxHorizonDays}.")
+            .Require(command.Reason is null || command.Reason.Length <= 500, nameof(command.Reason), "At most 500 characters.")
             .ThrowIfInvalid();
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
 
-        var lines = await scheduling.LockLinesAsync([command.LineId], cancellationToken);
-        if (lines.Count == 0)
-        {
-            throw new NotFoundException($"Equipment {command.LineId} not found.");
-        }
+        var (current, _) = await SchedulingRules.LockJobAsync(
+            scheduling, command.Id, command.ExpectedVersion, null, cancellationToken);
+        var job = current.Value;
+        var at = timeProvider.GetUtcNow();
+        var cancelled = job.Cancel();
 
-        var line = SchedulingRules.RequireLine(lines, command.LineId);
-        var now = timeProvider.GetUtcNow();
-        var source = await scheduling.GetLinePlanAsync(line.Id, now, now.AddDays(horizon), cancellationToken);
-        var timeline = TimelineProjector.Project(TimelineMapping.ToPlan(source!, now));
-        var jobs = (await scheduling.GetOpenJobsForUpdateAsync(line.Id, cancellationToken)).ToDictionary(j => j.Value.Id);
-
-        // The envelope's time stamps every write, so the baseline and its event agree.
-        var published = new List<(Job Before, Job After)>();
-        foreach (var segment in timeline.Segments.Where(s => s.Kind == SegmentKind.Job))
+        Job? replacement = null;
+        if (command.Replace)
         {
-            if (jobs.TryGetValue(segment.JobId, out var job) && JobStatus.Publishable.Contains(job.Value.Status))
-            {
-                published.Add((job.Value, job.Value.Publish(segment.Start, segment.End)));
-            }
+            var workOrderStatus = job.WorkOrderId is { } workOrderId
+                ? (await workOrders.GetForShareAsync(workOrderId, cancellationToken))!.Value.Status
+                : WorkOrderStatus.Planned;
+            var remaining = (job.PlannedQty ?? 0m) - await scheduling.GetGoodQtyAsync(job.Id, cancellationToken);
+            replacement = job.Replacement(ids.NewId(), remaining, workOrderStatus, at);
         }
 
         var envelope = events.Create(
-            EventTypes.SchedulePublished,
-            "equipment",
-            line.Id,
-            new
-            {
-                ProjectedAt = timeline.ProjectedAt,
-                Jobs = published.Select(p => new { p.After.Id, p.After.PlannedStart, p.After.PlannedEnd }),
-            });
+            EventTypes.JobCancelled,
+            "job",
+            cancelled.Id,
+            new { Before = new { job.Status }, After = new { cancelled.Status }, ReplacementJobId = replacement?.Id },
+            command.Reason);
+        await scheduling.EndOpenRunsAsync(job.Id, envelope.OccurredAt, cancellationToken);
+        var version = await scheduling.UpdateJobAsync(cancelled, envelope.OccurredAt, cancellationToken);
+        await scheduling.AppendStatusChangeAsync(job.Id, job.Status, cancelled.Status, envelope.OccurredAt, cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
 
-        var results = new List<PublishedJobDto>(published.Count);
-        foreach (var (before, after) in published)
+        if (replacement is not null)
         {
-            var version = await scheduling.UpdateJobAsync(after, envelope.OccurredAt, cancellationToken);
-            if (after.Status != before.Status)
-            {
-                await scheduling.AppendStatusChangeAsync(after.Id, before.Status, after.Status, envelope.OccurredAt, cancellationToken);
-            }
-
-            results.Add(new PublishedJobDto(after.Id, after.PlannedStart!.Value, after.PlannedEnd, version));
+            var created = events.Create(EventTypes.JobCreated, "job", replacement.Id, new { After = replacement });
+            await scheduling.InsertJobAsync(replacement, created.OccurredAt, cancellationToken);
+            await scheduling.AppendStatusChangeAsync(replacement.Id, null, replacement.Status, created.OccurredAt, cancellationToken);
+            await eventLog.AppendAsync(created, cancellationToken);
         }
 
-        await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return new PublishScheduleResponse(line.Id, envelope.OccurredAt, results);
+        return new CancelJobResponse(version, replacement?.Id);
     }
 }
 
-/// <summary>Locking order, line checks and rank placement shared by the job commands.</summary>
+/// <summary>Locking order, line checks and rank placement shared by the scheduling commands.</summary>
 internal static class SchedulingRules
 {
     /// <summary>Locks the job's line (and <paramref name="otherLineId"/>, if any), then the job, and checks its version.</summary>
@@ -395,6 +307,16 @@ internal static class SchedulingRules
         }
 
         return line;
+    }
+
+    /// <exception cref="DomainRuleException">The line has no current capability for the material (D-020).</exception>
+    public static async Task EnsureEligibleAsync(
+        ISchedulingRepository scheduling, SchedulingLine line, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        if (!await scheduling.IsEligibleAsync(line.Id, materialId, at, cancellationToken))
+        {
+            throw new DomainRuleException($"Material {materialId} is not set up to run on {line.Code}; add a capability for it first.");
+        }
     }
 
     /// <summary>A rank for the slot before <paramref name="beforeJobId"/>; renumbers the line once if the ranks have run out of room.</summary>

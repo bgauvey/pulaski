@@ -40,6 +40,11 @@ public sealed class InMemoryWorkOrders : IWorkOrderRepository, IWorkOrderReadSto
     public Task<Versioned<WorkOrder>?> GetForShareAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(Find(id));
 
+    /// <summary>Answers <see cref="HasOpenJobsAsync"/>; <see cref="InMemoryStores"/> points it at its scheduling store.</summary>
+    public Func<Guid, bool> OpenJobs { get; set; } = _ => false;
+
+    public Task<bool> HasOpenJobsAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(OpenJobs(id));
+
     public Task<long> InsertAsync(WorkOrder workOrder, DateTimeOffset at, CancellationToken cancellationToken)
     {
         lock (_lock)

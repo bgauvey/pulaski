@@ -115,7 +115,17 @@ internal sealed class ChangeWorkOrderStatusHandler(
             throw new ConflictException($"Work order {current.Value.OrderNumber} was changed by someone else. Reload and try again.");
         }
 
+        if (WorkOrderStatus.IsPlanningTransition(current.Value.Status, command.Status))
+        {
+            throw new DomainRuleException(
+                $"Moving a work order from '{current.Value.Status}' to '{command.Status}' also changes its jobs; use the dispatch, un-dispatch or firm command.");
+        }
+
         var changed = current.Value.WithStatus(command.Status);
+        if (changed.Status == WorkOrderStatus.Cancelled && await workOrders.HasOpenJobsAsync(changed.Id, cancellationToken))
+        {
+            throw new DomainRuleException($"Work order {changed.OrderNumber} still has open jobs; cancel them first.");
+        }
 
         var envelope = events.Create(
             EventTypes.WorkOrderStatusChanged,

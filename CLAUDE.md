@@ -55,11 +55,15 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Scheduling (D-014…D-016): the planner owns line + `sequence_rank`; times come from the pure
   projector in `Pulaski.Domain.Scheduling`, computed on read and stored only on publish.
   Rates come from `core.run_standard`, where a modified rate beats the calculated one.
-- Scheduling writes lock the line's equipment row before any job (D-017), so moves, dispatch and
-  publish on a line serialize without deadlocks. Read the plan inside the transaction after the lock.
+- Work orders are planned, dispatched (= published) and firmed; their jobs follow (D-018). Jobs are
+  placed only on lines with a capability for their material (D-020); firmed jobs keep their time (D-019).
+- Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
+  deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
 
 ## Database (`db/schema-draft.sql`)
+
+- `docs/database.md` documents every table and column. Update it in the same change as the schema.
 
 - IDs are native `uuid` holding UUIDv7, generated in the app with `Guid.CreateVersion7()` behind
   `IIdGenerator` (injectable clock). `uuidv7()` is only a DB default backstop (D-006).

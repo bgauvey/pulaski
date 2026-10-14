@@ -18,6 +18,12 @@ internal sealed class WorkOrderRepository(DbSession session) : IWorkOrderReposit
 
     private const string GetForShare = $"SELECT {Columns} FROM core.work_order WHERE id = @Id FOR SHARE";
 
+    private const string OpenJobs = """
+        SELECT EXISTS (
+            SELECT 1 FROM core.job
+            WHERE work_order_id = @Id AND status IN ('planned','dispatched','firmed','running','paused'))
+        """;
+
     private const string Insert = """
         INSERT INTO core.work_order (id, site_id, order_number, material_id, planned_qty, uom_id,
                                      target_equipment_id, planned_start, planned_end, due_at, priority,
@@ -41,6 +47,9 @@ internal sealed class WorkOrderRepository(DbSession session) : IWorkOrderReposit
         var row = await session.QuerySingleOrDefaultAsync<WorkOrderRow>(GetForUpdate, new { Id = id }, cancellationToken);
         return row?.ToVersioned();
     }
+
+    public Task<bool> HasOpenJobsAsync(Guid id, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(OpenJobs, new { Id = id }, cancellationToken);
 
     public async Task<Versioned<WorkOrder>?> GetForShareAsync(Guid id, CancellationToken cancellationToken)
     {

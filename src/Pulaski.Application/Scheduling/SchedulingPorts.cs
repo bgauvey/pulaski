@@ -39,8 +39,20 @@ public interface ISchedulingRepository
 
     Task<Versioned<Job>?> GetJobForUpdateAsync(Guid jobId, CancellationToken cancellationToken);
 
-    /// <summary>Open jobs on the line, locked <c>FOR UPDATE</c>.</summary>
-    Task<IReadOnlyList<Versioned<Job>>> GetOpenJobsForUpdateAsync(Guid lineId, CancellationToken cancellationToken);
+    /// <summary>The lines the work order's open jobs are on, read without a lock, so the caller can lock them first.</summary>
+    Task<IReadOnlyList<Guid>> GetWorkOrderLinesAsync(Guid workOrderId, CancellationToken cancellationToken);
+
+    /// <summary>The work order's open jobs, locked <c>FOR UPDATE</c>.</summary>
+    Task<IReadOnlyList<Versioned<Job>>> GetWorkOrderJobsForUpdateAsync(Guid workOrderId, CancellationToken cancellationToken);
+
+    /// <summary>True when the line has a capability for the material in effect at <paramref name="at"/> (D-020).</summary>
+    Task<bool> IsEligibleAsync(Guid lineId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Good quantity reported across the job's runs.</summary>
+    Task<decimal> GetGoodQtyAsync(Guid jobId, CancellationToken cancellationToken);
+
+    /// <summary>Ends the job's open run, if any, at <paramref name="at"/>.</summary>
+    Task EndOpenRunsAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken);
 
     /// <summary>
     /// The ranks either side of the slot before <paramref name="beforeJobId"/> (or at the end of
@@ -55,7 +67,7 @@ public interface ISchedulingRepository
     /// <returns>The new row version.</returns>
     Task<long> InsertJobAsync(Job job, DateTimeOffset at, CancellationToken cancellationToken);
 
-    /// <summary>Writes the planner-owned and lifecycle columns: line, rank, pins, status, dispatch time and baseline.</summary>
+    /// <summary>Writes the planner-owned and lifecycle columns: line, rank, pins, status, dispatch and firm times, and baseline.</summary>
     /// <returns>The new row version.</returns>
     Task<long> UpdateJobAsync(Job job, DateTimeOffset at, CancellationToken cancellationToken);
 

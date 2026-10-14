@@ -4,10 +4,12 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Scheduling;
+using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Domain;
 using Pulaski.Domain.Scheduling;
+using Pulaski.Domain.WorkOrders;
 
 namespace Pulaski.Infrastructure.Tests;
 
@@ -163,8 +165,9 @@ public sealed class SchedulingTests(DatabaseFixture db)
     public async Task Jobs_are_created_moved_and_renumbered_in_rank_order()
     {
         var (site, line) = await CreateLineAsync();
-        var (white, _) = await CreateMaterialsAsync();
-        var wo = await CreateWorkOrderAsync(site, white, "released");
+        var (white, black) = await CreateMaterialsAsync();
+        await CanRunAsync(line, white);
+        var wo = await CreateWorkOrderAsync(site, white);
 
         var a = await CreateJobAsync(line, wo, "A");
         var b = await CreateJobAsync(line, wo, "B");
@@ -189,6 +192,11 @@ public sealed class SchedulingTests(DatabaseFixture db)
 
         var duplicate = await Assert.ThrowsAsync<ConflictException>(() => CreateJobAsync(line, wo, "A"));
         Assert.Contains("job number", duplicate.Message, StringComparison.Ordinal);
+
+        // No capability for black on this line (D-020).
+        var blackOrder = await CreateWorkOrderAsync(site, black);
+        var ineligible = await Assert.ThrowsAsync<DomainRuleException>(() => CreateJobAsync(line, blackOrder, "K"));
+        Assert.Contains("capability", ineligible.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -197,8 +205,9 @@ public sealed class SchedulingTests(DatabaseFixture db)
         var (site, line) = await CreateLineAsync();
         var (_, otherLine) = await CreateLineAsync();
         var (white, _) = await CreateMaterialsAsync();
-        var wo = await CreateWorkOrderAsync(site, white, "released");
-        var job = await CreateJobAsync(line, wo, "A");
+        await CanRunAsync(line, white);
+        await CanRunAsync(otherLine, white);
+        var job = await CreateJobAsync(line, await CreateWorkOrderAsync(site, white), "A");
 
         var version = await JobVersionAsync(line, job);
         var otherSite = await Assert.ThrowsAsync<DomainRuleException>(() =>
@@ -217,74 +226,94 @@ public sealed class SchedulingTests(DatabaseFixture db)
     }
 
     [Fact]
-    public async Task Dispatch_materializes_the_changeover_and_publish_writes_the_baseline()
-    {
-        var (site, line) = await CreateLineAsync();
-        var (white, black) = await CreateMaterialsAsync();
-        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
-        {
-            await connection.ExecuteAsync(
-                """
-                INSERT INTO core.run_standard (equipment_id, material_id, uom_id, calculated_rate_per_hour, calculation_basis, calculated_at)
-                VALUES (@line, @white, @uom, 1000, 'ideal_rate', now()), (@line, @black, @uom, 1000, 'ideal_rate', now());
-                INSERT INTO core.changeover_rule (site_id, from_material_id, to_material_id, duration)
-                VALUES (@site, @white, @black, interval '45 minutes');
-                """,
-                new { site, line, white, black, uom = db.UomId });
-        }
-
-        var whiteJob = await CreateJobAsync(line, await CreateWorkOrderAsync(site, white, "released"), "W");
-        var blackJob = await CreateJobAsync(line, await CreateWorkOrderAsync(site, black, "released"), "K");
-
-        var dispatched = await db.SendAsync(new DispatchJobCommand(blackJob, await JobVersionAsync(line, blackJob)));
-
-        var changeover = dispatched.ChangeoverJobId!.Value;
-        var timeline = await QueryAsync(line);
-        Assert.Equal(
-            [(SegmentKind.Job, whiteJob), (SegmentKind.Job, changeover), (SegmentKind.Job, blackJob)],
-            timeline.Segments.Select(s => (s.Kind, s.JobId)));
-        Assert.Equal((JobType.Changeover, JobStatus.Dispatched), (timeline.Segments[1].JobType, timeline.Segments[1].Status));
-        Assert.Equal(TimeSpan.FromMinutes(45), timeline.Segments[1].Work);
-        Assert.Equal(dispatched.Version, timeline.Segments[2].Version);
-
-        var published = await db.SendAsync(new PublishScheduleCommand(line));
-
-        Assert.Equal([whiteJob, changeover, blackJob], published.Jobs.Select(j => j.JobId));
-        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
-        {
-            var rows = (await connection.QueryAsync<(Guid Id, string Status, DateTimeOffset? Start, DateTimeOffset? End)>(
-                "SELECT id, status, planned_start, planned_end FROM core.job WHERE equipment_id = @line ORDER BY sequence_rank",
-                new { line })).ToList();
-            Assert.Equal([JobStatus.Scheduled, JobStatus.Dispatched, JobStatus.Dispatched], rows.Select(r => r.Status));
-            Assert.All(rows, r => Assert.True(r.End > r.Start));
-            Assert.Equal(rows[0].End, rows[1].Start);
-            Assert.Equal(TimeSpan.FromMinutes(45), rows[1].End - rows[1].Start);
-
-            var history = await connection.QueryAsync<(string? From, string To)>(
-                "SELECT from_status, to_status FROM ts.job_status_change WHERE job_id = @blackJob ORDER BY occurred_at, to_status",
-                new { blackJob });
-            Assert.Equal([(null, JobStatus.Planned), (JobStatus.Planned, JobStatus.Dispatched)], history);
-
-            Assert.Equal(
-                [EventTypes.EquipmentCreated, EventTypes.SchedulePublished],
-                await connection.QueryAsync<string>("SELECT type FROM evt.event WHERE subject = @line ORDER BY sequence", new { line }));
-        }
-
-        var baseline = (await QueryAsync(line)).Segments[0];
-        Assert.Equal(published.Jobs[0].PlannedStart, baseline.BaselineStart);
-        Assert.Equal(published.Jobs[0].Version, baseline.Version);
-    }
-
-    [Fact]
-    public async Task Dispatch_refuses_a_job_whose_work_order_is_not_released()
+    public async Task Work_order_is_planned_dispatched_firmed_and_a_started_job_cancelled_and_replaced()
     {
         var (site, line) = await CreateLineAsync();
         var (white, _) = await CreateMaterialsAsync();
-        var job = await CreateJobAsync(line, await CreateWorkOrderAsync(site, white, "planned"), "A");
-        var version = await JobVersionAsync(line, job);
+        await CanRunAsync(line, white);
+        await db.ExecuteAsync(
+            $"""
+            INSERT INTO core.run_standard (equipment_id, material_id, uom_id, calculated_rate_per_hour, calculation_basis, calculated_at)
+            VALUES ('{line}', '{white}', '{db.UomId}', 1000, 'ideal_rate', now())
+            """);
+        var wo = await CreateWorkOrderAsync(site, white);
+        var first = await CreateJobAsync(line, wo, "A");
+        var second = await CreateJobAsync(line, wo, "B");
 
-        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new DispatchJobCommand(job, version)));
-        Assert.Equal(JobStatus.Planned, Assert.Single((await QueryAsync(line)).Segments).Status);
+        // Dispatch publishes both jobs' baselines; the order is 5000 but only 2000 is planned.
+        var dispatched = await db.SendAsync(new DispatchWorkOrderCommand(wo, await WorkOrderVersionAsync(wo), "Week 42"));
+        Assert.Equal("quantity_mismatch", Assert.Single(dispatched.Warnings).Code);
+        var jobs = await JobRowsAsync(line);
+        Assert.All(jobs, j => Assert.Equal(JobStatus.Dispatched, j.Status));
+        Assert.Equal(jobs[0].End, jobs[1].Start);
+        Assert.Equal(TimeSpan.FromHours(1), jobs[1].End - jobs[1].Start);
+
+        // A plain status change can't take it back; un-dispatch can, and clears the baseline.
+        await Assert.ThrowsAsync<DomainRuleException>(() =>
+            db.SendAsync(new ChangeWorkOrderStatusCommand(wo, dispatched.Version, WorkOrderStatus.Planned, null)));
+        await db.SendAsync(new UndispatchWorkOrderCommand(wo, dispatched.Version));
+        Assert.All(await JobRowsAsync(line), j => Assert.Equal((JobStatus.Planned, (DateTimeOffset?)null), (j.Status, j.Start)));
+
+        dispatched = await db.SendAsync(new DispatchWorkOrderCommand(wo, await WorkOrderVersionAsync(wo)));
+        await db.SendAsync(new FirmWorkOrderCommand(wo, dispatched.Version));
+        jobs = await JobRowsAsync(line);
+        Assert.All(jobs, j => Assert.Equal(JobStatus.Firmed, j.Status));
+        Assert.Equal(dispatched.Jobs.Single(j => j.JobId == first).PlannedStart, jobs[0].Start);
+
+        // The first job starts, makes 400 of 1000, and is cancelled and replaced.
+        await db.ExecuteAsync(
+            $"""
+            UPDATE core.work_order SET status = 'in_progress' WHERE id = '{wo}';
+            UPDATE core.job SET status = 'running' WHERE id = '{first}';
+            INSERT INTO core.job_run (job_id, equipment_id, run_no, started_at, good_qty, uom_id)
+            VALUES ('{first}', '{line}', 1, now() - interval '1 hour', 400, '{db.UomId}');
+            """);
+        var cancelled = await db.SendAsync(new CancelJobCommand(first, await JobVersionAsync(line, first), "Die damage", true));
+
+        var replacement = cancelled.ReplacementJobId!.Value;
+        await using var connection = await db.AdminDataSource.OpenConnectionAsync();
+        var row = await connection.QuerySingleAsync<(string Status, decimal Qty, Guid? Replaces, DateTimeOffset? FirmedAt)>(
+            "SELECT status, planned_qty, replaces_job_id, firmed_at FROM core.job WHERE id = @replacement", new { replacement });
+        Assert.Equal((JobStatus.Firmed, 600m, (Guid?)first), (row.Status, row.Qty, row.Replaces));
+        Assert.NotNull(row.FirmedAt);
+        Assert.Equal(JobStatus.Cancelled, await connection.ExecuteScalarAsync<string>("SELECT status FROM core.job WHERE id = @first", new { first }));
+        Assert.Equal(0, await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM core.job_run WHERE job_id = @first AND ended_at IS NULL", new { first }));
+        Assert.Equal([replacement, second], (await QueryAsync(line)).Segments.Select(s => s.JobId));
+
+        Assert.Equal(
+            [EventTypes.WorkOrderDispatched, EventTypes.WorkOrderUndispatched, EventTypes.WorkOrderDispatched, EventTypes.WorkOrderFirmed],
+            await connection.QueryAsync<string>(
+                "SELECT type FROM evt.event WHERE subject = @wo AND type <> @created ORDER BY sequence",
+                new { wo, created = EventTypes.WorkOrderCreated }));
+        Assert.Equal(
+            [(null, JobStatus.Planned), (JobStatus.Planned, JobStatus.Dispatched), (JobStatus.Dispatched, JobStatus.Planned),
+             (JobStatus.Planned, JobStatus.Dispatched), (JobStatus.Dispatched, JobStatus.Firmed), (JobStatus.Running, JobStatus.Cancelled)],
+            await connection.QueryAsync<(string?, string)>(
+                "SELECT from_status, to_status FROM ts.job_status_change WHERE job_id = @first ORDER BY occurred_at, id", new { first }));
+    }
+
+    [Fact]
+    public async Task Firmed_job_moves_to_another_eligible_line_and_keeps_its_time()
+    {
+        var (site, line) = await CreateLineAsync();
+        var other = await CreateLineInSiteAsync(site);
+        var spare = await CreateLineInSiteAsync(site);
+        var (white, _) = await CreateMaterialsAsync();
+        await CanRunAsync(line, white);
+        await CanRunAsync(other, white);
+        var wo = await CreateWorkOrderAsync(site, white);
+        var job = await CreateJobAsync(line, wo, "A");
+        var dispatched = await db.SendAsync(new DispatchWorkOrderCommand(wo, await WorkOrderVersionAsync(wo)));
+        await db.SendAsync(new FirmWorkOrderCommand(wo, dispatched.Version));
+        var anchor = dispatched.Jobs.Single().PlannedStart;
+
+        var version = await JobVersionAsync(line, job);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new SequenceJobCommand(job, version, spare, null)));
+        await db.SendAsync(new SequenceJobCommand(job, version, other, null));
+
+        var segment = Assert.Single((await QueryAsync(other)).Segments);
+        Assert.Equal((job, JobStatus.Firmed, (DateTimeOffset?)anchor), (segment.JobId, segment.Status, segment.BaselineStart));
+        Assert.Empty(await JobRowsAsync(line));
     }
 
     [Fact]
@@ -333,7 +362,7 @@ public sealed class SchedulingTests(DatabaseFixture db)
         Assert.Equal(ChangeoverMode.Auto, (await GetPolicyAsync(site)).ChangeoverMode);
     }
 
-    private async Task<Guid> CreateWorkOrderAsync(Guid site, Guid material, string status)
+    private async Task<Guid> CreateWorkOrderAsync(Guid site, Guid material, string status = WorkOrderStatus.Planned)
     {
         var id = Guid.CreateVersion7();
         await using var connection = await db.AdminDataSource.OpenConnectionAsync();
@@ -349,6 +378,37 @@ public sealed class SchedulingTests(DatabaseFixture db)
     private async Task<Guid> CreateJobAsync(Guid line, Guid workOrder, string suffix) =>
         (await db.SendAsync(new CreateJobCommand(
             line, $"J-{line.ToString("N")[^6..]}-{suffix}", JobType.Production, workOrder, 1000m, null, false, null, null))).Id;
+
+    /// <summary>Lets the line run the material from now on (D-020).</summary>
+    private Task CanRunAsync(Guid line, Guid material) =>
+        db.ExecuteAsync(
+            $"""
+            INSERT INTO core.equipment_capability (equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, effective_from)
+            VALUES ('{line}', '{material}', 1000, '{db.UomId}', now() - interval '1 day')
+            """);
+
+    private async Task<Guid> CreateLineInSiteAsync(Guid site) =>
+        (await db.SendAsync(new CreateEquipmentCommand(
+            site, "LINE-" + Guid.NewGuid().ToString("N")[..6], "Line", null, "work_center", "production_line", true, true, false, null))).Id;
+
+    private async Task<long> WorkOrderVersionAsync(Guid workOrder)
+    {
+        await using var scope = db.Services.CreateAsyncScope();
+        return (await scope.ServiceProvider.GetRequiredService<IWorkOrderReadStore>().GetAsync(workOrder, CancellationToken.None))!.Version;
+    }
+
+    private async Task<List<(Guid Id, string Status, DateTimeOffset? Start, DateTimeOffset? End)>> JobRowsAsync(Guid line)
+    {
+        await using var connection = await db.AdminDataSource.OpenConnectionAsync();
+        var rows = await connection.QueryAsync<(Guid, string, DateTimeOffset?, DateTimeOffset?)>(
+            """
+            SELECT id, status, planned_start, planned_end FROM core.job
+            WHERE equipment_id = @line AND status <> 'cancelled'
+            ORDER BY sequence_rank, job_number
+            """,
+            new { line });
+        return [.. rows];
+    }
 
     private async Task<long> JobVersionAsync(Guid line, Guid job) =>
         (await QueryAsync(line)).Segments.Single(s => s.JobId == job && s.Kind == SegmentKind.Job).Version!.Value;

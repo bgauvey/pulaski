@@ -320,4 +320,44 @@ public class TimelineProjectorTests
         Assert.Equal(first.Segments.Select(s => (s.JobId, s.Start, s.End)), second.Segments.Select(s => (s.JobId, s.Start, s.End)));
         Assert.True(first.Segments.Zip(first.Segments.Skip(1)).All(p => p.First.End <= p.Second.Start));
     }
+
+    [Fact]
+    public void Firmed_job_holds_its_start_and_the_next_job_follows_it()
+    {
+        var a = Production(White, 1000m);
+        var firmed = Production(White, 1000m, JobStatus.Firmed) with { FirmedStart = Now.AddHours(3) };
+        var b = Production(White, 500m);
+
+        var timeline = Project([a, firmed, b], previous: White);
+
+        Assert.Collection(
+            timeline.Segments,
+            s => Assert.Equal((Now, Now.AddHours(1)), (s.Start, s.End)),
+            s => Assert.Equal((Now.AddHours(3), Now.AddHours(4)), (s.Start, s.End)),
+            s => Assert.Equal((Now.AddHours(4), Now.AddHours(4.5)), (s.Start, s.End)));
+        Assert.All(timeline.Segments, s => Assert.Empty(s.Warnings));
+    }
+
+    [Fact]
+    public void Work_running_into_a_firmed_job_is_flagged_not_moved_past_it()
+    {
+        var a = Production(White, 4000m);
+        var firmed = Production(White, 1000m, JobStatus.Firmed) with { FirmedStart = Now.AddHours(3) };
+
+        var segment = Project([a, firmed], previous: White).Segments[1];
+
+        Assert.Equal((Now.AddHours(3), Now.AddHours(4)), (segment.Start, segment.End));
+        Assert.Equal(ScheduleWarningCode.FirmedConflict, Assert.Single(segment.Warnings).Code);
+    }
+
+    [Fact]
+    public void Firmed_start_in_the_past_starts_now_and_is_flagged()
+    {
+        var firmed = Production(White, 1000m, JobStatus.Firmed) with { FirmedStart = Now.AddHours(-2) };
+
+        var segment = Project([firmed], previous: White).Segments.Single();
+
+        Assert.Equal((Now, Now.AddHours(1)), (segment.Start, segment.End));
+        Assert.Equal(ScheduleWarningCode.FirmedConflict, Assert.Single(segment.Warnings).Code);
+    }
 }

@@ -159,11 +159,11 @@ public sealed class PersistenceTests(DatabaseFixture db)
         Assert.Equal("planned", row.Status);
         Assert.Equal(created.Version, row.Version);
 
-        await db.SendAsync(new ChangeWorkOrderStatusCommand(created.Id, created.Version, "released", "ready"));
+        await db.SendAsync(new ChangeWorkOrderStatusCommand(created.Id, created.Version, "cancelled", "ready"));
         await Assert.ThrowsAsync<ConflictException>(
             () => db.SendAsync(new ChangeWorkOrderStatusCommand(created.Id, created.Version, "cancelled", null)));
 
-        Assert.Contains(await reads.ListAsync(site, "released", CancellationToken.None), w => w.Id == created.Id);
+        Assert.Contains(await reads.ListAsync(site, "cancelled", CancellationToken.None), w => w.Id == created.Id);
 
         await using var connection = await db.AdminDataSource.OpenConnectionAsync();
         var events = (await connection.QueryAsync<(string Type, long Sequence, string? Reason)>(

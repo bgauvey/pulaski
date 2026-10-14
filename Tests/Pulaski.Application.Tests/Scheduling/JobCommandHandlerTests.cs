@@ -7,87 +7,50 @@ using Pulaski.Domain.WorkOrders;
 
 namespace Pulaski.Application.Tests.Scheduling;
 
-public class JobCommandHandlerTests
+public class JobCommandHandlerTests : SchedulingHandlerTestBase
 {
-    private static readonly DateTimeOffset Now = HandlerFixture.Now;
+    private SequenceJobHandler Sequence() => new(F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.Events, F.Events, F.Time);
 
-    private readonly HandlerFixture _f = new();
-    private readonly Guid _site = Guid.CreateVersion7();
-    private readonly Guid _metre = Guid.CreateVersion7();
-    private readonly Guid _white = Guid.CreateVersion7();
-    private readonly Guid _grey = Guid.CreateVersion7();
+    private PinJobHandler Pin() => new(F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.Events, F.Events);
 
-    private CreateJobHandler Create() => new(
-        _f.Stores.UnitOfWork, _f.Stores.Scheduling, _f.Stores.WorkOrders, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
+    private CancelJobHandler Cancel() => new(
+        F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Events, F.Events, F.Ids, F.Time);
 
-    private SequenceJobHandler Sequence() => new(_f.Stores.UnitOfWork, _f.Stores.Scheduling, _f.Stores.Events, _f.Events, _f.Time);
+    private DispatchWorkOrderHandler Dispatch() => new(
+        F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Events, F.Events, F.Time);
 
-    private DispatchJobHandler Dispatch() => new(
-        _f.Stores.UnitOfWork, _f.Stores.Scheduling, _f.Stores.WorkOrders, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
-
-    private PublishScheduleHandler Publish() => new(_f.Stores.UnitOfWork, _f.Stores.Scheduling, _f.Stores.Events, _f.Events, _f.Time);
-
-    /// <summary>A line that last ran white, with 100 m/h rates and a 30-minute standard changeover to grey.</summary>
-    private SchedulingLine Line(string mode = ChangeoverMode.Auto) =>
-        _f.Stores.Scheduling.AddLine(_site, changeoverMode: mode, plan: p => p with
-        {
-            PreviousMaterial = new PlanMaterialRow { MaterialId = _white, MaterialCode = "WH" },
-            Rates =
-            [
-                new RunRateRow { MaterialId = _white, UomId = _metre, RatePerHour = 100m, RateSource = RateSource.Calculated },
-                new RunRateRow { MaterialId = _grey, UomId = _metre, RatePerHour = 100m, RateSource = RateSource.Calculated },
-            ],
-            StandardChangeovers = [new StandardChangeoverRow { MaterialId = _grey, StandardChangeover = TimeSpan.FromMinutes(30) }],
-        });
-
-    private async Task<WorkOrder> WorkOrderAsync(Guid material, string status = WorkOrderStatus.Released, Guid? site = null)
-    {
-        var planned = WorkOrder.CreateLocal(
-            Guid.CreateVersion7(), site ?? _site, "WO-" + Guid.NewGuid().ToString("N")[..6], material, 1000m, _metre,
-            null, null, null, null, 0);
-        var wo = planned with { Status = status };
-        await _f.Stores.WorkOrders.InsertAsync(wo, Now, CancellationToken.None);
-        return wo;
-    }
-
-    private async Task<Guid> CreateProductionAsync(SchedulingLine line, WorkOrder wo, string number, Guid? before = null, decimal qty = 100m) =>
-        (await Create().HandleAsync(
-            new CreateJobCommand(line.Id, number, JobType.Production, wo.Id, qty, null, false, null, before),
-            CancellationToken.None)).Id;
-
-    private Job Job(Guid id) => _f.Stores.Scheduling.FindJob(id)!.Value;
-
-    private long Version(Guid id) => _f.Stores.Scheduling.FindJob(id)!.Version;
+    private FirmWorkOrderHandler Firm() => new(
+        F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Events, F.Events, F.Time);
 
     [Fact]
     public async Task Create_appends_a_production_job_with_the_work_order_material_and_unit()
     {
         var line = Line();
-        var wo = await WorkOrderAsync(_grey);
+        var wo = await WorkOrderAsync(Grey);
 
         var first = await CreateProductionAsync(line, wo, "J-1");
         var second = await CreateProductionAsync(line, wo, "J-2");
 
         var job = Job(second);
-        Assert.Equal((line.Id, _grey, _metre, wo.Id), (job.EquipmentId, job.MaterialId!.Value, job.UomId!.Value, job.WorkOrderId!.Value));
+        Assert.Equal((line.Id, Grey, Metre, wo.Id), (job.EquipmentId, job.MaterialId!.Value, job.UomId!.Value, job.WorkOrderId!.Value));
         Assert.Equal((1m, 2m), (Job(first).SequenceRank, job.SequenceRank));
         Assert.Equal(JobStatus.Planned, job.Status);
-        Assert.Contains((second, (string?)null, JobStatus.Planned), _f.Stores.Scheduling.StatusChanges);
-        Assert.All(_f.Stores.Events.Appended, e => Assert.Equal(EventTypes.JobCreated, e.Type));
-        Assert.Equal(2, _f.Stores.UnitOfWork.Committed);
+        Assert.Contains((second, (string?)null, JobStatus.Planned), F.Stores.Scheduling.StatusChanges);
+        Assert.All(F.Stores.Events.Appended, e => Assert.Equal(EventTypes.JobCreated, e.Type));
+        Assert.Equal(2, F.Stores.UnitOfWork.Committed);
     }
 
     [Fact]
     public async Task Create_before_a_job_takes_the_midpoint()
     {
         var line = Line();
-        var wo = await WorkOrderAsync(_grey);
+        var wo = await WorkOrderAsync(Grey);
         var first = await CreateProductionAsync(line, wo, "J-1");
         var second = await CreateProductionAsync(line, wo, "J-2");
 
         var between = await CreateProductionAsync(line, wo, "J-3", before: second);
 
-        Assert.Equal([first, between, second], _f.Stores.Scheduling.JobsOn(line.Id).Select(j => j.Id));
+        Assert.Equal([first, between, second], F.Stores.Scheduling.JobsOn(line.Id).Select(j => j.Id));
         Assert.Equal(1.5m, Job(between).SequenceRank);
     }
 
@@ -123,75 +86,81 @@ public class JobCommandHandlerTests
     }
 
     [Fact]
-    public async Task Create_refuses_unschedulable_lines_closed_orders_other_sites_and_unknown_neighbours()
+    public async Task Create_refuses_ineligible_or_unschedulable_lines_unplanned_orders_other_sites_and_unknown_neighbours()
     {
         var line = Line();
-        var unschedulable = _f.Stores.Scheduling.AddLine(_site, schedulable: false);
-        var released = await WorkOrderAsync(_grey);
-        var closed = await WorkOrderAsync(_grey, WorkOrderStatus.Closed);
-        var elsewhere = await WorkOrderAsync(_grey, site: Guid.CreateVersion7());
+        var ineligible = Line(eligible: false);
+        var unschedulable = F.Stores.Scheduling.AddLine(Site, schedulable: false);
+        var planned = await WorkOrderAsync(Grey);
+        var dispatched = await WorkOrderAsync(Grey, WorkOrderStatus.Dispatched);
+        var elsewhere = await WorkOrderAsync(Grey, site: Guid.CreateVersion7());
 
-        await Assert.ThrowsAsync<DomainRuleException>(() => CreateProductionAsync(unschedulable, released, "J-1"));
-        await Assert.ThrowsAsync<DomainRuleException>(() => CreateProductionAsync(line, closed, "J-2"));
+        var notSetUp = await Assert.ThrowsAsync<DomainRuleException>(() => CreateProductionAsync(ineligible, planned, "J-0"));
+        Assert.Contains("capability", notSetUp.Message, StringComparison.Ordinal);
+        await Assert.ThrowsAsync<DomainRuleException>(() => CreateProductionAsync(unschedulable, planned, "J-1"));
+        await Assert.ThrowsAsync<DomainRuleException>(() => CreateProductionAsync(line, dispatched, "J-2"));
         await Assert.ThrowsAsync<DomainRuleException>(() => CreateProductionAsync(line, elsewhere, "J-3"));
-        await Assert.ThrowsAsync<DomainRuleException>(() => CreateProductionAsync(line, released, "J-4", before: Guid.CreateVersion7()));
-        Assert.Empty(_f.Stores.Events.Appended);
+        await Assert.ThrowsAsync<DomainRuleException>(() => CreateProductionAsync(line, planned, "J-4", before: Guid.CreateVersion7()));
+        Assert.Empty(F.Stores.Events.Appended);
     }
 
     [Fact]
     public async Task Sequence_moves_a_job_before_another_on_the_same_line()
     {
         var line = Line();
-        var wo = await WorkOrderAsync(_grey);
+        var wo = await WorkOrderAsync(Grey);
         var a = await CreateProductionAsync(line, wo, "J-1");
         var b = await CreateProductionAsync(line, wo, "J-2");
         var c = await CreateProductionAsync(line, wo, "J-3");
 
         var result = await Sequence().HandleAsync(new SequenceJobCommand(c, Version(c), line.Id, a), CancellationToken.None);
 
-        Assert.Equal([c, a, b], _f.Stores.Scheduling.JobsOn(line.Id).Select(j => j.Id));
+        Assert.Equal([c, a, b], F.Stores.Scheduling.JobsOn(line.Id).Select(j => j.Id));
         Assert.Equal(Version(c), result.Version);
-        Assert.Equal(EventTypes.JobSequenced, _f.Stores.Events.Appended[^1].Type);
+        Assert.Equal(EventTypes.JobSequenced, F.Stores.Events.Appended[^1].Type);
     }
 
     [Fact]
-    public async Task Sequence_moves_a_job_to_the_end_of_another_line()
+    public async Task Sequence_moves_a_job_to_the_end_of_another_eligible_line()
     {
         var from = Line();
         var to = Line();
-        var wo = await WorkOrderAsync(_grey);
+        var ineligible = Line(eligible: false);
+        var wo = await WorkOrderAsync(Grey);
         var job = await CreateProductionAsync(from, wo, "J-1");
         var existing = await CreateProductionAsync(to, wo, "J-2");
 
+        await Assert.ThrowsAsync<DomainRuleException>(() =>
+            Sequence().HandleAsync(new SequenceJobCommand(job, Version(job), ineligible.Id, null), CancellationToken.None));
         await Sequence().HandleAsync(new SequenceJobCommand(job, Version(job), to.Id, null), CancellationToken.None);
 
-        Assert.Empty(_f.Stores.Scheduling.JobsOn(from.Id));
-        Assert.Equal([existing, job], _f.Stores.Scheduling.JobsOn(to.Id).Select(j => j.Id));
+        Assert.Empty(F.Stores.Scheduling.JobsOn(from.Id));
+        Assert.Equal([existing, job], F.Stores.Scheduling.JobsOn(to.Id).Select(j => j.Id));
     }
 
     [Fact]
     public async Task Sequence_renumbers_the_line_when_ranks_run_out()
     {
         var line = Line();
-        var wo = await WorkOrderAsync(_grey);
+        var wo = await WorkOrderAsync(Grey);
         var a = await CreateProductionAsync(line, wo, "J-1");
         var b = await CreateProductionAsync(line, wo, "J-2");
         var c = await CreateProductionAsync(line, wo, "J-3");
-        _f.Stores.Scheduling.AddJob(Job(a) with { SequenceRank = 1.0000000001m }, Version(a));
-        _f.Stores.Scheduling.AddJob(Job(b) with { SequenceRank = 1.0000000002m }, Version(b));
+        F.Stores.Scheduling.AddJob(Job(a) with { SequenceRank = 1.0000000001m }, Version(a));
+        F.Stores.Scheduling.AddJob(Job(b) with { SequenceRank = 1.0000000002m }, Version(b));
 
         await Sequence().HandleAsync(new SequenceJobCommand(c, Version(c), line.Id, b), CancellationToken.None);
 
-        Assert.Equal([a, c, b], _f.Stores.Scheduling.JobsOn(line.Id).Select(j => j.Id));
+        Assert.Equal([a, c, b], F.Stores.Scheduling.JobsOn(line.Id).Select(j => j.Id));
         Assert.Equal((1m, 1.5m, 2m), (Job(a).SequenceRank, Job(c).SequenceRank, Job(b).SequenceRank));
     }
 
     [Fact]
-    public async Task Sequence_refuses_locked_jobs_stale_versions_and_other_sites()
+    public async Task Sequence_refuses_locked_jobs_stale_versions_other_sites_and_dispatched_jobs()
     {
         var line = Line();
-        var otherSite = _f.Stores.Scheduling.AddLine(Guid.CreateVersion7());
-        var wo = await WorkOrderAsync(_grey);
+        var otherSite = Line(site: Guid.CreateVersion7());
+        var wo = await WorkOrderAsync(Grey);
         var job = await CreateProductionAsync(line, wo, "J-1");
 
         await Assert.ThrowsAsync<ConflictException>(() =>
@@ -199,118 +168,104 @@ public class JobCommandHandlerTests
         await Assert.ThrowsAsync<DomainRuleException>(() =>
             Sequence().HandleAsync(new SequenceJobCommand(job, Version(job), otherSite.Id, null), CancellationToken.None));
 
-        var pin = new PinJobHandler(_f.Stores.UnitOfWork, _f.Stores.Scheduling, _f.Stores.Events, _f.Events);
-        await pin.HandleAsync(new PinJobCommand(job, Version(job), true, null), CancellationToken.None);
-        var ex = await Assert.ThrowsAsync<DomainRuleException>(() =>
+        await Pin().HandleAsync(new PinJobCommand(job, Version(job), true, null), CancellationToken.None);
+        var locked = await Assert.ThrowsAsync<DomainRuleException>(() =>
             Sequence().HandleAsync(new SequenceJobCommand(job, Version(job), line.Id, null), CancellationToken.None));
-        Assert.Contains("locked", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("locked", locked.Message, StringComparison.Ordinal);
+
+        await Pin().HandleAsync(new PinJobCommand(job, Version(job), false, null), CancellationToken.None);
+        await Dispatch().HandleAsync(new DispatchWorkOrderCommand(wo.Id, WorkOrderVersion(wo)), CancellationToken.None);
+        var dispatched = await Assert.ThrowsAsync<DomainRuleException>(() =>
+            Sequence().HandleAsync(new SequenceJobCommand(job, Version(job), line.Id, null), CancellationToken.None));
+        Assert.Contains("un-dispatch", dispatched.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Firmed_job_changes_line_and_keeps_its_time()
+    {
+        var from = Line();
+        var to = Line();
+        var white = await WorkOrderAsync(White);
+        var grey = await WorkOrderAsync(Grey);
+        var early = await CreateProductionAsync(to, white, "T-1");       // 0-1 h on the target line
+        var late = await CreateProductionAsync(to, white, "T-2", qty: 500m); // 1-6 h
+        var firmed = await CreateProductionAsync(from, grey, "F-1");
+        await Dispatch().HandleAsync(new DispatchWorkOrderCommand(grey.Id, WorkOrderVersion(grey)), CancellationToken.None);
+        await Firm().HandleAsync(new FirmWorkOrderCommand(grey.Id, WorkOrderVersion(grey)), CancellationToken.None);
+        var anchor = Job(firmed).PlannedStart!.Value;   // after the 30-minute changeover from white
+
+        await Assert.ThrowsAsync<DomainRuleException>(() =>
+            Sequence().HandleAsync(new SequenceJobCommand(firmed, Version(firmed), from.Id, null), CancellationToken.None));
+        await Sequence().HandleAsync(new SequenceJobCommand(firmed, Version(firmed), to.Id, early), CancellationToken.None);
+
+        // Placed by its time (between the job starting before it and the one after), not where it was dropped.
+        Assert.Equal([early, firmed, late], F.Stores.Scheduling.JobsOn(to.Id).Select(j => j.Id));
+        Assert.Equal((anchor, JobStatus.Firmed), (Job(firmed).PlannedStart!.Value, Job(firmed).Status));
     }
 
     [Fact]
     public async Task Pin_sets_lock_and_earliest_start_with_before_and_after()
     {
         var line = Line();
-        var wo = await WorkOrderAsync(_grey);
+        var wo = await WorkOrderAsync(Grey);
         var job = await CreateProductionAsync(line, wo, "J-1");
-        var pin = new PinJobHandler(_f.Stores.UnitOfWork, _f.Stores.Scheduling, _f.Stores.Events, _f.Events);
 
-        await pin.HandleAsync(new PinJobCommand(job, Version(job), true, Now.AddHours(6)), CancellationToken.None);
+        await Pin().HandleAsync(new PinJobCommand(job, Version(job), true, Now.AddHours(6)), CancellationToken.None);
 
         Assert.Equal((true, (DateTimeOffset?)Now.AddHours(6)), (Job(job).IsLocked, Job(job).EarliestStart));
-        Assert.Equal(EventTypes.JobPinned, _f.Stores.Events.Appended[^1].Type);
+        Assert.Equal(EventTypes.JobPinned, F.Stores.Events.Appended[^1].Type);
     }
 
     [Fact]
-    public async Task Dispatch_in_auto_mode_turns_the_placeholder_into_a_dispatched_changeover_job()
+    public async Task Cancel_a_planned_job_outright()
     {
         var line = Line();
-        var wo = await WorkOrderAsync(_grey);
+        var wo = await WorkOrderAsync(Grey);
         var job = await CreateProductionAsync(line, wo, "J-1");
 
-        var result = await Dispatch().HandleAsync(new DispatchJobCommand(job, Version(job)), CancellationToken.None);
+        var result = await Cancel().HandleAsync(new CancelJobCommand(job, Version(job), "Not needed", false), CancellationToken.None);
 
-        var changeover = Job(result.ChangeoverJobId!.Value);
-        Assert.Equal((JobType.Changeover, "J-1-CO", JobStatus.Dispatched), (changeover.JobType, changeover.JobNumber, changeover.Status));
-        Assert.Null(changeover.PlannedDuration);
-        Assert.Equal([changeover.Id, job], _f.Stores.Scheduling.JobsOn(line.Id).Select(j => j.Id));
-        Assert.Equal((JobStatus.Dispatched, (DateTimeOffset?)Now), (Job(job).Status, Job(job).DispatchedAt));
-        Assert.Equal(Version(job), result.Version);
+        Assert.Null(result.ReplacementJobId);
+        Assert.Equal(JobStatus.Cancelled, Job(job).Status);
+        Assert.Empty(F.Stores.Scheduling.JobsOn(line.Id));
+        var evt = F.Stores.Events.Appended[^1];
+        Assert.Equal((EventTypes.JobCancelled, "Not needed"), (evt.Type, evt.Reason));
+    }
+
+    [Fact]
+    public async Task Cancel_and_replace_a_started_job_for_what_it_did_not_make()
+    {
+        var line = Line();
+        var wo = await WorkOrderAsync(Grey);
+        var job = await CreateProductionAsync(line, wo, "J-1", qty: 100m);
+        await Dispatch().HandleAsync(new DispatchWorkOrderCommand(wo.Id, WorkOrderVersion(wo)), CancellationToken.None);
+        await Firm().HandleAsync(new FirmWorkOrderCommand(wo.Id, WorkOrderVersion(wo)), CancellationToken.None);
+        await SetStatusAsync(wo, WorkOrderStatus.InProgress);
+        F.Stores.Scheduling.AddJob(Job(job) with { Status = JobStatus.Running }, Version(job));
+        F.Stores.Scheduling.SetGoodQty(job, 60m);
+
+        var result = await Cancel().HandleAsync(new CancelJobCommand(job, Version(job), "Die damage", true), CancellationToken.None);
+
+        var replacement = Job(result.ReplacementJobId!.Value);
+        Assert.Equal(JobStatus.Cancelled, Job(job).Status);
+        Assert.Contains(job, F.Stores.Scheduling.EndedRuns);
+        Assert.Equal(("J-1-R", 40m, JobStatus.Firmed, (Guid?)job), (replacement.JobNumber, replacement.PlannedQty!.Value, replacement.Status, replacement.ReplacesJobId));
+        Assert.Equal([replacement.Id], F.Stores.Scheduling.JobsOn(line.Id).Select(j => j.Id));
         Assert.Equal(
-            [EventTypes.JobCreated, EventTypes.JobCreated, EventTypes.JobDispatched],
-            _f.Stores.Events.Appended.Select(e => e.Type));
-        Assert.Contains((job, (string?)JobStatus.Planned, JobStatus.Dispatched), _f.Stores.Scheduling.StatusChanges);
-
-        // The real changeover job now suppresses the placeholder and is sized from the matrix.
-        var timeline = await new GetLineTimelineHandler(_f.Stores.Scheduling, _f.Time)
-            .HandleAsync(new GetLineTimelineQuery(line.Id), CancellationToken.None);
-        Assert.Equal([(SegmentKind.Job, changeover.Id), (SegmentKind.Job, job)], timeline.Segments.Select(s => (s.Kind, s.JobId)));
-        Assert.Equal(TimeSpan.FromMinutes(30), timeline.Segments[0].Work);
+            [EventTypes.JobCancelled, EventTypes.JobCreated],
+            F.Stores.Events.Appended.TakeLast(2).Select(e => e.Type));
     }
 
     [Fact]
-    public async Task Dispatch_creates_no_changeover_in_scheduler_mode_or_without_a_material_change()
-    {
-        var scheduler = Line(ChangeoverMode.Scheduler);
-        var auto = Line();
-        var grey = await WorkOrderAsync(_grey);
-        var white = await WorkOrderAsync(_white);
-        var a = await CreateProductionAsync(scheduler, grey, "J-1");
-        var b = await CreateProductionAsync(auto, white, "J-2");
-
-        Assert.Null((await Dispatch().HandleAsync(new DispatchJobCommand(a, Version(a)), CancellationToken.None)).ChangeoverJobId);
-        Assert.Null((await Dispatch().HandleAsync(new DispatchJobCommand(b, Version(b)), CancellationToken.None)).ChangeoverJobId);
-    }
-
-    [Fact]
-    public async Task Dispatch_needs_a_released_work_order_and_a_current_version()
+    public async Task Replace_refuses_a_job_with_nothing_left_to_make()
     {
         var line = Line();
-        var planned = await WorkOrderAsync(_grey, WorkOrderStatus.Planned);
-        var job = await CreateProductionAsync(line, planned, "J-1");
+        var wo = await WorkOrderAsync(Grey);
+        var job = await CreateProductionAsync(line, wo, "J-1", qty: 100m);
+        F.Stores.Scheduling.SetGoodQty(job, 100m);
 
-        await Assert.ThrowsAsync<ConflictException>(() =>
-            Dispatch().HandleAsync(new DispatchJobCommand(job, Version(job) + 1), CancellationToken.None));
-        var ex = await Assert.ThrowsAsync<DomainRuleException>(() =>
-            Dispatch().HandleAsync(new DispatchJobCommand(job, Version(job)), CancellationToken.None));
-        Assert.Contains("release it", ex.Message, StringComparison.Ordinal);
-        Assert.Equal(JobStatus.Planned, Job(job).Status);
-    }
-
-    [Fact]
-    public async Task Publish_baselines_jobs_that_have_not_started_and_schedules_planned_ones()
-    {
-        var line = Line();
-        var white = await WorkOrderAsync(_white);
-        var running = await CreateProductionAsync(line, white, "J-0");
-        var next = await CreateProductionAsync(line, white, "J-1");
-        var later = await CreateProductionAsync(line, white, "J-2", qty: 50m);
-        _f.Stores.Scheduling.AddJob(Job(running) with { Status = JobStatus.Running }, Version(running));
-
-        var result = await Publish().HandleAsync(new PublishScheduleCommand(line.Id), CancellationToken.None);
-
-        Assert.Equal(line.Id, result.LineId);
-        Assert.Equal([next, later], result.Jobs.Select(j => j.JobId));
-        Assert.Equal((Now.AddHours(1), Now.AddHours(2)), (Job(next).PlannedStart!.Value, Job(next).PlannedEnd!.Value));
-        Assert.Equal((Now.AddHours(2), Now.AddHours(2.5)), (Job(later).PlannedStart!.Value, Job(later).PlannedEnd!.Value));
-        Assert.All([next, later], id => Assert.Equal(JobStatus.Scheduled, Job(id).Status));
-        Assert.Null(Job(running).PlannedStart);
-        Assert.Equal(Version(later), result.Jobs[1].Version);
-
-        var evt = _f.Stores.Events.Appended[^1];
-        Assert.Equal((EventTypes.SchedulePublished, line.Id, "equipment"), (evt.Type, evt.Subject, evt.SubjectType));
-        Assert.Contains((later, (string?)JobStatus.Planned, JobStatus.Scheduled), _f.Stores.Scheduling.StatusChanges);
-    }
-
-    [Fact]
-    public async Task Publish_refuses_unknown_and_unschedulable_lines()
-    {
-        var unschedulable = _f.Stores.Scheduling.AddLine(_site, schedulable: false);
-
-        await Assert.ThrowsAsync<NotFoundException>(() =>
-            Publish().HandleAsync(new PublishScheduleCommand(Guid.CreateVersion7()), CancellationToken.None));
         await Assert.ThrowsAsync<DomainRuleException>(() =>
-            Publish().HandleAsync(new PublishScheduleCommand(unschedulable.Id), CancellationToken.None));
-        await Assert.ThrowsAsync<ValidationException>(() =>
-            Publish().HandleAsync(new PublishScheduleCommand(unschedulable.Id, 0), CancellationToken.None));
+            Cancel().HandleAsync(new CancelJobCommand(job, Version(job), null, true), CancellationToken.None));
+        Assert.Equal(JobStatus.Planned, Job(job).Status);
     }
 }

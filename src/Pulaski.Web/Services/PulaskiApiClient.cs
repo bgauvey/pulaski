@@ -3,6 +3,7 @@ using System.Text.Json;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.ReferenceData;
+using Pulaski.Contracts.Scheduling;
 using Pulaski.Contracts.WorkOrders;
 
 namespace Pulaski.Web.Services;
@@ -41,6 +42,24 @@ public sealed class PulaskiApiClient(HttpClient http)
         ChangeWorkOrderStatusRequest request,
         CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Post, $"api/work-orders/{id}/status", request, ct);
+
+    public Task<DispatchWorkOrderResponse> DispatchWorkOrderAsync(
+        Guid id,
+        WorkOrderPlanningRequest request,
+        CancellationToken ct = default) =>
+        SendAsync<DispatchWorkOrderResponse>(HttpMethod.Post, $"api/work-orders/{id}/dispatch", request, ct);
+
+    public Task<VersionResponse> UndispatchWorkOrderAsync(
+        Guid id,
+        WorkOrderPlanningRequest request,
+        CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/work-orders/{id}/undispatch", request, ct);
+
+    public Task<VersionResponse> FirmWorkOrderAsync(
+        Guid id,
+        WorkOrderPlanningRequest request,
+        CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/work-orders/{id}/firm", request, ct);
 
     // Reference data
 

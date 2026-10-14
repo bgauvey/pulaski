@@ -9,7 +9,7 @@ namespace Pulaski.Infrastructure.Scheduling;
 /// <summary>Write side for scheduling. Every statement runs in the command's transaction.</summary>
 internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) : ISchedulingRepository
 {
-    private const string OpenStatuses = "('planned','scheduled','dispatched','running','paused')";
+    private const string OpenStatuses = "('planned','dispatched','firmed','running','paused')";
 
     // Locks in id order, so two commands locking the same lines cannot deadlock.
     private const string LockLines = """
@@ -27,17 +27,41 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
     private const string JobColumns = """
         id, site_id, work_order_id, job_number, job_type, equipment_id, material_id, planned_qty, uom_id,
         planned_start, planned_end, sequence_rank, is_locked, earliest_start, planned_duration,
-        counts_as_planned_downtime, status, dispatched_at, xmin::text::bigint AS version
+        counts_as_planned_downtime, status, dispatched_at, firmed_at, replaces_job_id, xmin::text::bigint AS version
         """;
 
     private const string GetJobForUpdate = $"SELECT {JobColumns} FROM core.job WHERE id = @Id FOR UPDATE";
 
-    private const string GetOpenJobsForUpdate = $"""
+    private const string WorkOrderLines = $"""
+        SELECT DISTINCT equipment_id
+        FROM core.job
+        WHERE work_order_id = @WorkOrderId AND status IN {OpenStatuses}
+        """;
+
+    private const string GetWorkOrderJobsForUpdate = $"""
         SELECT {JobColumns}
         FROM core.job
-        WHERE equipment_id = @LineId AND status IN {OpenStatuses}
+        WHERE work_order_id = @WorkOrderId AND status IN {OpenStatuses}
         ORDER BY id
         FOR UPDATE
+        """;
+
+    private const string Eligible = """
+        SELECT EXISTS (
+            SELECT 1 FROM core.equipment_capability
+            WHERE equipment_id = @LineId
+              AND material_id = @MaterialId
+              AND effective_from <= @At
+              AND (effective_to IS NULL OR effective_to > @At))
+        """;
+
+    private const string GoodQty = "SELECT coalesce(sum(good_qty), 0) FROM core.job_run WHERE job_id = @JobId";
+
+    private const string EndOpenRuns = """
+        UPDATE core.job_run
+        SET ended_at = @At,
+            status = 'ended'
+        WHERE job_id = @JobId AND ended_at IS NULL
         """;
 
     // Ranks either side of the end of the line.
@@ -81,11 +105,11 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
         INSERT INTO core.job (id, site_id, work_order_id, job_number, job_type, equipment_id, material_id,
                               planned_qty, uom_id, planned_start, planned_end, sequence_rank, is_locked,
                               earliest_start, planned_duration, counts_as_planned_downtime, status,
-                              dispatched_at, created_at, updated_at)
+                              dispatched_at, firmed_at, replaces_job_id, created_at, updated_at)
         VALUES (@Id, @SiteId, @WorkOrderId, @JobNumber, @JobType, @EquipmentId, @MaterialId,
                 @PlannedQty, @UomId, @PlannedStart, @PlannedEnd, @SequenceRank, @IsLocked,
                 @EarliestStart, @PlannedDuration, @CountsAsPlannedDowntime, @Status,
-                @DispatchedAt, @At, @At)
+                @DispatchedAt, @FirmedAt, @ReplacesJobId, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
@@ -97,6 +121,7 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
             earliest_start = @EarliestStart,
             status = @Status,
             dispatched_at = @DispatchedAt,
+            firmed_at = @FirmedAt,
             planned_start = @PlannedStart,
             planned_end = @PlannedEnd,
             updated_at = @At
@@ -164,11 +189,23 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
         return row?.ToVersioned();
     }
 
-    public async Task<IReadOnlyList<Versioned<Job>>> GetOpenJobsForUpdateAsync(Guid lineId, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<Guid>> GetWorkOrderLinesAsync(Guid workOrderId, CancellationToken cancellationToken) =>
+        session.QueryAsync<Guid>(WorkOrderLines, new { WorkOrderId = workOrderId }, cancellationToken);
+
+    public async Task<IReadOnlyList<Versioned<Job>>> GetWorkOrderJobsForUpdateAsync(Guid workOrderId, CancellationToken cancellationToken)
     {
-        var rows = await session.QueryAsync<JobRow>(GetOpenJobsForUpdate, new { LineId = lineId }, cancellationToken);
+        var rows = await session.QueryAsync<JobRow>(GetWorkOrderJobsForUpdate, new { WorkOrderId = workOrderId }, cancellationToken);
         return [.. rows.Select(r => r.ToVersioned())];
     }
+
+    public Task<bool> IsEligibleAsync(Guid lineId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(Eligible, new { LineId = lineId, MaterialId = materialId, At = at }, cancellationToken);
+
+    public Task<decimal> GetGoodQtyAsync(Guid jobId, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<decimal>(GoodQty, new { JobId = jobId }, cancellationToken);
+
+    public Task EndOpenRunsAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(EndOpenRuns, new { JobId = jobId, At = at }, cancellationToken);
 
     public async Task<RankGap?> FindGapAsync(Guid lineId, Guid? beforeJobId, Guid? excludingJobId, CancellationToken cancellationToken)
     {
@@ -276,13 +313,15 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
         public bool CountsAsPlannedDowntime { get; init; }
         public string Status { get; init; } = "";
         public DateTimeOffset? DispatchedAt { get; init; }
+        public DateTimeOffset? FirmedAt { get; init; }
+        public Guid? ReplacesJobId { get; init; }
         public long Version { get; init; }
 
         public Versioned<Job> ToVersioned() => new(
             new Job(
                 Id, SiteId, WorkOrderId, JobNumber, JobType, EquipmentId, MaterialId, PlannedQty, UomId,
                 PlannedStart, PlannedEnd, SequenceRank, IsLocked, EarliestStart, PlannedDuration,
-                CountsAsPlannedDowntime, Status, DispatchedAt),
+                CountsAsPlannedDowntime, Status, DispatchedAt, FirmedAt, ReplacesJobId),
             Version);
     }
 

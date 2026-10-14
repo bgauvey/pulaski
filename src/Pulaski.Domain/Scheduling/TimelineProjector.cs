@@ -3,7 +3,8 @@ namespace Pulaski.Domain.Scheduling;
 /// <summary>
 /// One open job on the line, in planner sequence. <c>Material</c> is null for most
 /// non-production jobs; <c>GoodQty</c> is reported across its runs so far; <c>StartedAt</c> is
-/// when its first run started; <c>DueAt</c> is the work order due date.
+/// when its first run started; <c>DueAt</c> is the work order due date. <c>FirmedStart</c> is
+/// set for a firmed job: it is anchored there and does not move in time (D-019).
 /// </summary>
 public sealed record PlannedJob(
     Guid JobId,
@@ -16,7 +17,8 @@ public sealed record PlannedJob(
     DateTimeOffset? StartedAt,
     DateTimeOffset? EarliestStart,
     TimeSpan? PlannedDuration,
-    DateTimeOffset? DueAt);
+    DateTimeOffset? DueAt,
+    DateTimeOffset? FirmedStart = null);
 
 /// <summary>The effective run-standard rate for one material on the line (D-016).</summary>
 public sealed record RunRate(Guid MaterialId, Guid UomId, decimal RatePerHour, string Source);
@@ -53,6 +55,7 @@ public static class ScheduleWarningCode
     public const string NoDuration = "no_duration";
     public const string BeyondCalendar = "beyond_calendar";
     public const string NoShiftCalendar = "no_shift_calendar";
+    public const string FirmedConflict = "firmed_conflict";
 }
 
 public sealed record ScheduleWarning(string Code, string Message);
@@ -82,7 +85,8 @@ public sealed record LineTimeline(
 /// <summary>
 /// Projects a line's job sequence forward in time (D-014). One pass, no I/O, deterministic: the
 /// same plan always gives the same timeline. It never reorders jobs or moves them between lines;
-/// it only works out when the planner's sequence will happen, and warns, never blocks.
+/// it only works out when the planner's sequence will happen, and warns, never blocks. Firmed
+/// jobs are fixed at their firmed start (D-019); the jobs after them continue from their end.
 /// </summary>
 public static class TimelineProjector
 {
@@ -176,7 +180,20 @@ public static class TimelineProjector
         bool started)
     {
         var from = cursor;
-        if (!started && job.EarliestStart is { } earliest && earliest > from)
+        if (!started && job.FirmedStart is { } firmed)
+        {
+            // Anchored: the job starts at its firmed time (or now, if that has passed), whatever
+            // runs before it. Work that runs into the anchor is flagged, never moved past it.
+            if (cursor > firmed)
+            {
+                warnings.Add(new ScheduleWarning(
+                    ScheduleWarningCode.FirmedConflict,
+                    $"Firmed to start at {firmed:u}, but the line is busy or the time has passed until {cursor:u}."));
+            }
+
+            from = firmed > plan.Now ? firmed : plan.Now;
+        }
+        else if (!started && job.EarliestStart is { } earliest && earliest > from)
         {
             from = earliest;
         }

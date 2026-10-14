@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Scheduling;
 using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Common;
+using Pulaski.Contracts.Scheduling;
 using Pulaski.Contracts.WorkOrders;
 
 namespace Pulaski.Api.Endpoints;
@@ -52,6 +54,28 @@ internal static class WorkOrderEndpoints
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
                 new ChangeWorkOrderStatusCommand(id, request.Version, request.Status, request.Reason), ct)));
+
+        // Planning (D-018): these also carry the order's jobs, so they are not plain status changes.
+        group.MapPost("/{id:guid}/dispatch", async Task<Ok<DispatchWorkOrderResponse>> (
+            Guid id,
+            WorkOrderPlanningRequest request,
+            ICommandHandler<DispatchWorkOrderCommand, DispatchWorkOrderResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new DispatchWorkOrderCommand(id, request.Version, request.Reason), ct)));
+
+        group.MapPost("/{id:guid}/undispatch", async Task<Ok<VersionResponse>> (
+            Guid id,
+            WorkOrderPlanningRequest request,
+            ICommandHandler<UndispatchWorkOrderCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new UndispatchWorkOrderCommand(id, request.Version, request.Reason), ct)));
+
+        group.MapPost("/{id:guid}/firm", async Task<Ok<VersionResponse>> (
+            Guid id,
+            WorkOrderPlanningRequest request,
+            ICommandHandler<FirmWorkOrderCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new FirmWorkOrderCommand(id, request.Version, request.Reason), ct)));
 
         return routes;
     }

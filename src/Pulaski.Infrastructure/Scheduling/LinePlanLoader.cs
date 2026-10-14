@@ -38,7 +38,7 @@ internal static class LinePlanLoader
             WHERE jr.job_id = j.id
         ) r ON true
         WHERE j.equipment_id = @LineId
-          AND j.status IN ('planned','scheduled','dispatched','running','paused')
+          AND j.status IN ('planned','dispatched','firmed','running','paused')
         ORDER BY (j.status = 'running') DESC, j.sequence_rank, j.job_number
         """;
 

@@ -10,7 +10,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | --- | --- | --- | --- |
 | D-001 | License: Apache 2.0 with DCO sign-off | Decided | 2026-10-12 |
 | D-002 | Storage: PostgreSQL only, no TimescaleDB or SQL Server | Decided | 2026-10-12 |
-| D-003 | Order hierarchy: manufacturing order, work order, job, run; orders created in-app or imported from ERP | Decided | 2026-10-12 |
+| D-003 | Order hierarchy: manufacturing order, work order, job, run; orders created in-app or imported from ERP (amended by D-018: orders are planned and dispatched, jobs are their pieces) | Decided | 2026-10-12 |
 | D-004 | Full append-only event log for audit, with adapters for streams such as Kafka | Decided | 2026-10-12 |
 | D-005 | Machine states and events map closely to PackML (ISA-TR88.00.02) | Decided | 2026-10-12 |
 | D-006 | All ID columns are UUIDv7 | Decided | 2026-10-12 |
@@ -22,10 +22,12 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-012 | Data access: Dapper with parameterized SQL; reads are SELECTs (functions only for complex reused queries), writes run in the command handler's transaction; no procedures from the app | Decided | 2026-10-12 |
 | D-013 | API: CQRS with separate Domain, Application, Contracts, Infrastructure and Api projects | Decided | 2026-10-12 |
 | D-014 | Scheduling: the planner owns line and sequence; Pulaski projects times forward through the calendar. No solver, no automatic assignment | Decided | 2026-10-13 |
-| D-015 | Changeovers: auto-placed placeholders by default; a per-site policy switches to scheduler-placed changeover jobs | Decided | 2026-10-13 |
+| D-015 | Changeovers: auto-placed dynamic placeholders by default, made real when execution starts; a per-site policy switches to scheduler-placed changeover jobs | Decided | 2026-10-13 |
 | D-016 | Run standards: one line/material row holds a calculated rate and an optional modified rate; a modified rate is the gold standard | Decided | 2026-10-13 |
-| D-017 | Scheduling writes lock the line row first, then jobs; jobs are placed before a named job (or at the end) at a midpoint rank, renumbering the line only when ranks run out | Proposed | 2026-10-13 |
-| D-018 | Job lifecycle for planners: only unlocked planned/scheduled jobs move or dispatch; dispatch needs a released work order; publish baselines jobs that have not started and moves planned to scheduled | Proposed | 2026-10-13 |
+| D-017 | Scheduling writes lock the line row first, then the work order, then jobs; jobs are placed before a named job (or at the end) at a midpoint rank, renumbering the line only when ranks run out | Decided | 2026-10-13 |
+| D-018 | Work order lifecycle: plan, dispatch (publishes the baseline), firm, execute, complete. Only orders are dispatched and firmed; their jobs follow. Un-dispatch is allowed until the order is firmed | Decided | 2026-10-13 |
+| D-019 | Job rules: a locked job never moves; a planned job moves freely; a dispatched job moves only after un-dispatch; a firmed job may change machine but is anchored at its firmed start; a started job can only be cancelled, optionally replaced by a job for the remaining quantity | Decided | 2026-10-13 |
+| D-020 | Eligibility: `core.equipment_capability` says which material can run on which equipment, with its ideal rate and crew size (labor estimate). Jobs can only be placed on, moved to or dispatched on an eligible line. The run standard stays the planning rate | Decided | 2026-10-13 |
 
 ## Order hierarchy
 
@@ -33,21 +35,21 @@ Orders follow ISA-95 Part 4, with planned work separated from actual execution (
 
 ```
 Manufacturing Order   what to make, for whom, by when
- └─ Work Order        a portion, routed to an area or line
-     └─ Job           one dispatchable unit on one line or unit
+ └─ Work Order        a portion; the unit that is planned, dispatched and firmed (D-018)
+     └─ Job           the piece of a work order that runs on one line
          └─ Run       actual execution: start, stop, counts, lots
 ```
 
 | Level | ISA-95 equivalent | Notes |
 | --- | --- | --- |
 | Manufacturing order | Operations request | Optional; a standalone work order is valid |
-| Work order | Work request | Owns planned quantity and window |
-| Job | Job order | The level the scheduler places and operators receive |
+| Work order | Work request | Owns planned quantity and window. Planned, dispatched and firmed as a whole (D-018) |
+| Job | Job order | A subset of a work order on one line. The planner places and sequences jobs; operators execute them |
 | Run | Job response | A job may execute in several runs (interruptions, shifts, resumes); counts, downtime and lots attach here |
 
 - **Two sources, one model:** orders are scheduled in the app or imported from the ERP. Each carries an origin (`Erp` or `Local`), plus an external key and version for ERP records, so imports are idempotent.
 - **Field ownership (proposed):** for ERP orders the ERP owns product, quantity and due date; Pulaski owns scheduling, dispatch and status. Local orders own everything.
-- **Status rollup (proposed):** jobs drive work order status; work orders drive manufacturing order status.
+- **Status flow:** planning states flow down: dispatching or firming a work order carries its jobs (D-018). Execution states roll up (proposed): jobs drive work order status once execution starts, and work orders drive manufacturing order status.
 - **Job types (D-009, proposed):** production, changeover, cleaning or purge, trial, and maintenance window, so non-production activity is planned on the same timeline.
 
 ## Event log, audit and streaming
@@ -173,7 +175,7 @@ The projection is not stored. **Publish** copies the projected times into `job.p
 
 | Mode | Behaviour |
 | --- | --- |
-| `auto` (default) | The projection inserts a changeover placeholder wherever the material changes, sized from the matrix. When the next production job is dispatched, the placeholder becomes a real `changeover` job, so its runs and downtime attach somewhere. A changeover job the planner placed explicitly suppresses the placeholder. |
+| `auto` (default) | The projection inserts a dynamic changeover placeholder wherever the material changes, sized from the matrix and recalculated on every read. When execution of the next production job starts, the placeholder becomes a real `changeover` job, so its runs and downtime attach somewhere (built with execution; amended 2026-10-13, it was at dispatch). A changeover job the planner placed explicitly suppresses the placeholder. |
 | `scheduler` | Planners place changeover jobs themselves. The projection sizes them from the matrix unless the job has its own `planned_duration`. It warns where the material changes with no changeover job in between. |
 
 `core.changeover_rule` is the matrix. Each side matches a specific material, a material class or anything. A rule may be limited to one line, and the most specific rule wins. Two consecutive jobs on the same material need no changeover. If no rule matches, the capability's `standard_changeover` for the incoming material applies.
@@ -186,20 +188,52 @@ The projection is not stored. **Publish** copies the projected times into `job.p
 
 A rate rather than a fixed duration is stored, because a job's runtime scales with its quantity. Runtime = quantity ÷ effective rate.
 
-**Planner commands (D-017, D-018, proposed)**
+**Work order lifecycle (D-018)**
 
-- **Lock order.** Every command that changes a line's sequence locks the line's `core.equipment` row first (`FOR UPDATE`, in id order when two lines are involved), then the job. Create, move, dispatch and publish on one line therefore serialize, and no two commands wait on each other in opposite order. Pinning changes no sequence and locks only the job.
+Only work orders are planned and dispatched. A job is a piece of a work order on one line, and it follows its order:
+
+| Work order | Its jobs | What happens |
+| --- | --- | --- |
+| `planned` | `planned` | The planner creates jobs, places them on eligible lines and sequences them. |
+| `dispatched` | `dispatched` | **Dispatch is publish.** Each line holding one of the order's jobs is projected inside the transaction, and each job's projected times become its baseline (`planned_start`, `planned_end`). The order goes to the floor. Un-dispatch returns the order and its jobs to planned and clears the baseline, as long as nothing has started. |
+| `firmed` | `firmed` | The plan is frozen: no un-dispatch, and each job is anchored at its baseline start (D-019). Adherence is measured against this baseline. |
+| `in_progress`, `completed`, `closed` | `running`, `paused`, `completed`, `closed` | Execution, built in a later pass. |
+| `cancelled` | `cancelled` | A work order with open jobs can't be cancelled; cancel its jobs first. |
+
+- Dispatch, un-dispatch and firm are their own commands (`POST /api/work-orders/{id}/dispatch`, `/undispatch`, `/firm`), because they change the jobs too. The plain status change refuses those three transitions.
+- Dispatch refuses an order with no jobs, or with a job whose line can no longer run its material. When the jobs don't add up to the order quantity, dispatch warns (`quantity_mismatch`) but goes ahead.
+- New jobs can only be added to a planned order.
+- The work order status `released` is renamed `dispatched` to match. An ERP "release" arrives as a planned order. The manufacturing order keeps its own statuses.
+- Non-production jobs (cleaning, maintenance, trial, changeover) belong to no order. They stay planned until execution and can always be moved unless locked.
+
+**Job rules (D-019)**
+
+| Job status | Change machine | Move in time (resequence) | Cancel |
+| --- | --- | --- | --- |
+| `planned` | yes | yes | yes |
+| `dispatched` | no (un-dispatch the order first) | no | yes |
+| `firmed` | yes, to an eligible line; it keeps its time | no | yes |
+| `running`, `paused` | no | no | cancel, optionally with replace |
+
+- **Locked means locked.** A locked job can't be moved at all until it is unlocked.
+- **Firmed jobs are anchored.** The projection places a firmed job at its firmed start (or now, if that time has passed), whatever runs before it. Work that runs into the anchor gets a `firmed_conflict` warning; it is never pushed past the firmed job. A firmed job moved to another line is placed in that line's sequence by its time, not where it was dropped.
+- **Cancel and replace.** Cancelling ends the job's open run. With replace, a new production job (`<job number>-R`, `replaces_job_id` set) takes the same slot for the quantity not yet made (planned minus good). It takes its order's plan state, so under a firmed or in-progress order it is firmed and anchored at the time of the cancel. Runs, counts and lots stay with the cancelled job.
+
+**Eligibility (D-020)**
+
+`core.equipment_capability` is the list of what can run where. A row holds a line, a material, its effective dates, the ideal rate (for OEE performance, and the seed for the run standard), the standard changeover and `standard_crew_size`, the labor estimate. A production job can only be created on, moved to or dispatched on a line with a capability in effect for its material. The run standard (D-016) stays the planning rate. When capability maintenance is built, adding a capability will create its run standard from the ideal rate.
+
+**Planner commands (D-017)**
+
+- **Lock order.** Every scheduling write locks the affected lines' `core.equipment` rows first (`FOR UPDATE`, in id order), then the work order, then the jobs. Commands on the same line or order therefore serialize, and no two commands wait on each other in opposite order. Pinning changes no sequence and locks only the job. Dispatch, firm and the move of a firmed job read the plan inside the transaction, after the lock.
 - **Placement.** Create and move both take `beforeJobId`, or null for the end of the line. The new rank is the midpoint of its neighbours (`SequenceRank`). When ten decimal places leave no room, the line's open jobs are renumbered 1..n in their current order, once, and the move is retried. This is the only case where a move writes more than one row.
-- **Moves.** Only planned or scheduled jobs that are not locked can move, and only to a schedulable line in the same site.
-- **Dispatch.** Only planned or scheduled jobs can be dispatched, and a production job's work order must be released or in progress. In auto mode, dispatch projects the line inside the transaction. If a placeholder sits in front of the job, dispatch inserts a dispatched `changeover` job (`<job number>-CO`) ranked just before it. That job has no `planned_duration`, so the projection keeps sizing it from the matrix.
-- **Publish.** Publish projects the line inside the transaction and writes each not-yet-started job's `planned_start` and `planned_end`, leaving the end null when the projection has no duration. Planned jobs become scheduled. One `pulaski.schedule.published.v1` event on the line lists the baseline.
-- **History.** Every job status change is also appended to `ts.job_status_change` (D-010).
+- **History.** Every job status change is also appended to `ts.job_status_change` (D-010). Each work order planning step appends one event on the order.
 - **Run standards and policy.** A modified rate records the actor as `modified_by`, and clearing it takes an optional reason. A site with no `scheduling_policy` row reports the defaults at version 0, and setting the policy from version 0 creates the row.
 
 **Build passes**
 
 1. Foundation: decisions, schema, the domain projector, and a read-only timeline API. *(built)*
-2. Commands: create and sequence jobs, lock, run-standard modify and clear, the scheduling policy, dispatch with changeover materialization, and publish. *(built)*
+2. Commands: create and sequence jobs, lock, cancel and replace, run-standard modify and clear, the scheduling policy, and the work order dispatch (publish), un-dispatch and firm. *(built)*
 3. Calculated rates from run history (a worker), with drift against the modified standard.
 4. Blazor scheduling board: per-line timeline with drag-to-sequence.
 

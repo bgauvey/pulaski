@@ -24,6 +24,9 @@ public interface IWorkOrderRepository
     /// <returns>The new row version.</returns>
     Task<long> InsertAsync(WorkOrder workOrder, DateTimeOffset at, CancellationToken cancellationToken);
 
+    /// <summary>True while any of the work order's jobs is still open.</summary>
+    Task<bool> HasOpenJobsAsync(Guid id, CancellationToken cancellationToken);
+
     /// <returns>The new row version.</returns>
     Task<long> UpdateStatusAsync(Guid id, string status, DateTimeOffset at, CancellationToken cancellationToken);
 }

@@ -19,13 +19,6 @@ internal static class SchedulingEndpoints
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new GetLineTimelineQuery(lineId, horizonDays), ct)));
 
-        group.MapPost("/lines/{lineId:guid}/publish", async Task<Ok<PublishScheduleResponse>> (
-            Guid lineId,
-            PublishScheduleRequest request,
-            ICommandHandler<PublishScheduleCommand, PublishScheduleResponse> handler,
-            CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new PublishScheduleCommand(lineId, request.HorizonDays), ct)));
-
         group.MapGet("/lines/{lineId:guid}/run-standards", async Task<Ok<IReadOnlyList<RunStandardDto>>> (
             Guid lineId,
             IQueryHandler<ListRunStandardsQuery, IReadOnlyList<RunStandardDto>> handler,
@@ -67,12 +60,13 @@ internal static class SchedulingEndpoints
             TypedResults.Ok(await handler.HandleAsync(
                 new PinJobCommand(id, request.Version, request.IsLocked, request.EarliestStart), ct)));
 
-        group.MapPost("/jobs/{id:guid}/dispatch", async Task<Ok<DispatchJobResponse>> (
+        group.MapPost("/jobs/{id:guid}/cancel", async Task<Ok<CancelJobResponse>> (
             Guid id,
-            DispatchJobRequest request,
-            ICommandHandler<DispatchJobCommand, DispatchJobResponse> handler,
+            CancelJobRequest request,
+            ICommandHandler<CancelJobCommand, CancelJobResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new DispatchJobCommand(id, request.Version), ct)));
+            TypedResults.Ok(await handler.HandleAsync(
+                new CancelJobCommand(id, request.Version, request.Reason, request.Replace), ct)));
 
         group.MapPost("/run-standards/{id:guid}/modify", async Task<Ok<VersionResponse>> (
             Guid id,

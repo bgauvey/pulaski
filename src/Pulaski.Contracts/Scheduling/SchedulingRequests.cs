@@ -18,7 +18,11 @@ public sealed record CreateJobRequest
     public Guid? BeforeJobId { get; init; }
 }
 
-/// <summary>Moves a job before <see cref="BeforeJobId"/> on <see cref="LineId"/>, or to the end of that line.</summary>
+/// <summary>
+/// Moves a job before <see cref="BeforeJobId"/> on <see cref="LineId"/>, or to the end of that line.
+/// A firmed job keeps its time, so its place on the new line follows from that time and
+/// <see cref="BeforeJobId"/> is ignored.
+/// </summary>
 public sealed record SequenceJobRequest
 {
     public long Version { get; init; }
@@ -34,15 +38,22 @@ public sealed record PinJobRequest
     public DateTimeOffset? EarliestStart { get; init; }
 }
 
-public sealed record DispatchJobRequest
+/// <summary>
+/// Cancels a job. With <see cref="Replace"/>, a new job for the quantity it did not make takes
+/// its slot (D-019); a job that has started can only be cancelled this way or outright.
+/// </summary>
+public sealed record CancelJobRequest
 {
     public long Version { get; init; }
+    public string? Reason { get; init; }
+    public bool Replace { get; init; }
 }
 
-public sealed record PublishScheduleRequest
+/// <summary>Dispatch, un-dispatch or firm a work order (D-018); the reason is recorded on the event.</summary>
+public sealed record WorkOrderPlanningRequest
 {
-    /// <summary>How far ahead shift windows are loaded; the timeline query's default when null.</summary>
-    public int? HorizonDays { get; init; }
+    public long Version { get; init; }
+    public string? Reason { get; init; }
 }
 
 public sealed record ModifyRunStandardRequest

@@ -79,7 +79,8 @@ internal static class TimelineMapping
             j.StartedAt,
             j.EarliestStart,
             j.PlannedDuration,
-            j.DueAt)).ToList();
+            j.DueAt,
+            j.Status == JobStatus.Firmed ? j.PlannedStart : null)).ToList();
 
         return new LinePlan(
             source.Line.Id,

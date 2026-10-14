@@ -19,6 +19,47 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
     private readonly Dictionary<Guid, Versioned<RunStandard>> _runStandards = [];
     private readonly Dictionary<Guid, Versioned<string>> _policies = [];
     private readonly List<(Guid JobId, string? From, string To)> _statusChanges = [];
+    private readonly HashSet<(Guid LineId, Guid MaterialId)> _capabilities = [];
+    private readonly Dictionary<Guid, decimal> _goodQty = [];
+    private readonly HashSet<Guid> _endedRuns = [];
+
+    /// <summary>Jobs whose open run a cancel has ended.</summary>
+    public IReadOnlyCollection<Guid> EndedRuns
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _endedRuns];
+            }
+        }
+    }
+
+    /// <summary>Lets the line run the material (D-020).</summary>
+    public void AddCapability(Guid lineId, Guid materialId)
+    {
+        lock (_lock)
+        {
+            _capabilities.Add((lineId, materialId));
+        }
+    }
+
+    /// <summary>Good quantity reported against a job so far.</summary>
+    public void SetGoodQty(Guid jobId, decimal goodQty)
+    {
+        lock (_lock)
+        {
+            _goodQty[jobId] = goodQty;
+        }
+    }
+
+    public bool HasOpenJobs(Guid workOrderId)
+    {
+        lock (_lock)
+        {
+            return _jobs.Values.Any(j => j.Value.WorkOrderId == workOrderId && j.Value.IsOpen);
+        }
+    }
 
     public IReadOnlyList<(Guid JobId, string? From, string To)> StatusChanges
     {
@@ -189,13 +230,47 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
     public Task<Versioned<Job>?> GetJobForUpdateAsync(Guid jobId, CancellationToken cancellationToken) =>
         Task.FromResult(FindJob(jobId));
 
-    public Task<IReadOnlyList<Versioned<Job>>> GetOpenJobsForUpdateAsync(Guid lineId, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<Guid>> GetWorkOrderLinesAsync(Guid workOrderId, CancellationToken cancellationToken)
     {
         lock (_lock)
         {
-            return Task.FromResult<IReadOnlyList<Versioned<Job>>>(
-                [.. OpenJobs(lineId, excluding: null).Select(j => _jobs[j.Id])]);
+            return Task.FromResult<IReadOnlyList<Guid>>(
+                [.. WorkOrderJobs(workOrderId).Select(j => j.Value.EquipmentId).Distinct()]);
         }
+    }
+
+    public Task<IReadOnlyList<Versioned<Job>>> GetWorkOrderJobsForUpdateAsync(Guid workOrderId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<Versioned<Job>>>([.. WorkOrderJobs(workOrderId)]);
+        }
+    }
+
+    public Task<bool> IsEligibleAsync(Guid lineId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_capabilities.Contains((lineId, materialId)));
+        }
+    }
+
+    public Task<decimal> GetGoodQtyAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_goodQty.GetValueOrDefault(jobId));
+        }
+    }
+
+    public Task EndOpenRunsAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _endedRuns.Add(jobId);
+        }
+
+        return Task.CompletedTask;
     }
 
     public Task<RankGap?> FindGapAsync(Guid lineId, Guid? beforeJobId, Guid? excludingJobId, CancellationToken cancellationToken)
@@ -293,6 +368,10 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
     }
 
     /// <summary>Caller holds <see cref="_lock"/>.</summary>
+    private IEnumerable<Versioned<Job>> WorkOrderJobs(Guid workOrderId) =>
+        _jobs.Values.Where(j => j.Value.WorkOrderId == workOrderId && j.Value.IsOpen);
+
+    /// <summary>Caller holds <see cref="_lock"/>.</summary>
     private List<Job> OpenJobs(Guid lineId, Guid? excluding) =>
         [.. _jobs.Values
             .Select(v => v.Value)
@@ -300,7 +379,8 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
             .OrderBy(j => j.SequenceRank)
             .ThenBy(j => j.JobNumber, StringComparer.Ordinal)];
 
-    private static PlanJobRow ToPlanRow(Versioned<Job> row)
+    /// <summary>Caller holds <see cref="_lock"/>.</summary>
+    private PlanJobRow ToPlanRow(Versioned<Job> row)
     {
         var j = row.Value;
         return new PlanJobRow
@@ -318,6 +398,7 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
             PlannedStart = j.PlannedStart,
             PlannedEnd = j.PlannedEnd,
             IsLocked = j.IsLocked,
+            GoodQty = _goodQty.GetValueOrDefault(j.Id),
             Version = row.Version,
         };
     }

@@ -44,7 +44,10 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
         var invalid = await _client.PostAsJsonAsync(uri, new ChangeWorkOrderStatusRequest { Version = 5, Status = "closed" });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, invalid.StatusCode);
 
-        var ok = await _client.PostAsJsonAsync(uri, new ChangeWorkOrderStatusRequest { Version = 5, Status = "released" });
+        var planning = await _client.PostAsJsonAsync(uri, new ChangeWorkOrderStatusRequest { Version = 5, Status = "dispatched" });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, planning.StatusCode);
+
+        var ok = await _client.PostAsJsonAsync(uri, new ChangeWorkOrderStatusRequest { Version = 5, Status = "cancelled" });
         Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
         Assert.Equal(6, (await ok.Content.ReadFromJsonAsync<VersionResponse>())!.Version);
 
@@ -89,11 +92,11 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
     [Fact]
     public async Task Work_order_list_includes_next_statuses()
     {
-        factory.Stores.WorkOrders.Add("released");
+        factory.Stores.WorkOrders.Add("dispatched");
 
         var rows = await _client.GetFromJsonAsync<List<WorkOrderDto>>("/api/work-orders");
 
-        Assert.Contains(rows!, w => w.Status == "released" && w.NextStatuses.Contains("in_progress"));
+        Assert.Contains(rows!, w => w.Status == "dispatched" && w.NextStatuses.Contains("firmed"));
     }
 
     [Fact]
@@ -124,8 +127,9 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
     [Fact]
     public async Task Scheduling_commands_map_to_created_ok_conflict_and_not_found()
     {
-        var wo = factory.Stores.WorkOrders.Add("released");
+        var wo = factory.Stores.WorkOrders.Add("planned");
         var line = factory.Stores.Scheduling.AddLine(wo.SiteId);
+        factory.Stores.Scheduling.AddCapability(line.Id, wo.MaterialId);
 
         var create = await _client.PostAsJsonAsync("/api/scheduling/jobs", new CreateJobRequest
         {
@@ -144,12 +148,22 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
         Assert.Equal(HttpStatusCode.OK, pin.StatusCode);
 
         var stale = await _client.PostAsJsonAsync(
-            $"/api/scheduling/jobs/{created.Id}/dispatch", new DispatchJobRequest { Version = created.Version });
+            $"/api/scheduling/jobs/{created.Id}/cancel", new CancelJobRequest { Version = created.Version });
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
 
-        var published = await _client.PostAsJsonAsync($"/api/scheduling/lines/{line.Id}/publish", new PublishScheduleRequest());
-        Assert.Equal(HttpStatusCode.OK, published.StatusCode);
-        Assert.Equal(created.Id, Assert.Single((await published.Content.ReadFromJsonAsync<PublishScheduleResponse>())!.Jobs).JobId);
+        var dispatch = await _client.PostAsJsonAsync(
+            $"/api/work-orders/{wo.Id}/dispatch", new WorkOrderPlanningRequest { Version = factory.Stores.WorkOrders.Find(wo.Id)!.Version });
+        Assert.Equal(HttpStatusCode.OK, dispatch.StatusCode);
+        var dispatched = (await dispatch.Content.ReadFromJsonAsync<DispatchWorkOrderResponse>())!;
+        Assert.Equal(created.Id, Assert.Single(dispatched.Jobs).JobId);
+
+        var firm = await _client.PostAsJsonAsync(
+            $"/api/work-orders/{wo.Id}/firm", new WorkOrderPlanningRequest { Version = dispatched.Version });
+        Assert.Equal(HttpStatusCode.OK, firm.StatusCode);
+
+        var undispatch = await _client.PostAsJsonAsync(
+            $"/api/work-orders/{wo.Id}/undispatch", new WorkOrderPlanningRequest { Version = dispatched.Version });
+        Assert.Equal(HttpStatusCode.Conflict, undispatch.StatusCode);
 
         var policy = await _client.GetFromJsonAsync<SchedulingPolicyDto>($"/api/scheduling/sites/{wo.SiteId}/policy");
         Assert.True(policy!.IsDefault);

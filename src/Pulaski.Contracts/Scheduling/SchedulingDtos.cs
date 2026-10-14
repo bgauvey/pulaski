@@ -1,16 +1,21 @@
 namespace Pulaski.Contracts.Scheduling;
 
 /// <summary>
-/// The dispatched job's new version. In auto changeover mode, <see cref="ChangeoverJobId"/> is
-/// the changeover job that replaced the placeholder in front of it (D-015).
+/// The dispatched work order's new version, the baseline published for each of its jobs, and
+/// warnings about the order as a whole (e.g. job quantities that don't add up to the order's).
 /// </summary>
-public sealed record DispatchJobResponse(long Version, Guid? ChangeoverJobId);
-
-/// <summary>The baseline written for each job, with the job's new version.</summary>
-public sealed record PublishScheduleResponse(Guid LineId, DateTimeOffset PublishedAt, IReadOnlyList<PublishedJobDto> Jobs);
+public sealed record DispatchWorkOrderResponse(long Version, IReadOnlyList<BaselineJobDto> Jobs, IReadOnlyList<ScheduleWarningDto> Warnings);
 
 /// <summary><see cref="PlannedEnd"/> is null when the projection had no duration to give.</summary>
-public sealed record PublishedJobDto(Guid JobId, DateTimeOffset PlannedStart, DateTimeOffset? PlannedEnd, long Version);
+public sealed record BaselineJobDto(
+    Guid JobId,
+    DateTimeOffset PlannedStart,
+    DateTimeOffset? PlannedEnd,
+    long Version,
+    IReadOnlyList<ScheduleWarningDto> Warnings);
+
+/// <summary>The cancelled job's new version, and its replacement if one was asked for.</summary>
+public sealed record CancelJobResponse(long Version, Guid? ReplacementJobId);
 
 /// <summary>A line/material run standard (D-016).</summary>
 public sealed record RunStandardDto
