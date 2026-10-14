@@ -74,6 +74,9 @@ public sealed record TimelineSegmentDto
 
     public bool IsLocked { get; init; }
 
+    /// <summary>The job's concurrency token, for sequencing, pinning and dispatch; null for a placeholder.</summary>
+    public long? Version { get; init; }
+
     public IReadOnlyList<ScheduleWarningDto> Warnings { get; init; } = [];
 }
 

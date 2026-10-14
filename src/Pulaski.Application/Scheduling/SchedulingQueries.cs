@@ -9,6 +9,10 @@ namespace Pulaski.Application.Scheduling;
 /// <summary>A line's timeline; <see cref="HorizonDays"/> bounds how far ahead shift windows are loaded.</summary>
 public sealed record GetLineTimelineQuery(Guid LineId, int? HorizonDays = null) : IQuery<LineTimelineDto>;
 
+public sealed record ListRunStandardsQuery(Guid LineId) : IQuery<IReadOnlyList<RunStandardDto>>;
+
+public sealed record GetSchedulingPolicyQuery(Guid SiteId) : IQuery<SchedulingPolicyDto>;
+
 internal sealed class GetLineTimelineHandler(ISchedulingReadStore store, TimeProvider timeProvider)
     : IQueryHandler<GetLineTimelineQuery, LineTimelineDto>
 {
@@ -34,6 +38,21 @@ internal sealed class GetLineTimelineHandler(ISchedulingReadStore store, TimePro
         var timeline = TimelineProjector.Project(TimelineMapping.ToPlan(source, now));
         return TimelineMapping.ToDto(source, timeline);
     }
+}
+
+internal sealed class ListRunStandardsHandler(ISchedulingReadStore store)
+    : IQueryHandler<ListRunStandardsQuery, IReadOnlyList<RunStandardDto>>
+{
+    public Task<IReadOnlyList<RunStandardDto>> HandleAsync(ListRunStandardsQuery query, CancellationToken cancellationToken) =>
+        store.ListRunStandardsAsync(query.LineId, cancellationToken);
+}
+
+internal sealed class GetSchedulingPolicyHandler(ISchedulingReadStore store)
+    : IQueryHandler<GetSchedulingPolicyQuery, SchedulingPolicyDto>
+{
+    public async Task<SchedulingPolicyDto> HandleAsync(GetSchedulingPolicyQuery query, CancellationToken cancellationToken) =>
+        await store.GetPolicyAsync(query.SiteId, cancellationToken)
+            ?? throw new NotFoundException($"Site {query.SiteId} not found.");
 }
 
 internal static class TimelineMapping
@@ -123,6 +142,7 @@ internal static class TimelineMapping
             BaselineStart = placeholder ? null : job.PlannedStart,
             BaselineEnd = placeholder ? null : job.PlannedEnd,
             IsLocked = !placeholder && job.IsLocked,
+            Version = placeholder ? null : job.Version,
             Warnings = [.. segment.Warnings.Select(ToDto)],
         };
     }

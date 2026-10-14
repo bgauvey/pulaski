@@ -23,10 +23,13 @@ BEGIN
     END IF;
 END $$;
 
-GRANT USAGE ON SCHEMA core, evt TO pulaski_app;
+GRANT USAGE ON SCHEMA core, evt, ts TO pulaski_app;
 
 GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA core TO pulaski_app;
 
 GRANT SELECT, INSERT ON evt.event TO pulaski_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON evt.event FROM pulaski_app;
 GRANT USAGE ON SEQUENCE evt.event_position_seq TO pulaski_app;
+
+-- History the application appends to (D-010). Like evt.event, never updated or deleted.
+GRANT SELECT, INSERT ON ts.job_status_change TO pulaski_app;

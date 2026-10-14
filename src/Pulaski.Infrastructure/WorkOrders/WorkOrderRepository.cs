@@ -9,13 +9,14 @@ namespace Pulaski.Infrastructure.WorkOrders;
 /// <summary>Write side for work orders. Every statement runs in the command's transaction.</summary>
 internal sealed class WorkOrderRepository(DbSession session) : IWorkOrderRepository
 {
-    private const string GetForUpdate = """
-        SELECT id, site_id, order_number, material_id, planned_qty, uom_id, target_equipment_id,
-               planned_start, planned_end, due_at, priority, status, origin, xmin::text::bigint AS version
-        FROM core.work_order
-        WHERE id = @Id
-        FOR UPDATE
+    private const string Columns = """
+        id, site_id, order_number, material_id, planned_qty, uom_id, target_equipment_id,
+        planned_start, planned_end, due_at, priority, status, origin, xmin::text::bigint AS version
         """;
+
+    private const string GetForUpdate = $"SELECT {Columns} FROM core.work_order WHERE id = @Id FOR UPDATE";
+
+    private const string GetForShare = $"SELECT {Columns} FROM core.work_order WHERE id = @Id FOR SHARE";
 
     private const string Insert = """
         INSERT INTO core.work_order (id, site_id, order_number, material_id, planned_qty, uom_id,
@@ -38,6 +39,12 @@ internal sealed class WorkOrderRepository(DbSession session) : IWorkOrderReposit
     public async Task<Versioned<WorkOrder>?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken)
     {
         var row = await session.QuerySingleOrDefaultAsync<WorkOrderRow>(GetForUpdate, new { Id = id }, cancellationToken);
+        return row?.ToVersioned();
+    }
+
+    public async Task<Versioned<WorkOrder>?> GetForShareAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var row = await session.QuerySingleOrDefaultAsync<WorkOrderRow>(GetForShare, new { Id = id }, cancellationToken);
         return row?.ToVersioned();
     }
 

@@ -18,6 +18,9 @@ public interface IWorkOrderRepository
 {
     Task<Versioned<WorkOrder>?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>Reads the work order <c>FOR SHARE</c>, for a command that references it (e.g. a job).</summary>
+    Task<Versioned<WorkOrder>?> GetForShareAsync(Guid id, CancellationToken cancellationToken);
+
     /// <returns>The new row version.</returns>
     Task<long> InsertAsync(WorkOrder workOrder, DateTimeOffset at, CancellationToken cancellationToken);
 

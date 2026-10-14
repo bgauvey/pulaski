@@ -38,6 +38,7 @@ public sealed class InMemoryStores
         services.RemoveAll<IMaterialRepository>();
         services.RemoveAll<IReferenceDataReadStore>();
         services.RemoveAll<ISchedulingReadStore>();
+        services.RemoveAll<ISchedulingRepository>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -48,6 +49,7 @@ public sealed class InMemoryStores
         services.AddSingleton<IMaterialRepository>(Materials);
         services.AddSingleton<IReferenceDataReadStore>(Materials);
         services.AddSingleton<ISchedulingReadStore>(Scheduling);
+        services.AddSingleton<ISchedulingRepository>(Scheduling);
         return services;
     }
 }

@@ -24,6 +24,8 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-014 | Scheduling: the planner owns line and sequence; Pulaski projects times forward through the calendar. No solver, no automatic assignment | Decided | 2026-10-13 |
 | D-015 | Changeovers: auto-placed placeholders by default; a per-site policy switches to scheduler-placed changeover jobs | Decided | 2026-10-13 |
 | D-016 | Run standards: one line/material row holds a calculated rate and an optional modified rate; a modified rate is the gold standard | Decided | 2026-10-13 |
+| D-017 | Scheduling writes lock the line row first, then jobs; jobs are placed before a named job (or at the end) at a midpoint rank, renumbering the line only when ranks run out | Proposed | 2026-10-13 |
+| D-018 | Job lifecycle for planners: only unlocked planned/scheduled jobs move or dispatch; dispatch needs a released work order; publish baselines jobs that have not started and moves planned to scheduled | Proposed | 2026-10-13 |
 
 ## Order hierarchy
 
@@ -184,10 +186,20 @@ The projection is not stored. **Publish** copies the projected times into `job.p
 
 A rate rather than a fixed duration is stored, because a job's runtime scales with its quantity. Runtime = quantity ÷ effective rate.
 
+**Planner commands (D-017, D-018, proposed)**
+
+- **Lock order.** Every command that changes a line's sequence locks the line's `core.equipment` row first (`FOR UPDATE`, in id order when two lines are involved), then the job. Create, move, dispatch and publish on one line therefore serialize, and no two commands wait on each other in opposite order. Pinning changes no sequence and locks only the job.
+- **Placement.** Create and move both take `beforeJobId`, or null for the end of the line. The new rank is the midpoint of its neighbours (`SequenceRank`). When ten decimal places leave no room, the line's open jobs are renumbered 1..n in their current order, once, and the move is retried. This is the only case where a move writes more than one row.
+- **Moves.** Only planned or scheduled jobs that are not locked can move, and only to a schedulable line in the same site.
+- **Dispatch.** Only planned or scheduled jobs can be dispatched, and a production job's work order must be released or in progress. In auto mode, dispatch projects the line inside the transaction. If a placeholder sits in front of the job, dispatch inserts a dispatched `changeover` job (`<job number>-CO`) ranked just before it. That job has no `planned_duration`, so the projection keeps sizing it from the matrix.
+- **Publish.** Publish projects the line inside the transaction and writes each not-yet-started job's `planned_start` and `planned_end`, leaving the end null when the projection has no duration. Planned jobs become scheduled. One `pulaski.schedule.published.v1` event on the line lists the baseline.
+- **History.** Every job status change is also appended to `ts.job_status_change` (D-010).
+- **Run standards and policy.** A modified rate records the actor as `modified_by`, and clearing it takes an optional reason. A site with no `scheduling_policy` row reports the defaults at version 0, and setting the policy from version 0 creates the row.
+
 **Build passes**
 
-1. Foundation: decisions, schema, the domain projector, and a read-only timeline API.
-2. Commands: create and sequence jobs, lock, run-standard modify and clear, the scheduling policy, dispatch with changeover materialization, and publish.
+1. Foundation: decisions, schema, the domain projector, and a read-only timeline API. *(built)*
+2. Commands: create and sequence jobs, lock, run-standard modify and clear, the scheduling policy, dispatch with changeover materialization, and publish. *(built)*
 3. Calculated rates from run history (a worker), with drift against the modified standard.
 4. Blazor scheduling board: per-line timeline with drag-to-sequence.
 

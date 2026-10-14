@@ -37,6 +37,9 @@ public sealed class InMemoryWorkOrders : IWorkOrderRepository, IWorkOrderReadSto
     public Task<Versioned<WorkOrder>?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(Find(id));
 
+    public Task<Versioned<WorkOrder>?> GetForShareAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(Find(id));
+
     public Task<long> InsertAsync(WorkOrder workOrder, DateTimeOffset at, CancellationToken cancellationToken)
     {
         lock (_lock)

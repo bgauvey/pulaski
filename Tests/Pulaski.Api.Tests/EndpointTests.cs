@@ -120,4 +120,41 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
         var badHorizon = await _client.GetAsync(new Uri($"/api/scheduling/lines/{line.Id}/timeline?horizonDays=0", UriKind.Relative));
         Assert.Equal(HttpStatusCode.BadRequest, badHorizon.StatusCode);
     }
+
+    [Fact]
+    public async Task Scheduling_commands_map_to_created_ok_conflict_and_not_found()
+    {
+        var wo = factory.Stores.WorkOrders.Add("released");
+        var line = factory.Stores.Scheduling.AddLine(wo.SiteId);
+
+        var create = await _client.PostAsJsonAsync("/api/scheduling/jobs", new CreateJobRequest
+        {
+            LineId = line.Id,
+            JobNumber = "J-1",
+            JobType = "production",
+            WorkOrderId = wo.Id,
+            PlannedQty = 10m,
+        });
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var created = (await create.Content.ReadFromJsonAsync<CreatedResponse>())!;
+        Assert.Equal($"/api/scheduling/jobs/{created.Id}", create.Headers.Location?.OriginalString);
+
+        var pin = await _client.PostAsJsonAsync(
+            $"/api/scheduling/jobs/{created.Id}/pin", new PinJobRequest { Version = created.Version, IsLocked = true });
+        Assert.Equal(HttpStatusCode.OK, pin.StatusCode);
+
+        var stale = await _client.PostAsJsonAsync(
+            $"/api/scheduling/jobs/{created.Id}/dispatch", new DispatchJobRequest { Version = created.Version });
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+
+        var published = await _client.PostAsJsonAsync($"/api/scheduling/lines/{line.Id}/publish", new PublishScheduleRequest());
+        Assert.Equal(HttpStatusCode.OK, published.StatusCode);
+        Assert.Equal(created.Id, Assert.Single((await published.Content.ReadFromJsonAsync<PublishScheduleResponse>())!.Jobs).JobId);
+
+        var policy = await _client.GetFromJsonAsync<SchedulingPolicyDto>($"/api/scheduling/sites/{wo.SiteId}/policy");
+        Assert.True(policy!.IsDefault);
+
+        var missing = await _client.GetAsync(new Uri($"/api/scheduling/sites/{Guid.CreateVersion7()}/policy", UriKind.Relative));
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
 }

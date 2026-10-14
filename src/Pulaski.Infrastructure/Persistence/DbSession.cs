@@ -36,16 +36,15 @@ internal sealed class DbSession(NpgsqlDataSource dataSource) : IUnitOfWork, IAsy
                 ?? throw new InvalidOperationException("The statement returned no value."),
             cancellationToken);
 
+    public Task<IReadOnlyList<T>> QueryAsync<T>(string sql, object? args, CancellationToken cancellationToken) =>
+        RunAsync<IReadOnlyList<T>>(
+            sql, args, async (connection, command) => (await connection.QueryAsync<T>(command)).AsList(), cancellationToken);
+
     public Task<int> ExecuteAsync(string sql, object? args, CancellationToken cancellationToken) =>
         RunAsync(sql, args, (connection, command) => connection.ExecuteAsync(command), cancellationToken);
 
-    public async ValueTask DisposeAsync() => await EndAsync(commit: false, CancellationToken.None);
-
-    private async Task<T> RunAsync<T>(
-        string sql,
-        object? args,
-        Func<NpgsqlConnection, CommandDefinition, Task<T>> run,
-        CancellationToken cancellationToken)
+    /// <summary>Runs code that issues several statements of its own on the session's connection and transaction.</summary>
+    public async Task<T> UseConnectionAsync<T>(Func<NpgsqlConnection, NpgsqlTransaction, Task<T>> run)
     {
         if (_connection is null || _transaction is null)
         {
@@ -54,13 +53,23 @@ internal sealed class DbSession(NpgsqlDataSource dataSource) : IUnitOfWork, IAsy
 
         try
         {
-            return await run(_connection, new CommandDefinition(sql, args, _transaction, cancellationToken: cancellationToken));
+            return await run(_connection, _transaction);
         }
         catch (PostgresException ex) when (PostgresErrors.TryTranslate(ex, out var translated))
         {
             throw translated;
         }
     }
+
+    public async ValueTask DisposeAsync() => await EndAsync(commit: false, CancellationToken.None);
+
+    private Task<T> RunAsync<T>(
+        string sql,
+        object? args,
+        Func<NpgsqlConnection, CommandDefinition, Task<T>> run,
+        CancellationToken cancellationToken) =>
+        UseConnectionAsync((connection, transaction) =>
+            run(connection, new CommandDefinition(sql, args, transaction, cancellationToken: cancellationToken)));
 
     private async ValueTask EndAsync(bool commit, CancellationToken cancellationToken)
     {

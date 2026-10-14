@@ -11,6 +11,7 @@ internal static class PostgresErrors
     {
         ["equipment_code_uq"] = "That equipment code is already used in this site.",
         ["wo_number_uq"] = "That work order number is already used in this site.",
+        ["job_number_uq"] = "That job number is already used in this site.",
     };
 
     public static bool TryTranslate(PostgresException ex, out Exception translated)

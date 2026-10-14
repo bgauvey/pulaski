@@ -55,6 +55,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(dbDir, "app-role.sql")));
         await ExecuteAsync($"GRANT pulaski_app TO {_appLogin}");
         await ExecuteAsync("SELECT ts.create_month_partitions('evt.event', current_date - 31, 3)");
+        await ExecuteAsync("SELECT ts.create_month_partitions('ts.job_status_change', current_date - 31, 3)");
 
         UomId = Guid.CreateVersion7();
         MaterialId = Guid.CreateVersion7();

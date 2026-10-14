@@ -11,10 +11,12 @@ internal sealed class HandlerFixture
 
     public HandlerFixture()
     {
-        var time = new FakeTimeProvider(Now);
-        Ids = new UuidV7Generator(time);
-        Events = new EventFactory(Ids, time, new FixedRequestContext());
+        Time = new FakeTimeProvider(Now);
+        Ids = new UuidV7Generator(Time);
+        Events = new EventFactory(Ids, Time, new FixedRequestContext());
     }
+
+    public FakeTimeProvider Time { get; }
 
     public InMemoryStores Stores { get; } = new();
 

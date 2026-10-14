@@ -1,146 +1,56 @@
 using Dapper;
 using Npgsql;
 using Pulaski.Application.Scheduling;
+using Pulaski.Contracts.Scheduling;
 
 namespace Pulaski.Infrastructure.Scheduling;
 
-/// <summary>Read side for scheduling: loads one line's plan inputs on one connection, no locks.</summary>
+/// <summary>Read side for scheduling: one connection per query, no locks.</summary>
 internal sealed class SchedulingQueries(NpgsqlDataSource dataSource) : ISchedulingReadStore
 {
-    private const string Line = """
-        SELECT e.id, e.code, e.name, e.is_schedulable,
-               coalesce(p.changeover_mode, 'auto') AS changeover_mode
+    private const string RunStandards = """
+        SELECT rs.id, rs.equipment_id, rs.material_id, m.code AS material_code, rs.uom_id, u.code AS uom_code,
+               rs.calculated_rate_per_hour, rs.calculation_basis, rs.calculated_at,
+               rs.modified_rate_per_hour, rs.modified_at, rs.modified_by, rs.modified_note,
+               rs.rate_source, rs.effective_rate_per_hour, rs.xmin::text::bigint AS version
+        FROM core.run_standard rs
+        JOIN core.material m ON m.id = rs.material_id
+        JOIN core.uom u      ON u.id = rs.uom_id
+        WHERE rs.equipment_id = @LineId
+        ORDER BY m.code
+        """;
+
+    // A site without a policy row gets the defaults, version 0.
+    private const string Policy = """
+        SELECT e.id AS site_id,
+               coalesce(p.changeover_mode, 'auto') AS changeover_mode,
+               p.site_id IS NULL AS is_default,
+               coalesce(p.xmin::text::bigint, 0) AS version
         FROM core.equipment e
-        LEFT JOIN core.scheduling_policy p ON p.site_id = e.site_id
-        WHERE e.id = @LineId
-        """;
-
-    // Open jobs in planner sequence; the running job first. Good quantity and first start
-    // are summed over the job's runs on any equipment.
-    private const string Jobs = """
-        SELECT j.id AS job_id, j.job_number, j.job_type, j.status,
-               j.material_id, m.code AS material_code, m.material_class_id,
-               j.planned_qty, j.uom_id, u.code AS uom_code,
-               coalesce(r.good_qty, 0) AS good_qty, r.started_at,
-               j.earliest_start, j.planned_duration, j.planned_start, j.planned_end, j.is_locked,
-               w.order_number AS work_order_number, w.due_at
-        FROM core.job j
-        LEFT JOIN core.material m   ON m.id = j.material_id
-        LEFT JOIN core.uom u        ON u.id = j.uom_id
-        LEFT JOIN core.work_order w ON w.id = j.work_order_id
-        LEFT JOIN LATERAL (
-            SELECT sum(jr.good_qty) AS good_qty, min(jr.started_at) AS started_at
-            FROM core.job_run jr
-            WHERE jr.job_id = j.id
-        ) r ON true
-        WHERE j.equipment_id = @LineId
-          AND j.status IN ('planned','scheduled','dispatched','running','paused')
-        ORDER BY (j.status = 'running') DESC, j.sequence_rank, j.job_number
-        """;
-
-    private const string PreviousMaterial = """
-        SELECT j.material_id, m.code AS material_code, m.material_class_id
-        FROM core.job_run jr
-        JOIN core.job j      ON j.id = jr.job_id
-        JOIN core.material m ON m.id = j.material_id
-        WHERE jr.equipment_id = @LineId
-          AND jr.ended_at IS NOT NULL
-          AND j.job_type = 'production'
-        ORDER BY jr.ended_at DESC
-        LIMIT 1
-        """;
-
-    private const string Rates = """
-        SELECT material_id, uom_id, effective_rate_per_hour AS rate_per_hour, rate_source
-        FROM core.run_standard
-        WHERE equipment_id = @LineId
-        """;
-
-    private const string ChangeoverRules = """
-        SELECT id, equipment_id, from_material_id, from_material_class_id,
-               to_material_id, to_material_class_id, duration
-        FROM core.changeover_rule
-        WHERE site_id = (SELECT site_id FROM core.equipment WHERE id = @LineId)
-          AND is_active
-          AND (equipment_id IS NULL OR equipment_id = @LineId)
-        """;
-
-    private const string StandardChangeovers = """
-        SELECT material_id, standard_changeover
-        FROM core.equipment_capability
-        WHERE equipment_id = @LineId
-          AND standard_changeover IS NOT NULL
-          AND effective_from <= @From
-          AND (effective_to IS NULL OR effective_to > @From)
-        """;
-
-    // Shifts come from the nearest ancestor (or the line itself) that has any instances.
-    private const string ShiftScope = """
-        SELECT c.ancestor_id
-        FROM core.equipment_closure c
-        WHERE c.descendant_id = @LineId
-          AND EXISTS (SELECT 1 FROM core.shift_instance si WHERE si.scope_equipment_id = c.ancestor_id)
-        ORDER BY c.depth
-        LIMIT 1
-        """;
-
-    private const string Shifts = """
-        SELECT starts_at, ends_at
-        FROM core.shift_instance
-        WHERE scope_equipment_id = @ScopeId
-          AND is_scheduled
-          AND ends_at > @From
-          AND starts_at < @To
-        ORDER BY starts_at
-        """;
-
-    // Exceptions apply from every ancestor, including the line itself.
-    private const string Exceptions = """
-        SELECT x.starts_at, x.ends_at
-        FROM core.calendar_exception x
-        JOIN core.equipment_closure c ON c.ancestor_id = x.scope_equipment_id
-        WHERE c.descendant_id = @LineId
-          AND x.ends_at > @From
-          AND x.starts_at < @To
-        ORDER BY x.starts_at
+        LEFT JOIN core.scheduling_policy p ON p.site_id = e.id
+        WHERE e.id = @SiteId
+          AND e.level = 'site'
         """;
 
     public async Task<LinePlanSource?> GetLinePlanAsync(
         Guid lineId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        var args = new { LineId = lineId, From = windowStart, To = windowEnd };
-
-        var line = await connection.QuerySingleOrDefaultAsync<SchedulingLineRow>(Command(Line, args, cancellationToken));
-        if (line is null)
-        {
-            return null;
-        }
-
-        var scopeId = await connection.QuerySingleOrDefaultAsync<Guid?>(Command(ShiftScope, args, cancellationToken));
-        var shifts = scopeId is { } scope
-            ? await ListAsync<WindowRow>(connection, Shifts, new { ScopeId = scope, From = windowStart, To = windowEnd }, cancellationToken)
-            : [];
-
-        return new LinePlanSource
-        {
-            Line = line,
-            Jobs = await ListAsync<PlanJobRow>(connection, Jobs, args, cancellationToken),
-            PreviousMaterial = await connection.QuerySingleOrDefaultAsync<PlanMaterialRow>(
-                Command(PreviousMaterial, args, cancellationToken)),
-            Rates = await ListAsync<RunRateRow>(connection, Rates, args, cancellationToken),
-            ChangeoverRules = await ListAsync<ChangeoverRuleRow>(connection, ChangeoverRules, args, cancellationToken),
-            StandardChangeovers = await ListAsync<StandardChangeoverRow>(connection, StandardChangeovers, args, cancellationToken),
-            HasShiftCalendar = scopeId is not null,
-            Shifts = shifts,
-            Exceptions = await ListAsync<WindowRow>(connection, Exceptions, args, cancellationToken),
-        };
+        return await LinePlanLoader.LoadAsync(connection, null, lineId, windowStart, windowEnd, cancellationToken);
     }
 
-    private static async Task<IReadOnlyList<T>> ListAsync<T>(
-        NpgsqlConnection connection, string sql, object args, CancellationToken cancellationToken) =>
-        (await connection.QueryAsync<T>(Command(sql, args, cancellationToken))).AsList();
+    public async Task<IReadOnlyList<RunStandardDto>> ListRunStandardsAsync(Guid lineId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<RunStandardDto>(
+            new CommandDefinition(RunStandards, new { LineId = lineId }, cancellationToken: cancellationToken));
+        return rows.AsList();
+    }
 
-    private static CommandDefinition Command(string sql, object args, CancellationToken cancellationToken) =>
-        new(sql, args, cancellationToken: cancellationToken);
+    public async Task<SchedulingPolicyDto?> GetPolicyAsync(Guid siteId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return await connection.QuerySingleOrDefaultAsync<SchedulingPolicyDto>(
+            new CommandDefinition(Policy, new { SiteId = siteId }, cancellationToken: cancellationToken));
+    }
 }

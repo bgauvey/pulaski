@@ -61,4 +61,12 @@ public static class EventTypes
     public const string EquipmentUpdated = "pulaski.equipment.updated.v1";
     public const string WorkOrderCreated = "pulaski.work_order.created.v1";
     public const string WorkOrderStatusChanged = "pulaski.work_order.status_changed.v1";
+    public const string JobCreated = "pulaski.job.created.v1";
+    public const string JobSequenced = "pulaski.job.sequenced.v1";
+    public const string JobPinned = "pulaski.job.pinned.v1";
+    public const string JobDispatched = "pulaski.job.dispatched.v1";
+    public const string SchedulePublished = "pulaski.schedule.published.v1";
+    public const string RunStandardModified = "pulaski.run_standard.modified.v1";
+    public const string RunStandardModificationCleared = "pulaski.run_standard.modification_cleared.v1";
+    public const string SchedulingPolicyChanged = "pulaski.scheduling_policy.changed.v1";
 }

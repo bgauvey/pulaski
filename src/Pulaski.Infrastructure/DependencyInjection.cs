@@ -36,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IEquipmentRepository, EquipmentRepository>();
         services.AddScoped<IWorkOrderRepository, WorkOrderRepository>();
         services.AddScoped<IMaterialRepository, MaterialRepository>();
+        services.AddScoped<ISchedulingRepository, SchedulingRepository>();
 
         return services;
     }

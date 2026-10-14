@@ -11,6 +11,7 @@
 
 -- Partitions for the current month and the next two.
 SELECT ts.create_month_partitions('evt.event', current_date, 3);
+SELECT ts.create_month_partitions('ts.job_status_change', current_date, 3);
 
 INSERT INTO core.uom (code, name, dimension, to_base_factor) VALUES
     ('kg', 'Kilogram', 'mass',   1),

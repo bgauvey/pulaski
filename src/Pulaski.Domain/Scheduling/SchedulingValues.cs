@@ -26,6 +26,12 @@ public static class JobStatus
 
     /// <summary>Statuses with work still ahead of them; these are the jobs on a line's timeline.</summary>
     public static IReadOnlyList<string> Open { get; } = [Planned, Scheduled, Dispatched, Running, Paused];
+
+    /// <summary>Jobs the planner may still move or dispatch.</summary>
+    public static IReadOnlyList<string> Resequenceable { get; } = [Planned, Scheduled];
+
+    /// <summary>Jobs that have not started, so publish may (re)baseline them.</summary>
+    public static IReadOnlyList<string> Publishable { get; } = [Planned, Scheduled, Dispatched];
 }
 
 /// <summary>How changeovers get onto the timeline (D-015). Values match <c>core.scheduling_policy.changeover_mode</c>.</summary>
