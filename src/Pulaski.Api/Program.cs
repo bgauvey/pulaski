@@ -33,5 +33,6 @@ api.MapEquipmentEndpoints();
 api.MapWorkOrderEndpoints();
 api.MapReferenceDataEndpoints();
 api.MapSchedulingEndpoints();
+api.MapProcessEndpoints();
 
 app.Run();

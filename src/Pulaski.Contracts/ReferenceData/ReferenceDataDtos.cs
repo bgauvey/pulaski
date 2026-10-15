@@ -16,5 +16,9 @@ public sealed record MaterialDto
     public required string MaterialType { get; init; }
     public required Guid BaseUomId { get; init; }
     public required string BaseUomCode { get; init; }
+    public Guid? MaterialClassId { get; init; }
+    public string? MaterialClassCode { get; init; }
     public bool IsActive { get; init; }
 }
+
+public sealed record MaterialClassDto(Guid Id, string Code, string Name);

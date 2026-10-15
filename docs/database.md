@@ -198,6 +198,7 @@ Groups materials (e.g. all resins), so changeover rules can match a class instea
 | `origin` | text | no | `local` (created in Pulaski) or `erp` (imported). |
 | `external_system`, `external_key`, `external_version` | text | yes | The ERP record this came from. System and key are required for `erp` rows and unique together. |
 | `is_active` | boolean | no | False when retired; inactive materials can't be put on new orders. |
+| `default_process_id` | uuid → process | yes | The process order creation pre-selects for it (D-023), among those whose scope covers it; the planner may pick another. Can only be set to a process that makes the material. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ### core.material_uom_conversion — per-material unit conversions · *Planned*
@@ -237,6 +238,77 @@ Conversions that depend on the material (metres of profile to kilograms, for exa
 | `uom_id` | uuid → uom | no | Unit of `qty_per`. |
 | `scrap_factor` | numeric(9,6) | no | Expected extra consumption as a fraction (0.02 = 2 %). Default 0. |
 | `consumption_method` | text | no | How consumption is recorded: `time_window`, `declared`, `backflush` or `scan`. |
+
+### core.process — process routes (D-023) · *In use*
+
+A reusable route such as "Extrude and Pack" (ISA-95 operations definition). Its content lives in versions.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The site it belongs to. |
+| `code` | text | no | Unique per site (`process_code_uq`). |
+| `name` | text | no | Display name. |
+| `description` | text | yes | Notes. |
+| `makes_all_materials` | boolean | no | The scope: true when it can make every material; otherwise it makes the classes and materials listed in `process_material_class` and `process_material`. |
+| `is_active` | boolean | no | False when retired; an inactive process can't be picked for new orders or be a material's default. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.process_material_class, core.process_material — what a process makes (D-023) · *In use*
+
+The scope beyond `makes_all_materials`: whole material classes and single materials. A process covers a material when it makes all materials, lists the material, or lists its class. Changing the scope switches rows off and back on; they are never deleted.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `process_id` | uuid → process | no | Part of the primary key. |
+| `material_class_id` / `material_id` | uuid → material_class / material | no | The class or material it makes. Part of the primary key. |
+| `is_active` | boolean | no | False once taken out of the scope. |
+| `updated_at` | timestamptz | no | When it last joined or left the scope. |
+
+### core.process_version — a version of a process (D-023) · *In use*
+
+A draft is edited freely; a released version is fixed and is what orders are made from; releasing a newer version makes the old one obsolete. At most one draft and one released version per process (partial unique indexes).
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `process_id` | uuid → process | no | The process. |
+| `version_number` | integer | no | 1, 2, 3…, unique per process. |
+| `status` | text | no | `draft`, `released` or `obsolete`. |
+| `definition` | jsonb | no | The operations (number, name, description, editor position, equipment with shares) and the links between them, as one document, so editing a draft never deletes rows. Same camelCase shape as the API's `ProcessDefinitionDto`. |
+| `released_at` | timestamptz | yes | When it was released; set exactly when the status is not `draft`. |
+| `note` | text | yes | What changed, given at release. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.process_operation — a released version's operations (D-023) · *In use*
+
+Written once, at release, from the definition, so jobs can reference an operation (D-010). Never changed afterwards.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key; the operation's id in the definition. |
+| `process_version_id` | uuid → process_version | no | The released version. |
+| `operation_number` | integer | no | 10, 20, 30…; unique per version. |
+| `name` | text | no | What it does. |
+| `description` | text | yes | Notes. |
+
+### core.process_operation_equipment — who runs an operation (D-023) · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `operation_id` | uuid → process_operation | no | Part of the primary key. |
+| `equipment_id` | uuid → equipment | no | A line, or a department that plans for lines (D-022). Part of the primary key. |
+| `share_percent` | numeric(5,2) | no | Its share of the operation's quantity; the shares of an operation total 100. Each becomes its own job. |
+
+### core.process_dependency — links between operations (D-023) · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key; the link's id in the definition. |
+| `from_operation_id` | uuid → process_operation | no | The earlier operation. |
+| `to_operation_id` | uuid → process_operation | no | The operation that follows. Never the same as the earlier one; one link per pair. |
+| `dependency_type` | text | no | `after_start` (starts once the earlier one has started: material flows through) or `after_end` (starts once it has ended: a hand-off). |
+| `lag` | interval | no | Extra wait after the start or end. Never negative. |
 
 ### core.equipment_capability — what can run where (D-020) · *In use*
 

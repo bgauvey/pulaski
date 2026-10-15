@@ -29,6 +29,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-019 | Job rules: a locked job never moves; a planned job moves freely; a dispatched job moves only after un-dispatch; a firmed job may change machine but is anchored at its firmed start; a started job can only be cancelled, optionally replaced by a job for the remaining quantity | Decided | 2026-10-13 |
 | D-020 | Eligibility: `core.equipment_capability` says which material can run on which equipment, with its ideal rate and crew size (labor estimate). Jobs can only be placed on, moved to or dispatched on an eligible line. The run standard stays the planning rate | Decided | 2026-10-13 |
 | D-022 | Group scheduling: equipment can be a planning target (`is_schedulable`) and runs jobs only with `can_run_job`. A job planned to a group (e.g. a department) waits there in a window until the floor assigns it to a line below the group that can run it; Pulaski checks the window, never picks the line | Decided | 2026-10-14 |
+| D-023 | Process routes: a process (ISA-95 operations definition) has numbered operations, each run by one or more lines or departments with shares totalling 100%, linked "after start" or "after end" with a lag. Versioned: drafts are edited, released versions are fixed and are what orders are made from. A process makes all materials, or chosen classes and materials; a material may name one of those as its default | Decided | 2026-10-14 |
 | D-021 | Scheduling board: Gantt, calendar, Kanban and table views over one live board. Each view edits only what the planner owns (line, sequence, pins, order status); overlaps are reported by the projector and shown on every view; the board re-reads every 10 s | Proposed | 2026-10-14 |
 
 ## Order hierarchy
@@ -267,6 +268,26 @@ A planner can plan to a department rather than a line: "Extrusion, this weekend,
 - **On a line** the job is projected like any other job, and warns when it runs past its finish-by (`missed_finish_by`). A firmed job from a group is not anchored at a start, since it was firmed to a window.
 - **Dispatch** publishes a job waiting on a group with its window as the baseline (`planned_start` = window start, `planned_end` = finish-by).
 - **The board** shows a department row with each waiting job as a band over its window, labelled with the fastest line's estimate. Each line that could run it shows a faint ghost with the estimate on that line ("~14h here"). Dragging the band or a ghost onto a line assigns the job there; dragging an order from the tray onto the department opens the plan form with a suggested window.
+
+## Process routes (D-023)
+
+A process describes how an order is made, as a template that order creation will copy: "Extrude and Pack" runs operation 10, Extrude, on EXT-01 and EXT-02, and operation 30, Pack, on PACK1, which starts once extrusion has started. Each operation becomes jobs on the order, one per line or department it names, for that one's share of the quantity. Order creation is a later pass; this decision covers the model and its editor.
+
+**Scope.** The charter's non-goal is the job-shop MES: discrete multi-step routings as the main use case. Process routes for continuous lines (a few operations on whole lines, often running at the same time as material flows between them) are within v1. The model has no work centres within a line, no queue or move times, and no alternative routings chosen by a solver.
+
+| ISA-95 term | Pulaski |
+| --- | --- |
+| Operations definition | `core.process` with its versions |
+| Operations segment | An operation: number, name, the equipment that runs it |
+| Segment dependency | A link: `after_start` or `after_end`, with a lag |
+
+- **Parallel and sequential.** Operations with no path of links between them run in parallel; a link makes one follow another. Links flow one way: a loop is refused. A released process with several operations must be connected.
+- **Equipment and shares.** Each operation names at least one line, or department (D-022), in the process's site. Several entities on one operation run in parallel, each taking its share of the quantity; the shares total 100%. Machines and other equipment that neither runs nor plans jobs are refused.
+- **Versions.** A process starts with an empty draft, version 1. The editor saves the draft's whole definition after every change; the draft may be incomplete but never malformed (duplicate numbers, a loop, a share out of range). Releasing checks it is complete, makes the previously released version obsolete, and writes the operations, their equipment and the links out as fixed rows that jobs will reference. A released version never changes: changing the process starts a new draft, a copy with new ids. Orders keep the version they were made from.
+- **Storage.** A version's definition is one `jsonb` document, so editing a draft never deletes rows (the application role has no DELETE). The relational rows exist only for released versions, because they are referenced (D-010).
+- **What it makes.** A process has a scope: all materials, or chosen material classes and single materials, in any mix. Extrude and Pack fits every extruded profile, so it makes the "Extruded profiles" class rather than a list of items. Order creation will offer every released process whose scope covers the order's material (`GET /api/processes?materialId=`). The scope belongs to the process, not to a version.
+- **Default process.** Of the processes that make a material, the material may name one as its default, which order creation pre-selects; the planner can pick another. A default must be inside the process's scope; the editor flags a default the scope no longer covers.
+- **Editor** (`/processes/{id}`): a palette of the site's lines and departments (collapsible), a canvas (drag equipment onto an operation, or onto the canvas for a new one; drag an operation by its header; drag from its right-hand handle to the next operation to link them), a properties panel (collapsible) for the selected operation, link or the process (with what it makes and its defaults), and a grid of every operation's equipment and shares. A released version opens read-only.
 
 ## Application architecture
 

@@ -15,12 +15,23 @@ internal sealed class ReferenceDataQueries(NpgsqlDataSource dataSource) : IRefer
         """;
 
     private const string Materials = """
-        SELECT m.id, m.code, m.name, m.material_type, m.base_uom_id, u.code AS base_uom_code, m.is_active
+        SELECT m.id, m.code, m.name, m.material_type, m.base_uom_id, u.code AS base_uom_code,
+               m.material_class_id, c.code AS material_class_code, m.is_active
         FROM core.material m
         JOIN core.uom u ON u.id = m.base_uom_id
+        LEFT JOIN core.material_class c ON c.id = m.material_class_id
         WHERE @IncludeInactive OR m.is_active
         ORDER BY m.code
         """;
+
+    private const string MaterialClasses = "SELECT id, code, name FROM core.material_class ORDER BY code";
+
+    public async Task<IReadOnlyList<MaterialClassDto>> ListMaterialClassesAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<MaterialClassDto>(new CommandDefinition(MaterialClasses, cancellationToken: cancellationToken));
+        return rows.AsList();
+    }
 
     public async Task<IReadOnlyList<UomDto>> ListUomsAsync(CancellationToken cancellationToken)
     {

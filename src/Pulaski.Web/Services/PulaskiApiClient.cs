@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
+using Pulaski.Contracts.Processes;
 using Pulaski.Contracts.ReferenceData;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Contracts.WorkOrders;
@@ -139,10 +140,45 @@ public sealed class PulaskiApiClient(HttpClient http)
     public Task<CancelJobResponse> CancelJobAsync(Guid id, CancelJobRequest request, CancellationToken ct = default) =>
         SendAsync<CancelJobResponse>(HttpMethod.Post, $"api/scheduling/jobs/{id}/cancel", request, ct);
 
+    // Processes (D-023)
+
+    public Task<IReadOnlyList<ProcessSummaryDto>> ListProcessesAsync(Guid? siteId = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ProcessSummaryDto>>(siteId is null ? "api/processes" : $"api/processes?siteId={siteId}", ct);
+
+    public Task<ProcessDto> GetProcessAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<ProcessDto>($"api/processes/{id}", ct);
+
+    public Task<CreatedResponse> CreateProcessAsync(CreateProcessRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/processes", request, ct);
+
+    public Task<VersionResponse> UpdateProcessAsync(Guid id, UpdateProcessRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/processes/{id}", request, ct);
+
+    public Task<ProcessVersionDto> GetProcessVersionAsync(Guid id, Guid versionId, CancellationToken ct = default) =>
+        GetAsync<ProcessVersionDto>($"api/processes/{id}/versions/{versionId}", ct);
+
+    public Task<SaveProcessDraftResponse> SaveProcessDraftAsync(Guid id, Guid versionId, SaveProcessDraftRequest request, CancellationToken ct = default) =>
+        SendAsync<SaveProcessDraftResponse>(HttpMethod.Put, $"api/processes/{id}/versions/{versionId}", request, ct);
+
+    public Task<VersionResponse> ReleaseProcessVersionAsync(Guid id, Guid versionId, ReleaseProcessVersionRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/processes/{id}/versions/{versionId}/release", request, ct);
+
+    public Task<CreatedResponse> StartProcessDraftAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/processes/{id}/drafts", new { }, ct);
+
+    public Task<VersionResponse> SetProcessScopeAsync(Guid id, SetProcessScopeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/processes/{id}/scope", request, ct);
+
+    public Task<VersionResponse> SetDefaultProcessAsync(Guid materialId, Guid? processId, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/materials/{materialId}/default-process", new SetDefaultProcessRequest { ProcessId = processId }, ct);
+
     // Reference data
 
     public Task<IReadOnlyList<UomDto>> ListUomsAsync(CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<UomDto>>("api/uoms", ct);
+
+    public Task<IReadOnlyList<MaterialClassDto>> ListMaterialClassesAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MaterialClassDto>>("api/material-classes", ct);
 
     public Task<IReadOnlyList<MaterialDto>> ListMaterialsAsync(CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<MaterialDto>>("api/materials", ct);

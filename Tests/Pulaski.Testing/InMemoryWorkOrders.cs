@@ -145,4 +145,7 @@ public sealed class InMemoryMaterials : IMaterialRepository, IReferenceDataReadS
 
     public Task<IReadOnlyList<MaterialDto>> ListMaterialsAsync(bool includeInactive, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<MaterialDto>>([]);
+
+    public Task<IReadOnlyList<MaterialClassDto>> ListMaterialClassesAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<MaterialClassDto>>([]);
 }

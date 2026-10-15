@@ -1,0 +1,164 @@
+@page "/processes"
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>Processes · Pulaski</PageTitle>
+
+<div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="mb-1">Processes</h1>
+        <p class="text-muted mb-0">Process routes: the operations an order goes through, and the lines or departments that run each one.</p>
+    </div>
+    <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New process</button>
+</div>
+
+<ProblemAlert Error="_error" />
+
+@if (_adding)
+{
+    <form class="process-new" @onsubmit="CreateAsync" @onsubmit:preventDefault>
+        @if (_sites.Count > 1)
+        {
+            <div>
+                <label class="form-label" for="new-site">Site</label>
+                <select id="new-site" class="form-select" @bind="_siteId">
+                    @foreach (var site in _sites)
+                    {
+                        <option value="@site.Id">@site.Code · @site.Name</option>
+                    }
+                </select>
+            </div>
+        }
+        <div>
+            <label class="form-label" for="new-code">Code</label>
+            <input id="new-code" class="form-control" maxlength="50" placeholder="EXT-PACK" @bind="_code" />
+        </div>
+        <div class="flex-grow-1">
+            <label class="form-label" for="new-name">Name</label>
+            <input id="new-name" class="form-control" maxlength="200" placeholder="Extrude and Pack" @bind="_name" />
+        </div>
+        <div class="d-flex gap-2 align-self-end">
+            <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))">Create and edit</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _adding = false">Cancel</button>
+        </div>
+    </form>
+}
+
+@if (_processes is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_processes.Count == 0)
+{
+    <div class="empty-panel">
+        <h2>No processes yet</h2>
+        <p class="text-muted mb-0">Create one to describe how an order is made, for example extrude on two lines, then pack.</p>
+    </div>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Process</th>
+                    <th>Released</th>
+                    <th>Draft</th>
+                    <th>Makes</th>
+                    <th>Default for</th>
+                    <th>Updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _processes)
+                {
+                    <tr @key="p.Id" class="@(p.IsActive ? "" : "text-muted")">
+                        <td>
+                            <a class="fw-semibold" href="processes/@p.Id">@p.Code</a>
+                            <div class="small text-muted">@p.Name@(p.IsActive ? "" : " · inactive")</div>
+                        </td>
+                        <td>@(p.ReleasedVersion is { } r ? $"Version {r}" : "—")</td>
+                        <td>
+                            @if (p.DraftVersion is { } d)
+                            {
+                                <span class="chip">Version @d</span>
+                            }
+                        </td>
+                        <td>
+                            @if (p.MakesAllMaterials)
+                            {
+                                <span class="chip">All materials</span>
+                            }
+                            else if (p.MakesClasses.Count == 0 && p.MakesMaterials.Count == 0)
+                            {
+                                <span class="small text-warning-strong">Nothing yet</span>
+                            }
+                            @foreach (var classCode in p.MakesClasses)
+                            {
+                                <span class="chip me-1"><span class="scope-kind">Class</span> @classCode</span>
+                            }
+                            @foreach (var materialCode in p.MakesMaterials)
+                            {
+                                <span class="chip me-1">@materialCode</span>
+                            }
+                        </td>
+                        <td>
+                            @foreach (var materialCode in p.DefaultFor)
+                            {
+                                <span class="chip me-1">@materialCode</span>
+                            }
+                        </td>
+                        <td class="small text-muted text-nowrap">@p.UpdatedAt.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) UTC</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<ProcessSummaryDto>? _processes;
+    private IReadOnlyList<EquipmentDto> _sites = [];
+    private ApiException? _error;
+    private bool _adding;
+    private bool _saving;
+    private Guid _siteId;
+    private string _code = "";
+    private string _name = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _sites = [.. (await Api.ListEquipmentAsync()).Where(e => e.Level == "site")];
+            _siteId = _sites.FirstOrDefault()?.Id ?? Guid.Empty;
+            _processes = await Api.ListProcessesAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var created = await Api.CreateProcessAsync(new CreateProcessRequest { SiteId = _siteId, Code = _code, Name = _name });
+            Navigation.NavigateTo($"processes/{created.Id}");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

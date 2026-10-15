@@ -12,6 +12,9 @@ internal static class PostgresErrors
         ["equipment_code_uq"] = "That equipment code is already used in this site.",
         ["wo_number_uq"] = "That work order number is already used in this site.",
         ["job_number_uq"] = "That job number is already used in this site.",
+        ["process_code_uq"] = "That process code is already used in this site.",
+        ["process_version_draft_uq"] = "This process already has a draft.",
+        ["process_version_released_uq"] = "Another version of this process was released at the same time. Reload and try again.",
     };
 
     public static bool TryTranslate(PostgresException ex, out Exception translated)

@@ -72,4 +72,11 @@ public static class EventTypes
     public const string RunStandardModified = "pulaski.run_standard.modified.v1";
     public const string RunStandardModificationCleared = "pulaski.run_standard.modification_cleared.v1";
     public const string SchedulingPolicyChanged = "pulaski.scheduling_policy.changed.v1";
+    public const string ProcessCreated = "pulaski.process.created.v1";
+    public const string ProcessUpdated = "pulaski.process.updated.v1";
+    public const string ProcessDraftSaved = "pulaski.process.draft_saved.v1";
+    public const string ProcessDraftStarted = "pulaski.process.draft_started.v1";
+    public const string ProcessVersionReleased = "pulaski.process.version_released.v1";
+    public const string ProcessScopeSet = "pulaski.process.scope_set.v1";
+    public const string MaterialDefaultProcessSet = "pulaski.material.default_process_set.v1";
 }

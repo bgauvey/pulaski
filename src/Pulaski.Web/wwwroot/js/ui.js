@@ -134,5 +134,12 @@
         focus(id) {
             document.getElementById(id)?.focus();
         },
+        // Per-browser view preferences (collapsed panes); storage may be blocked, which is fine.
+        load(key) {
+            try { return localStorage.getItem(key); } catch { return null; }
+        },
+        save(key, value) {
+            try { localStorage.setItem(key, value); } catch { /* keep it for this page only */ }
+        },
     };
 })();

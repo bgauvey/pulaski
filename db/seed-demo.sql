@@ -1,7 +1,7 @@
 -- =====================================================================
 -- Pulaski — demo seed data                                  2026-10-12
 -- Load after schema-draft.sql, into an empty database. One enterprise,
--- one site and an extrusion department with two lines, matching the first
+-- one site, an extrusion department with two lines and a packer, matching the first
 -- vertical slice in docs/charter.md.
 --
 -- Seed rows are master data loaded before go-live, so they carry no
@@ -36,7 +36,7 @@ JOIN core.material_class mc ON mc.code = v.class_code
 JOIN core.uom u ON u.code = v.uom_code;
 
 WITH ids AS (
-    SELECT uuidv7() AS ent, uuidv7() AS site, uuidv7() AS area, uuidv7() AS line, uuidv7() AS line2
+    SELECT uuidv7() AS ent, uuidv7() AS site, uuidv7() AS area, uuidv7() AS line, uuidv7() AS line2, uuidv7() AS pkg, uuidv7() AS pack
 )
 INSERT INTO core.equipment (id, parent_id, site_id, code, name, description, level, equipment_role,
                             tracks_state, is_schedulable, holds_inventory, time_zone, can_run_job)
@@ -50,7 +50,9 @@ SELECT v.* FROM ids, LATERAL (VALUES
     (uuidv7(),  line, site, 'EXT-01-EXT', 'Extruder',           'Twin-screw extruder',    'work_unit',        'machine',         true,  false, false, NULL,              false),
     (uuidv7(),  line, site, 'EXT-01-PUL', 'Puller',             NULL,                     'work_unit',        'machine',         true,  false, false, NULL,              false),
     (uuidv7(),  line, site, 'EXT-01-SAW', 'Saw',                NULL,                     'work_unit',        'machine',         true,  false, false, NULL,              false),
-    (line2,     area, site, 'EXT-02',     'Extrusion line 2',   'Profile extrusion line', 'work_center',      'production_line', true,  true,  false, NULL,              true)
+    (line2,     area, site, 'EXT-02',     'Extrusion line 2',   'Profile extrusion line', 'work_center',      'production_line', true,  true,  false, NULL,              true),
+    (pkg,       site, site, 'PKG',        'Packaging',          NULL,                     'area',             'area',            false, false, false, NULL,              false),
+    (pack,      pkg,  site, 'PACK1',      'Packer 1',           'Bundles and wraps profile for transfer to stock', 'work_center', 'production_line', true, true, false, NULL, true)
 ) AS v;
 
 -- Closure table: every ancestor/descendant pair, including self at depth 0.
@@ -76,7 +78,9 @@ FROM (VALUES
     ('EXT-01', 'PRF-4410-WH', 900, interval '45 minutes', true),
     ('EXT-01', 'PRF-4410-GY', 850, interval '45 minutes', true),
     ('EXT-02', 'PRF-4410-WH', 700, interval '45 minutes', false),
-    ('EXT-02', 'PRF-4410-GY', 700, interval '45 minutes', false)
+    ('EXT-02', 'PRF-4410-GY', 700, interval '45 minutes', false),
+    ('PACK1',  'PRF-4410-WH', 2000, interval '10 minutes', true),
+    ('PACK1',  'PRF-4410-GY', 2000, interval '10 minutes', true)
 ) AS v(line_code, material_code, rate, changeover, preferred)
 JOIN core.material m  ON m.code = v.material_code
 JOIN core.equipment e ON e.code = v.line_code

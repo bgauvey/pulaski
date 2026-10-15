@@ -254,6 +254,95 @@ CREATE TABLE core.bom_item (
     CONSTRAINT bom_item_uq UNIQUE (bom_id, line_no)
 );
 
+-- Process routes (D-023, ISA-95 operations definition): a reusable template such as
+-- "Extrude and Pack". Operations run on one or more lines or departments, each with a
+-- share of the quantity; links say whether an operation starts after the one before it
+-- starts or ends. Versions: a draft is edited, a released version is fixed and is what
+-- orders are made from, releasing a newer one makes it obsolete.
+CREATE TABLE core.process (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id         uuid NOT NULL REFERENCES core.equipment(id),
+    code            text NOT NULL,
+    name            text NOT NULL,
+    description     text,
+    makes_all_materials boolean NOT NULL DEFAULT false,         -- the scope: every material, or the classes and items below
+    is_active       boolean NOT NULL DEFAULT true,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT process_code_uq UNIQUE (site_id, code)
+);
+
+-- What a process can make, beyond makes_all_materials: whole material classes and single
+-- materials. A row taken out of the scope is switched off, not deleted (the app never deletes).
+CREATE TABLE core.process_material_class (
+    process_id          uuid NOT NULL REFERENCES core.process(id),
+    material_class_id   uuid NOT NULL REFERENCES core.material_class(id),
+    is_active           boolean NOT NULL DEFAULT true,
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (process_id, material_class_id)
+);
+
+CREATE TABLE core.process_material (
+    process_id      uuid NOT NULL REFERENCES core.process(id),
+    material_id     uuid NOT NULL REFERENCES core.material(id),
+    is_active       boolean NOT NULL DEFAULT true,
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (process_id, material_id)
+);
+CREATE INDEX process_material_material_ix ON core.process_material (material_id) WHERE is_active;
+
+-- The definition (operations, their equipment and the links) is one document, so editing a
+-- draft never deletes rows. A released version is also written out below, row by row,
+-- because jobs will reference its operations (D-010).
+CREATE TABLE core.process_version (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    process_id      uuid NOT NULL REFERENCES core.process(id),
+    version_number  integer NOT NULL CHECK (version_number > 0),
+    status          text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','released','obsolete')),
+    definition      jsonb NOT NULL DEFAULT '{"operations":[],"dependencies":[]}',
+    released_at     timestamptz,
+    note            text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT process_version_uq UNIQUE (process_id, version_number),
+    CONSTRAINT process_version_released_ck CHECK ((status = 'draft') = (released_at IS NULL))
+);
+-- At most one draft and one released version per process.
+CREATE UNIQUE INDEX process_version_draft_uq ON core.process_version (process_id) WHERE status = 'draft';
+CREATE UNIQUE INDEX process_version_released_uq ON core.process_version (process_id) WHERE status = 'released';
+
+-- A released version's operations, fixed from release on.
+CREATE TABLE core.process_operation (
+    id                  uuid PRIMARY KEY,                       -- the id in the definition
+    process_version_id  uuid NOT NULL REFERENCES core.process_version(id),
+    operation_number    integer NOT NULL CHECK (operation_number > 0),
+    name                text NOT NULL,
+    description         text,
+    CONSTRAINT process_operation_uq UNIQUE (process_version_id, operation_number)
+);
+
+CREATE TABLE core.process_operation_equipment (
+    operation_id    uuid NOT NULL REFERENCES core.process_operation(id),
+    equipment_id    uuid NOT NULL REFERENCES core.equipment(id),
+    share_percent   numeric(5,2) NOT NULL CHECK (share_percent > 0 AND share_percent <= 100),
+    PRIMARY KEY (operation_id, equipment_id)
+);
+
+CREATE TABLE core.process_dependency (
+    id                  uuid PRIMARY KEY,                       -- the id in the definition
+    from_operation_id   uuid NOT NULL REFERENCES core.process_operation(id),
+    to_operation_id     uuid NOT NULL REFERENCES core.process_operation(id),
+    dependency_type     text NOT NULL CHECK (dependency_type IN ('after_start','after_end')),
+    lag                 interval NOT NULL DEFAULT interval '0' CHECK (lag >= interval '0'),
+    CONSTRAINT process_dependency_self_ck CHECK (from_operation_id <> to_operation_id),
+    CONSTRAINT process_dependency_uq UNIQUE (from_operation_id, to_operation_id)
+);
+
+-- The process order creation pre-selects for a material, among those whose scope covers it;
+-- the planner may pick another.
+ALTER TABLE core.material
+    ADD COLUMN default_process_id uuid REFERENCES core.process(id);
+
 -- What a work center / unit can run, and how fast (D-020). A job may only be
 -- placed on a line with a current row for its material. ideal_rate drives OEE
 -- performance and seeds the run standard; standard_crew_size is the labor estimate.

@@ -59,6 +59,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   placed only on lines with a capability for their material (D-020); firmed jobs keep their time (D-019).
 - A job may be planned to a group (schedulable, not `can_run_job`, e.g. a department) in a window; the floor
   assigns it to a line below that can run it (D-022). Pulaski checks the window and never picks the line.
+- Process routes (D-023): versioned templates of numbered operations, each on lines or departments with
+  shares totalling 100%, linked after start / after end. Drafts are one `jsonb` document; release writes
+  fixed rows for jobs to reference.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
