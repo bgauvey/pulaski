@@ -64,6 +64,7 @@ public static class EventTypes
     public const string JobCreated = "pulaski.job.created.v1";
     public const string JobSequenced = "pulaski.job.sequenced.v1";
     public const string JobPinned = "pulaski.job.pinned.v1";
+    public const string JobAssigned = "pulaski.job.assigned.v1";
     public const string JobCancelled = "pulaski.job.cancelled.v1";
     public const string WorkOrderDispatched = "pulaski.work_order.dispatched.v1";
     public const string WorkOrderUndispatched = "pulaski.work_order.undispatched.v1";

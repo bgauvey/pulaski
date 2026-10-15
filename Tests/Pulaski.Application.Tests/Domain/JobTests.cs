@@ -83,16 +83,17 @@ public class JobTests
         Assert.Throws<DomainRuleException>(() => Production(status).MoveTo(Guid.CreateVersion7(), 1m));
 
     [Fact]
-    public void Pin_sets_lock_and_earliest_start()
+    public void Pin_sets_lock_earliest_start_and_finish_by()
     {
-        var pinned = Production(JobStatus.Running).Pin(true, Now);
+        var pinned = Production(JobStatus.Running).Pin(true, Now, Now.AddDays(1));
 
-        Assert.Equal((true, (DateTimeOffset?)Now), (pinned.IsLocked, pinned.EarliestStart));
+        Assert.Equal((true, (DateTimeOffset?)Now, (DateTimeOffset?)Now.AddDays(1)), (pinned.IsLocked, pinned.EarliestStart, pinned.LatestEnd));
+        Assert.Throws<DomainRuleException>(() => Production().Pin(false, Now, Now.AddHours(-1)));
     }
 
     [Fact]
     public void Finished_job_cannot_be_pinned() =>
-        Assert.Throws<DomainRuleException>(() => Production(JobStatus.Closed).Pin(true, null));
+        Assert.Throws<DomainRuleException>(() => Production(JobStatus.Closed).Pin(true, null, null));
 
     [Fact]
     public void Dispatch_publishes_the_baseline()

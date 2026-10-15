@@ -47,6 +47,11 @@ internal sealed class PreviewJobPlacementHandler(
             throw new DomainRuleException($"{source.Line.Code} is not schedulable; jobs cannot be placed on it.");
         }
 
+        if (source.Line.IsGroup)
+        {
+            throw new DomainRuleException($"{source.Line.Code} is a group: a job planned to it gets a window, not a slot on a line.");
+        }
+
         var workOrder = await workOrders.GetAsync(query.WorkOrderId, cancellationToken)
             ?? throw new NotFoundException($"Work order {query.WorkOrderId} not found.");
         var check = await store.GetPlacementCheckAsync(source.Line.Id, workOrder.MaterialId, now, cancellationToken)

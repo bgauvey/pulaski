@@ -6,6 +6,9 @@ namespace Pulaski.Web.Services.Scheduling;
 
 public sealed record ScheduleToast(Guid Id, string Kind, string Text, DateTimeOffset Expires);
 
+/// <summary>What an order dropped on a group should be planned with: the group and a suggested window (D-022).</summary>
+public sealed record PlacementPreset(Guid WorkOrderId, Guid TargetId, DateTimeOffset Start, DateTimeOffset End);
+
 /// <summary>
 /// State behind the schedule page: the current <see cref="ScheduleBoard"/>, the edits the planner
 /// makes from any view, and what changed since the last read. Every edit is sent straight to the
@@ -63,7 +66,7 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
         {
             _equipment = await api.ListEquipmentAsync(ct: ct);
             Sites = [.. _equipment.Where(e => e.Level == "site").OrderBy(e => e.Code, StringComparer.OrdinalIgnoreCase)];
-            SiteId ??= Sites.FirstOrDefault(s => _equipment.Any(e => e.SiteId == s.Id && e.IsSchedulable))?.Id
+            SiteId ??= Sites.FirstOrDefault(s => _equipment.Any(e => e.SiteId == s.Id && OnBoard(e)))?.Id
                 ?? (Sites.Count > 0 ? Sites[0].Id : null);
             await RefreshAsync(ct);
         }
@@ -123,13 +126,16 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
         IsRefreshing = true;
         try
         {
-            var lines = _equipment.Where(e => e.SiteId == siteId && e.IsSchedulable && e.IsActive).ToList();
+            // In the equipment tree's order, so a department sits above its lines.
+            var lines = _equipment.Where(e => e.SiteId == siteId && e.IsActive && OnBoard(e)).ToList();
+            var top = lines.Count > 0 ? lines.Min(l => l.Depth) : 0;
             var workOrders = api.ListWorkOrdersAsync(ct: ct);
             var timelines = await Task.WhenAll(lines.Select(l => api.GetLineTimelineAsync(l.Id, _horizonDays, ct)));
             var board = ScheduleBoard.Build(
-                lines.Zip(timelines, (line, timeline) => new BoardLine(line, timeline)),
+                lines.Zip(timelines, (line, timeline) => new BoardLine(line, timeline, line.Depth - top)),
                 [.. (await workOrders).Where(w => w.SiteId == siteId)],
-                Now);
+                Now,
+                _equipment.ToDictionary(e => e.Id, e => e.ParentId));
 
             var previous = Board;
             Board = board;
@@ -156,9 +162,20 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
         }
     }
 
-    /// <summary>Puts a job on <paramref name="lineId"/> before <paramref name="beforeJobId"/> (null = end of line).</summary>
+    /// <summary>Lines and the groups that plan for them (D-022).</summary>
+    private static bool OnBoard(EquipmentDto equipment) => equipment.IsSchedulable || equipment.CanRunJob;
+
+    /// <summary>
+    /// Puts a job on <paramref name="lineId"/> before <paramref name="beforeJobId"/> (null = end of
+    /// line). A job planned to a group is moved by assignment instead (D-022).
+    /// </summary>
     public Task MoveJobAsync(BoardItem item, Guid lineId, Guid? beforeJobId)
     {
+        if (item.IsFromGroup)
+        {
+            return AssignJobAsync(item, lineId, beforeJobId);
+        }
+
         // Dropped where it already is: nothing to send.
         if (beforeJobId == item.JobId
             || (lineId == item.LineId && beforeJobId == ScheduleLayout.NextJobAfter(Board.ItemsOn(lineId), item.JobId)))
@@ -178,18 +195,55 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
             item.JobId, new SequenceJobRequest { Version = item.Segment.Version ?? 0, LineId = lineId, BeforeJobId = beforeJobId }));
     }
 
-    public Task PinJobAsync(BoardItem item, bool isLocked, DateTimeOffset? earliestStart)
+    /// <summary>
+    /// The floor's move of a job planned to a group (D-022): onto <paramref name="targetId"/>, a line
+    /// under the group (before <paramref name="beforeJobId"/>, or at the end), or back to the group.
+    /// </summary>
+    public Task AssignJobAsync(BoardItem item, Guid targetId, Guid? beforeJobId)
     {
-        var message = (isLocked, earliestStart) switch
+        var target = Board.FindLine(targetId);
+        var number = item.Segment.JobNumber;
+        if (targetId == item.LineId
+            && (target?.IsGroup == true || beforeJobId == ScheduleLayout.NextJobAfter(Board.ItemsOn(targetId), item.JobId)))
         {
-            (true, _) when !item.Segment.IsLocked => $"{item.Segment.JobNumber} locked.",
-            (false, _) when item.Segment.IsLocked => $"{item.Segment.JobNumber} unlocked.",
-            (_, null) => $"{item.Segment.JobNumber} no longer waits for a start time.",
-            (_, { } at) => $"{item.Segment.JobNumber} starts no earlier than {ScheduleFormat.When(at, TimeZone)}.",
+            return Task.CompletedTask;
+        }
+
+        var message = target switch
+        {
+            { IsGroup: true } => $"{number} is back on {target.Code}, waiting for a line.",
+            _ when item.IsWindow => $"{number} assigned to {target?.Code ?? "the line"}.",
+            _ => $"{number} moved to {target?.Code ?? "the line"}.",
+        };
+
+        return RunAsync(item.Key, message, () => api.AssignJobAsync(
+            item.JobId,
+            new AssignJobRequest { Version = item.Segment.Version ?? 0, TargetId = targetId, BeforeJobId = target?.IsGroup == true ? null : beforeJobId }));
+    }
+
+    /// <summary>Sets the lock and the earliest start, keeping the job's finish-by.</summary>
+    public Task PinJobAsync(BoardItem item, bool isLocked, DateTimeOffset? earliestStart) =>
+        PinJobAsync(item, isLocked, earliestStart, item.Segment.LatestEnd);
+
+    public Task PinJobAsync(BoardItem item, bool isLocked, DateTimeOffset? earliestStart, DateTimeOffset? latestEnd)
+    {
+        var s = item.Segment;
+        var message = (isLocked, earliestStart, latestEnd) switch
+        {
+            (true, _, _) when !s.IsLocked => $"{s.JobNumber} locked.",
+            (false, _, _) when s.IsLocked => $"{s.JobNumber} unlocked.",
+            _ when latestEnd != s.LatestEnd && item.IsWindow =>
+                $"{s.JobNumber}'s window is now {ScheduleFormat.When(earliestStart ?? Now, TimeZone)} to {ScheduleFormat.When(latestEnd, TimeZone)}.",
+            _ when latestEnd != s.LatestEnd => latestEnd is null
+                ? $"{s.JobNumber} no longer has a finish-by time."
+                : $"{s.JobNumber} must finish by {ScheduleFormat.When(latestEnd, TimeZone)}.",
+            (_, null, _) => $"{s.JobNumber} no longer waits for a start time.",
+            (_, { } at, _) => $"{s.JobNumber} starts no earlier than {ScheduleFormat.When(at, TimeZone)}.",
         };
 
         return RunAsync(item.Key, message, () => api.PinJobAsync(
-            item.JobId, new PinJobRequest { Version = item.Segment.Version ?? 0, IsLocked = isLocked, EarliestStart = earliestStart }));
+            item.JobId,
+            new PinJobRequest { Version = s.Version ?? 0, IsLocked = isLocked, EarliestStart = earliestStart, LatestEnd = latestEnd }));
     }
 
     /// <summary>
@@ -200,6 +254,12 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
     public Task HoldJobUntilAsync(BoardItem item, DateOnly day)
     {
         var (dayStart, _) = ScheduleLayout.DayRange(day, TimeZone);
+        if (item.IsWindow)
+        {
+            Toast("info", $"{item.Segment.JobNumber} waits for a line in its window; change the window in its editor.");
+            return Task.CompletedTask;
+        }
+
         if (dayStart > item.Segment.Start && dayStart > Now)
         {
             return PinJobAsync(item, item.Segment.IsLocked, dayStart);
@@ -228,14 +288,26 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
     public Task<JobPlacementPreviewDto> PreviewPlacementAsync(WorkOrderDto workOrder, Guid lineId, Guid? beforeJobId, CancellationToken ct) =>
         api.PreviewPlacementAsync(lineId, workOrder.Id, Board.UnplacedQty(workOrder), beforeJobId, Board.NextJobNumber(workOrder), ct);
 
-    /// <summary>Cuts a job from a planned order onto a line (the unscheduled tray's drag).</summary>
-    public Task PlaceWorkOrderAsync(WorkOrderDto workOrder, Guid lineId, Guid? beforeJobId, decimal qty)
+    /// <summary>
+    /// Cuts a job from a planned order onto a line (the unscheduled tray's drag), or plans it to a
+    /// group with a window, <paramref name="earliestStart"/> to <paramref name="latestEnd"/> (D-022).
+    /// </summary>
+    public Task PlaceWorkOrderAsync(
+        WorkOrderDto workOrder,
+        Guid lineId,
+        Guid? beforeJobId,
+        decimal qty,
+        DateTimeOffset? earliestStart = null,
+        DateTimeOffset? latestEnd = null)
     {
         var number = Board.NextJobNumber(workOrder);
-        var line = Board.FindLine(lineId)?.Code ?? "the line";
+        var target = Board.FindLine(lineId);
+        var message = target?.IsGroup == true
+            ? $"{number} planned to {target.Code} for {ScheduleFormat.Qty(qty, workOrder.UomCode)}, {ScheduleFormat.When(earliestStart ?? Now, TimeZone)} to {ScheduleFormat.When(latestEnd, TimeZone)}."
+            : $"{number} created on {target?.Code ?? "the line"} for {ScheduleFormat.Qty(qty, workOrder.UomCode)}.";
         return RunAsync(
             ScheduleBoard.WorkOrderKey(workOrder.Id),
-            $"{number} created on {line} for {ScheduleFormat.Qty(qty, workOrder.UomCode)}.",
+            message,
             () => api.CreateJobAsync(new CreateJobRequest
             {
                 LineId = lineId,
@@ -243,7 +315,9 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
                 JobType = "production",
                 WorkOrderId = workOrder.Id,
                 PlannedQty = qty,
-                BeforeJobId = beforeJobId,
+                BeforeJobId = target?.IsGroup == true ? null : beforeJobId,
+                EarliestStart = earliestStart,
+                LatestEnd = latestEnd,
             }));
     }
 

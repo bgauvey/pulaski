@@ -11,6 +11,7 @@
         {
             var s = item.Segment;
             var order = Controller.Board.FindWorkOrder(s.WorkOrderId);
+            var group = s.GroupEquipmentId is { } groupId ? Controller.Board.FindLine(groupId) : null;
             <header class="drawer-head">
                 <div>
                     <div class="small text-muted">@Display.Label(s.JobType) job · @item.LineCode</div>
@@ -36,8 +37,18 @@
                 }
 
                 <dl class="facts">
-                    <dt>Projected</dt>
+                    <dt>@(item.IsWindow ? "Window" : "Projected")</dt>
                     <dd>@ScheduleFormat.When(s.Start, Tz) – @ScheduleFormat.When(s.End, Tz) <span class="text-muted">(@ScheduleFormat.Duration(s.End - s.Start))</span></dd>
+                    @if (group is not null)
+                    {
+                        <dt>Planned to</dt>
+                        <dd>@group.Code <span class="text-muted">@(item.IsWindow ? "· waiting for a line" : $"· running on {item.LineCode}")</span></dd>
+                    }
+                    @if (s.LatestEnd is not null && !item.IsWindow)
+                    {
+                        <dt>Finish by</dt>
+                        <dd>@ScheduleFormat.When(s.LatestEnd, Tz)</dd>
+                    }
                     @if (s.BaselineStart is not null)
                     {
                         <dt>Baseline</dt>
@@ -70,7 +81,67 @@
                     }
                 </dl>
 
-                @if (item.CanChangeLine)
+                @if (item.IsWindow)
+                {
+                    <section class="drawer-section">
+                        <h3>Lines that could run it</h3>
+                        @if (s.Candidates.Count == 0)
+                        {
+                            <p class="small text-muted mb-0">No line in @group?.Code can run @s.MaterialCode.</p>
+                        }
+                        else
+                        {
+                            <ul class="candidate-list">
+                                @foreach (var candidate in s.Candidates)
+                                {
+                                    <li @key="candidate.LineId">
+                                        <span class="fw-semibold">@candidate.LineCode</span>
+                                        <span class="small text-muted">@(candidate.Work is { } work ? $"~{ScheduleFormat.Duration(work)}" : "no run standard")</span>
+                                        <span class="chip @(candidate.FitsWindow ? "" : "chip-warning")">@(candidate.FitsWindow ? "Fits the window" : "Won't fit")</span>
+                                        <button type="button" class="btn btn-outline-primary btn-sm ms-auto" disabled="@(Busy(item) || !item.CanChangeLine)"
+                                                @onclick="() => Controller.AssignJobAsync(item, candidate.LineId, null)">Run on @candidate.LineCode</button>
+                                    </li>
+                                }
+                            </ul>
+                            <p class="small text-muted mt-2 mb-0">It joins the end of that line. To put it elsewhere in the line, drag it onto the line on the Gantt.</p>
+                        }
+                    </section>
+                }
+                else if (item.IsFromGroup && group is not null)
+                {
+                    <section class="drawer-section">
+                        <h3>On the floor</h3>
+                        <p class="small text-muted">Planned to @group.Code, so it can move between its lines whatever its plan status, until it starts.</p>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label" for="assign-line">Line</label>
+                                <select id="assign-line" class="form-select" @bind="_moveLine" @bind:after="ResetBefore">
+                                    <option value="@item.LineId">@item.LineCode</option>
+                                    @foreach (var line in Controller.Board.AssignTargets(item).Where(l => !l.IsGroup))
+                                    {
+                                        <option value="@line.Id">@line.Code</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label" for="assign-before">Runs</label>
+                                <select id="assign-before" class="form-select" @bind="_moveBefore">
+                                    @foreach (var other in BeforeChoices(item))
+                                    {
+                                        <option value="@other.JobId">Before @other.Segment.JobNumber</option>
+                                    }
+                                    <option value="">At the end</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <button type="button" class="btn btn-primary btn-sm" disabled="@(Busy(item) || !item.CanChangeLine)" @onclick="() => MoveAsync(item)">Move</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@(Busy(item) || !item.CanChangeLine)"
+                                    @onclick="() => Controller.AssignJobAsync(item, group.Id, null)">Send back to @group.Code</button>
+                        </div>
+                    </section>
+                }
+                else if (item.CanChangeLine)
                 {
                     <section class="drawer-section">
                         <h3>Line and sequence</h3>
@@ -78,7 +149,7 @@
                             <div class="col-6">
                                 <label class="form-label" for="move-line">Line</label>
                                 <select id="move-line" class="form-select" @bind="_moveLine" @bind:after="ResetBefore">
-                                    @foreach (var line in Controller.Board.Lines)
+                                    @foreach (var line in Controller.Board.Lines.Where(l => !l.IsGroup))
                                     {
                                         <option value="@line.Id">@line.Code</option>
                                     }
@@ -112,20 +183,36 @@
                                    checked="@s.IsLocked" disabled="@Busy(item)" @onchange="e => Controller.PinJobAsync(item, e.Value is true, s.EarliestStart)" />
                             <label class="form-check-label" for="pin-lock">Locked: it keeps its place when others move</label>
                         </div>
-                        @if (item.CanResequence)
-                        {
-                            <label class="form-label mt-2" for="pin-hold">Hold until (site time)</label>
-                            <div class="d-flex gap-2">
-                                <input id="pin-hold" type="datetime-local" class="form-control" @bind="_holdUntil" />
-                                <button type="button" class="btn btn-outline-primary btn-sm" disabled="@Busy(item)"
-                                        @onclick="() => Controller.PinJobAsync(item, s.IsLocked, Display.FromSiteLocal(_holdUntil, Tz))">Set</button>
-                                @if (s.EarliestStart is not null)
-                                {
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@Busy(item)"
-                                            @onclick="() => Controller.PinJobAsync(item, s.IsLocked, null)">Clear</button>
-                                }
+                        @{ var holdShown = item.CanResequence || item.IsWindow; }
+                        <div class="row g-2 mt-1">
+                            @if (holdShown)
+                            {
+                                <div class="col-6">
+                                    <label class="form-label" for="pin-hold">@(item.IsWindow ? "Window opens" : "Hold until") (site time)</label>
+                                    <input id="pin-hold" type="datetime-local" class="form-control" @bind="_holdUntil" />
+                                </div>
+                            }
+                            <div class="col-6">
+                                <label class="form-label" for="pin-finish">Finish by (site time)</label>
+                                <input id="pin-finish" type="datetime-local" class="form-control" @bind="_finishBy" />
                             </div>
-                        }
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm" disabled="@Busy(item)"
+                                    @onclick="() => Controller.PinJobAsync(item, s.IsLocked, holdShown ? Display.FromSiteLocal(_holdUntil, Tz) : s.EarliestStart, Display.FromSiteLocal(_finishBy, Tz))">
+                                @(item.IsWindow ? "Set window" : "Set")
+                            </button>
+                            @if (holdShown && s.EarliestStart is not null)
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@Busy(item)"
+                                        @onclick="() => Controller.PinJobAsync(item, s.IsLocked, null)">@(item.IsWindow ? "Open from now" : "Clear hold")</button>
+                            }
+                            @if (s.LatestEnd is not null && !item.IsWindow)
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@Busy(item)"
+                                        @onclick="() => Controller.PinJobAsync(item, s.IsLocked, s.EarliestStart, null)">Clear finish-by</button>
+                            }
+                        </div>
                     </section>
                 }
 
@@ -229,19 +316,20 @@
 
                 @if (wo.Status == "planned")
                 {
+                    var placeGroup = Controller.Board.FindLine(_placeLine) is { IsGroup: true } chosen ? chosen : null;
                     <section class="drawer-section">
-                        <h3>Place on a line</h3>
+                        <h3>Place on a line or plan to a department</h3>
                         @if (unplaced > 0)
                         {
                             <p class="small text-muted">@ScheduleFormat.Qty(unplaced, wo.UomCode) is not on a line yet.</p>
                         }
                         <div class="row g-2">
                             <div class="col-6">
-                                <label class="form-label" for="place-line">Line</label>
-                                <select id="place-line" class="form-select" @bind="_placeLine">
-                                    @foreach (var line in Controller.Board.Lines)
+                                <label class="form-label" for="place-line">Line or department</label>
+                                <select id="place-line" class="form-select" @bind="_placeLine" @bind:after="() => DefaultWindow(wo)">
+                                    @foreach (var line in Controller.Board.Lines.Where(l => l.IsGroup || l.Line.IsSchedulable))
                                     {
-                                        <option value="@line.Id">@line.Code</option>
+                                        <option value="@line.Id">@line.Code@(line.IsGroup ? " · department" : "")</option>
                                     }
                                 </select>
                             </div>
@@ -250,10 +338,24 @@
                                 <input id="place-qty" type="number" min="0" step="any" class="form-control" @bind="_placeQty" />
                             </div>
                         </div>
+                        @if (placeGroup is not null)
+                        {
+                            <div class="row g-2 mt-1">
+                                <div class="col-6">
+                                    <label class="form-label" for="place-start">Window opens (site time)</label>
+                                    <input id="place-start" type="datetime-local" class="form-control" @bind="_placeStart" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label" for="place-end">Finish by (site time)</label>
+                                    <input id="place-end" type="datetime-local" class="form-control" @bind="_placeEnd" />
+                                </div>
+                            </div>
+                            <p class="small text-muted mt-2 mb-0">It waits on @placeGroup.Code until one of its lines takes it; the floor decides which.</p>
+                        }
                         <button type="button" class="btn btn-primary btn-sm mt-2"
-                                disabled="@(Controller.Saving.Contains(key) || _placeQty is not > 0)"
+                                disabled="@(Controller.Saving.Contains(key) || _placeQty is not > 0 || (placeGroup is not null && _placeEnd is null))"
                                 @onclick="() => PlaceAsync(wo)">
-                            Add job at the end of the line
+                            @(placeGroup is not null ? $"Plan to {placeGroup.Code}" : "Add job at the end of the line")
                         </button>
                     </section>
                 }
@@ -281,6 +383,10 @@
     [Parameter]
     public EventCallback OnClose { get; set; }
 
+    /// <summary>An order dropped on a department: open its form on that department with a suggested window.</summary>
+    [Parameter]
+    public PlacementPreset? Preset { get; set; }
+
     // Form state, reset whenever the selection changes; a refresh leaves it alone.
     private object? _formFor;
     private Guid _moveLine;
@@ -291,6 +397,10 @@
     private bool _cancelReplace = true;
     private Guid _placeLine;
     private decimal? _placeQty;
+    private DateTime? _placeStart;
+    private DateTime? _placeEnd;
+    private DateTime? _finishBy;
+    private PlacementPreset? _presetApplied;
 
     private string? Tz => Controller.TimeZone;
 
@@ -303,6 +413,7 @@
         object? current = Selected is { } s ? s : SelectedWorkOrder;
         if (Equals(current, _formFor))
         {
+            ApplyPreset();
             return;
         }
 
@@ -316,15 +427,41 @@
             _moveLine = item.LineId;
             _moveBefore = ScheduleLayout.NextJobAfter(Controller.Board.ItemsOn(item.LineId), item.JobId)?.ToString() ?? "";
             _holdUntil = item.Segment.EarliestStart is { } at ? Display.ToSite(at, Tz).DateTime : null;
+            _finishBy = item.Segment.LatestEnd is { } by ? Display.ToSite(by, Tz).DateTime : null;
         }
         else if (WorkOrder is { } wo)
         {
             _placeLine = wo.TargetEquipmentId is { } target && Controller.Board.FindLine(target) is not null
                 ? target
-                : Controller.Board.Lines.FirstOrDefault()?.Id ?? Guid.Empty;
-            var unplaced = Controller.Board.UnplacedQty(wo);
+                : Controller.Board.Lines.FirstOrDefault(l => !l.IsGroup)?.Id ?? Guid.Empty;
+            // The API sends numeric(…, 6): drop the trailing zeros so the field shows 5000, not 5000.000000.
+            var unplaced = Controller.Board.UnplacedQty(wo) / 1.000000000000000000000000000000000m;
             _placeQty = unplaced > 0 ? unplaced : null;
+            DefaultWindow(wo);
         }
+
+        ApplyPreset();
+    }
+
+    private void ApplyPreset()
+    {
+        if (Preset is not { } preset || ReferenceEquals(preset, _presetApplied) || preset.WorkOrderId != WorkOrder?.Id)
+        {
+            return;
+        }
+
+        _presetApplied = preset;
+        _placeLine = preset.TargetId;
+        _placeStart = Display.ToSite(preset.Start, Tz).DateTime;
+        _placeEnd = Display.ToSite(preset.End, Tz).DateTime;
+    }
+
+    /// <summary>A window from now to the order's due date, or two days if it has none (D-022).</summary>
+    private void DefaultWindow(WorkOrderDto workOrder)
+    {
+        var (start, end) = ScheduleLayout.SuggestWindow(Controller.Now, workOrder.DueAt, Tz);
+        _placeStart = Display.ToSite(start, Tz).DateTime;
+        _placeEnd = Display.ToSite(end, Tz).DateTime;
     }
 
     /// <summary>The jobs on the chosen line this one can be put in front of.</summary>
@@ -346,8 +483,17 @@
         _confirmCancel = false;
     }
 
-    private Task PlaceAsync(WorkOrderDto workOrder) =>
-        _placeQty is { } qty && qty > 0 ? Controller.PlaceWorkOrderAsync(workOrder, _placeLine, null, qty) : Task.CompletedTask;
+    private Task PlaceAsync(WorkOrderDto workOrder)
+    {
+        if (_placeQty is not { } qty || qty <= 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        return Controller.Board.FindLine(_placeLine) is { IsGroup: true }
+            ? Controller.PlaceWorkOrderAsync(workOrder, _placeLine, null, qty, Display.FromSiteLocal(_placeStart, Tz), Display.FromSiteLocal(_placeEnd, Tz))
+            : Controller.PlaceWorkOrderAsync(workOrder, _placeLine, null, qty);
+    }
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {

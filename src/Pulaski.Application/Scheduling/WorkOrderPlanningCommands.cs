@@ -45,13 +45,14 @@ internal sealed class DispatchWorkOrderHandler(
         var now = timeProvider.GetUtcNow();
         foreach (var job in jobs.Where(j => j.MaterialId is not null))
         {
-            await SchedulingRules.EnsureEligibleAsync(
+            await SchedulingRules.EnsureCanRunAsync(
                 scheduling, lines.Single(l => l.Id == job.EquipmentId), job.MaterialId!.Value, now, cancellationToken);
         }
 
-        // Each line is projected once, inside the transaction, after its lock.
+        // Each line is projected once, inside the transaction, after its lock. A group isn't
+        // projected: its jobs publish their window as the baseline (D-022).
         var segments = new Dictionary<Guid, TimelineSegment>();
-        foreach (var line in lines)
+        foreach (var line in lines.Where(l => !l.IsGroup))
         {
             var source = await scheduling.GetLinePlanAsync(
                 line.Id, now, now.AddDays(GetLineTimelineHandler.DefaultHorizonDays), cancellationToken);
@@ -62,7 +63,11 @@ internal sealed class DispatchWorkOrderHandler(
             }
         }
 
-        var published = jobs.Select(j => j.Dispatch(now, segments[j.Id].Start, segments[j.Id].End)).ToList();
+        var published = jobs
+            .Select(j => j.IsOnGroup
+                ? j.Dispatch(now, j.EarliestStart ?? now, j.LatestEnd ?? now)
+                : j.Dispatch(now, segments[j.Id].Start, segments[j.Id].End))
+            .ToList();
         IReadOnlyList<ScheduleWarningDto> warnings = published.Sum(j => j.PlannedQty ?? 0m) is var total && total != workOrder.PlannedQty
             ? [new ScheduleWarningDto("quantity_mismatch", $"The jobs plan {total} against an order quantity of {workOrder.PlannedQty}.")]
             : [];
@@ -90,7 +95,9 @@ internal sealed class DispatchWorkOrderHandler(
                 job.PlannedStart!.Value,
                 job.PlannedEnd,
                 jobVersion,
-                [.. segments[job.Id].Warnings.Select(w => new ScheduleWarningDto(w.Code, w.Message))]));
+                segments.TryGetValue(job.Id, out var segment)
+                    ? [.. segment.Warnings.Select(w => new ScheduleWarningDto(w.Code, w.Message))]
+                    : []));
         }
 
         await eventLog.AppendAsync(envelope, cancellationToken);

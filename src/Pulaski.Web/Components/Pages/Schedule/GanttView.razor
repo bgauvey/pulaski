@@ -75,15 +75,23 @@
             var items = Controller.Board.ItemsOn(line.Id).Where(IsVisible).ToList();
             var lanes = ScheduleLayout.Lanes(items);
             var laneCount = Math.Max(1, lanes.Count == 0 ? 1 : lanes.Values.Max() + 1);
+            var ghosts = Controller.Board.GhostsOn(line.Id).Where(g => IsVisible(g.Window)).ToList();
+            var ghostLanes = ScheduleLayout.Lanes(ghosts.Select(g => g.Window));
+            var ghostLaneCount = ghostLanes.Count == 0 ? 0 : ghostLanes.Values.Max() + 1;
             var blocked = !CanDropOn(line);
             var ghost = _ghost?.LineId == line.Id ? _ghost : null;
             var dropLane = Controller.DraggingWorkOrder is not null;
-            <div class="gantt-row" role="row" @key="line.Id" data-line-id="@line.Id"
+            <div class="gantt-row @(line.IsGroup ? "is-group" : "")" role="row" @key="line.Id" data-line-id="@line.Id"
                  data-drop-zone data-drop-blocked="@(blocked ? "" : null)" data-drop-refused="@(ghost?.Error is not null ? "" : null)">
-                <div class="gantt-label" role="rowheader">
+                <div class="gantt-label" role="rowheader" style="padding-left:@(12 + line.Indent * 14)px">
                     <span class="fw-semibold">@line.Code</span>
                     <span class="small text-muted text-truncate">@line.Line.Name</span>
                     <span class="gantt-label-meta">
+                        @if (line.IsGroup)
+                        {
+                            var runners = Controller.Board.Lines.Count(l => !l.IsGroup && Controller.Board.IsUnder(line.Id, l.Id));
+                            <span class="chip" title="Jobs planned here wait in a window until one of its lines takes them.">Plans for @runners line@(runners == 1 ? "" : "s")</span>
+                        }
                         @if (!line.Timeline.HasShiftCalendar)
                         {
                             <span class="chip chip-muted" title="No shift calendar covers this line; times assume it runs around the clock.">24/7</span>
@@ -96,7 +104,7 @@
                     </span>
                 </div>
                 <div class="gantt-track" data-slots="@Slots(line)"
-                     style="height:@(laneCount * LaneHeight + 8 + (dropLane ? DropLaneHeight : 0))px">
+                     style="height:@(laneCount * LaneHeight + ghostLaneCount * GhostLaneHeight + 8 + (dropLane ? DropLaneHeight : 0))px">
                     @foreach (var tick in _ticks)
                     {
                         <span class="gantt-grid @(tick.IsDayStart ? "is-day" : "")" style="left:@Pct(tick.Percent)"></span>
@@ -125,6 +133,17 @@
                             {
                                 <span class="bar-title">Changeover</span>
                             }
+                            else if (item.IsWindow)
+                            {
+                                <span class="bar-title">
+                                    @if (s.IsLocked)
+                                    {
+                                        <Icon Name="lock" Size="12" />
+                                    }
+                                    @s.JobNumber · @ScheduleFormat.Qty(s.RemainingQty, s.UomCode)
+                                </span>
+                                <span class="bar-sub">@WindowSummary(item)</span>
+                            }
                             else
                             {
                                 <span class="bar-title">
@@ -138,6 +157,20 @@
                             }
                         </div>
                     }
+                    @foreach (var (window, candidate) in ghosts)
+                    {
+                        var s = window.Segment;
+                        <div class="bar bar-ghost @(candidate.FitsWindow ? "" : "is-tight") @(Selected == (window.JobId, s.Kind) ? "is-selected" : "")"
+                             @key="@($"ghost:{window.Key}:{window.Signature}")"
+                             style="left:@Pct(_scale.Percent(s.Start));width:@Pct(_scale.Width(s.Start, s.End));top:@(laneCount * LaneHeight + ghostLanes[window.Key] * GhostLaneHeight + 4)px"
+                             draggable="@(window.CanChangeLine ? "true" : "false")" data-drag="@($"job:{window.Key}")"
+                             role="button" tabindex="0" title="@GhostTitle(window, candidate, line)" aria-label="@GhostTitle(window, candidate, line)"
+                             @ondragstart="() => Controller.StartDrag(window)" @ondragend="Controller.EndDrag"
+                             @onclick="() => Select(window)" @onkeydown="e => OnKey(e, () => Select(window))">
+                            <span class="bar-title">@s.JobNumber</span>
+                            <span class="bar-sub">@(candidate.Work is { } work ? $"~{ScheduleFormat.Duration(work)} here" : "no rate here")@(candidate.FitsWindow ? "" : " · won't fit")</span>
+                        </div>
+                    }
                     @if (_slot is { } slot && slot.Line == line.Id && SlotPercent(line, slot.Before) is { } at)
                     {
                         <span class="slot-marker" style="left:@Pct(at)" aria-hidden="true">
@@ -147,10 +180,14 @@
                     @if (dropLane)
                     {
                         <div class="drop-lane @(ghost is not null ? "is-active" : "") @(ghost?.Error is not null ? "is-refused" : "")"
-                             style="top:@(laneCount * LaneHeight + 4)px">
+                             style="top:@(laneCount * LaneHeight + ghostLaneCount * GhostLaneHeight + 4)px">
                             @if (ghost is null)
                             {
-                                <span class="drop-lane-hint">Drop @Controller.DraggingWorkOrder!.OrderNumber here to see where it lands</span>
+                                <span class="drop-lane-hint">
+                                    @(line.IsGroup
+                                        ? $"Drop {Controller.DraggingWorkOrder!.OrderNumber} here to plan it to {line.Code} in a window"
+                                        : $"Drop {Controller.DraggingWorkOrder!.OrderNumber} here to see where it lands")
+                                </span>
                             }
                             else if (ghost.IsLoading)
                             {
@@ -207,11 +244,14 @@
     <li><span class="swatch swatch-changeover"></span>Changeover</li>
     <li><span class="swatch swatch-overlap"></span>Overlap</li>
     <li><span class="swatch swatch-late"></span>Late</li>
+    <li><span class="swatch swatch-window"></span>Department window</li>
+    <li><span class="swatch swatch-ghost"></span>Could run here</li>
 </ul>
 
 @code {
     private const int LaneHeight = 40;
     private const int DropLaneHeight = 62;
+    private const int GhostLaneHeight = 36;
     private static readonly (int Days, string Label)[] Zooms = [(1, "Day"), (3, "3 days"), (7, "Week"), (14, "2 weeks")];
 
     [Parameter, EditorRequired]
@@ -228,6 +268,10 @@
 
     [Parameter]
     public EventCallback<DateTimeOffset> OnHorizon { get; set; }
+
+    /// <summary>An order was dropped on a group at a time: the page asks for its window (D-022).</summary>
+    [Parameter]
+    public EventCallback<(WorkOrderDto WorkOrder, Guid GroupId, DateTimeOffset At)> OnPlanToGroup { get; set; }
 
     private int _days = 3;
     private DateTimeOffset _from;
@@ -301,7 +345,7 @@
     private bool CanDropOn(BoardLine line) => Controller switch
     {
         { DraggingWorkOrder: not null } => true,
-        { DraggingItem: { } item } => item.LineId == line.Id ? item.CanResequence : item.CanChangeLine,
+        { DraggingItem: { } item } => Controller.Board.CanDrop(item, line),
         _ => true,
     };
 
@@ -324,6 +368,14 @@
         if (_slot is not { } slot || Controller.DraggingWorkOrder is not { } workOrder)
         {
             _ghost = null;
+            StateHasChanged();
+            return;
+        }
+
+        // A group takes a window, not a slot: nothing to project until the planner picks the dates.
+        if (Controller.Board.FindLine(slot.Line) is { IsGroup: true } group)
+        {
+            _ghost = PlacementGhost.Hint(slot.Line, $"Drop to plan {workOrder.OrderNumber} to {group.Code}; you'll set its window next.");
             StateHasChanged();
             return;
         }
@@ -378,7 +430,7 @@
     /// never reached the server.
     /// </summary>
     [JSInvokable]
-    public async Task OnDropSlot(string lineId, string? beforeJobId, string? payload)
+    public async Task OnDropSlot(string lineId, string? beforeJobId, string? payload, double percent)
     {
         var item = payload?.StartsWith("job:", StringComparison.Ordinal) == true
             ? Controller.Board.Items.FirstOrDefault(i => i.Key == payload[4..])
@@ -397,17 +449,20 @@
         }
 
         var before = Guid.TryParse(beforeJobId, out var b) ? b : (Guid?)null;
-        if (item is not null)
+        var target = Controller.Board.FindLine(line);
+        if (item is not null && target is not null)
         {
-            if (!(item.LineId == line ? item.CanResequence : item.CanChangeLine))
+            if (!Controller.Board.CanDrop(item, target))
             {
-                Controller.Toast("warning", item.LineId == line
-                    ? $"{item.Segment.JobNumber} can't be resequenced while it is {(item.Segment.IsLocked ? "locked" : item.Segment.Status)}."
-                    : $"{item.Segment.JobNumber} can't change line while it is {(item.Segment.IsLocked ? "locked" : item.Segment.Status)}.");
+                Controller.Toast("warning", RefusalFor(item, target));
                 return;
             }
 
             await Controller.MoveJobAsync(item, line, before);
+        }
+        else if (workOrder is not null && target is { IsGroup: true })
+        {
+            await OnPlanToGroup.InvokeAsync((workOrder, line, _scale.At(percent / 100d)));
         }
         else if (workOrder is not null)
         {
@@ -419,6 +474,38 @@
 
             await Controller.PlaceWorkOrderAsync(workOrder, line, before, Controller.Board.UnplacedQty(workOrder));
         }
+    }
+
+    private static string RefusalFor(BoardItem item, BoardLine target)
+    {
+        var s = item.Segment;
+        var state = s.IsLocked ? "locked" : s.Status;
+        return (item.IsFromGroup, target.IsGroup) switch
+        {
+            (true, true) => $"{s.JobNumber} can only go back to the group it was planned to.",
+            (true, false) when !item.CanChangeLine => $"{s.JobNumber} can't move while it is {state}.",
+            (true, false) => $"{target.Code} isn't a line of {s.JobNumber}'s group that can run it.",
+            (false, true) => $"{s.JobNumber} was planned to a line. Plan a new job to {target.Code} from its work order instead.",
+            _ when item.LineId == target.Id => $"{s.JobNumber} can't be resequenced while it is {state}.",
+            _ => $"{s.JobNumber} can't change line while it is {state}.",
+        };
+    }
+
+    /// <summary>'~10h on EXT-01 · window 2d' or the window's warning.</summary>
+    private static string WindowSummary(BoardItem window)
+    {
+        var s = window.Segment;
+        var fastest = s.Candidates.Where(c => c.Work is not null).OrderBy(c => c.Work).FirstOrDefault();
+        var estimate = fastest is null ? "no line has a rate" : $"~{ScheduleFormat.Duration(fastest.Work!.Value)} on {fastest.LineCode}";
+        return s.Warnings.Count > 0 ? $"{estimate} · {s.Warnings[0].Message}" : $"{estimate} · window {ScheduleFormat.Duration(s.End - s.Start)}";
+    }
+
+    private string GhostTitle(BoardItem window, CandidateLineDto candidate, BoardLine line)
+    {
+        var s = window.Segment;
+        var estimate = candidate.Work is { } work ? $"about {ScheduleFormat.Duration(work)} on {line.Code}" : $"no run standard on {line.Code}";
+        var fit = candidate.FitsWindow ? "fits its window" : "would not finish inside its window";
+        return $"{s.JobNumber} could run here: {estimate}, {fit} ({ScheduleFormat.When(s.Start, Tz)} – {ScheduleFormat.When(s.End, Tz)}). Drag it onto a line to assign it.";
     }
 
     private void ClearPreview()
@@ -434,7 +521,7 @@
     /// The jobs a drop can go in front of, in order, with each one's midpoint on the track (unclamped,
     /// so jobs outside the window still count): 'id@percent;...'. Read by js/ui.js during a drag.
     /// </summary>
-    private string Slots(BoardLine line) => string.Join(';', Controller.Board.ItemsOn(line.Id)
+    private string Slots(BoardLine line) => line.IsGroup ? "" : string.Join(';', Controller.Board.ItemsOn(line.Id)
         .Where(i => !i.IsPlaceholder && i.Segment.Status != "running")
         .OrderBy(i => i.Segment.Start)
         .Select(i => $"{i.JobId}@{_scale.RawPercent(i.Segment.Start + (i.Segment.End - i.Segment.Start) / 2).ToString("0.###", CultureInfo.InvariantCulture)}"));
@@ -484,6 +571,8 @@
     {
         var s = item.Segment;
         var classes = new List<string> { item.IsPlaceholder ? "bar-placeholder" : $"bar-{s.Status}" };
+        if (item.IsWindow) classes.Add("bar-window");
+        if (item.IsWindow && s.Warnings.Any(w => w.Code is "window_too_short" or "window_passed" or "no_runner")) classes.Add("is-at-risk");
         if (item.IsPlaceholder || s.JobType == "changeover") classes.Add("bar-changeover");
         else if (s.JobType != "production") classes.Add("bar-activity");
         if (Selected == (item.JobId, s.Kind)) classes.Add("is-selected");

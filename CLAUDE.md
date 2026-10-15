@@ -57,6 +57,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   Rates come from `core.run_standard`, where a modified rate beats the calculated one.
 - Work orders are planned, dispatched (= published) and firmed; their jobs follow (D-018). Jobs are
   placed only on lines with a capability for their material (D-020); firmed jobs keep their time (D-019).
+- A job may be planned to a group (schedulable, not `can_run_job`, e.g. a department) in a window; the floor
+  assigns it to a line below that can run it (D-022). Pulaski checks the window and never picks the line.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
@@ -84,7 +86,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 Treat these as working assumptions; confirm with Bill before building anything that hard-codes them.
 
 - One `core.equipment` table for work centers, work units, machines and storage, typed by ISA-95
-  level + role, with capability flags (`tracks_state`, `is_schedulable`, `holds_inventory`).
+  level + role, with capability flags (`tracks_state`, `is_schedulable`, `can_run_job`, `holds_inventory`).
 - PackML state 0 `Undefined` records no-signal time so it stays visible in OEE.
 - `ts.process_value` keys on `(equipment_tag_id, occurred_at)` with no surrogate id or FKs.
 - Outbox ordering uses `xid8` transaction ids.

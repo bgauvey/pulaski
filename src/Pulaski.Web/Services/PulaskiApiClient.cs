@@ -127,6 +127,10 @@ public sealed class PulaskiApiClient(HttpClient http)
     public Task<VersionResponse> PinJobAsync(Guid id, PinJobRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Post, $"api/scheduling/jobs/{id}/pin", request, ct);
 
+    /// <summary>Moves a job planned to a group onto one of its lines, between them, or back to the group (D-022).</summary>
+    public Task<VersionResponse> AssignJobAsync(Guid id, AssignJobRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/scheduling/jobs/{id}/assign", request, ct);
+
     public Task<CancelJobResponse> CancelJobAsync(Guid id, CancelJobRequest request, CancellationToken ct = default) =>
         SendAsync<CancelJobResponse>(HttpMethod.Post, $"api/scheduling/jobs/{id}/cancel", request, ct);
 

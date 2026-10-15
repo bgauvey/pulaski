@@ -51,7 +51,8 @@ internal static class SchedulingEndpoints
                 request.PlannedDuration,
                 request.CountsAsPlannedDowntime,
                 request.EarliestStart,
-                request.BeforeJobId);
+                request.BeforeJobId,
+                request.LatestEnd);
             var created = await handler.HandleAsync(command, ct);
             return TypedResults.Created($"/api/scheduling/jobs/{created.Id}", created);
         });
@@ -70,7 +71,15 @@ internal static class SchedulingEndpoints
             ICommandHandler<PinJobCommand, VersionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new PinJobCommand(id, request.Version, request.IsLocked, request.EarliestStart), ct)));
+                new PinJobCommand(id, request.Version, request.IsLocked, request.EarliestStart, request.LatestEnd), ct)));
+
+        group.MapPost("/jobs/{id:guid}/assign", async Task<Ok<VersionResponse>> (
+            Guid id,
+            AssignJobRequest request,
+            ICommandHandler<AssignJobCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new AssignJobCommand(id, request.Version, request.TargetId, request.BeforeJobId), ct)));
 
         group.MapPost("/jobs/{id:guid}/cancel", async Task<Ok<CancelJobResponse>> (
             Guid id,

@@ -55,6 +55,12 @@ public interface ISchedulingRepository
     /// <summary>True when the line has a capability for the material in effect at <paramref name="at"/> (D-020).</summary>
     Task<bool> IsEligibleAsync(Guid lineId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken);
 
+    /// <summary>True when some line under the group that can run jobs has a capability for the material (D-020, D-022).</summary>
+    Task<bool> IsEligibleInGroupAsync(Guid groupId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>True when <paramref name="lineId"/> is below <paramref name="groupId"/> in the equipment hierarchy.</summary>
+    Task<bool> IsUnderAsync(Guid groupId, Guid lineId, CancellationToken cancellationToken);
+
     /// <summary>Good quantity reported across the job's runs.</summary>
     Task<decimal> GetGoodQtyAsync(Guid jobId, CancellationToken cancellationToken);
 
@@ -101,7 +107,14 @@ public interface ISchedulingRepository
 }
 
 /// <summary>A line as scheduling commands see it, with its site's changeover mode.</summary>
-public sealed record SchedulingLine(Guid Id, Guid? SiteId, string Code, bool IsSchedulable, string ChangeoverMode);
+/// <summary>
+/// Locked equipment a scheduling command works on. Without <see cref="CanRunJob"/> a schedulable
+/// row is a group, such as a department, whose lines run its jobs (D-022).
+/// </summary>
+public sealed record SchedulingLine(Guid Id, Guid? SiteId, string Code, bool IsSchedulable, string ChangeoverMode, bool CanRunJob = true)
+{
+    public bool IsGroup => IsSchedulable && !CanRunJob;
+}
 
 /// <summary>The ranks either side of an insertion point; null means the start or end of the line.</summary>
 public sealed record RankGap(decimal? Before, decimal? After);
@@ -123,6 +136,9 @@ public sealed record LinePlanSource
 
     public IReadOnlyList<WindowRow> Shifts { get; init; } = [];
     public IReadOnlyList<WindowRow> Exceptions { get; init; } = [];
+
+    /// <summary>For a group only: the lines under it that can run jobs, with their capabilities and rates (D-022).</summary>
+    public IReadOnlyList<RunnerRateRow> Runners { get; init; } = [];
 }
 
 public sealed record SchedulingLineRow
@@ -131,7 +147,11 @@ public sealed record SchedulingLineRow
     public required string Code { get; init; }
     public required string Name { get; init; }
     public bool IsSchedulable { get; init; }
+    public bool CanRunJob { get; init; } = true;
     public required string ChangeoverMode { get; init; }
+
+    /// <summary>A planning target that runs nothing itself; its timeline is windows, not a projection (D-022).</summary>
+    public bool IsGroup => IsSchedulable && !CanRunJob;
 }
 
 public sealed record PlacementCheckRow
@@ -171,6 +191,19 @@ public sealed record PlanJobRow
     public Guid? WorkOrderId { get; init; }
     public string? WorkOrderNumber { get; init; }
     public DateTimeOffset? DueAt { get; init; }
+    public DateTimeOffset? LatestEnd { get; init; }
+    public Guid? GroupEquipmentId { get; init; }
+}
+
+/// <summary>A line under a group that can run jobs, one row per material it has a capability for; the rate is null without a run standard.</summary>
+public sealed record RunnerRateRow
+{
+    public required Guid LineId { get; init; }
+    public required string LineCode { get; init; }
+    public required Guid MaterialId { get; init; }
+    public Guid? UomId { get; init; }
+    public decimal? RatePerHour { get; init; }
+    public string? RateSource { get; init; }
 }
 
 public sealed record RunRateRow

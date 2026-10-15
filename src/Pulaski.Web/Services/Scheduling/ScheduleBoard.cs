@@ -4,12 +4,18 @@ using Pulaski.Contracts.WorkOrders;
 
 namespace Pulaski.Web.Services.Scheduling;
 
-/// <summary>A schedulable line and its projected timeline.</summary>
-public sealed record BoardLine(EquipmentDto Line, LineTimelineDto Timeline)
+/// <summary>
+/// A row of the board: a line and its projected timeline, or a group such as a department whose
+/// timeline is the windows of the jobs waiting for one of its lines (D-022).
+/// <see cref="Indent"/> is its depth below the board's top row, for showing the hierarchy.
+/// </summary>
+public sealed record BoardLine(EquipmentDto Line, LineTimelineDto Timeline, int Indent = 0)
 {
     public Guid Id => Line.Id;
 
     public string Code => Line.Code;
+
+    public bool IsGroup => Timeline.IsGroup;
 }
 
 /// <summary>
@@ -24,10 +30,23 @@ public sealed record BoardItem(Guid LineId, string LineCode, TimelineSegmentDto 
 
     public bool IsPlaceholder => Segment.Kind == "changeover_placeholder";
 
-    /// <summary>Planned jobs move in time; firmed jobs only change line (D-019); locked jobs don't move.</summary>
-    public bool CanResequence => !IsPlaceholder && !Segment.IsLocked && Segment.Status == "planned";
+    /// <summary>A job waiting on a group, drawn as its window (D-022).</summary>
+    public bool IsWindow => Segment.Kind == "window";
 
-    public bool CanChangeLine => !IsPlaceholder && !Segment.IsLocked && Segment.Status is "planned" or "firmed";
+    /// <summary>Planned to a group: the floor moves it between the group's lines, whatever its plan status (D-022).</summary>
+    public bool IsFromGroup => Segment.GroupEquipmentId is not null && !IsPlaceholder;
+
+    /// <summary>
+    /// Planned jobs move in time; firmed jobs only change line (D-019); locked jobs don't move.
+    /// A job from a group moves on the floor until it starts (D-022); its window doesn't resequence.
+    /// </summary>
+    public bool CanResequence =>
+        !IsPlaceholder && !IsWindow && !Segment.IsLocked && (IsFromGroup ? IsOpenForFloor : Segment.Status == "planned");
+
+    public bool CanChangeLine =>
+        !IsPlaceholder && !Segment.IsLocked && (IsFromGroup ? IsOpenForFloor : Segment.Status is "planned" or "firmed");
+
+    private bool IsOpenForFloor => Segment.Status is "planned" or "dispatched" or "firmed";
 
     /// <summary>The board only shows open jobs, and any open job can be pinned or cancelled.</summary>
     public bool CanPin => !IsPlaceholder;
@@ -69,11 +88,15 @@ public sealed class ScheduleBoard
     private readonly Dictionary<Guid, List<BoardItem>> _jobsByWorkOrder;
     private readonly HashSet<string> _overlapping;
 
+    private readonly IReadOnlyDictionary<Guid, Guid?> _parents;
+
     private ScheduleBoard(
         IReadOnlyList<BoardLine> lines,
         IReadOnlyList<WorkOrderDto> workOrders,
-        DateTimeOffset loadedAt)
+        DateTimeOffset loadedAt,
+        IReadOnlyDictionary<Guid, Guid?> parents)
     {
+        _parents = parents;
         Lines = lines;
         WorkOrders = workOrders;
         LoadedAt = loadedAt;
@@ -91,7 +114,7 @@ public sealed class ScheduleBoard
         _overlapping = [.. Overlaps.SelectMany(o => new[] { o.First.Key, o.Second.Key })];
     }
 
-    public static ScheduleBoard Empty { get; } = new([], [], DateTimeOffset.MinValue);
+    public static ScheduleBoard Empty { get; } = new([], [], DateTimeOffset.MinValue, new Dictionary<Guid, Guid?>());
 
     public IReadOnlyList<BoardLine> Lines { get; }
 
@@ -104,11 +127,70 @@ public sealed class ScheduleBoard
 
     public DateTimeOffset LoadedAt { get; }
 
+    /// <summary>
+    /// Rows stay in the order given (the equipment tree's). <paramref name="parents"/> maps
+    /// equipment to its parent, for telling which lines sit under a group; without it every row is
+    /// taken as a top-level row.
+    /// </summary>
     public static ScheduleBoard Build(
         IEnumerable<BoardLine> lines,
         IReadOnlyList<WorkOrderDto> workOrders,
-        DateTimeOffset loadedAt) =>
-        new([.. lines.OrderBy(l => l.Code, StringComparer.OrdinalIgnoreCase)], workOrders, loadedAt);
+        DateTimeOffset loadedAt,
+        IReadOnlyDictionary<Guid, Guid?>? parents = null) =>
+        new([.. lines], workOrders, loadedAt, parents ?? new Dictionary<Guid, Guid?>());
+
+    /// <summary>True when <paramref name="lineId"/> sits somewhere below <paramref name="groupId"/>.</summary>
+    public bool IsUnder(Guid groupId, Guid lineId)
+    {
+        for (var at = lineId; _parents.TryGetValue(at, out var parent) && parent is { } up; at = up)
+        {
+            if (up == groupId)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Group windows that could run on <paramref name="lineId"/>, with the estimate for that line:
+    /// drawn as ghosts on the line's row until the floor assigns them (D-022).
+    /// </summary>
+    public IReadOnlyList<(BoardItem Window, CandidateLineDto Candidate)> GhostsOn(Guid lineId) =>
+        [.. Items
+            .Where(i => i.IsWindow)
+            .SelectMany(i => i.Segment.Candidates.Where(c => c.LineId == lineId).Select(c => (i, c)))];
+
+    /// <summary>
+    /// Whether a drag of <paramref name="item"/> may end on <paramref name="target"/>. A job from a
+    /// group goes to its group or to a line under it that could run it; any other job goes to a
+    /// line, never a group: resequenced on its own line, moved to another (D-019, D-022).
+    /// </summary>
+    public bool CanDrop(BoardItem item, BoardLine target)
+    {
+        if (item.IsFromGroup)
+        {
+            var group = item.Segment.GroupEquipmentId!.Value;
+            if (target.Id == group)
+            {
+                return item.CanChangeLine && !item.IsWindow;
+            }
+
+            return item.CanChangeLine
+                && !target.IsGroup
+                && IsUnder(group, target.Id)
+                && (!item.IsWindow || item.Segment.Candidates.Any(c => c.LineId == target.Id));
+        }
+
+        return !target.IsGroup && (item.LineId == target.Id ? item.CanResequence : item.CanChangeLine);
+    }
+
+    /// <summary>Where the floor may put a job from a group: the lines under the group that could run it, then the group itself.</summary>
+    public IReadOnlyList<BoardLine> AssignTargets(BoardItem item) =>
+        item.IsFromGroup
+            ? [.. Lines.Where(l => l.Id != item.LineId && CanDrop(item, l))]
+            : [];
 
     public BoardItem? Find(Guid jobId, string kind = "job") => _byKey.GetValueOrDefault(BoardItem.KeyOf(jobId, kind));
 

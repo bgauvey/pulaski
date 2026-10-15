@@ -82,7 +82,8 @@ else
             <ScheduleTable Controller="_controller" Selected="_selected" OnSelect="SelectItem" />
             break;
         default:
-            <GanttView Controller="_controller" Selected="_selected" OnSelect="SelectItem" OnSelectWorkOrder="SelectWorkOrder" OnHorizon="OnHorizonAsync" />
+            <GanttView Controller="_controller" Selected="_selected" OnSelect="SelectItem" OnSelectWorkOrder="SelectWorkOrder"
+                       OnHorizon="OnHorizonAsync" OnPlanToGroup="PlanToGroup" />
             break;
     }
 }
@@ -92,7 +93,8 @@ else
                 SelectedWorkOrder="_selectedWorkOrder"
                 OnSelect="SelectItem"
                 OnSelectWorkOrder="SelectWorkOrder"
-                OnClose="CloseDrawer" />
+                OnClose="CloseDrawer"
+                Preset="_preset" />
 
 <div class="toast-stack" role="status" aria-live="polite">
     @foreach (var toast in _controller.Toasts)
@@ -126,6 +128,7 @@ else
     private readonly CancellationTokenSource _cts = new();
     private (Guid JobId, string Kind)? _selected;
     private Guid? _selectedWorkOrder;
+    private PlacementPreset? _preset;
 
     private string CurrentView => Views.Any(v => v.Key == View) ? View! : "gantt";
 
@@ -204,6 +207,14 @@ else
     {
         _selectedWorkOrder = workOrderId;
         _selected = null;
+    }
+
+    /// <summary>An order dropped on a department opens its editor there, with a window from the drop time to its due date.</summary>
+    private void PlanToGroup((WorkOrderDto WorkOrder, Guid GroupId, DateTimeOffset At) drop)
+    {
+        var (start, end) = ScheduleLayout.SuggestWindow(_controller.Now, drop.WorkOrder.DueAt, _controller.TimeZone, drop.At);
+        _preset = new PlacementPreset(drop.WorkOrder.Id, drop.GroupId, start, end);
+        SelectWorkOrder(drop.WorkOrder.Id);
     }
 
     private void CloseDrawer()

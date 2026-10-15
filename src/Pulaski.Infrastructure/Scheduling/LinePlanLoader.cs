@@ -11,7 +11,7 @@ namespace Pulaski.Infrastructure.Scheduling;
 internal static class LinePlanLoader
 {
     private const string Line = """
-        SELECT e.id, e.code, e.name, e.is_schedulable,
+        SELECT e.id, e.code, e.name, e.is_schedulable, e.can_run_job,
                coalesce(p.changeover_mode, 'auto') AS changeover_mode
         FROM core.equipment e
         LEFT JOIN core.scheduling_policy p ON p.site_id = e.site_id
@@ -27,7 +27,8 @@ internal static class LinePlanLoader
                coalesce(r.good_qty, 0) AS good_qty, r.started_at,
                j.earliest_start, j.planned_duration, j.planned_start, j.planned_end, j.is_locked,
                j.xmin::text::bigint AS version,
-               j.work_order_id, w.order_number AS work_order_number, w.due_at
+               j.work_order_id, w.order_number AS work_order_number, w.due_at,
+               j.latest_end, j.group_equipment_id
         FROM core.job j
         LEFT JOIN core.material m   ON m.id = j.material_id
         LEFT JOIN core.uom u        ON u.id = j.uom_id
@@ -76,6 +77,22 @@ internal static class LinePlanLoader
           AND standard_changeover IS NOT NULL
           AND effective_from <= @From
           AND (effective_to IS NULL OR effective_to > @From)
+        """;
+
+    // A group's runners (D-022): active lines below it that can run jobs, one row per material
+    // they have a capability for, with the run standard's rate when there is one.
+    private const string Runners = """
+        SELECT e.id AS line_id, e.code AS line_code, c.material_id,
+               rs.uom_id, rs.effective_rate_per_hour AS rate_per_hour, rs.rate_source
+        FROM core.equipment_closure cl
+        JOIN core.equipment e ON e.id = cl.descendant_id AND e.can_run_job AND e.is_active
+        JOIN core.equipment_capability c ON c.equipment_id = e.id
+                                        AND c.effective_from <= @From
+                                        AND (c.effective_to IS NULL OR c.effective_to > @From)
+        LEFT JOIN core.run_standard rs ON rs.equipment_id = e.id AND rs.material_id = c.material_id
+        WHERE cl.ancestor_id = @LineId
+          AND cl.depth > 0
+        ORDER BY e.code
         """;
 
     // Shifts come from the nearest ancestor (or the line itself) that has any instances.
@@ -148,6 +165,7 @@ internal static class LinePlanLoader
             HasShiftCalendar = scopeId is not null,
             Shifts = shifts,
             Exceptions = await ListAsync<WindowRow>(Exceptions, args),
+            Runners = line.IsGroup ? await ListAsync<RunnerRateRow>(Runners, args) : [],
         };
     }
 }

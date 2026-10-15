@@ -21,8 +21,12 @@ public sealed record PlacementGhost(
     IReadOnlyList<ScheduleWarningDto> Warnings,
     bool IsOverlapping,
     string? Error = null,
-    bool IsLoading = false)
+    bool IsLoading = false,
+    string? Note = null)
 {
+    /// <summary>No preview, just a word about what the drop will do (e.g. on a group, which takes a window).</summary>
+    public static PlacementGhost Hint(Guid lineId, string note) => new(lineId, null, [], [], [], false, Note: note);
+
     public static PlacementGhost Loading(Guid lineId, Guid? beforeJobId) => new(lineId, beforeJobId, [], [], [], false, IsLoading: true);
 
     public static PlacementGhost Refused(Guid lineId, Guid? beforeJobId, string error) => new(lineId, beforeJobId, [], [], [], false, error);
@@ -60,6 +64,11 @@ public sealed record PlacementGhost(
         if (Error is not null)
         {
             return $"Can't place here: {Error}";
+        }
+
+        if (Note is not null)
+        {
+            return Note;
         }
 
         if (Job is not { } job)

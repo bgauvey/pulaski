@@ -22,14 +22,13 @@ public sealed record GanttScale(DateTimeOffset Start, TimeSpan Span, string? Tim
     /// <summary>The instant at a fraction (0–1) of the track.</summary>
     public DateTimeOffset At(double fraction) => Start + Span * Math.Clamp(fraction, 0d, 1d);
 
-    /// <summary>Gridlines at a step that keeps 6–24 of them on the track, aligned to site-local wall time.</summary>
+    /// <summary>Gridlines at a step that keeps 7–14 of them on the track, aligned to site-local wall time.</summary>
     public IReadOnlyList<GanttTick> Ticks()
     {
         var step = Span.TotalHours switch
         {
             <= 24 => TimeSpan.FromHours(2),
             <= 72 => TimeSpan.FromHours(6),
-            <= 24 * 7 => TimeSpan.FromHours(12),
             _ => TimeSpan.FromDays(1),
         };
 
@@ -131,6 +130,25 @@ public static class ScheduleLayout
         return [.. items
             .Where(i => i.Segment.Start < end && (i.Segment.End > start || (i.Segment.End == i.Segment.Start && i.Segment.Start >= start)))
             .OrderBy(i => i.Segment.Start)];
+    }
+
+    /// <summary>
+    /// A window for planning to a group (D-022): opening at <paramref name="from"/> (or now, if
+    /// that has passed; at the start of its hour), closing at the due date when that is later,
+    /// otherwise two days on.
+    /// </summary>
+    public static (DateTimeOffset Start, DateTimeOffset End) SuggestWindow(
+        DateTimeOffset now, DateTimeOffset? due, string? timeZone, DateTimeOffset? from = null)
+    {
+        var at = from is { } chosen && chosen > now ? chosen : now;
+        var local = Display.ToSite(at, timeZone).DateTime;
+        var start = Display.FromSiteLocal(new DateTime(local.Year, local.Month, local.Day, local.Hour, 0, 0), timeZone)!.Value;
+        if (start < now)
+        {
+            start = start.AddHours(1);
+        }
+
+        return (start, due is { } d && d > start ? d : start.AddDays(2));
     }
 
     public static DateOnly SiteDate(DateTimeOffset at, string? timeZone) => DateOnly.FromDateTime(Display.ToSite(at, timeZone).DateTime);

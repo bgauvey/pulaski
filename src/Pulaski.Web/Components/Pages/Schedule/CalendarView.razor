@@ -191,6 +191,7 @@
     {
         var s = item.Segment;
         var classes = new List<string> { item.IsPlaceholder ? "is-changeover" : $"is-{s.Status}" };
+        if (item.IsWindow) classes.Add("is-window");
         if (Selected == (item.JobId, s.Kind)) classes.Add("is-selected");
         if (Controller.Board.IsOverlapping(item)) classes.Add("is-overlap");
         if (s.Warnings.Any(w => w.Code == "late")) classes.Add("is-late");

@@ -87,7 +87,8 @@ One self-referencing table holds enterprise, sites, areas, work centers (lines),
 | `level` | text | no | ISA-95 level: `enterprise`, `site`, `area`, `work_center`, `work_unit`, `equipment_module`, `control_module`. |
 | `equipment_role` | text | no | What the row does at that level, e.g. `production_line`, `machine`, `feed_point`, `storage_zone`. Valid level/role pairs are listed in `equipment_level_role_ck`. |
 | `tracks_state` | boolean | no | Has PackML state, downtime and OEE. |
-| `is_schedulable` | boolean | no | Jobs can be placed on it (a line). |
+| `is_schedulable` | boolean | no | A planning target: jobs can be planned to it, a line or a group such as a department (D-022). |
+| `can_run_job` | boolean | no | Jobs actually run here (a line or cell). A schedulable row without it is a group: its jobs wait in a window until a line below it that can run jobs takes them (D-022). |
 | `holds_inventory` | boolean | no | Lots can be located here (storage, feed point). |
 | `state_derivation` | text | yes | How a line's state is derived: `own_tags`, `constraint_machine`, `worst_child` or `rule`. Open question; not used yet. |
 | `constraint_equipment_id` | uuid → equipment | yes | The constraint machine, required when `state_derivation = 'constraint_machine'`. |
@@ -523,14 +524,16 @@ A job is what the planner places and sequences on a line and what operators exec
 | `work_order_id` | uuid → work_order | yes | The order it belongs to. Required for production jobs. |
 | `job_number` | text | no | Unique per site. A replacement is `<job number>-R`. |
 | `job_type` | text | no | `production`, `changeover`, `cleaning`, `trial` or `maintenance`. |
-| `equipment_id` | uuid → equipment | no | The line it is on; must be schedulable. The planner owns it (D-014). |
+| `equipment_id` | uuid → equipment | no | The line it is on, or the group it waits on (D-022). The planner owns it (D-014); for a job planned to a group the floor moves it between the group's lines. |
 | `material_id` | uuid → material | yes | What it makes; taken from the work order. Required for production. |
 | `planned_qty` | qty | yes | How much. Required for production. |
 | `uom_id` | uuid → uom | yes | Unit of the quantity; taken from the work order. |
 | `planned_start`, `planned_end` | timestamptz | yes | **The baseline**, written when the order is dispatched and frozen when it is firmed. A firmed job is anchored at `planned_start`. End is null when the projection had no duration. Projected times are not stored. |
 | `sequence_rank` | numeric(20,10) | no | Position on the line. Fractional, so a move writes one row; the line is renumbered only when ranks run out (D-017). |
 | `is_locked` | boolean | no | A locked job cannot be moved at all (D-019). |
-| `earliest_start` | timestamptz | yes | Hold the job until this time (material arrival, customer window). |
+| `earliest_start` | timestamptz | yes | Hold the job until this time (material arrival, customer window). On a group, where its window opens. |
+| `latest_end` | timestamptz | yes | Finish by. Required while the job waits on a group, where it closes the window; on a line the projection warns if the job runs past it (D-022). After `earliest_start` when both are set. |
+| `group_equipment_id` | uuid → equipment | yes | The group the job was planned to. Kept once a line takes it, so it can still move between the group's lines or go back (D-022). |
 | `planned_duration` | interval | yes | Fixed length for non-production jobs. Production is sized by the run standard; a changeover without one is sized from the matrix. |
 | `counts_as_planned_downtime` | boolean | no | Excludes the job's time from OEE (planned maintenance). |
 | `status` | text | no | `planned`, `dispatched`, `firmed` (these follow the work order), then `running`, `paused`, `completed`, `closed`, or `cancelled`. |

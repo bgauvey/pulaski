@@ -13,7 +13,7 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
 
     // Locks in id order, so two commands locking the same lines cannot deadlock.
     private const string LockLines = """
-        SELECT e.id, e.site_id, e.code, e.is_schedulable,
+        SELECT e.id, e.site_id, e.code, e.is_schedulable, e.can_run_job,
                coalesce(p.changeover_mode, 'auto') AS changeover_mode
         FROM core.equipment e
         LEFT JOIN core.scheduling_policy p ON p.site_id = e.site_id
@@ -27,7 +27,8 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
     private const string JobColumns = """
         id, site_id, work_order_id, job_number, job_type, equipment_id, material_id, planned_qty, uom_id,
         planned_start, planned_end, sequence_rank, is_locked, earliest_start, planned_duration,
-        counts_as_planned_downtime, status, dispatched_at, firmed_at, replaces_job_id, xmin::text::bigint AS version
+        counts_as_planned_downtime, status, dispatched_at, firmed_at, replaces_job_id, group_equipment_id, latest_end,
+        xmin::text::bigint AS version
         """;
 
     private const string GetJobForUpdate = $"SELECT {JobColumns} FROM core.job WHERE id = @Id FOR UPDATE";
@@ -53,6 +54,25 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
               AND material_id = @MaterialId
               AND effective_from <= @At
               AND (effective_to IS NULL OR effective_to > @At))
+        """;
+
+    private const string EligibleInGroup = """
+        SELECT EXISTS (
+            SELECT 1
+            FROM core.equipment_closure cl
+            JOIN core.equipment e ON e.id = cl.descendant_id AND e.can_run_job AND e.is_active
+            JOIN core.equipment_capability c ON c.equipment_id = e.id
+            WHERE cl.ancestor_id = @GroupId
+              AND cl.depth > 0
+              AND c.material_id = @MaterialId
+              AND c.effective_from <= @At
+              AND (c.effective_to IS NULL OR c.effective_to > @At))
+        """;
+
+    private const string IsUnder = """
+        SELECT EXISTS (
+            SELECT 1 FROM core.equipment_closure
+            WHERE ancestor_id = @GroupId AND descendant_id = @LineId AND depth > 0)
         """;
 
     private const string GoodQty = "SELECT coalesce(sum(good_qty), 0) FROM core.job_run WHERE job_id = @JobId";
@@ -105,11 +125,13 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
         INSERT INTO core.job (id, site_id, work_order_id, job_number, job_type, equipment_id, material_id,
                               planned_qty, uom_id, planned_start, planned_end, sequence_rank, is_locked,
                               earliest_start, planned_duration, counts_as_planned_downtime, status,
-                              dispatched_at, firmed_at, replaces_job_id, created_at, updated_at)
+                              dispatched_at, firmed_at, replaces_job_id, group_equipment_id, latest_end,
+                              created_at, updated_at)
         VALUES (@Id, @SiteId, @WorkOrderId, @JobNumber, @JobType, @EquipmentId, @MaterialId,
                 @PlannedQty, @UomId, @PlannedStart, @PlannedEnd, @SequenceRank, @IsLocked,
                 @EarliestStart, @PlannedDuration, @CountsAsPlannedDowntime, @Status,
-                @DispatchedAt, @FirmedAt, @ReplacesJobId, @At, @At)
+                @DispatchedAt, @FirmedAt, @ReplacesJobId, @GroupEquipmentId, @LatestEnd,
+                @At, @At)
         RETURNING xmin::text::bigint
         """;
 
@@ -119,6 +141,7 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
             sequence_rank = @SequenceRank,
             is_locked = @IsLocked,
             earliest_start = @EarliestStart,
+            latest_end = @LatestEnd,
             status = @Status,
             dispatched_at = @DispatchedAt,
             firmed_at = @FirmedAt,
@@ -177,7 +200,7 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
     public async Task<IReadOnlyList<SchedulingLine>> LockLinesAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken)
     {
         var rows = await session.QueryAsync<LineRow>(LockLines, new { Ids = lineIds.ToArray() }, cancellationToken);
-        return [.. rows.Select(r => new SchedulingLine(r.Id, r.SiteId, r.Code, r.IsSchedulable, r.ChangeoverMode))];
+        return [.. rows.Select(r => new SchedulingLine(r.Id, r.SiteId, r.Code, r.IsSchedulable, r.ChangeoverMode, r.CanRunJob))];
     }
 
     public Task<Guid?> GetJobLineAsync(Guid jobId, CancellationToken cancellationToken) =>
@@ -200,6 +223,12 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
 
     public Task<bool> IsEligibleAsync(Guid lineId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(Eligible, new { LineId = lineId, MaterialId = materialId, At = at }, cancellationToken);
+
+    public Task<bool> IsEligibleInGroupAsync(Guid groupId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(EligibleInGroup, new { GroupId = groupId, MaterialId = materialId, At = at }, cancellationToken);
+
+    public Task<bool> IsUnderAsync(Guid groupId, Guid lineId, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(IsUnder, new { GroupId = groupId, LineId = lineId }, cancellationToken);
 
     public Task<decimal> GetGoodQtyAsync(Guid jobId, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<decimal>(GoodQty, new { JobId = jobId }, cancellationToken);
@@ -277,6 +306,7 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
         public Guid? SiteId { get; init; }
         public string Code { get; init; } = "";
         public bool IsSchedulable { get; init; }
+        public bool CanRunJob { get; init; }
         public string ChangeoverMode { get; init; } = "";
     }
 
@@ -315,13 +345,15 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
         public DateTimeOffset? DispatchedAt { get; init; }
         public DateTimeOffset? FirmedAt { get; init; }
         public Guid? ReplacesJobId { get; init; }
+        public Guid? GroupEquipmentId { get; init; }
+        public DateTimeOffset? LatestEnd { get; init; }
         public long Version { get; init; }
 
         public Versioned<Job> ToVersioned() => new(
             new Job(
                 Id, SiteId, WorkOrderId, JobNumber, JobType, EquipmentId, MaterialId, PlannedQty, UomId,
                 PlannedStart, PlannedEnd, SequenceRank, IsLocked, EarliestStart, PlannedDuration,
-                CountsAsPlannedDowntime, Status, DispatchedAt, FirmedAt, ReplacesJobId),
+                CountsAsPlannedDowntime, Status, DispatchedAt, FirmedAt, ReplacesJobId, GroupEquipmentId, LatestEnd),
             Version);
     }
 

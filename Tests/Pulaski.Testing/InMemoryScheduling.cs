@@ -20,6 +20,7 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
     private readonly Dictionary<Guid, Versioned<string>> _policies = [];
     private readonly List<(Guid JobId, string? From, string To)> _statusChanges = [];
     private readonly HashSet<(Guid LineId, Guid MaterialId)> _capabilities = [];
+    private readonly Dictionary<Guid, Guid> _parents = [];
     private readonly Dictionary<Guid, decimal> _goodQty = [];
     private readonly HashSet<Guid> _endedRuns = [];
 
@@ -85,9 +86,14 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
 
     /// <summary>A line commands can lock, with an empty plan (no rates, rules or calendar) unless <paramref name="plan"/> fills one in.</summary>
     public SchedulingLine AddLine(
-        Guid siteId, bool schedulable = true, string changeoverMode = ChangeoverMode.Auto, Func<LinePlanSource, LinePlanSource>? plan = null)
+        Guid siteId,
+        bool schedulable = true,
+        string changeoverMode = ChangeoverMode.Auto,
+        Func<LinePlanSource, LinePlanSource>? plan = null,
+        bool canRunJob = true)
     {
-        var line = new SchedulingLine(Guid.CreateVersion7(), siteId, "LINE-" + Guid.NewGuid().ToString("N")[..4], schedulable, changeoverMode);
+        var line = new SchedulingLine(
+            Guid.CreateVersion7(), siteId, "LINE-" + Guid.NewGuid().ToString("N")[..4], schedulable, changeoverMode, canRunJob);
         var source = new LinePlanSource
         {
             Line = new SchedulingLineRow
@@ -96,6 +102,7 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
                 Code = line.Code,
                 Name = line.Code,
                 IsSchedulable = schedulable,
+                CanRunJob = canRunJob,
                 ChangeoverMode = changeoverMode,
             },
         };
@@ -107,6 +114,21 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
         }
 
         return line;
+    }
+
+    /// <summary>A group (e.g. a department) that plans for <paramref name="lines"/> and runs nothing itself (D-022).</summary>
+    public SchedulingLine AddGroup(Guid siteId, params SchedulingLine[] lines)
+    {
+        var group = AddLine(siteId, canRunJob: false);
+        lock (_lock)
+        {
+            foreach (var line in lines)
+            {
+                _parents[line.Id] = group.Id;
+            }
+        }
+
+        return group;
     }
 
     public Job AddJob(Job job, long version = 1)
@@ -170,6 +192,11 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
             if (!_plans.TryGetValue(lineId, out var source))
             {
                 return Task.FromResult<LinePlanSource?>(null);
+            }
+
+            if (source.Line.IsGroup)
+            {
+                source = source with { Runners = RunnersUnder(lineId) };
             }
 
             var stored = _jobs.Values.Where(j => j.Value.EquipmentId == lineId).ToList();
@@ -257,6 +284,53 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
                 : null);
         }
     }
+
+    public Task<bool> IsEligibleInGroupAsync(Guid groupId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_capabilities.Any(c => c.MaterialId == materialId && Under(groupId, c.LineId) && _lines[c.LineId].CanRunJob));
+        }
+    }
+
+    public Task<bool> IsUnderAsync(Guid groupId, Guid lineId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(Under(groupId, lineId));
+        }
+    }
+
+    private bool Under(Guid groupId, Guid lineId)
+    {
+        for (var at = lineId; _parents.TryGetValue(at, out var parent); at = parent)
+        {
+            if (parent == groupId)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private List<RunnerRateRow> RunnersUnder(Guid groupId) =>
+        [.. _capabilities
+            .Where(c => Under(groupId, c.LineId) && _lines[c.LineId].CanRunJob)
+            .Select(c =>
+            {
+                var rate = _plans[c.LineId].Rates.FirstOrDefault(r => r.MaterialId == c.MaterialId);
+                return new RunnerRateRow
+                {
+                    LineId = c.LineId,
+                    LineCode = _lines[c.LineId].Code,
+                    MaterialId = c.MaterialId,
+                    UomId = rate?.UomId,
+                    RatePerHour = rate?.RatePerHour,
+                    RateSource = rate?.RateSource,
+                };
+            })
+            .OrderBy(r => r.LineCode, StringComparer.Ordinal)];
 
     public Task<bool> IsEligibleAsync(Guid lineId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken)
     {
@@ -412,6 +486,8 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
             GoodQty = _goodQty.GetValueOrDefault(j.Id),
             Version = row.Version,
             WorkOrderId = j.WorkOrderId,
+            LatestEnd = j.LatestEnd,
+            GroupEquipmentId = j.GroupEquipmentId,
         };
     }
 

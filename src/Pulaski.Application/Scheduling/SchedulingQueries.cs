@@ -30,9 +30,14 @@ internal sealed class GetLineTimelineHandler(ISchedulingReadStore store, TimePro
         var source = await store.GetLinePlanAsync(query.LineId, now, now.AddDays(horizon), cancellationToken)
             ?? throw new NotFoundException($"Equipment {query.LineId} not found.");
 
-        if (!source.Line.IsSchedulable)
+        if (!source.Line.IsSchedulable && !source.Line.CanRunJob)
         {
             throw new DomainRuleException($"{source.Line.Code} is not schedulable; jobs cannot be placed on it.");
+        }
+
+        if (source.Line.IsGroup)
+        {
+            return TimelineMapping.ToGroupDto(source, now);
         }
 
         var timeline = TimelineProjector.Project(TimelineMapping.ToPlan(source, now));
@@ -59,28 +64,13 @@ internal static class TimelineMapping
 {
     public static LinePlan ToPlan(LinePlanSource source, DateTimeOffset now)
     {
-        var exceptions = source.Exceptions.Select(ToWindow);
-        var calendar = source.HasShiftCalendar
-            ? WorkCalendar.Create(source.Shifts.Select(ToWindow), exceptions)
-            : WorkCalendar.AroundTheClock(exceptions);
+        var calendar = Calendar(source);
 
         var rules = source.ChangeoverRules.Select(r => new ChangeoverRule(
             r.Id, r.EquipmentId, r.FromMaterialId, r.FromMaterialClassId, r.ToMaterialId, r.ToMaterialClassId, r.Duration));
         var standards = source.StandardChangeovers.ToDictionary(s => s.MaterialId, s => s.StandardChangeover);
 
-        var jobs = source.Jobs.Select(j => new PlannedJob(
-            j.JobId,
-            j.JobType,
-            j.Status,
-            j.MaterialId is { } m ? new MaterialRef(m, j.MaterialClassId) : null,
-            j.PlannedQty,
-            j.UomId,
-            j.GoodQty,
-            j.StartedAt,
-            j.EarliestStart,
-            j.PlannedDuration,
-            j.DueAt,
-            j.Status == JobStatus.Firmed ? j.PlannedStart : null)).ToList();
+        var jobs = source.Jobs.Select(ToPlanned).ToList();
 
         return new LinePlan(
             source.Line.Id,
@@ -130,6 +120,8 @@ internal static class TimelineMapping
             Status = placeholder ? JobStatus.Planned : job.Status,
             WorkOrderId = job.WorkOrderId,
             WorkOrderNumber = job.WorkOrderNumber,
+            LatestEnd = placeholder ? null : job.LatestEnd,
+            GroupEquipmentId = placeholder ? null : job.GroupEquipmentId,
             MaterialCode = job.MaterialCode,
             FromMaterialCode = segment.FromMaterial is { } from ? materialCodes.GetValueOrDefault(from.Id) : null,
             Start = segment.Start,
@@ -149,6 +141,93 @@ internal static class TimelineMapping
             Version = placeholder ? null : job.Version,
             Warnings = [.. segment.Warnings.Select(ToDto)],
         };
+    }
+
+    /// <summary>
+    /// A group's timeline (D-022): each job as its window, checked against the lines under the
+    /// group that could run it. Nothing is projected and no line is chosen.
+    /// </summary>
+    public static LineTimelineDto ToGroupDto(LinePlanSource source, DateTimeOffset now)
+    {
+        var calendar = Calendar(source);
+        var segments = source.Jobs.Select(job =>
+        {
+            var runners = source.Runners
+                .Where(r => r.MaterialId == job.MaterialId)
+                .Select(r => new Runner(
+                    r.LineId,
+                    r.LineCode,
+                    r.RatePerHour is { } rate && r.UomId is { } uom ? new RunRate(r.MaterialId, uom, rate, r.RateSource ?? RateSource.Calculated) : null))
+                .ToList();
+            var window = GroupWindows.Evaluate(ToPlanned(job), runners, calendar, now);
+
+            return new TimelineSegmentDto
+            {
+                Kind = SegmentKind.Window,
+                JobId = job.JobId,
+                JobNumber = job.JobNumber,
+                JobType = job.JobType,
+                Status = job.Status,
+                WorkOrderId = job.WorkOrderId,
+                WorkOrderNumber = job.WorkOrderNumber,
+                MaterialCode = job.MaterialCode,
+                Start = window.Start,
+                End = window.End,
+                Work = window.Fastest?.Work ?? TimeSpan.Zero,
+                PlannedQty = job.PlannedQty,
+                RemainingQty = Math.Max(0m, (job.PlannedQty ?? 0m) - job.GoodQty),
+                UomCode = job.UomCode,
+                DueAt = job.DueAt,
+                EarliestStart = job.EarliestStart,
+                LatestEnd = job.LatestEnd,
+                GroupEquipmentId = job.GroupEquipmentId,
+                BaselineStart = job.PlannedStart,
+                BaselineEnd = job.PlannedEnd,
+                IsLocked = job.IsLocked,
+                Version = job.Version,
+                Candidates = [.. window.Runners.Select(r => new CandidateLineDto(r.LineId, r.LineCode, r.Work, r.FitsWindow))],
+                Warnings = [.. window.Warnings.Select(ToDto)],
+            };
+        });
+
+        return new LineTimelineDto
+        {
+            LineId = source.Line.Id,
+            LineCode = source.Line.Code,
+            LineName = source.Line.Name,
+            ChangeoverMode = source.Line.ChangeoverMode,
+            IsGroup = true,
+            ProjectedAt = now,
+            HasShiftCalendar = source.HasShiftCalendar,
+            Segments = [.. segments.OrderBy(s => s.Start).ThenBy(s => s.JobNumber, StringComparer.Ordinal)],
+        };
+    }
+
+    /// <summary>
+    /// A firmed job is anchored at its firmed start (D-019), unless it was planned to a group: that
+    /// job was firmed to a window, not a start, so on a line it runs where it is sequenced (D-022).
+    /// </summary>
+    private static PlannedJob ToPlanned(PlanJobRow j) => new(
+        j.JobId,
+        j.JobType,
+        j.Status,
+        j.MaterialId is { } m ? new MaterialRef(m, j.MaterialClassId) : null,
+        j.PlannedQty,
+        j.UomId,
+        j.GoodQty,
+        j.StartedAt,
+        j.EarliestStart,
+        j.PlannedDuration,
+        j.DueAt,
+        j.Status == JobStatus.Firmed && j.GroupEquipmentId is null ? j.PlannedStart : null,
+        j.LatestEnd);
+
+    private static WorkCalendar Calendar(LinePlanSource source)
+    {
+        var exceptions = source.Exceptions.Select(ToWindow);
+        return source.HasShiftCalendar
+            ? WorkCalendar.Create(source.Shifts.Select(ToWindow), exceptions)
+            : WorkCalendar.AroundTheClock(exceptions);
     }
 
     private static ScheduleWarningDto ToDto(ScheduleWarning warning) => new(warning.Code, warning.Message);

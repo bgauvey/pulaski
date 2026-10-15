@@ -74,7 +74,8 @@ CREATE TABLE core.equipment (
     equipment_role          text NOT NULL,
     -- capability flags: what the rest of the model may do with this row
     tracks_state            boolean NOT NULL DEFAULT false,         -- has PackML state, downtime, OEE
-    is_schedulable          boolean NOT NULL DEFAULT false,         -- jobs can be placed on it
+    is_schedulable          boolean NOT NULL DEFAULT false,         -- a planning target: jobs can be planned to it (a line, or a department)
+    can_run_job             boolean NOT NULL DEFAULT false,         -- executes jobs; a schedulable row without it is a group whose runners do (D-022)
     holds_inventory         boolean NOT NULL DEFAULT false,         -- lots can be located here
     -- line state derivation (open question: constraint vs worst vs configured)
     state_derivation        text CHECK (state_derivation IN ('own_tags','constraint_machine','worst_child','rule')),
@@ -555,6 +556,8 @@ CREATE TABLE core.job (
     sequence_rank       numeric(20,10) NOT NULL DEFAULT 0,     -- fractional rank: insert between jobs without renumbering
     is_locked           boolean NOT NULL DEFAULT false,         -- pinned; resequencing skips it
     earliest_start      timestamptz,                            -- hold until (material arrival, customer window)
+    latest_end          timestamptz,                            -- finish by; with earliest_start, the window of a job planned to a group (D-022)
+    group_equipment_id  uuid REFERENCES core.equipment(id),     -- the group (e.g. department) it was planned to; kept after a line takes it (D-022)
     planned_duration    interval CHECK (planned_duration > interval '0'),  -- non-production jobs; production uses the run standard
     counts_as_planned_downtime boolean NOT NULL DEFAULT false,  -- e.g. planned maintenance excluded from OEE
     -- planned/dispatched/firmed follow the work order (D-018); the rest is execution
@@ -567,10 +570,12 @@ CREATE TABLE core.job (
     updated_at          timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT job_number_uq UNIQUE (site_id, job_number),
     CONSTRAINT job_production_ck CHECK (job_type <> 'production' OR (work_order_id IS NOT NULL AND material_id IS NOT NULL AND planned_qty IS NOT NULL)),
-    CONSTRAINT job_window_ck CHECK (planned_end IS NULL OR planned_start IS NULL OR planned_end > planned_start)
+    CONSTRAINT job_window_ck CHECK (planned_end IS NULL OR planned_start IS NULL OR planned_end > planned_start),
+    CONSTRAINT job_finish_by_ck CHECK (latest_end IS NULL OR earliest_start IS NULL OR latest_end > earliest_start)
 );
 CREATE INDEX job_dispatch_ix ON core.job (equipment_id, status, sequence_rank);
 CREATE INDEX job_wo_ix ON core.job (work_order_id);
+CREATE INDEX job_group_ix ON core.job (group_equipment_id) WHERE group_equipment_id IS NOT NULL;
 
 -- Planned material for a job, exploded from the BOM or entered directly.
 CREATE TABLE core.job_material (

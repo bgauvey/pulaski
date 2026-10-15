@@ -521,6 +521,8 @@
 .swatch-changeover { background: var(--sched-hatch), var(--surface); border-style: dashed; }
 .swatch-overlap { background: var(--sched-overlap-hatch); border: 2px solid var(--danger); }
 .swatch-late { box-shadow: inset 0 -3px 0 var(--warning); }
+.swatch-window { background: var(--accent-soft); border: 1px solid var(--accent); border-left-width: 4px; }
+.swatch-ghost { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); border: 1px dashed var(--accent); }
 
 /* ---- Calendar ---- */
 
@@ -1133,3 +1135,82 @@
         animation: none;
     }
 }
+
+/* ---- Departments (D-022): window bands, and ghosts on the lines that could run them ---- */
+
+.gantt-row.is-group {
+    background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+    .gantt-row.is-group .gantt-label {
+        border-left: 3px solid var(--accent);
+    }
+
+/* A job waiting on a department: its whole window, not a run. */
+.bar-window {
+    background: repeating-linear-gradient(90deg, var(--accent-soft) 0 10px, color-mix(in srgb, var(--accent-soft) 60%, var(--surface)) 10px 20px);
+    border: 1px solid var(--accent);
+    border-left-width: 4px;
+}
+
+    .bar-window.bar-dispatched,
+    .bar-window.bar-firmed {
+        border-color: var(--accent);
+        color: var(--text);
+    }
+
+        .bar-window.bar-firmed .bar-sub {
+            color: var(--text-muted);
+        }
+
+    .bar-window.is-at-risk {
+        border-color: var(--warning);
+        box-shadow: inset 0 -3px 0 var(--warning);
+    }
+
+/* On each line that could run a department job: a faint band over its window. */
+.bar-ghost {
+    height: 28px;
+    border: 1px dashed var(--accent);
+    background: color-mix(in srgb, var(--accent-soft) 45%, transparent);
+    color: var(--text-muted);
+    opacity: 0.85;
+}
+
+    .bar-ghost .bar-title {
+        color: var(--text);
+    }
+
+    .bar-ghost.is-tight {
+        border-color: var(--warning);
+    }
+
+    .bar-ghost:hover {
+        opacity: 1;
+        border-style: solid;
+    }
+
+.cal-item.is-window {
+    border-style: dashed;
+    border-left-style: solid;
+    background: var(--accent-soft);
+}
+
+.candidate-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+    .candidate-list li {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-2) 0;
+        border-bottom: 1px solid var(--border);
+    }
+
+        .candidate-list li:last-child {
+            border-bottom: 0;
+        }

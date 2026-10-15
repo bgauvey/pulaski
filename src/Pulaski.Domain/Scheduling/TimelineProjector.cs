@@ -18,7 +18,8 @@ public sealed record PlannedJob(
     DateTimeOffset? EarliestStart,
     TimeSpan? PlannedDuration,
     DateTimeOffset? DueAt,
-    DateTimeOffset? FirmedStart = null);
+    DateTimeOffset? FirmedStart = null,
+    DateTimeOffset? LatestEnd = null);
 
 /// <summary>The effective run-standard rate for one material on the line (D-016).</summary>
 public sealed record RunRate(Guid MaterialId, Guid UomId, decimal RatePerHour, string Source);
@@ -44,6 +45,9 @@ public static class SegmentKind
 
     /// <summary>A changeover the projector inserted in auto mode; it becomes a job at dispatch (D-015).</summary>
     public const string ChangeoverPlaceholder = "changeover_placeholder";
+
+    /// <summary>A job waiting on a group, drawn as its window rather than a projection (D-022).</summary>
+    public const string Window = "window";
 }
 
 public static class ScheduleWarningCode
@@ -56,6 +60,10 @@ public static class ScheduleWarningCode
     public const string BeyondCalendar = "beyond_calendar";
     public const string NoShiftCalendar = "no_shift_calendar";
     public const string FirmedConflict = "firmed_conflict";
+    public const string MissedFinishBy = "missed_finish_by";
+    public const string NoRunner = "no_runner";
+    public const string WindowTooShort = "window_too_short";
+    public const string WindowPassed = "window_passed";
 }
 
 public sealed record ScheduleWarning(string Code, string Message);
@@ -239,6 +247,12 @@ public static class TimelineProjector
         if (job.DueAt is { } due && placed.End > due)
         {
             warnings.Add(new ScheduleWarning(ScheduleWarningCode.Late, $"Projected to finish {placed.End - due} after the due date."));
+        }
+
+        if (job.LatestEnd is { } finishBy && placed.End > finishBy)
+        {
+            warnings.Add(new ScheduleWarning(
+                ScheduleWarningCode.MissedFinishBy, $"Projected to finish {placed.End - finishBy} after its finish-by time."));
         }
 
         var start = started && job.StartedAt is { } actual ? actual : placed.Start;

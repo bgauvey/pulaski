@@ -16,6 +16,9 @@ public sealed record CreateJobRequest
     public bool CountsAsPlannedDowntime { get; init; }
     public DateTimeOffset? EarliestStart { get; init; }
     public Guid? BeforeJobId { get; init; }
+
+    /// <summary>Finish by. Required when <see cref="LineId"/> is a group: it closes the job's window (D-022).</summary>
+    public DateTimeOffset? LatestEnd { get; init; }
 }
 
 /// <summary>
@@ -30,12 +33,27 @@ public sealed record SequenceJobRequest
     public Guid? BeforeJobId { get; init; }
 }
 
-/// <summary>The job's pins (D-014): the lock, and the earliest time it may start.</summary>
+/// <summary>
+/// The job's pins (D-014): the lock, the earliest time it may start and the time it must finish by.
+/// All three are set as sent; a job waiting on a group must keep a finish-by (D-022).
+/// </summary>
 public sealed record PinJobRequest
 {
     public long Version { get; init; }
     public bool IsLocked { get; init; }
     public DateTimeOffset? EarliestStart { get; init; }
+    public DateTimeOffset? LatestEnd { get; init; }
+}
+
+/// <summary>
+/// Moves a job planned to a group (D-022) onto one of the group's lines, before
+/// <see cref="BeforeJobId"/> or at the end, or back to the group when <see cref="TargetId"/> is the group.
+/// </summary>
+public sealed record AssignJobRequest
+{
+    public long Version { get; init; }
+    public Guid TargetId { get; init; }
+    public Guid? BeforeJobId { get; init; }
 }
 
 /// <summary>

@@ -12,6 +12,8 @@ namespace Pulaski.Application.Scheduling;
 /// <summary>
 /// Puts a job on a line before <see cref="BeforeJobId"/>, or at the end when it is null. Production
 /// jobs take the work order's material and unit; other types take an optional duration.
+/// <see cref="LineId"/> may be a group such as a department (D-022): the job then waits there in
+/// its window, <see cref="EarliestStart"/> to <see cref="LatestEnd"/>, for a line to take it.
 /// </summary>
 public sealed record CreateJobCommand(
     Guid LineId,
@@ -22,7 +24,8 @@ public sealed record CreateJobCommand(
     TimeSpan? PlannedDuration,
     bool CountsAsPlannedDowntime,
     DateTimeOffset? EarliestStart,
-    Guid? BeforeJobId) : ICommand<CreatedResponse>;
+    Guid? BeforeJobId,
+    DateTimeOffset? LatestEnd = null) : ICommand<CreatedResponse>;
 
 /// <summary>
 /// Moves a job before <see cref="BeforeJobId"/> on <see cref="LineId"/>, or to the end of that line
@@ -30,7 +33,15 @@ public sealed record CreateJobCommand(
 /// </summary>
 public sealed record SequenceJobCommand(Guid Id, long ExpectedVersion, Guid LineId, Guid? BeforeJobId) : ICommand<VersionResponse>;
 
-public sealed record PinJobCommand(Guid Id, long ExpectedVersion, bool IsLocked, DateTimeOffset? EarliestStart) : ICommand<VersionResponse>;
+public sealed record PinJobCommand(
+    Guid Id, long ExpectedVersion, bool IsLocked, DateTimeOffset? EarliestStart, DateTimeOffset? LatestEnd = null) : ICommand<VersionResponse>;
+
+/// <summary>
+/// The floor's move of a job planned to a group (D-022): onto one of the group's lines that can
+/// run it (before <see cref="BeforeJobId"/>, or at the end), to another of them, or back to the
+/// group when <see cref="TargetId"/> is the group.
+/// </summary>
+public sealed record AssignJobCommand(Guid Id, long ExpectedVersion, Guid TargetId, Guid? BeforeJobId) : ICommand<VersionResponse>;
 
 /// <summary>Cancels a job; with <see cref="Replace"/>, a new job takes its slot for the quantity it did not make (D-019).</summary>
 public sealed record CancelJobCommand(Guid Id, long ExpectedVersion, string? Reason, bool Replace) : ICommand<CancelJobResponse>;
@@ -59,6 +70,10 @@ internal sealed class CreateJobHandler(
             .Require(!production || command.PlannedDuration is null, nameof(command.PlannedDuration), "Production jobs are sized by the run standard.")
             .Require(command.PlannedDuration is null || command.PlannedDuration > TimeSpan.Zero, nameof(command.PlannedDuration), "Must be greater than zero.")
             .Require(!production || !command.CountsAsPlannedDowntime, nameof(command.CountsAsPlannedDowntime), "Production is never planned downtime.")
+            .Require(
+                command.LatestEnd is null || command.EarliestStart is null || command.LatestEnd > command.EarliestStart,
+                nameof(command.LatestEnd),
+                "Must be after the earliest start.")
             .ThrowIfInvalid();
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -83,17 +98,35 @@ internal sealed class CreateJobHandler(
                 throw new DomainRuleException($"Work order {workOrder.OrderNumber} is {workOrder.Status}; only planned orders get new jobs.");
             }
 
-            await SchedulingRules.EnsureEligibleAsync(scheduling, line, workOrder.MaterialId, at, cancellationToken);
+            await SchedulingRules.EnsureCanRunAsync(scheduling, line, workOrder.MaterialId, at, cancellationToken);
+        }
+        else if (line.IsGroup)
+        {
+            throw new DomainRuleException($"{line.Code} is a group; only production jobs are planned to it. Put {command.JobType} jobs on a line.");
         }
 
         var rank = await SchedulingRules.RankAsync(scheduling, line.Id, command.BeforeJobId, null, at, cancellationToken);
-        var job = workOrder is not null
-            ? Job.CreateProduction(
-                ids.NewId(), workOrder.SiteId, workOrder.Id, command.JobNumber.Trim(), line.Id,
-                workOrder.MaterialId, command.PlannedQty!.Value, workOrder.UomId, rank, command.EarliestStart)
-            : Job.CreateActivity(
+        Job job;
+        if (workOrder is null)
+        {
+            job = Job.CreateActivity(
                 ids.NewId(), line.SiteId!.Value, command.JobType, command.JobNumber.Trim(), line.Id,
                 command.PlannedDuration, command.CountsAsPlannedDowntime, rank, command.EarliestStart);
+            job = job with { LatestEnd = command.LatestEnd };
+        }
+        else if (line.IsGroup)
+        {
+            job = Job.CreateForGroup(
+                ids.NewId(), workOrder.SiteId, workOrder.Id, command.JobNumber.Trim(), line.Id,
+                workOrder.MaterialId, command.PlannedQty!.Value, workOrder.UomId, rank, command.EarliestStart, command.LatestEnd);
+        }
+        else
+        {
+            job = Job.CreateProduction(
+                ids.NewId(), workOrder.SiteId, workOrder.Id, command.JobNumber.Trim(), line.Id,
+                workOrder.MaterialId, command.PlannedQty!.Value, workOrder.UomId, rank, command.EarliestStart);
+            job = job with { LatestEnd = command.LatestEnd };
+        }
 
         var envelope = events.Create(EventTypes.JobCreated, "job", job.Id, new { After = job });
         var version = await scheduling.InsertJobAsync(job, envelope.OccurredAt, cancellationToken);
@@ -131,6 +164,10 @@ internal sealed class SequenceJobHandler(
         }
 
         job.EnsureMovable(target.Id);
+        if (target.IsGroup)
+        {
+            throw new DomainRuleException($"{target.Code} is a group; plan a new job to it instead of moving one there.");
+        }
         var at = timeProvider.GetUtcNow();
         if (job.MaterialId is { } material)
         {
@@ -188,7 +225,7 @@ internal sealed class PinJobHandler(
             ?? throw new NotFoundException($"Job {command.Id} not found.");
         SchedulingRules.EnsureVersion(current, command.ExpectedVersion);
 
-        var pinned = current.Value.Pin(command.IsLocked, command.EarliestStart);
+        var pinned = current.Value.Pin(command.IsLocked, command.EarliestStart, command.LatestEnd);
 
         var envelope = events.Create(
             EventTypes.JobPinned,
@@ -196,10 +233,74 @@ internal sealed class PinJobHandler(
             pinned.Id,
             new
             {
-                Before = new { current.Value.IsLocked, current.Value.EarliestStart },
-                After = new { pinned.IsLocked, pinned.EarliestStart },
+                Before = new { current.Value.IsLocked, current.Value.EarliestStart, current.Value.LatestEnd },
+                After = new { pinned.IsLocked, pinned.EarliestStart, pinned.LatestEnd },
             });
         var version = await scheduling.UpdateJobAsync(pinned, envelope.OccurredAt, cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return new VersionResponse(version);
+    }
+}
+
+internal sealed class AssignJobHandler(
+    IUnitOfWork unitOfWork,
+    ISchedulingRepository scheduling,
+    IEventLog eventLog,
+    IEventFactory events,
+    TimeProvider timeProvider) : ICommandHandler<AssignJobCommand, VersionResponse>
+{
+    public async Task<VersionResponse> HandleAsync(AssignJobCommand command, CancellationToken cancellationToken)
+    {
+        new Validator()
+            .Require(command.TargetId != Guid.Empty, nameof(command.TargetId), "Required.")
+            .Require(command.BeforeJobId != command.Id, nameof(command.BeforeJobId), "A job cannot be placed before itself.")
+            .ThrowIfInvalid();
+
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+
+        var (current, lines) = await SchedulingRules.LockJobAsync(
+            scheduling, command.Id, command.ExpectedVersion, command.TargetId, cancellationToken);
+        var job = current.Value;
+        var target = lines.FirstOrDefault(l => l.Id == command.TargetId)
+            ?? throw new DomainRuleException($"Equipment {command.TargetId} not found.");
+        var targetIsGroup = target.Id == job.GroupEquipmentId;
+        var at = timeProvider.GetUtcNow();
+
+        if (!targetIsGroup && job.GroupEquipmentId is { } group)
+        {
+            if (!target.CanRunJob)
+            {
+                throw new DomainRuleException($"{target.Code} can't run jobs; pick a line.");
+            }
+
+            if (!await scheduling.IsUnderAsync(group, target.Id, cancellationToken))
+            {
+                throw new DomainRuleException($"{target.Code} is not in the group job {job.JobNumber} was planned to.");
+            }
+
+            if (job.MaterialId is { } material)
+            {
+                await SchedulingRules.EnsureEligibleAsync(scheduling, target, material, at, cancellationToken);
+            }
+        }
+
+        var rank = await SchedulingRules.RankAsync(
+            scheduling, target.Id, targetIsGroup ? null : command.BeforeJobId, job.Id, at, cancellationToken);
+        var assigned = job.Assign(target.Id, targetIsGroup, rank);
+
+        var envelope = events.Create(
+            EventTypes.JobAssigned,
+            "job",
+            assigned.Id,
+            new
+            {
+                Before = new { job.EquipmentId, job.SequenceRank },
+                After = new { assigned.EquipmentId, assigned.SequenceRank, command.BeforeJobId },
+                assigned.GroupEquipmentId,
+            });
+        var version = await scheduling.UpdateJobAsync(assigned, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -316,6 +417,24 @@ internal static class SchedulingRules
         if (!await scheduling.IsEligibleAsync(line.Id, materialId, at, cancellationToken))
         {
             throw new DomainRuleException($"Material {materialId} is not set up to run on {line.Code}; add a capability for it first.");
+        }
+    }
+
+    /// <summary>
+    /// Checks the material can run where the job is: on a line, that line's capability; on a
+    /// group, a capability on any line under it that can run jobs (D-020, D-022).
+    /// </summary>
+    /// <exception cref="DomainRuleException">Nothing there can run the material.</exception>
+    public static async Task EnsureCanRunAsync(
+        ISchedulingRepository scheduling, SchedulingLine line, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        if (!line.IsGroup)
+        {
+            await EnsureEligibleAsync(scheduling, line, materialId, at, cancellationToken);
+        }
+        else if (!await scheduling.IsEligibleInGroupAsync(line.Id, materialId, at, cancellationToken))
+        {
+            throw new DomainRuleException($"No line in {line.Code} is set up to run material {materialId}; add a capability for it first.");
         }
     }
 

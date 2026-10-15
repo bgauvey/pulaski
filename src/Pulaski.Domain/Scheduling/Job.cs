@@ -6,6 +6,9 @@ namespace Pulaski.Domain.Scheduling;
 /// A job: the piece of a work order that runs on one line (D-003). The planner places and
 /// sequences jobs; dispatch and firm happen on the work order and carry its jobs with them
 /// (D-018). Operators execute jobs. Pulaski only calculates the times (D-014).
+/// A job may instead be planned to a group such as a department (D-022): it then holds a window
+/// (<see cref="EarliestStart"/> to <see cref="LatestEnd"/>) until the floor assigns it to one of
+/// the group's lines. <see cref="GroupEquipmentId"/> remembers the group after that.
 /// </summary>
 public sealed record Job(
     Guid Id,
@@ -27,7 +30,9 @@ public sealed record Job(
     string Status,
     DateTimeOffset? DispatchedAt,
     DateTimeOffset? FirmedAt,
-    Guid? ReplacesJobId)
+    Guid? ReplacesJobId,
+    Guid? GroupEquipmentId = null,
+    DateTimeOffset? LatestEnd = null)
 {
     /// <summary>A production job for part of a work order, sized by the run standard.</summary>
     /// <exception cref="DomainRuleException">The quantity is invalid.</exception>
@@ -47,6 +52,30 @@ public sealed record Job(
         return new Job(
             id, siteId, workOrderId, jobNumber, Scheduling.JobType.Production, lineId, materialId, plannedQty, uomId,
             null, null, sequenceRank, false, earliestStart, null, false, JobStatus.Planned, null, null, null);
+    }
+
+    /// <summary>
+    /// A production job planned to a group (D-022): it waits there, in its window, for the floor to
+    /// assign it to one of the group's lines. The window must have an end.
+    /// </summary>
+    /// <exception cref="DomainRuleException">The quantity or the window is invalid.</exception>
+    public static Job CreateForGroup(
+        Guid id,
+        Guid siteId,
+        Guid workOrderId,
+        string jobNumber,
+        Guid groupId,
+        Guid materialId,
+        decimal plannedQty,
+        Guid uomId,
+        decimal sequenceRank,
+        DateTimeOffset? earliestStart,
+        DateTimeOffset? latestEnd)
+    {
+        EnsurePositive(plannedQty);
+        EnsureWindow(earliestStart, latestEnd, onGroup: true);
+        var job = CreateProduction(id, siteId, workOrderId, jobNumber, groupId, materialId, plannedQty, uomId, sequenceRank, earliestStart);
+        return job with { GroupEquipmentId = groupId, LatestEnd = latestEnd };
     }
 
     /// <summary>
@@ -85,6 +114,9 @@ public sealed record Job(
 
     public bool IsFirmed => Status == JobStatus.Firmed;
 
+    /// <summary>Planned to a group and not yet taken by one of its lines (D-022).</summary>
+    public bool IsOnGroup => GroupEquipmentId is { } group && group == EquipmentId;
+
     /// <summary>
     /// Checks the job may move. A planned job may move anywhere. A firmed job may only change
     /// line, keeping its time (D-019). Anything else stays put.
@@ -92,6 +124,11 @@ public sealed record Job(
     /// <exception cref="DomainRuleException">The job is locked, dispatched, started or finished, or firmed and staying on its line.</exception>
     public void EnsureMovable(Guid toLineId)
     {
+        if (GroupEquipmentId is not null)
+        {
+            throw new DomainRuleException($"Job {JobNumber} was planned to a group; assign it to one of the group's lines instead.");
+        }
+
         if (IsLocked)
         {
             throw new DomainRuleException($"Job {JobNumber} is locked; unlock it before moving it.");
@@ -120,16 +157,59 @@ public sealed record Job(
         return this with { EquipmentId = lineId, SequenceRank = sequenceRank };
     }
 
-    /// <summary>Sets the pins: the lock and the earliest start (D-014).</summary>
-    /// <exception cref="DomainRuleException">The job is finished.</exception>
-    public Job Pin(bool isLocked, DateTimeOffset? earliestStart)
+    /// <summary>
+    /// Sets the pins: the lock, the earliest start and the finish-by (D-014). A job waiting on a
+    /// group keeps a finish-by, since that is its window (D-022).
+    /// </summary>
+    /// <exception cref="DomainRuleException">The job is finished, or the window is invalid.</exception>
+    public Job Pin(bool isLocked, DateTimeOffset? earliestStart, DateTimeOffset? latestEnd)
     {
         if (!IsOpen)
         {
             throw new DomainRuleException($"Job {JobNumber} is {Status}; it can no longer be pinned.");
         }
 
-        return this with { IsLocked = isLocked, EarliestStart = earliestStart };
+        EnsureWindow(earliestStart, latestEnd, IsOnGroup);
+        return this with { IsLocked = isLocked, EarliestStart = earliestStart, LatestEnd = latestEnd };
+    }
+
+    /// <summary>
+    /// The floor's move of a job planned to a group (D-022): onto one of the group's lines, to
+    /// another of them, or back to the group. Allowed whatever the plan status, because where the
+    /// job runs is the floor's call; never for a locked or started job.
+    /// </summary>
+    /// <param name="targetId">A line of the group, or the group itself.</param>
+    /// <param name="targetIsGroup">The target is the job's group itself, not a line.</param>
+    /// <param name="sequenceRank">The job's rank on the target.</param>
+    /// <exception cref="DomainRuleException">The job was not planned to a group, is locked or started, or the group is another one.</exception>
+    public Job Assign(Guid targetId, bool targetIsGroup, decimal sequenceRank)
+    {
+        if (GroupEquipmentId is not { } group)
+        {
+            throw new DomainRuleException($"Job {JobNumber} was planned to a line, not a group; move it with the sequence instead.");
+        }
+
+        if (IsLocked)
+        {
+            throw new DomainRuleException($"Job {JobNumber} is locked; unlock it before moving it.");
+        }
+
+        if (Status is not (JobStatus.Planned or JobStatus.Dispatched or JobStatus.Firmed))
+        {
+            throw new DomainRuleException($"Job {JobNumber} is {Status}; it can no longer be moved.");
+        }
+
+        if (targetIsGroup && targetId != group)
+        {
+            throw new DomainRuleException($"Job {JobNumber} can only go back to the group it was planned to.");
+        }
+
+        if (targetIsGroup && LatestEnd is null)
+        {
+            throw new DomainRuleException($"Job {JobNumber} needs a finish-by time before it goes back to its group.");
+        }
+
+        return this with { EquipmentId = targetId, SequenceRank = sequenceRank };
     }
 
     /// <summary>
@@ -222,6 +302,19 @@ public sealed record Job(
         if (Status != expected)
         {
             throw new DomainRuleException($"Job {JobNumber} is {Status}; only {expected} jobs can be {action}.");
+        }
+    }
+
+    private static void EnsureWindow(DateTimeOffset? earliestStart, DateTimeOffset? latestEnd, bool onGroup)
+    {
+        if (onGroup && latestEnd is null)
+        {
+            throw new DomainRuleException("A job planned to a group needs a finish-by time: its window must have an end.");
+        }
+
+        if (earliestStart is { } start && latestEnd is { } end && end <= start)
+        {
+            throw new DomainRuleException("The finish-by time must be after the earliest start.");
         }
     }
 

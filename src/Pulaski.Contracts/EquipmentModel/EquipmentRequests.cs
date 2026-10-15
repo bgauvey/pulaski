@@ -10,6 +10,11 @@ public sealed record CreateEquipmentRequest
     public string EquipmentRole { get; init; } = "";
     public bool TracksState { get; init; }
     public bool IsSchedulable { get; init; }
+    /// <summary>
+    /// Runs jobs (D-022). Left out, a new row runs jobs when it is schedulable, and an update
+    /// keeps the current value. A schedulable row that can't run jobs is a group, such as a department.
+    /// </summary>
+    public bool? CanRunJob { get; init; }
     public bool HoldsInventory { get; init; }
     public string? TimeZone { get; init; }
 }
@@ -21,6 +26,11 @@ public sealed record UpdateEquipmentRequest
     public string? Description { get; init; }
     public bool TracksState { get; init; }
     public bool IsSchedulable { get; init; }
+    /// <summary>
+    /// Runs jobs (D-022). Left out, a new row runs jobs when it is schedulable, and an update
+    /// keeps the current value. A schedulable row that can't run jobs is a group, such as a department.
+    /// </summary>
+    public bool? CanRunJob { get; init; }
     public bool HoldsInventory { get; init; }
     public bool IsActive { get; init; } = true;
 }

@@ -15,7 +15,7 @@ public class GetLineTimelineHandlerTests
         _handler = new GetLineTimelineHandler(_f.Stores.Scheduling, new FakeTimeProvider(HandlerFixture.Now));
 
     private static SchedulingLineRow Line(bool schedulable = true, string mode = ChangeoverMode.Auto) =>
-        new() { Id = Guid.CreateVersion7(), Code = "EXT-01", Name = "Line 1", IsSchedulable = schedulable, ChangeoverMode = mode };
+        new() { Id = Guid.CreateVersion7(), Code = "EXT-01", Name = "Line 1", IsSchedulable = schedulable, CanRunJob = schedulable, ChangeoverMode = mode };
 
     [Fact]
     public async Task Maps_rows_to_a_projected_timeline_with_display_fields()

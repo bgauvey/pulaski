@@ -392,6 +392,42 @@ public sealed class SchedulingTests(DatabaseFixture db)
             handler.HandleAsync(new PreviewJobPlacementQuery(spare, wo, 500m, null), CancellationToken.None));
     }
 
+    [Fact]
+    public async Task A_department_plans_a_window_and_the_floor_assigns_the_job_to_one_of_its_lines()
+    {
+        var (site, _) = await CreateLineAsync();
+        var department = (await db.SendAsync(new CreateEquipmentCommand(
+            site, "DEPT-" + Guid.NewGuid().ToString("N")[..6], "Department", null, "area", "area", false, true, false, null, CanRunJob: false))).Id;
+        var line = (await db.SendAsync(new CreateEquipmentCommand(
+            department, "LINE-" + Guid.NewGuid().ToString("N")[..6], "Line", null, "work_center", "production_line", true, true, false, null))).Id;
+        var (white, _) = await CreateMaterialsAsync();
+        await CanRunAsync(line, white);
+        await db.ExecuteAsync(
+            $"""
+            INSERT INTO core.run_standard (equipment_id, material_id, uom_id, calculated_rate_per_hour, calculation_basis, calculated_at)
+            VALUES ('{line}', '{white}', '{db.UomId}', 1000, 'ideal_rate', now())
+            """);
+        var wo = await CreateWorkOrderAsync(site, white);
+        var start = DateTimeOffset.UtcNow.AddDays(1);
+        var end = start.AddDays(2);
+
+        var job = (await db.SendAsync(new CreateJobCommand(
+            department, $"G-{department.ToString("N")[^6..]}", JobType.Production, wo, 2000m, null, false, start, null, end))).Id;
+
+        var window = Assert.Single((await QueryAsync(department)).Segments);
+        Assert.Equal((SegmentKind.Window, job), (window.Kind, window.JobId));
+        Assert.Equal(end, window.LatestEnd!.Value, TimeSpan.FromMilliseconds(1));
+        var candidate = Assert.Single(window.Candidates);
+        Assert.Equal((line, (TimeSpan?)TimeSpan.FromHours(2), true), (candidate.LineId, candidate.Work, candidate.FitsWindow));
+
+        var version = (await QueryAsync(department)).Segments[0].Version!.Value;
+        await db.SendAsync(new AssignJobCommand(job, version, line, null));
+
+        Assert.Empty((await QueryAsync(department)).Segments);
+        var onLine = Assert.Single((await QueryAsync(line)).Segments, s => s.Kind == SegmentKind.Job);
+        Assert.Equal((job, (Guid?)department), (onLine.JobId, onLine.GroupEquipmentId));
+    }
+
     private async Task<Guid> CreateWorkOrderAsync(Guid site, Guid material, string status = WorkOrderStatus.Planned)
     {
         var id = Guid.CreateVersion7();

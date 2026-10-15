@@ -57,7 +57,7 @@
                         break;
                     }
                 }
-                return { line: row.dataset.lineId, before };
+                return { line: row.dataset.lineId, before, percent: Math.min(100, Math.max(0, percent)) };
             };
 
             const setSlot = next => {
@@ -95,7 +95,7 @@
                 e.preventDefault();
                 const at = slotAt(row, e.clientX);
                 slot = null;
-                dotnet.invokeMethodAsync("OnDropSlot", at.line, at.before, payload);
+                dotnet.invokeMethodAsync("OnDropSlot", at.line, at.before, payload, at.percent);
                 payload = null;
             };
 

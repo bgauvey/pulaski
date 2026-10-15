@@ -64,7 +64,8 @@
                         else
                         {
                             @if (item.TracksState) { <span class="chip">State</span> }
-                            @if (item.IsSchedulable) { <span class="chip">Schedulable</span> }
+                            @if (item.IsSchedulable) { <span class="chip">@(item.CanRunJob ? "Schedulable" : "Plans for children")</span> }
+                            @if (item.CanRunJob) { <span class="chip">Runs jobs</span> }
                             @if (item.HoldsInventory) { <span class="chip">Inventory</span> }
                             @if (!item.IsActive) { <span class="chip chip-muted">Inactive</span> }
                         }
