@@ -216,194 +216,12 @@
         </div>
 
         @* Properties *@
-        <aside class="process-properties" aria-label="Properties" hidden="@_hideProperties">
-            @if (SelectedOperation is { } sel)
-            {
-                <h2>Operation @sel.Number</h2>
-                <div class="row g-2">
-                    <div class="col-4">
-                        <label class="form-label" for="op-number">Number</label>
-                        <input id="op-number" type="number" min="1" step="10" class="form-control" value="@sel.Number" disabled="@(!IsDraft)"
-                               @onchange="e => ChangeOperationAsync(sel.Id, o => int.TryParse(e.Value as string, out var n) && n > 0 ? o with { Number = n } : o)" />
-                    </div>
-                    <div class="col-8">
-                        <label class="form-label" for="op-name">Name</label>
-                        <input id="op-name" class="form-control" maxlength="200" value="@sel.Name" disabled="@(!IsDraft)"
-                               @onchange="e => ChangeOperationAsync(sel.Id, o => o with { Name = (e.Value as string ?? o.Name).Trim() })" />
-                    </div>
-                </div>
-                <label class="form-label mt-2" for="op-description">Description</label>
-                <textarea id="op-description" class="form-control" rows="2" disabled="@(!IsDraft)"
-                          @onchange="e => ChangeOperationAsync(sel.Id, o => o with { Description = e.Value as string })">@sel.Description</textarea>
-
-                <h3 class="mt-3">Runs on</h3>
-                <p class="small text-muted">Each line or department becomes its own job for its share of the quantity.</p>
-                @foreach (var use in sel.Equipment)
-                {
-                    var eq = Equipment(use.EquipmentId);
-                    <div class="share-row" @key="use.EquipmentId">
-                        <span class="share-name">
-                            <span class="fw-semibold">@(eq?.Code ?? "?")</span>
-                            <span class="small text-muted">@(eq is not null && IsGroup(eq) ? "Department" : "Line")</span>
-                        </span>
-                        <div class="input-group input-group-sm share-input">
-                            <input type="number" min="0.01" max="100" step="0.01" class="form-control" aria-label="Share for @(eq?.Code)"
-                                   value="@use.SharePercent.ToString("0.##", CultureInfo.InvariantCulture)" disabled="@(!IsDraft)"
-                                   @onchange="e => SetShareAsync(sel.Id, use.EquipmentId, e)" />
-                            <span class="input-group-text">%</span>
-                        </div>
-                        @if (IsDraft)
-                        {
-                            <button type="button" class="icon-btn" aria-label="Remove @(eq?.Code)" @onclick="() => ApplyAsync(ProcessEditing.RemoveEquipment(_definition, sel.Id, use.EquipmentId))">
-                                <Icon Name="close" Size="16" />
-                            </button>
-                        }
-                    </div>
-                }
-                var total = ProcessEditing.ShareTotal(sel);
-                <div class="share-total @(sel.Equipment.Count > 0 && total != 100m ? "is-off" : "")">
-                    Total @Share(total)
-                    @if (IsDraft && sel.Equipment.Count > 1)
-                    {
-                        <button type="button" class="link-button ms-2" @onclick="() => ChangeOperationAsync(sel.Id, ProcessEditing.SplitEvenly)">Split evenly</button>
-                    }
-                </div>
-                @if (IsDraft)
-                {
-                    <select class="form-select form-select-sm mt-2" aria-label="Add a line or department" value="" @onchange="e => AddEquipmentFromListAsync(sel.Id, e)">
-                        <option value="">Add a line or department…</option>
-                        @foreach (var e in Palette.Where(e => sel.Equipment.All(u => u.EquipmentId != e.Id)))
-                        {
-                            <option value="@e.Id">@e.Code · @e.Name</option>
-                        }
-                    </select>
-                    <button type="button" class="btn btn-outline-danger btn-sm btn-with-icon mt-3" @onclick="() => RemoveOperationAsync(sel.Id)">
-                        <Icon Name="trash" Size="16" /> Delete operation
-                    </button>
-                }
-            }
-            else if (SelectedLink is { } chosen)
-            {
-                var from = _definition.Operations.First(o => o.Id == chosen.FromOperationId);
-                var to = _definition.Operations.First(o => o.Id == chosen.ToOperationId);
-                <h2>Link</h2>
-                <p><span class="fw-semibold">@to.Number @to.Name</span> follows <span class="fw-semibold">@from.Number @from.Name</span>.</p>
-                <fieldset disabled="@(!IsDraft)">
-                    <legend class="form-label">It starts</legend>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="link-type" id="link-after-start" checked="@(chosen.Type == ProcessEditing.AfterStart)"
-                               @onchange="() => ApplyAsync(ProcessEditing.UpdateDependency(_definition, chosen.Id, ProcessEditing.AfterStart, chosen.Lag))" />
-                        <label class="form-check-label" for="link-after-start">After @from.Name starts <span class="text-muted small">(material flows straight through)</span></label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="link-type" id="link-after-end" checked="@(chosen.Type == ProcessEditing.AfterEnd)"
-                               @onchange="() => ApplyAsync(ProcessEditing.UpdateDependency(_definition, chosen.Id, ProcessEditing.AfterEnd, chosen.Lag))" />
-                        <label class="form-check-label" for="link-after-end">After @from.Name ends <span class="text-muted small">(hand-off of the finished quantity)</span></label>
-                    </div>
-                    <label class="form-label mt-2" for="link-lag">Lag (minutes)</label>
-                    <input id="link-lag" type="number" min="0" step="5" class="form-control" value="@((int)chosen.Lag.TotalMinutes)"
-                           @onchange="e => SetLagAsync(chosen, e)" />
-                </fieldset>
-                @if (IsDraft)
-                {
-                    <button type="button" class="btn btn-outline-danger btn-sm btn-with-icon mt-3" @onclick="() => RemoveLinkAsync(chosen.Id)">
-                        <Icon Name="trash" Size="16" /> Delete link
-                    </button>
-                }
-            }
-            else
-            {
-                <h2>Process</h2>
-                <label class="form-label" for="process-name">Name</label>
-                <input id="process-name" class="form-control" maxlength="200" value="@_process.Name" @onchange="e => UpdateHeaderAsync(name: e.Value as string)" />
-                <label class="form-label mt-2" for="process-description">Description</label>
-                <textarea id="process-description" class="form-control" rows="3" @onchange="e => UpdateHeaderAsync(description: e.Value as string)">@_process.Description</textarea>
-                <div class="form-check form-switch mt-2">
-                    <input class="form-check-input" type="checkbox" role="switch" id="process-active" checked="@_process.IsActive"
-                           @onchange="e => UpdateHeaderAsync(active: e.Value is true)" />
-                    <label class="form-check-label" for="process-active">Active: can be picked for new orders</label>
-                </div>
-
-                <h3 class="mt-3">Makes</h3>
-                <p class="small text-muted">Order creation offers this process for any material it makes.</p>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="makes" id="makes-all" checked="@_process.MakesAllMaterials"
-                           @onchange="() => SetScopeAsync(true, [], [])" />
-                    <label class="form-check-label" for="makes-all">All materials</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="makes" id="makes-chosen" checked="@(!_process.MakesAllMaterials)"
-                           @onchange="() => SetScopeAsync(false, [], [])" />
-                    <label class="form-check-label" for="makes-chosen">Chosen classes and materials</label>
-                </div>
-                @if (!_process.MakesAllMaterials)
-                {
-                    <div class="scope-list">
-                        @foreach (var c in _process.MakesClasses)
-                        {
-                            <span class="chip scope-chip" @key="c.Id">
-                                <span class="scope-kind">Class</span> @c.Code
-                                <button type="button" class="scope-remove" aria-label="Stop making class @c.Code"
-                                        @onclick="() => SetScopeAsync(false, ClassIds.Where(id => id != c.Id), MaterialIds)"><Icon Name="close" Size="12" /></button>
-                            </span>
-                        }
-                        @foreach (var m in _process.MakesMaterials)
-                        {
-                            <span class="chip scope-chip" @key="m.Id">
-                                @m.Code
-                                <button type="button" class="scope-remove" aria-label="Stop making @m.Code"
-                                        @onclick="() => SetScopeAsync(false, ClassIds, MaterialIds.Where(id => id != m.Id))"><Icon Name="close" Size="12" /></button>
-                            </span>
-                        }
-                    </div>
-                    @if (_process.MakesClasses.Count == 0 && _process.MakesMaterials.Count == 0)
-                    {
-                        <p class="small text-warning-strong mb-1">It makes nothing yet, so order creation won't offer it.</p>
-                    }
-                    <select class="form-select form-select-sm mt-1" aria-label="Add a material class" value="" @onchange="AddScopeClassAsync">
-                        <option value="">Add a material class…</option>
-                        @foreach (var c in _classes.Where(c => ClassIds.All(id => id != c.Id)))
-                        {
-                            <option value="@c.Id">@c.Code · @c.Name</option>
-                        }
-                    </select>
-                    <select class="form-select form-select-sm mt-1" aria-label="Add a material" value="" @onchange="AddScopeMaterialAsync">
-                        <option value="">Add a single material…</option>
-                        @foreach (var m in _materials.Where(m => m.IsActive && !Covers(m)))
-                        {
-                            <option value="@m.Id">@m.Code · @m.Name</option>
-                        }
-                    </select>
-                }
-
-                <h3 class="mt-3">Default for</h3>
-                <p class="small text-muted">Of the materials it makes, these pre-select this process when an order is created. Adding a material replaces its current default.</p>
-                @foreach (var material in _process.DefaultFor)
-                {
-                    var covered = _materials.FirstOrDefault(m => m.Id == material.Id) is { } known && Covers(known);
-                    <div class="share-row" @key="material.Id">
-                        <span class="share-name">
-                            <span class="fw-semibold">@material.Code</span> <span class="small text-muted">@material.Name</span>
-                            @if (!covered)
-                            {
-                                <span class="chip chip-warning ms-1" title="The process no longer makes this material; order creation won't offer it.">Not made</span>
-                            }
-                        </span>
-                        <button type="button" class="icon-btn" aria-label="Stop being the default for @material.Code" @onclick="() => SetDefaultAsync(material.Id, null)">
-                            <Icon Name="close" Size="16" />
-                        </button>
-                    </div>
-                }
-                <select class="form-select form-select-sm mt-1" aria-label="Add a default material" value="" @onchange="AddDefaultAsync">
-                    <option value="">Add a material…</option>
-                    @foreach (var m in _materials.Where(m => m.IsActive && Covers(m) && _process.DefaultFor.All(d => d.Id != m.Id)))
-                    {
-                        <option value="@m.Id">@m.Code · @m.Name</option>
-                    }
-                </select>
-                <p class="small text-muted mt-3 mb-0">Select an operation or a link on the canvas to edit it.</p>
-            }
-        </aside>
+        @* Properties: the selected operation or link, or the process itself (D-023). *@
+        <div class="process-properties" hidden="@_hideProperties">
+            <PropertyGrid Items="PropertyItems" Title="@PropertiesTitle" Subtitle="@PropertiesSubtitle"
+                          Revision="_revision" OnChange="OnPropertyChangeAsync" OnRemove="OnPropertyRemoveAsync"
+                          Footer="PropertiesFooter" />
+        </div>
     </div>
 
     @* Every operation's equipment and shares, as a grid. *@
@@ -702,23 +520,16 @@ else if (_error is null)
         SelectOperation(id);
     }
 
-    private Task AddEquipmentFromListAsync(Guid operationId, ChangeEventArgs e) =>
-        Guid.TryParse(e.Value as string, out var equipmentId)
+    private Task AddEquipmentFromListAsync(Guid operationId, ChangeEventArgs e)
+    {
+        _pickerRevision++;
+        return Guid.TryParse(e.Value as string, out var equipmentId)
             ? ApplyAsync(ProcessEditing.AddEquipment(_definition, operationId, equipmentId))
             : Task.CompletedTask;
+    }
 
     private Task ChangeOperationAsync(Guid operationId, Func<ProcessOperationDto, ProcessOperationDto> change) =>
         ApplyAsync(ProcessEditing.UpdateOperation(_definition, operationId, change));
-
-    private Task SetShareAsync(Guid operationId, Guid equipmentId, ChangeEventArgs e) =>
-        decimal.TryParse(e.Value as string, NumberStyles.Number, CultureInfo.InvariantCulture, out var share) && share > 0 && share <= 100
-            ? ApplyAsync(ProcessEditing.SetShare(_definition, operationId, equipmentId, share))
-            : Task.CompletedTask;
-
-    private Task SetLagAsync(ProcessDependencyDto link, ChangeEventArgs e) =>
-        int.TryParse(e.Value as string, out var minutes) && minutes >= 0
-            ? ApplyAsync(ProcessEditing.UpdateDependency(_definition, link.Id, link.Type, TimeSpan.FromMinutes(minutes)))
-            : Task.CompletedTask;
 
     private async Task RemoveOperationAsync(Guid id)
     {
@@ -808,6 +619,167 @@ else if (_error is null)
         }
     }
 
+    // ---- Properties grid ----
+
+    private int _revision;
+
+    // Bumped after each pick from a footer list, so the list is rebuilt showing its placeholder again.
+    private int _pickerRevision;
+
+    private IReadOnlyList<PropertyItem> PropertyItems =>
+        SelectedOperation is { } op ? ProcessProperties.ForOperation(op, _definition, _equipment, IsDraft)
+        : SelectedLink is { } link ? ProcessProperties.ForLink(link, _definition, IsDraft)
+        : _process is not null && _version is not null ? ProcessProperties.ForProcess(_process, _version, _materials)
+        : [];
+
+    private string PropertiesTitle =>
+        SelectedOperation is { } op ? $"{op.Number} {op.Name}"
+        : SelectedLink is { } link ? $"{OperationLabel(link.FromOperationId)} → {OperationLabel(link.ToOperationId)}"
+        : _process?.Code ?? "";
+
+    private string PropertiesSubtitle => SelectedOperation is not null ? "Operation" : SelectedLink is not null ? "Link" : "Process";
+
+    private string OperationLabel(Guid id) => _definition.Operations.FirstOrDefault(o => o.Id == id) is { } o ? o.Number.ToString(CultureInfo.InvariantCulture) : "?";
+
+    /// <summary>Lists are added to from the footer; their rows are taken out with the grid's × buttons.</summary>
+    private RenderFragment PropertiesFooter => __builder =>
+    {
+        if (SelectedOperation is { } op)
+        {
+            if (IsDraft)
+            {
+                <select @key="@($"Add a line or department:{_pickerRevision}")" class="form-select form-select-sm" aria-label="Add a line or department" value="" @onchange="e => AddEquipmentFromListAsync(op.Id, e)">
+                    <option value="">Add a line or department…</option>
+                    @foreach (var e in Palette.Where(e => op.Equipment.All(u => u.EquipmentId != e.Id)))
+                    {
+                        <option value="@e.Id">@e.Code · @e.Name</option>
+                    }
+                </select>
+                <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@(op.Equipment.Count < 2)"
+                        @onclick="() => ChangeOperationAsync(op.Id, ProcessEditing.SplitEvenly)">Split evenly</button>
+                <button type="button" class="btn btn-outline-danger btn-sm btn-with-icon" @onclick="() => RemoveOperationAsync(op.Id)">
+                    <Icon Name="trash" Size="16" /> Delete operation
+                </button>
+            }
+        }
+        else if (SelectedLink is { } link)
+        {
+            if (IsDraft)
+            {
+                <button type="button" class="btn btn-outline-danger btn-sm btn-with-icon" @onclick="() => RemoveLinkAsync(link.Id)">
+                    <Icon Name="trash" Size="16" /> Delete link
+                </button>
+            }
+        }
+        else if (_process is { } process)
+        {
+            if (!process.MakesAllMaterials)
+            {
+                <select @key="@($"Add a material class:{_pickerRevision}")" class="form-select form-select-sm" aria-label="Add a material class" value="" @onchange="AddScopeClassAsync">
+                    <option value="">Make a material class…</option>
+                    @foreach (var c in _classes.Where(c => ClassIds.All(id => id != c.Id)))
+                    {
+                        <option value="@c.Id">@c.Code · @c.Name</option>
+                    }
+                </select>
+                <select @key="@($"Add a material:{_pickerRevision}")" class="form-select form-select-sm" aria-label="Add a material" value="" @onchange="AddScopeMaterialAsync">
+                    <option value="">Make a single material…</option>
+                    @foreach (var m in _materials.Where(m => m.IsActive && !ProcessProperties.Covers(process, m)))
+                    {
+                        <option value="@m.Id">@m.Code · @m.Name</option>
+                    }
+                </select>
+            }
+            <select @key="@($"Add a default material:{_pickerRevision}")" class="form-select form-select-sm" aria-label="Add a default material" value="" @onchange="AddDefaultAsync">
+                <option value="">Default for a material…</option>
+                @foreach (var m in _materials.Where(m => m.IsActive && ProcessProperties.Covers(process, m) && process.DefaultFor.All(d => d.Id != m.Id)))
+                {
+                    <option value="@m.Id">@m.Code · @m.Name</option>
+                }
+            </select>
+        }
+    };
+
+    private async Task OnPropertyChangeAsync(PropertyChange change)
+    {
+        var value = change.Value?.Trim();
+        if (SelectedOperation is { } op)
+        {
+            switch (change.Key)
+            {
+                case ProcessProperties.Number when int.TryParse(value, out var number) && number > 0:
+                    await ChangeOperationAsync(op.Id, o => o with { Number = number });
+                    return;
+                case ProcessProperties.Name when !string.IsNullOrEmpty(value):
+                    await ChangeOperationAsync(op.Id, o => o with { Name = value });
+                    return;
+                case ProcessProperties.Description:
+                    await ChangeOperationAsync(op.Id, o => o with { Description = string.IsNullOrEmpty(value) ? null : value });
+                    return;
+                case var key when ProcessProperties.IdAfter(key, ProcessProperties.SharePrefix) is { } equipmentId
+                                  && decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var share) && share is > 0 and <= 100:
+                    await ApplyAsync(ProcessEditing.SetShare(_definition, op.Id, equipmentId, share));
+                    return;
+            }
+        }
+        else if (SelectedLink is { } link)
+        {
+            switch (change.Key)
+            {
+                case ProcessProperties.LinkType when value is ProcessEditing.AfterStart or ProcessEditing.AfterEnd:
+                    await ApplyAsync(ProcessEditing.UpdateDependency(_definition, link.Id, value, link.Lag));
+                    return;
+                case ProcessProperties.Lag when int.TryParse(value, out var minutes) && minutes >= 0:
+                    await ApplyAsync(ProcessEditing.UpdateDependency(_definition, link.Id, link.Type, TimeSpan.FromMinutes(minutes)));
+                    return;
+            }
+        }
+        else if (_process is not null)
+        {
+            switch (change.Key)
+            {
+                case ProcessProperties.Name when !string.IsNullOrEmpty(value):
+                    await UpdateHeaderAsync(name: value);
+                    return;
+                case ProcessProperties.Description:
+                    await UpdateHeaderAsync(description: value ?? "");
+                    return;
+                case ProcessProperties.IsActive:
+                    await UpdateHeaderAsync(active: value == "true");
+                    return;
+                case ProcessProperties.AllMaterials:
+                    await SetScopeAsync(value == "true", ClassIds, MaterialIds);
+                    return;
+            }
+        }
+
+        // Not a value we can take: put the editors back to what is saved.
+        _saveMessage = "That value isn't valid here.";
+        _revision++;
+    }
+
+    private Task OnPropertyRemoveAsync(string key)
+    {
+        if (SelectedOperation is { } op && ProcessProperties.IdAfter(key, ProcessProperties.SharePrefix) is { } equipmentId)
+        {
+            return ApplyAsync(ProcessEditing.RemoveEquipment(_definition, op.Id, equipmentId));
+        }
+
+        if (ProcessProperties.IdAfter(key, ProcessProperties.ClassPrefix) is { } classId)
+        {
+            return SetScopeAsync(false, ClassIds.Where(id => id != classId), MaterialIds);
+        }
+
+        if (ProcessProperties.IdAfter(key, ProcessProperties.MaterialPrefix) is { } materialId)
+        {
+            return SetScopeAsync(false, ClassIds, MaterialIds.Where(id => id != materialId));
+        }
+
+        return ProcessProperties.IdAfter(key, ProcessProperties.DefaultPrefix) is { } defaultId
+            ? SetDefaultAsync(defaultId, null)
+            : Task.CompletedTask;
+    }
+
     private async Task TogglePaneAsync(bool palette)
     {
         if (palette)
@@ -826,18 +798,17 @@ else if (_error is null)
 
     private IEnumerable<Guid> MaterialIds => _process?.MakesMaterials.Select(m => m.Id) ?? [];
 
-    /// <summary>Whether the process's scope covers the material, as the API decides it (D-023).</summary>
-    private bool Covers(MaterialDto material) =>
-        _process is { } p
-        && (p.MakesAllMaterials
-            || p.MakesMaterials.Any(m => m.Id == material.Id)
-            || (material.MaterialClassId is { } classId && p.MakesClasses.Any(c => c.Id == classId)));
+    private Task AddScopeClassAsync(ChangeEventArgs e)
+    {
+        _pickerRevision++;
+        return Guid.TryParse(e.Value as string, out var classId) ? SetScopeAsync(false, ClassIds.Append(classId), MaterialIds) : Task.CompletedTask;
+    }
 
-    private Task AddScopeClassAsync(ChangeEventArgs e) =>
-        Guid.TryParse(e.Value as string, out var classId) ? SetScopeAsync(false, ClassIds.Append(classId), MaterialIds) : Task.CompletedTask;
-
-    private Task AddScopeMaterialAsync(ChangeEventArgs e) =>
-        Guid.TryParse(e.Value as string, out var materialId) ? SetScopeAsync(false, ClassIds, MaterialIds.Append(materialId)) : Task.CompletedTask;
+    private Task AddScopeMaterialAsync(ChangeEventArgs e)
+    {
+        _pickerRevision++;
+        return Guid.TryParse(e.Value as string, out var materialId) ? SetScopeAsync(false, ClassIds, MaterialIds.Append(materialId)) : Task.CompletedTask;
+    }
 
     private async Task SetScopeAsync(bool all, IEnumerable<Guid> classIds, IEnumerable<Guid> materialIds)
     {
@@ -867,6 +838,7 @@ else if (_error is null)
 
     private async Task AddDefaultAsync(ChangeEventArgs e)
     {
+        _pickerRevision++;
         if (Guid.TryParse(e.Value as string, out var materialId))
         {
             await SetDefaultAsync(materialId, Id);

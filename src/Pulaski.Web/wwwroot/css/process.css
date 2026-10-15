@@ -120,13 +120,11 @@
         grid-template-columns: minmax(0, 1fr);
     }
 
-.process-palette[hidden],
-.process-properties[hidden] {
+.process-palette[hidden] {
     display: none;
 }
 
-.process-palette,
-.process-properties {
+.process-palette {
     align-self: start;
     max-height: clamp(420px, calc(100vh - 320px), 960px);
     overflow-y: auto;
@@ -136,15 +134,9 @@
     border-radius: var(--radius-lg);
 }
 
-    .process-palette h2,
-    .process-properties h2 {
+    .process-palette h2 {
         font: var(--type-section-title);
         margin-bottom: var(--space-2);
-    }
-
-    .process-properties h3 {
-        font: var(--type-body-strong);
-        margin-bottom: var(--space-1);
     }
 
 .palette-list {
@@ -428,50 +420,16 @@ g.is-selected .link-line {
     color: var(--text-muted);
 }
 
-/* ---- Properties ---- */
+/* ---- Properties: the shared property grid, as tall as the canvas ---- */
 
-.share-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-1) 0;
-}
-
-.share-name {
-    flex: 1 1 auto;
+.process-properties {
+    height: clamp(420px, calc(100vh - 320px), 960px);
     min-width: 0;
 }
 
-.share-input {
-    width: 110px;
+.process-properties[hidden] {
+    display: none;
 }
-
-.share-total {
-    margin-top: var(--space-1);
-    font: var(--type-label);
-    color: var(--success);
-}
-
-    .share-total.is-off {
-        color: var(--danger);
-    }
-
-.icon-btn {
-    display: inline-grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-full);
-    background: transparent;
-    color: var(--text-muted);
-}
-
-    .icon-btn:hover {
-        background: var(--surface-2);
-        color: var(--danger);
-    }
 
 /* ---- Grid ---- */
 
@@ -493,45 +451,21 @@ g.is-selected .link-line {
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .process-palette,
-    .process-properties {
+    .process-palette {
         max-height: none;
+    }
+
+    .process-properties {
+        height: 520px;
     }
 }
 
-/* ---- Scope ---- */
-
-.scope-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1);
-    margin: var(--space-2) 0 var(--space-1);
-}
-
-.scope-chip {
-    gap: var(--space-1);
-}
+/* ---- Scope (process list) ---- */
 
 .scope-kind {
     font-weight: 400;
     color: var(--text-muted);
 }
-
-.scope-remove {
-    display: inline-grid;
-    place-items: center;
-    width: 16px;
-    height: 16px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-full);
-    background: none;
-    color: var(--text-muted);
-}
-
-    .scope-remove:hover {
-        color: var(--danger);
-    }
 
 /* The editor uses the full width of the window, not the content column's usual cap. The layout's
    rule is scoped CSS loaded after this file, so this one needs the extra .app-main to win. */

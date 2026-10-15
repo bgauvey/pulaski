@@ -102,6 +102,9 @@
     [Parameter] public int Revision { get; set; }
 
     [Parameter] public EventCallback<PropertyChange> OnChange { get; set; }
+
+    /// <summary>A <see cref="PropertyItem.Removable"/> row's × was pressed; receives its key.</summary>
+    [Parameter] public EventCallback<string> OnRemove { get; set; }
     [Parameter] public RenderFragment? Banner { get; set; }
     [Parameter] public RenderFragment? Footer { get; set; }
 
@@ -153,7 +156,7 @@
     private RenderFragment Row(PropertyItem item) => __builder =>
     {
         var readOnly = item.Editor == PropertyEditor.ReadOnly;
-        <tr class="pg-row @(item.Key == _selectedKey ? "is-selected" : "") @(readOnly ? "is-readonly" : "")"
+        <tr class="pg-row @(item.Key == _selectedKey ? "is-selected" : "") @(readOnly ? "is-readonly" : "") @(item.IsFlagged ? "is-flagged" : "")"
             @onclick="() => _selectedKey = item.Key">
             <th scope="row" class="pg-name">
                 @if (readOnly)
@@ -166,6 +169,7 @@
                 }
             </th>
             <td class="pg-value">
+              <div class="pg-value-cell">
                 @switch (item.Editor)
                 {
                     case PropertyEditor.Text:
@@ -187,10 +191,32 @@
                             }
                         </select>
                         break;
+                    case PropertyEditor.Number:
+                        <input @key="EditorKey(item)" id="@InputId(item)" class="pg-input pg-number" type="number" value="@item.Value"
+                               min="@item.Min?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                               max="@item.Max?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                               step="@(item.Step?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "any")"
+                               disabled="@Disabled"
+                               @onfocus="() => _selectedKey = item.Key"
+                               @onkeydown="OnKeyDown"
+                               @onchange="e => CommitAsync(item, e.Value as string)" />
+                        break;
                     default:
                         <span class="pg-readonly" title="@item.DisplayValue">@item.DisplayValue</span>
                         break;
                 }
+                @if (item.Suffix is not null)
+                {
+                    <span class="pg-suffix">@item.Suffix</span>
+                }
+                @if (item.Removable && !Disabled)
+                {
+                    <button type="button" class="pg-remove" aria-label="Remove @item.Name" title="Remove @item.Name"
+                            @onclick="() => OnRemove.InvokeAsync(item.Key)" @onclick:stopPropagation>
+                        <Icon Name="close" Size="14" />
+                    </button>
+                }
+              </div>
             </td>
         </tr>
     };
