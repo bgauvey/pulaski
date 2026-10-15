@@ -34,7 +34,8 @@ public class WorkOrderPlanningHandlerTests : SchedulingHandlerTestBase
         Assert.Equal(WorkOrderStatus.Dispatched, Current(white).Status);
         Assert.Equal(WorkOrderVersion(white), result.Version);
         Assert.Empty(result.Warnings);
-        Assert.Equal([onA, onB], result.Jobs.Select(j => j.JobId).Order());
+        // A set, not a sort: .NET orders Guids differently from UUIDv7's time order.
+        Assert.Equal(new HashSet<Guid> { onA, onB }, result.Jobs.Select(j => j.JobId).ToHashSet());
 
         // On line A it follows the grey job (0.5 h changeover + 1 h); on line B it runs straight away.
         Assert.Equal((Now.AddHours(1.5), Now.AddHours(2.5), JobStatus.Dispatched), (Job(onA).PlannedStart!.Value, Job(onA).PlannedEnd!.Value, Job(onA).Status));

@@ -75,6 +75,15 @@ public static class Display
         _ => "chip",
     };
 
+    /// <summary>Chip classes for a job status: neutral like work orders, with the running dot for a running job.</summary>
+    public static string JobStatusChip(string status) => status switch
+    {
+        "running" => "chip chip-strong chip-live",
+        "dispatched" or "firmed" => "chip chip-strong",
+        "paused" => "chip chip-strong",
+        _ => "chip",
+    };
+
     private static TimeZoneInfo? TryFindZone(string? timeZone) =>
         timeZone is not null && TimeZoneInfo.TryFindSystemTimeZoneById(timeZone, out var zone) ? zone : null;
 }

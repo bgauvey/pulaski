@@ -1,0 +1,359 @@
+@* The editor every view opens: a job (move, lock, hold, cancel) or a work order (dispatch,
+   un-dispatch, firm, place on a line). It reads the live board on every render, so what it shows
+   follows refreshes; the form fields keep what the planner is typing. Every action is also
+   reachable here from the keyboard, so nothing depends on dragging. *@
+@using System.Globalization
+
+@if (Item is not null || WorkOrder is not null)
+{
+    <aside class="drawer" role="dialog" aria-modal="false" aria-labelledby="drawer-title" @onkeydown="OnKeyDown">
+        @if (Item is { } item)
+        {
+            var s = item.Segment;
+            var order = Controller.Board.FindWorkOrder(s.WorkOrderId);
+            <header class="drawer-head">
+                <div>
+                    <div class="small text-muted">@Display.Label(s.JobType) job · @item.LineCode</div>
+                    <h2 id="drawer-title" class="mb-0">@s.JobNumber</h2>
+                </div>
+                <span class="@Display.JobStatusChip(s.Status)">@Display.Label(s.Status)</span>
+                <button type="button" class="icon-button" aria-label="Close" @onclick="OnClose"><Icon Name="close" /></button>
+            </header>
+
+            <div class="drawer-body">
+                @foreach (var overlap in Controller.Board.OverlapsFor(item))
+                {
+                    <div class="drawer-alert is-danger" @key="overlap.Key">
+                        <Icon Name="alert" Size="18" />
+                        <span>@overlap.Describe(), from @ScheduleFormat.When(overlap.Start, Tz) to @ScheduleFormat.Time(overlap.End, Tz).</span>
+                    </div>
+                }
+                @foreach (var warning in s.Warnings)
+                {
+                    <div class="drawer-alert @(warning.Code is "late" or "firmed_conflict" ? "is-warning" : "")">
+                        <Icon Name="alert" Size="18" /><span>@warning.Message</span>
+                    </div>
+                }
+
+                <dl class="facts">
+                    <dt>Projected</dt>
+                    <dd>@ScheduleFormat.When(s.Start, Tz) – @ScheduleFormat.When(s.End, Tz) <span class="text-muted">(@ScheduleFormat.Duration(s.End - s.Start))</span></dd>
+                    @if (s.BaselineStart is not null)
+                    {
+                        <dt>Baseline</dt>
+                        <dd>@ScheduleFormat.When(s.BaselineStart, Tz) – @ScheduleFormat.When(s.BaselineEnd, Tz)</dd>
+                    }
+                    @if (order is not null)
+                    {
+                        <dt>Work order</dt>
+                        <dd><button type="button" class="link-button" @onclick="() => OnSelectWorkOrder.InvokeAsync(order.Id)">@order.OrderNumber</button> · @Display.Label(order.Status)</dd>
+                    }
+                    @if (s.MaterialCode is not null)
+                    {
+                        <dt>Material</dt>
+                        <dd>@s.MaterialCode</dd>
+                    }
+                    @if (s.PlannedQty is not null)
+                    {
+                        <dt>Quantity</dt>
+                        <dd>@ScheduleFormat.Qty(s.RemainingQty, s.UomCode) to make of @ScheduleFormat.Qty(s.PlannedQty, s.UomCode)</dd>
+                    }
+                    @if (s.RatePerHour is not null)
+                    {
+                        <dt>Rate</dt>
+                        <dd>@ScheduleFormat.Qty(s.RatePerHour, s.UomCode)/h <span class="text-muted">(@s.RateSource)</span></dd>
+                    }
+                    @if (s.DueAt is not null)
+                    {
+                        <dt>Due</dt>
+                        <dd>@ScheduleFormat.When(s.DueAt, Tz)</dd>
+                    }
+                </dl>
+
+                @if (item.CanChangeLine)
+                {
+                    <section class="drawer-section">
+                        <h3>Line and sequence</h3>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label" for="move-line">Line</label>
+                                <select id="move-line" class="form-select" @bind="_moveLine" @bind:after="ResetBefore">
+                                    @foreach (var line in Controller.Board.Lines)
+                                    {
+                                        <option value="@line.Id">@line.Code</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label" for="move-before">Runs</label>
+                                <select id="move-before" class="form-select" @bind="_moveBefore" disabled="@(s.Status == "firmed")">
+                                    @foreach (var other in BeforeChoices(item))
+                                    {
+                                        <option value="@other.JobId">Before @other.Segment.JobNumber</option>
+                                    }
+                                    <option value="">At the end</option>
+                                </select>
+                            </div>
+                        </div>
+                        @if (s.Status == "firmed")
+                        {
+                            <p class="small text-muted mt-2 mb-0">Firmed: it keeps its start, so it takes its place on the new line by time.</p>
+                        }
+                        <button type="button" class="btn btn-primary btn-sm mt-2" disabled="@Busy(item)" @onclick="() => MoveAsync(item)">Move</button>
+                    </section>
+                }
+
+                @if (item.CanPin)
+                {
+                    <section class="drawer-section">
+                        <h3>Pins</h3>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="pin-lock"
+                                   checked="@s.IsLocked" disabled="@Busy(item)" @onchange="e => Controller.PinJobAsync(item, e.Value is true, s.EarliestStart)" />
+                            <label class="form-check-label" for="pin-lock">Locked: it keeps its place when others move</label>
+                        </div>
+                        @if (item.CanResequence)
+                        {
+                            <label class="form-label mt-2" for="pin-hold">Hold until (site time)</label>
+                            <div class="d-flex gap-2">
+                                <input id="pin-hold" type="datetime-local" class="form-control" @bind="_holdUntil" />
+                                <button type="button" class="btn btn-outline-primary btn-sm" disabled="@Busy(item)"
+                                        @onclick="() => Controller.PinJobAsync(item, s.IsLocked, Display.FromSiteLocal(_holdUntil, Tz))">Set</button>
+                                @if (s.EarliestStart is not null)
+                                {
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@Busy(item)"
+                                            @onclick="() => Controller.PinJobAsync(item, s.IsLocked, null)">Clear</button>
+                                }
+                            </div>
+                        }
+                    </section>
+                }
+
+                @if (item.CanCancel)
+                {
+                    <section class="drawer-section">
+                        <h3>Cancel</h3>
+                        @if (!_confirmCancel)
+                        {
+                            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => _confirmCancel = true">Cancel job…</button>
+                        }
+                        else
+                        {
+                            <label class="form-label" for="cancel-reason">Reason</label>
+                            <input id="cancel-reason" class="form-control" @bind="_cancelReason" />
+                            @if (s.JobType == "production")
+                            {
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="cancel-replace" @bind="_cancelReplace" />
+                                    <label class="form-check-label" for="cancel-replace">Replace it with a job for the quantity not yet made</label>
+                                </div>
+                            }
+                            <div class="d-flex gap-2 mt-2">
+                                <button type="button" class="btn btn-outline-danger btn-sm" disabled="@Busy(item)" @onclick="() => CancelAsync(item)">Cancel @s.JobNumber</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _confirmCancel = false">Keep it</button>
+                            </div>
+                        }
+                    </section>
+                }
+            </div>
+        }
+        else if (WorkOrder is { } wo)
+        {
+            var key = ScheduleBoard.WorkOrderKey(wo.Id);
+            var jobs = Controller.Board.JobsFor(wo.Id);
+            var unplaced = Controller.Board.UnplacedQty(wo);
+            <header class="drawer-head">
+                <div>
+                    <div class="small text-muted">Work order · @wo.SiteCode</div>
+                    <h2 id="drawer-title" class="mb-0">@wo.OrderNumber</h2>
+                </div>
+                <span class="@Display.StatusChip(wo.Status)">@Display.Label(wo.Status)</span>
+                <button type="button" class="icon-button" aria-label="Close" @onclick="OnClose"><Icon Name="close" /></button>
+            </header>
+
+            <div class="drawer-body">
+                <dl class="facts">
+                    <dt>Material</dt>
+                    <dd>@wo.MaterialCode <span class="text-muted">@wo.MaterialName</span></dd>
+                    <dt>Quantity</dt>
+                    <dd>@ScheduleFormat.Qty(wo.PlannedQty, wo.UomCode)</dd>
+                    @if (wo.DueAt is not null)
+                    {
+                        <dt>Due</dt>
+                        <dd>@ScheduleFormat.When(wo.DueAt, Tz)</dd>
+                    }
+                    <dt>Origin</dt>
+                    <dd>@Display.Label(wo.Origin)</dd>
+                </dl>
+
+                @if (wo.NextStatuses.Count > 0)
+                {
+                    <section class="drawer-section">
+                        <h3>Status</h3>
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach (var next in wo.NextStatuses)
+                            {
+                                <button type="button" class="btn btn-sm @(next == "cancelled" ? "btn-outline-danger" : "btn-outline-primary")"
+                                        disabled="@Controller.Saving.Contains(key)" @onclick="() => Controller.MoveWorkOrderAsync(wo, next)">
+                                    @Display.StatusAction(wo.Status, next)
+                                </button>
+                            }
+                        </div>
+                    </section>
+                }
+
+                <section class="drawer-section">
+                    <h3>Jobs</h3>
+                    @if (jobs.Count == 0)
+                    {
+                        <p class="small text-muted mb-0">No open jobs.</p>
+                    }
+                    else
+                    {
+                        <ul class="drawer-jobs">
+                            @foreach (var job in jobs)
+                            {
+                                <li @key="job.Key">
+                                    <button type="button" class="link-button fw-semibold" @onclick="() => OnSelect.InvokeAsync(job)">@job.Segment.JobNumber</button>
+                                    <span class="chip">@job.LineCode</span>
+                                    <span class="small text-muted">@ScheduleFormat.When(job.Segment.Start, Tz) – @ScheduleFormat.Time(job.Segment.End, Tz)</span>
+                                    @if (Controller.Board.IsOverlapping(job))
+                                    {
+                                        <span class="chip chip-danger">Overlap</span>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                </section>
+
+                @if (wo.Status == "planned")
+                {
+                    <section class="drawer-section">
+                        <h3>Place on a line</h3>
+                        @if (unplaced > 0)
+                        {
+                            <p class="small text-muted">@ScheduleFormat.Qty(unplaced, wo.UomCode) is not on a line yet.</p>
+                        }
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label" for="place-line">Line</label>
+                                <select id="place-line" class="form-select" @bind="_placeLine">
+                                    @foreach (var line in Controller.Board.Lines)
+                                    {
+                                        <option value="@line.Id">@line.Code</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label" for="place-qty">Quantity (@wo.UomCode)</label>
+                                <input id="place-qty" type="number" min="0" step="any" class="form-control" @bind="_placeQty" />
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-primary btn-sm mt-2"
+                                disabled="@(Controller.Saving.Contains(key) || _placeQty is not > 0)"
+                                @onclick="() => PlaceAsync(wo)">
+                            Add job at the end of the line
+                        </button>
+                    </section>
+                }
+            </div>
+        }
+    </aside>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ScheduleController Controller { get; set; } = null!;
+
+    [Parameter]
+    public (Guid JobId, string Kind)? Selected { get; set; }
+
+    [Parameter]
+    public Guid? SelectedWorkOrder { get; set; }
+
+    [Parameter]
+    public EventCallback<BoardItem> OnSelect { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnSelectWorkOrder { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    // Form state, reset whenever the selection changes; a refresh leaves it alone.
+    private object? _formFor;
+    private Guid _moveLine;
+    private string _moveBefore = "";
+    private DateTime? _holdUntil;
+    private bool _confirmCancel;
+    private string? _cancelReason;
+    private bool _cancelReplace = true;
+    private Guid _placeLine;
+    private decimal? _placeQty;
+
+    private string? Tz => Controller.TimeZone;
+
+    private BoardItem? Item => Selected is { } s ? Controller.Board.Find(s.JobId, s.Kind) : null;
+
+    private WorkOrderDto? WorkOrder => Controller.Board.FindWorkOrder(SelectedWorkOrder);
+
+    protected override void OnParametersSet()
+    {
+        object? current = Selected is { } s ? s : SelectedWorkOrder;
+        if (Equals(current, _formFor))
+        {
+            return;
+        }
+
+        _formFor = current;
+        _confirmCancel = false;
+        _cancelReason = null;
+        _cancelReplace = true;
+
+        if (Item is { } item)
+        {
+            _moveLine = item.LineId;
+            _moveBefore = ScheduleLayout.NextJobAfter(Controller.Board.ItemsOn(item.LineId), item.JobId)?.ToString() ?? "";
+            _holdUntil = item.Segment.EarliestStart is { } at ? Display.ToSite(at, Tz).DateTime : null;
+        }
+        else if (WorkOrder is { } wo)
+        {
+            _placeLine = wo.TargetEquipmentId is { } target && Controller.Board.FindLine(target) is not null
+                ? target
+                : Controller.Board.Lines.FirstOrDefault()?.Id ?? Guid.Empty;
+            var unplaced = Controller.Board.UnplacedQty(wo);
+            _placeQty = unplaced > 0 ? unplaced : null;
+        }
+    }
+
+    /// <summary>The jobs on the chosen line this one can be put in front of.</summary>
+    private IEnumerable<BoardItem> BeforeChoices(BoardItem item) =>
+        Controller.Board.ItemsOn(_moveLine)
+            .Where(i => !i.IsPlaceholder && i.JobId != item.JobId && i.Segment.Status != "running")
+            .OrderBy(i => i.Segment.Start);
+
+    private bool Busy(BoardItem item) => Controller.Saving.Contains(item.Key);
+
+    private void ResetBefore() => _moveBefore = "";
+
+    private Task MoveAsync(BoardItem item) =>
+        Controller.MoveJobAsync(item, _moveLine, Guid.TryParse(_moveBefore, out var before) ? before : null);
+
+    private async Task CancelAsync(BoardItem item)
+    {
+        await Controller.CancelJobAsync(item, _cancelReplace && item.Segment.JobType == "production", _cancelReason);
+        _confirmCancel = false;
+    }
+
+    private Task PlaceAsync(WorkOrderDto workOrder) =>
+        _placeQty is { } qty && qty > 0 ? Controller.PlaceWorkOrderAsync(workOrder, _placeLine, null, qty) : Task.CompletedTask;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+}

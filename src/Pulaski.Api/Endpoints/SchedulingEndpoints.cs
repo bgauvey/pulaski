@@ -19,6 +19,18 @@ internal static class SchedulingEndpoints
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new GetLineTimelineQuery(lineId, horizonDays), ct)));
 
+        // A read: where a new job for the order would run, without creating it.
+        group.MapGet("/lines/{lineId:guid}/placement-preview", async Task<Ok<JobPlacementPreviewDto>> (
+            Guid lineId,
+            Guid workOrderId,
+            decimal plannedQty,
+            Guid? beforeJobId,
+            string? jobNumber,
+            IQueryHandler<PreviewJobPlacementQuery, JobPlacementPreviewDto> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new PreviewJobPlacementQuery(lineId, workOrderId, plannedQty, beforeJobId, jobNumber), ct)));
+
         group.MapGet("/lines/{lineId:guid}/run-standards", async Task<Ok<IReadOnlyList<RunStandardDto>>> (
             Guid lineId,
             IQueryHandler<ListRunStandardsQuery, IReadOnlyList<RunStandardDto>> handler,

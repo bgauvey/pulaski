@@ -1,0 +1,127 @@
+@* Work orders by lifecycle status (D-018). Dragging a card to another column dispatches,
+   un-dispatches, firms or changes its status; columns it can't go to dim during the drag. *@
+
+<div class="view-toolbar">
+    <span class="small text-muted">Drag an order to dispatch, un-dispatch or firm it. Click it to see its jobs.</span>
+    <div class="form-check form-switch ms-auto mb-0">
+        <input class="form-check-input" type="checkbox" role="switch" id="kanban-finished" @bind="_showFinished" />
+        <label class="form-check-label" for="kanban-finished">Closed and cancelled</label>
+    </div>
+</div>
+
+<div class="kanban">
+    @foreach (var status in Columns)
+    {
+        var cards = Controller.Board.WorkOrders
+            .Where(w => Controller.StatusOf(w) == status)
+            .OrderBy(w => w.DueAt ?? DateTimeOffset.MaxValue)
+            .ThenBy(w => w.OrderNumber, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var blocked = Controller.DraggingWorkOrder is { } dragged && dragged.Status != status && !dragged.NextStatuses.Contains(status);
+        <section class="kanban-column" @key="status" aria-label="@Display.Label(status)"
+                 data-drop-zone data-drop-blocked="@(blocked ? "" : null)"
+                 @ondragover:preventDefault @ondrop="() => DropAsync(status)">
+            <header class="kanban-column-head">
+                <span>@Display.Label(status)</span>
+                <span class="chip chip-muted">@cards.Count</span>
+            </header>
+            <div class="kanban-cards">
+                @foreach (var wo in cards)
+                {
+                    var key = ScheduleBoard.WorkOrderKey(wo.Id);
+                    var jobs = Controller.Board.JobsFor(wo.Id);
+                    var lines = jobs.Select(j => j.LineCode).Distinct().ToList();
+                    var unplaced = Controller.Board.UnplacedQty(wo);
+                    var late = jobs.Any(j => j.Segment.Warnings.Any(w => w.Code == "late"));
+                    var overlap = Controller.Board.IsOverlapping(wo);
+                    <article class="kanban-card @(SelectedWorkOrder == wo.Id ? "is-selected" : "") @(overlap ? "is-overlap" : "") @(Controller.Saving.Contains(key) ? "is-saving" : "") @(Controller.Changed.Contains(key) ? "is-updated" : "") @(Controller.DraggingWorkOrder?.Id == wo.Id ? "is-dragging" : "")"
+                             @key="@($"{wo.Id}:{wo.Version}")" draggable="true" tabindex="0" role="button" aria-label="@($"{wo.OrderNumber}, {wo.MaterialCode}")"
+                             @ondragstart="() => Controller.StartDrag(wo)" @ondragend="Controller.EndDrag"
+                             @onclick="() => OnSelect.InvokeAsync(wo.Id)" @onkeydown="e => OnKey(e, wo)">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <span class="fw-semibold">@wo.OrderNumber</span>
+                            <span class="small text-muted text-nowrap">@ScheduleFormat.Qty(wo.PlannedQty, wo.UomCode)</span>
+                        </div>
+                        <div class="small">@wo.MaterialCode <span class="text-muted">@wo.MaterialName</span></div>
+                        <div class="kanban-card-meta">
+                            @if (wo.DueAt is not null)
+                            {
+                                <span class="small @(late ? "text-warning-strong" : "text-muted")">Due @ScheduleFormat.When(wo.DueAt, Tz)</span>
+                            }
+                            @foreach (var line in lines)
+                            {
+                                <span class="chip">@line</span>
+                            }
+                        </div>
+                        @if (jobs.Count > 0)
+                        {
+                            <div class="small text-muted">
+                                @(jobs.Count == 1 ? "1 job" : $"{jobs.Count} jobs"),
+                                @ScheduleFormat.When(jobs.Min(j => j.Segment.Start), Tz) – @ScheduleFormat.When(jobs.Max(j => j.Segment.End), Tz)
+                            </div>
+                        }
+                        @if (unplaced > 0)
+                        {
+                            <div class="small text-muted">@ScheduleFormat.Qty(unplaced, wo.UomCode) not on a line yet</div>
+                        }
+                        @if (overlap || late)
+                        {
+                            <div class="kanban-card-flags">
+                                @if (overlap)
+                                {
+                                    <span class="chip chip-danger"><Icon Name="alert" Size="12" />Overlap</span>
+                                }
+                                @if (late)
+                                {
+                                    <span class="chip chip-warning">Late</span>
+                                }
+                            </div>
+                        }
+                    </article>
+                }
+                @if (cards.Count == 0)
+                {
+                    <p class="kanban-empty">No orders</p>
+                }
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private static readonly string[] Open = ["planned", "dispatched", "firmed", "in_progress", "completed"];
+    private static readonly string[] Finished = ["closed", "cancelled"];
+
+    [Parameter, EditorRequired]
+    public ScheduleController Controller { get; set; } = null!;
+
+    [Parameter]
+    public Guid? SelectedWorkOrder { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnSelect { get; set; }
+
+    private bool _showFinished;
+
+    private string? Tz => Controller.TimeZone;
+
+    private IEnumerable<string> Columns => _showFinished ? Open.Concat(Finished) : Open;
+
+    private async Task DropAsync(string status)
+    {
+        var workOrder = Controller.DraggingWorkOrder;
+        Controller.EndDrag();
+        if (workOrder is not null)
+        {
+            await Controller.MoveWorkOrderAsync(workOrder, status);
+        }
+    }
+
+    private async Task OnKey(KeyboardEventArgs e, WorkOrderDto workOrder)
+    {
+        if (e.Key is "Enter" or " ")
+        {
+            await OnSelect.InvokeAsync(workOrder.Id);
+        }
+    }
+}

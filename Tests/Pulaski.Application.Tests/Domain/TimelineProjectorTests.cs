@@ -351,6 +351,42 @@ public class TimelineProjectorTests
     }
 
     [Fact]
+    public void Work_running_into_a_firmed_job_is_reported_as_an_overlap()
+    {
+        var a = Production(White, 4000m);
+        var firmed = Production(White, 1000m, JobStatus.Firmed) with { FirmedStart = Now.AddHours(3) };
+
+        var timeline = Project([a, firmed], previous: White);
+
+        var overlap = Assert.Single(timeline.Overlaps);
+        Assert.Equal((a.JobId, firmed.JobId), (overlap.FirstJobId, overlap.SecondJobId));
+        Assert.Equal((Now.AddHours(3), Now.AddHours(4)), (overlap.Start, overlap.End));
+    }
+
+    [Fact]
+    public void A_changeover_placeholder_running_into_a_firmed_job_is_an_overlap_too()
+    {
+        var firmed = Production(Black, 1000m, JobStatus.Firmed) with { FirmedStart = Now.AddMinutes(30) };
+
+        var timeline = Project([firmed], previous: White);
+
+        var overlap = Assert.Single(timeline.Overlaps);
+        Assert.Equal((SegmentKind.ChangeoverPlaceholder, firmed.JobId), (overlap.FirstKind, overlap.FirstJobId));
+        Assert.Equal((SegmentKind.Job, firmed.JobId), (overlap.SecondKind, overlap.SecondJobId));
+        Assert.Equal((Now.AddMinutes(30), Now.AddMinutes(45)), (overlap.Start, overlap.End));
+    }
+
+    [Fact]
+    public void Back_to_back_and_zero_length_segments_do_not_overlap()
+    {
+        var a = Production(White, 1000m);
+        var unknown = Production(White, 1000m, uom: Kilogram);
+        var b = Production(White, 1000m);
+
+        Assert.Empty(Project([a, unknown, b], previous: White).Overlaps);
+    }
+
+    [Fact]
     public void Firmed_start_in_the_past_starts_now_and_is_flagged()
     {
         var firmed = Production(White, 1000m, JobStatus.Firmed) with { FirmedStart = Now.AddHours(-2) };

@@ -22,7 +22,22 @@ public sealed record LineTimelineDto
 
     /// <summary>Warnings about the line as a whole; each segment carries its own.</summary>
     public IReadOnlyList<ScheduleWarningDto> Warnings { get; init; } = [];
+
+    /// <summary>Segments whose times intersect, e.g. work running into a firmed job.</summary>
+    public IReadOnlyList<TimelineOverlapDto> Overlaps { get; init; } = [];
 }
+
+/// <summary>
+/// Two segments on one line that intersect from <see cref="Start"/> to <see cref="End"/>. A segment
+/// is named by its job and kind, because a changeover placeholder shares its job's id.
+/// </summary>
+public sealed record TimelineOverlapDto(
+    Guid FirstJobId,
+    string FirstKind,
+    Guid SecondJobId,
+    string SecondKind,
+    DateTimeOffset Start,
+    DateTimeOffset End);
 
 /// <summary>
 /// A span on the timeline: a job, or (<see cref="Kind"/> <c>changeover_placeholder</c>) a
@@ -38,6 +53,7 @@ public sealed record TimelineSegmentDto
     public required string JobNumber { get; init; }
     public required string JobType { get; init; }
     public required string Status { get; init; }
+    public Guid? WorkOrderId { get; init; }
     public string? WorkOrderNumber { get; init; }
 
     /// <summary>The job's material; for a placeholder, the material being changed to.</summary>

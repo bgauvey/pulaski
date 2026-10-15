@@ -25,6 +25,7 @@ public sealed class SchedulingTests(DatabaseFixture db)
         var running = Guid.CreateVersion7();
         var next = Guid.CreateVersion7();
         var maintenance = Guid.CreateVersion7();
+        var workOrder = Guid.CreateVersion7();
 
         await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
         {
@@ -66,7 +67,7 @@ public sealed class SchedulingTests(DatabaseFixture db)
                     running,
                     next,
                     maintenance,
-                    wo = Guid.CreateVersion7(),
+                    wo = workOrder,
                     woNumber = "WO-" + Guid.NewGuid().ToString("N")[..8],
                 });
         }
@@ -94,6 +95,8 @@ public sealed class SchedulingTests(DatabaseFixture db)
 
         // The modified 500 m/h beats the calculated 2000 m/h: 1000 m takes 2 h, so it misses the due date.
         var blackJob = timeline.Segments[2];
+        Assert.Equal(workOrder, blackJob.WorkOrderId);
+        Assert.Empty(timeline.Overlaps);
         Assert.Equal((500m, RateSource.Modified), (blackJob.RatePerHour, blackJob.RateSource));
         Assert.Equal(TimeSpan.FromHours(2), blackJob.Work);
         Assert.Equal(ScheduleWarningCode.Late, Assert.Single(blackJob.Warnings).Code);
@@ -360,6 +363,33 @@ public sealed class SchedulingTests(DatabaseFixture db)
 
         await db.SendAsync(new SetSchedulingPolicyCommand(site, set.Version, ChangeoverMode.Auto));
         Assert.Equal(ChangeoverMode.Auto, (await GetPolicyAsync(site)).ChangeoverMode);
+    }
+
+    [Fact]
+    public async Task Placement_preview_projects_the_job_from_the_database_and_saves_nothing()
+    {
+        var (site, line) = await CreateLineAsync();
+        var spare = await CreateLineInSiteAsync(site);
+        var (white, _) = await CreateMaterialsAsync();
+        await CanRunAsync(line, white);
+        await db.ExecuteAsync(
+            $"""
+            INSERT INTO core.run_standard (equipment_id, material_id, uom_id, calculated_rate_per_hour, calculation_basis, calculated_at)
+            VALUES ('{line}', '{white}', '{db.UomId}', 1000, 'ideal_rate', now())
+            """);
+        var queued = await CreateJobAsync(line, await CreateWorkOrderAsync(site, white), "A");
+        var wo = await CreateWorkOrderAsync(site, white);
+
+        await using var scope = db.Services.CreateAsyncScope();
+        var handler = scope.ServiceProvider.GetRequiredService<IQueryHandler<PreviewJobPlacementQuery, JobPlacementPreviewDto>>();
+        var preview = await handler.HandleAsync(new PreviewJobPlacementQuery(line, wo, 500m, queued), CancellationToken.None);
+
+        var mine = Assert.Single(preview.Timeline.Segments, s => s.JobId == preview.PreviewJobId);
+        Assert.Equal((wo, (decimal?)500m, TimeSpan.FromMinutes(30)), (mine.WorkOrderId, mine.PlannedQty, mine.End - mine.Start));
+        Assert.Equal((queued, TimeSpan.FromMinutes(30)), (Assert.Single(preview.Delayed).JobId, preview.Delayed[0].Delay));
+        Assert.Equal([queued], (await JobRowsAsync(line)).Select(j => j.Id));
+        await Assert.ThrowsAsync<DomainRuleException>(() =>
+            handler.HandleAsync(new PreviewJobPlacementQuery(spare, wo, 500m, null), CancellationToken.None));
     }
 
     private async Task<Guid> CreateWorkOrderAsync(Guid site, Guid material, string status = WorkOrderStatus.Planned)

@@ -247,6 +247,17 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
         }
     }
 
+    public Task<PlacementCheckRow?> GetPlacementCheckAsync(
+        Guid lineId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_lines.TryGetValue(lineId, out var line)
+                ? new PlacementCheckRow { LineSiteId = line.SiteId, IsEligible = _capabilities.Contains((lineId, materialId)) }
+                : null);
+        }
+    }
+
     public Task<bool> IsEligibleAsync(Guid lineId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken)
     {
         lock (_lock)
@@ -400,6 +411,7 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
             IsLocked = j.IsLocked,
             GoodQty = _goodQty.GetValueOrDefault(j.Id),
             Version = row.Version,
+            WorkOrderId = j.WorkOrderId,
         };
     }
 

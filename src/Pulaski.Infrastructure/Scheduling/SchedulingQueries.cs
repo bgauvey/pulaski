@@ -32,6 +32,28 @@ internal sealed class SchedulingQueries(NpgsqlDataSource dataSource) : IScheduli
           AND e.level = 'site'
         """;
 
+    // Mirrors the capability check commands make (D-020), so a preview refuses what creating would.
+    private const string PlacementCheck = """
+        SELECT e.site_id AS line_site_id,
+               EXISTS (
+                   SELECT 1 FROM core.equipment_capability c
+                   WHERE c.equipment_id = e.id
+                     AND c.material_id = @MaterialId
+                     AND c.effective_from <= @At
+                     AND (c.effective_to IS NULL OR c.effective_to > @At)) AS is_eligible,
+               (SELECT m.material_class_id FROM core.material m WHERE m.id = @MaterialId) AS material_class_id
+        FROM core.equipment e
+        WHERE e.id = @LineId
+        """;
+
+    public async Task<PlacementCheckRow?> GetPlacementCheckAsync(
+        Guid lineId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return await connection.QuerySingleOrDefaultAsync<PlacementCheckRow>(
+            new CommandDefinition(PlacementCheck, new { LineId = lineId, MaterialId = materialId, At = at }, cancellationToken: cancellationToken));
+    }
+
     public async Task<LinePlanSource?> GetLinePlanAsync(
         Guid lineId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken)
     {

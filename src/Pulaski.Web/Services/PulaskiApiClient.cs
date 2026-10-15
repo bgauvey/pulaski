@@ -61,6 +61,75 @@ public sealed class PulaskiApiClient(HttpClient http)
         CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Post, $"api/work-orders/{id}/firm", request, ct);
 
+    /// <summary>
+    /// Moves a work order to <paramref name="to"/>. Dispatch, un-dispatch and firm carry the order's
+    /// jobs, so they have their own endpoints (D-018); everything else is a plain status change.
+    /// </summary>
+    public async Task MoveWorkOrderAsync(WorkOrderDto workOrder, string to, CancellationToken ct = default)
+    {
+        var planning = new WorkOrderPlanningRequest { Version = workOrder.Version };
+        switch ((workOrder.Status, to))
+        {
+            case ("planned", "dispatched"):
+                await DispatchWorkOrderAsync(workOrder.Id, planning, ct);
+                break;
+            case ("dispatched", "planned"):
+                await UndispatchWorkOrderAsync(workOrder.Id, planning, ct);
+                break;
+            case ("dispatched", "firmed"):
+                await FirmWorkOrderAsync(workOrder.Id, planning, ct);
+                break;
+            default:
+                await ChangeWorkOrderStatusAsync(
+                    workOrder.Id, new ChangeWorkOrderStatusRequest { Version = workOrder.Version, Status = to }, ct);
+                break;
+        }
+    }
+
+    // Scheduling
+
+    public Task<LineTimelineDto> GetLineTimelineAsync(Guid lineId, int? horizonDays = null, CancellationToken ct = default) =>
+        GetAsync<LineTimelineDto>(
+            horizonDays is null
+                ? $"api/scheduling/lines/{lineId}/timeline"
+                : $"api/scheduling/lines/{lineId}/timeline?horizonDays={horizonDays}",
+            ct);
+
+    /// <summary>Where a new job for the order would run before <paramref name="beforeJobId"/> (null: at the end); saves nothing.</summary>
+    public Task<JobPlacementPreviewDto> PreviewPlacementAsync(
+        Guid lineId,
+        Guid workOrderId,
+        decimal plannedQty,
+        Guid? beforeJobId,
+        string? jobNumber,
+        CancellationToken ct = default)
+    {
+        var query = $"workOrderId={workOrderId}&plannedQty={plannedQty.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+        if (beforeJobId is { } before)
+        {
+            query += $"&beforeJobId={before}";
+        }
+
+        if (!string.IsNullOrEmpty(jobNumber))
+        {
+            query += $"&jobNumber={Uri.EscapeDataString(jobNumber)}";
+        }
+
+        return GetAsync<JobPlacementPreviewDto>($"api/scheduling/lines/{lineId}/placement-preview?{query}", ct);
+    }
+
+    public Task<CreatedResponse> CreateJobAsync(CreateJobRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/scheduling/jobs", request, ct);
+
+    public Task<VersionResponse> SequenceJobAsync(Guid id, SequenceJobRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/scheduling/jobs/{id}/sequence", request, ct);
+
+    public Task<VersionResponse> PinJobAsync(Guid id, PinJobRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/scheduling/jobs/{id}/pin", request, ct);
+
+    public Task<CancelJobResponse> CancelJobAsync(Guid id, CancelJobRequest request, CancellationToken ct = default) =>
+        SendAsync<CancelJobResponse>(HttpMethod.Post, $"api/scheduling/jobs/{id}/cancel", request, ct);
+
     // Reference data
 
     public Task<IReadOnlyList<UomDto>> ListUomsAsync(CancellationToken ct = default) =>

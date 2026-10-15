@@ -112,6 +112,8 @@ internal static class TimelineMapping
             ProjectedAt = timeline.ProjectedAt,
             HasShiftCalendar = source.HasShiftCalendar,
             Warnings = [.. timeline.Warnings.Select(ToDto)],
+            Overlaps = [.. timeline.Overlaps.Select(o => new TimelineOverlapDto(
+                o.FirstJobId, o.FirstKind, o.SecondJobId, o.SecondKind, o.Start, o.End))],
             Segments = [.. timeline.Segments.Select(s => ToDto(s, jobs[s.JobId], materialCodes))],
         };
     }
@@ -126,6 +128,7 @@ internal static class TimelineMapping
             JobNumber = job.JobNumber,
             JobType = placeholder ? JobType.Changeover : job.JobType,
             Status = placeholder ? JobStatus.Planned : job.Status,
+            WorkOrderId = job.WorkOrderId,
             WorkOrderNumber = job.WorkOrderNumber,
             MaterialCode = job.MaterialCode,
             FromMaterialCode = segment.FromMaterial is { } from ? materialCodes.GetValueOrDefault(from.Id) : null,

@@ -27,7 +27,7 @@ internal static class LinePlanLoader
                coalesce(r.good_qty, 0) AS good_qty, r.started_at,
                j.earliest_start, j.planned_duration, j.planned_start, j.planned_end, j.is_locked,
                j.xmin::text::bigint AS version,
-               w.order_number AS work_order_number, w.due_at
+               j.work_order_id, w.order_number AS work_order_number, w.due_at
         FROM core.job j
         LEFT JOIN core.material m   ON m.id = j.material_id
         LEFT JOIN core.uom u        ON u.id = j.uom_id

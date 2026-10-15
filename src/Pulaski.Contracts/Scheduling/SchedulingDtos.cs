@@ -14,6 +14,22 @@ public sealed record BaselineJobDto(
     long Version,
     IReadOnlyList<ScheduleWarningDto> Warnings);
 
+/// <summary>
+/// What placing a new job would do to a line, worked out by the projector and saved nowhere.
+/// <see cref="Timeline"/> is the whole line with the job in place; the job's own segments (and
+/// any changeover placeholder Pulaski would put before it) carry <see cref="PreviewJobId"/>.
+/// </summary>
+public sealed record JobPlacementPreviewDto
+{
+    public required Guid PreviewJobId { get; init; }
+    public required LineTimelineDto Timeline { get; init; }
+
+    /// <summary>Jobs already on the line that would start later, and by how much.</summary>
+    public IReadOnlyList<JobDelayDto> Delayed { get; init; } = [];
+}
+
+public sealed record JobDelayDto(Guid JobId, string JobNumber, TimeSpan Delay);
+
 /// <summary>The cancelled job's new version, and its replacement if one was asked for.</summary>
 public sealed record CancelJobResponse(long Version, Guid? ReplacementJobId);
 

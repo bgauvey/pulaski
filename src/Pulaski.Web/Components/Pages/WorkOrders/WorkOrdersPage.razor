@@ -138,25 +138,7 @@ else
         _error = null;
         try
         {
-            // Dispatch, un-dispatch and firm carry the order's jobs, so they have their own endpoints (D-018).
-            var planning = new WorkOrderPlanningRequest { Version = workOrder.Version };
-            switch ((workOrder.Status, status))
-            {
-                case ("planned", "dispatched"):
-                    await Api.DispatchWorkOrderAsync(workOrder.Id, planning);
-                    break;
-                case ("dispatched", "planned"):
-                    await Api.UndispatchWorkOrderAsync(workOrder.Id, planning);
-                    break;
-                case ("dispatched", "firmed"):
-                    await Api.FirmWorkOrderAsync(workOrder.Id, planning);
-                    break;
-                default:
-                    await Api.ChangeWorkOrderStatusAsync(
-                        workOrder.Id,
-                        new ChangeWorkOrderStatusRequest { Version = workOrder.Version, Status = status });
-                    break;
-            }
+            await Api.MoveWorkOrderAsync(workOrder, status);
         }
         catch (ApiException ex)
         {

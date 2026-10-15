@@ -76,11 +76,25 @@ public sealed record TimelineSegment(
     ChangeoverResolution? Changeover,
     IReadOnlyList<ScheduleWarning> Warnings);
 
+/// <summary>
+/// Two segments on the same line whose times intersect, from <see cref="Start"/> to <see cref="End"/>.
+/// The projector only lays work end to end, so an overlap means an anchor (a firmed job) was hit
+/// by the work before it. <c>First</c> is the segment that starts earlier.
+/// </summary>
+public sealed record TimelineOverlap(
+    Guid FirstJobId,
+    string FirstKind,
+    Guid SecondJobId,
+    string SecondKind,
+    DateTimeOffset Start,
+    DateTimeOffset End);
+
 public sealed record LineTimeline(
     Guid LineId,
     DateTimeOffset ProjectedAt,
     IReadOnlyList<TimelineSegment> Segments,
-    IReadOnlyList<ScheduleWarning> Warnings);
+    IReadOnlyList<ScheduleWarning> Warnings,
+    IReadOnlyList<TimelineOverlap> Overlaps);
 
 /// <summary>
 /// Projects a line's job sequence forward in time (D-014). One pass, no I/O, deterministic: the
@@ -166,7 +180,27 @@ public static class TimelineProjector
             ? [new ScheduleWarning(ScheduleWarningCode.NoShiftCalendar, "No shift calendar covers this line; times assume it runs around the clock.")]
             : [];
 
-        return new LineTimeline(plan.LineId, plan.Now, segments, lineWarnings);
+        return new LineTimeline(plan.LineId, plan.Now, segments, lineWarnings, FindOverlaps(segments));
+    }
+
+    /// <summary>Every pair of segments with a positive intersection; zero-length segments never overlap.</summary>
+    public static IReadOnlyList<TimelineOverlap> FindOverlaps(IReadOnlyList<TimelineSegment> segments)
+    {
+        var byStart = segments.Where(s => s.End > s.Start).OrderBy(s => s.Start).ToList();
+        var overlaps = new List<TimelineOverlap>();
+
+        for (var i = 0; i < byStart.Count; i++)
+        {
+            var first = byStart[i];
+            for (var j = i + 1; j < byStart.Count && byStart[j].Start < first.End; j++)
+            {
+                var second = byStart[j];
+                var end = first.End < second.End ? first.End : second.End;
+                overlaps.Add(new TimelineOverlap(first.JobId, first.Kind, second.JobId, second.Kind, second.Start, end));
+            }
+        }
+
+        return overlaps;
     }
 
     private static TimelineSegment PlaceJob(

@@ -14,6 +14,13 @@ public interface ISchedulingReadStore
     /// </summary>
     Task<LinePlanSource?> GetLinePlanAsync(Guid lineId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// What a new production job for <paramref name="materialId"/> on the line needs checked and
+    /// projected: the line's site, whether a capability is in effect at <paramref name="at"/>
+    /// (D-020), and the material's class for the changeover matrix. Null if the line does not exist.
+    /// </summary>
+    Task<PlacementCheckRow?> GetPlacementCheckAsync(Guid lineId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken);
+
     /// <summary>The line's run standards by material code.</summary>
     Task<IReadOnlyList<RunStandardDto>> ListRunStandardsAsync(Guid lineId, CancellationToken cancellationToken);
 
@@ -127,6 +134,13 @@ public sealed record SchedulingLineRow
     public required string ChangeoverMode { get; init; }
 }
 
+public sealed record PlacementCheckRow
+{
+    public Guid? LineSiteId { get; init; }
+    public bool IsEligible { get; init; }
+    public Guid? MaterialClassId { get; init; }
+}
+
 public sealed record PlanMaterialRow
 {
     public required Guid MaterialId { get; init; }
@@ -154,6 +168,7 @@ public sealed record PlanJobRow
     public DateTimeOffset? PlannedEnd { get; init; }
     public bool IsLocked { get; init; }
     public long Version { get; init; }
+    public Guid? WorkOrderId { get; init; }
     public string? WorkOrderNumber { get; init; }
     public DateTimeOffset? DueAt { get; init; }
 }
