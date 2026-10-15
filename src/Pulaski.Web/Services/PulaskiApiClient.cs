@@ -34,6 +34,11 @@ public sealed class PulaskiApiClient(HttpClient http)
         GetAsync<IReadOnlyList<WorkOrderDto>>(
             string.IsNullOrEmpty(status) ? "api/work-orders" : $"api/work-orders?status={Uri.EscapeDataString(status)}", ct);
 
+    /// <summary>Work orders with their projected jobs and slip, for the equipment at and below <paramref name="equipmentId"/>.</summary>
+    public Task<IReadOnlyList<WorkOrderProgressDto>> ListWorkOrderProgressAsync(Guid? equipmentId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<WorkOrderProgressDto>>(
+            equipmentId is null ? "api/work-orders/progress" : $"api/work-orders/progress?equipmentId={equipmentId}", ct);
+
     public Task<CreatedResponse> CreateWorkOrderAsync(CreateWorkOrderRequest request, CancellationToken ct = default) =>
         SendAsync<CreatedResponse>(HttpMethod.Post, "api/work-orders", request, ct);
 

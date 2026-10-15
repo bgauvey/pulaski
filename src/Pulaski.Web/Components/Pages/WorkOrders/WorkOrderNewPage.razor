@@ -1,4 +1,5 @@
-@page "/work-orders/new"
+@* Planners create work orders from the Schedule page; access control comes later. *@
+@page "/schedule/work-orders/new"
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
 
@@ -98,7 +99,7 @@ else
 
         <div class="mt-4">
             <button type="submit" class="btn btn-primary" disabled="@_saving">Create</button>
-            <a class="btn btn-link" href="work-orders">Cancel</a>
+            <a class="btn btn-link" href="schedule">Cancel</a>
         </div>
     </EditForm>
 }
@@ -150,7 +151,7 @@ else
         var tz = SiteZone(_form.SiteId);
         try
         {
-            await Api.CreateWorkOrderAsync(new CreateWorkOrderRequest
+            var created = await Api.CreateWorkOrderAsync(new CreateWorkOrderRequest
             {
                 SiteId = _form.SiteId,
                 OrderNumber = _form.OrderNumber,
@@ -163,7 +164,8 @@ else
                 DueAt = Display.FromSiteLocal(_form.DueAt, tz),
                 Priority = _form.Priority,
             });
-            Navigation.NavigateTo("work-orders");
+            // Straight back to the schedule with the new order open, ready to put on a line.
+            Navigation.NavigateTo($"schedule?workOrder={created.Id}");
         }
         catch (ApiException ex)
         {

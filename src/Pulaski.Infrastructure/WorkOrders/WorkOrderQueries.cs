@@ -33,6 +33,45 @@ internal sealed class WorkOrderQueries(NpgsqlDataSource dataSource) : IWorkOrder
         WHERE w.id = @Id
         """;
 
+    // The subtree, self included; equipment that holds jobs is an active line or a group above lines (D-022).
+    private const string Scope = """
+        SELECT e.id, e.site_id, (e.is_schedulable OR e.can_run_job) AND e.is_active AS holds_jobs
+        FROM core.equipment e
+        WHERE @EquipmentId::uuid IS NULL
+           OR e.id IN (SELECT c.descendant_id FROM core.equipment_closure c WHERE c.ancestor_id = @EquipmentId)
+        ORDER BY e.code
+        """;
+
+    private const string Facts = """
+        SELECT w.id AS work_order_id,
+               coalesce((SELECT sum(r.good_qty)
+                         FROM core.job j
+                         JOIN core.job_run r ON r.job_id = j.id
+                         WHERE j.work_order_id = w.id), 0) AS completed_qty,
+               (SELECT count(*)::int
+                FROM core.job j
+                WHERE j.work_order_id = w.id
+                  AND j.status IN ('planned','dispatched','firmed','running','paused')) AS open_jobs
+        FROM core.work_order w
+        WHERE @SiteId::uuid IS NULL OR w.site_id = @SiteId
+        """;
+
+    public async Task<IReadOnlyList<ScopeEquipmentRow>> GetScopeAsync(Guid? equipmentId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<ScopeEquipmentRow>(
+            new CommandDefinition(Scope, new { EquipmentId = equipmentId }, cancellationToken: cancellationToken));
+        return rows.AsList();
+    }
+
+    public async Task<IReadOnlyList<WorkOrderFactsRow>> GetFactsAsync(Guid? siteId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<WorkOrderFactsRow>(
+            new CommandDefinition(Facts, new { SiteId = siteId }, cancellationToken: cancellationToken));
+        return rows.AsList();
+    }
+
     public async Task<IReadOnlyList<WorkOrderDto>> ListAsync(Guid? siteId, string? status, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);

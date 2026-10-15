@@ -21,6 +21,13 @@ internal static class WorkOrderEndpoints
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ListWorkOrdersQuery(siteId, status), ct)));
 
+        // Before "/{id}" so "progress" is never read as an id.
+        group.MapGet("/progress", async Task<Ok<IReadOnlyList<WorkOrderProgressDto>>> (
+            Guid? equipmentId,
+            IQueryHandler<ListWorkOrderProgressQuery, IReadOnlyList<WorkOrderProgressDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListWorkOrderProgressQuery(equipmentId), ct)));
+
         group.MapGet("/{id:guid}", async Task<Ok<WorkOrderDto>> (
             Guid id,
             IQueryHandler<GetWorkOrderQuery, WorkOrderDto> handler,

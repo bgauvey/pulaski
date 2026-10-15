@@ -1,0 +1,141 @@
+@* Picks a site, department or line from the equipment hierarchy. Machines and modules are left
+   out: work is planned to lines and groups, not to the parts of a line. *@
+
+<div class="picker" @onkeydown="OnKeyDown">
+    <button type="button" class="btn btn-outline-secondary picker-button" aria-haspopup="listbox" aria-expanded="@(_open ? "true" : "false")"
+            aria-label="Equipment: @Path" @onclick="Toggle">
+        <Icon Name="equipment" Size="18" />
+        <span class="picker-path">@Path</span>
+        <Icon Name="chevron-down" Size="16" />
+    </button>
+
+    @if (_open)
+    {
+        <div class="picker-backdrop" @onclick="Close"></div>
+        <div class="picker-panel">
+            <div class="picker-search">
+                <Icon Name="search" Size="16" />
+                <input type="search" class="form-control" placeholder="Find a site, department or line" aria-label="Find equipment"
+                       @bind="_filter" @bind:event="oninput" @ref="_input" />
+            </div>
+            <ul class="picker-list" role="listbox" aria-label="Equipment">
+                @if (string.IsNullOrWhiteSpace(_filter))
+                {
+                    <li role="option" aria-selected="@(Value is null ? "true" : "false")">
+                        <button type="button" class="picker-option @(Value is null ? "is-selected" : "")" @onclick="() => SelectAsync(null)">
+                            All equipment
+                        </button>
+                    </li>
+                }
+                @foreach (var item in Rows)
+                {
+                    <li role="option" aria-selected="@(Value == item.Id ? "true" : "false")" @key="item.Id">
+                        <button type="button" class="picker-option @(Value == item.Id ? "is-selected" : "")"
+                                style="padding-left:@(12 + (Filtering ? 0 : item.Depth - _top) * 16)px" @onclick="() => SelectAsync(item.Id)">
+                            <span class="fw-semibold">@item.Code</span>
+                            <span class="text-muted text-truncate">@(Filtering ? PathOf(item.Id) : item.Name)</span>
+                            <span class="picker-kind">@Kind(item)</span>
+                        </button>
+                    </li>
+                }
+                @if (!Rows.Any())
+                {
+                    <li class="picker-empty">Nothing matches.</li>
+                }
+            </ul>
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly HashSet<string> Levels = ["enterprise", "site", "area", "work_center"];
+
+    /// <summary>Equipment in tree order (every row after its parent), as the API lists it.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<EquipmentDto> Equipment { get; set; } = [];
+
+    [Parameter]
+    public Guid? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> ValueChanged { get; set; }
+
+    private bool _open;
+    private string _filter = "";
+    private int _top;
+    private ElementReference _input;
+    private bool _focus;
+
+    private bool Filtering => !string.IsNullOrWhiteSpace(_filter);
+
+    private IEnumerable<EquipmentDto> Rows => Equipment
+        .Where(e => Levels.Contains(e.Level) && e.IsActive)
+        .Where(e => !Filtering
+            || e.Code.Contains(_filter.Trim(), StringComparison.OrdinalIgnoreCase)
+            || e.Name.Contains(_filter.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private string Path => Value is { } id && Equipment.Any(e => e.Id == id) ? PathOf(id) : "All equipment";
+
+    protected override void OnParametersSet() =>
+        _top = Equipment.Where(e => Levels.Contains(e.Level)).Select(e => e.Depth).DefaultIfEmpty(0).Min();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focus)
+        {
+            _focus = false;
+            await _input.FocusAsync();
+        }
+    }
+
+    /// <summary>'PLT1 › EXT › EXT-01', from the top of the tree down.</summary>
+    private string PathOf(Guid id)
+    {
+        var byId = Equipment.ToDictionary(e => e.Id);
+        var codes = new List<string>();
+        for (var at = byId.GetValueOrDefault(id); at is not null; at = at.ParentId is { } parent ? byId.GetValueOrDefault(parent) : null)
+        {
+            if (at.Level != "enterprise")
+            {
+                codes.Add(at.Code);
+            }
+        }
+
+        codes.Reverse();
+        return string.Join(" › ", codes);
+    }
+
+    private static string Kind(EquipmentDto e) => e switch
+    {
+        { Level: "site" } => "Site",
+        { IsSchedulable: true, CanRunJob: false } => "Department",
+        { CanRunJob: true } => "Line",
+        _ => Display.Label(e.Level),
+    };
+
+    private void Toggle()
+    {
+        _open = !_open;
+        _filter = "";
+        _focus = _open;
+    }
+
+    private void Close() => _open = false;
+
+    private async Task SelectAsync(Guid? id)
+    {
+        _open = false;
+        if (id != Value)
+        {
+            await ValueChanged.InvokeAsync(id);
+        }
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            Close();
+        }
+    }
+}

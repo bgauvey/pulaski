@@ -7,6 +7,7 @@ using Pulaski.Application.Scheduling;
 using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Scheduling;
+using Pulaski.Contracts.WorkOrders;
 using Pulaski.Domain;
 using Pulaski.Domain.Scheduling;
 using Pulaski.Domain.WorkOrders;
@@ -426,6 +427,28 @@ public sealed class SchedulingTests(DatabaseFixture db)
         Assert.Empty((await QueryAsync(department)).Segments);
         var onLine = Assert.Single((await QueryAsync(line)).Segments, s => s.Kind == SegmentKind.Job);
         Assert.Equal((job, (Guid?)department), (onLine.JobId, onLine.GroupEquipmentId));
+    }
+
+    [Fact]
+    public async Task Work_order_progress_reads_the_selected_subtree_from_the_database()
+    {
+        var (site, line) = await CreateLineAsync();
+        var (white, _) = await CreateMaterialsAsync();
+        await CanRunAsync(line, white);
+        var placed = await CreateWorkOrderAsync(site, white);
+        await CreateJobAsync(line, placed, "P");
+        var unplaced = await CreateWorkOrderAsync(site, white);
+
+        await using var scope = db.Services.CreateAsyncScope();
+        var handler = scope.ServiceProvider.GetRequiredService<IQueryHandler<ListWorkOrderProgressQuery, IReadOnlyList<WorkOrderProgressDto>>>();
+        var forLine = await handler.HandleAsync(new ListWorkOrderProgressQuery(line), CancellationToken.None);
+        var forSite = await handler.HandleAsync(new ListWorkOrderProgressQuery(site), CancellationToken.None);
+
+        var progress = Assert.Single(forLine);
+        Assert.Equal((placed, 1000m, 0m), (progress.Order.Id, progress.PlacedQty, progress.CompletedQty));
+        Assert.Equal(line, Assert.Single(progress.Jobs).EquipmentId);
+        Assert.Equal(new HashSet<Guid> { placed, unplaced }, forSite.Select(p => p.Order.Id).ToHashSet());
+        await Assert.ThrowsAsync<NotFoundException>(() => handler.HandleAsync(new ListWorkOrderProgressQuery(Guid.CreateVersion7()), CancellationToken.None));
     }
 
     private async Task<Guid> CreateWorkOrderAsync(Guid site, Guid material, string status = WorkOrderStatus.Planned)

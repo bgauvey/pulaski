@@ -43,6 +43,8 @@
             }
         </div>
 
+        <a class="btn btn-primary text-nowrap" href="schedule/work-orders/new">New work order</a>
+
         <button type="button" class="btn btn-outline-secondary btn-square" aria-label="Refresh now"
                 title="Refresh now" disabled="@_controller.IsRefreshing" @onclick="RefreshAsync">
             <Icon Name="refresh" Size="18" />
@@ -124,6 +126,10 @@ else
     [SupplyParameterFromQuery(Name = "view")]
     public string? View { get; set; }
 
+    /// <summary>Opens the page with this work order's editor showing (from the work orders screen).</summary>
+    [SupplyParameterFromQuery(Name = "workOrder")]
+    public Guid? WorkOrder { get; set; }
+
     private ScheduleController _controller = null!;
     private readonly CancellationTokenSource _cts = new();
     private (Guid JobId, string Kind)? _selected;
@@ -137,6 +143,11 @@ else
         _controller = new ScheduleController(Api, Time);
         _controller.StateChanged += OnControllerChanged;
         await _controller.InitializeAsync(_cts.Token);
+        if (WorkOrder is { } workOrder && _controller.Board.FindWorkOrder(workOrder) is not null)
+        {
+            SelectWorkOrder(workOrder);
+        }
+
         _ = TickAsync(_cts.Token);
     }
 

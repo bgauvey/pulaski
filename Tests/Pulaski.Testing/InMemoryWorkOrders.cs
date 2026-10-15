@@ -75,6 +75,18 @@ public sealed class InMemoryWorkOrders : IWorkOrderRepository, IWorkOrderReadSto
         }
     }
 
+    /// <summary>The equipment a progress query sees for a selection; tests set it up.</summary>
+    public Func<Guid?, IReadOnlyList<ScopeEquipmentRow>> Scope { get; set; } = _ => [];
+
+    /// <summary>Good quantity and open job count per order; orders not listed have neither.</summary>
+    public Dictionary<Guid, WorkOrderFactsRow> Facts { get; } = [];
+
+    public Task<IReadOnlyList<ScopeEquipmentRow>> GetScopeAsync(Guid? equipmentId, CancellationToken cancellationToken) =>
+        Task.FromResult(Scope(equipmentId));
+
+    public Task<IReadOnlyList<WorkOrderFactsRow>> GetFactsAsync(Guid? siteId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<WorkOrderFactsRow>>([.. Facts.Values]);
+
     public Task<WorkOrderDto?> GetAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(Find(id) is { } row ? ToDto(row) : null);
 
