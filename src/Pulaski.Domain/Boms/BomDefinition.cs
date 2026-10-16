@@ -102,6 +102,13 @@ public sealed record BomDefinition(decimal BaseQty, Guid BaseUomId, IReadOnlyLis
         return problems;
     }
 
+    /// <summary>The operation numbers the items name that aren't in <paramref name="operationNumbers"/>, in order.</summary>
+    public IReadOnlyList<int> MissingOperations(IEnumerable<int> operationNumbers)
+    {
+        var known = operationNumbers.ToHashSet();
+        return [.. Items.Select(i => i.OperationNumber).OfType<int>().Where(n => !known.Contains(n)).Distinct().Order()];
+    }
+
     /// <summary>Everything that stops a release on the definition alone; the caller checks the components and operations.</summary>
     public IReadOnlyList<BomProblem> ReleaseProblems()
     {

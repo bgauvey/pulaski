@@ -40,6 +40,10 @@ internal sealed class ProcessRepository(DbSession session) : IProcessRepository
         FOR UPDATE
         """;
 
+    private const string GetVersionById = $"""
+        SELECT {VersionColumns} FROM core.process_version WHERE id = @VersionId
+        """;
+
     private const string GetReleasedForUpdate = $"""
         SELECT {VersionColumns} FROM core.process_version
         WHERE process_id = @ProcessId AND status = 'released'
@@ -149,6 +153,9 @@ internal sealed class ProcessRepository(DbSession session) : IProcessRepository
     public async Task<Versioned<ProcessVersion>?> GetVersionForUpdateAsync(Guid processId, Guid versionId, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<VersionRow>(
             GetVersionForUpdate, new { ProcessId = processId, VersionId = versionId }, cancellationToken))?.ToVersioned();
+
+    public async Task<ProcessVersion?> GetVersionAsync(Guid versionId, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<VersionRow>(GetVersionById, new { VersionId = versionId }, cancellationToken))?.ToVersioned().Value;
 
     public async Task<Versioned<ProcessVersion>?> GetReleasedForUpdateAsync(Guid processId, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<VersionRow>(GetReleasedForUpdate, new { ProcessId = processId }, cancellationToken))?.ToVersioned();

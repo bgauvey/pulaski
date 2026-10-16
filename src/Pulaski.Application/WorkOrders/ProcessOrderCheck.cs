@@ -1,4 +1,5 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Boms;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Processes;
 using Pulaski.Contracts.WorkOrders;
@@ -67,7 +68,7 @@ public static class ProcessOrderRules
 /// <summary>Can an order for <see cref="MaterialId"/> be made from the process? Answers before the planner submits.</summary>
 public sealed record CheckProcessForOrderQuery(Guid ProcessId, Guid MaterialId) : IQuery<ProcessOrderCheckDto>;
 
-internal sealed class CheckProcessForOrderHandler(IProcessReadStore processes, TimeProvider timeProvider)
+internal sealed class CheckProcessForOrderHandler(IProcessReadStore processes, IBomReadStore boms, TimeProvider timeProvider)
     : IQueryHandler<CheckProcessForOrderQuery, ProcessOrderCheckDto>
 {
     public async Task<ProcessOrderCheckDto> HandleAsync(CheckProcessForOrderQuery query, CancellationToken cancellationToken)
@@ -101,6 +102,18 @@ internal sealed class CheckProcessForOrderHandler(IProcessReadStore processes, T
         }
 
         problems.AddRange(ProcessOrderRules.Problems(rows, process.SiteId));
+
+        // The BOM the order would use: the material's BOM for this process, or else its BOM for any process (D-025).
+        var bom = (await boms.ListAsync(query.MaterialId, cancellationToken))
+            .Where(b => b.IsActive && b.ReleasedVersion is not null && (b.ProcessId == process.Id || b.ProcessId is null))
+            .OrderBy(b => b.ProcessId is null)
+            .FirstOrDefault();
+        if (bom is { MissingOperations.Length: > 0 })
+        {
+            problems.Add(new(
+                "bom_operation",
+                $"The BOM for {bom.MaterialCode} (version {bom.ReleasedVersion}) names operation {string.Join(", ", bom.MissingOperations)}, which {process.Code}'s released version doesn't have; release a new BOM version first."));
+        }
         return result with
         {
             ProcessVersionId = released.Id,

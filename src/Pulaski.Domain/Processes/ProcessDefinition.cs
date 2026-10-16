@@ -188,6 +188,17 @@ public sealed record ProcessDefinition(IReadOnlyList<ProcessOperation> Operation
         return order;
     }
 
+    /// <summary>
+    /// The operation a job on <paramref name="equipmentId"/> belongs to: the first in flow order
+    /// that runs on it, or else the first operation of all. Null when there are no operations.
+    /// Used for a job added to an order by hand rather than made from the process (D-025).
+    /// </summary>
+    public ProcessOperation? OperationFor(Guid equipmentId)
+    {
+        var flow = InFlowOrder();
+        return flow.FirstOrDefault(o => o.Equipment.Any(e => e.EquipmentId == equipmentId)) ?? (flow.Count > 0 ? flow[0] : null);
+    }
+
     private ProcessOperation Operation(Guid id) => Operations.First(o => o.Id == id);
 
     private bool Reaches(Guid from, Guid target)

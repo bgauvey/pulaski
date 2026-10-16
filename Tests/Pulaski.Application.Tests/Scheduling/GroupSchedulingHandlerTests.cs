@@ -93,7 +93,7 @@ public class GroupSchedulingHandlerTests : SchedulingHandlerTestBase
         var id = await PlanToAsync(department, wo.Id, Saturday, Monday);
 
         var result = await new DispatchWorkOrderHandler(
-                F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Events, F.Events, F.Time)
+                F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Processes, F.Stores.Events, F.Events, F.Time)
             .HandleAsync(new DispatchWorkOrderCommand(wo.Id, WorkOrderVersion(wo)), CancellationToken.None);
 
         var baseline = Assert.Single(result.Jobs);

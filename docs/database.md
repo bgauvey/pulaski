@@ -640,12 +640,12 @@ A job is what the planner places and sequences on a line and what operators exec
 | `dispatched_at` | timestamptz | yes | When its order was dispatched. |
 | `firmed_at` | timestamptz | yes | When its order was firmed; from then on `planned_start` is frozen. |
 | `replaces_job_id` | uuid → job | yes | On a replacement, the cancelled job whose remaining quantity it took. |
-| `process_operation_id` | uuid → process_operation | yes | The released process operation the job was made for, when its order came from a process (D-024). Kept for the links between operations, which the projection will use later. |
+| `process_operation_id` | uuid → process_operation | yes | The process operation the job belongs to, when its order came from a process (D-024). Set when the order makes the job; a job added later takes the operation that runs on its line (or the first), and a replacement keeps the cancelled job's (D-025). Order quantities are counted per operation, and the links will drive the projection later. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ### core.job_material — planned material for a job · *In use*
 
-Planned when the work order is made (D-025): one `consume` row per BOM item and job of the operation that consumes it, its share of the item's total in proportion to the job's quantity. Never changed afterwards; consumption is recorded against it later.
+Planned when the work order is made (D-025): one `consume` row per BOM item and job of the operation that consumes it, its share of the item's total in proportion to the job's quantity. A job added to the order later, or a replacement for a cancelled one, gets rows for its own quantity from the order's BOM version. Never changed afterwards; consumption is recorded against it later.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |

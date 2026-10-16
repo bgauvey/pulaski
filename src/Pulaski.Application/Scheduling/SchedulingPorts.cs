@@ -200,6 +200,7 @@ public sealed record PlanJobRow
     public DateTimeOffset? DueAt { get; init; }
     public DateTimeOffset? LatestEnd { get; init; }
     public Guid? GroupEquipmentId { get; init; }
+    public Guid? ProcessOperationId { get; init; }
 }
 
 /// <summary>A line under a group that can run jobs, one row per material it has a capability for; the rate is null without a run standard.</summary>

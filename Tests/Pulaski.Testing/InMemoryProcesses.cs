@@ -165,6 +165,14 @@ public sealed class InMemoryProcesses : IProcessReadStore, IProcessRepository
         }
     }
 
+    public Task<ProcessVersion?> GetVersionAsync(Guid versionId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_versions.GetValueOrDefault(versionId)?.Value);
+        }
+    }
+
     public Task<Versioned<ProcessVersion>?> GetReleasedForUpdateAsync(Guid processId, CancellationToken cancellationToken)
     {
         lock (_lock)

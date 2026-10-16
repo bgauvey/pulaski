@@ -96,6 +96,9 @@ public sealed record TimelineSegmentDto
     /// <summary>The group the job was planned to, if any; the floor may move it between that group's lines.</summary>
     public Guid? GroupEquipmentId { get; init; }
 
+    /// <summary>The process operation the job is for, when its order came from a process (D-024).</summary>
+    public Guid? ProcessOperationId { get; init; }
+
     /// <summary>For a window: the lines under the group that could run it, with how long it would take on each.</summary>
     public IReadOnlyList<CandidateLineDto> Candidates { get; init; } = [];
 

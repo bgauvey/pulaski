@@ -20,7 +20,7 @@ public abstract class SchedulingHandlerTestBase
     protected Guid Grey { get; } = Guid.CreateVersion7();
 
     private protected CreateJobHandler Create() => new(
-        F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Events, F.Events, F.Ids, F.Time);
+        F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Processes, F.Stores.Boms, F.Stores.Units, F.Stores.Events, F.Events, F.Ids, F.Time);
 
     /// <summary>
     /// A line that can run white and grey (unless <paramref name="eligible"/> is false), last ran

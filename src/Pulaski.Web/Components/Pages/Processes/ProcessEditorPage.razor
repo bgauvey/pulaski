@@ -61,6 +61,20 @@
         </div>
     </div>
 
+    @if (_releaseWarnings.Count > 0)
+    {
+        <div class="process-banner is-todo" role="alert">
+            <strong>Released, but some BOMs need a new version:</strong>
+            <ul>
+                @foreach (var warning in _releaseWarnings)
+                {
+                    <li>@warning</li>
+                }
+            </ul>
+            <a href="boms">Open BOMs</a>
+        </div>
+    }
+
     @if (!IsDraft)
     {
         <div class="process-banner">
@@ -305,6 +319,7 @@ else if (_error is null)
     private bool _releasing;
     private string? _releaseNote;
     private string? _saveMessage;
+    private IReadOnlyList<string> _releaseWarnings = [];
     private DateTimeOffset? _savedAt;
 
     private ElementReference _stage;
@@ -863,9 +878,10 @@ else if (_error is null)
         _busy = true;
         try
         {
-            await Api.ReleaseProcessVersionAsync(Id, _version!.Id, new ReleaseProcessVersionRequest { Version = _token, Note = _releaseNote });
+            var released = await Api.ReleaseProcessVersionAsync(Id, _version!.Id, new ReleaseProcessVersionRequest { Version = _token, Note = _releaseNote });
             _releaseNote = null;
             await LoadAsync(_version.Id);
+            _releaseWarnings = released.Warnings;
             _saveMessage = $"Version {_version.Number} released";
         }
         catch (ApiException ex)

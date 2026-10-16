@@ -14,10 +14,10 @@ public class JobCommandHandlerTests : SchedulingHandlerTestBase
     private PinJobHandler Pin() => new(F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.Events, F.Events);
 
     private CancelJobHandler Cancel() => new(
-        F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Events, F.Events, F.Ids, F.Time);
+        F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Processes, F.Stores.Boms, F.Stores.Units, F.Stores.Events, F.Events, F.Ids, F.Time);
 
     private DispatchWorkOrderHandler Dispatch() => new(
-        F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Events, F.Events, F.Time);
+        F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Processes, F.Stores.Events, F.Events, F.Time);
 
     private FirmWorkOrderHandler Firm() => new(
         F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Events, F.Events, F.Time);

@@ -1,9 +1,11 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Processes;
 using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Domain;
+using Pulaski.Domain.Processes;
 using Pulaski.Domain.Scheduling;
 using Pulaski.Domain.WorkOrders;
 
@@ -25,6 +27,7 @@ internal sealed class DispatchWorkOrderHandler(
     IUnitOfWork unitOfWork,
     ISchedulingRepository scheduling,
     IWorkOrderRepository workOrders,
+    IProcessRepository processes,
     IEventLog eventLog,
     IEventFactory events,
     TimeProvider timeProvider) : ICommandHandler<DispatchWorkOrderCommand, DispatchWorkOrderResponse>
@@ -68,9 +71,10 @@ internal sealed class DispatchWorkOrderHandler(
                 ? j.Dispatch(now, j.EarliestStart ?? now, j.LatestEnd ?? now)
                 : j.Dispatch(now, segments[j.Id].Start, segments[j.Id].End))
             .ToList();
-        IReadOnlyList<ScheduleWarningDto> warnings = published.Sum(j => j.PlannedQty ?? 0m) is var total && total != workOrder.PlannedQty
-            ? [new ScheduleWarningDto("quantity_mismatch", $"The jobs plan {total} against an order quantity of {workOrder.PlannedQty}.")]
-            : [];
+        var definition = workOrder.ProcessVersionId is { } versionId
+            ? (await processes.GetVersionAsync(versionId, cancellationToken))?.Definition
+            : null;
+        var warnings = QuantityWarnings(workOrder, definition, published);
 
         var envelope = events.Create(
             EventTypes.WorkOrderDispatched,
@@ -104,6 +108,27 @@ internal sealed class DispatchWorkOrderHandler(
         await transaction.CommitAsync(cancellationToken);
 
         return new DispatchWorkOrderResponse(version, baselines, warnings);
+    }
+
+    /// <summary>
+    /// Warns, without refusing, where the jobs don't add up to the order (D-018). Each operation of
+    /// the order's process makes the whole quantity, so each is checked on its own (D-024).
+    /// </summary>
+    private static IReadOnlyList<ScheduleWarningDto> QuantityWarnings(WorkOrder order, ProcessDefinition? definition, IReadOnlyList<Job> jobs)
+    {
+        if (definition is null || definition.Operations.Count == 0)
+        {
+            var total = jobs.Sum(j => j.PlannedQty ?? 0m);
+            return total == order.PlannedQty
+                ? []
+                : [new ScheduleWarningDto("quantity_mismatch", $"The jobs plan {total:0.######} against an order quantity of {order.PlannedQty:0.######}.")];
+        }
+
+        return [.. OperationQuantities.ByOperation(definition, jobs.Select(j => (j.ProcessOperationId, j.PlannedQty ?? 0m)))
+            .Where(o => o.Quantity != order.PlannedQty)
+            .Select(o => new ScheduleWarningDto(
+                "quantity_mismatch",
+                $"Operation {o.Operation.Number} ({o.Operation.Name}) plans {o.Quantity:0.######} against an order quantity of {order.PlannedQty:0.######}."))];
     }
 }
 

@@ -57,4 +57,22 @@ public static class BomExplosion
 
         return components;
     }
+
+    /// <summary>
+    /// The components one job needs on its own: a job added to an order after it was made, or the
+    /// replacement for a cancelled one (D-025). Each item consumed by the job's operation (the
+    /// first operation when the item names none) takes <paramref name="jobQty"/> ÷ base quantity ×
+    /// quantity per × (1 + scrap factor).
+    /// </summary>
+    /// <param name="bom">The order's BOM version.</param>
+    /// <param name="jobQty">The job's quantity, converted to the BOM's base unit (D-026).</param>
+    /// <param name="operationNumber">The job's operation.</param>
+    /// <param name="firstOperationNumber">The process's first operation in flow order.</param>
+    public static IReadOnlyList<(BomItem Item, decimal PlannedQty)> ForJob(
+        BomDefinition bom, decimal jobQty, int operationNumber, int firstOperationNumber) =>
+        [.. bom.Items
+            .Where(i => (i.OperationNumber ?? firstOperationNumber) == operationNumber)
+            .OrderBy(i => i.LineNo)
+            .Select(i => (Item: i, PlannedQty: Math.Round(jobQty / bom.BaseQty * i.QtyPer * (1 + i.ScrapFactor), ProcessJobPlan.QuantityScale, MidpointRounding.AwayFromZero)))
+            .Where(x => x.PlannedQty > 0)];
 }

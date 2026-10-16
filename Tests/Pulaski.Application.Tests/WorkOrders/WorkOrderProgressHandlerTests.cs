@@ -9,7 +9,7 @@ namespace Pulaski.Application.Tests.WorkOrders;
 public class WorkOrderProgressHandlerTests : SchedulingHandlerTestBase
 {
     private ListWorkOrderProgressHandler Progress() =>
-        new(F.Stores.WorkOrders, new GetLineTimelineHandler(F.Stores.Scheduling, F.Time));
+        new(F.Stores.WorkOrders, F.Stores.Processes, new GetLineTimelineHandler(F.Stores.Scheduling, F.Time));
 
     /// <summary>The selection: the site row, plus each given line as equipment that holds jobs.</summary>
     private void Select(params Guid[] lines) =>

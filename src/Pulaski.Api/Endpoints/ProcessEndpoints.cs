@@ -79,11 +79,11 @@ internal static class ProcessEndpoints
             TypedResults.Ok(await handler.HandleAsync(
                 new SaveProcessDraftCommand(id, versionId, request.Version, request.Definition), ct)));
 
-        group.MapPost("/{id:guid}/versions/{versionId:guid}/release", async Task<Ok<VersionResponse>> (
+        group.MapPost("/{id:guid}/versions/{versionId:guid}/release", async Task<Ok<ReleaseProcessVersionResponse>> (
             Guid id,
             Guid versionId,
             ReleaseProcessVersionRequest request,
-            ICommandHandler<ReleaseProcessVersionCommand, VersionResponse> handler,
+            ICommandHandler<ReleaseProcessVersionCommand, ReleaseProcessVersionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
                 new ReleaseProcessVersionCommand(id, versionId, request.Version, request.Note), ct)));

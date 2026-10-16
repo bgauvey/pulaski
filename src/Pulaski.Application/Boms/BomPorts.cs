@@ -37,6 +37,15 @@ public interface IBomRepository
 
     Task<bool> HasDraftAsync(Guid bomId, CancellationToken cancellationToken);
 
+    /// <summary>A version by its id, without a lock: what an order was planned with, which never changes once released.</summary>
+    Task<BomVersion?> GetVersionAsync(Guid versionId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The process's active BOMs whose released version names operations the process's released
+    /// version doesn't have, read inside the transaction (after a process release, D-025).
+    /// </summary>
+    Task<IReadOnlyList<BomMissingOperationsRow>> ListMissingOperationsAsync(Guid processId, CancellationToken cancellationToken);
+
     /// <returns>The new row version.</returns>
     Task<long> InsertVersionAsync(BomVersion version, DateTimeOffset at, CancellationToken cancellationToken);
 
@@ -58,6 +67,15 @@ public interface IBomRepository
     Task<BomVersion?> GetReleasedForOrderAsync(Guid materialId, Guid processId, CancellationToken cancellationToken);
 
     Task InsertJobMaterialsAsync(IReadOnlyList<JobMaterial> rows, CancellationToken cancellationToken);
+}
+
+/// <summary>A BOM that names operations its process's released version no longer has.</summary>
+public sealed record BomMissingOperationsRow
+{
+    public required Guid BomId { get; init; }
+    public required string MaterialCode { get; init; }
+    public int VersionNumber { get; init; }
+    public int[] Operations { get; init; } = [];
 }
 
 public sealed record BomMaterialRow

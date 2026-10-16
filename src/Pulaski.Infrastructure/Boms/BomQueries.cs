@@ -9,13 +9,30 @@ namespace Pulaski.Infrastructure.Boms;
 /// <summary>Read side for bills of materials (D-025): one connection per query, no locks.</summary>
 internal sealed class BomQueries(NpgsqlDataSource dataSource) : IBomReadStore
 {
-    private const string List = """
+    // Operation numbers b's released version names that its process's released version lacks.
+    internal const string MissingOperations = """
+        coalesce((
+            SELECT array_agg(DISTINCT i.operation_number ORDER BY i.operation_number)
+            FROM core.bom_version v
+            JOIN core.bom_item i ON i.bom_version_id = v.id
+            WHERE v.bom_id = b.id AND v.status = 'released' AND b.process_id IS NOT NULL
+              AND i.operation_number IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM core.process_version pv
+                  JOIN core.process_operation o ON o.process_version_id = pv.id
+                  WHERE pv.process_id = b.process_id AND pv.status = 'released'
+                    AND o.operation_number = i.operation_number)), '{}')
+        """;
+
+    private const string List = $"""
         SELECT b.id, b.material_id, m.code AS material_code, m.name AS material_name,
                b.process_id, p.code AS process_code, b.is_active, b.updated_at,
                (SELECT v.version_number FROM core.bom_version v WHERE v.bom_id = b.id AND v.status = 'released') AS released_version,
                (SELECT v.version_number FROM core.bom_version v WHERE v.bom_id = b.id AND v.status = 'draft') AS draft_version,
                (SELECT count(*)::int FROM core.bom_item i JOIN core.bom_version v ON v.id = i.bom_version_id
-                WHERE v.bom_id = b.id AND v.status = 'released') AS released_items
+                WHERE v.bom_id = b.id AND v.status = 'released') AS released_items,
+               {MissingOperations} AS missing_operations
         FROM core.bom b
         JOIN core.material m ON m.id = b.material_id
         LEFT JOIN core.process p ON p.id = b.process_id
@@ -23,9 +40,10 @@ internal sealed class BomQueries(NpgsqlDataSource dataSource) : IBomReadStore
         ORDER BY m.code, p.code NULLS FIRST
         """;
 
-    private const string Get = """
+    private const string Get = $"""
         SELECT b.id, b.material_id, m.code AS material_code, m.name AS material_name, m.base_uom_id AS material_base_uom_id,
-               b.process_id, p.code AS process_code, p.name AS process_name, b.is_active, b.xmin::text::bigint AS version
+               b.process_id, p.code AS process_code, p.name AS process_name, b.is_active, b.xmin::text::bigint AS version,
+               {MissingOperations} AS missing_operations
         FROM core.bom b
         JOIN core.material m ON m.id = b.material_id
         LEFT JOIN core.process p ON p.id = b.process_id

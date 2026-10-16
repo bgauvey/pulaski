@@ -38,6 +38,9 @@ public interface IProcessRepository
 
     Task<Versioned<ProcessVersion>?> GetVersionForUpdateAsync(Guid processId, Guid versionId, CancellationToken cancellationToken);
 
+    /// <summary>A version by its id, without a lock: what an order was made from, which never changes once released.</summary>
+    Task<ProcessVersion?> GetVersionAsync(Guid versionId, CancellationToken cancellationToken);
+
     /// <summary>The process's released version, if it has one, locked.</summary>
     Task<Versioned<ProcessVersion>?> GetReleasedForUpdateAsync(Guid processId, CancellationToken cancellationToken);
 

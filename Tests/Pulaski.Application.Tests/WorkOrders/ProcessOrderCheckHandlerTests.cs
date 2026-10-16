@@ -12,7 +12,7 @@ public class ProcessOrderCheckHandlerTests
     private readonly Guid _site = Guid.CreateVersion7();
     private readonly Guid _material = Guid.CreateVersion7();
 
-    public ProcessOrderCheckHandlerTests() => _handler = new CheckProcessForOrderHandler(_f.Stores.Processes, _f.Time);
+    public ProcessOrderCheckHandlerTests() => _handler = new CheckProcessForOrderHandler(_f.Stores.Processes, _f.Stores.Boms, _f.Time);
 
     [Fact]
     public async Task A_process_whose_lines_all_run_the_material_has_no_problems()

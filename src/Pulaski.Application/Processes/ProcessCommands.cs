@@ -1,4 +1,5 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Boms;
 using Pulaski.Application.Errors;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Processes;
@@ -16,7 +17,7 @@ public sealed record SaveProcessDraftCommand(Guid ProcessId, Guid VersionId, lon
     : ICommand<SaveProcessDraftResponse>;
 
 /// <summary>Releases a complete draft for orders; the version released before it becomes obsolete.</summary>
-public sealed record ReleaseProcessVersionCommand(Guid ProcessId, Guid VersionId, long ExpectedVersion, string? Note) : ICommand<VersionResponse>;
+public sealed record ReleaseProcessVersionCommand(Guid ProcessId, Guid VersionId, long ExpectedVersion, string? Note) : ICommand<ReleaseProcessVersionResponse>;
 
 /// <summary>Starts a new draft from the released version, to change the process.</summary>
 public sealed record StartProcessDraftCommand(Guid ProcessId) : ICommand<CreatedResponse>;
@@ -161,11 +162,12 @@ internal sealed class SaveProcessDraftHandler(
 internal sealed class ReleaseProcessVersionHandler(
     IUnitOfWork unitOfWork,
     IProcessRepository processes,
+    IBomRepository boms,
     IEventLog eventLog,
     IEventFactory events,
-    TimeProvider timeProvider) : ICommandHandler<ReleaseProcessVersionCommand, VersionResponse>
+    TimeProvider timeProvider) : ICommandHandler<ReleaseProcessVersionCommand, ReleaseProcessVersionResponse>
 {
-    public async Task<VersionResponse> HandleAsync(ReleaseProcessVersionCommand command, CancellationToken cancellationToken)
+    public async Task<ReleaseProcessVersionResponse> HandleAsync(ReleaseProcessVersionCommand command, CancellationToken cancellationToken)
     {
         new Validator()
             .Require(command.Note is null || command.Note.Length <= 500, nameof(command.Note), "At most 500 characters.")
@@ -199,11 +201,20 @@ internal sealed class ReleaseProcessVersionHandler(
 
         var version = await processes.UpdateVersionAsync(released, envelope.OccurredAt, cancellationToken);
         await processes.InsertReleasedRowsAsync(released, cancellationToken);
+
+        // BOMs keep naming the operations they were released with; say which ones this release breaks (D-025).
+        var broken = await boms.ListMissingOperationsAsync(process.Id, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return new VersionResponse(version);
+        return new ReleaseProcessVersionResponse(version, [.. broken.Select(b =>
+            $"The BOM for {b.MaterialCode} (version {b.VersionNumber}) names {Operations(b.Operations)}, which version {released.Number} of {process.Code} doesn't have. " +
+            $"Orders for {b.MaterialCode} made with {process.Code} are refused until a new BOM version is released.")]);
     }
+
+    private static string Operations(int[] numbers) =>
+        numbers.Length == 1 ? $"operation {numbers[0]}" : $"operations {string.Join(", ", numbers)}";
+
 }
 
 internal sealed class StartProcessDraftHandler(

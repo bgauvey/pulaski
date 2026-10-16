@@ -51,6 +51,22 @@ internal sealed class BomRepository(DbSession session) : IBomRepository
         FOR SHARE OF v
         """;
 
+    private const string GetVersionById = $"""
+        SELECT {VersionColumns} FROM core.bom_version v WHERE v.id = @VersionId
+        """;
+
+    private const string MissingOperationsForProcess = $"""
+        SELECT * FROM (
+            SELECT b.id AS bom_id, m.code AS material_code, v.version_number,
+                   {BomQueries.MissingOperations} AS operations
+            FROM core.bom b
+            JOIN core.material m ON m.id = b.material_id
+            JOIN core.bom_version v ON v.bom_id = b.id AND v.status = 'released'
+            WHERE b.process_id = @ProcessId AND b.is_active) x
+        WHERE cardinality(x.operations) > 0
+        ORDER BY x.material_code
+        """;
+
     private const string HasDraft = "SELECT EXISTS (SELECT 1 FROM core.bom_version WHERE bom_id = @BomId AND status = 'draft')";
 
     private const string InsertVersion = """
@@ -104,6 +120,12 @@ internal sealed class BomRepository(DbSession session) : IBomRepository
     public async Task<BomVersion?> GetReleasedForOrderAsync(Guid materialId, Guid processId, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<VersionRow>(
             GetReleasedForOrder, new { MaterialId = materialId, ProcessId = processId }, cancellationToken))?.ToVersioned().Value;
+
+    public async Task<BomVersion?> GetVersionAsync(Guid versionId, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<VersionRow>(GetVersionById, new { VersionId = versionId }, cancellationToken))?.ToVersioned().Value;
+
+    public Task<IReadOnlyList<BomMissingOperationsRow>> ListMissingOperationsAsync(Guid processId, CancellationToken cancellationToken) =>
+        session.QueryAsync<BomMissingOperationsRow>(MissingOperationsForProcess, new { ProcessId = processId }, cancellationToken);
 
     public Task<bool> HasDraftAsync(Guid bomId, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(HasDraft, new { BomId = bomId }, cancellationToken);

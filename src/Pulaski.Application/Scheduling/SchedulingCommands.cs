@@ -1,5 +1,8 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Boms;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Processes;
+using Pulaski.Application.Units;
 using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Scheduling;
@@ -50,6 +53,9 @@ internal sealed class CreateJobHandler(
     IUnitOfWork unitOfWork,
     ISchedulingRepository scheduling,
     IWorkOrderRepository workOrders,
+    IProcessRepository processes,
+    IBomRepository boms,
+    IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
@@ -128,9 +134,21 @@ internal sealed class CreateJobHandler(
             job = job with { LatestEnd = command.LatestEnd };
         }
 
+        // A job added to an order takes its operation and components as if the order had made it (D-025).
+        var components = new JobComponents(processes, boms, units, ids);
+        if (workOrder is not null)
+        {
+            job = await components.WithOperationAsync(job, workOrder, cancellationToken);
+        }
+
         var envelope = events.Create(EventTypes.JobCreated, "job", job.Id, new { After = job });
         var version = await scheduling.InsertJobAsync(job, envelope.OccurredAt, cancellationToken);
         await scheduling.AppendStatusChangeAsync(job.Id, null, job.Status, envelope.OccurredAt, cancellationToken);
+        if (workOrder is not null)
+        {
+            await components.PlanAsync(job, workOrder, cancellationToken);
+        }
+
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -312,6 +330,9 @@ internal sealed class CancelJobHandler(
     IUnitOfWork unitOfWork,
     ISchedulingRepository scheduling,
     IWorkOrderRepository workOrders,
+    IProcessRepository processes,
+    IBomRepository boms,
+    IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
@@ -332,11 +353,13 @@ internal sealed class CancelJobHandler(
         var cancelled = job.Cancel();
 
         Job? replacement = null;
+        WorkOrder? workOrder = null;
         if (command.Replace)
         {
-            var workOrderStatus = job.WorkOrderId is { } workOrderId
-                ? (await workOrders.GetForShareAsync(workOrderId, cancellationToken))!.Value.Status
-                : WorkOrderStatus.Planned;
+            workOrder = job.WorkOrderId is { } workOrderId
+                ? (await workOrders.GetForShareAsync(workOrderId, cancellationToken))!.Value
+                : null;
+            var workOrderStatus = workOrder?.Status ?? WorkOrderStatus.Planned;
             var remaining = (job.PlannedQty ?? 0m) - await scheduling.GetGoodQtyAsync(job.Id, cancellationToken);
             replacement = job.Replacement(ids.NewId(), remaining, workOrderStatus, at);
         }
@@ -357,6 +380,13 @@ internal sealed class CancelJobHandler(
             var created = events.Create(EventTypes.JobCreated, "job", replacement.Id, new { After = replacement });
             await scheduling.InsertJobAsync(replacement, created.OccurredAt, cancellationToken);
             await scheduling.AppendStatusChangeAsync(replacement.Id, null, replacement.Status, created.OccurredAt, cancellationToken);
+
+            // The replacement keeps the cancelled job's operation and plans components for the quantity it takes over (D-025).
+            if (workOrder is not null)
+            {
+                await new JobComponents(processes, boms, units, ids).PlanAsync(replacement, workOrder, cancellationToken);
+            }
+
             await eventLog.AppendAsync(created, cancellationToken);
         }
 

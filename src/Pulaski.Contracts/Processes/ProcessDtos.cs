@@ -110,3 +110,10 @@ public sealed record ProcessProblemDto(string Code, string Message, Guid? Operat
 
 /// <summary>The draft's new concurrency token and what still stops its release.</summary>
 public sealed record SaveProcessDraftResponse(long Version, IReadOnlyList<ProcessProblemDto> Problems);
+
+/// <summary>
+/// A released version, and what it broke: each BOM for the process that names an operation the
+/// new version doesn't have (D-025). The release still happens; orders using those BOMs are
+/// refused until a new BOM version is released.
+/// </summary>
+public sealed record ReleaseProcessVersionResponse(long Version, IReadOnlyList<string> Warnings);

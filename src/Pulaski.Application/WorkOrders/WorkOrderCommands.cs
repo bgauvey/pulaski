@@ -120,6 +120,13 @@ internal sealed class CreateWorkOrderHandler(
 
         // Read FOR SHARE after the lines and the route, so the BOM can't be replaced while it is used.
         var bom = await boms.GetReleasedForOrderAsync(command.MaterialId, process.Id, cancellationToken);
+        if (bom?.Definition.MissingOperations(route.Version.Definition.Operations.Select(o => o.Number)) is { Count: > 0 } missing)
+        {
+            throw new DomainRuleException(
+                $"The BOM for {output.Code} (version {bom.Number}) names operation {string.Join(", ", missing)}, which version {route.Version.Number} of {process.Code} doesn't have. " +
+                $"Start a new BOM draft, move those lines to operations the process has, and release it.");
+        }
+
         var components = bom is null
             ? []
             : BomExplosion.For(bom.Definition, converter.Convert(command.PlannedQty, command.UomId, bom.Definition.BaseUomId), plan);

@@ -16,6 +16,13 @@ public sealed record BomSummaryDto
     /// <summary>Components in the released version.</summary>
     public int ReleasedItems { get; init; }
 
+    /// <summary>
+    /// Operation numbers the released version names that its process's released version no
+    /// longer has. Orders for the material made with that process are refused until a new BOM
+    /// version is released (D-025).
+    /// </summary>
+    public int[] MissingOperations { get; init; } = [];
+
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
@@ -30,6 +37,9 @@ public sealed record BomDto
     public string? ProcessCode { get; init; }
     public string? ProcessName { get; init; }
     public bool IsActive { get; init; }
+
+    /// <summary>As <see cref="BomSummaryDto.MissingOperations"/>.</summary>
+    public int[] MissingOperations { get; init; } = [];
 
     /// <summary>Concurrency token of the BOM row.</summary>
     public long Version { get; init; }

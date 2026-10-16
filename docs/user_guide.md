@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-10-15 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-10-16 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#11-reference) tables give the exact rules.
 
@@ -478,6 +478,17 @@ A 2,400 m order, extruded 50/50 on EXT-01 and EXT-02, plans:
 - Operation numbers must exist in the process's **released** version. A draft may name an operation that isn't released yet, but can't be released until it is.
 - Each component's total is rounded to six decimal places. The jobs of an operation share it in proportion to their quantities, and the last job takes any rounding remainder, so the jobs always add up to the total.
 - Planned components never change after the order is made, even if the BOM changes later.
+- A job added to the order later (from the Schedule, or the replacement when a job is cancelled and replaced) gets its components too: those of its operation, for its own quantity, from the BOM version the order was planned with.
+
+### When the process changes
+
+A released BOM names operations by number. If the process is later released with different operations (Pack renumbered from 30 to 40, say), the BOM still names 30. Pulaski doesn't stop the process release, but:
+
+- the process editor shows which BOMs the release broke;
+- the BOMs list and the BOM editor say which operation the BOM names that the process no longer has;
+- the new-order form greys out the process for that material, and creating the order is refused with the same reason.
+
+To fix it, open the BOM, start a new draft, move those lines to operations the process has, and release it.
 
 ---
 
@@ -648,6 +659,7 @@ Pulaski checks each department job on its own; it doesn't share out a department
 - **Dispatch** publishes the order: Pulaski calculates every job's times on its line right now and saves them as the **baseline**. The floor sees the order, and later you can compare what happened with what was published.
   - Dispatch is refused if the order has no jobs, or if a job's line can no longer run its material.
   - A job waiting on a department is published with its window as the baseline.
+  - If an operation's jobs don't add up to the order quantity, dispatch goes ahead but warns, for example *Operation 30 (Pack) plans 1,500 against an order quantity of 2,000.* Each operation is checked on its own, because each makes the whole quantity.
 - **Un-dispatch** returns the order and its jobs to planned and clears the baseline. You can do this until the order is firmed.
 - **Firm** freezes the plan: no more un-dispatch, and each job is anchored at its baseline start (see [Job rules](#job-rules)).
 - New jobs can only be added to a **planned** order.
@@ -732,7 +744,6 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **No execution yet:** starting and stopping jobs, counts, downtime, OEE and quality charts are planned. Order statuses after Firmed exist but nothing records production yet.
 - **No inventory yet:** receiving lots, loading them at feed points and consuming them (backflush, time window…) come next. BOMs today only plan components.
 - **Process links don't drive the schedule yet:** a Pack job can be projected to start before the Extrude job it follows. The link only sets the earliest start, counted from the order's start.
-- **Orders from a multi-operation process show their quantity more than once:** the details show *On lines 4,800 of 2,400 m* for a two-operation order, dispatch shows a quantity warning, and the **Not on a line** tile can be wrong. This is a known bug being fixed.
 - **The Overview** shows no machine state, counts, OEE, downtime, quality, lots or labor yet: those parts are hatched placeholders until the data exists. Its line strip is a rolling 24 hours rather than the shift, since there are no shift calendars on screen yet.
 - **Notes** can only be written when the order is created.
 - **No sign-in or permissions** yet; changes are recorded as *anonymous*.

@@ -103,6 +103,20 @@ public sealed class InMemoryBoms : IBomReadStore, IBomRepository
         }
     }
 
+    public Task<BomVersion?> GetVersionAsync(Guid versionId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_versions.GetValueOrDefault(versionId)?.Value);
+        }
+    }
+
+    /// <summary>Answers <see cref="ListMissingOperationsAsync"/>; tests set the rows they need.</summary>
+    public List<BomMissingOperationsRow> MissingOperations { get; } = [];
+
+    public Task<IReadOnlyList<BomMissingOperationsRow>> ListMissingOperationsAsync(Guid processId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<BomMissingOperationsRow>>([.. MissingOperations]);
+
     public Task<long> InsertVersionAsync(BomVersion version, DateTimeOffset at, CancellationToken cancellationToken) => Put(_versions, version.Id, version);
 
     public Task<long> UpdateVersionAsync(BomVersion version, DateTimeOffset at, CancellationToken cancellationToken) => Put(_versions, version.Id, version);

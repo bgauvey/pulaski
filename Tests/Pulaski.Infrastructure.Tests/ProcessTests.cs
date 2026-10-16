@@ -5,6 +5,7 @@ using Pulaski.Application.Boms;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Processes;
+using Pulaski.Application.Scheduling;
 using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
@@ -13,6 +14,7 @@ using Pulaski.Contracts.WorkOrders;
 using Pulaski.Domain;
 using Pulaski.Domain.Boms;
 using Pulaski.Domain.Processes;
+using Pulaski.Domain.Scheduling;
 
 namespace Pulaski.Infrastructure.Tests;
 
@@ -285,8 +287,8 @@ public sealed class ProcessTests(DatabaseFixture db)
         await db.ExecuteAsync(
             $"""
             INSERT INTO core.material (id, code, name, material_type, base_uom_id)
-            VALUES ('{blend}', 'BLEND-{blend.ToString("N")[..6]}', 'Blend', 'intermediate', '{db.UomId}'),
-                   ('{endCap}', 'CAP-{endCap.ToString("N")[..6]}', 'End cap', 'packaging', '{db.UomId}')
+            VALUES ('{blend}', 'BLEND-{blend.ToString("N")[^8..]}', 'Blend', 'intermediate', '{db.UomId}'),
+                   ('{endCap}', 'CAP-{endCap.ToString("N")[^8..]}', 'End cap', 'packaging', '{db.UomId}')
             """);
 
         var bom = await db.SendAsync(new CreateBomCommand(db.MaterialId, processId));
@@ -321,6 +323,81 @@ public sealed class ProcessTests(DatabaseFixture db)
         Assert.Equal(
             [(10, blend, 1479m), (10, blend, 1479m), (30, endCap, 168m)],
             components.Select(c => (c.OperationNumber!.Value, c.MaterialId, c.PlannedQty)));
+    }
+
+    [Fact]
+    public async Task Jobs_added_later_get_components_and_a_process_change_that_breaks_a_bom_is_reported()
+    {
+        var plant = await CreatePlantAsync();
+        var processId = await ReleasedExtrudeAndPackAsync(plant);
+        foreach (var line in new[] { plant.Ext1, plant.Ext2, plant.Pack })
+        {
+            await db.ExecuteAsync(
+                $"""
+                INSERT INTO core.equipment_capability (equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, effective_from)
+                VALUES ('{line}', '{db.MaterialId}', 1000, '{db.UomId}', now() - interval '1 day')
+                """);
+        }
+
+        var endCap = Guid.CreateVersion7();
+        await db.ExecuteAsync(
+            $"""
+            INSERT INTO core.material (id, code, name, material_type, base_uom_id)
+            VALUES ('{endCap}', 'CAP-{endCap.ToString("N")[^8..]}', 'End cap', 'packaging', '{db.UomId}')
+            """);
+        var bom = await db.SendAsync(new CreateBomCommand(db.MaterialId, processId));
+        var bomDraft = await QueryAsync<GetBomVersionQuery, BomVersionDto>(new GetBomVersionQuery(
+            bom.Id, (await QueryAsync<GetBomQuery, BomDto>(new GetBomQuery(bom.Id))).Versions.Single().Id));
+        var savedBom = await db.SendAsync(new SaveBomDraftCommand(bom.Id, bomDraft.Id, bomDraft.Version, new BomDefinitionDto
+        {
+            BaseQty = 1000m,
+            BaseUomId = db.UomId,
+            Items = [new BomItemDto { Id = Guid.CreateVersion7(), LineNo = 10, ComponentMaterialId = endCap, QtyPer = 84m, UomId = db.UomId, ConsumptionMethod = ConsumptionMethod.Backflush, OperationNumber = 30 }],
+        }));
+        await db.SendAsync(new ReleaseBomVersionCommand(bom.Id, bomDraft.Id, savedBom.Version, null));
+
+        var order = await db.SendAsync(new CreateWorkOrderCommand(
+            processId, "WO-" + Guid.NewGuid().ToString("N")[..8], db.MaterialId, 2000m, db.UomId, DateTimeOffset.UtcNow, null, 0, null));
+
+        // Extrude and Pack each make the 2000 m: on lines is 2000, not the 4000 the jobs add up to.
+        var progress = await QueryAsync<ListWorkOrderProgressQuery, IReadOnlyList<WorkOrderProgressDto>>(new ListWorkOrderProgressQuery(plant.Site));
+        Assert.Equal(2000m, Assert.Single(progress, p => p.Order.Id == order.Id).PlacedQty);
+
+        // A job added from the schedule on PACK1 is a Pack job, with its end caps.
+        var added = await db.SendAsync(new CreateJobCommand(
+            plant.Pack, "J-" + Guid.NewGuid().ToString("N")[..8], JobType.Production, order.Id, 500m, null, false, null, null));
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            var (operation, quantity) = await connection.QuerySingleAsync<(int, decimal)>(
+                """
+                SELECT o.operation_number, jm.planned_qty
+                FROM core.job j
+                JOIN core.process_operation o ON o.id = j.process_operation_id
+                JOIN core.job_material jm ON jm.job_id = j.id
+                WHERE j.id = @Id
+                """,
+                new { added.Id });
+            Assert.Equal((30, 42m), (operation, quantity));
+        }
+
+        // Version 2 renumbers Pack to 40: the release goes through but reports the BOM it broke.
+        var v2 = await db.SendAsync(new StartProcessDraftCommand(processId));
+        var draft = await QueryAsync<GetProcessVersionQuery, ProcessVersionDto>(new GetProcessVersionQuery(processId, v2.Id));
+        var renumbered = draft.Definition with
+        {
+            Operations = [.. draft.Definition.Operations.Select(o => o.Number == 30 ? o with { Number = 40 } : o)],
+        };
+        var saved = await db.SendAsync(new SaveProcessDraftCommand(processId, v2.Id, draft.Version, renumbered));
+        var released = await db.SendAsync(new ReleaseProcessVersionCommand(processId, v2.Id, saved.Version, null));
+
+        Assert.Contains("operation 30", Assert.Single(released.Warnings), StringComparison.Ordinal);
+        var broken = await QueryAsync<GetBomQuery, BomDto>(new GetBomQuery(bom.Id));
+        Assert.Equal(30, Assert.Single(broken.MissingOperations));
+        var check = await QueryAsync<CheckProcessForOrderQuery, ProcessOrderCheckDto>(new CheckProcessForOrderQuery(processId, db.MaterialId));
+        Assert.Contains(check.Problems, p => p.Code == "bom_operation");
+        var refused = await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CreateWorkOrderCommand(
+            processId, "WO-" + Guid.NewGuid().ToString("N")[..8], db.MaterialId, 10m, db.UomId, DateTimeOffset.UtcNow, null, 0, null)));
+        Assert.Contains("names operation 30", refused.Message, StringComparison.Ordinal);
     }
 
     /// <summary>Extrude and Pack, making every material, released as version 1.</summary>

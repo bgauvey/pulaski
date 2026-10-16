@@ -180,8 +180,8 @@ public sealed class PulaskiApiClient(HttpClient http)
     public Task<SaveProcessDraftResponse> SaveProcessDraftAsync(Guid id, Guid versionId, SaveProcessDraftRequest request, CancellationToken ct = default) =>
         SendAsync<SaveProcessDraftResponse>(HttpMethod.Put, $"api/processes/{id}/versions/{versionId}", request, ct);
 
-    public Task<VersionResponse> ReleaseProcessVersionAsync(Guid id, Guid versionId, ReleaseProcessVersionRequest request, CancellationToken ct = default) =>
-        SendAsync<VersionResponse>(HttpMethod.Post, $"api/processes/{id}/versions/{versionId}/release", request, ct);
+    public Task<ReleaseProcessVersionResponse> ReleaseProcessVersionAsync(Guid id, Guid versionId, ReleaseProcessVersionRequest request, CancellationToken ct = default) =>
+        SendAsync<ReleaseProcessVersionResponse>(HttpMethod.Post, $"api/processes/{id}/versions/{versionId}/release", request, ct);
 
     public Task<CreatedResponse> StartProcessDraftAsync(Guid id, CancellationToken ct = default) =>
         SendAsync<CreatedResponse>(HttpMethod.Post, $"api/processes/{id}/drafts", new { }, ct);

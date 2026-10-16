@@ -1,8 +1,11 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Processes;
 using Pulaski.Application.Scheduling;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Contracts.WorkOrders;
+using Pulaski.Domain.Processes;
+using Pulaski.Domain.WorkOrders;
 
 namespace Pulaski.Application.WorkOrders;
 
@@ -19,6 +22,7 @@ public sealed record ListWorkOrderProgressQuery(Guid? EquipmentId) : IQuery<IRea
 /// </summary>
 internal sealed class ListWorkOrderProgressHandler(
     IWorkOrderReadStore store,
+    IProcessReadStore processes,
     IQueryHandler<GetLineTimelineQuery, LineTimelineDto> timelines)
     : IQueryHandler<ListWorkOrderProgressQuery, IReadOnlyList<WorkOrderProgressDto>>
 {
@@ -48,9 +52,27 @@ internal sealed class ListWorkOrderProgressHandler(
         var facts = (await store.GetFactsAsync(siteId, cancellationToken)).ToDictionary(f => f.WorkOrderId);
         var orders = await store.ListAsync(siteId, null, cancellationToken);
 
-        return [.. orders
+        var shown = orders
             .Where(o => jobsByOrder.Contains(o.Id) || (facts.GetValueOrDefault(o.Id)?.OpenJobs ?? 0) == 0 && Targets(o, inScope, query.EquipmentId))
-            .Select(o => Progress(WorkOrderMapping.WithNextStatuses(o), jobsByOrder[o.Id], facts.GetValueOrDefault(o.Id), overlapping))];
+            .ToList();
+
+        // Each process version once: its operations decide how much of an order is on lines (D-024).
+        var definitions = new Dictionary<Guid, ProcessDefinition?>();
+        foreach (var order in shown.Where(o => o.ProcessId is not null && o.ProcessVersionId is not null))
+        {
+            if (!definitions.ContainsKey(order.ProcessVersionId!.Value))
+            {
+                var version = await processes.GetVersionAsync(order.ProcessId!.Value, order.ProcessVersionId.Value, cancellationToken);
+                definitions[order.ProcessVersionId.Value] = version is null ? null : ProcessRules.ToDomain(version.Definition);
+            }
+        }
+
+        return [.. shown.Select(o => Progress(
+            WorkOrderMapping.WithNextStatuses(o),
+            jobsByOrder[o.Id],
+            facts.GetValueOrDefault(o.Id),
+            overlapping,
+            o.ProcessVersionId is { } versionId ? definitions.GetValueOrDefault(versionId) : null))];
     }
 
     /// <summary>An order without open jobs belongs to its target equipment, or to its site when it has none.</summary>
@@ -61,7 +83,8 @@ internal sealed class ListWorkOrderProgressHandler(
         WorkOrderDto order,
         IEnumerable<(LineTimelineDto Line, TimelineSegmentDto Segment)> jobs,
         WorkOrderFactsRow? facts,
-        HashSet<Guid> overlapping)
+        HashSet<Guid> overlapping,
+        ProcessDefinition? definition)
     {
         var open = jobs.OrderBy(j => j.Segment.Start).ThenBy(j => j.Segment.JobNumber, StringComparer.Ordinal).ToList();
         DateTimeOffset? start = open.Count > 0 ? open.Min(j => j.Segment.Start) : null;
@@ -82,7 +105,7 @@ internal sealed class ListWorkOrderProgressHandler(
             StartSlip = Later(start, baselineStart),
             FinishSlip = Later(end, order.DueAt),
             CompletedQty = facts?.CompletedQty ?? 0m,
-            PlacedQty = open.Sum(j => j.Segment.PlannedQty ?? 0m),
+            PlacedQty = OperationQuantities.Placed(definition, open.Select(j => (j.Segment.ProcessOperationId, j.Segment.PlannedQty ?? 0m))),
             IsRunning = open.Any(j => j.Segment.Status == "running"),
             Warnings = [.. open.SelectMany(j => j.Segment.Warnings).DistinctBy(w => w.Code)],
             HasOverlap = open.Any(j => overlapping.Contains(j.Segment.JobId)),

@@ -10,7 +10,7 @@ namespace Pulaski.Application.Tests.Scheduling;
 public class WorkOrderPlanningHandlerTests : SchedulingHandlerTestBase
 {
     private DispatchWorkOrderHandler Dispatch() => new(
-        F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Events, F.Events, F.Time);
+        F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Processes, F.Stores.Events, F.Events, F.Time);
 
     private UndispatchWorkOrderHandler Undispatch() => new(
         F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Events, F.Events);
