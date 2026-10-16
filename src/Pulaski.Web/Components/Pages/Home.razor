@@ -1,73 +1,482 @@
 @page "/"
+@* The plant overview (docs/admin-dashboard-brief.md). In five seconds it answers: which lines
+   are running, which are not and why, and what needs a person. Everything Pulaski can't know
+   yet (machine state, counts, OEE, quality, lots, labor) is a placeholder in its final place, so
+   the layout doesn't move when that data arrives. *@
+@implements IDisposable
+@using System.Globalization
+@using Pulaski.Web.Services.Scheduling
 @inject PulaskiApiClient Api
+@inject TimeProvider Time
 
 <PageTitle>Overview · Pulaski</PageTitle>
 
-<h1>Overview</h1>
+<header class="ov-head">
+    <div>
+        <h1 class="ov-title">@(Site?.Name ?? "Overview")</h1>
+        <p class="ov-when">
+            <span>@SiteNow.ToString("dddd d MMMM", CultureInfo.InvariantCulture)</span>
+            <span class="ov-clock">@SiteNow.ToString("HH:mm", CultureInfo.InvariantCulture) site time</span>
+        </p>
+    </div>
+    <div class="ov-tools">
+        @if (_sites.Count > 1)
+        {
+            <select class="form-select" aria-label="Site" value="@_siteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in _sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+        <span class="ov-live @(IsStale ? "is-stale" : "")" role="status">
+            <span class="ov-live-dot" aria-hidden="true"></span>
+            @(_loadedAt is null ? "Connecting…" : IsStale ? $"Stale since {ScheduleFormat.Time(_loadedAt.Value, Tz)}" : $"Live, updated {ScheduleFormat.Time(_loadedAt.Value, Tz)}")
+        </span>
+        <button type="button" class="btn btn-outline-secondary btn-square" aria-label="Refresh now" title="Refresh now"
+                disabled="@_loading" @onclick="RefreshAsync">
+            <Icon Name="refresh" Size="18" />
+        </button>
+    </div>
+</header>
 
 <ProblemAlert Error="_error" />
 
-@if (_workOrders is null || _equipment is null)
+@if (IsStale && _loadedAt is not null)
 {
-    @if (_error is null)
-    {
-        <p class="text-muted">Loading…</p>
-    }
+    <div class="ov-stale" role="alert">
+        <Icon Name="alert" Size="18" />
+        These figures are from @ScheduleFormat.Time(_loadedAt.Value, Tz) and may be out of date: Pulaski can't reach the API. It keeps retrying.
+    </div>
 }
-else
-{
-    <div class="row g-3 mb-4">
-        @foreach (var status in Display.WorkOrderStatuses)
+
+@* ---- Needs attention ---- *@
+<section class="ov-attention" aria-labelledby="attention-title">
+    <h2 id="attention-title" class="visually-hidden">Needs attention</h2>
+    @foreach (var cell in Attention)
+    {
+        var tone = cell.IsPlaceholder ? "is-placeholder" : cell.Count > 0 ? $"is-{cell.Tone}" : "is-zero";
+        @if (cell.Href is not null && !cell.IsPlaceholder)
         {
-            var count = _workOrders.Count(w => w.Status == status);
-            <div class="col-6 col-md-4 col-xl-2">
-                <a class="card text-decoration-none h-100" href="work-orders?status=@status">
-                    <div class="card-body">
-                        <div class="metric @(count == 0 ? "is-zero" : "")">@count</div>
-                        <div class="fw-semibold">@Display.Label(status)</div>
-                    </div>
-                </a>
-            </div>
+            <a class="ov-att @tone" href="@cell.Href" title="@cell.Help">@AttentionBody(cell)</a>
         }
+        else
+        {
+            <div class="ov-att @tone" title="@cell.Help">@AttentionBody(cell)</div>
+        }
+    }
+</section>
+
+@* ---- This shift: needs machine data ---- *@
+<section class="ov-summary" aria-labelledby="summary-title">
+    <div class="ov-summary-head">
+        <h2 id="summary-title" class="ov-h2">This shift</h2>
+        <span class="ov-pending"><Icon Name="plug" Size="16" /> Fills in once lines send machine data through the edge connector</span>
+    </div>
+    <div class="ov-summary-band">
+        <div class="ov-sum">
+            <span class="ov-sum-label">OEE</span>
+            <span class="ov-sum-value is-ghost">—</span>
+            <div class="ov-apq" aria-label="Availability, performance and quality: no data yet">
+                @foreach (var part in new[] { "Availability", "Performance", "Quality" })
+                {
+                    <span class="ov-apq-row">
+                        <span class="ov-apq-name">@part</span>
+                        <span class="ov-meter is-ghost"><span class="ov-meter-target" style="left: 85%"></span></span>
+                        <span class="ov-apq-value">—</span>
+                    </span>
+                }
+            </div>
+        </div>
+        <div class="ov-sum">
+            <span class="ov-sum-label">Good output</span>
+            <span class="ov-sum-value is-ghost">— <span class="ov-sum-unit">of planned</span></span>
+            <span class="ov-meter is-ghost is-wide"></span>
+            <span class="ov-sum-note">Counted from the line's good-part counter</span>
+        </div>
+        <div class="ov-sum">
+            <span class="ov-sum-label">Scrap</span>
+            <span class="ov-sum-value is-ghost">—</span>
+            <span class="ov-sum-note">Quantity and share of output</span>
+        </div>
+        <div class="ov-sum">
+            <span class="ov-sum-label">Downtime</span>
+            <span class="ov-sum-value is-ghost">— <span class="ov-sum-unit">min</span></span>
+            <span class="ov-sum-note">With the biggest reason named</span>
+        </div>
+    </div>
+</section>
+
+@* ---- Line board ---- *@
+<section class="ov-board" aria-labelledby="board-title">
+    <div class="ov-board-head">
+        <h2 id="board-title" class="ov-h2">Lines</h2>
+        <ul class="ov-key" aria-label="Key">
+            <li><span class="ov-swatch is-nosignal"></span>No signal</li>
+            <li><span class="ov-swatch is-planned"></span>Planned</li>
+            <li><span class="ov-swatch is-published"></span>Dispatched or firmed</li>
+            <li><span class="ov-swatch is-changeover"></span>Changeover</li>
+        </ul>
     </div>
 
-    <h2 class="h5">Lines</h2>
-    @if (_lines.Count == 0)
+    @if (_lines is null)
     {
-        <p class="text-muted">No production lines yet. <a href="equipment">Add equipment</a>.</p>
+        <div class="ov-rows" aria-busy="true">
+            @for (var i = 0; i < 3; i++)
+            {
+                <div class="ov-row is-skeleton"><span></span><span></span><span></span><span></span></div>
+            }
+        </div>
+    }
+    else if (_lines.Count == 0)
+    {
+        <div class="ov-empty">
+            <p class="mb-1 fw-semibold">No lines in @(Site?.Code ?? "this site") yet.</p>
+            <p class="mb-0 text-muted">Add a work center that can run jobs on <a href="equipment">Equipment</a>, and it appears here.</p>
+        </div>
     }
     else
     {
-        <ul class="list-group mb-4">
+        <div class="ov-rows" role="table" aria-label="Lines">
+            <div class="ov-row is-head" role="row">
+                <span role="columnheader">Line</span>
+                <span role="columnheader">State</span>
+                <span role="columnheader">Now or next</span>
+                <span role="columnheader" class="ov-scale">
+                    @foreach (var (percent, label) in _window.Ticks(Tz))
+                    {
+                        <span class="ov-tick" style="left: @Pct(percent)">@label</span>
+                    }
+                </span>
+                <span role="columnheader">OEE</span>
+                <span role="columnheader"><span class="visually-hidden">Flags</span></span>
+            </div>
+
             @foreach (var line in _lines)
             {
-                var open = _workOrders.Count(w => w.TargetEquipmentId == line.Id && w.Status is "dispatched" or "firmed" or "in_progress");
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <span><span class="fw-semibold">@line.Code</span> · @line.Name</span>
-                    <span class="chip" title="Dispatched, firmed or in-progress work orders">@open open</span>
+                var timeline = _timelines.GetValueOrDefault(line.Id);
+                var segments = timeline?.Segments ?? [];
+                var job = OverviewModel.NowOrNext(segments, Now);
+                var flags = Flags(timeline);
+                <div class="ov-row" role="row" @key="line.Id">
+                    <span role="cell" class="ov-line">
+                        <a class="ov-line-code" href="schedule">@line.Code</a>
+                        <span class="ov-line-name">@line.Name</span>
+                    </span>
+
+                    <span role="cell">
+                        <span class="ov-state is-nosignal" title="No machine connection yet: connect this line through the edge connector to see whether it is running.">
+                            <Icon Name="signal-off" Size="16" /> No signal
+                        </span>
+                    </span>
+
+                    <span role="cell" class="ov-job">
+                        @if (job is null)
+                        {
+                            <span class="text-muted">Nothing planned</span>
+                        }
+                        else
+                        {
+                            <span class="ov-job-when">@NowOrNextLabel(job)</span>
+                            <a class="ov-job-number" href="@(job.WorkOrderId is { } wo ? $"schedule?workOrder={wo}" : "schedule")">@job.JobNumber</a>
+                            <span class="ov-job-material">@job.MaterialCode</span>
+                            <span class="ov-progress">
+                                <span class="ov-meter"><span class="ov-meter-fill" style="width: @Pct(OverviewModel.Made(job) * 100)"></span></span>
+                                <span class="ov-progress-text">@Number(job.PlannedQty - job.RemainingQty) of @ScheduleFormat.Qty(job.PlannedQty, job.UomCode)</span>
+                            </span>
+                        }
+                    </span>
+
+                    <span role="cell" class="ov-strip" style="--now: @Pct(_window.Percent(Now))" aria-label="@StripLabel(line, segments)">
+                        <span class="ov-lane is-state">
+                            <span class="ov-nosignal" style="width: @Pct(_window.Percent(Now))"></span>
+                        </span>
+                        <span class="ov-lane is-plan">
+                            @if (!OverviewModel.Bars(segments, _window).Any())
+                            {
+                                <span class="ov-lane-empty">@(job is null ? "Nothing planned" : $"Nothing planned until {ScheduleFormat.When(job.Start, Tz)}")</span>
+                            }
+                            @foreach (var bar in OverviewModel.Bars(segments, _window))
+                            {
+                                <a class="ov-bar @BarClass(bar)" style="left: @Pct(bar.Left); width: @Pct(bar.Width)"
+                                   href="@(bar.Segment.WorkOrderId is { } wo ? $"schedule?workOrder={wo}" : "schedule")"
+                                   title="@BarTitle(bar)" aria-label="@BarTitle(bar)"></a>
+                            }
+                        </span>
+                        <span class="ov-now" style="left: @Pct(_window.Percent(Now))" aria-hidden="true"></span>
+                    </span>
+
+                    <span role="cell" class="ov-oee" title="Line OEE needs machine data.">
+                        <span class="ov-oee-value">—</span>
+                        <span class="ov-oee-bars" aria-hidden="true"><span></span><span></span><span></span></span>
+                    </span>
+
+                    <span role="cell" class="ov-flags">
+                        @if (flags.Overlaps > 0)
+                        {
+                            <span class="ov-flag is-danger" title="@flags.OverlapText"><Icon Name="alert" Size="18" /><span class="visually-hidden">@flags.OverlapText</span></span>
+                        }
+                        @if (flags.Warnings.Count > 0)
+                        {
+                            <span class="ov-flag is-warning" title="@string.Join("\n", flags.Warnings)"><Icon Name="clock" Size="18" /><span class="visually-hidden">@string.Join(". ", flags.Warnings)</span></span>
+                        }
+                    </span>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@* ---- Orders and what starts next ---- *@
+<div class="ov-lower">
+    <section aria-labelledby="flow-title">
+        <h2 id="flow-title" class="ov-h2">Work orders</h2>
+        <ol class="ov-flow">
+            @foreach (var status in FlowStatuses)
+            {
+                var count = _orders.Count(o => o.Status == status);
+                <li>
+                    <a class="ov-flow-step @(count == 0 ? "is-zero" : "")" href="work-orders?status=@status">
+                        <span class="ov-flow-count">@count</span>
+                        <span class="ov-flow-label">@Display.Label(status)</span>
+                    </a>
                 </li>
             }
-        </ul>
-    }
-}
+        </ol>
+        <p class="ov-foot">
+            @_orders.Count(o => o.Status == "closed") closed and @_orders.Count(o => o.Status == "cancelled") cancelled.
+            <a href="schedule/work-orders/new">New work order</a>
+        </p>
+    </section>
+
+    <section aria-labelledby="next-title">
+        <h2 id="next-title" class="ov-h2">Starting next</h2>
+        @if (StartingNext.Count == 0)
+        {
+            <p class="text-muted">Nothing is planned to start. <a href="schedule">Open the schedule</a> to place work on a line.</p>
+        }
+        else
+        {
+            <table class="ov-next">
+                <tbody>
+                    @foreach (var (line, segment) in StartingNext)
+                    {
+                        <tr>
+                            <td class="ov-next-time">@StartLabel(segment.Start)</td>
+                            <td class="ov-next-line">@line.Code</td>
+                            <td><a href="@(segment.WorkOrderId is { } wo ? $"schedule?workOrder={wo}" : "schedule")">@segment.JobNumber</a></td>
+                            <td class="text-muted">@segment.MaterialCode</td>
+                            <td class="ov-next-qty">@ScheduleFormat.Qty(segment.PlannedQty, segment.UomCode)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+</div>
 
 @code {
-    private IReadOnlyList<WorkOrderDto>? _workOrders;
-    private IReadOnlyList<EquipmentDto>? _equipment;
-    private List<EquipmentDto> _lines = [];
+    private static readonly TimeSpan RefreshEvery = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan StaleAfter = TimeSpan.FromSeconds(60);
+    private static readonly string[] FlowStatuses = ["planned", "dispatched", "firmed", "in_progress", "completed"];
+
+    private List<EquipmentDto> _sites = [];
+    private IReadOnlyList<EquipmentDto> _equipment = [];
+    private List<EquipmentDto>? _lines;
+    private Dictionary<Guid, LineTimelineDto> _timelines = [];
+    private IReadOnlyList<WorkOrderDto> _orders = [];
+    private IReadOnlyList<WorkOrderProgressDto> _progress = [];
+    private Guid _siteId;
+    private OverviewWindow _window = OverviewWindow.Around(DateTimeOffset.UtcNow);
+    private DateTimeOffset? _loadedAt;
+    private bool _loading;
     private ApiException? _error;
+    private Timer? _timer;
+
+    private DateTimeOffset Now => Time.GetUtcNow();
+
+    private EquipmentDto? Site => _sites.FirstOrDefault(s => s.Id == _siteId);
+
+    private string? Tz => Site?.TimeZone;
+
+    private DateTimeOffset SiteNow => Display.ToSite(Now, Tz);
+
+    private bool IsStale => _loadedAt is { } at && Now - at > StaleAfter;
+
+    private sealed record AttentionCell(string Icon, string Label, int Count, string Detail, string Tone, string? Href, string Help, bool IsPlaceholder = false);
+
+    // Ordered by urgency (docs/admin-dashboard-brief.md). Placeholders keep their place until their data exists.
+    private IEnumerable<AttentionCell> Attention
+    {
+        get
+        {
+            var open = _progress.Where(WorkOrderTiles.IsOpen).ToList();
+            var behind = open.Count(WorkOrderTiles.IsBehind);
+            var conflicts = open.Count(p => p.Warnings.Count > 0 || p.HasOverlap);
+            var overlaps = open.Count(p => p.HasOverlap);
+            var unplaced = open.Count(p => p.Order.Status == "planned" && p.PlacedQty < p.Order.PlannedQty);
+            var silent = _lines?.Count(l => l.TracksState) ?? 0;
+
+            yield return new("stop", "Uncoded stops", 0, "Needs machine data", "danger", null,
+                "Stops longer than a micro-stop that no one has given a reason yet, this shift.", IsPlaceholder: true);
+            yield return new("spc", "Open SPC alerts", 0, "Needs quality checks", "danger", null,
+                "Control-chart rule violations waiting for someone to respond.", IsPlaceholder: true);
+            yield return new("clock", "Orders behind", behind, behind == 0 ? "All on time" : "Late or slipping", "danger", "work-orders",
+                "Open orders projected to finish after their due date, or to start more than 15 minutes after their published baseline.");
+            yield return new("lot", "Lots on hold", 0, "Needs lot tracking", "warning", null,
+                "Material lots on hold or in quarantine at this site.", IsPlaceholder: true);
+            yield return new("alert", "Schedule conflicts", conflicts, overlaps > 0 ? $"{overlaps} with an overlap" : conflicts == 0 ? "None" : "Warnings to review", "warning", "schedule",
+                "Open orders with a schedule warning (late, no rate, unit mismatch…) or work that overlaps on a line.");
+            yield return new("signal-off", "Lines with no signal", silent, "No machine connection yet", "muted", "equipment",
+                "Lines that should report their state but send nothing. Until the edge connector is set up, that is every line.");
+            yield return new("schedule", "Not on a line", unplaced, unplaced == 0 ? "Everything placed" : "Quantity to place", "warning", "schedule",
+                "Planned orders with quantity not yet on a line or department.");
+            yield return new("erp", "ERP changes to accept", 0, "Needs an ERP connection", "warning", null,
+                "Orders the ERP changed after they were dispatched, waiting for a planner to accept.", IsPlaceholder: true);
+            yield return new("labor", "Labor to approve", 0, "Needs labor tracking", "muted", null,
+                "Closed labor sessions from the last shift waiting for approval.", IsPlaceholder: true);
+        }
+    }
+
+    private RenderFragment AttentionBody(AttentionCell cell) =>
+        @<text>
+            <span class="ov-att-top">
+                <span class="ov-att-icon"><Icon Name="@cell.Icon" Size="18" /></span>
+                <span class="ov-att-count">@(cell.IsPlaceholder ? "—" : cell.Count.ToString(CultureInfo.InvariantCulture))</span>
+            </span>
+            <span class="ov-att-label">@cell.Label</span>
+            <span class="ov-att-detail">
+                @if (cell.IsPlaceholder)
+                {
+                    <Icon Name="plug" Size="14" />
+                }
+                @cell.Detail
+            </span>
+        </text>;
+
+    /// <summary>The next production jobs to start across the site's lines, soonest first.</summary>
+    private IReadOnlyList<(EquipmentDto Line, TimelineSegmentDto Segment)> StartingNext =>
+        [.. (_lines ?? [])
+            .SelectMany(l => (_timelines.GetValueOrDefault(l.Id)?.Segments ?? [])
+                .Where(s => s.Kind == "job" && s.JobType == "production" && s.Start > Now)
+                .Select(s => (Line: l, Segment: s)))
+            .OrderBy(x => x.Segment.Start)
+            .Take(6)];
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            _workOrders = await Api.ListWorkOrdersAsync();
             _equipment = await Api.ListEquipmentAsync();
-            _lines = [.. _equipment.Where(e => e.EquipmentRole == "production_line")];
+            _sites = [.. _equipment.Where(e => e.Level == "site" && e.IsActive).OrderBy(e => e.Code, StringComparer.Ordinal)];
+            _siteId = _sites.FirstOrDefault()?.Id ?? Guid.Empty;
+            await LoadAsync();
         }
         catch (ApiException ex)
         {
             _error = ex;
         }
+
+        _timer = new Timer(_ => InvokeAsync(async () =>
+        {
+            await LoadAsync();
+            StateHasChanged();
+        }), null, RefreshEvery, RefreshEvery);
     }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        _siteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty;
+        _lines = null;
+        _timelines = [];
+        await LoadAsync();
+    }
+
+    private async Task RefreshAsync() => await LoadAsync();
+
+    // Lines run jobs; departments plan for them and appear on the Schedule instead.
+    private async Task LoadAsync()
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            var lines = _equipment
+                .Where(e => e.SiteId == _siteId && e.IsActive && e.CanRunJob)
+                .OrderBy(e => e.Code, StringComparer.Ordinal)
+                .ToList();
+            var orders = Api.ListWorkOrdersAsync();
+            var progress = Api.ListWorkOrderProgressAsync(_siteId == Guid.Empty ? null : _siteId);
+            var timelines = lines.Select(l => Api.GetLineTimelineAsync(l.Id)).ToList();
+
+            _orders = [.. (await orders).Where(o => o.SiteId == _siteId)];
+            _progress = await progress;
+            _timelines = (await Task.WhenAll(timelines)).ToDictionary(t => t.LineId);
+            _lines = lines;
+            _window = OverviewWindow.Around(Now);
+            _loadedAt = Now;
+            _error = null;
+        }
+        catch (ApiException ex)
+        {
+            // Keep showing the last figures; the stale banner says how old they are.
+            _error = _loadedAt is null ? ex : null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private (int Overlaps, string OverlapText, IReadOnlyList<string> Warnings) Flags(LineTimelineDto? timeline)
+    {
+        if (timeline is null)
+        {
+            return (0, "", []);
+        }
+
+        var overlaps = timeline.Overlaps.Count;
+        var warnings = timeline.Segments
+            .SelectMany(s => s.Warnings.Select(w => $"{s.JobNumber}: {w.Message}"))
+            .Distinct()
+            .Take(5)
+            .ToList();
+        return (overlaps, overlaps == 1 ? "1 overlap on this line" : $"{overlaps} overlaps on this line", warnings);
+    }
+
+    private static string BarClass(OverviewBar bar) =>
+        bar.IsChangeover ? "is-changeover" : bar.Segment.Status is "dispatched" or "firmed" or "running" or "paused" ? "is-published" : "is-planned";
+
+    private string BarTitle(OverviewBar bar)
+    {
+        var s = bar.Segment;
+        var what = bar.IsChangeover ? "Changeover" : $"{s.JobNumber}, {s.MaterialCode}, {ScheduleFormat.Qty(s.PlannedQty, s.UomCode)}";
+        return $"{what}: {ScheduleFormat.Time(s.Start, Tz)} to {ScheduleFormat.Time(s.End, Tz)}, {Display.Label(s.Status)}";
+    }
+
+    private string StripLabel(EquipmentDto line, IReadOnlyList<TimelineSegmentDto> segments)
+    {
+        var jobs = segments.Count(s => s.Kind == "job" && s.End > _window.Start && s.Start < _window.End);
+        return $"{line.Code}: no machine signal; {jobs} planned jobs between {ScheduleFormat.Time(_window.Start, Tz)} and {ScheduleFormat.Time(_window.End, Tz)}";
+    }
+
+    // "06:00" today, "Mon 19 Oct 06:00" on another day.
+    private string StartLabel(DateTimeOffset at) =>
+        ScheduleLayout.SiteDate(at, Tz) == ScheduleLayout.SiteDate(Now, Tz) ? ScheduleFormat.Time(at, Tz) : ScheduleFormat.When(at, Tz);
+
+    // "Now", "Next at 06:00" today, or "Next Mon 19 Oct 06:00" on another day.
+    private string NowOrNextLabel(TimelineSegmentDto job) =>
+        job.Start <= Now ? "Now"
+        : ScheduleLayout.SiteDate(job.Start, Tz) == ScheduleLayout.SiteDate(Now, Tz) ? $"Next at {ScheduleFormat.Time(job.Start, Tz)}"
+        : $"Next {ScheduleFormat.When(job.Start, Tz)}";
+
+    private static string Pct(double value) => value.ToString("0.###", CultureInfo.InvariantCulture) + "%";
+
+    private static string Number(decimal? value) => (value ?? 0m).ToString("#,##0.###", CultureInfo.InvariantCulture);
+
+    public void Dispose() => _timer?.Dispose();
 }

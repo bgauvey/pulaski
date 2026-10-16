@@ -176,10 +176,35 @@ The demo data that comes with Pulaski already contains steps 1 to 4 (plant PLT1 
 
 ### The Overview page
 
-**Operate → Overview** is the home page. It shows:
+**Operate → Overview** is the home page: a live board for the plant. In a few seconds it answers *which lines are running, which aren't and why, and what needs a person*. It refreshes itself every 30 seconds; the pill at the top right says when it was last updated (and turns grey, with a warning, if Pulaski can't reach the server for over a minute). The refresh button updates it at once. With several sites, pick one at the top.
 
-- **A count of work orders in each status** (Planned, Dispatched, Firmed…). Click a count to open the Work orders screen filtered to that status.
-- **Lines:** each production line, with how many dispatched, firmed or in-progress orders are routed to it (see the limitation in [What Pulaski doesn't do yet](#12-what-pulaski-doesnt-do-yet)). If there are no lines yet, it links to Equipment.
+**Diagonal hatching means "no data yet".** Several parts of the board need machine data, quality checks, lot tracking, labor tracking or an ERP connection, none of which Pulaski collects yet. Those parts already sit where they'll be, hatched and greyed, with a plug symbol saying what will fill them, so the page won't move around when the data arrives.
+
+**Needs attention** (the grid at the top) counts what needs a person, most urgent first. A count above zero is marked with a coloured bar and icon; click it to go to the list behind it.
+
+| Cell | Counts | Today |
+| --- | --- | --- |
+| Uncoded stops | Stops this shift with no reason given | Needs machine data |
+| Open SPC alerts | Control-chart alerts to respond to | Needs quality checks |
+| Orders behind | Open orders projected late or slipping past their baseline | Live → Work orders |
+| Lots on hold | Lots on hold or in quarantine | Needs lot tracking |
+| Schedule conflicts | Open orders with a schedule warning or an overlap | Live → Schedule |
+| Lines with no signal | Lines that should report their state but don't | Live: every line, until machines are connected |
+| Not on a line | Planned orders with quantity not yet placed | Live → Schedule |
+| ERP changes to accept | Orders the ERP changed after dispatch | Needs an ERP connection |
+| Labor to approve | Labor sessions from the last shift to approve | Needs labor tracking |
+
+**This shift** will show OEE (with availability, performance and quality against target), good output against plan, scrap and downtime with its biggest reason. All four need machine data.
+
+**Lines** has one row per line:
+
+- **State:** the machine state. Until the line is connected it says **No signal**.
+- **Now or next:** the job the schedule has on the line now, or the next one and when it starts, with how much of it is made.
+- **The strip** covers six hours back to eighteen hours ahead, with a black line at *now*. The top lane will show what the line actually did (hatched while there's no signal); the bottom lane shows the planned jobs: outlined for planned, solid for dispatched or firmed, hatched for changeovers. Hover over a job to see it; click it to open its order on the Schedule. If nothing is planned in the window, the lane says when the next work starts.
+- **OEE** for the line, once there's machine data.
+- **Flags** at the end: a red mark if work overlaps on the line, an amber clock if a job has a schedule warning (hover for the messages).
+
+At the bottom, **Work orders** counts orders at each stage, Planned → Dispatched → Firmed → In progress → Completed (click one to list them), and **Starting next** lists the next six jobs to start across the plant.
 
 ---
 
@@ -708,7 +733,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **No inventory yet:** receiving lots, loading them at feed points and consuming them (backflush, time window…) come next. BOMs today only plan components.
 - **Process links don't drive the schedule yet:** a Pack job can be projected to start before the Extrude job it follows. The link only sets the earliest start, counted from the order's start.
 - **Orders from a multi-operation process show their quantity more than once:** the details show *On lines 4,800 of 2,400 m* for a two-operation order, dispatch shows a quantity warning, and the **Not on a line** tile can be wrong. This is a known bug being fixed.
-- **The Overview's Lines list** only counts orders routed directly to a line, so orders made from a process aren't counted there yet.
+- **The Overview** shows no machine state, counts, OEE, downtime, quality, lots or labor yet: those parts are hatched placeholders until the data exists. Its line strip is a rolling 24 hours rather than the shift, since there are no shift calendars on screen yet.
 - **Notes** can only be written when the order is created.
 - **No sign-in or permissions** yet; changes are recorded as *anonymous*.
 
