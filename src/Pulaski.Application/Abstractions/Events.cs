@@ -79,4 +79,8 @@ public static class EventTypes
     public const string ProcessVersionReleased = "pulaski.process.version_released.v1";
     public const string ProcessScopeSet = "pulaski.process.scope_set.v1";
     public const string MaterialDefaultProcessSet = "pulaski.material.default_process_set.v1";
+    public const string BomCreated = "pulaski.bom.created.v1";
+    public const string BomDraftSaved = "pulaski.bom.draft_saved.v1";
+    public const string BomDraftStarted = "pulaski.bom.draft_started.v1";
+    public const string BomVersionReleased = "pulaski.bom.version_released.v1";
 }

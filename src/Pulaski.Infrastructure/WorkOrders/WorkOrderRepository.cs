@@ -11,7 +11,7 @@ internal sealed class WorkOrderRepository(DbSession session) : IWorkOrderReposit
 {
     private const string Columns = """
         id, site_id, order_number, material_id, planned_qty, uom_id, target_equipment_id,
-        planned_start, planned_end, due_at, priority, status, origin, process_version_id, notes,
+        planned_start, planned_end, due_at, priority, status, origin, process_version_id, notes, bom_version_id,
         xmin::text::bigint AS version
         """;
 
@@ -28,10 +28,10 @@ internal sealed class WorkOrderRepository(DbSession session) : IWorkOrderReposit
     private const string Insert = """
         INSERT INTO core.work_order (id, site_id, order_number, material_id, planned_qty, uom_id,
                                      target_equipment_id, planned_start, planned_end, due_at, priority,
-                                     status, origin, process_version_id, notes, created_at, updated_at)
+                                     status, origin, process_version_id, notes, bom_version_id, created_at, updated_at)
         VALUES (@Id, @SiteId, @OrderNumber, @MaterialId, @PlannedQty, @UomId,
                 @TargetEquipmentId, @PlannedStart, @PlannedEnd, @DueAt, @Priority,
-                @Status, @Origin, @ProcessVersionId, @Notes, @At, @At)
+                @Status, @Origin, @ProcessVersionId, @Notes, @BomVersionId, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
@@ -86,12 +86,13 @@ internal sealed class WorkOrderRepository(DbSession session) : IWorkOrderReposit
         public string Origin { get; init; } = "";
         public Guid? ProcessVersionId { get; init; }
         public string? Notes { get; init; }
+        public Guid? BomVersionId { get; init; }
         public long Version { get; init; }
 
         public Versioned<WorkOrder> ToVersioned() => new(
             new WorkOrder(
                 Id, SiteId, OrderNumber, MaterialId, PlannedQty, UomId, TargetEquipmentId,
-                PlannedStart, PlannedEnd, DueAt, Priority, Status, Origin, ProcessVersionId, Notes),
+                PlannedStart, PlannedEnd, DueAt, Priority, Status, Origin, ProcessVersionId, Notes, BomVersionId),
             Version);
     }
 }

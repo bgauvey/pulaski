@@ -158,6 +158,21 @@ else
                 </tbody>
             </table>
             <p class="small text-muted">Each job goes at the end of its line's sequence; move it on the schedule afterwards.</p>
+
+            @if (SelectedBom is { } bom)
+            {
+                <p class="small">
+                    Components are planned from the
+                    <a href="boms/@bom.Id">BOM for @(bom.ProcessCode ?? "any process"), version @bom.ReleasedVersion</a>
+                    (@bom.ReleasedItems components), for each job that consumes them. Enter the quantity in the BOM's unit.
+                </p>
+            }
+            else
+            {
+                <p class="small text-warning-strong">
+                    @MaterialCode has no released BOM, so this order plans no components. <a href="boms">Create one</a> to plan them.
+                </p>
+            }
         }
 
         <div class="mt-4">
@@ -174,6 +189,7 @@ else
     private IReadOnlyList<UomDto>? _uoms;
     private IReadOnlyList<ProcessSummaryDto> _processes = [];
     private Dictionary<Guid, ProcessOrderCheckDto> _checks = [];
+    private IReadOnlyList<BomSummaryDto> _boms = [];
     private List<ProcessOrderCheckDto> _unavailable = [];
     private IReadOnlyList<ProcessOperationDto>? _operations;
     private readonly FormModel _form = new();
@@ -219,6 +235,12 @@ else
 
     private ProcessOrderCheckDto? SelectedCheck => _checks.GetValueOrDefault(_form.ProcessId);
 
+    // The material's BOM for the chosen process wins over its BOM for any process (D-025).
+    private BomSummaryDto? SelectedBom =>
+        _boms.Where(b => b.IsActive && b.ReleasedVersion is not null && (b.ProcessId == _form.ProcessId || b.ProcessId is null))
+            .OrderBy(b => b.ProcessId is null)
+            .FirstOrDefault();
+
     private bool NeedsDueDate => SelectedCheck is { DepartmentOperations.Count: > 0 };
 
     private string ProcessCode(Guid id) => _processes.FirstOrDefault(p => p.Id == id)?.Code ?? "?";
@@ -250,6 +272,7 @@ else
     {
         _processes = [];
         _checks = [];
+        _boms = [];
         _unavailable = [];
         _form.ProcessId = Guid.Empty;
         _operations = null;
@@ -269,6 +292,7 @@ else
             }
 
             _unavailable = [.. _checks.Values.Where(c => c.Problems.Count > 0)];
+            _boms = await Api.ListBomsAsync(_form.MaterialId);
             var usable = _processes.Where(p => CanUse(p.Id)).ToList();
             var pick = usable.FirstOrDefault(IsDefault) ?? (usable.Count == 1 ? usable[0] : null);
             if (pick is not null)

@@ -1,9 +1,11 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Boms;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Processes;
 using Pulaski.Application.Scheduling;
 using Pulaski.Application.WorkOrders;
 using Pulaski.Domain;
+using Pulaski.Domain.Boms;
 using Pulaski.Domain.Processes;
 using Pulaski.Domain.Scheduling;
 using Pulaski.Domain.WorkOrders;
@@ -19,11 +21,12 @@ public class CreateWorkOrderHandlerTests
     private readonly CreateWorkOrderHandler _handler;
     private readonly Guid _site = Guid.CreateVersion7();
     private readonly Guid _material;
+    private readonly Guid _uom = Guid.CreateVersion7();
 
     public CreateWorkOrderHandlerTests()
     {
         _handler = new CreateWorkOrderHandler(
-            _f.Stores.UnitOfWork, _f.Stores.WorkOrders, _f.Stores.Processes, _f.Stores.Materials, _f.Stores.Scheduling,
+            _f.Stores.UnitOfWork, _f.Stores.WorkOrders, _f.Stores.Processes, _f.Stores.Boms, _f.Stores.Materials, _f.Stores.Scheduling,
             _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
         _material = _f.Stores.Materials.AddActive();
     }
@@ -52,6 +55,42 @@ public class CreateWorkOrderHandlerTests
         Assert.Equal(3, _f.Stores.Scheduling.StatusChanges.Count);
         Assert.Equal(1, _f.Stores.UnitOfWork.Committed);
     }
+
+    [Fact]
+    public async Task Components_come_from_the_bom_for_the_process_ahead_of_the_bom_for_any_process()
+    {
+        var (ext1, ext2, pack) = (Line(), Line(), Line());
+        var route = ExtrudeAndPack([(ext1.Id, 60m), (ext2.Id, 40m)], pack.Id);
+        var (blend, endCap) = (Guid.CreateVersion7(), Guid.CreateVersion7());
+        _f.Stores.Boms.AddReleased(_material, null, new BomDefinition(1m, _uom, [BomLine(10, Guid.CreateVersion7(), 1m, null)]));
+        var bom = _f.Stores.Boms.AddReleased(_material, route.Process.Id, new BomDefinition(1000m, _uom,
+            [BomLine(10, blend, 1450m, 10), BomLine(20, endCap, 84m, 30)]));
+
+        var result = await _handler.HandleAsync(Command(route.Process.Id, qty: 2000m), CancellationToken.None);
+
+        Assert.Equal(bom.Id, _f.Stores.WorkOrders.Find(result.Id)!.Value.BomVersionId);
+        var jobs = new[] { ext1, ext2, pack }.Select(l => Assert.Single(_f.Stores.Scheduling.JobsOn(l.Id)).Id).ToList();
+        Assert.Equal(
+            [(jobs[0], blend, 1740m), (jobs[1], blend, 1160m), (jobs[2], endCap, 168m)],
+            _f.Stores.Boms.JobMaterials.Select(m => (m.JobId, m.MaterialId, m.PlannedQty)));
+        Assert.All(_f.Stores.Boms.JobMaterials, m => Assert.Equal((JobMaterial.Consume, ConsumptionMethod.Backflush), (m.Direction, m.ConsumptionMethod)));
+    }
+
+    [Fact]
+    public async Task Without_a_bom_no_components_are_planned_and_another_unit_than_the_bom_is_refused()
+    {
+        var route = _f.Stores.Processes.AddReleased(_site, OneOperation(Line().Id));
+
+        var plain = await _handler.HandleAsync(Command(route.Process.Id, number: "WO-A"), CancellationToken.None);
+        Assert.Null(_f.Stores.WorkOrders.Find(plain.Id)!.Value.BomVersionId);
+        Assert.Empty(_f.Stores.Boms.JobMaterials);
+
+        _f.Stores.Boms.AddReleased(_material, null, new BomDefinition(1m, Guid.CreateVersion7(), [BomLine(10, Guid.CreateVersion7(), 1m, null)]));
+        await Assert.ThrowsAsync<DomainRuleException>(() => _handler.HandleAsync(Command(route.Process.Id, number: "WO-B"), CancellationToken.None));
+    }
+
+    private static BomItem BomLine(int line, Guid component, decimal qty, int? op) =>
+        new(Guid.CreateVersion7(), line, component, qty, Guid.CreateVersion7(), 0m, ConsumptionMethod.Backflush, op);
 
     [Fact]
     public async Task A_following_operation_is_held_until_the_link_lag_has_passed()
@@ -187,5 +226,5 @@ public class CreateWorkOrderHandlerTests
 
     private CreateWorkOrderCommand Command(
         Guid processId, string number = "WO-1", decimal qty = 500m, DateTimeOffset? due = null, string? notes = null) =>
-        new(processId, number, _material, qty, Guid.CreateVersion7(), Start, due, 0, notes);
+        new(processId, number, _material, qty, _uom, Start, due, 0, notes);
 }

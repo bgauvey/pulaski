@@ -2,7 +2,8 @@ namespace Pulaski.Domain.WorkOrders;
 
 /// <summary>
 /// A work order (ISA-95 work request): a quantity of one material (D-003). One made from a process
-/// keeps the released version it came from (D-024); <see cref="Notes"/> is the planner's note.
+/// keeps the released version it came from (D-024), and the BOM version its components were
+/// planned with (D-025); <see cref="Notes"/> is the planner's note.
 /// </summary>
 public sealed record WorkOrder(
     Guid Id,
@@ -19,7 +20,8 @@ public sealed record WorkOrder(
     string Status,
     string Origin,
     Guid? ProcessVersionId = null,
-    string? Notes = null)
+    string? Notes = null,
+    Guid? BomVersionId = null)
 {
     public const string LocalOrigin = "local";
 
@@ -38,7 +40,8 @@ public sealed record WorkOrder(
         DateTimeOffset? dueAt,
         int priority,
         Guid? processVersionId = null,
-        string? notes = null)
+        string? notes = null,
+        Guid? bomVersionId = null)
     {
         if (plannedQty <= 0)
         {
@@ -53,7 +56,7 @@ public sealed record WorkOrder(
         return new WorkOrder(
             id, siteId, orderNumber, materialId, plannedQty, uomId, targetEquipmentId,
             plannedStart, plannedEnd, dueAt, priority, WorkOrderStatus.Planned, LocalOrigin,
-            processVersionId, string.IsNullOrWhiteSpace(notes) ? null : notes.Trim());
+            processVersionId, string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(), bomVersionId);
     }
 
     /// <exception cref="DomainRuleException">The transition is not allowed.</exception>

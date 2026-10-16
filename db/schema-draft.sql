@@ -229,31 +229,6 @@ CREATE TABLE core.material_uom_conversion (
     PRIMARY KEY (material_id, from_uom_id, to_uom_id)
 );
 
-CREATE TABLE core.bom (
-    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
-    material_id         uuid NOT NULL REFERENCES core.material(id),   -- the output
-    revision            text NOT NULL,
-    base_qty            core.qty NOT NULL CHECK (base_qty > 0),
-    base_uom_id         uuid NOT NULL REFERENCES core.uom(id),
-    effective_from      timestamptz NOT NULL,
-    effective_to        timestamptz,
-    origin              text NOT NULL DEFAULT 'local' CHECK (origin IN ('erp','local')),
-    external_key        text,
-    CONSTRAINT bom_uq UNIQUE (material_id, revision)
-);
-
-CREATE TABLE core.bom_item (
-    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
-    bom_id                  uuid NOT NULL REFERENCES core.bom(id) ON DELETE CASCADE,
-    line_no                 integer NOT NULL,
-    component_material_id   uuid NOT NULL REFERENCES core.material(id),
-    qty_per                 core.qty NOT NULL,                  -- per bom.base_qty
-    uom_id                  uuid NOT NULL REFERENCES core.uom(id),
-    scrap_factor            numeric(9,6) NOT NULL DEFAULT 0,
-    consumption_method      text NOT NULL CHECK (consumption_method IN ('time_window','declared','backflush','scan')),
-    CONSTRAINT bom_item_uq UNIQUE (bom_id, line_no)
-);
-
 -- Process routes (D-023, ISA-95 operations definition): a reusable template such as
 -- "Extrude and Pack". Operations run on one or more lines or departments, each with a
 -- share of the quantity; links say whether an operation starts after the one before it
@@ -342,6 +317,59 @@ CREATE TABLE core.process_dependency (
 -- the planner may pick another.
 ALTER TABLE core.material
     ADD COLUMN default_process_id uuid REFERENCES core.process(id);
+
+-- Bills of materials (D-025): what one material is made from, one level deep. A BOM
+-- belongs to a material and may name a process (one BOM per material and process, and
+-- one with none); its items then name the operation that consumes them. Versioned like
+-- processes: a draft's items are one document, a released version is written out as
+-- fixed rows that planned components reference.
+CREATE TABLE core.bom (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    material_id     uuid NOT NULL REFERENCES core.material(id),   -- the output
+    process_id      uuid REFERENCES core.process(id),             -- null: any process
+    is_active       boolean NOT NULL DEFAULT true,
+    origin          text NOT NULL DEFAULT 'local' CHECK (origin IN ('erp','local')),
+    external_system text,
+    external_key    text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT bom_uq UNIQUE NULLS NOT DISTINCT (material_id, process_id),
+    CONSTRAINT bom_erp_ck CHECK (origin = 'local' OR (external_system IS NOT NULL AND external_key IS NOT NULL))
+);
+
+CREATE TABLE core.bom_version (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    bom_id          uuid NOT NULL REFERENCES core.bom(id),
+    version_number  integer NOT NULL CHECK (version_number > 0),
+    status          text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','released','obsolete')),
+    base_qty        core.qty NOT NULL CHECK (base_qty > 0),        -- items are per this much output
+    base_uom_id     uuid NOT NULL REFERENCES core.uom(id),
+    definition      jsonb NOT NULL DEFAULT '{"items":[]}',
+    released_at     timestamptz,
+    note            text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT bom_version_uq UNIQUE (bom_id, version_number),
+    CONSTRAINT bom_version_released_ck CHECK ((status = 'draft') = (released_at IS NULL))
+);
+-- At most one draft and one released version per BOM.
+CREATE UNIQUE INDEX bom_version_draft_uq ON core.bom_version (bom_id) WHERE status = 'draft';
+CREATE UNIQUE INDEX bom_version_released_uq ON core.bom_version (bom_id) WHERE status = 'released';
+
+-- A released version's items, fixed from release on.
+CREATE TABLE core.bom_item (
+    id                      uuid PRIMARY KEY,                   -- the id in the definition
+    bom_version_id          uuid NOT NULL REFERENCES core.bom_version(id),
+    line_no                 integer NOT NULL CHECK (line_no > 0),
+    component_material_id   uuid NOT NULL REFERENCES core.material(id),
+    qty_per                 core.qty NOT NULL CHECK (qty_per > 0),   -- per bom_version.base_qty
+    uom_id                  uuid NOT NULL REFERENCES core.uom(id),
+    scrap_factor            numeric(9,6) NOT NULL DEFAULT 0 CHECK (scrap_factor >= 0 AND scrap_factor < 1),
+    consumption_method      text NOT NULL CHECK (consumption_method IN ('time_window','declared','backflush','scan')),
+    operation_number        integer CHECK (operation_number > 0),   -- null: the first operation
+    CONSTRAINT bom_item_uq UNIQUE (bom_version_id, line_no)
+);
+CREATE INDEX bom_item_component_ix ON core.bom_item (component_material_id);
 
 -- What a work center / unit can run, and how fast (D-020). A job may only be
 -- placed on a line with a current row for its material. ideal_rate drives OEE
@@ -603,7 +631,7 @@ CREATE TABLE core.work_order (
     manufacturing_order_id      uuid REFERENCES core.manufacturing_order(id),
     order_number                text NOT NULL,
     material_id                 uuid NOT NULL REFERENCES core.material(id),
-    bom_id                      uuid REFERENCES core.bom(id),
+    bom_version_id              uuid REFERENCES core.bom_version(id),  -- the BOM it was planned with (D-025)
     process_version_id          uuid REFERENCES core.process_version(id),  -- the released process it was made from (D-024)
     planned_qty                 core.qty NOT NULL CHECK (planned_qty > 0),
     uom_id                      uuid NOT NULL REFERENCES core.uom(id),

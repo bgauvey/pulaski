@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Processes;
@@ -187,6 +188,32 @@ public sealed class PulaskiApiClient(HttpClient http)
 
     public Task<VersionResponse> SetProcessScopeAsync(Guid id, SetProcessScopeRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/processes/{id}/scope", request, ct);
+
+    // Bills of materials (D-025)
+
+    public Task<IReadOnlyList<BomSummaryDto>> ListBomsAsync(Guid? materialId = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<BomSummaryDto>>(materialId is null ? "api/boms" : $"api/boms?materialId={materialId}", ct);
+
+    public Task<BomDto> GetBomAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<BomDto>($"api/boms/{id}", ct);
+
+    public Task<CreatedResponse> CreateBomAsync(CreateBomRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/boms", request, ct);
+
+    public Task<BomVersionDto> GetBomVersionAsync(Guid id, Guid versionId, CancellationToken ct = default) =>
+        GetAsync<BomVersionDto>($"api/boms/{id}/versions/{versionId}", ct);
+
+    public Task<SaveBomDraftResponse> SaveBomDraftAsync(Guid id, Guid versionId, SaveBomDraftRequest request, CancellationToken ct = default) =>
+        SendAsync<SaveBomDraftResponse>(HttpMethod.Put, $"api/boms/{id}/versions/{versionId}", request, ct);
+
+    public Task<VersionResponse> ReleaseBomVersionAsync(Guid id, Guid versionId, ReleaseBomVersionRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/boms/{id}/versions/{versionId}/release", request, ct);
+
+    public Task<CreatedResponse> StartBomDraftAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/boms/{id}/drafts", new { }, ct);
+
+    public Task<IReadOnlyList<PlannedComponentDto>> ListWorkOrderComponentsAsync(Guid workOrderId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<PlannedComponentDto>>($"api/work-orders/{workOrderId}/components", ct);
 
     public Task<VersionResponse> SetDefaultProcessAsync(Guid materialId, Guid? processId, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/materials/{materialId}/default-process", new SetDefaultProcessRequest { ProcessId = processId }, ct);

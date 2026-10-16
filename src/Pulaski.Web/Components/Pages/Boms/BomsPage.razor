@@ -1,0 +1,160 @@
+@page "/boms"
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>BOMs · Pulaski</PageTitle>
+
+<div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="mb-1">Bills of materials</h1>
+        <p class="text-muted mb-0">What each material is made from, one level deep. A BOM for a process says which operation consumes each component.</p>
+    </div>
+    <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New BOM</button>
+</div>
+
+<ProblemAlert Error="_error" />
+
+@if (_adding)
+{
+    <form class="process-new" @onsubmit="CreateAsync" @onsubmit:preventDefault>
+        <div class="flex-grow-1">
+            <label class="form-label" for="new-material">Material</label>
+            <select id="new-material" class="form-select" value="@_materialId" @onchange="OnMaterialChangedAsync">
+                <option value="@Guid.Empty">Choose a material…</option>
+                @foreach (var m in _materials.Where(m => m.MaterialType is not ("raw" or "consumable")))
+                {
+                    <option value="@m.Id">@m.Code · @m.Name</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label class="form-label" for="new-process">For process</label>
+            <select id="new-process" class="form-select" @bind="_processId" disabled="@(_materialId == Guid.Empty)">
+                <option value="">Any process</option>
+                @foreach (var p in _processes)
+                {
+                    <option value="@p.Id">@p.Code · @p.Name</option>
+                }
+            </select>
+        </div>
+        <div class="d-flex gap-2 align-self-end">
+            <button type="submit" class="btn btn-primary" disabled="@(_saving || _materialId == Guid.Empty)">Create and edit</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _adding = false">Cancel</button>
+        </div>
+    </form>
+}
+
+@if (_boms is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_boms.Count == 0)
+{
+    <div class="empty-panel">
+        <h2>No BOMs yet</h2>
+        <p class="text-muted mb-0">Create one to plan an order's components, for example the blend and capstock a profile is extruded from.</p>
+    </div>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Material</th>
+                    <th>For process</th>
+                    <th>Released</th>
+                    <th>Draft</th>
+                    <th>Updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in _boms)
+                {
+                    <tr @key="b.Id" class="@(b.IsActive ? "" : "text-muted")">
+                        <td>
+                            <a class="fw-semibold" href="boms/@b.Id">@b.MaterialCode</a>
+                            <div class="small text-muted">@b.MaterialName@(b.IsActive ? "" : " · inactive")</div>
+                        </td>
+                        <td>@(b.ProcessCode ?? "Any")</td>
+                        <td>@(b.ReleasedVersion is { } r ? $"Version {r} · {b.ReleasedItems} components" : "—")</td>
+                        <td>
+                            @if (b.DraftVersion is { } d)
+                            {
+                                <span class="chip">Version @d</span>
+                            }
+                        </td>
+                        <td class="small text-muted text-nowrap">@b.UpdatedAt.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) UTC</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<BomSummaryDto>? _boms;
+    private IReadOnlyList<MaterialDto> _materials = [];
+    private IReadOnlyList<ProcessSummaryDto> _processes = [];
+    private ApiException? _error;
+    private bool _adding;
+    private bool _saving;
+    private Guid _materialId;
+    private Guid? _processId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _materials = await Api.ListMaterialsAsync();
+            _boms = await Api.ListBomsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    // A BOM for a process needs the process to make the material (D-025), so offer only those.
+    private async Task OnMaterialChangedAsync(ChangeEventArgs e)
+    {
+        _materialId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty;
+        _processId = null;
+        _processes = [];
+        if (_materialId == Guid.Empty)
+        {
+            return;
+        }
+
+        try
+        {
+            _processes = await Api.ListProcessesAsync(materialId: _materialId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var created = await Api.CreateBomAsync(new CreateBomRequest { MaterialId = _materialId, ProcessId = _processId });
+            Navigation.NavigateTo($"boms/{created.Id}");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

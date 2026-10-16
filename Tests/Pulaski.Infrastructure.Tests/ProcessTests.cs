@@ -1,14 +1,17 @@
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Boms;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Processes;
 using Pulaski.Application.WorkOrders;
+using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Processes;
 using Pulaski.Contracts.WorkOrders;
 using Pulaski.Domain;
+using Pulaski.Domain.Boms;
 using Pulaski.Domain.Processes;
 
 namespace Pulaski.Infrastructure.Tests;
@@ -262,6 +265,62 @@ public sealed class ProcessTests(DatabaseFixture db)
             processId, "WO-X", db.MaterialId, 10, db.UomId, DateTimeOffset.UtcNow, null, 0, null)));
         Assert.Equal(problem.Message, refused.Message);
         Assert.StartsWith("Operation 30 (Pack): PACK1-", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_released_bom_plans_each_job_components_when_the_order_is_made()
+    {
+        var plant = await CreatePlantAsync();
+        var processId = await ReleasedExtrudeAndPackAsync(plant);
+        foreach (var line in new[] { plant.Ext1, plant.Ext2, plant.Pack })
+        {
+            await db.ExecuteAsync(
+                $"""
+                INSERT INTO core.equipment_capability (equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, effective_from)
+                VALUES ('{line}', '{db.MaterialId}', 1000, '{db.UomId}', now() - interval '1 day')
+                """);
+        }
+
+        var (blend, endCap) = (Guid.CreateVersion7(), Guid.CreateVersion7());
+        await db.ExecuteAsync(
+            $"""
+            INSERT INTO core.material (id, code, name, material_type, base_uom_id)
+            VALUES ('{blend}', 'BLEND-{blend.ToString("N")[..6]}', 'Blend', 'intermediate', '{db.UomId}'),
+                   ('{endCap}', 'CAP-{endCap.ToString("N")[..6]}', 'End cap', 'packaging', '{db.UomId}')
+            """);
+
+        var bom = await db.SendAsync(new CreateBomCommand(db.MaterialId, processId));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new CreateBomCommand(db.MaterialId, processId)));
+        var header = await QueryAsync<GetBomQuery, BomDto>(new GetBomQuery(bom.Id));
+        var draft = await QueryAsync<GetBomVersionQuery, BomVersionDto>(new GetBomVersionQuery(bom.Id, header.Versions.Single().Id));
+        Assert.Equal(["no_items"], draft.Problems.Select(p => p.Code));
+
+        var saved = await db.SendAsync(new SaveBomDraftCommand(bom.Id, draft.Id, draft.Version, new BomDefinitionDto
+        {
+            BaseQty = 1000m,
+            BaseUomId = db.UomId,
+            Items =
+            [
+                new BomItemDto { Id = Guid.CreateVersion7(), LineNo = 10, ComponentMaterialId = blend, QtyPer = 1450m, UomId = db.UomId, ScrapFactor = 0.02m, ConsumptionMethod = ConsumptionMethod.TimeWindow, OperationNumber = 10 },
+                new BomItemDto { Id = Guid.CreateVersion7(), LineNo = 20, ComponentMaterialId = endCap, QtyPer = 84m, UomId = db.UomId, ConsumptionMethod = ConsumptionMethod.Backflush, OperationNumber = 30 },
+            ],
+        }));
+        Assert.Empty(saved.Problems);
+        await db.SendAsync(new ReleaseBomVersionCommand(bom.Id, draft.Id, saved.Version, null));
+
+        var reread = await QueryAsync<GetBomVersionQuery, BomVersionDto>(new GetBomVersionQuery(bom.Id, draft.Id));
+        Assert.Equal((BomVersionStatus.Released, 1000m, 2), (reread.Status, reread.Definition.BaseQty, reread.Definition.Items.Count));
+        Assert.Equal(1, Assert.Single(await QueryAsync<ListBomsQuery, IReadOnlyList<BomSummaryDto>>(new ListBomsQuery(db.MaterialId)), b => b.Id == bom.Id).ReleasedVersion);
+
+        var order = await db.SendAsync(new CreateWorkOrderCommand(
+            processId, "WO-" + Guid.NewGuid().ToString("N")[..8], db.MaterialId, 2000m, db.UomId, DateTimeOffset.UtcNow, null, 0, null));
+
+        var reads = db.Services.GetRequiredService<IWorkOrderReadStore>();
+        Assert.Equal(1, (await reads.GetAsync(order.Id, CancellationToken.None))!.BomVersionNumber);
+        var components = await QueryAsync<ListPlannedComponentsQuery, IReadOnlyList<PlannedComponentDto>>(new ListPlannedComponentsQuery(order.Id));
+        Assert.Equal(
+            [(10, blend, 1479m), (10, blend, 1479m), (30, endCap, 168m)],
+            components.Select(c => (c.OperationNumber!.Value, c.MaterialId, c.PlannedQty)));
     }
 
     /// <summary>Extrude and Pack, making every material, released as version 1.</summary>

@@ -249,6 +249,8 @@
                                     <dd>@Number(p.PlacedQty) of @Number(wo.PlannedQty) @wo.UomCode</dd>
                                     <dt>Process</dt>
                                     <dd>@(wo.ProcessCode is null ? "None" : $"{wo.ProcessCode} · {wo.ProcessName} (v{wo.ProcessVersionNumber})")</dd>
+                                    <dt>BOM</dt>
+                                    <dd>@(wo.BomVersionNumber is { } bomVersion ? $"Version {bomVersion}" : "None: no components planned")</dd>
                                     <dt>Origin</dt>
                                     <dd>@Display.Label(wo.Origin) · @wo.SiteCode</dd>
                                     @if (wo.Notes is not null)
@@ -289,6 +291,25 @@
                                     @if (p.HasOverlap)
                                     {
                                         <div class="small wo-warning is-danger"><Icon Name="alert" Size="14" /> A job overlaps other work on its line.</div>
+                                    }
+                                    @if (_components.GetValueOrDefault(wo.Id) is { Count: > 0 } components)
+                                    {
+                                        <table class="table table-sm mb-0 mt-3 wo-jobs">
+                                            <thead>
+                                                <tr><th>Component</th><th>For job</th><th>Consumed by</th><th class="text-end">Planned</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var c in components)
+                                                {
+                                                    <tr>
+                                                        <td>@c.MaterialCode <span class="small text-muted">@c.MaterialName</span></td>
+                                                        <td>@c.JobNumber · @c.EquipmentCode</td>
+                                                        <td>@Display.Label(c.ConsumptionMethod)</td>
+                                                        <td class="text-end text-nowrap">@Number(c.PlannedQty) @c.UomCode</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
                                     }
                                 </div>
                             </div>
@@ -334,6 +355,7 @@
     private string _status = "";
     private readonly HashSet<Guid> _selected = [];
     private readonly HashSet<Guid> _expanded = [];
+    private readonly Dictionary<Guid, IReadOnlyList<PlannedComponentDto>> _components = [];
     private Guid? _menuFor;
     private bool _actionsOpen;
     private string? _pendingBulk;
@@ -478,11 +500,25 @@
 
     private void ToggleTile(string key) => _tile = _tile == key ? null : key;
 
-    private void ToggleExpanded(Guid id)
+    private async Task ToggleExpanded(Guid id)
     {
-        if (!_expanded.Remove(id))
+        if (_expanded.Remove(id))
         {
-            _expanded.Add(id);
+            return;
+        }
+
+        _expanded.Add(id);
+        try
+        {
+            // Planned components never change after the order is made (D-025), so load them once.
+            if (!_components.ContainsKey(id))
+            {
+                _components[id] = await Api.ListWorkOrderComponentsAsync(id);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
         }
     }
 

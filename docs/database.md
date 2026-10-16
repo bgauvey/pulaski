@@ -28,7 +28,7 @@ This is the reference for every table and column in `db/schema-draft.sql` (Postg
 Equipment model            Material & capability          Calendar
  equipment ─┬─ closure       material_class                 shift_pattern ─ shift_definition
             ├─ link ─ residence_time   material ─ uom_conversion   crew
-            ├─ tag                     bom ─ bom_item               shift_instance
+            ├─ tag                     bom ─ bom_version ─ bom_item shift_instance
             ├─ stop_reason_map         equipment_capability (D-020) calendar_exception
             └─ oee_state_category
 
@@ -212,33 +212,6 @@ Conversions that depend on the material (metres of profile to kilograms, for exa
 | `to_uom_id` | uuid → uom | no | Target unit. Part of the primary key. |
 | `factor` | numeric(24,12) | no | Multiply a quantity in the source unit by this to get the target unit. Positive. |
 
-### core.bom — bill of materials header · *Planned*
-
-| Column | Type | Null | Description |
-| --- | --- | --- | --- |
-| `id` | uuid | no | Primary key. |
-| `material_id` | uuid → material | no | The output material. |
-| `revision` | text | no | Revision label; unique per material. |
-| `base_qty` | qty | no | Output quantity the item quantities are stated for. Positive. |
-| `base_uom_id` | uuid → uom | no | Unit of `base_qty`. |
-| `effective_from` | timestamptz | no | When this revision applies from. |
-| `effective_to` | timestamptz | yes | When it stops applying; null means open-ended. |
-| `origin` | text | no | `local` or `erp`. |
-| `external_key` | text | yes | ERP key, for imported BOMs. |
-
-### core.bom_item — BOM components · *Planned*
-
-| Column | Type | Null | Description |
-| --- | --- | --- | --- |
-| `id` | uuid | no | Primary key. |
-| `bom_id` | uuid → bom | no | The BOM. |
-| `line_no` | integer | no | Line number; unique per BOM. |
-| `component_material_id` | uuid → material | no | The component consumed. |
-| `qty_per` | qty | no | Quantity per `bom.base_qty` of output. |
-| `uom_id` | uuid → uom | no | Unit of `qty_per`. |
-| `scrap_factor` | numeric(9,6) | no | Expected extra consumption as a fraction (0.02 = 2 %). Default 0. |
-| `consumption_method` | text | no | How consumption is recorded: `time_window`, `declared`, `backflush` or `scan`. |
-
 ### core.process — process routes (D-023) · *In use*
 
 A reusable route such as "Extrude and Pack" (ISA-95 operations definition). Its content lives in versions.
@@ -309,6 +282,53 @@ Written once, at release, from the definition, so jobs can reference an operatio
 | `to_operation_id` | uuid → process_operation | no | The operation that follows. Never the same as the earlier one; one link per pair. |
 | `dependency_type` | text | no | `after_start` (starts once the earlier one has started: material flows through) or `after_end` (starts once it has ended: a hand-off). |
 | `lag` | interval | no | Extra wait after the start or end. Never negative. |
+
+### core.bom — bills of materials (D-025) · *In use*
+
+What one material is made from, one level deep. A BOM may be for one process, whose operations its items then name; there is at most one BOM per material and process, and one for any process. Its content lives in versions.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `material_id` | uuid → material | no | The output material. |
+| `process_id` | uuid → process | yes | The process it is for; the process must make the material. Null: any process. Unique with `material_id` (nulls not distinct). An order uses the BOM for its process, or else the one for any process. |
+| `is_active` | boolean | no | Inactive BOMs are not used for new orders. |
+| `origin` | text | no | `local` or `erp`. |
+| `external_system`, `external_key` | text | yes | The ERP record, required when `origin` is `erp`. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.bom_version — versions of a BOM (D-025) · *In use*
+
+Versioned as processes are: a draft is edited freely, a released version is fixed and is what orders are planned with, and releasing another makes it obsolete. At most one draft and one released version per BOM.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `bom_id` | uuid → bom | no | The BOM. |
+| `version_number` | integer | no | 1, 2, 3…; unique per BOM. |
+| `status` | text | no | `draft`, `released` or `obsolete`. |
+| `base_qty` | qty | no | Output quantity the item quantities are stated for. Positive. |
+| `base_uom_id` | uuid → uom | no | Unit of `base_qty`, and the unit an order planned with this version must use. Starts as the material's base unit. |
+| `definition` | jsonb | no | The items, `{"items":[…]}`, camelCase as in the API. Written out as `bom_item` rows on release. |
+| `released_at` | timestamptz | yes | When it was released; set exactly when the status is not `draft`. |
+| `note` | text | yes | Release note. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.bom_item — a released version's components (D-025) · *In use*
+
+Written once, when the version is released; planned components reference them.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key; the item's id in the definition. |
+| `bom_version_id` | uuid → bom_version | no | The released version. |
+| `line_no` | integer | no | Line number, positive; unique per version. |
+| `component_material_id` | uuid → material | no | The component consumed; never the BOM's own material. |
+| `qty_per` | qty | no | Quantity per `bom_version.base_qty` of output. Positive. |
+| `uom_id` | uuid → uom | no | Unit of `qty_per`. |
+| `scrap_factor` | numeric(9,6) | no | Extra share to plan, from 0 to under 1 (0.02 plans 2 % more). Default 0. |
+| `consumption_method` | text | no | How it will be consumed: `time_window` (lots loaded at a feed point), `declared`, `backflush` (per good count) or `scan`. |
+| `operation_number` | integer | yes | On a BOM for a process, the operation that consumes it; it must exist in the process's released version. Null: the first operation in flow order. |
 
 ### core.equipment_capability — what can run where (D-020) · *In use*
 
@@ -572,7 +592,7 @@ The top level, usually from the ERP. A work order may also stand alone.
 | `manufacturing_order_id` | uuid → manufacturing_order | yes | Parent order, if any. |
 | `order_number` | text | no | Unique per site. |
 | `material_id` | uuid → material | no | What to make. |
-| `bom_id` | uuid → bom | yes | The BOM revision to use. |
+| `bom_version_id` | uuid → bom_version | yes | The BOM version the order's components were planned with (D-025); null when the material had no released BOM. |
 | `process_version_id` | uuid → process_version | yes | The released process version the order was made from (D-024). Orders made in Pulaski always have one; its operations made the order's jobs. |
 | `planned_qty` | qty | no | How much. Positive. Dispatch warns when the jobs don't add up to it. |
 | `uom_id` | uuid → uom | no | Unit of the quantity; production jobs inherit it. |
@@ -617,9 +637,9 @@ A job is what the planner places and sequences on a line and what operators exec
 | `process_operation_id` | uuid → process_operation | yes | The released process operation the job was made for, when its order came from a process (D-024). Kept for the links between operations, which the projection will use later. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
-### core.job_material — planned material for a job · *Planned*
+### core.job_material — planned material for a job · *In use*
 
-Exploded from the BOM or entered directly.
+Planned when the work order is made (D-025): one `consume` row per BOM item and job of the operation that consumes it, its share of the item's total in proportion to the job's quantity. Never changed afterwards; consumption is recorded against it later.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -627,9 +647,9 @@ Exploded from the BOM or entered directly.
 | `job_id` | uuid → job | no | The job. |
 | `material_id` | uuid → material | no | The material. |
 | `direction` | text | no | `consume`, `produce`, `co_product` or `by_product`. |
-| `planned_qty` | qty | no | Planned quantity. |
-| `uom_id` | uuid → uom | no | Its unit. |
-| `consumption_method` | text | yes | `time_window`, `declared`, `backflush` or `scan`. |
+| `planned_qty` | qty | no | Planned quantity: order quantity ÷ base quantity × quantity per × (1 + scrap factor), the job's share. |
+| `uom_id` | uuid → uom | no | Its unit, the BOM item's. |
+| `consumption_method` | text | yes | `time_window`, `declared`, `backflush` or `scan`, from the BOM item. |
 | `bom_item_id` | uuid → bom_item | yes | The BOM line it came from. |
 
 ### core.job_run — actual execution (ISA-95 job response) · *In use (read)*

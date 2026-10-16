@@ -64,6 +64,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   fixed rows for jobs to reference.
 - Work orders are made from a released process (D-024, proposed): each operation's equipment gets a planned job
   for its share, at the end of its line, held until the order's start. The order keeps the version and a note.
+- BOMs (D-025, proposed) are single level, per material and optionally per process (items name the consuming
+  operation), versioned like processes. Order creation plans each job's components (`job_material`). Pulaski
+  owns lots on the floor; the ERP owns warehouse stock.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

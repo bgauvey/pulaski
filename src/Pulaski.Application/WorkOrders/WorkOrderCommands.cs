@@ -1,10 +1,12 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Boms;
 using Pulaski.Application.Errors;
 using Pulaski.Contracts.Common;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
 using Pulaski.Application.Scheduling;
 using Pulaski.Domain;
+using Pulaski.Domain.Boms;
 using Pulaski.Domain.Processes;
 using Pulaski.Domain.Scheduling;
 using Pulaski.Domain.WorkOrders;
@@ -14,7 +16,8 @@ namespace Pulaski.Application.WorkOrders;
 /// <summary>
 /// Makes a work order from a process (D-024): the process's released version decides the
 /// operations and the lines or departments that run them, and each becomes a planned job at the
-/// end of its line for its share of the quantity, held until <see cref="PlannedStart"/>.
+/// end of its line for its share of the quantity, held until <see cref="PlannedStart"/>. The
+/// material's released BOM (D-025) plans each job's components.
 /// </summary>
 public sealed record CreateWorkOrderCommand(
     Guid ProcessId,
@@ -37,6 +40,7 @@ internal sealed class CreateWorkOrderHandler(
     IUnitOfWork unitOfWork,
     IWorkOrderRepository workOrders,
     IProcessRepository processes,
+    IBomRepository boms,
     IMaterialRepository materials,
     ISchedulingRepository scheduling,
     IEventLog eventLog,
@@ -102,6 +106,10 @@ internal sealed class CreateWorkOrderHandler(
             throw new DomainRuleException(string.Join(" ", problems));
         }
 
+        // Read FOR SHARE after the lines and the route, so the BOM can't be replaced while it is used.
+        var bom = await boms.GetReleasedForOrderAsync(command.MaterialId, process.Id, cancellationToken);
+        var components = bom is null ? [] : BomExplosion.For(bom.Definition, command.PlannedQty, command.UomId, plan);
+
         var workOrder = WorkOrder.CreateLocal(
             ids.NewId(),
             process.SiteId,
@@ -115,12 +123,14 @@ internal sealed class CreateWorkOrderHandler(
             command.DueAt,
             command.Priority,
             route.Version.Id,
-            command.Notes);
+            command.Notes,
+            bom?.Id);
 
         var envelope = events.Create(EventTypes.WorkOrderCreated, "work_order", workOrder.Id, new { After = workOrder });
         var version = await workOrders.InsertAsync(workOrder, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
 
+        var jobIds = new List<Guid>(plan.Count);
         foreach (var planned in plan)
         {
             var line = lines[planned.EquipmentId];
@@ -138,7 +148,14 @@ internal sealed class CreateWorkOrderHandler(
             await scheduling.InsertJobAsync(job, jobEnvelope.OccurredAt, cancellationToken);
             await scheduling.AppendStatusChangeAsync(job.Id, null, job.Status, jobEnvelope.OccurredAt, cancellationToken);
             await eventLog.AppendAsync(jobEnvelope, cancellationToken);
+            jobIds.Add(job.Id);
         }
+
+        await boms.InsertJobMaterialsAsync(
+            [.. components.Select(c => new JobMaterial(
+                ids.NewId(), jobIds[c.JobIndex], c.Item.ComponentMaterialId, JobMaterial.Consume, c.PlannedQty, c.Item.UomId,
+                c.Item.ConsumptionMethod, c.Item.Id))],
+            cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
         return new CreatedResponse(workOrder.Id, version);

@@ -34,6 +34,10 @@ public sealed record WorkOrderDto
     /// <summary>The planner's note.</summary>
     public string? Notes { get; init; }
 
+    /// <summary>The BOM version the order's components were planned with (D-025); null when the material had none.</summary>
+    public Guid? BomVersionId { get; init; }
+    public int? BomVersionNumber { get; init; }
+
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
 

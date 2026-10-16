@@ -1,10 +1,12 @@
 using Microsoft.Extensions.DependencyInjection;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Boms;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
 using Pulaski.Application.Scheduling;
 using Pulaski.Application.WorkOrders;
+using Pulaski.Infrastructure.Boms;
 using Pulaski.Infrastructure.EquipmentModel;
 using Pulaski.Infrastructure.Events;
 using Pulaski.Infrastructure.Persistence;
@@ -32,6 +34,7 @@ public static class DependencyInjection
         services.AddSingleton<IReferenceDataReadStore, ReferenceDataQueries>();
         services.AddSingleton<ISchedulingReadStore, SchedulingQueries>();
         services.AddSingleton<IProcessReadStore, ProcessQueries>();
+        services.AddSingleton<IBomReadStore, BomQueries>();
 
         services.AddScoped<DbSession>();
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DbSession>());
@@ -41,6 +44,7 @@ public static class DependencyInjection
         services.AddScoped<IMaterialRepository, MaterialRepository>();
         services.AddScoped<ISchedulingRepository, SchedulingRepository>();
         services.AddScoped<IProcessRepository, ProcessRepository>();
+        services.AddScoped<IBomRepository, BomRepository>();
 
         return services;
     }
