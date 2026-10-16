@@ -335,3 +335,7 @@
         grid-template-columns: minmax(0, 1fr);
     }
 }
+
+.wo-notes {
+    white-space: pre-wrap;
+}

@@ -40,16 +40,15 @@ internal static class WorkOrderEndpoints
             CancellationToken ct) =>
         {
             var command = new CreateWorkOrderCommand(
-                request.SiteId,
+                request.ProcessId,
                 request.OrderNumber,
                 request.MaterialId,
                 request.PlannedQty,
                 request.UomId,
-                request.TargetEquipmentId,
                 request.PlannedStart,
-                request.PlannedEnd,
                 request.DueAt,
-                request.Priority);
+                request.Priority,
+                request.Notes);
             var created = await handler.HandleAsync(command, ct);
             return TypedResults.Created($"/api/work-orders/{created.Id}", created);
         });

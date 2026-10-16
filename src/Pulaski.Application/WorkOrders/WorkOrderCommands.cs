@@ -1,25 +1,31 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Contracts.Common;
-using Pulaski.Application.EquipmentModel;
+using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
+using Pulaski.Application.Scheduling;
 using Pulaski.Domain;
-using Pulaski.Domain.EquipmentModel;
+using Pulaski.Domain.Processes;
+using Pulaski.Domain.Scheduling;
 using Pulaski.Domain.WorkOrders;
 
 namespace Pulaski.Application.WorkOrders;
 
+/// <summary>
+/// Makes a work order from a process (D-024): the process's released version decides the
+/// operations and the lines or departments that run them, and each becomes a planned job at the
+/// end of its line for its share of the quantity, held until <see cref="PlannedStart"/>.
+/// </summary>
 public sealed record CreateWorkOrderCommand(
-    Guid SiteId,
+    Guid ProcessId,
     string OrderNumber,
     Guid MaterialId,
     decimal PlannedQty,
     Guid UomId,
-    Guid? TargetEquipmentId,
-    DateTimeOffset? PlannedStart,
-    DateTimeOffset? PlannedEnd,
+    DateTimeOffset PlannedStart,
     DateTimeOffset? DueAt,
-    int Priority) : ICommand<CreatedResponse>;
+    int Priority,
+    string? Notes) : ICommand<CreatedResponse>;
 
 public sealed record ChangeWorkOrderStatusCommand(
     Guid Id,
@@ -30,32 +36,38 @@ public sealed record ChangeWorkOrderStatusCommand(
 internal sealed class CreateWorkOrderHandler(
     IUnitOfWork unitOfWork,
     IWorkOrderRepository workOrders,
-    IEquipmentRepository equipment,
+    IProcessRepository processes,
     IMaterialRepository materials,
+    ISchedulingRepository scheduling,
     IEventLog eventLog,
     IEventFactory events,
-    IIdGenerator ids) : ICommandHandler<CreateWorkOrderCommand, CreatedResponse>
+    IIdGenerator ids,
+    TimeProvider timeProvider) : ICommandHandler<CreateWorkOrderCommand, CreatedResponse>
 {
+    public const int NotesMaxLength = 4000;
+
     public async Task<CreatedResponse> HandleAsync(CreateWorkOrderCommand command, CancellationToken cancellationToken)
     {
         new Validator()
-            .Require(command.SiteId != Guid.Empty, nameof(command.SiteId), "Required.")
+            .Require(command.ProcessId != Guid.Empty, nameof(command.ProcessId), "Required.")
             .RequireText(command.OrderNumber, nameof(command.OrderNumber), 50)
             .Require(command.MaterialId != Guid.Empty, nameof(command.MaterialId), "Required.")
             .Require(command.UomId != Guid.Empty, nameof(command.UomId), "Required.")
             .Require(command.PlannedQty > 0, nameof(command.PlannedQty), "Must be greater than zero.")
-            .Require(
-                command.PlannedStart is null || command.PlannedEnd is null || command.PlannedEnd > command.PlannedStart,
-                nameof(command.PlannedEnd),
-                "Must be after the planned start.")
+            .Require(command.PlannedStart != default, nameof(command.PlannedStart), "Required.")
+            .Require(command.DueAt is null || command.DueAt > command.PlannedStart, nameof(command.DueAt), "Must be after the planned start.")
+            .Require(command.Notes is null || command.Notes.Length <= NotesMaxLength, nameof(command.Notes), $"At most {NotesMaxLength} characters.")
             .ThrowIfInvalid();
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
 
-        var site = await equipment.GetAsync(command.SiteId, RowLock.Share, cancellationToken);
-        if (site?.Value.Level != EquipmentTypes.Site)
+        // Read the route without a lock to learn which lines to lock first (D-017).
+        var route = await processes.GetReleasedAsync(command.ProcessId, lockVersion: false, cancellationToken)
+            ?? throw new DomainRuleException($"Process {command.ProcessId} not found, or it has no released version.");
+        var process = route.Process;
+        if (!process.IsActive)
         {
-            throw new DomainRuleException($"Site {command.SiteId} not found.");
+            throw new DomainRuleException($"Process {process.Code} is inactive.");
         }
 
         if (!await materials.IsActiveAsync(command.MaterialId, cancellationToken))
@@ -63,31 +75,91 @@ internal sealed class CreateWorkOrderHandler(
             throw new DomainRuleException($"Material {command.MaterialId} not found or inactive.");
         }
 
-        if (command.TargetEquipmentId is { } target &&
-            !await equipment.IsInSubtreeAsync(command.SiteId, target, cancellationToken))
+        if (!await processes.CoversAsync(process.Id, command.MaterialId, cancellationToken))
         {
-            throw new DomainRuleException($"Target equipment {target} is not in site {site.Value.Code}.");
+            throw new DomainRuleException($"Process {process.Code} doesn't make this material; pick a process whose scope covers it.");
+        }
+
+        var orderNumber = command.OrderNumber.Trim();
+        var plan = ProcessJobPlan.For(route.Version.Definition, orderNumber, command.PlannedQty, command.PlannedStart);
+        var lines = (await scheduling.LockLinesAsync([.. plan.Select(j => j.EquipmentId).Distinct()], cancellationToken))
+            .ToDictionary(l => l.Id);
+
+        // Under the lock, the route must still be the released one.
+        var locked = await processes.GetReleasedAsync(process.Id, lockVersion: true, cancellationToken);
+        if (locked?.Version.Id != route.Version.Id)
+        {
+            throw new ConflictException($"Process {process.Code} was released again while the order was being made. Try again.");
+        }
+
+        // The same rules the order form checks before submitting (ProcessOrderRules).
+        var at = timeProvider.GetUtcNow();
+        var equipmentRows = await processes.GetOrderEquipmentAsync(route.Version.Id, command.MaterialId, at, cancellationToken);
+        var problems = ProcessOrderRules.Problems(equipmentRows, process.SiteId).Select(p => p.Message).ToList();
+        problems.AddRange(DepartmentProblems(plan, lines, command.DueAt));
+        if (problems.Count > 0)
+        {
+            throw new DomainRuleException(string.Join(" ", problems));
         }
 
         var workOrder = WorkOrder.CreateLocal(
             ids.NewId(),
-            command.SiteId,
-            command.OrderNumber.Trim(),
+            process.SiteId,
+            orderNumber,
             command.MaterialId,
             command.PlannedQty,
             command.UomId,
-            command.TargetEquipmentId,
+            null,
             command.PlannedStart,
-            command.PlannedEnd,
+            null,
             command.DueAt,
-            command.Priority);
+            command.Priority,
+            route.Version.Id,
+            command.Notes);
 
         var envelope = events.Create(EventTypes.WorkOrderCreated, "work_order", workOrder.Id, new { After = workOrder });
         var version = await workOrders.InsertAsync(workOrder, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
 
+        foreach (var planned in plan)
+        {
+            var line = lines[planned.EquipmentId];
+            var rank = await SchedulingRules.RankAsync(scheduling, line.Id, null, null, at, cancellationToken);
+            var job = line.IsGroup
+                ? Job.CreateForGroup(
+                    ids.NewId(), workOrder.SiteId, workOrder.Id, planned.JobNumber, line.Id, workOrder.MaterialId,
+                    planned.PlannedQty, workOrder.UomId, rank, planned.EarliestStart, workOrder.DueAt)
+                : Job.CreateProduction(
+                    ids.NewId(), workOrder.SiteId, workOrder.Id, planned.JobNumber, line.Id, workOrder.MaterialId,
+                    planned.PlannedQty, workOrder.UomId, rank, planned.EarliestStart);
+            job = job with { ProcessOperationId = planned.Operation.Id };
+
+            var jobEnvelope = events.Create(EventTypes.JobCreated, "job", job.Id, new { After = job });
+            await scheduling.InsertJobAsync(job, jobEnvelope.OccurredAt, cancellationToken);
+            await scheduling.AppendStatusChangeAsync(job.Id, null, job.Status, jobEnvelope.OccurredAt, cancellationToken);
+            await eventLog.AppendAsync(jobEnvelope, cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
         return new CreatedResponse(workOrder.Id, version);
+    }
+
+    /// <summary>A job on a department waits in a window that ends at the order's due date (D-022).</summary>
+    private static IEnumerable<string> DepartmentProblems(
+        IReadOnlyList<OperationJob> plan, Dictionary<Guid, SchedulingLine> lines, DateTimeOffset? dueAt)
+    {
+        foreach (var job in plan.Where(j => lines.GetValueOrDefault(j.EquipmentId)?.IsGroup == true))
+        {
+            var op = $"Operation {job.Operation.Number} ({job.Operation.Name}):";
+            if (dueAt is not { } due)
+            {
+                yield return $"{op} {lines[job.EquipmentId].Code} is a department, so its job needs a finish-by; give the order a due date.";
+            }
+            else if (due <= job.EarliestStart)
+            {
+                yield return $"{op} the due date must be after the operation's earliest start, {job.EarliestStart:u}.";
+            }
+        }
     }
 }
 

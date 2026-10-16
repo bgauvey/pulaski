@@ -15,7 +15,11 @@ namespace Pulaski.Testing;
 /// </summary>
 public sealed class InMemoryStores
 {
-    public InMemoryStores() => WorkOrders.OpenJobs = Scheduling.HasOpenJobs;
+    public InMemoryStores()
+    {
+        WorkOrders.OpenJobs = Scheduling.HasOpenJobs;
+        Processes.Eligibility = Scheduling.Eligibility;
+    }
 
     public InMemoryUnitOfWork UnitOfWork { get; } = new();
 

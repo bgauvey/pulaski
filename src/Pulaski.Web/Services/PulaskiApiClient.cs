@@ -142,8 +142,27 @@ public sealed class PulaskiApiClient(HttpClient http)
 
     // Processes (D-023)
 
-    public Task<IReadOnlyList<ProcessSummaryDto>> ListProcessesAsync(Guid? siteId = null, CancellationToken ct = default) =>
-        GetAsync<IReadOnlyList<ProcessSummaryDto>>(siteId is null ? "api/processes" : $"api/processes?siteId={siteId}", ct);
+    /// <summary>Processes in the site (all when null) whose scope covers the material (any when null).</summary>
+    public Task<IReadOnlyList<ProcessSummaryDto>> ListProcessesAsync(Guid? siteId = null, Guid? materialId = null, CancellationToken ct = default)
+    {
+        var filters = new List<string>();
+        if (siteId is { } site)
+        {
+            filters.Add($"siteId={site}");
+        }
+
+        if (materialId is { } material)
+        {
+            filters.Add($"materialId={material}");
+        }
+
+        return GetAsync<IReadOnlyList<ProcessSummaryDto>>(
+            filters.Count == 0 ? "api/processes" : $"api/processes?{string.Join('&', filters)}", ct);
+    }
+
+    /// <summary>Whether an order for the material can be made from the process, as creating it would check (D-024).</summary>
+    public Task<ProcessOrderCheckDto> CheckProcessForOrderAsync(Guid processId, Guid materialId, CancellationToken ct = default) =>
+        GetAsync<ProcessOrderCheckDto>($"api/processes/{processId}/order-check?materialId={materialId}", ct);
 
     public Task<ProcessDto> GetProcessAsync(Guid id, CancellationToken ct = default) =>
         GetAsync<ProcessDto>($"api/processes/{id}", ct);

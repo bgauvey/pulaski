@@ -141,51 +141,6 @@ public sealed class PersistenceTests(DatabaseFixture db)
     }
 
     [Fact]
-    public async Task Work_order_round_trips_times_and_records_events_in_sequence()
-    {
-        var (_, site, line) = await CreateHierarchyAsync();
-        var start = new DateTimeOffset(2026, 10, 13, 8, 0, 0, TimeSpan.FromHours(-5));
-
-        var created = await db.SendAsync(new CreateWorkOrderCommand(
-            site, "WO-" + Guid.NewGuid().ToString("N")[..8], db.MaterialId, 1500.5m, db.UomId, line,
-            start, start.AddHours(8), DueAt: null, Priority: 2));
-
-        var reads = db.Services.GetRequiredService<IWorkOrderReadStore>();
-        var row = (await reads.GetAsync(created.Id, CancellationToken.None))!;
-        Assert.Equal(start, row.PlannedStart);
-        Assert.Equal(TimeSpan.Zero, row.PlannedStart!.Value.Offset);
-        Assert.Null(row.DueAt);
-        Assert.Equal(1500.5m, row.PlannedQty);
-        Assert.Equal("planned", row.Status);
-        Assert.Equal(created.Version, row.Version);
-
-        await db.SendAsync(new ChangeWorkOrderStatusCommand(created.Id, created.Version, "cancelled", "ready"));
-        await Assert.ThrowsAsync<ConflictException>(
-            () => db.SendAsync(new ChangeWorkOrderStatusCommand(created.Id, created.Version, "cancelled", null)));
-
-        Assert.Contains(await reads.ListAsync(site, "cancelled", CancellationToken.None), w => w.Id == created.Id);
-
-        await using var connection = await db.AdminDataSource.OpenConnectionAsync();
-        var events = (await connection.QueryAsync<(string Type, long Sequence, string? Reason)>(
-            "SELECT type, sequence, reason FROM evt.event WHERE subject = @Id ORDER BY sequence",
-            new { created.Id })).ToList();
-        Assert.Equal(
-            [(EventTypes.WorkOrderCreated, 1L), (EventTypes.WorkOrderStatusChanged, 2L)],
-            events.Select(e => (e.Type, e.Sequence)));
-        Assert.Equal("ready", events[1].Reason);
-    }
-
-    [Fact]
-    public async Task Work_order_target_outside_site_is_a_rule_violation()
-    {
-        var (_, site, _) = await CreateHierarchyAsync();
-        var (_, _, otherLine) = await CreateHierarchyAsync();
-
-        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CreateWorkOrderCommand(
-            site, "WO-X", db.MaterialId, 1, db.UomId, otherLine, null, null, null, 0)));
-    }
-
-    [Fact]
     public async Task Reference_data_lists_seeded_rows()
     {
         var reads = db.Services.GetRequiredService<IReferenceDataReadStore>();

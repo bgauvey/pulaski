@@ -6,6 +6,7 @@ using Pulaski.Application.Scheduling;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Contracts.WorkOrders;
+using Pulaski.Domain.Processes;
 
 namespace Pulaski.Api.Tests;
 
@@ -58,32 +59,43 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
     [Fact]
     public async Task Create_work_order_returns_201_with_location()
     {
-        var (_, site, _) = factory.Stores.Equipment.AddHierarchy();
+        var site = Guid.CreateVersion7();
+        var material = factory.Stores.Materials.AddActive();
+        var line = factory.Stores.Scheduling.AddLine(site);
+        factory.Stores.Scheduling.AddCapability(line.Id, material);
+        var route = factory.Stores.Processes.AddReleased(site, new ProcessDefinition(
+            [new ProcessOperation(Guid.CreateVersion7(), 10, "Make", null, 0, 0, [new OperationEquipment(line.Id, 100m)])], []));
+
         var response = await _client.PostAsJsonAsync("/api/work-orders", new CreateWorkOrderRequest
         {
-            SiteId = site.Id,
+            ProcessId = route.Process.Id,
             OrderNumber = "WO-NEW",
-            MaterialId = factory.Stores.Materials.AddActive(),
+            MaterialId = material,
             PlannedQty = 100,
             UomId = Guid.CreateVersion7(),
+            PlannedStart = DateTimeOffset.UtcNow,
+            Notes = "Call the customer before packing.",
         });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var created = await response.Content.ReadFromJsonAsync<CreatedResponse>();
         Assert.Equal(7, created!.Id.Version);
         Assert.Equal($"/api/work-orders/{created.Id}", response.Headers.Location?.ToString());
+        var order = await _client.GetFromJsonAsync<WorkOrderDto>($"/api/work-orders/{created.Id}");
+        Assert.Equal("Call the customer before packing.", order!.Notes);
     }
 
     [Fact]
-    public async Task Work_order_for_unknown_site_returns_422()
+    public async Task Work_order_for_unknown_process_returns_422()
     {
         var response = await _client.PostAsJsonAsync("/api/work-orders", new CreateWorkOrderRequest
         {
-            SiteId = Guid.CreateVersion7(),
+            ProcessId = Guid.CreateVersion7(),
             OrderNumber = "WO-X",
             MaterialId = factory.Stores.Materials.AddActive(),
             PlannedQty = 1,
             UomId = Guid.CreateVersion7(),
+            PlannedStart = DateTimeOffset.UtcNow,
         });
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);

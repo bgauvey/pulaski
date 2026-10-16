@@ -1,5 +1,6 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Processes;
+using Pulaski.Application.WorkOrders;
 using Pulaski.Domain.Processes;
 using Pulaski.Infrastructure.Persistence;
 
@@ -43,6 +44,22 @@ internal sealed class ProcessRepository(DbSession session) : IProcessRepository
         SELECT {VersionColumns} FROM core.process_version
         WHERE process_id = @ProcessId AND status = 'released'
         FOR UPDATE
+        """;
+
+    private const string GetProcess = """
+        SELECT id, site_id, code, name, description, is_active, xmin::text::bigint AS version
+        FROM core.process
+        WHERE id = @Id
+        """;
+
+    private const string GetReleased = $"""
+        SELECT {VersionColumns} FROM core.process_version
+        WHERE process_id = @ProcessId AND status = 'released'
+        """;
+
+    private const string GetReleasedForShare = $"""
+        {GetReleased}
+        FOR SHARE
         """;
 
     private const string HasDraft = "SELECT EXISTS (SELECT 1 FROM core.process_version WHERE process_id = @ProcessId AND status = 'draft')";
@@ -135,6 +152,25 @@ internal sealed class ProcessRepository(DbSession session) : IProcessRepository
 
     public async Task<Versioned<ProcessVersion>?> GetReleasedForUpdateAsync(Guid processId, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<VersionRow>(GetReleasedForUpdate, new { ProcessId = processId }, cancellationToken))?.ToVersioned();
+
+    public async Task<ReleasedProcess?> GetReleasedAsync(Guid processId, bool lockVersion, CancellationToken cancellationToken)
+    {
+        var version = await session.QuerySingleOrDefaultAsync<VersionRow>(
+            lockVersion ? GetReleasedForShare : GetReleased, new { ProcessId = processId }, cancellationToken);
+        if (version is null)
+        {
+            return null;
+        }
+
+        var row = (await session.QuerySingleOrDefaultAsync<ProcessRow>(GetProcess, new { Id = processId }, cancellationToken))!;
+        return new ReleasedProcess(
+            new Process(row.Id, row.SiteId, row.Code, row.Name, row.Description, row.IsActive), version.ToVersioned().Value);
+    }
+
+    public Task<IReadOnlyList<OrderEquipmentRow>> GetOrderEquipmentAsync(
+        Guid versionId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.QueryAsync<OrderEquipmentRow>(
+            ProcessQueries.OrderEquipment, new { VersionId = versionId, MaterialId = materialId, At = at }, cancellationToken);
 
     public Task<bool> HasDraftAsync(Guid processId, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(HasDraft, new { ProcessId = processId }, cancellationToken);

@@ -36,6 +36,23 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
         }
     }
 
+    /// <summary>The line or group, and whether it can run the material (on a group: some line under it, D-022); null when unknown.</summary>
+    public (SchedulingLine Line, bool CanRun)? Eligibility(Guid equipmentId, Guid materialId)
+    {
+        lock (_lock)
+        {
+            if (!_lines.TryGetValue(equipmentId, out var line))
+            {
+                return null;
+            }
+
+            var canRun = line.IsGroup
+                ? _capabilities.Any(c => c.MaterialId == materialId && Under(equipmentId, c.LineId) && _lines[c.LineId].CanRunJob)
+                : _capabilities.Contains((equipmentId, materialId));
+            return (line, canRun);
+        }
+    }
+
     /// <summary>Lets the line run the material (D-020).</summary>
     public void AddCapability(Guid lineId, Guid materialId)
     {

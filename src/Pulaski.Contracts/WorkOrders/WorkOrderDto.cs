@@ -23,6 +23,17 @@ public sealed record WorkOrderDto
     public int Priority { get; init; }
     public required string Status { get; init; }
     public required string Origin { get; init; }
+
+    /// <summary>The released process version the order was made from (D-024), if any.</summary>
+    public Guid? ProcessVersionId { get; init; }
+    public Guid? ProcessId { get; init; }
+    public string? ProcessCode { get; init; }
+    public string? ProcessName { get; init; }
+    public int? ProcessVersionNumber { get; init; }
+
+    /// <summary>The planner's note.</summary>
+    public string? Notes { get; init; }
+
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
 

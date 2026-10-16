@@ -269,8 +269,18 @@
                         <dt>Due</dt>
                         <dd>@ScheduleFormat.When(wo.DueAt, Tz)</dd>
                     }
+                    @if (wo.ProcessCode is not null)
+                    {
+                        <dt>Process</dt>
+                        <dd>@wo.ProcessCode <span class="text-muted">v@(wo.ProcessVersionNumber)</span></dd>
+                    }
                     <dt>Origin</dt>
                     <dd>@Display.Label(wo.Origin)</dd>
+                    @if (wo.Notes is not null)
+                    {
+                        <dt>Notes</dt>
+                        <dd style="white-space: pre-wrap">@wo.Notes</dd>
+                    }
                 </dl>
 
                 @if (wo.NextStatuses.Count > 0)

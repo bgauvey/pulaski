@@ -9,6 +9,7 @@ namespace Pulaski.Domain.Scheduling;
 /// A job may instead be planned to a group such as a department (D-022): it then holds a window
 /// (<see cref="EarliestStart"/> to <see cref="LatestEnd"/>) until the floor assigns it to one of
 /// the group's lines. <see cref="GroupEquipmentId"/> remembers the group after that.
+/// A job made from a process route keeps its operation (<see cref="ProcessOperationId"/>, D-024).
 /// </summary>
 public sealed record Job(
     Guid Id,
@@ -32,7 +33,8 @@ public sealed record Job(
     DateTimeOffset? FirmedAt,
     Guid? ReplacesJobId,
     Guid? GroupEquipmentId = null,
-    DateTimeOffset? LatestEnd = null)
+    DateTimeOffset? LatestEnd = null,
+    Guid? ProcessOperationId = null)
 {
     /// <summary>A production job for part of a work order, sized by the run standard.</summary>
     /// <exception cref="DomainRuleException">The quantity is invalid.</exception>

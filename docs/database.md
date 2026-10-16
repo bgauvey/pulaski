@@ -573,16 +573,18 @@ The top level, usually from the ERP. A work order may also stand alone.
 | `order_number` | text | no | Unique per site. |
 | `material_id` | uuid → material | no | What to make. |
 | `bom_id` | uuid → bom | yes | The BOM revision to use. |
+| `process_version_id` | uuid → process_version | yes | The released process version the order was made from (D-024). Orders made in Pulaski always have one; its operations made the order's jobs. |
 | `planned_qty` | qty | no | How much. Positive. Dispatch warns when the jobs don't add up to it. |
 | `uom_id` | uuid → uom | no | Unit of the quantity; production jobs inherit it. |
-| `target_equipment_id` | uuid → equipment | yes | Area or line the order is routed to, as a hint. Jobs may go on any eligible line (D-014, D-020). |
-| `planned_start`, `planned_end` | timestamptz | yes | The order's requested window. End after start. |
-| `due_at` | timestamptz | yes | Due date; jobs that finish after it get a `late` warning. |
+| `target_equipment_id` | uuid → equipment | yes | Area or line the order is routed to, as a hint. Jobs may go on any eligible line (D-014, D-020). Not set by orders made from a process, whose operations name the equipment. |
+| `planned_start`, `planned_end` | timestamptz | yes | The order's requested window. End after start. An order made from a process always has a start: none of its jobs is held to start earlier. |
+| `due_at` | timestamptz | yes | Due date; jobs that finish after it get a `late` warning. It is also the finish-by of the order's jobs planned to a department, so such an order needs one (D-024). |
 | `priority` | integer | no | Higher is more urgent. Default 0. |
 | `status` | text | no | `planned` → `dispatched` → `firmed` → `in_progress` → `completed` → `closed`, or `cancelled` (D-018). Dispatch, un-dispatch and firm have their own commands. |
 | `origin` | text | no | `local` or `erp`. |
 | `external_system`, `external_key`, `external_version` | text | yes | The ERP record. |
 | `erp_change_pending` | boolean | no | The ERP changed the order after dispatch and a planner must accept it. |
+| `notes` | text | yes | The planner's note on the order, at most 4000 characters. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ### core.job — a piece of a work order on one line · *In use*
@@ -612,6 +614,7 @@ A job is what the planner places and sequences on a line and what operators exec
 | `dispatched_at` | timestamptz | yes | When its order was dispatched. |
 | `firmed_at` | timestamptz | yes | When its order was firmed; from then on `planned_start` is frozen. |
 | `replaces_job_id` | uuid → job | yes | On a replacement, the cancelled job whose remaining quantity it took. |
+| `process_operation_id` | uuid → process_operation | yes | The released process operation the job was made for, when its order came from a process (D-024). Kept for the links between operations, which the projection will use later. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ### core.job_material — planned material for a job · *Planned*

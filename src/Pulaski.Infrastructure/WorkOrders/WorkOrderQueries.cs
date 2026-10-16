@@ -13,12 +13,16 @@ internal sealed class WorkOrderQueries(NpgsqlDataSource dataSource) : IWorkOrder
                m.code AS material_code, m.name AS material_name, w.planned_qty, w.uom_id,
                u.code AS uom_code, w.target_equipment_id, t.code AS target_equipment_code,
                w.planned_start, w.planned_end, w.due_at, w.priority, w.status, w.origin,
+               w.process_version_id, pv.process_id, p.code AS process_code, p.name AS process_name,
+               pv.version_number AS process_version_number, w.notes,
                w.created_at, w.updated_at, w.xmin::text::bigint AS version
         FROM core.work_order w
         JOIN core.equipment s ON s.id = w.site_id
         JOIN core.material m  ON m.id = w.material_id
         JOIN core.uom u       ON u.id = w.uom_id
         LEFT JOIN core.equipment t ON t.id = w.target_equipment_id
+        LEFT JOIN core.process_version pv ON pv.id = w.process_version_id
+        LEFT JOIN core.process p ON p.id = pv.process_id
         """;
 
     private const string List = $"""

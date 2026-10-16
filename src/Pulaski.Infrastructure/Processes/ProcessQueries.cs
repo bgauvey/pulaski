@@ -1,6 +1,7 @@
 using Dapper;
 using Npgsql;
 using Pulaski.Application.Processes;
+using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Processes;
 
 namespace Pulaski.Infrastructure.Processes;
@@ -146,6 +147,42 @@ internal sealed class ProcessQueries(NpgsqlDataSource dataSource) : IProcessRead
                 Definition = ProcessJson.Read<ProcessDefinitionDto>(row.DefinitionJson),
                 Version = row.Version,
             };
+    }
+
+    // A released version's lines and departments, and whether each can run @MaterialId at @At:
+    // a line by its own capability, a department by one on an active line under it that runs
+    // jobs. The same tests as scheduling's eligibility checks (D-020, D-022).
+    internal const string OrderEquipment = """
+        SELECT o.id AS operation_id, o.operation_number, o.name AS operation_name,
+               e.id AS equipment_id, e.code AS equipment_code, e.site_id, e.is_schedulable, e.can_run_job, e.is_active,
+               m.code AS material_code,
+               CASE WHEN e.can_run_job THEN EXISTS (
+                        SELECT 1 FROM core.equipment_capability c
+                        WHERE c.equipment_id = e.id AND c.material_id = m.id
+                          AND c.effective_from <= @At AND (c.effective_to IS NULL OR c.effective_to > @At))
+                    ELSE EXISTS (
+                        SELECT 1
+                        FROM core.equipment_closure cl
+                        JOIN core.equipment l ON l.id = cl.descendant_id AND l.can_run_job AND l.is_active
+                        JOIN core.equipment_capability c ON c.equipment_id = l.id
+                        WHERE cl.ancestor_id = e.id AND cl.depth > 0 AND c.material_id = m.id
+                          AND c.effective_from <= @At AND (c.effective_to IS NULL OR c.effective_to > @At))
+               END AS can_run_material
+        FROM core.process_operation o
+        JOIN core.process_operation_equipment oe ON oe.operation_id = o.id
+        JOIN core.equipment e ON e.id = oe.equipment_id
+        JOIN core.material m ON m.id = @MaterialId
+        WHERE o.process_version_id = @VersionId
+        ORDER BY o.operation_number, e.code
+        """;
+
+    public async Task<IReadOnlyList<OrderEquipmentRow>> GetOrderEquipmentAsync(
+        Guid versionId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<OrderEquipmentRow>(new CommandDefinition(
+            OrderEquipment, new { VersionId = versionId, MaterialId = materialId, At = at }, cancellationToken: cancellationToken));
+        return rows.AsList();
     }
 
     public async Task<IReadOnlyList<ProcessEquipmentRow>> GetEquipmentAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)

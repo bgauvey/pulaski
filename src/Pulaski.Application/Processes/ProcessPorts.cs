@@ -1,4 +1,5 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Processes;
 using Pulaski.Domain.Processes;
 
@@ -18,6 +19,12 @@ public interface IProcessReadStore
 
     /// <summary>The equipment a definition names, for checking it can be used.</summary>
     Task<IReadOnlyList<ProcessEquipmentRow>> GetEquipmentAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Each line or department of the released version's operations, with whether it can run the
+    /// material at <paramref name="at"/> (D-020, D-022). Empty when the material doesn't exist.
+    /// </summary>
+    Task<IReadOnlyList<OrderEquipmentRow>> GetOrderEquipmentAsync(Guid versionId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken);
 }
 
 /// <summary>Write side: runs inside the current <see cref="IUnitOfWork"/>. Commands lock the process, then its version.</summary>
@@ -33,6 +40,16 @@ public interface IProcessRepository
 
     /// <summary>The process's released version, if it has one, locked.</summary>
     Task<Versioned<ProcessVersion>?> GetReleasedForUpdateAsync(Guid processId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The process with its released version, or null when it doesn't exist or has none. With
+    /// <paramref name="lockVersion"/> the version is read <c>FOR SHARE</c>, so it can't become
+    /// obsolete while an order is made from it.
+    /// </summary>
+    Task<ReleasedProcess?> GetReleasedAsync(Guid processId, bool lockVersion, CancellationToken cancellationToken);
+
+    /// <summary>The same as <see cref="IProcessReadStore.GetOrderEquipmentAsync"/>, read inside the transaction.</summary>
+    Task<IReadOnlyList<OrderEquipmentRow>> GetOrderEquipmentAsync(Guid versionId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken);
 
     Task<bool> HasDraftAsync(Guid processId, CancellationToken cancellationToken);
 
@@ -62,6 +79,9 @@ public interface IProcessRepository
     /// <summary>Sets or clears the material's default process; the material's new row version, or null when it doesn't exist.</summary>
     Task<long?> SetMaterialDefaultAsync(Guid materialId, Guid? processId, DateTimeOffset at, CancellationToken cancellationToken);
 }
+
+/// <summary>A process and its released version, which orders are made from (D-023, D-024).</summary>
+public sealed record ReleasedProcess(Process Process, ProcessVersion Version);
 
 public sealed record ProcessEquipmentRow
 {

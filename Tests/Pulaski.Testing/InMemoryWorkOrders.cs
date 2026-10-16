@@ -112,6 +112,8 @@ public sealed class InMemoryWorkOrders : IWorkOrderRepository, IWorkOrderReadSto
             Priority = w.Priority,
             Status = w.Status,
             Origin = w.Origin,
+            ProcessVersionId = w.ProcessVersionId,
+            Notes = w.Notes,
             Version = row.Version,
         };
     }

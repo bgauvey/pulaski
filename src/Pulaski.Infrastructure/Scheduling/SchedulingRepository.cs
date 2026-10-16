@@ -126,12 +126,12 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
                               planned_qty, uom_id, planned_start, planned_end, sequence_rank, is_locked,
                               earliest_start, planned_duration, counts_as_planned_downtime, status,
                               dispatched_at, firmed_at, replaces_job_id, group_equipment_id, latest_end,
-                              created_at, updated_at)
+                              process_operation_id, created_at, updated_at)
         VALUES (@Id, @SiteId, @WorkOrderId, @JobNumber, @JobType, @EquipmentId, @MaterialId,
                 @PlannedQty, @UomId, @PlannedStart, @PlannedEnd, @SequenceRank, @IsLocked,
                 @EarliestStart, @PlannedDuration, @CountsAsPlannedDowntime, @Status,
                 @DispatchedAt, @FirmedAt, @ReplacesJobId, @GroupEquipmentId, @LatestEnd,
-                @At, @At)
+                @ProcessOperationId, @At, @At)
         RETURNING xmin::text::bigint
         """;
 

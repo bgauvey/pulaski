@@ -134,3 +134,34 @@ FROM items i
 JOIN core.material_class mc ON mc.code = i.class_code
 JOIN core.uom u ON u.code = i.uom_code
 ON CONFLICT (code) DO NOTHING;
+
+-- What the demo lines can run, by class (D-020): the extruders run profiles, pipe and sheet;
+-- PACK1 packs every finished class. Rates are in each material's base unit. Raw materials,
+-- packaging and consumables are never made, so they get none. Run standards start from the
+-- ideal rate (D-016). Rows that already exist (such as the 4410 profiles in seed-demo.sql)
+-- are left alone, so this stays re-runnable.
+INSERT INTO core.equipment_capability (equipment_id, material_id, ideal_rate_per_hour, rate_uom_id,
+                                       standard_changeover, is_preferred, effective_from)
+SELECT e.id, m.id, v.rate, m.base_uom_id, v.changeover, v.preferred, '2026-01-01'
+FROM (VALUES
+    ('EXT-01', 'PROFILE',  850, interval '45 minutes', true),
+    ('EXT-01', 'PIPE',     600, interval '60 minutes', true),
+    ('EXT-01', 'SHEET',    400, interval '60 minutes', true),
+    ('EXT-02', 'PROFILE',  700, interval '45 minutes', false),
+    ('EXT-02', 'PIPE',     500, interval '60 minutes', false),
+    ('EXT-02', 'SHEET',    300, interval '60 minutes', false),
+    ('PACK1',  'PROFILE', 2000, interval '10 minutes', true),
+    ('PACK1',  'PIPE',    1500, interval '10 minutes', true),
+    ('PACK1',  'SHEET',   1200, interval '10 minutes', true),
+    ('PACK1',  'FILM',    1000, interval '10 minutes', true),
+    ('PACK1',  'MOLDED',  3000, interval '10 minutes', true)
+) AS v(line_code, class_code, rate, changeover, preferred)
+JOIN core.equipment e      ON e.code = v.line_code
+JOIN core.material_class c ON c.code = v.class_code
+JOIN core.material m       ON m.material_class_id = c.id AND m.is_active
+WHERE NOT EXISTS (SELECT 1 FROM core.equipment_capability x WHERE x.equipment_id = e.id AND x.material_id = m.id);
+
+INSERT INTO core.run_standard (equipment_id, material_id, uom_id, calculated_rate_per_hour, calculation_basis, calculated_at)
+SELECT c.equipment_id, c.material_id, c.rate_uom_id, c.ideal_rate_per_hour, 'ideal_rate', now()
+FROM core.equipment_capability c
+ON CONFLICT (equipment_id, material_id) DO NOTHING;

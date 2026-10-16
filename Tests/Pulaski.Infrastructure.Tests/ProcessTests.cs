@@ -4,8 +4,10 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Processes;
+using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Processes;
+using Pulaski.Contracts.WorkOrders;
 using Pulaski.Domain;
 using Pulaski.Domain.Processes;
 
@@ -184,5 +186,94 @@ public sealed class ProcessTests(DatabaseFixture db)
         await db.SendAsync(new SetDefaultProcessCommand(material, null));
         Assert.Empty((await QueryAsync<GetProcessQuery, ProcessDto>(new GetProcessQuery(created.Id))).DefaultFor);
         await Assert.ThrowsAsync<NotFoundException>(() => db.SendAsync(new SetDefaultProcessCommand(Guid.CreateVersion7(), null)));
+    }
+
+    [Fact]
+    public async Task A_work_order_is_made_from_the_released_process_with_its_jobs_and_notes()
+    {
+        var plant = await CreatePlantAsync();
+        var processId = await ReleasedExtrudeAndPackAsync(plant);
+        foreach (var line in new[] { plant.Ext1, plant.Ext2, plant.Pack })
+        {
+            await db.ExecuteAsync(
+                $"""
+                INSERT INTO core.equipment_capability (equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, effective_from)
+                VALUES ('{line}', '{db.MaterialId}', 1000, '{db.UomId}', now() - interval '1 day')
+                """);
+        }
+
+        var start = new DateTimeOffset(2026, 10, 13, 8, 0, 0, TimeSpan.FromHours(-5));
+        var number = "WO-" + Guid.NewGuid().ToString("N")[..8];
+        var created = await db.SendAsync(new CreateWorkOrderCommand(
+            processId, number, db.MaterialId, 1500.5m, db.UomId, start, DueAt: null, Priority: 2, Notes: "  Rush for the dealer show.  "));
+
+        var reads = db.Services.GetRequiredService<IWorkOrderReadStore>();
+        var row = (await reads.GetAsync(created.Id, CancellationToken.None))!;
+        Assert.Equal(start, row.PlannedStart);
+        Assert.Equal(TimeSpan.Zero, row.PlannedStart!.Value.Offset);
+        Assert.Equal(1500.5m, row.PlannedQty);
+        Assert.Equal(("EXT-PACK", 1), (row.ProcessCode, row.ProcessVersionNumber));
+        Assert.Equal("Rush for the dealer show.", row.Notes);
+        Assert.Equal(created.Version, row.Version);
+
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            var jobs = (await connection.QueryAsync<(string JobNumber, Guid EquipmentId, decimal PlannedQty, DateTimeOffset EarliestStart, int Operation)>(
+                """
+                SELECT j.job_number, j.equipment_id, j.planned_qty, j.earliest_start, o.operation_number
+                FROM core.job j JOIN core.process_operation o ON o.id = j.process_operation_id
+                WHERE j.work_order_id = @Id ORDER BY j.job_number
+                """,
+                new { created.Id })).ToList();
+            Assert.Equal(
+                [($"{number}-10-1", plant.Ext1, 750.25m, start, 10), ($"{number}-10-2", plant.Ext2, 750.25m, start, 10),
+                 ($"{number}-30", plant.Pack, 1500.5m, start.AddMinutes(15), 30)],
+                jobs);
+
+            var events = await connection.QueryAsync<string>(
+                "SELECT type FROM evt.event WHERE subject = @Id OR subject IN (SELECT id FROM core.job WHERE work_order_id = @Id) ORDER BY position",
+                new { created.Id });
+            Assert.Equal([EventTypes.WorkOrderCreated, EventTypes.JobCreated, EventTypes.JobCreated, EventTypes.JobCreated], events);
+        }
+
+        // The order number is unique per site; the whole order, jobs included, is refused.
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new CreateWorkOrderCommand(
+            processId, number, db.MaterialId, 1, db.UomId, start, null, 0, null)));
+    }
+
+    [Fact]
+    public async Task A_work_order_needs_a_capability_on_every_line_of_its_process_and_the_check_says_which()
+    {
+        var plant = await CreatePlantAsync();
+        var processId = await ReleasedExtrudeAndPackAsync(plant);
+        await db.ExecuteAsync(
+            $"""
+            INSERT INTO core.equipment_capability (equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, effective_from)
+            VALUES ('{plant.Ext1}', '{db.MaterialId}', 1000, '{db.UomId}', now() - interval '1 day'),
+                   ('{plant.Ext2}', '{db.MaterialId}', 1000, '{db.UomId}', now() - interval '1 day')
+            """);
+
+        // The form's check and creating the order agree: only PACK1 lacks a capability.
+        var check = await QueryAsync<CheckProcessForOrderQuery, ProcessOrderCheckDto>(new CheckProcessForOrderQuery(processId, db.MaterialId));
+        var problem = Assert.Single(check.Problems);
+        Assert.Equal(("no_capability", 30), (problem.Code, problem.OperationNumber));
+
+        var refused = await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CreateWorkOrderCommand(
+            processId, "WO-X", db.MaterialId, 10, db.UomId, DateTimeOffset.UtcNow, null, 0, null)));
+        Assert.Equal(problem.Message, refused.Message);
+        Assert.StartsWith("Operation 30 (Pack): PACK1-", refused.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>Extrude and Pack, making every material, released as version 1.</summary>
+    private async Task<Guid> ReleasedExtrudeAndPackAsync(Plant plant)
+    {
+        var created = await db.SendAsync(new CreateProcessCommand(plant.Site, "EXT-PACK", "Extrude and Pack", null));
+        var process = await QueryAsync<GetProcessQuery, ProcessDto>(new GetProcessQuery(created.Id));
+        await db.SendAsync(new SetProcessScopeCommand(created.Id, process.Version, true, [], []));
+        var v1 = Assert.Single(process.Versions);
+        var draft = await QueryAsync<GetProcessVersionQuery, ProcessVersionDto>(new GetProcessVersionQuery(created.Id, v1.Id));
+        var saved = await db.SendAsync(new SaveProcessDraftCommand(created.Id, v1.Id, draft.Version, ExtrudeAndPack(plant)));
+        await db.SendAsync(new ReleaseProcessVersionCommand(created.Id, v1.Id, saved.Version, null));
+        return created.Id;
     }
 }

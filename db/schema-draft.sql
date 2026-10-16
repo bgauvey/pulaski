@@ -604,6 +604,7 @@ CREATE TABLE core.work_order (
     order_number                text NOT NULL,
     material_id                 uuid NOT NULL REFERENCES core.material(id),
     bom_id                      uuid REFERENCES core.bom(id),
+    process_version_id          uuid REFERENCES core.process_version(id),  -- the released process it was made from (D-024)
     planned_qty                 core.qty NOT NULL CHECK (planned_qty > 0),
     uom_id                      uuid NOT NULL REFERENCES core.uom(id),
     target_equipment_id         uuid REFERENCES core.equipment(id),   -- area or work center it is routed to
@@ -618,6 +619,7 @@ CREATE TABLE core.work_order (
     external_key                text,
     external_version            text,
     erp_change_pending          boolean NOT NULL DEFAULT false,       -- ERP changed after release; planner must accept
+    notes                       text CHECK (length(notes) <= 4000),   -- the planner's note on the order
     created_at                  timestamptz NOT NULL DEFAULT now(),
     updated_at                  timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT wo_number_uq UNIQUE (site_id, order_number),
@@ -647,6 +649,7 @@ CREATE TABLE core.job (
     earliest_start      timestamptz,                            -- hold until (material arrival, customer window)
     latest_end          timestamptz,                            -- finish by; with earliest_start, the window of a job planned to a group (D-022)
     group_equipment_id  uuid REFERENCES core.equipment(id),     -- the group (e.g. department) it was planned to; kept after a line takes it (D-022)
+    process_operation_id uuid REFERENCES core.process_operation(id), -- the operation it was made for (D-024)
     planned_duration    interval CHECK (planned_duration > interval '0'),  -- non-production jobs; production uses the run standard
     counts_as_planned_downtime boolean NOT NULL DEFAULT false,  -- e.g. planned maintenance excluded from OEE
     -- planned/dispatched/firmed follow the work order (D-018); the rest is execution

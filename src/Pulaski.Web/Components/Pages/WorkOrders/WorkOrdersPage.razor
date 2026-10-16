@@ -247,10 +247,15 @@
                                     <dd>@(p.BaselineStart is null ? "Not published yet" : $"{Display.SiteTime(p.BaselineStart, tz)} – {Display.SiteTime(p.BaselineEnd, tz)}")</dd>
                                     <dt>On lines</dt>
                                     <dd>@Number(p.PlacedQty) of @Number(wo.PlannedQty) @wo.UomCode</dd>
-                                    <dt>Target</dt>
-                                    <dd>@(wo.TargetEquipmentCode ?? "Any")</dd>
+                                    <dt>Process</dt>
+                                    <dd>@(wo.ProcessCode is null ? "None" : $"{wo.ProcessCode} · {wo.ProcessName} (v{wo.ProcessVersionNumber})")</dd>
                                     <dt>Origin</dt>
                                     <dd>@Display.Label(wo.Origin) · @wo.SiteCode</dd>
+                                    @if (wo.Notes is not null)
+                                    {
+                                        <dt>Notes</dt>
+                                        <dd class="wo-notes">@wo.Notes</dd>
+                                    }
                                 </dl>
                                 <div>
                                     @if (p.Jobs.Count == 0)

@@ -1,5 +1,7 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Processes;
+using Pulaski.Application.Scheduling;
+using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Processes;
 using Pulaski.Domain.Processes;
 
@@ -35,6 +37,22 @@ public sealed class InMemoryProcesses : IProcessReadStore, IProcessRepository
             _materialDefaults[materialId] = null;
             _materialClasses[materialId] = materialClassId;
         }
+    }
+
+    /// <summary>An active process in the site with <paramref name="definition"/> released as version 1, making everything unless <paramref name="scope"/> says otherwise.</summary>
+    public ReleasedProcess AddReleased(Guid siteId, ProcessDefinition definition, ProcessScope? scope = null)
+    {
+        var process = new Process(Guid.CreateVersion7(), siteId, "P-" + Guid.NewGuid().ToString("N")[..4], "Process", null, true);
+        var version = new ProcessVersion(
+            Guid.CreateVersion7(), process.Id, 1, ProcessVersionStatus.Released, definition, DateTimeOffset.UnixEpoch, null);
+        Put(_processes, process.Id, process);
+        Put(_versions, version.Id, version);
+        lock (_lock)
+        {
+            _scopes[process.Id] = scope ?? ProcessScope.Of(true, [], []);
+        }
+
+        return new ReleasedProcess(process, version);
     }
 
     public ProcessScope ScopeOf(Guid processId)
@@ -152,6 +170,47 @@ public sealed class InMemoryProcesses : IProcessReadStore, IProcessRepository
         lock (_lock)
         {
             return Task.FromResult(_versions.Values.FirstOrDefault(v => v.Value.ProcessId == processId && v.Value.Status == ProcessVersionStatus.Released));
+        }
+    }
+
+    /// <summary>Where order checks look up equipment and capabilities; <see cref="InMemoryStores"/> points it at its scheduling store.</summary>
+    public Func<Guid, Guid, (SchedulingLine Line, bool CanRun)?> Eligibility { get; set; } = (_, _) => null;
+
+    /// <summary>Rows for the version's operations; equipment the scheduling store doesn't know is left out. Materials are all "MAT".</summary>
+    public Task<IReadOnlyList<OrderEquipmentRow>> GetOrderEquipmentAsync(
+        Guid versionId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        ProcessDefinition definition;
+        lock (_lock)
+        {
+            definition = _versions[versionId].Value.Definition;
+        }
+
+        return Task.FromResult<IReadOnlyList<OrderEquipmentRow>>([.. definition.Operations
+            .SelectMany(o => o.Equipment.Select(e => (Op: o, Found: Eligibility(e.EquipmentId, materialId))))
+            .Where(x => x.Found is not null)
+            .Select(x => new OrderEquipmentRow
+            {
+                OperationId = x.Op.Id,
+                OperationNumber = x.Op.Number,
+                OperationName = x.Op.Name,
+                EquipmentId = x.Found!.Value.Line.Id,
+                EquipmentCode = x.Found.Value.Line.Code,
+                SiteId = x.Found.Value.Line.SiteId,
+                IsSchedulable = x.Found.Value.Line.IsSchedulable,
+                CanRunJob = x.Found.Value.Line.CanRunJob,
+                IsActive = true,
+                MaterialCode = "MAT",
+                CanRunMaterial = x.Found.Value.CanRun,
+            })]);
+    }
+
+    public Task<ReleasedProcess?> GetReleasedAsync(Guid processId, bool lockVersion, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var version = _versions.Values.FirstOrDefault(v => v.Value.ProcessId == processId && v.Value.Status == ProcessVersionStatus.Released);
+            return Task.FromResult(version is null ? null : new ReleasedProcess(_processes[processId].Value, version.Value));
         }
     }
 

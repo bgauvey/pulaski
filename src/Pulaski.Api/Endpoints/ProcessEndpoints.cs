@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Processes;
+using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Processes;
+using Pulaski.Contracts.WorkOrders;
 
 namespace Pulaski.Api.Endpoints;
 
@@ -20,6 +22,14 @@ internal static class ProcessEndpoints
             IQueryHandler<ListProcessesQuery, IReadOnlyList<ProcessSummaryDto>> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ListProcessesQuery(siteId, materialId), ct)));
+
+        // Whether an order for the material can be made from the process, as creating it would check (D-024).
+        group.MapGet("/{id:guid}/order-check", async Task<Ok<ProcessOrderCheckDto>> (
+            Guid id,
+            Guid materialId,
+            IQueryHandler<CheckProcessForOrderQuery, ProcessOrderCheckDto> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CheckProcessForOrderQuery(id, materialId), ct)));
 
         group.MapPut("/{id:guid}/scope", async Task<Ok<VersionResponse>> (
             Guid id,
