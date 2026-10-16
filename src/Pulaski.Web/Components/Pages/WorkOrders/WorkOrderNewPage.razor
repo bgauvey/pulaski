@@ -91,11 +91,15 @@ else
                 <label class="form-label" for="uom">Unit</label>
                 <InputSelect id="uom" class="form-select" @bind-Value="_form.UomId">
                     <option value="@Guid.Empty">Choose a unit…</option>
-                    @foreach (var u in _uoms)
+                    @foreach (var u in _uoms.Where(u => u.IsActive))
                     {
                         <option value="@u.Id">@u.Code · @u.Name</option>
                     }
                 </InputSelect>
+                @if (MaterialCode is not null)
+                {
+                    <div class="form-text">Any unit that converts to @MaterialCode's base unit. <a href="units?material=@_form.MaterialId">Its conversions</a></div>
+                }
             </div>
 
             <div class="col-sm-6">
@@ -164,7 +168,7 @@ else
                 <p class="small">
                     Components are planned from the
                     <a href="boms/@bom.Id">BOM for @(bom.ProcessCode ?? "any process"), version @bom.ReleasedVersion</a>
-                    (@bom.ReleasedItems components), for each job that consumes them. Enter the quantity in the BOM's unit.
+                    (@bom.ReleasedItems components), for each job that consumes them.
                 </p>
             }
             else

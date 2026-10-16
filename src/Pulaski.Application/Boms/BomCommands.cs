@@ -1,10 +1,12 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Processes;
+using Pulaski.Application.Units;
 using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
 using Pulaski.Domain;
 using Pulaski.Domain.Boms;
+using Pulaski.Domain.Units;
 
 namespace Pulaski.Application.Boms;
 
@@ -64,6 +66,7 @@ internal sealed class SaveBomDraftHandler(
     IUnitOfWork unitOfWork,
     IBomRepository boms,
     IProcessRepository processes,
+    IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events) : ICommandHandler<SaveBomDraftCommand, SaveBomDraftResponse>
 {
@@ -75,7 +78,7 @@ internal sealed class SaveBomDraftHandler(
         var bom = await BomLocks.BomAsync(boms, command.BomId, cancellationToken);
         var current = await BomLocks.VersionAsync(boms, command.BomId, command.VersionId, command.ExpectedVersion, cancellationToken);
 
-        var materials = await boms.GetMaterialsAsync(BomRules.MaterialIds(definition), cancellationToken);
+        var materials = await boms.GetMaterialsAsync(BomRules.MaterialIds(definition, bom.MaterialId), cancellationToken);
         if (BomRules.ReferenceProblems(definition, bom, materials, null, malformedOnly: true) is { Count: > 0 } malformed)
         {
             throw new DomainRuleException(malformed[0].Message);
@@ -86,10 +89,11 @@ internal sealed class SaveBomDraftHandler(
         var version = await boms.UpdateVersionAsync(saved, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         var operations = await BomLocks.OperationsAsync(processes, bom, cancellationToken);
+        var converterFor = await BomLocks.ConvertersAsync(units, materials, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         var problems = definition.ReleaseProblems()
-            .Concat(BomRules.ReferenceProblems(definition, bom, materials, operations, malformedOnly: false));
+            .Concat(BomRules.ReferenceProblems(definition, bom, materials, operations, malformedOnly: false, converterFor));
         return new SaveBomDraftResponse(version, [.. problems.Select(BomRules.ToDto)]);
     }
 }
@@ -98,6 +102,7 @@ internal sealed class ReleaseBomVersionHandler(
     IUnitOfWork unitOfWork,
     IBomRepository boms,
     IProcessRepository processes,
+    IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events,
     TimeProvider timeProvider) : ICommandHandler<ReleaseBomVersionCommand, VersionResponse>
@@ -112,9 +117,10 @@ internal sealed class ReleaseBomVersionHandler(
         var bom = await BomLocks.BomAsync(boms, command.BomId, cancellationToken);
         var draft = await BomLocks.VersionAsync(boms, command.BomId, command.VersionId, command.ExpectedVersion, cancellationToken);
 
-        var materials = await boms.GetMaterialsAsync(BomRules.MaterialIds(draft.Definition), cancellationToken);
+        var materials = await boms.GetMaterialsAsync(BomRules.MaterialIds(draft.Definition, bom.MaterialId), cancellationToken);
         var operations = await BomLocks.OperationsAsync(processes, bom, cancellationToken);
-        if (BomRules.ReferenceProblems(draft.Definition, bom, materials, operations, malformedOnly: false) is { Count: > 0 } problems)
+        var converterFor = await BomLocks.ConvertersAsync(units, materials, cancellationToken);
+        if (BomRules.ReferenceProblems(draft.Definition, bom, materials, operations, malformedOnly: false, converterFor) is { Count: > 0 } problems)
         {
             throw new DomainRuleException(string.Join(" ", problems.Select(p => p.Message)));
         }
@@ -190,6 +196,15 @@ internal static class BomLocks
         }
 
         return current.Value;
+    }
+
+    /// <summary>A converter per material for the BOM's own material and its components (D-026).</summary>
+    public static async Task<Func<Guid, UnitConverter>> ConvertersAsync(
+        IUnitRepository units, IReadOnlyList<BomMaterialRow> materials, CancellationToken cancellationToken)
+    {
+        var all = await units.GetUnitsAsync(cancellationToken);
+        var conversions = await units.GetConversionsAsync([.. materials.Select(m => m.Id)], cancellationToken);
+        return materialId => UnitConversions.For(materialId, all, conversions);
     }
 
     /// <summary>The operation numbers of the BOM's process's released version; null when the BOM has no process or the process no released version.</summary>

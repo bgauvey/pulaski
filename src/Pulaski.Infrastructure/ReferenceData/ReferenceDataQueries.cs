@@ -8,10 +8,14 @@ namespace Pulaski.Infrastructure.ReferenceData;
 /// <summary>Read side for units and materials.</summary>
 internal sealed class ReferenceDataQueries(NpgsqlDataSource dataSource) : IReferenceDataReadStore
 {
+    // Base code: the dimension's unit with factor 1 (D-026); packaging units have none.
     private const string Uoms = """
-        SELECT id, code, name, dimension
-        FROM core.uom
-        ORDER BY dimension, code
+        SELECT u.id, u.code, u.name, u.dimension, u.to_base_factor, u.is_active, u.xmin::text::bigint AS version,
+               (SELECT b.code FROM core.uom b
+                WHERE b.dimension = u.dimension AND b.to_base_factor = 1
+                ORDER BY b.is_active DESC, b.code LIMIT 1) AS base_code
+        FROM core.uom u
+        ORDER BY u.dimension, u.to_base_factor NULLS LAST, u.code
         """;
 
     private const string Materials = """

@@ -26,9 +26,10 @@ public class CreateWorkOrderHandlerTests
     public CreateWorkOrderHandlerTests()
     {
         _handler = new CreateWorkOrderHandler(
-            _f.Stores.UnitOfWork, _f.Stores.WorkOrders, _f.Stores.Processes, _f.Stores.Boms, _f.Stores.Materials, _f.Stores.Scheduling,
+            _f.Stores.UnitOfWork, _f.Stores.WorkOrders, _f.Stores.Processes, _f.Stores.Boms, _f.Stores.Units, _f.Stores.Materials, _f.Stores.Scheduling,
             _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
         _material = _f.Stores.Materials.AddActive();
+        _f.Stores.Boms.AddMaterial(_material, _uom);
     }
 
     [Fact]
@@ -87,6 +88,28 @@ public class CreateWorkOrderHandlerTests
 
         _f.Stores.Boms.AddReleased(_material, null, new BomDefinition(1m, Guid.CreateVersion7(), [BomLine(10, Guid.CreateVersion7(), 1m, null)]));
         await Assert.ThrowsAsync<DomainRuleException>(() => _handler.HandleAsync(Command(route.Process.Id, number: "WO-B"), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task An_order_in_another_unit_is_converted_to_the_bom_unit()
+    {
+        var metre = _f.Stores.Units.AddUnit("m", "length", 1m);
+        var foot = _f.Stores.Units.AddUnit("ft", "length", 0.3048m);
+        var kg = _f.Stores.Units.AddUnit("kg", "mass", 1m);
+        _f.Stores.Boms.AddMaterial(_material, metre.Id);
+        var route = _f.Stores.Processes.AddReleased(_site, OneOperation(Line().Id));
+        var blend = Guid.CreateVersion7();
+        _f.Stores.Boms.AddReleased(_material, null, new BomDefinition(1000m, metre.Id, [BomLine(10, blend, 1450m, null)]));
+
+        var order = await _handler.HandleAsync(Command(route.Process.Id, qty: 1000m) with { UomId = foot.Id }, CancellationToken.None);
+
+        // 1000 ft = 304.8 m, which takes 304.8 / 1000 × 1450 = 441.96 kg of blend.
+        Assert.Equal(foot.Id, _f.Stores.WorkOrders.Find(order.Id)!.Value.UomId);
+        Assert.Equal(441.96m, Assert.Single(_f.Stores.Boms.JobMaterials).PlannedQty);
+
+        var refused = await Assert.ThrowsAsync<DomainRuleException>(() =>
+            _handler.HandleAsync(Command(route.Process.Id, number: "WO-2") with { UomId = kg.Id }, CancellationToken.None));
+        Assert.Contains("kg doesn't convert to m", refused.Message, StringComparison.Ordinal);
     }
 
     private static BomItem BomLine(int line, Guid component, decimal qty, int? op) =>

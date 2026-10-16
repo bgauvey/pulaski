@@ -50,15 +50,19 @@ People & access                            History & events
 
 ## 1. Reference data
 
-### core.uom — units of measure · *In use*
+### core.uom — units of measure (D-026) · *In use*
+
+The unit catalog. A unit with a factor converts to every other unit of its dimension, for every material. A packaging unit (box, bag, pallet) has none and converts only through a material's own conversion. `db/seed-units.sql` loads the standard metric and US units with their exact factors.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `code` | text | no | Unique short code: `kg`, `m`, `ea`. |
-| `name` | text | no | Display name. |
-| `dimension` | text | no | `mass`, `length`, `count`, `volume`, `area`, `time` or `other`. Units only convert within a dimension. |
-| `to_base_factor` | numeric(24,12) | no | Multiply by this to reach the dimension's base unit (lb → kg = 0.45359237). Default 1. |
+| `code` | text | no | Unique short code: `kg`, `m`, `ea`, `box`. Fixed once created. |
+| `name` | text | no | Display name. The only thing besides `is_active` that can change. |
+| `dimension` | text | no | `mass`, `length`, `count`, `volume`, `area`, `time`, or `other` for packaging. Fixed once created. |
+| `to_base_factor` | numeric(24,12) | yes | How many of the dimension's base unit one of this is (1 lb = 0.45359237 kg). The base unit has 1. Null only for `other` (packaging). Positive. Fixed once created, since quantities are stored in the unit. |
+| `is_active` | boolean | no | Inactive units are not offered for new entries; quantities already in them still convert. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ### core.packml_state — PackML states · *Planned (seeded)*
 
@@ -201,16 +205,18 @@ Groups materials (e.g. all resins), so changeover rules can match a class instea
 | `default_process_id` | uuid → process | yes | The process order creation pre-selects for it (D-023), among those whose scope covers it; the planner may pick another. Can only be set to a process that makes the material. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
-### core.material_uom_conversion — per-material unit conversions · *Planned*
+### core.material_uom_conversion — a material's own conversions (D-026) · *In use*
 
-Conversions that depend on the material (metres of profile to kilograms, for example).
+Conversions true for one material only: 1 m of a profile weighs 1.6 kg, a box holds 500 end caps. Each works both ways and combines with the standard factors (with m to kg, feet convert to pounds). A material's conversions never give two routes between the same units, so every conversion has one answer; a pair is stored one way only.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `material_id` | uuid → material | no | The material. Part of the primary key. |
 | `from_uom_id` | uuid → uom | no | Source unit. Part of the primary key. |
-| `to_uom_id` | uuid → uom | no | Target unit. Part of the primary key. |
-| `factor` | numeric(24,12) | no | Multiply a quantity in the source unit by this to get the target unit. Positive. |
+| `to_uom_id` | uuid → uom | no | Target unit; never the source unit. Part of the primary key. |
+| `factor` | numeric(24,12) | no | 1 source unit = this many target units. Positive. |
+| `is_active` | boolean | no | Removing a conversion switches it off; setting it again switches it back on. |
+| `updated_at` | timestamptz | no | When it was last set or removed. |
 
 ### core.process — process routes (D-023) · *In use*
 

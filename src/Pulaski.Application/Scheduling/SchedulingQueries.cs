@@ -1,4 +1,5 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Units;
 using Pulaski.Application.Errors;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Domain;
@@ -70,7 +71,7 @@ internal static class TimelineMapping
             r.Id, r.EquipmentId, r.FromMaterialId, r.FromMaterialClassId, r.ToMaterialId, r.ToMaterialClassId, r.Duration));
         var standards = source.StandardChangeovers.ToDictionary(s => s.MaterialId, s => s.StandardChangeover);
 
-        var jobs = source.Jobs.Select(ToPlanned).ToList();
+        var jobs = source.Jobs.Select(j => ToPlanned(j, source)).ToList();
 
         return new LinePlan(
             source.Line.Id,
@@ -104,11 +105,11 @@ internal static class TimelineMapping
             Warnings = [.. timeline.Warnings.Select(ToDto)],
             Overlaps = [.. timeline.Overlaps.Select(o => new TimelineOverlapDto(
                 o.FirstJobId, o.FirstKind, o.SecondJobId, o.SecondKind, o.Start, o.End))],
-            Segments = [.. timeline.Segments.Select(s => ToDto(s, jobs[s.JobId], materialCodes))],
+            Segments = [.. timeline.Segments.Select(s => ToDto(s, jobs[s.JobId], materialCodes, source))],
         };
     }
 
-    private static TimelineSegmentDto ToDto(TimelineSegment segment, PlanJobRow job, Dictionary<Guid, string> materialCodes)
+    private static TimelineSegmentDto ToDto(TimelineSegment segment, PlanJobRow job, Dictionary<Guid, string> materialCodes, LinePlanSource source)
     {
         var placeholder = segment.Kind == SegmentKind.ChangeoverPlaceholder;
         return new TimelineSegmentDto
@@ -130,7 +131,7 @@ internal static class TimelineMapping
             PlannedQty = placeholder ? null : job.PlannedQty,
             RemainingQty = segment.RemainingQty,
             UomCode = placeholder ? null : job.UomCode,
-            RatePerHour = segment.Rate?.RatePerHour,
+            RatePerHour = segment.Rate is { } rate ? InJobUnit(rate, job.UomId, source) : null,
             RateSource = segment.Rate?.Source,
             ChangeoverSource = segment.Changeover?.Source,
             DueAt = placeholder ? null : job.DueAt,
@@ -152,14 +153,15 @@ internal static class TimelineMapping
         var calendar = Calendar(source);
         var segments = source.Jobs.Select(job =>
         {
+            // Each line's rate is stated in the job's unit, so lines whose rate is in another unit compare (D-026).
             var runners = source.Runners
                 .Where(r => r.MaterialId == job.MaterialId)
                 .Select(r => new Runner(
                     r.LineId,
                     r.LineCode,
-                    r.RatePerHour is { } rate && r.UomId is { } uom ? new RunRate(r.MaterialId, uom, rate, r.RateSource ?? RateSource.Calculated) : null))
+                    r.RatePerHour is { } rate && r.UomId is { } uom ? RateInJobUnit(new RunRate(r.MaterialId, uom, rate, r.RateSource ?? RateSource.Calculated), job.UomId, source) : null))
                 .ToList();
-            var window = GroupWindows.Evaluate(ToPlanned(job), runners, calendar, now);
+            var window = GroupWindows.Evaluate(ToPlanned(job, source), runners, calendar, now);
 
             return new TimelineSegmentDto
             {
@@ -207,7 +209,23 @@ internal static class TimelineMapping
     /// A firmed job is anchored at its firmed start (D-019), unless it was planned to a group: that
     /// job was firmed to a window, not a start, so on a line it runs where it is sequenced (D-022).
     /// </summary>
-    private static PlannedJob ToPlanned(PlanJobRow j) => new(
+    /// <summary>What one of the job's unit is in its run standard's unit, when they differ and convert (D-026).</summary>
+    private static decimal? ToRateUnit(Guid? materialId, Guid? jobUomId, Guid rateUomId, LinePlanSource source) =>
+        materialId is { } material && jobUomId is { } uom && uom != rateUomId
+            ? UnitConversions.For(material, source.Units, source.Conversions).Factor(uom, rateUomId)
+            : null;
+
+    /// <summary>The rate per hour in the job's unit, for display; the rate as it is when the units match or don't convert.</summary>
+    private static decimal InJobUnit(RunRate rate, Guid? jobUomId, LinePlanSource source) =>
+        ToRateUnit(rate.MaterialId, jobUomId, rate.UomId, source) is { } factor ? Math.Round(rate.RatePerHour / factor, 6) : rate.RatePerHour;
+
+    /// <summary>The rate restated in the job's unit when they convert, so a group's lines compare whatever unit their rates use.</summary>
+    private static RunRate RateInJobUnit(RunRate rate, Guid? jobUomId, LinePlanSource source) =>
+        ToRateUnit(rate.MaterialId, jobUomId, rate.UomId, source) is { } factor
+            ? rate with { UomId = jobUomId!.Value, RatePerHour = rate.RatePerHour / factor }
+            : rate;
+
+    private static PlannedJob ToPlanned(PlanJobRow j, LinePlanSource source) => new(
         j.JobId,
         j.JobType,
         j.Status,
@@ -220,7 +238,10 @@ internal static class TimelineMapping
         j.PlannedDuration,
         j.DueAt,
         j.Status == JobStatus.Firmed && j.GroupEquipmentId is null ? j.PlannedStart : null,
-        j.LatestEnd);
+        j.LatestEnd,
+        source.Rates.FirstOrDefault(r => r.MaterialId == j.MaterialId) is { } rate
+            ? ToRateUnit(j.MaterialId, j.UomId, rate.UomId, source)
+            : null);
 
     private static WorkCalendar Calendar(LinePlanSource source)
     {

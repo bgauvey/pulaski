@@ -40,12 +40,19 @@ CREATE DOMAIN core.qty AS numeric(18,6);
 -- 1. REFERENCE DATA
 -- =====================================================================
 
+-- Units of measure (D-026). A unit with a factor converts to every other unit of its
+-- dimension for any material (kg, lb, m, ft). A packaging unit (box, bag, pallet) has no
+-- factor: it converts only through a material's own conversion.
 CREATE TABLE core.uom (
     id              uuid PRIMARY KEY DEFAULT uuidv7(),
-    code            text NOT NULL UNIQUE,              -- 'kg', 'lb', 'm', 'ft', 'ea'
+    code            text NOT NULL UNIQUE,              -- 'kg', 'lb', 'm', 'ft', 'ea', 'box'
     name            text NOT NULL,
     dimension       text NOT NULL CHECK (dimension IN ('mass','length','count','volume','area','time','other')),
-    to_base_factor  numeric(24,12) NOT NULL DEFAULT 1   -- multiply to reach the dimension's base unit
+    to_base_factor  numeric(24,12) CHECK (to_base_factor > 0),  -- multiply to reach the dimension's base unit; null: packaging
+    is_active       boolean NOT NULL DEFAULT true,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT uom_packaging_ck CHECK (to_base_factor IS NOT NULL OR dimension = 'other')
 );
 
 -- PackML StateCurrent numbering (ISA-TR88.00.02). Code is the standard number,
@@ -221,12 +228,19 @@ CREATE UNIQUE INDEX material_external_uq ON core.material (external_system, exte
 ALTER TABLE core.residence_time
     ADD CONSTRAINT residence_time_material_fk FOREIGN KEY (material_id) REFERENCES core.material(id);
 
+-- A conversion true for one material only (D-026): 1 from_uom = factor to_uom, e.g.
+-- 1 m of a profile = 1.6 kg, or 1 box of end caps = 500 ea. It works both ways and
+-- combines with the standard factors (so ft to lb follows from m to kg). A material's
+-- conversions never form two routes between the same units. Removing one switches it off.
 CREATE TABLE core.material_uom_conversion (
-    material_id     uuid NOT NULL REFERENCES core.material(id) ON DELETE CASCADE,
+    material_id     uuid NOT NULL REFERENCES core.material(id),
     from_uom_id     uuid NOT NULL REFERENCES core.uom(id),
     to_uom_id       uuid NOT NULL REFERENCES core.uom(id),
     factor          numeric(24,12) NOT NULL CHECK (factor > 0),
-    PRIMARY KEY (material_id, from_uom_id, to_uom_id)
+    is_active       boolean NOT NULL DEFAULT true,
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (material_id, from_uom_id, to_uom_id),
+    CONSTRAINT material_uom_conversion_self_ck CHECK (from_uom_id <> to_uom_id)
 );
 
 -- Process routes (D-023, ISA-95 operations definition): a reusable template such as

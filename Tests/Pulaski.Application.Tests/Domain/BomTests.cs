@@ -37,7 +37,7 @@ public class BomTests
     [Fact]
     public void Each_item_goes_to_the_jobs_of_its_operation_by_their_share()
     {
-        var components = BomExplosion.For(ProfileBom(), 2400m, Metre, Jobs(2400m));
+        var components = BomExplosion.For(ProfileBom(), 2400m, Jobs(2400m));
 
         // Blend: 2400 / 1000 × 1450 × 1.02 = 3549.6 kg, split 60/40 between the extruders.
         Assert.Equal(
@@ -50,7 +50,7 @@ public class BomTests
     {
         var bom = new BomDefinition(1000m, Metre, [Item(10, Blend, 1000m, Kg)]);
 
-        var components = BomExplosion.For(bom, 1000m, Metre, Jobs(1000m));
+        var components = BomExplosion.For(bom, 1000m, Jobs(1000m));
 
         Assert.Equal([0, 1], components.Select(c => c.JobIndex));
         Assert.Equal(1000m, components.Sum(c => c.PlannedQty));
@@ -61,19 +61,17 @@ public class BomTests
     {
         var bom = new BomDefinition(3m, Metre, [Item(10, Blend, 1m, Kg, op: 10)]);
 
-        var components = BomExplosion.For(bom, 1m, Metre, Jobs(1m));
+        var components = BomExplosion.For(bom, 1m, Jobs(1m));
 
         Assert.Equal(0.333333m, components.Sum(c => c.PlannedQty));
         Assert.Equal([0.199999m, 0.133334m], components.Select(c => c.PlannedQty));
     }
 
     [Fact]
-    public void The_order_must_be_in_the_bom_base_unit_and_name_real_operations()
+    public void Items_must_name_operations_the_process_has()
     {
-        Assert.Throws<DomainRuleException>(() => BomExplosion.For(ProfileBom(), 10m, Kg, Jobs(10m)));
-
         var wrongOperation = new BomDefinition(1m, Metre, [Item(10, Blend, 1m, Kg, op: 20)]);
-        var refused = Assert.Throws<DomainRuleException>(() => BomExplosion.For(wrongOperation, 10m, Metre, Jobs(10m)));
+        var refused = Assert.Throws<DomainRuleException>(() => BomExplosion.For(wrongOperation, 10m, Jobs(10m)));
         Assert.Contains("operation 20", refused.Message, StringComparison.Ordinal);
     }
 

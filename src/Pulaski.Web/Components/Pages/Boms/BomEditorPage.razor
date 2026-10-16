@@ -45,13 +45,20 @@ else
             <div class="input-group">
                 <input id="base-qty" type="number" class="form-control" min="0" step="any" style="max-width: 9rem"
                        value="@Plain(_baseQty)" @onchange="e => Edit(() => _baseQty = Decimal(e))" disabled="@ReadOnly" />
-                <span class="input-group-text">@UomCode(_baseUomId) of @_bom.MaterialCode</span>
+                <select class="form-select" style="max-width: 7rem" aria-label="BOM unit" value="@_baseUomId" disabled="@ReadOnly"
+                        @onchange="e => Edit(() => _baseUomId = Guid.Parse(e.Value!.ToString()!))">
+                    @foreach (var u in ActiveUnits(_baseUomId))
+                    {
+                        <option value="@u.Id">@u.Code</option>
+                    }
+                </select>
+                <span class="input-group-text">of @_bom.MaterialCode</span>
             </div>
         </div>
-        @if (!ReadOnly)
-        {
-            <div class="small text-muted pb-2">The order is entered in this unit.</div>
-        }
+        <div class="small pb-2">
+            <a href="units?material=@_bom.MaterialId">Unit conversions for @_bom.MaterialCode</a>
+            <span class="text-muted">· orders may use any unit that converts to this one</span>
+        </div>
     </div>
 
     <div class="table-panel mb-3">
@@ -92,7 +99,7 @@ else
                         <td>
                             <select class="form-select form-select-sm" value="@item.UomId" disabled="@ReadOnly"
                                     @onchange="e => Edit(() => item.UomId = Guid.Parse(e.Value!.ToString()!))">
-                                @foreach (var u in _uoms)
+                                @foreach (var u in ActiveUnits(item.UomId))
                                 {
                                     <option value="@u.Id">@u.Code</option>
                                 }
@@ -292,7 +299,8 @@ else
     // numeric(18,6) comes back with trailing zeros; show 1000, not 1000.000000.
     private static string Plain(decimal value) => value.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture);
 
-    private string UomCode(Guid id) => _uoms.FirstOrDefault(u => u.Id == id)?.Code ?? "?";
+    // Active units, plus the one already chosen even if it has since been switched off.
+    private IEnumerable<UomDto> ActiveUnits(Guid current) => _uoms.Where(u => u.IsActive || u.Id == current);
 
     private static decimal Decimal(ChangeEventArgs e) =>
         decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var value) ? value : 0m;

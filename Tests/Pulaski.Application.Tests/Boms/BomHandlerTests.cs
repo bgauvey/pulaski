@@ -1,5 +1,6 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Boms;
+using Pulaski.Application.Units;
 using Pulaski.Contracts.Boms;
 using Pulaski.Domain;
 using Pulaski.Domain.Boms;
@@ -24,9 +25,9 @@ public class BomHandlerTests
 
     private CreateBomHandler Create() => new(_f.Stores.UnitOfWork, _f.Stores.Boms, _f.Stores.Processes, _f.Stores.Events, _f.Events, _f.Ids);
 
-    private SaveBomDraftHandler Save() => new(_f.Stores.UnitOfWork, _f.Stores.Boms, _f.Stores.Processes, _f.Stores.Events, _f.Events);
+    private SaveBomDraftHandler Save() => new(_f.Stores.UnitOfWork, _f.Stores.Boms, _f.Stores.Processes, _f.Stores.Units, _f.Stores.Events, _f.Events);
 
-    private ReleaseBomVersionHandler Release() => new(_f.Stores.UnitOfWork, _f.Stores.Boms, _f.Stores.Processes, _f.Stores.Events, _f.Events, _f.Time);
+    private ReleaseBomVersionHandler Release() => new(_f.Stores.UnitOfWork, _f.Stores.Boms, _f.Stores.Processes, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Time);
 
     private StartBomDraftHandler StartDraft() => new(_f.Stores.UnitOfWork, _f.Stores.Boms, _f.Stores.Events, _f.Events, _f.Ids);
 
@@ -107,6 +108,31 @@ public class BomHandlerTests
 
         Assert.Equal(BomVersionStatus.Obsolete, _f.Stores.Boms.FindVersion(v1.Value.Id)!.Value.Status);
         Assert.Equal(BomVersionStatus.Released, _f.Stores.Boms.FindVersion(v2.Id)!.Value.Status);
+    }
+
+    [Fact]
+    public async Task An_item_unit_must_convert_to_the_component_base_unit_before_release()
+    {
+        var kg = _f.Stores.Units.AddUnit("kg", "mass", 1m);
+        var box = _f.Stores.Units.AddUnit("box", "other", null);
+        _f.Stores.Boms.AddMaterial(_blend, kg.Id);
+        _f.Stores.Units.AddMaterial(_blend);
+        var created = await Create().HandleAsync(new CreateBomCommand(_profile, null), CancellationToken.None);
+        var draft = await DraftAsync(created.Id);
+
+        var saved = await Save().HandleAsync(
+            new SaveBomDraftCommand(created.Id, draft.Value.Id, draft.Version, Definition(Line(10, _blend, 2m) with { UomId = box.Id })),
+            CancellationToken.None);
+        var problem = Assert.Single(saved.Problems);
+        Assert.Equal("unit_conversion", problem.Code);
+        Assert.Contains("box doesn't convert to kg", problem.Message, StringComparison.Ordinal);
+        await Assert.ThrowsAsync<DomainRuleException>(() => Release().HandleAsync(
+            new ReleaseBomVersionCommand(created.Id, draft.Value.Id, saved.Version, null), CancellationToken.None));
+
+        // With a conversion for the blend (a box holds 40 kg) it releases.
+        await new SetMaterialConversionHandler(_f.Stores.UnitOfWork, _f.Stores.Units, _f.Stores.Events, _f.Events)
+            .HandleAsync(new SetMaterialConversionCommand(_blend, box.Id, kg.Id, 40m), CancellationToken.None);
+        await Release().HandleAsync(new ReleaseBomVersionCommand(created.Id, draft.Value.Id, saved.Version, null), CancellationToken.None);
     }
 
     private async Task<Versioned<BomVersion>> DraftAsync(Guid bomId)

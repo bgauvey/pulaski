@@ -2,7 +2,7 @@
 
 *Last updated: 2026-10-15 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
-This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#10-reference) tables give the exact rules.
+This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#11-reference) tables give the exact rules.
 
 ## Contents
 
@@ -11,14 +11,15 @@ This guide explains how to use Pulaski to set up your plant, plan production and
 3. [Setting up: what to do first](#3-setting-up-what-to-do-first)
 4. [Equipment](#4-equipment)
 5. [Processes](#5-processes)
-6. [Bills of materials (BOMs)](#6-bills-of-materials-boms)
-7. [Creating a work order](#7-creating-a-work-order)
-8. [The Work orders screen](#8-the-work-orders-screen)
-9. [The Schedule](#9-the-schedule)
-10. [Reference](#10-reference)
-11. [What Pulaski doesn't do yet](#11-what-pulaski-doesnt-do-yet)
-12. [Troubleshooting and questions](#12-troubleshooting-and-questions)
-13. [Glossary](#13-glossary)
+6. [Units and conversions](#6-units-and-conversions)
+7. [Bills of materials (BOMs)](#7-bills-of-materials-boms)
+8. [Creating a work order](#8-creating-a-work-order)
+9. [The Work orders screen](#9-the-work-orders-screen)
+10. [The Schedule](#10-the-schedule)
+11. [Reference](#11-reference)
+12. [What Pulaski doesn't do yet](#12-what-pulaski-doesnt-do-yet)
+13. [Troubleshooting and questions](#13-troubleshooting-and-questions)
+14. [Glossary](#14-glossary)
 
 ---
 
@@ -36,7 +37,7 @@ Today you can use Pulaski to:
 - plan and sequence those jobs on a live **schedule**, and see when each one is expected to run;
 - publish the plan to the floor and freeze it.
 
-Recording what actually happens on the floor (running jobs, counts, downtime, material lots) is still being built; see [What Pulaski doesn't do yet](#11-what-pulaski-doesnt-do-yet).
+Recording what actually happens on the floor (running jobs, counts, downtime, material lots) is still being built; see [What Pulaski doesn't do yet](#12-what-pulaski-doesnt-do-yet).
 
 ### Opening Pulaski
 
@@ -48,7 +49,7 @@ There is no sign-in yet. Everyone who can reach the address can see and change e
 
 - **Menu (left).** Two groups of pages:
   - **Operate:** **Overview**, **Work orders**, **Schedule**: the pages you use day to day.
-  - **Configure:** **Equipment**, **Processes**, **BOMs**: the setup you do once and change now and then.
+  - **Configure:** **Equipment**, **Processes**, **BOMs**, **Units**: the setup you do once and change now and then.
   - The ☰ button at the top left collapses the menu to icons, to make room on small screens.
 - **Theme (top right).** The sun/moon button switches between light and dark.
 - **Main area.** The page you picked.
@@ -113,6 +114,13 @@ A **material** is anything you make or use: a finished profile, a resin, a dry b
 
 **Capabilities** say which material can run on which line, and how fast (its ideal rate). Pulaski never puts a material's job on a line without a capability for it.
 
+### Units of measure
+
+Every quantity has a **unit**: kilograms, metres, each, boxes. Each material has a **base unit**, the one its stock is counted in. You don't have to use it everywhere: you can order a profile in feet even though it is stocked in metres. Pulaski converts:
+
+- **Standard units** of the same kind convert for every material: kg ↔ lb, m ↔ ft, ea ↔ dozen.
+- **A material's own conversions** cover the rest: 1 m of a profile weighs 1.6 kg; 1 box holds 500 end caps; 1 bag holds 25 kg of resin.
+
 ### How you make it: processes
 
 A **process** (a "route") is a reusable recipe for *where* an order runs: "Extrude and Pack" runs operation 10, *Extrude*, on EXT-01 and EXT-02, then operation 30, *Pack*, on PACK1. Each operation names one or more lines or departments, each taking a share of the quantity. Processes are versioned: you edit a draft and release it, and orders are made from the released version.
@@ -156,21 +164,22 @@ If you are starting from an empty Pulaski, work through this list in order. Each
 | --- | --- | --- | --- |
 | 1 | The enterprise and at least one site, with its time zone | [Equipment](#4-equipment) | Everything else belongs to a site. |
 | 2 | Areas (departments) and lines under the site | [Equipment](#4-equipment) | Jobs are planned on lines and departments. |
-| 3 | Materials, material classes and units | *Your administrator* (no screen yet) | Orders and BOMs need materials. |
+| 3 | Materials and material classes | *Your administrator* (no screen yet) | Orders and BOMs need materials. |
+| 3a | Units, and conversions for materials you order or use in other units | [Units](#6-units-and-conversions) | So orders, BOMs and rates can use any unit that converts. |
 | 4 | Capabilities: which material runs on which line, and how fast | *Your administrator* (no screen yet) | Without one, a line can't take a material's job. |
 | 5 | Shift calendar (optional) | *Your administrator* (no screen yet) | Without one, Pulaski assumes lines run around the clock and marks them **24/7**. |
 | 6 | Processes: the routes, what they make, released | [Processes](#5-processes) | Every work order is made from a process. |
-| 7 | BOMs for the materials you make (optional, recommended) | [BOMs](#6-bills-of-materials-boms) | Without a BOM, an order plans no components. |
-| 8 | Work orders | [Schedule → New work order](#7-creating-a-work-order) | Now you can plan. |
+| 7 | BOMs for the materials you make (optional, recommended) | [BOMs](#7-bills-of-materials-boms) | Without a BOM, an order plans no components. |
+| 8 | Work orders | [Schedule → New work order](#8-creating-a-work-order) | Now you can plan. |
 
-The demo data that comes with Pulaski already contains steps 1 to 4 (plant PLT1 with EXT-01, EXT-02 and PACK1, and 200 materials), so you can start at step 6.
+The demo data that comes with Pulaski already contains steps 1 to 4 (plant PLT1 with EXT-01, EXT-02 and PACK1, 200 materials, and the standard units with conversions for the demo materials), so you can start at step 6.
 
 ### The Overview page
 
 **Operate → Overview** is the home page. It shows:
 
 - **A count of work orders in each status** (Planned, Dispatched, Firmed…). Click a count to open the Work orders screen filtered to that status.
-- **Lines:** each production line, with how many dispatched, firmed or in-progress orders are routed to it (see the limitation in [What Pulaski doesn't do yet](#11-what-pulaski-doesnt-do-yet)). If there are no lines yet, it links to Equipment.
+- **Lines:** each production line, with how many dispatched, firmed or in-progress orders are routed to it (see the limitation in [What Pulaski doesn't do yet](#12-what-pulaski-doesnt-do-yet)). If there are no lines yet, it links to Equipment.
 
 ---
 
@@ -308,11 +317,73 @@ Orders already made keep the version they were made from. If a draft already exi
 - Operations with no path of links between them run in parallel; links make them sequential. Links must flow one way; a loop is refused.
 - A released process with more than one operation must be connected.
 - Only lines and departments of the process's own site can be used; machines and other equipment that neither runs nor plans jobs are refused.
-- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#11-what-pulaski-doesnt-do-yet).
+- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#12-what-pulaski-doesnt-do-yet).
 
 ---
 
-## 6. Bills of materials (BOMs)
+## 6. Units and conversions
+
+**Configure → Units.** Here you see every unit Pulaski knows, and say how a material converts between units that aren't of the same kind.
+
+### Why it matters
+
+People work in different units. A customer orders 10,000 ft of profile, the BOM is written per 1000 m, the line's rate is in metres per hour, and the blend arrives in 25 kg bags. Pulaski converts between all of these, as long as it knows how. When it doesn't, you'll see a message such as *ft doesn't convert to kg for this material; add a conversion for it*, and this page is where you fix it.
+
+### Two kinds of conversion
+
+1. **Standard conversions** come with the unit. Units of the same kind always convert, for every material, by fixed factors: 1 lb = 0.45359237 kg, 1 ft = 0.3048 m, 1 dozen = 12 each. You never enter these.
+2. **Material conversions** are true for one material only:
+   - between kinds: 1 m of PRF-5100-BR weighs **1.6 kg** (a lighter profile weighs less);
+   - to a packaging unit: 1 **box** of end caps holds **500 each**; 1 **bag** of resin holds **25 kg**.
+
+A material conversion works both ways, and combines with the standard ones. With *1 m = 1.6 kg*, Pulaski also knows that 1 ft = 0.48768 kg and 1 ft = 1.07515 lb.
+
+### The units list (right side)
+
+Units are grouped by kind: **Area**, **Count**, **Length**, **Mass**, **Packaging (per material)**, **Time** and **Volume**; within each kind, smallest first. For each unit you see its code, name and what one of it is in the kind's base unit (*= 0.3048 m*). The base unit itself says **base unit**; packaging units say **per material**.
+
+- **Rename** a unit by typing over its name; it saves when you leave the field.
+- **Switch a unit off** with its **Active** switch. Inactive units disappear from the lists where you choose a unit, but quantities already in them still convert.
+- **Add a unit** with **New unit**: enter the **Code** (for example `bdl`), the **Name**, the **Kind** and, for anything but packaging, how many of the base unit one of it is. Click **Create**.
+
+A unit's code, kind and factor can't be changed after it is created, because quantities are stored in it. If one is wrong, switch it off and create a new one.
+
+### Add a conversion for a material
+
+1. In **Material conversions** (left side), choose the **Material**. The note under it says which unit it is stocked in.
+2. In the row under the table, fill in **1 [unit] = [quantity] [unit]**. For example: 1 `m` = `1.6` `kg`, or 1 `box` = `500` `ea`.
+3. Click **Save conversion**. It appears in the table with the reverse worked out (*1 kg = 0.625 m*).
+
+To change a conversion, save it again with the new quantity (in either direction; Pulaski replaces the old one). To remove one, click **Remove**.
+
+**Pulaski refuses a conversion when:**
+
+| Message says… | Because… |
+| --- | --- |
+| *…already convert by their standard factors* | Both units are of the same kind (kg and lb): they already convert for every material. |
+| *…already converts to … through its other conversions; change one of those instead* | The material can already get from one unit to the other. Two routes could give two different answers, so Pulaski allows only one. Change the existing conversion instead. |
+
+### Try a conversion
+
+Under the conversions, **Try a conversion** works out any quantity: enter a **Quantity**, choose **From** and **To**, and click **Convert**. With a material chosen, its own conversions are used too, so you can check, for example, what one bundle of profile weighs in pounds. Without a material, only standard conversions work.
+
+### Where conversions are used
+
+| Where | What converts |
+| --- | --- |
+| [Creating a work order](#8-creating-a-work-order) | The order may be in any unit that converts to the material's base unit. It is converted to the BOM's unit to plan the components. |
+| [BOMs](#7-bills-of-materials-boms) | The BOM's unit must convert to the material's base unit, and each component's unit to that component's base unit, before the BOM can be released. |
+| [The Schedule](#10-the-schedule) | A job's length is worked out from the line's rate even when the job is in another unit (an order in feet on a line rated in metres per hour). The side panel shows the rate in the job's unit. |
+
+### In detail
+
+- Base units: kg (mass), m (length), m² (area), L (volume), ea (count), s (time). The standard factors are the exact legal definitions, not approximations.
+- Conversions are kept exact along the way; a converted quantity is rounded to six decimal places.
+- A material's conversions can never offer two routes between two units, so every conversion has exactly one answer.
+
+---
+
+## 7. Bills of materials (BOMs)
 
 **Configure → BOMs.** A BOM lists what one material is made from, so that every order plans the components each job will use.
 
@@ -320,7 +391,7 @@ Orders already made keep the version they were made from. If a draft already exi
 
 - **One level.** A BOM lists only the direct components. If your profile is made from a dry blend, and the blend from resin and additives, the profile's BOM lists the *blend*, and the blend has its own BOM. Each is made on its own orders.
 - **For a process, or for any process.** A BOM can be tied to one process. Then each component can name the **operation** that consumes it: blend at *Extrude*, end caps at *Pack*. A BOM for "any process" is used when the order's process has no BOM of its own; all its components go to the first operation.
-- **Quantities are per a base quantity.** For example, "per 1000 m of PRF-5100-BR". Orders must be entered in the BOM's base unit.
+- **Quantities are per a base quantity.** For example, "per 1000 m of PRF-5100-BR". Orders can be in any unit that [converts](#6-units-and-conversions) to it.
 - **Versions**, as with processes: edit a draft, release it, start a new draft to change it.
 
 ### Create a BOM
@@ -334,7 +405,7 @@ There can be one BOM per material and process, plus one for any process.
 
 ### Fill it in
 
-1. **Quantities are per:** enter the base quantity, for example `1000`. The unit is the material's base unit.
+1. **Quantities are per:** enter the base quantity, for example `1000`, and choose its unit (it starts as the material's base unit). It must convert to the material's base unit. The link beside it opens the material's [unit conversions](#6-units-and-conversions).
 2. Click **Add component** for each line, and fill in:
 
 | Field | What to enter |
@@ -378,13 +449,14 @@ A 2,400 m order, extruded 50/50 on EXT-01 and EXT-02, plans:
 ### In detail
 
 - A material can't be its own component. Components must exist and be active to release.
+- To release, each component's unit must convert to that component's base unit (so its use can be taken from stock later), and the BOM's unit must convert to the material's base unit. The yellow box says which conversion is missing.
 - Operation numbers must exist in the process's **released** version. A draft may name an operation that isn't released yet, but can't be released until it is.
 - Each component's total is rounded to six decimal places. The jobs of an operation share it in proportion to their quantities, and the last job takes any rounding remainder, so the jobs always add up to the total.
 - Planned components never change after the order is made, even if the BOM changes later.
 
 ---
 
-## 7. Creating a work order
+## 8. Creating a work order
 
 **Schedule → New work order** (the button at the top right of the Schedule).
 
@@ -398,7 +470,7 @@ You choose *what*, *how much* and *when*. The process you choose decides *where*
 4. **Process:** the processes at this site that make this material and have a released version.
    - The material's **default** process (marked *· default*) is picked automatically, or the only one if there is just one.
    - A process whose lines can't run this material is **greyed out** with *can't run this material*, and the reason is listed underneath, for example *Operation 10 (Extrude): EXT-02 is not set up to run FLM-HDPE-20-BLK; add a capability for it first.*
-5. **Planned quantity** and **Unit:** how much. If the material has a BOM, enter it in the BOM's unit.
+5. **Planned quantity** and **Unit:** how much, in any unit that converts to the material's base unit (the hint under the field links to its conversions).
 6. **Start:** when the order may start. No job will be planned before it. It defaults to the next whole hour at the site.
 7. **Due:** when it must be finished (optional). Jobs projected to finish later are flagged **late**. If the process uses a department, the due date is **required** (the label says so): it is the department's finish-by time.
 8. **Priority:** a number; higher is more urgent. Shown as an arrow on the Work orders screen.
@@ -426,13 +498,13 @@ Everything is checked before anything is created, and all problems are listed to
 | *…is not set up to run…; add a capability for it first* | Ask your administrator to add a capability for the material on that line, or pick another process. |
 | *…is a department, so its job needs a finish-by; give the order a due date* | Enter a **Due** date. |
 | *…doesn't make…* | The process's scope doesn't include the material: add it on the [process](#say-what-the-process-makes), or pick another process. |
-| *The order's unit is not the BOM's base unit* | Enter the quantity in the BOM's unit. |
+| *…doesn't convert to…, the base unit of…* | Enter the quantity in another unit, or add a [conversion](#6-units-and-conversions) for the material. |
 | *…was changed by someone else* / *…was released again* | Try again: the process changed while you were filling in the form. |
 | Duplicate order number | Use another order number. |
 
 ---
 
-## 8. The Work orders screen
+## 9. The Work orders screen
 
 **Operate → Work orders.** A list of orders with how each one stands: when it is projected to run, how much is made, and whether it is behind.
 
@@ -468,7 +540,7 @@ Click ⓘ to open a row. You see the due date, the published baseline, how much 
 
 ---
 
-## 9. The Schedule
+## 10. The Schedule
 
 **Operate → Schedule.** The live plan: every line and department, every open job and order, and when each is projected to run.
 
@@ -561,7 +633,7 @@ Pulaski lays work end to end on each line, so two jobs on a line only overlap wh
 
 ---
 
-## 10. Reference
+## 11. Reference
 
 ### Work order statuses
 
@@ -597,7 +669,7 @@ Warnings never block anything; they tell you something needs a look.
 | --- | --- | --- |
 | **Late** | Projected to finish after the order's due date (or a department window closes after it). | Resequence, move to a faster line, or agree a new date. |
 | **No run standard** | There is no rate for this material on this line, so its length can't be calculated. | Ask your administrator to set a rate. |
-| **Uom mismatch** | The order's unit doesn't match the rate's unit. | Check the order's unit. |
+| **Uom mismatch** | The job's unit and the line's rate unit don't convert for this material, so its length is unknown. | Add a [conversion](#6-units-and-conversions) for the material. |
 | **Beyond calendar** | The job runs past the last shift in the calendar, so it is placed around the clock. | Ask for more shifts to be generated. |
 | **No shift calendar** | No shift calendar covers the line: times assume 24/7. | Ask for a shift calendar. |
 | **Missing changeover** | In *scheduler* changeover mode: the product changes with no changeover job between. | Add a changeover job. |
@@ -627,23 +699,22 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 ---
 
-## 11. What Pulaski doesn't do yet
+## 12. What Pulaski doesn't do yet
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
-- **No screens yet for** materials and material classes, units, capabilities, run standards (rates), shift calendars or the changeover setting. Your administrator sets these up.
+- **No screens yet for** materials and material classes, capabilities, run standards (rates), shift calendars or the changeover setting. Your administrator sets these up.
 - **No execution yet:** starting and stopping jobs, counts, downtime, OEE and quality charts are planned. Order statuses after Firmed exist but nothing records production yet.
 - **No inventory yet:** receiving lots, loading them at feed points and consuming them (backflush, time window…) come next. BOMs today only plan components.
 - **Process links don't drive the schedule yet:** a Pack job can be projected to start before the Extrude job it follows. The link only sets the earliest start, counted from the order's start.
 - **Orders from a multi-operation process show their quantity more than once:** the details show *On lines 4,800 of 2,400 m* for a two-operation order, dispatch shows a quantity warning, and the **Not on a line** tile can be wrong. This is a known bug being fixed.
 - **The Overview's Lines list** only counts orders routed directly to a line, so orders made from a process aren't counted there yet.
-- **BOM units:** the order must be entered in the BOM's base unit; unit conversion comes later.
 - **Notes** can only be written when the order is created.
 - **No sign-in or permissions** yet; changes are recorded as *anonymous*.
 
 ---
 
-## 12. Troubleshooting and questions
+## 13. Troubleshooting and questions
 
 **I can't find a process when creating an order.**
 The process must be at the order's site, be active, have a released version, and make the material (all materials, its class, or the material itself). If it is listed but greyed out, read the reason under the field: usually a missing capability.
@@ -672,18 +743,23 @@ Another person saved first. Reload, check what they did, and make your change ag
 **I can't cancel a work order.**
 Cancel its open jobs first (from each job's side panel), then the order.
 
+**"…doesn't convert to…" when creating an order or saving a BOM.**
+Pulaski doesn't know how this material converts between those units. Open **Units**, choose the material, and add a conversion (for example 1 m = 1.6 kg). Then try again.
+
 **A BOM won't release.**
-Read the yellow box: a component that doesn't exist or is inactive, an operation number the process's released version doesn't have, or no components at all. Save the draft after fixing.
+Read the yellow box: a component that doesn't exist or is inactive, an operation number the process's released version doesn't have, a unit with no conversion, or no components at all. Save the draft after fixing.
 
 ---
 
-## 13. Glossary
+## 14. Glossary
 
 | Term | Meaning |
 | --- | --- |
+| **Base unit** | The unit a material is stocked in; also the base unit of a kind of unit (kg, m, ea…). |
 | **Baseline** | A job's times as published when its order was dispatched; the plan you're measured against. |
 | **BOM** | Bill of materials: what one material is made from, per a base quantity. |
 | **Capability** | A line's permission to run a material, with its ideal rate. |
+| **Conversion** | How a quantity in one unit becomes another: standard for units of one kind, or set per material. |
 | **Changeover** | Time to switch a line from one product to another. |
 | **Department / group** | Equipment you can plan to that doesn't run jobs itself; its lines do. |
 | **Dispatch** | Publish an order to the floor, fixing its baseline. |
@@ -695,6 +771,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Lock** | Pin a job so it keeps its place. |
 | **Material class** | A group of similar materials, such as *Extruded profiles*. |
 | **Operation** | One step of a process, run on one or more lines or departments. |
+| **Packaging unit** | A unit like box, bag or pallet whose size depends on the material; it converts only through a material conversion. |
 | **Process (route)** | The operations an order goes through, and where each runs. |
 | **Projection** | Pulaski's calculation of when each job will run, redone on every read. |
 | **Run standard** | The rate Pulaski plans with for a material on a line. |

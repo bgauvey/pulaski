@@ -5,6 +5,8 @@ namespace Pulaski.Domain.Scheduling;
 /// non-production jobs; <c>GoodQty</c> is reported across its runs so far; <c>StartedAt</c> is
 /// when its first run started; <c>DueAt</c> is the work order due date. <c>FirmedStart</c> is
 /// set for a firmed job: it is anchored there and does not move in time (D-019).
+/// <c>ToRateUnit</c> converts a quantity in the job's unit to the unit of its run standard, when
+/// they differ and the material converts between them (D-026).
 /// </summary>
 public sealed record PlannedJob(
     Guid JobId,
@@ -19,7 +21,8 @@ public sealed record PlannedJob(
     TimeSpan? PlannedDuration,
     DateTimeOffset? DueAt,
     DateTimeOffset? FirmedStart = null,
-    DateTimeOffset? LatestEnd = null);
+    DateTimeOffset? LatestEnd = null,
+    decimal? ToRateUnit = null);
 
 /// <summary>The effective run-standard rate for one material on the line (D-016).</summary>
 public sealed record RunRate(Guid MaterialId, Guid UomId, decimal RatePerHour, string Source);
@@ -271,15 +274,23 @@ public static class TimelineProjector
             return (TimeSpan.Zero, remaining, null);
         }
 
+        // A job in another unit than its run standard is sized through the material's conversion (D-026).
+        var quantity = remaining;
         if (job.UomId is { } uom && uom != rate.UomId)
         {
-            warnings.Add(new ScheduleWarning(
-                ScheduleWarningCode.UomMismatch, "The job and the run standard use different units; duration unknown."));
-            return (TimeSpan.Zero, remaining, rate);
+            if (job.ToRateUnit is not { } factor)
+            {
+                warnings.Add(new ScheduleWarning(
+                    ScheduleWarningCode.UomMismatch,
+                    "The job and the run standard use units that don't convert for this material; duration unknown. Add a conversion on the Units page."));
+                return (TimeSpan.Zero, remaining, rate);
+            }
+
+            quantity = remaining * factor;
         }
 
         // Whole seconds, rounded up, computed in decimal so large quantities stay exact.
-        var seconds = decimal.Ceiling(remaining / rate.RatePerHour * 3600m);
+        var seconds = decimal.Ceiling(quantity / rate.RatePerHour * 3600m);
         return (TimeSpan.FromSeconds((double)seconds), remaining, rate);
     }
 

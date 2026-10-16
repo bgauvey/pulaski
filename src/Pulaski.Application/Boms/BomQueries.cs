@@ -1,6 +1,7 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Processes;
+using Pulaski.Application.Units;
 using Pulaski.Contracts.Boms;
 using Pulaski.Domain.Boms;
 using Pulaski.Domain.Processes;
@@ -35,7 +36,7 @@ internal sealed class ListPlannedComponentsHandler(IBomReadStore store) : IQuery
 }
 
 /// <summary>A version with what still stops it being released, so the editor can show it.</summary>
-internal sealed class GetBomVersionHandler(IBomReadStore store, IProcessReadStore processes) : IQueryHandler<GetBomVersionQuery, BomVersionDto>
+internal sealed class GetBomVersionHandler(IBomReadStore store, IProcessReadStore processes, IUnitReadStore units) : IQueryHandler<GetBomVersionQuery, BomVersionDto>
 {
     public async Task<BomVersionDto> HandleAsync(GetBomVersionQuery query, CancellationToken cancellationToken)
     {
@@ -49,9 +50,13 @@ internal sealed class GetBomVersionHandler(IBomReadStore store, IProcessReadStor
         var header = (await store.GetAsync(query.BomId, cancellationToken))!;
         var bom = new Bom(header.Id, header.MaterialId, header.ProcessId, header.IsActive);
         var definition = BomRules.ToDomain(version.Definition);
-        var materials = await store.GetMaterialsAsync(BomRules.MaterialIds(definition), cancellationToken);
+        var materials = await store.GetMaterialsAsync(BomRules.MaterialIds(definition, bom.MaterialId), cancellationToken);
+        var allUnits = await units.GetUnitsAsync(cancellationToken);
+        var conversions = await units.GetConversionsAsync([.. materials.Select(m => m.Id)], cancellationToken);
         var problems = definition.ReleaseProblems()
-            .Concat(BomRules.ReferenceProblems(definition, bom, materials, await OperationsAsync(bom, cancellationToken), malformedOnly: false));
+            .Concat(BomRules.ReferenceProblems(
+                definition, bom, materials, await OperationsAsync(bom, cancellationToken), malformedOnly: false,
+                materialId => UnitConversions.For(materialId, allUnits, conversions)));
         return version with { Problems = [.. problems.Select(BomRules.ToDto)] };
     }
 

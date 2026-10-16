@@ -1,5 +1,6 @@
 using Pulaski.Contracts.Boms;
 using Pulaski.Domain.Boms;
+using Pulaski.Domain.Units;
 
 namespace Pulaski.Application.Boms;
 
@@ -29,21 +30,25 @@ internal static class BomRules
         })],
     };
 
-    public static IReadOnlyList<Guid> MaterialIds(BomDefinition definition) =>
-        [.. definition.Items.Select(i => i.ComponentMaterialId).Distinct()];
+    /// <summary>The components, and the BOM's own material when given (its base unit is checked too).</summary>
+    public static IReadOnlyList<Guid> MaterialIds(BomDefinition definition, Guid? bomMaterialId = null) =>
+        [.. definition.Items.Select(i => i.ComponentMaterialId).Append(bomMaterialId ?? Guid.Empty).Where(id => id != Guid.Empty).Distinct()];
 
     /// <summary>
     /// What the definition names must make sense for the BOM: real components other than the
     /// material itself, and operation numbers only on a BOM for a process, from its released
     /// version (<paramref name="operations"/>, null when it has none). <paramref name="malformedOnly"/>
-    /// leaves out what a draft may still have: inactive components and operations not (yet) released.
+    /// leaves out what a draft may still have: inactive components, operations not (yet) released,
+    /// and units that don't convert yet. With <paramref name="converterFor"/>, the base unit must
+    /// convert to the material's base unit and each item's unit to its component's (D-026).
     /// </summary>
     public static IReadOnlyList<BomProblem> ReferenceProblems(
         BomDefinition definition,
         Bom bom,
         IReadOnlyList<BomMaterialRow> materials,
         IReadOnlySet<int>? operations,
-        bool malformedOnly)
+        bool malformedOnly,
+        Func<Guid, UnitConverter>? converterFor = null)
     {
         var byId = materials.ToDictionary(m => m.Id);
         var problems = new List<BomProblem>();
@@ -62,6 +67,13 @@ internal static class BomRules
             {
                 problems.Add(new("inactive_component", $"Line {item.LineNo}: {component.Code} is inactive.", item.Id));
             }
+            else if (!malformedOnly && converterFor?.Invoke(component.Id) is { } converter && !converter.CanConvert(item.UomId, component.BaseUomId))
+            {
+                problems.Add(new(
+                    "unit_conversion",
+                    $"Line {item.LineNo}: {converter.Code(item.UomId)} doesn't convert to {converter.Code(component.BaseUomId)}, the base unit of {component.Code}; add a conversion for {component.Code} on the Units page.",
+                    item.Id));
+            }
 
             if (item.OperationNumber is { } number)
             {
@@ -74,6 +86,16 @@ internal static class BomRules
                     problems.Add(new("unknown_operation", $"Line {item.LineNo}: the process's released version has no operation {number}.", item.Id));
                 }
             }
+        }
+
+        if (!malformedOnly
+            && converterFor?.Invoke(bom.MaterialId) is { } own
+            && byId.GetValueOrDefault(bom.MaterialId) is { } output
+            && !own.CanConvert(definition.BaseUomId, output.BaseUomId))
+        {
+            problems.Add(new(
+                "base_unit_conversion",
+                $"The BOM's unit, {own.Code(definition.BaseUomId)}, doesn't convert to {own.Code(output.BaseUomId)}, the base unit of {output.Code}; add a conversion for {output.Code} on the Units page."));
         }
 
         if (!malformedOnly && bom.ProcessId is not null && operations is null)

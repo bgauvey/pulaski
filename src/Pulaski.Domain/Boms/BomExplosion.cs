@@ -18,20 +18,14 @@ public static class BomExplosion
     /// quantities with the last taking the remainder. Jobs that would get nothing are left out.
     /// </summary>
     /// <param name="bom">The released BOM version's definition.</param>
-    /// <param name="orderQty">The work order quantity.</param>
-    /// <param name="orderUomId">The work order's unit; it must be the BOM's base unit.</param>
+    /// <param name="orderQty">The work order quantity, converted to the BOM's base unit (D-026).</param>
     /// <param name="jobs">The order's jobs in flow order, as <see cref="ProcessJobPlan.For"/> returns them.</param>
-    /// <exception cref="DomainRuleException">The units differ, or an item names an operation the process doesn't have.</exception>
-    public static IReadOnlyList<PlannedComponent> For(BomDefinition bom, decimal orderQty, Guid orderUomId, IReadOnlyList<OperationJob> jobs)
+    /// <exception cref="DomainRuleException">An item names an operation the process doesn't have.</exception>
+    public static IReadOnlyList<PlannedComponent> For(BomDefinition bom, decimal orderQty, IReadOnlyList<OperationJob> jobs)
     {
         if (jobs.Count == 0)
         {
             return [];
-        }
-
-        if (orderUomId != bom.BaseUomId)
-        {
-            throw new DomainRuleException("The order's unit is not the BOM's base unit; enter the quantity in the BOM's unit.");
         }
 
         var first = jobs[0].Operation.Number;

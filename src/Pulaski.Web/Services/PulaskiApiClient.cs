@@ -189,6 +189,37 @@ public sealed class PulaskiApiClient(HttpClient http)
     public Task<VersionResponse> SetProcessScopeAsync(Guid id, SetProcessScopeRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/processes/{id}/scope", request, ct);
 
+    // Units and material conversions (D-026)
+
+    public Task<CreatedResponse> CreateUomAsync(CreateUomRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/uoms", request, ct);
+
+    public Task<VersionResponse> UpdateUomAsync(Guid id, UpdateUomRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/uoms/{id}", request, ct);
+
+    public Task<IReadOnlyList<MaterialConversionDto>> ListMaterialConversionsAsync(Guid materialId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MaterialConversionDto>>($"api/materials/{materialId}/conversions", ct);
+
+    public Task<MaterialConversionDto> SetMaterialConversionAsync(Guid materialId, SetMaterialConversionRequest request, CancellationToken ct = default) =>
+        SendAsync<MaterialConversionDto>(HttpMethod.Put, $"api/materials/{materialId}/conversions", request, ct);
+
+    /// <summary>Switches the conversion off (the API answers 204 with no body).</summary>
+    public async Task RemoveMaterialConversionAsync(Guid materialId, Guid fromUomId, Guid toUomId, CancellationToken ct = default)
+    {
+        using var response = await SendCoreAsync(
+            new HttpRequestMessage(HttpMethod.Delete, $"api/materials/{materialId}/conversions?fromUomId={fromUomId}&toUomId={toUomId}"), ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await ApiException.FromResponseAsync(response, ct);
+        }
+    }
+
+    public Task<UnitConversionResultDto> ConvertAsync(decimal quantity, Guid fromUomId, Guid toUomId, Guid? materialId, CancellationToken ct = default) =>
+        GetAsync<UnitConversionResultDto>(
+            FormattableString.Invariant($"api/uoms/convert?quantity={quantity}&fromUomId={fromUomId}&toUomId={toUomId}")
+            + (materialId is { } m ? $"&materialId={m}" : ""),
+            ct);
+
     // Bills of materials (D-025)
 
     public Task<IReadOnlyList<BomSummaryDto>> ListBomsAsync(Guid? materialId = null, CancellationToken ct = default) =>

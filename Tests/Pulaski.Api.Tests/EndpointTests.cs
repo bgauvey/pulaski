@@ -61,6 +61,8 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
     {
         var site = Guid.CreateVersion7();
         var material = factory.Stores.Materials.AddActive();
+        var unit = Guid.CreateVersion7();
+        factory.Stores.Boms.AddMaterial(material, unit);
         var line = factory.Stores.Scheduling.AddLine(site);
         factory.Stores.Scheduling.AddCapability(line.Id, material);
         var route = factory.Stores.Processes.AddReleased(site, new ProcessDefinition(
@@ -72,7 +74,7 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
             OrderNumber = "WO-NEW",
             MaterialId = material,
             PlannedQty = 100,
-            UomId = Guid.CreateVersion7(),
+            UomId = unit,
             PlannedStart = DateTimeOffset.UtcNow,
             Notes = "Call the customer before packing.",
         });

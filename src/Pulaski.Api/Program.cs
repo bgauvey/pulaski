@@ -35,5 +35,6 @@ api.MapReferenceDataEndpoints();
 api.MapSchedulingEndpoints();
 api.MapProcessEndpoints();
 api.MapBomEndpoints();
+api.MapUnitEndpoints();
 
 app.Run();

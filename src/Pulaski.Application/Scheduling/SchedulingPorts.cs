@@ -1,6 +1,8 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Units;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Domain.Scheduling;
+using Pulaski.Domain.Units;
 
 namespace Pulaski.Application.Scheduling;
 
@@ -139,6 +141,11 @@ public sealed record LinePlanSource
 
     /// <summary>For a group only: the lines under it that can run jobs, with their capabilities and rates (D-022).</summary>
     public IReadOnlyList<RunnerRateRow> Runners { get; init; } = [];
+
+    /// <summary>Every unit, and the conversions of the materials on the line, to size jobs in other units than their rate (D-026).</summary>
+    public IReadOnlyList<Unit> Units { get; init; } = [];
+
+    public IReadOnlyList<MaterialConversionRow> Conversions { get; init; } = [];
 }
 
 public sealed record SchedulingLineRow

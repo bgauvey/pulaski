@@ -6,6 +6,7 @@ using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
 using Pulaski.Application.Scheduling;
+using Pulaski.Application.Units;
 using Pulaski.Application.WorkOrders;
 
 namespace Pulaski.Testing;
@@ -38,6 +39,8 @@ public sealed class InMemoryStores
 
     public InMemoryBoms Boms { get; } = new();
 
+    public InMemoryUnits Units { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -55,6 +58,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IProcessRepository>();
         services.RemoveAll<IBomReadStore>();
         services.RemoveAll<IBomRepository>();
+        services.RemoveAll<IUnitReadStore>();
+        services.RemoveAll<IUnitRepository>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -70,6 +75,8 @@ public sealed class InMemoryStores
         services.AddSingleton<IProcessRepository>(Processes);
         services.AddSingleton<IBomReadStore>(Boms);
         services.AddSingleton<IBomRepository>(Boms);
+        services.AddSingleton<IUnitReadStore>(Units);
+        services.AddSingleton<IUnitRepository>(Units);
         return services;
     }
 }

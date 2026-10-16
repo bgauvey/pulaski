@@ -1,6 +1,8 @@
 using Dapper;
 using Npgsql;
 using Pulaski.Application.Scheduling;
+using Pulaski.Application.Units;
+using Pulaski.Infrastructure.Units;
 
 namespace Pulaski.Infrastructure.Scheduling;
 
@@ -154,10 +156,20 @@ internal static class LinePlanLoader
             ? await ListAsync<WindowRow>(Shifts, new { ScopeId = scope, From = windowStart, To = windowEnd })
             : [];
 
+        var jobs = await ListAsync<PlanJobRow>(Jobs, args);
+        var runners = line.IsGroup ? await ListAsync<RunnerRateRow>(Runners, args) : [];
+
+        // Units and the conversions of every material on the line, to size jobs entered in another unit than their rate (D-026).
+        Guid[] materialIds = [.. jobs.Select(j => j.MaterialId).OfType<Guid>().Concat(runners.Select(r => r.MaterialId)).Distinct()];
+        var units = (await ListAsync<UnitRow>(UnitSql.Units, new { })).Select(u => u.ToDomain()).ToList();
+        var conversions = materialIds.Length == 0 ? [] : await ListAsync<MaterialConversionRow>(UnitSql.Conversions, new { MaterialIds = materialIds });
+
         return new LinePlanSource
         {
             Line = line,
-            Jobs = await ListAsync<PlanJobRow>(Jobs, args),
+            Jobs = jobs,
+            Units = units,
+            Conversions = conversions,
             PreviousMaterial = await connection.QuerySingleOrDefaultAsync<PlanMaterialRow>(Command(PreviousMaterial, args)),
             Rates = await ListAsync<RunRateRow>(Rates, args),
             ChangeoverRules = await ListAsync<ChangeoverRuleRow>(ChangeoverRules, args),
@@ -165,7 +177,7 @@ internal static class LinePlanLoader
             HasShiftCalendar = scopeId is not null,
             Shifts = shifts,
             Exceptions = await ListAsync<WindowRow>(Exceptions, args),
-            Runners = line.IsGroup ? await ListAsync<RunnerRateRow>(Runners, args) : [],
+            Runners = runners,
         };
     }
 }

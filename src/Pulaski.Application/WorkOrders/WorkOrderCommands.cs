@@ -5,6 +5,7 @@ using Pulaski.Contracts.Common;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
 using Pulaski.Application.Scheduling;
+using Pulaski.Application.Units;
 using Pulaski.Domain;
 using Pulaski.Domain.Boms;
 using Pulaski.Domain.Processes;
@@ -41,6 +42,7 @@ internal sealed class CreateWorkOrderHandler(
     IWorkOrderRepository workOrders,
     IProcessRepository processes,
     IBomRepository boms,
+    IUnitRepository units,
     IMaterialRepository materials,
     ISchedulingRepository scheduling,
     IEventLog eventLog,
@@ -106,9 +108,21 @@ internal sealed class CreateWorkOrderHandler(
             throw new DomainRuleException(string.Join(" ", problems));
         }
 
+        // The order may be in any unit that converts to the material's base unit (D-026).
+        var output = (await boms.GetMaterialsAsync([command.MaterialId], cancellationToken)).Single();
+        var converter = UnitConversions.For(
+            output.Id, await units.GetUnitsAsync(cancellationToken), await units.GetConversionsAsync([output.Id], cancellationToken));
+        if (!converter.CanConvert(command.UomId, output.BaseUomId))
+        {
+            throw new DomainRuleException(
+                $"{converter.Code(command.UomId)} doesn't convert to {converter.Code(output.BaseUomId)}, the base unit of {output.Code}; enter the quantity in another unit, or add a conversion for {output.Code} on the Units page.");
+        }
+
         // Read FOR SHARE after the lines and the route, so the BOM can't be replaced while it is used.
         var bom = await boms.GetReleasedForOrderAsync(command.MaterialId, process.Id, cancellationToken);
-        var components = bom is null ? [] : BomExplosion.For(bom.Definition, command.PlannedQty, command.UomId, plan);
+        var components = bom is null
+            ? []
+            : BomExplosion.For(bom.Definition, converter.Convert(command.PlannedQty, command.UomId, bom.Definition.BaseUomId), plan);
 
         var workOrder = WorkOrder.CreateLocal(
             ids.NewId(),

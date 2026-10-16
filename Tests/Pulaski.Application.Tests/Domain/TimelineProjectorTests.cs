@@ -231,6 +231,18 @@ public class TimelineProjectorTests
     }
 
     [Fact]
+    public void A_job_in_another_unit_is_sized_through_its_conversion_to_the_rate_unit()
+    {
+        // 6562 ft at 1000 m/h: 1 ft = 0.3048 m, so 2000.0976 m, just over two hours.
+        var feet = Production(White, 6562m, uom: Guid.CreateVersion7()) with { ToRateUnit = 0.3048m };
+
+        var segment = Assert.Single(Project([feet], previous: White).Segments);
+
+        Assert.DoesNotContain(ScheduleWarningCode.UomMismatch, Codes(segment));
+        Assert.Equal(Now.AddSeconds(7201), segment.End);
+    }
+
+    [Fact]
     public void Earliest_start_holds_a_job_and_the_line_waits()
     {
         var held = Production(White, 1000m, earliest: Now.AddHours(5));

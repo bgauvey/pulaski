@@ -83,4 +83,8 @@ public static class EventTypes
     public const string BomDraftSaved = "pulaski.bom.draft_saved.v1";
     public const string BomDraftStarted = "pulaski.bom.draft_started.v1";
     public const string BomVersionReleased = "pulaski.bom.version_released.v1";
+    public const string UnitCreated = "pulaski.uom.created.v1";
+    public const string UnitUpdated = "pulaski.uom.updated.v1";
+    public const string MaterialConversionSet = "pulaski.material.conversion_set.v1";
+    public const string MaterialConversionRemoved = "pulaski.material.conversion_removed.v1";
 }

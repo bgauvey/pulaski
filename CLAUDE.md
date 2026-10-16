@@ -115,7 +115,8 @@ Treat these as working assumptions; confirm with Bill before building anything t
 - PostgreSQL 18 via Homebrew (`postgresql@18`); database `pulaski`.
 - Load schema: `psql -d pulaski -v ON_ERROR_STOP=1 -f db/schema-draft.sql`, then
   `db/app-role.sql` (re-runnable), then `db/seed-demo.sql` (empty database only), then optionally
-  `db/seed-materials.sql` (200 demo materials in 11 classes; re-runnable).
+  `db/seed-materials.sql` (200 demo materials in 11 classes; re-runnable), then `db/seed-units.sql` (standard units
+  and demo material conversions, D-026; re-runnable).
 - Layout: production projects in `src/`, test projects in `Tests/` (shared in-memory fakes in
   `Tests/Pulaski.Testing`); `.editorconfig`,
   `Directory.Build.props`, `Directory.Packages.props` (central package versions) and
