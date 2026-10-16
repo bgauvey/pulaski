@@ -2,6 +2,7 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.WorkOrders;
 using Pulaski.Domain;
+using Pulaski.Domain.Scheduling;
 using Pulaski.Domain.WorkOrders;
 
 namespace Pulaski.Application.Tests.WorkOrders;
@@ -15,19 +16,44 @@ public class ChangeWorkOrderStatusHandlerTests
         _handler = new ChangeWorkOrderStatusHandler(_f.Stores.UnitOfWork, _f.Stores.WorkOrders, _f.Stores.Events, _f.Events);
 
     [Fact]
-    public async Task Releases_a_planned_work_order_and_records_the_reason()
+    public async Task Cancels_a_planned_work_order_and_records_the_reason()
     {
         var wo = _f.Stores.WorkOrders.Add(WorkOrderStatus.Planned, version: 10);
 
         var result = await _handler.HandleAsync(
-            new ChangeWorkOrderStatusCommand(wo.Id, 10, WorkOrderStatus.Released, "Material staged"), CancellationToken.None);
+            new ChangeWorkOrderStatusCommand(wo.Id, 10, WorkOrderStatus.Cancelled, "Customer withdrew"), CancellationToken.None);
 
         Assert.Equal(11, result.Version);
-        Assert.Equal(WorkOrderStatus.Released, _f.Stores.WorkOrders.Find(wo.Id)!.Value.Status);
+        Assert.Equal(WorkOrderStatus.Cancelled, _f.Stores.WorkOrders.Find(wo.Id)!.Value.Status);
         var evt = Assert.Single(_f.Stores.Events.Appended);
         Assert.Equal(EventTypes.WorkOrderStatusChanged, evt.Type);
-        Assert.Equal("Material staged", evt.Reason);
+        Assert.Equal("Customer withdrew", evt.Reason);
         Assert.Equal(1, _f.Stores.UnitOfWork.Committed);
+    }
+
+    [Theory]
+    [InlineData(WorkOrderStatus.Planned, WorkOrderStatus.Dispatched)]
+    [InlineData(WorkOrderStatus.Dispatched, WorkOrderStatus.Planned)]
+    [InlineData(WorkOrderStatus.Dispatched, WorkOrderStatus.Firmed)]
+    public async Task Planning_transitions_need_their_own_commands(string from, string to)
+    {
+        var wo = _f.Stores.WorkOrders.Add(from, version: 10);
+
+        var ex = await Assert.ThrowsAsync<DomainRuleException>(() => _handler.HandleAsync(
+            new ChangeWorkOrderStatusCommand(wo.Id, 10, to, null), CancellationToken.None));
+        Assert.Contains("dispatch", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Cancelling_an_order_with_open_jobs_is_refused()
+    {
+        var wo = _f.Stores.WorkOrders.Add(WorkOrderStatus.Planned, version: 10);
+        _f.Stores.Scheduling.AddJob(Job.CreateProduction(
+            Guid.CreateVersion7(), wo.SiteId, wo.Id, "J-1", Guid.CreateVersion7(), wo.MaterialId, 10m, wo.UomId, 1m, null));
+
+        var ex = await Assert.ThrowsAsync<DomainRuleException>(() => _handler.HandleAsync(
+            new ChangeWorkOrderStatusCommand(wo.Id, 10, WorkOrderStatus.Cancelled, null), CancellationToken.None));
+        Assert.Contains("open jobs", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -59,16 +85,16 @@ public class ChangeWorkOrderStatusHandlerTests
     [Fact]
     public async Task Missing_work_order_is_not_found() =>
         await Assert.ThrowsAsync<NotFoundException>(() => _handler.HandleAsync(
-            new ChangeWorkOrderStatusCommand(Guid.CreateVersion7(), 1, WorkOrderStatus.Released, null), CancellationToken.None));
+            new ChangeWorkOrderStatusCommand(Guid.CreateVersion7(), 1, WorkOrderStatus.Cancelled, null), CancellationToken.None));
 
     [Fact]
     public async Task List_fills_next_statuses()
     {
-        _f.Stores.WorkOrders.Add(WorkOrderStatus.Released);
+        _f.Stores.WorkOrders.Add(WorkOrderStatus.Dispatched);
         var list = new ListWorkOrdersHandler(_f.Stores.WorkOrders);
 
         var rows = await list.HandleAsync(new ListWorkOrdersQuery(null, null), CancellationToken.None);
 
-        Assert.Equal(WorkOrderStatus.NextStatuses(WorkOrderStatus.Released), Assert.Single(rows).NextStatuses);
+        Assert.Equal(WorkOrderStatus.NextStatuses(WorkOrderStatus.Dispatched), Assert.Single(rows).NextStatuses);
     }
 }

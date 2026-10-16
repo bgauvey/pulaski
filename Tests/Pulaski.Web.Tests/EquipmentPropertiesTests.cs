@@ -70,7 +70,7 @@ public class EquipmentPropertiesTests
         var items = EquipmentProperties.ForExisting(Line, new EquipmentTree([Line]));
 
         var editable = items.Where(i => i.Editor != PropertyEditor.ReadOnly).Select(i => i.Key);
-        Assert.Equal(["name", "description", "tracksState", "isSchedulable", "holdsInventory", "isActive"], editable);
+        Assert.Equal(["name", "description", "tracksState", "isSchedulable", "canRunJob", "holdsInventory", "isActive"], editable);
     }
 
     [Fact]

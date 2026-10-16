@@ -1,0 +1,932 @@
+@page "/processes/{Id:guid}"
+@* The process editor (D-023). Operations sit on a canvas; drag a line or department from the left
+   onto an operation (or onto empty canvas for a new one), drag an operation's header to move it,
+   and drag from the handle on its right edge to the next operation to link them. Every change to
+   a draft is saved straight away; a released version is read-only until a new draft is started. *@
+@implements IAsyncDisposable
+@using System.Globalization
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>@(_process?.Code ?? "Process") · Pulaski</PageTitle>
+
+<ProblemAlert Error="_error" />
+
+@if (_process is not null && _version is not null)
+{
+    <div class="process-head">
+        <div class="process-title">
+            <a class="small" href="processes">Processes</a>
+            <h1 class="mb-0">@_process.Code <span class="process-name">@_process.Name</span></h1>
+        </div>
+
+        <div class="process-versions" role="tablist" aria-label="Versions">
+            @foreach (var v in _process.Versions)
+            {
+                <a role="tab" aria-selected="@(v.Id == _version.Id ? "true" : "false")" href="@VersionHref(v.Id)"
+                   class="version-chip status-@v.Status @(v.Id == _version.Id ? "is-active" : "")">
+                    Version @v.Number <span class="version-status">@Display.Label(v.Status)</span>
+                </a>
+            }
+        </div>
+
+        <div class="process-actions">
+            <span class="save-state" role="status">@SaveState</span>
+            @if (IsDraft)
+            {
+                @if (_releasing)
+                {
+                    <input class="form-control form-control-sm" placeholder="What changed (optional)" aria-label="Release note" @bind="_releaseNote" />
+                    <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="ReleaseAsync">Release</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _releasing = false">Not yet</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-primary btn-sm" disabled="@(_problems.Count > 0 || _saving)"
+                            title="@(_problems.Count > 0 ? "Fix the items listed below first." : "Make this version the one orders are made from.")"
+                            @onclick="() => _releasing = true">
+                        Release version @_version.Number…
+                    </button>
+                }
+            }
+            else if (!_process.Versions.Any(v => v.Status == "draft"))
+            {
+                <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="StartDraftAsync">Change: start version @(_process.Versions.Max(v => v.Number) + 1)</button>
+            }
+            else
+            {
+                <a class="btn btn-outline-primary btn-sm" href="@VersionHref(_process.Versions.First(v => v.Status == "draft").Id)">Open the draft</a>
+            }
+        </div>
+    </div>
+
+    @if (_releaseWarnings.Count > 0)
+    {
+        <div class="process-banner is-todo" role="alert">
+            <strong>Released, but some BOMs need a new version:</strong>
+            <ul>
+                @foreach (var warning in _releaseWarnings)
+                {
+                    <li>@warning</li>
+                }
+            </ul>
+            <a href="boms">Open BOMs</a>
+        </div>
+    }
+
+    @if (!IsDraft)
+    {
+        <div class="process-banner">
+            @VersionSummary(_version) It can't be changed; start a new version to change the process.
+        </div>
+    }
+    else if (_problems.Count > 0)
+    {
+        <div class="process-banner is-todo">
+            <strong>Before it can be released:</strong>
+            <ul>
+                @foreach (var problem in _problems)
+                {
+                    <li>
+                        @if (problem.OperationId is { } opId)
+                        {
+                            <button type="button" class="link-button" @onclick="() => SelectOperation(opId)">@problem.Message</button>
+                        }
+                        else
+                        {
+                            @problem.Message
+                        }
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+
+    <div class="process-workspace @(_hidePalette ? "hide-palette" : "") @(_hideProperties ? "hide-properties" : "")">
+        @* Palette: what can run an operation, in this site. *@
+        <aside class="process-palette" aria-labelledby="palette-title" hidden="@_hidePalette">
+            <h2 id="palette-title">Lines and departments</h2>
+            @if (IsDraft)
+            {
+                <p class="small text-muted">Drag onto an operation, or onto the canvas for a new one.</p>
+                <button type="button" class="btn btn-outline-primary btn-sm btn-with-icon mb-2" @onclick="AddOperationAsync">
+                    <Icon Name="plus" Size="16" /> Add operation
+                </button>
+            }
+            <ul class="palette-list">
+                @foreach (var e in Palette)
+                {
+                    <li @key="e.Id">
+                        <div class="palette-item @(IsDraft ? "" : "is-static")" draggable="@(IsDraft ? "true" : "false")"
+                             style="margin-left:@((e.Depth - _paletteTop) * 12)px"
+                             @ondragstart="() => _dragging = e.Id" @ondragend="() => _dragging = null">
+                            <Icon Name="@(IsGroup(e) ? "process" : "equipment")" Size="16" />
+                            <span class="fw-semibold">@e.Code</span>
+                            <span class="text-muted text-truncate">@e.Name</span>
+                            <span class="palette-kind">@(IsGroup(e) ? "Department" : "Line")</span>
+                        </div>
+                    </li>
+                }
+            </ul>
+        </aside>
+
+        @* Canvas *@
+        <div class="process-canvas">
+            <div class="canvas-toolbar">
+                <button type="button" class="btn btn-outline-secondary btn-sm btn-square" aria-pressed="@(_hidePalette ? "false" : "true")"
+                        aria-label="@(_hidePalette ? "Show" : "Hide") lines and departments" title="@(_hidePalette ? "Show" : "Hide") lines and departments"
+                        @onclick="() => TogglePaneAsync(palette: true)">
+                    <Icon Name="panel-left" Size="16" />
+                </button>
+                <span class="ms-auto"></span>
+                @if (IsDraft)
+                {
+                    <button type="button" class="btn btn-outline-secondary btn-sm btn-with-icon" disabled="@(_definition.Operations.Count < 2)" @onclick="ArrangeAsync">
+                        <Icon Name="arrange" Size="16" /> Arrange
+                    </button>
+                }
+                <button type="button" class="btn btn-outline-secondary btn-sm btn-square" aria-pressed="@(_hideProperties ? "false" : "true")"
+                        aria-label="@(_hideProperties ? "Show" : "Hide") properties" title="@(_hideProperties ? "Show" : "Hide") properties"
+                        @onclick="() => TogglePaneAsync(palette: false)">
+                    <Icon Name="panel-right" Size="16" />
+                </button>
+            </div>
+            <div class="process-stage" @ref="_stage" data-readonly="@(IsDraft ? "false" : "true")"
+                 @onclick="ClearSelection" @ondragover:preventDefault @ondrop="DropOnCanvasAsync">
+                <svg class="process-links" aria-hidden="true">
+                    <defs>
+                        <marker id="process-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                            <path class="arrow-head" d="M 0 0 L 10 5 L 0 10 z" />
+                        </marker>
+                        <marker id="process-arrow-selected" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                            <path class="arrow-head is-selected" d="M 0 0 L 10 5 L 0 10 z" />
+                        </marker>
+                    </defs>
+                    @foreach (var link in _definition.Dependencies)
+                    {
+                        var selected = _selectedLink == link.Id;
+                        <g data-link="@link.Id" data-from="@link.FromOperationId" data-to="@link.ToOperationId" class="@(selected ? "is-selected" : "")" @key="link.Id">
+                            <path class="link-hit" @onclick="() => SelectLink(link.Id)" @onclick:stopPropagation />
+                            <path class="link-line @(link.Type == ProcessEditing.AfterEnd ? "is-after-end" : "")"
+                                  marker-end="@(selected ? "url(#process-arrow-selected)" : "url(#process-arrow)")" />
+                        </g>
+                    }
+                    <path class="process-link-draft" marker-end="url(#process-arrow-selected)" />
+                </svg>
+
+                @foreach (var link in _definition.Dependencies)
+                {
+                    <button type="button" class="link-label @(_selectedLink == link.Id ? "is-selected" : "")" data-link-label="@link.Id" @key="(link.Id, true)"
+                            @onclick="() => SelectLink(link.Id)" @onclick:stopPropagation>
+                        @ProcessEditing.Describe(link)
+                    </button>
+                }
+
+                @foreach (var op in _definition.Operations)
+                {
+                    var problems = _problems.Count(p => p.OperationId == op.Id);
+                    <div class="op-node @(_selectedOp == op.Id ? "is-selected" : "") @(problems > 0 ? "has-problem" : "")" data-op-id="@op.Id" @key="op.Id"
+                         style="left:@Px(op.X);top:@Px(op.Y);width:@Px(ProcessEditing.NodeWidth)"
+                         @ondragover:preventDefault @ondrop="() => DropOnOperationAsync(op.Id)" @ondrop:stopPropagation
+                         @onclick="() => SelectOperation(op.Id)" @onclick:stopPropagation>
+                        <div class="op-head" data-grip title="@(IsDraft ? "Drag to move" : null)">
+                            <span class="op-number">@op.Number</span>
+                            <span class="op-name">@op.Name</span>
+                            @if (problems > 0)
+                            {
+                                <span class="op-flag" title="@string.Join("\n", _problems.Where(p => p.OperationId == op.Id).Select(p => p.Message))"><Icon Name="alert" Size="16" /></span>
+                            }
+                        </div>
+                        <div class="op-body">
+                            @foreach (var use in op.Equipment)
+                            {
+                                var eq = Equipment(use.EquipmentId);
+                                <div class="op-equipment @(eq is not null && IsGroup(eq) ? "is-group" : "")" @key="use.EquipmentId">
+                                    <Icon Name="@(eq is not null && IsGroup(eq) ? "process" : "equipment")" Size="16" />
+                                    <span class="fw-semibold">@(eq?.Code ?? "?")</span>
+                                    <span class="op-share">@Share(use.SharePercent)</span>
+                                </div>
+                            }
+                            @if (op.Equipment.Count == 0)
+                            {
+                                <div class="op-empty">@(IsDraft ? "Drop a line or department here" : "No equipment")</div>
+                            }
+                        </div>
+                        @if (IsDraft)
+                        {
+                            <span class="op-connector" data-connector title="Drag to the operation that follows" aria-hidden="true"></span>
+                        }
+                    </div>
+                }
+
+                @if (_definition.Operations.Count == 0)
+                {
+                    <div class="canvas-empty">
+                        @(IsDraft ? "Drag a line or department here to start, or use Add operation." : "This version has no operations.")
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* Properties *@
+        @* Properties: the selected operation or link, or the process itself (D-023). *@
+        <div class="process-properties" hidden="@_hideProperties">
+            <PropertyGrid Items="PropertyItems" Title="@PropertiesTitle" Subtitle="@PropertiesSubtitle"
+                          Revision="_revision" OnChange="OnPropertyChangeAsync" OnRemove="OnPropertyRemoveAsync"
+                          Footer="PropertiesFooter" />
+        </div>
+    </div>
+
+    @* Every operation's equipment and shares, as a grid. *@
+    <div class="table-panel process-grid">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Operation</th>
+                    <th>Runs on</th>
+                    <th>Kind</th>
+                    <th class="text-end">Share</th>
+                    <th>Follows</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var op in _definition.Operations.OrderBy(o => o.Number))
+                {
+                    var follows = _definition.Dependencies.Where(d => d.ToOperationId == op.Id)
+                        .Select(d => $"{_definition.Operations.First(o => o.Id == d.FromOperationId).Number} ({ProcessEditing.Describe(d)})");
+                    List<OperationEquipmentDto?> rows = op.Equipment.Count == 0 ? [null] : [.. op.Equipment];
+                    var first = true;
+                    @foreach (var use in rows)
+                    {
+                        var eq = use is null ? null : Equipment(use.EquipmentId);
+                        <tr class="@(_selectedOp == op.Id ? "table-active" : "")" @onclick="() => SelectOperation(op.Id)" @key="(op.Id, use?.EquipmentId)">
+                            <td>@(first ? $"{op.Number} · {op.Name}" : "")</td>
+                            <td>@(eq?.Code ?? (use is null ? "—" : "?")) <span class="small text-muted">@eq?.Name</span></td>
+                            <td class="small">@(eq is null ? "" : IsGroup(eq) ? "Department" : "Line")</td>
+                            <td class="text-end">@(use is null ? "" : Share(use.SharePercent))</td>
+                            <td class="small">@(first ? string.Join(", ", follows) : "")</td>
+                        </tr>
+                        first = false;
+                    }
+                    <tr class="process-grid-sum" @key="@($"{op.Id}:sum")">
+                        <td colspan="3"></td>
+                        <td class="text-end @(op.Equipment.Count > 0 && ProcessEditing.ShareTotal(op) != 100m ? "text-danger fw-semibold" : "text-muted")">
+                            Sum @Share(ProcessEditing.ShareTotal(op))
+                        </td>
+                        <td></td>
+                    </tr>
+                }
+                @if (_definition.Operations.Count == 0)
+                {
+                    <tr><td colspan="5" class="text-muted">No operations yet.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else if (_error is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "version")]
+    public Guid? VersionId { get; set; }
+
+    private ProcessDto? _process;
+    private ProcessVersionDto? _version;
+    private ProcessDefinitionDto _definition = new();
+    private IReadOnlyList<ProcessProblemDto> _problems = [];
+    private long _token;
+    private IReadOnlyList<EquipmentDto> _equipment = [];
+    private IReadOnlyList<MaterialDto> _materials = [];
+    private IReadOnlyList<MaterialClassDto> _classes = [];
+    private bool _hidePalette;
+    private bool _hideProperties;
+    private int _paletteTop;
+    private ApiException? _error;
+
+    private Guid? _selectedOp;
+    private Guid? _selectedLink;
+    private Guid? _dragging;
+    private bool _saving;
+    private bool _dirty;
+    private bool _busy;
+    private bool _releasing;
+    private string? _releaseNote;
+    private string? _saveMessage;
+    private IReadOnlyList<string> _releaseWarnings = [];
+    private DateTimeOffset? _savedAt;
+
+    private ElementReference _stage;
+    private DotNetObjectReference<ProcessEditorPage>? _self;
+    private IJSObjectReference? _canvas;
+
+    private bool IsDraft => _version?.Status == "draft";
+
+    private ProcessOperationDto? SelectedOperation => _definition.Operations.FirstOrDefault(o => o.Id == _selectedOp);
+
+    private ProcessDependencyDto? SelectedLink => _definition.Dependencies.FirstOrDefault(d => d.Id == _selectedLink);
+
+    /// <summary>The site's lines and departments, in tree order.</summary>
+    private IEnumerable<EquipmentDto> Palette => _equipment
+        .Where(e => e.SiteId == _process?.SiteId && e.IsActive && (e.IsSchedulable || e.CanRunJob));
+
+    private string SaveState => _saving
+        ? "Saving…"
+        : _saveMessage ?? (_savedAt is not null ? "All changes saved" : IsDraft ? "Changes save as you go" : "");
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var equipment = Api.ListEquipmentAsync();
+            var materials = Api.ListMaterialsAsync();
+            var classes = Api.ListMaterialClassesAsync();
+            _equipment = await equipment;
+            _materials = await materials;
+            _classes = await classes;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_version is not null && _version.Id == VersionId && _process?.Id == Id)
+        {
+            return;
+        }
+
+        await LoadAsync(VersionId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Collapsed panes are remembered per browser.
+            _hidePalette = await JS.InvokeAsync<string?>("pulaski.ui.load", "pulaski.process.hidePalette") == "true";
+            _hideProperties = await JS.InvokeAsync<string?>("pulaski.ui.load", "pulaski.process.hideProperties") == "true";
+            if (_hidePalette || _hideProperties)
+            {
+                StateHasChanged();
+            }
+        }
+
+        if (_canvas is null && _version is not null)
+        {
+            _self ??= DotNetObjectReference.Create(this);
+            _canvas = await JS.InvokeAsync<IJSObjectReference>("pulaski.processCanvas.attach", _stage, _self);
+        }
+
+        if (_canvas is not null)
+        {
+            await _canvas.InvokeVoidAsync("draw");
+        }
+    }
+
+    private async Task LoadAsync(Guid? versionId)
+    {
+        try
+        {
+            _process = await Api.GetProcessAsync(Id);
+            var chosen = versionId is { } v && _process.Versions.Any(x => x.Id == v)
+                ? v
+                : (_process.Versions.FirstOrDefault(x => x.Status == "draft") ?? _process.Versions.FirstOrDefault(x => x.Status == "released") ?? _process.Versions[0]).Id;
+            _version = await Api.GetProcessVersionAsync(Id, chosen);
+            _definition = _version.Definition;
+            _problems = _version.Problems;
+            _token = _version.Version;
+            _paletteTop = Palette.Select(e => e.Depth).DefaultIfEmpty(0).Min();
+            _selectedOp = null;
+            _selectedLink = null;
+            _releasing = false;
+            _error = null;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    /// <summary>'Version 1 was released 2026-10-15 01:58 UTC: first cut.' or, when superseded, 'Version 1 is obsolete…'.</summary>
+    private static string VersionSummary(ProcessVersionDto version)
+    {
+        var when = version.ReleasedAt is { } at ? $" {at.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} UTC" : "";
+        var text = version.Status == "obsolete"
+            ? $"Version {version.Number} is obsolete; it was released{when} and a newer version has replaced it"
+            : $"Version {version.Number} was released{when}";
+        return version.Note is { } note ? $"{text}: {note.TrimEnd('.')}." : $"{text}.";
+    }
+
+    private string VersionHref(Guid versionId) => $"processes/{Id}?version={versionId}";
+
+    private EquipmentDto? Equipment(Guid id) => _equipment.FirstOrDefault(e => e.Id == id);
+
+    private static bool IsGroup(EquipmentDto e) => e.IsSchedulable && !e.CanRunJob;
+
+    private static string Px(double value) => value.ToString("0.#", CultureInfo.InvariantCulture) + "px";
+
+    private static string Share(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture) + "%";
+
+    // ---- Selection ----
+
+    private void SelectOperation(Guid id)
+    {
+        _selectedOp = id;
+        _selectedLink = null;
+    }
+
+    private void SelectLink(Guid id)
+    {
+        _selectedLink = id;
+        _selectedOp = null;
+    }
+
+    private void ClearSelection()
+    {
+        _selectedOp = null;
+        _selectedLink = null;
+    }
+
+    // ---- Canvas callbacks (js/process-canvas.js) ----
+
+    [JSInvokable]
+    public async Task OnMoved(string operationId, double x, double y)
+    {
+        if (Guid.TryParse(operationId, out var id))
+        {
+            await ApplyAsync(ProcessEditing.Move(_definition, id, x, y));
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public void OnSelectOperation(string operationId)
+    {
+        if (Guid.TryParse(operationId, out var id))
+        {
+            SelectOperation(id);
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnConnect(string fromId, string toId)
+    {
+        if (!Guid.TryParse(fromId, out var from) || !Guid.TryParse(toId, out var to))
+        {
+            return;
+        }
+
+        var (next, refusal) = ProcessEditing.Connect(_definition, from, to, Guid.CreateVersion7());
+        if (next is null)
+        {
+            _saveMessage = refusal;
+        }
+        else
+        {
+            await ApplyAsync(next);
+            SelectLink(next.Dependencies[^1].Id);
+        }
+
+        StateHasChanged();
+    }
+
+    // ---- Edits ----
+
+    private async Task AddOperationAsync()
+    {
+        var (next, id) = ProcessEditing.AddOperation(_definition, Guid.CreateVersion7());
+        await ApplyAsync(next);
+        SelectOperation(id);
+    }
+
+    private async Task DropOnOperationAsync(Guid operationId)
+    {
+        if (_dragging is { } equipmentId && IsDraft)
+        {
+            _dragging = null;
+            await ApplyAsync(ProcessEditing.AddEquipment(_definition, operationId, equipmentId));
+            SelectOperation(operationId);
+        }
+    }
+
+    private async Task DropOnCanvasAsync(DragEventArgs e)
+    {
+        if (_dragging is not { } equipmentId || !IsDraft || _canvas is null)
+        {
+            return;
+        }
+
+        _dragging = null;
+        var point = await _canvas.InvokeAsync<double[]>("point", e.ClientX, e.ClientY);
+        var name = Equipment(equipmentId)?.Name;
+        var (next, id) = ProcessEditing.AddOperation(
+            _definition, Guid.CreateVersion7(), name, point[0] - ProcessEditing.NodeWidth / 2, point[1] - 24, equipmentId);
+        await ApplyAsync(next);
+        SelectOperation(id);
+    }
+
+    private Task AddEquipmentFromListAsync(Guid operationId, ChangeEventArgs e)
+    {
+        _pickerRevision++;
+        return Guid.TryParse(e.Value as string, out var equipmentId)
+            ? ApplyAsync(ProcessEditing.AddEquipment(_definition, operationId, equipmentId))
+            : Task.CompletedTask;
+    }
+
+    private Task ChangeOperationAsync(Guid operationId, Func<ProcessOperationDto, ProcessOperationDto> change) =>
+        ApplyAsync(ProcessEditing.UpdateOperation(_definition, operationId, change));
+
+    private async Task RemoveOperationAsync(Guid id)
+    {
+        ClearSelection();
+        await ApplyAsync(ProcessEditing.RemoveOperation(_definition, id));
+    }
+
+    private async Task RemoveLinkAsync(Guid id)
+    {
+        ClearSelection();
+        await ApplyAsync(ProcessEditing.RemoveDependency(_definition, id));
+    }
+
+    private Task ArrangeAsync() => ApplyAsync(ProcessEditing.AutoArrange(_definition));
+
+    /// <summary>
+    /// Takes the edit and saves the draft. Saves run one at a time; edits made meanwhile go out
+    /// together in the next one. If the API refuses, the draft is reloaded so the canvas shows
+    /// what is actually stored.
+    /// </summary>
+    private async Task ApplyAsync(ProcessDefinitionDto next)
+    {
+        if (!IsDraft || ReferenceEquals(next, _definition))
+        {
+            return;
+        }
+
+        _definition = next;
+        _dirty = true;
+        _saveMessage = null;
+        if (_saving)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            while (_dirty)
+            {
+                _dirty = false;
+                var saved = await Api.SaveProcessDraftAsync(Id, _version!.Id, new SaveProcessDraftRequest { Version = _token, Definition = _definition });
+                _token = saved.Version;
+                _problems = saved.Problems;
+                _savedAt = DateTimeOffset.UtcNow;
+            }
+        }
+        catch (ApiException ex)
+        {
+            _saving = false;
+            var selected = (_selectedOp, _selectedLink);
+            await LoadAsync(_version!.Id);
+            (_selectedOp, _selectedLink) = selected;
+            _saveMessage = ex.IsConflict ? "Someone else changed this draft; showing their version." : $"Not saved: {ex.Detail ?? ex.Title}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    // ---- Process and versions ----
+
+    private async Task UpdateHeaderAsync(string? name = null, string? description = null, bool? active = null)
+    {
+        if (_process is null || (name is not null && string.IsNullOrWhiteSpace(name)))
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.UpdateProcessAsync(Id, new UpdateProcessRequest
+            {
+                Version = _process.Version,
+                Name = name ?? _process.Name,
+                Description = description ?? _process.Description,
+                IsActive = active ?? _process.IsActive,
+            });
+            _process = await Api.GetProcessAsync(Id);
+            _saveMessage = "Process details saved";
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            _process = await Api.GetProcessAsync(Id);
+        }
+    }
+
+    // ---- Properties grid ----
+
+    private int _revision;
+
+    // Bumped after each pick from a footer list, so the list is rebuilt showing its placeholder again.
+    private int _pickerRevision;
+
+    private IReadOnlyList<PropertyItem> PropertyItems =>
+        SelectedOperation is { } op ? ProcessProperties.ForOperation(op, _definition, _equipment, IsDraft)
+        : SelectedLink is { } link ? ProcessProperties.ForLink(link, _definition, IsDraft)
+        : _process is not null && _version is not null ? ProcessProperties.ForProcess(_process, _version, _materials)
+        : [];
+
+    private string PropertiesTitle =>
+        SelectedOperation is { } op ? $"{op.Number} {op.Name}"
+        : SelectedLink is { } link ? $"{OperationLabel(link.FromOperationId)} → {OperationLabel(link.ToOperationId)}"
+        : _process?.Code ?? "";
+
+    private string PropertiesSubtitle => SelectedOperation is not null ? "Operation" : SelectedLink is not null ? "Link" : "Process";
+
+    private string OperationLabel(Guid id) => _definition.Operations.FirstOrDefault(o => o.Id == id) is { } o ? o.Number.ToString(CultureInfo.InvariantCulture) : "?";
+
+    /// <summary>Lists are added to from the footer; their rows are taken out with the grid's × buttons.</summary>
+    private RenderFragment PropertiesFooter => __builder =>
+    {
+        if (SelectedOperation is { } op)
+        {
+            if (IsDraft)
+            {
+                <select @key="@($"Add a line or department:{_pickerRevision}")" class="form-select form-select-sm" aria-label="Add a line or department" value="" @onchange="e => AddEquipmentFromListAsync(op.Id, e)">
+                    <option value="">Add a line or department…</option>
+                    @foreach (var e in Palette.Where(e => op.Equipment.All(u => u.EquipmentId != e.Id)))
+                    {
+                        <option value="@e.Id">@e.Code · @e.Name</option>
+                    }
+                </select>
+                <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@(op.Equipment.Count < 2)"
+                        @onclick="() => ChangeOperationAsync(op.Id, ProcessEditing.SplitEvenly)">Split evenly</button>
+                <button type="button" class="btn btn-outline-danger btn-sm btn-with-icon" @onclick="() => RemoveOperationAsync(op.Id)">
+                    <Icon Name="trash" Size="16" /> Delete operation
+                </button>
+            }
+        }
+        else if (SelectedLink is { } link)
+        {
+            if (IsDraft)
+            {
+                <button type="button" class="btn btn-outline-danger btn-sm btn-with-icon" @onclick="() => RemoveLinkAsync(link.Id)">
+                    <Icon Name="trash" Size="16" /> Delete link
+                </button>
+            }
+        }
+        else if (_process is { } process)
+        {
+            if (!process.MakesAllMaterials)
+            {
+                <select @key="@($"Add a material class:{_pickerRevision}")" class="form-select form-select-sm" aria-label="Add a material class" value="" @onchange="AddScopeClassAsync">
+                    <option value="">Make a material class…</option>
+                    @foreach (var c in _classes.Where(c => ClassIds.All(id => id != c.Id)))
+                    {
+                        <option value="@c.Id">@c.Code · @c.Name</option>
+                    }
+                </select>
+                <select @key="@($"Add a material:{_pickerRevision}")" class="form-select form-select-sm" aria-label="Add a material" value="" @onchange="AddScopeMaterialAsync">
+                    <option value="">Make a single material…</option>
+                    @foreach (var m in _materials.Where(m => m.IsActive && !ProcessProperties.Covers(process, m)))
+                    {
+                        <option value="@m.Id">@m.Code · @m.Name</option>
+                    }
+                </select>
+            }
+            <select @key="@($"Add a default material:{_pickerRevision}")" class="form-select form-select-sm" aria-label="Add a default material" value="" @onchange="AddDefaultAsync">
+                <option value="">Default for a material…</option>
+                @foreach (var m in _materials.Where(m => m.IsActive && ProcessProperties.Covers(process, m) && process.DefaultFor.All(d => d.Id != m.Id)))
+                {
+                    <option value="@m.Id">@m.Code · @m.Name</option>
+                }
+            </select>
+        }
+    };
+
+    private async Task OnPropertyChangeAsync(PropertyChange change)
+    {
+        var value = change.Value?.Trim();
+        if (SelectedOperation is { } op)
+        {
+            switch (change.Key)
+            {
+                case ProcessProperties.Number when int.TryParse(value, out var number) && number > 0:
+                    await ChangeOperationAsync(op.Id, o => o with { Number = number });
+                    return;
+                case ProcessProperties.Name when !string.IsNullOrEmpty(value):
+                    await ChangeOperationAsync(op.Id, o => o with { Name = value });
+                    return;
+                case ProcessProperties.Description:
+                    await ChangeOperationAsync(op.Id, o => o with { Description = string.IsNullOrEmpty(value) ? null : value });
+                    return;
+                case var key when ProcessProperties.IdAfter(key, ProcessProperties.SharePrefix) is { } equipmentId
+                                  && decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var share) && share is > 0 and <= 100:
+                    await ApplyAsync(ProcessEditing.SetShare(_definition, op.Id, equipmentId, share));
+                    return;
+            }
+        }
+        else if (SelectedLink is { } link)
+        {
+            switch (change.Key)
+            {
+                case ProcessProperties.LinkType when value is ProcessEditing.AfterStart or ProcessEditing.AfterEnd:
+                    await ApplyAsync(ProcessEditing.UpdateDependency(_definition, link.Id, value, link.Lag));
+                    return;
+                case ProcessProperties.Lag when int.TryParse(value, out var minutes) && minutes >= 0:
+                    await ApplyAsync(ProcessEditing.UpdateDependency(_definition, link.Id, link.Type, TimeSpan.FromMinutes(minutes)));
+                    return;
+            }
+        }
+        else if (_process is not null)
+        {
+            switch (change.Key)
+            {
+                case ProcessProperties.Name when !string.IsNullOrEmpty(value):
+                    await UpdateHeaderAsync(name: value);
+                    return;
+                case ProcessProperties.Description:
+                    await UpdateHeaderAsync(description: value ?? "");
+                    return;
+                case ProcessProperties.IsActive:
+                    await UpdateHeaderAsync(active: value == "true");
+                    return;
+                case ProcessProperties.AllMaterials:
+                    await SetScopeAsync(value == "true", ClassIds, MaterialIds);
+                    return;
+            }
+        }
+
+        // Not a value we can take: put the editors back to what is saved.
+        _saveMessage = "That value isn't valid here.";
+        _revision++;
+    }
+
+    private Task OnPropertyRemoveAsync(string key)
+    {
+        if (SelectedOperation is { } op && ProcessProperties.IdAfter(key, ProcessProperties.SharePrefix) is { } equipmentId)
+        {
+            return ApplyAsync(ProcessEditing.RemoveEquipment(_definition, op.Id, equipmentId));
+        }
+
+        if (ProcessProperties.IdAfter(key, ProcessProperties.ClassPrefix) is { } classId)
+        {
+            return SetScopeAsync(false, ClassIds.Where(id => id != classId), MaterialIds);
+        }
+
+        if (ProcessProperties.IdAfter(key, ProcessProperties.MaterialPrefix) is { } materialId)
+        {
+            return SetScopeAsync(false, ClassIds, MaterialIds.Where(id => id != materialId));
+        }
+
+        return ProcessProperties.IdAfter(key, ProcessProperties.DefaultPrefix) is { } defaultId
+            ? SetDefaultAsync(defaultId, null)
+            : Task.CompletedTask;
+    }
+
+    private async Task TogglePaneAsync(bool palette)
+    {
+        if (palette)
+        {
+            _hidePalette = !_hidePalette;
+            await JS.InvokeVoidAsync("pulaski.ui.save", "pulaski.process.hidePalette", _hidePalette ? "true" : "false");
+        }
+        else
+        {
+            _hideProperties = !_hideProperties;
+            await JS.InvokeVoidAsync("pulaski.ui.save", "pulaski.process.hideProperties", _hideProperties ? "true" : "false");
+        }
+    }
+
+    private IEnumerable<Guid> ClassIds => _process?.MakesClasses.Select(c => c.Id) ?? [];
+
+    private IEnumerable<Guid> MaterialIds => _process?.MakesMaterials.Select(m => m.Id) ?? [];
+
+    private Task AddScopeClassAsync(ChangeEventArgs e)
+    {
+        _pickerRevision++;
+        return Guid.TryParse(e.Value as string, out var classId) ? SetScopeAsync(false, ClassIds.Append(classId), MaterialIds) : Task.CompletedTask;
+    }
+
+    private Task AddScopeMaterialAsync(ChangeEventArgs e)
+    {
+        _pickerRevision++;
+        return Guid.TryParse(e.Value as string, out var materialId) ? SetScopeAsync(false, ClassIds, MaterialIds.Append(materialId)) : Task.CompletedTask;
+    }
+
+    private async Task SetScopeAsync(bool all, IEnumerable<Guid> classIds, IEnumerable<Guid> materialIds)
+    {
+        if (_process is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.SetProcessScopeAsync(Id, new SetProcessScopeRequest
+            {
+                Version = _process.Version,
+                AllMaterials = all,
+                MaterialClassIds = [.. classIds],
+                MaterialIds = [.. materialIds],
+            });
+            _saveMessage = "What it makes is saved";
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        _process = await Api.GetProcessAsync(Id);
+    }
+
+    private async Task AddDefaultAsync(ChangeEventArgs e)
+    {
+        _pickerRevision++;
+        if (Guid.TryParse(e.Value as string, out var materialId))
+        {
+            await SetDefaultAsync(materialId, Id);
+        }
+    }
+
+    private async Task SetDefaultAsync(Guid materialId, Guid? processId)
+    {
+        try
+        {
+            await Api.SetDefaultProcessAsync(materialId, processId);
+            _process = await Api.GetProcessAsync(Id);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task ReleaseAsync()
+    {
+        _busy = true;
+        try
+        {
+            var released = await Api.ReleaseProcessVersionAsync(Id, _version!.Id, new ReleaseProcessVersionRequest { Version = _token, Note = _releaseNote });
+            _releaseNote = null;
+            await LoadAsync(_version.Id);
+            _releaseWarnings = released.Warnings;
+            _saveMessage = $"Version {_version.Number} released";
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task StartDraftAsync()
+    {
+        _busy = true;
+        try
+        {
+            var created = await Api.StartProcessDraftAsync(Id);
+            Navigation.NavigateTo(VersionHref(created.Id));
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_canvas is not null)
+        {
+            try
+            {
+                await _canvas.InvokeVoidAsync("dispose");
+                await _canvas.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit gone.
+            }
+        }
+
+        _self?.Dispose();
+    }
+}

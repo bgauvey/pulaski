@@ -1,8 +1,12 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Boms;
 using Pulaski.Application.EquipmentModel;
+using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
+using Pulaski.Application.Scheduling;
+using Pulaski.Application.Units;
 using Pulaski.Application.WorkOrders;
 
 namespace Pulaski.Testing;
@@ -13,6 +17,12 @@ namespace Pulaski.Testing;
 /// </summary>
 public sealed class InMemoryStores
 {
+    public InMemoryStores()
+    {
+        WorkOrders.OpenJobs = Scheduling.HasOpenJobs;
+        Processes.Eligibility = Scheduling.Eligibility;
+    }
+
     public InMemoryUnitOfWork UnitOfWork { get; } = new();
 
     public InMemoryEventLog Events { get; } = new();
@@ -22,6 +32,14 @@ public sealed class InMemoryStores
     public InMemoryWorkOrders WorkOrders { get; } = new();
 
     public InMemoryMaterials Materials { get; } = new();
+
+    public InMemoryScheduling Scheduling { get; } = new();
+
+    public InMemoryProcesses Processes { get; } = new();
+
+    public InMemoryBoms Boms { get; } = new();
+
+    public InMemoryUnits Units { get; } = new();
 
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
@@ -34,6 +52,14 @@ public sealed class InMemoryStores
         services.RemoveAll<IWorkOrderReadStore>();
         services.RemoveAll<IMaterialRepository>();
         services.RemoveAll<IReferenceDataReadStore>();
+        services.RemoveAll<ISchedulingReadStore>();
+        services.RemoveAll<ISchedulingRepository>();
+        services.RemoveAll<IProcessReadStore>();
+        services.RemoveAll<IProcessRepository>();
+        services.RemoveAll<IBomReadStore>();
+        services.RemoveAll<IBomRepository>();
+        services.RemoveAll<IUnitReadStore>();
+        services.RemoveAll<IUnitRepository>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -43,6 +69,14 @@ public sealed class InMemoryStores
         services.AddSingleton<IWorkOrderReadStore>(WorkOrders);
         services.AddSingleton<IMaterialRepository>(Materials);
         services.AddSingleton<IReferenceDataReadStore>(Materials);
+        services.AddSingleton<ISchedulingReadStore>(Scheduling);
+        services.AddSingleton<ISchedulingRepository>(Scheduling);
+        services.AddSingleton<IProcessReadStore>(Processes);
+        services.AddSingleton<IProcessRepository>(Processes);
+        services.AddSingleton<IBomReadStore>(Boms);
+        services.AddSingleton<IBomRepository>(Boms);
+        services.AddSingleton<IUnitReadStore>(Units);
+        services.AddSingleton<IUnitRepository>(Units);
         return services;
     }
 }

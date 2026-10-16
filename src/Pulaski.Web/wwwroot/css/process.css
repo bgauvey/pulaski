@@ -1,0 +1,474 @@
+/* Process editor (D-023): palette, canvas of operation boxes and links, properties, grid.
+   Colours come from css/tokens.css; departments are marked with the accent, lines stay neutral. */
+
+.process-new {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+    padding: var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+.process-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-3);
+}
+
+.process-title h1 {
+    font-size: 22px;
+}
+
+.process-name {
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: var(--space-2);
+}
+
+.process-versions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+}
+
+.version-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    color: var(--text);
+    font: var(--type-label);
+    text-decoration: none;
+}
+
+    .version-chip.is-active {
+        border-color: var(--accent);
+        box-shadow: inset 0 0 0 1px var(--accent);
+    }
+
+.version-status {
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+.version-chip.status-draft .version-status { color: var(--warning); }
+.version-chip.status-released .version-status { color: var(--success); }
+
+.process-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: auto;
+}
+
+    .process-actions .form-control {
+        width: 240px;
+    }
+
+.save-state {
+    font: var(--type-caption);
+    color: var(--text-muted);
+}
+
+.process-banner {
+    margin-bottom: var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--border-strong);
+    border-left-width: 4px;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+}
+
+    .process-banner.is-todo {
+        border-color: var(--warning);
+        background: var(--sched-warning-soft);
+    }
+
+    .process-banner ul {
+        margin: var(--space-1) 0 0;
+        padding-left: var(--space-5);
+    }
+
+/* ---- Workspace ---- */
+
+.process-workspace {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr) 300px;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+    /* Collapsing a side pane gives its width to the canvas. */
+    .process-workspace.hide-palette {
+        grid-template-columns: minmax(0, 1fr) 300px;
+    }
+
+    .process-workspace.hide-properties {
+        grid-template-columns: 240px minmax(0, 1fr);
+    }
+
+    .process-workspace.hide-palette.hide-properties {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+.process-palette[hidden] {
+    display: none;
+}
+
+.process-palette {
+    align-self: start;
+    max-height: clamp(420px, calc(100vh - 320px), 960px);
+    overflow-y: auto;
+    padding: var(--space-3);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+    .process-palette h2 {
+        font: var(--type-section-title);
+        margin-bottom: var(--space-2);
+    }
+
+.palette-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.palette-item {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-1);
+    margin-bottom: var(--space-1);
+    padding: var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    cursor: grab;
+    font-size: 13px;
+}
+
+    .palette-item.is-static {
+        cursor: default;
+    }
+
+    .palette-item > .fw-semibold {
+        white-space: nowrap;
+    }
+
+    .palette-item > .text-muted {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .palette-item .icon {
+        align-self: center;
+        color: var(--text-muted);
+    }
+
+.palette-kind {
+    margin-left: auto;
+    font: var(--type-caption);
+    color: var(--text-faint);
+}
+
+/* ---- Canvas ---- */
+
+.process-canvas {
+    position: relative;
+    height: clamp(420px, calc(100vh - 320px), 960px);
+    overflow: auto;
+    background-color: var(--surface);
+    background-image: radial-gradient(color-mix(in srgb, var(--border) 80%, transparent) 1px, transparent 1px);
+    background-size: 16px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+.canvas-toolbar {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 5;
+    display: flex;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    pointer-events: none;
+}
+
+    .canvas-toolbar > * {
+        pointer-events: auto;
+    }
+
+.process-stage {
+    position: relative;
+    min-width: 100%;
+    min-height: 380px;
+    margin-top: -44px;
+}
+
+.process-links {
+    position: absolute;
+    top: 0;
+    left: 0;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.link-line {
+    fill: none;
+    stroke: var(--border-strong);
+    stroke-width: 2;
+}
+
+    .link-line.is-after-end {
+        stroke-dasharray: 6 4;
+    }
+
+.link-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 14;
+    pointer-events: stroke;
+    cursor: pointer;
+}
+
+g.is-selected .link-line {
+    stroke: var(--accent);
+    stroke-width: 3;
+}
+
+.arrow-head {
+    fill: var(--border-strong);
+}
+
+    .arrow-head.is-selected {
+        fill: var(--accent);
+    }
+
+.process-link-draft {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
+}
+
+.link-label {
+    position: absolute;
+    z-index: 2;
+    transform: translate(-50%, -50%);
+    padding: 1px var(--space-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    color: var(--text-muted);
+    font: var(--type-caption);
+    white-space: nowrap;
+}
+
+    .link-label.is-selected {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+.op-node {
+    position: absolute;
+    z-index: 3;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    user-select: none;
+}
+
+    .op-node.is-selected {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .op-node.has-problem {
+        border-color: var(--warning);
+    }
+
+    .op-node.is-moving {
+        opacity: 0.85;
+        z-index: 4;
+    }
+
+    .op-node.is-link-target {
+        outline: 2px dashed var(--accent);
+        outline-offset: 2px;
+    }
+
+.op-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: 40px;
+    padding: 0 var(--space-3);
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    background: var(--surface-2);
+}
+
+.process-stage[data-readonly=false] .op-head {
+    cursor: grab;
+}
+
+.op-number {
+    display: inline-grid;
+    place-items: center;
+    min-width: 30px;
+    height: 22px;
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font: var(--type-label);
+}
+
+.op-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: var(--type-body-strong);
+}
+
+.op-flag {
+    display: inline-flex;
+    margin-left: auto;
+    color: var(--warning);
+}
+
+.op-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-2) var(--space-3);
+}
+
+.op-equipment {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: 36px;
+    padding: 0 var(--space-2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    font-size: 13px;
+}
+
+    .op-equipment.is-group {
+        border-left-color: var(--accent);
+    }
+
+    .op-equipment .icon {
+        color: var(--text-muted);
+    }
+
+.op-share {
+    margin-left: auto;
+    font: var(--type-label);
+    color: var(--text-muted);
+}
+
+.op-empty {
+    display: grid;
+    place-items: center;
+    height: 36px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    color: var(--text-faint);
+    font: var(--type-caption);
+}
+
+.op-connector {
+    position: absolute;
+    top: 50%;
+    right: -8px;
+    width: 16px;
+    height: 16px;
+    margin-top: -8px;
+    border: 2px solid var(--accent);
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    cursor: crosshair;
+}
+
+    .op-connector:hover {
+        background: var(--accent);
+    }
+
+.canvas-empty {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--text-muted);
+}
+
+/* ---- Properties: the shared property grid, as tall as the canvas ---- */
+
+.process-properties {
+    height: clamp(420px, calc(100vh - 320px), 960px);
+    min-width: 0;
+}
+
+.process-properties[hidden] {
+    display: none;
+}
+
+/* ---- Grid ---- */
+
+.process-grid .table > :not(caption) > * > * {
+    padding: var(--space-2) var(--space-3);
+}
+
+.process-grid tbody tr {
+    cursor: pointer;
+}
+
+.process-grid-sum td {
+    border-bottom-width: 2px;
+    font: var(--type-caption);
+}
+
+@media (max-width: 1199.98px) {
+    .process-workspace {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .process-palette {
+        max-height: none;
+    }
+
+    .process-properties {
+        height: 520px;
+    }
+}
+
+/* ---- Scope (process list) ---- */
+
+.scope-kind {
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+/* The editor uses the full width of the window, not the content column's usual cap. The layout's
+   rule is scoped CSS loaded after this file, so this one needs the extra .app-main to win. */
+.app-main .content:has(.process-workspace) {
+    max-width: none;
+}

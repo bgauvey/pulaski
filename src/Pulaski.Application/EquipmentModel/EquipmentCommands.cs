@@ -16,7 +16,8 @@ public sealed record CreateEquipmentCommand(
     bool TracksState,
     bool IsSchedulable,
     bool HoldsInventory,
-    string? TimeZone) : ICommand<CreatedResponse>;
+    string? TimeZone,
+    bool? CanRunJob = null) : ICommand<CreatedResponse>;
 
 public sealed record UpdateEquipmentCommand(
     Guid Id,
@@ -26,7 +27,8 @@ public sealed record UpdateEquipmentCommand(
     bool TracksState,
     bool IsSchedulable,
     bool HoldsInventory,
-    bool IsActive) : ICommand<VersionResponse>;
+    bool IsActive,
+    bool? CanRunJob = null) : ICommand<VersionResponse>;
 
 internal sealed class CreateEquipmentHandler(
     IUnitOfWork unitOfWork,
@@ -81,7 +83,8 @@ internal sealed class CreateEquipmentHandler(
             command.TracksState,
             command.IsSchedulable,
             command.HoldsInventory,
-            timeZone);
+            timeZone,
+            command.CanRunJob ?? command.IsSchedulable);
 
         var envelope = events.Create(EventTypes.EquipmentCreated, "equipment", created.Id, new { After = created });
         var version = await equipment.InsertAsync(created, envelope.OccurredAt, cancellationToken);
@@ -119,6 +122,7 @@ internal sealed class UpdateEquipmentHandler(
             Description = command.Description,
             TracksState = command.TracksState,
             IsSchedulable = command.IsSchedulable,
+            CanRunJob = command.CanRunJob ?? current.Value.CanRunJob,
             HoldsInventory = command.HoldsInventory,
             IsActive = command.IsActive,
         };

@@ -7,13 +7,14 @@ public static class Display
 {
     /// <summary>Work order statuses in lifecycle order; mirrors Pulaski.Domain.WorkOrders.WorkOrderStatus.</summary>
     public static IReadOnlyList<string> WorkOrderStatuses { get; } =
-        ["planned", "released", "in_progress", "completed", "closed", "cancelled"];
+        ["planned", "dispatched", "firmed", "in_progress", "completed", "closed", "cancelled"];
 
     /// <summary>Button text for moving a work order from one status to another.</summary>
     public static string StatusAction(string from, string to) => (from, to) switch
     {
-        (_, "released") => "Release",
-        ("released", "planned") => "Unrelease",
+        (_, "dispatched") => "Dispatch",
+        ("dispatched", "planned") => "Un-dispatch",
+        (_, "firmed") => "Firm",
         (_, "in_progress") when from == "completed" => "Reopen",
         (_, "in_progress") => "Start",
         (_, "completed") => "Complete",
@@ -68,9 +69,18 @@ public static class Display
     /// </summary>
     public static string StatusChip(string status) => status switch
     {
-        "released" => "chip chip-strong",
+        "dispatched" or "firmed" => "chip chip-strong",
         "in_progress" => "chip chip-strong chip-live",
         "closed" or "cancelled" => "chip chip-muted",
+        _ => "chip",
+    };
+
+    /// <summary>Chip classes for a job status: neutral like work orders, with the running dot for a running job.</summary>
+    public static string JobStatusChip(string status) => status switch
+    {
+        "running" => "chip chip-strong chip-live",
+        "dispatched" or "firmed" => "chip chip-strong",
+        "paused" => "chip chip-strong",
         _ => "chip",
     };
 

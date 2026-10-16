@@ -1,0 +1,814 @@
+/* Plant overview (docs/admin-dashboard-brief.md). Calm surfaces, 1 px rules, no shadows; one
+   accent for planned work and links; state colours only for state. One visual idea runs through
+   the page: diagonal hatching means "no data yet", from the no-signal lane to the placeholders. */
+
+.ov-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+}
+
+.ov-title {
+    margin: 0;
+}
+
+.ov-when {
+    display: flex;
+    gap: var(--space-3);
+    margin: var(--space-1) 0 0;
+    color: var(--text-muted);
+}
+
+.ov-clock {
+    font-variant-numeric: tabular-nums;
+}
+
+.ov-tools {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+    .ov-tools .form-select {
+        width: auto;
+    }
+
+.ov-live {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0 var(--space-3);
+    height: 32px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    color: var(--text-muted);
+    font: var(--type-caption);
+    white-space: nowrap;
+}
+
+.ov-live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--state-producing);
+}
+
+.ov-live.is-stale .ov-live-dot {
+    background: var(--state-nosignal);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .ov-live:not(.is-stale) .ov-live-dot {
+        animation: ov-pulse 2.4s ease-in-out infinite;
+    }
+}
+
+@keyframes ov-pulse {
+    50% {
+        opacity: 0.35;
+    }
+}
+
+.ov-stale {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--warning);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--text);
+}
+
+.ov-h2 {
+    margin: 0;
+}
+
+/* ---- Hatching: no data yet ---- */
+
+.ov-att.is-placeholder,
+.ov-meter.is-ghost,
+.ov-oee-bars span,
+.ov-nosignal,
+.ov-swatch.is-nosignal,
+.ov-swatch.is-changeover,
+.ov-bar.is-changeover {
+    background-image: repeating-linear-gradient(135deg, var(--hatch, var(--border)) 0 1.5px, transparent 1.5px 6px);
+}
+
+/* ---- Needs attention: one band, cells split by rules ---- */
+
+/* Bands: cells split by 1 px rules drawn on the cells, so a short last row never shows a gap. */
+.ov-attention,
+.ov-summary-band {
+    display: grid;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    overflow: hidden;
+}
+
+    .ov-attention > *,
+    .ov-summary-band > * {
+        box-shadow: 1px 0 0 var(--border), 0 1px 0 var(--border);
+    }
+
+.ov-attention {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: var(--space-6);
+}
+
+/* An attention cell reads across: icon, the count, then what it is and what to do. */
+.ov-att {
+    position: relative;
+    display: grid;
+    grid-template-columns: 20px 52px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-items: center;
+    column-gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background-color: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+}
+
+a.ov-att:hover {
+    background-color: var(--surface-2);
+}
+
+.ov-att-top {
+    display: contents;
+}
+
+.ov-att-icon {
+    grid-row: 1 / span 2;
+    display: inline-flex;
+    color: var(--text-faint);
+}
+
+.ov-att-count {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    font: var(--type-metric);
+    font-variant-numeric: normal;
+    text-align: right;
+}
+
+.ov-att-label {
+    grid-column: 3;
+    font: var(--type-body-strong);
+}
+
+.ov-att-detail {
+    grid-column: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--text-muted);
+    font: var(--type-caption);
+}
+
+/* Something to do: the count is full ink, the icon takes the status colour, and a bar marks the cell. */
+.ov-att.is-danger::before,
+.ov-att.is-warning::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: var(--danger);
+}
+
+.ov-att.is-warning::before {
+    background: var(--warning);
+}
+
+.ov-att.is-danger .ov-att-icon {
+    color: var(--danger);
+}
+
+.ov-att.is-warning .ov-att-icon {
+    color: var(--warning);
+}
+
+.ov-att.is-muted .ov-att-icon {
+    color: var(--state-nosignal);
+}
+
+.ov-att.is-zero .ov-att-count {
+    color: var(--text-faint);
+}
+
+.ov-att.is-placeholder {
+    --hatch: color-mix(in srgb, var(--border) 45%, transparent);
+}
+
+    .ov-att.is-placeholder .ov-att-count,
+    .ov-att.is-placeholder .ov-att-label,
+    .ov-att.is-placeholder .ov-att-detail {
+        color: var(--text-faint);
+    }
+
+    .ov-att.is-placeholder .ov-att-label {
+        font-weight: 500;
+    }
+
+/* ---- This shift ---- */
+
+.ov-summary {
+    margin-bottom: var(--space-6);
+}
+
+.ov-summary-head,
+.ov-board-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+    margin-bottom: var(--space-3);
+}
+
+.ov-pending {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--text-faint);
+    font: var(--type-caption);
+}
+
+.ov-summary-band {
+    grid-template-columns: 1.4fr repeat(3, 1fr);
+}
+
+.ov-sum {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    background: var(--surface);
+}
+
+.ov-sum-label {
+    font: var(--type-body-strong);
+    color: var(--text-muted);
+}
+
+.ov-sum-value {
+    font: 600 36px/40px var(--font-sans);
+    font-variant-numeric: normal;
+}
+
+    .ov-sum-value.is-ghost {
+        color: var(--border-strong);
+    }
+
+.ov-sum-unit {
+    font: var(--type-body);
+    color: var(--text-faint);
+}
+
+.ov-sum-note {
+    margin-top: auto;
+    color: var(--text-faint);
+    font: var(--type-caption);
+}
+
+.ov-apq {
+    display: grid;
+    gap: var(--space-1);
+}
+
+.ov-apq-row {
+    display: grid;
+    grid-template-columns: 88px 1fr 24px;
+    align-items: center;
+    gap: var(--space-2);
+    font: var(--type-caption);
+    color: var(--text-faint);
+}
+
+.ov-apq-value {
+    text-align: right;
+}
+
+/* A meter: the fill carries the value, the track is a lighter step of the same hue. */
+.ov-meter {
+    position: relative;
+    display: block;
+    height: 6px;
+    border-radius: var(--radius-full);
+    background: var(--accent-soft);
+    overflow: hidden;
+}
+
+    .ov-meter.is-ghost {
+        background-color: var(--surface-2);
+        box-shadow: inset 0 0 0 1px var(--border);
+    }
+
+    .ov-meter.is-wide {
+        height: 8px;
+    }
+
+.ov-meter-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: inherit;
+    background: var(--accent);
+}
+
+.ov-meter-target {
+    position: absolute;
+    top: -1px;
+    bottom: -1px;
+    width: 2px;
+    background: var(--border-strong);
+}
+
+/* ---- Line board ---- */
+
+.ov-board {
+    margin-bottom: var(--space-6);
+}
+
+.ov-key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--text-muted);
+    font: var(--type-caption);
+}
+
+    .ov-key li {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+.ov-swatch {
+    display: inline-block;
+    width: 18px;
+    height: 10px;
+    border-radius: 2px;
+}
+
+    .ov-swatch.is-nosignal {
+        --hatch: var(--state-nosignal);
+        box-shadow: inset 0 0 0 1px var(--state-nosignal);
+    }
+
+    .ov-swatch.is-planned {
+        background: var(--accent-soft);
+        box-shadow: inset 0 0 0 1px var(--accent);
+    }
+
+    .ov-swatch.is-published {
+        background: var(--accent);
+    }
+
+    .ov-swatch.is-changeover {
+        --hatch: var(--border-strong);
+        box-shadow: inset 0 0 0 1px var(--border-strong);
+    }
+
+.ov-rows {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    overflow: hidden;
+}
+
+.ov-row {
+    display: grid;
+    grid-template-columns: 168px 124px minmax(190px, 240px) minmax(280px, 1fr) 84px 52px;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-top: 1px solid var(--border);
+}
+
+    .ov-row:first-child {
+        border-top: 0;
+    }
+
+    .ov-row.is-head {
+        padding-block: var(--space-2);
+        background: var(--surface-2);
+        color: var(--text-muted);
+        font: var(--type-label);
+    }
+
+    .ov-row.is-skeleton {
+        grid-template-columns: 168px 124px 220px 1fr;
+        min-height: 68px;
+    }
+
+        .ov-row.is-skeleton span {
+            height: 14px;
+            border-radius: var(--radius-sm);
+            background: var(--surface-2);
+        }
+
+.ov-line {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.ov-line-code {
+    font: 600 16px/22px var(--font-sans);
+    color: var(--text);
+    text-decoration: none;
+}
+
+    .ov-line-code:hover {
+        color: var(--accent);
+    }
+
+.ov-line-name {
+    color: var(--text-muted);
+    font: var(--type-caption);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ov-state {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-full);
+    font: var(--type-label);
+    white-space: nowrap;
+}
+
+    .ov-state.is-nosignal {
+        border: 1px solid var(--state-nosignal);
+        color: var(--text-muted);
+    }
+
+.ov-job {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: baseline;
+    gap: 0 var(--space-2);
+    min-width: 0;
+}
+
+.ov-job-when {
+    grid-column: 1 / -1;
+    color: var(--text-muted);
+    font: var(--type-caption);
+}
+
+.ov-job-number {
+    font: var(--type-body-strong);
+    white-space: nowrap;
+}
+
+.ov-job-material {
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ov-progress {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-1);
+}
+
+.ov-progress-text {
+    color: var(--text-muted);
+    font: var(--type-caption);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* The strip: what the line did (state, above) over what it is planned to do (below). */
+.ov-scale,
+.ov-strip {
+    position: relative;
+    align-self: stretch;
+}
+
+.ov-scale {
+    min-height: 16px;
+}
+
+.ov-tick {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    font: 400 11px/16px var(--font-sans);
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+}
+
+    .ov-tick:first-child {
+        transform: none;
+    }
+
+
+.ov-strip {
+    display: grid;
+    grid-template-rows: 12px 20px;
+    align-content: center;
+    gap: 4px;
+    min-height: 44px;
+}
+
+.ov-lane {
+    position: relative;
+    border-radius: 3px;
+    background: var(--surface-2);
+}
+
+.ov-nosignal {
+    --hatch: color-mix(in srgb, var(--state-nosignal) 70%, transparent);
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: 3px 0 0 3px;
+}
+
+.ov-lane-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding-left: calc(var(--now, 25%) + var(--space-3));
+    color: var(--text-faint);
+    font: 400 11px/1 var(--font-sans);
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.ov-bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-radius: 3px;
+    /* A surface gap keeps neighbouring jobs apart. */
+    box-shadow: 0 0 0 1px var(--surface-2);
+}
+
+    .ov-bar.is-planned {
+        background: var(--accent-soft);
+        border: 1px solid var(--accent);
+    }
+
+    .ov-bar.is-published {
+        background: var(--accent);
+    }
+
+    .ov-bar.is-changeover {
+        --hatch: var(--border-strong);
+        background-color: var(--surface);
+    }
+
+    .ov-bar:hover,
+    .ov-bar:focus-visible {
+        outline: 2px solid var(--text);
+        outline-offset: 1px;
+        z-index: 1;
+    }
+
+.ov-now {
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--text);
+    pointer-events: none;
+}
+
+    .ov-now::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -3px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text);
+    }
+
+.ov-oee {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.ov-oee-value {
+    font: 600 18px/22px var(--font-sans);
+    color: var(--border-strong);
+}
+
+.ov-oee-bars {
+    display: grid;
+    gap: 3px;
+}
+
+    .ov-oee-bars span {
+        display: block;
+        height: 4px;
+        border-radius: var(--radius-full);
+        background-color: var(--surface-2);
+        box-shadow: inset 0 0 0 1px var(--border);
+    }
+
+.ov-flags {
+    display: flex;
+    gap: var(--space-1);
+    justify-content: flex-end;
+}
+
+.ov-flag {
+    display: inline-flex;
+}
+
+    .ov-flag.is-danger {
+        color: var(--danger);
+    }
+
+    .ov-flag.is-warning {
+        color: var(--warning);
+    }
+
+.ov-empty {
+    padding: var(--space-5);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+}
+
+/* ---- Work orders and what starts next ---- */
+
+.ov-lower {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: var(--space-6);
+}
+
+    .ov-lower .ov-h2 {
+        margin-bottom: var(--space-3);
+    }
+
+/* The order lifecycle is a real sequence, so it reads left to right with a step between each stage. */
+.ov-flow {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+    .ov-flow li {
+        position: relative;
+    }
+
+        .ov-flow li + li::before {
+            content: "";
+            position: absolute;
+            left: calc(-1 * var(--space-4));
+            top: 50%;
+            width: var(--space-4);
+            border-top: 1px solid var(--border-strong);
+        }
+
+.ov-flow-step {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+}
+
+    .ov-flow-step:hover {
+        border-color: var(--accent);
+    }
+
+    .ov-flow-step.is-zero .ov-flow-count {
+        color: var(--text-faint);
+    }
+
+.ov-flow-count {
+    font: var(--type-metric);
+    font-variant-numeric: normal;
+}
+
+.ov-flow-label {
+    color: var(--text-muted);
+    font: var(--type-caption);
+}
+
+.ov-foot {
+    margin: var(--space-3) 0 0;
+    color: var(--text-muted);
+    font: var(--type-caption);
+}
+
+    .ov-foot a {
+        margin-left: var(--space-2);
+    }
+
+.ov-next {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+
+    .ov-next td {
+        padding: var(--space-2) var(--space-2) var(--space-2) 0;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+    }
+
+    .ov-next tr:last-child td {
+        border-bottom: 0;
+    }
+
+.ov-next-time {
+    font-weight: 600;
+}
+
+.ov-next-line {
+    color: var(--text-muted);
+}
+
+.ov-next-qty {
+    text-align: right;
+}
+
+/* ---- Smaller screens ---- */
+
+@media (max-width: 1200px) {
+    .ov-row {
+        grid-template-columns: 140px 112px minmax(170px, 210px) minmax(220px, 1fr) 52px;
+    }
+
+        .ov-row > :nth-child(5) {
+            display: none;
+        }
+
+    .ov-summary-band {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .ov-lower {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* Tablets: each line becomes a card, with the strip on its own row. */
+@media (max-width: 900px) {
+    .ov-row {
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+            "line state"
+            "job flags"
+            "strip strip";
+        row-gap: var(--space-2);
+    }
+
+        .ov-row.is-head {
+            display: none;
+        }
+
+        .ov-row > :nth-child(1) { grid-area: line; }
+        .ov-row > :nth-child(2) { grid-area: state; }
+        .ov-row > :nth-child(3) { grid-area: job; }
+        .ov-row > :nth-child(4) { grid-area: strip; }
+        .ov-row > :nth-child(6) { grid-area: flags; }
+
+    .ov-summary-band,
+    .ov-flow {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .ov-attention {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+        .ov-flow li + li::before {
+            display: none;
+        }
+}

@@ -15,6 +15,7 @@ public sealed class EquipmentDraft
     public string? TimeZone { get; set; }
     public bool TracksState { get; set; }
     public bool IsSchedulable { get; set; }
+    public bool CanRunJob { get; set; }
     public bool HoldsInventory { get; set; }
 
     /// <summary>A placeholder row for the tree grid.</summary>
@@ -39,6 +40,7 @@ public sealed class EquipmentDraft
         EquipmentRole = Role,
         TracksState = TracksState,
         IsSchedulable = IsSchedulable,
+        CanRunJob = CanRunJob,
         HoldsInventory = HoldsInventory,
         TimeZone = Level == "site" ? EquipmentProperties.NullIfBlank(TimeZone) : null,
     };
@@ -60,7 +62,11 @@ public static class EquipmentProperties
     private const string LevelHelp = "ISA-95 level. A child sits below its parent's level. Fixed once created.";
     private const string RoleHelp = "ISA-95 role within the level. Fixed once created.";
     private const string TracksStateHelp = "Collects PackML machine state, so downtime and OEE are recorded for it.";
-    private const string SchedulableHelp = "Jobs can be dispatched to it.";
+    private const string SchedulableHelp =
+        "Jobs can be planned to it. A schedulable group such as a department, without Can run jobs, takes jobs in a time window and its lines run them.";
+
+    private const string CanRunJobHelp =
+        "Jobs actually run here: a line or cell. Jobs planned to a schedulable group above it can be released to it.";
     private const string HoldsInventoryHelp = "Material lots can be located here.";
     private const string TimeZoneHelp = "IANA time zone the site's shifts and reports use, e.g. America/Chicago.";
 
@@ -80,6 +86,7 @@ public static class EquipmentProperties
             new() { Key = "role", Name = "Role", Category = Classification, Description = RoleHelp, Value = Display.Label(e.EquipmentRole) },
             Bool("tracksState", "Tracks state", Capabilities, TracksStateHelp, e.TracksState),
             Bool("isSchedulable", "Schedulable", Capabilities, SchedulableHelp, e.IsSchedulable),
+            Bool("canRunJob", "Can run jobs", Capabilities, CanRunJobHelp, e.CanRunJob),
             Bool("holdsInventory", "Holds inventory", Capabilities, HoldsInventoryHelp, e.HoldsInventory),
         ];
 
@@ -116,6 +123,7 @@ public static class EquipmentProperties
             Description = e.Description,
             TracksState = e.TracksState,
             IsSchedulable = e.IsSchedulable,
+            CanRunJob = e.CanRunJob,
             HoldsInventory = e.HoldsInventory,
             IsActive = e.IsActive,
         };
@@ -126,6 +134,7 @@ public static class EquipmentProperties
             "description" => request with { Description = NullIfBlank(change.Value) },
             "tracksState" => request with { TracksState = change.Value == "true" },
             "isSchedulable" => request with { IsSchedulable = change.Value == "true" },
+            "canRunJob" => request with { CanRunJob = change.Value == "true" },
             "holdsInventory" => request with { HoldsInventory = change.Value == "true" },
             "isActive" => request with { IsActive = change.Value == "true" },
             _ => null,
@@ -175,6 +184,7 @@ public static class EquipmentProperties
             },
             Bool("tracksState", "Tracks state", Capabilities, TracksStateHelp, d.TracksState),
             Bool("isSchedulable", "Schedulable", Capabilities, SchedulableHelp, d.IsSchedulable),
+            Bool("canRunJob", "Can run jobs", Capabilities, CanRunJobHelp, d.CanRunJob),
             Bool("holdsInventory", "Holds inventory", Capabilities, HoldsInventoryHelp, d.HoldsInventory),
         ];
 
@@ -224,6 +234,9 @@ public static class EquipmentProperties
             case "isSchedulable":
                 d.IsSchedulable = change.Value == "true";
                 break;
+            case "canRunJob":
+                d.CanRunJob = change.Value == "true";
+                break;
             case "holdsInventory":
                 d.HoldsInventory = change.Value == "true";
                 break;
@@ -247,6 +260,7 @@ public static class EquipmentProperties
         d.Role = role;
         d.TracksState = role is "production_line" or "machine" or "unit" or "work_cell" or "process_cell";
         d.IsSchedulable = role is "production_line" or "process_cell" or "production_unit";
+        d.CanRunJob = d.IsSchedulable;
         d.HoldsInventory = role is "feed_point" or "storage_zone" or "storage_unit";
     }
 

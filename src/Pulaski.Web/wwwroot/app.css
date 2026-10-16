@@ -370,3 +370,17 @@ a.card {
     .blazor-error-boundary::after {
         content: "An error has occurred."
     }
+
+/* Units page (D-026): conversions beside the unit catalog on wide screens. */
+.units-layout {
+    display: grid;
+    gap: 2rem;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    align-items: start;
+}
+
+@media (max-width: 992px) {
+    .units-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

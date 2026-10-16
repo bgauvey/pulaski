@@ -102,6 +102,7 @@ public sealed class InMemoryEquipment : IEquipmentRepository, IEquipmentReadStor
             EquipmentRole = e.EquipmentRole,
             TracksState = e.TracksState,
             IsSchedulable = e.IsSchedulable,
+            CanRunJob = e.CanRunJob,
             HoldsInventory = e.HoldsInventory,
             TimeZone = e.TimeZone,
             IsActive = e.IsActive,

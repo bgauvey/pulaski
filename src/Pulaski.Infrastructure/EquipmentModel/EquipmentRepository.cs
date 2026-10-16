@@ -11,7 +11,7 @@ internal sealed class EquipmentRepository(DbSession session) : IEquipmentReposit
 {
     private const string Columns = """
         id, parent_id, site_id, code, name, description, level, equipment_role,
-        tracks_state, is_schedulable, holds_inventory, time_zone, is_active, xmin::text::bigint AS version
+        tracks_state, is_schedulable, can_run_job, holds_inventory, time_zone, is_active, xmin::text::bigint AS version
         """;
 
     private const string GetForShare = $"SELECT {Columns} FROM core.equipment WHERE id = @Id FOR SHARE";
@@ -20,10 +20,10 @@ internal sealed class EquipmentRepository(DbSession session) : IEquipmentReposit
 
     private const string Insert = """
         INSERT INTO core.equipment (id, parent_id, site_id, code, name, description, level, equipment_role,
-                                    tracks_state, is_schedulable, holds_inventory, time_zone, is_active,
+                                    tracks_state, is_schedulable, can_run_job, holds_inventory, time_zone, is_active,
                                     created_at, updated_at)
         VALUES (@Id, @ParentId, @SiteId, @Code, @Name, @Description, @Level, @EquipmentRole,
-                @TracksState, @IsSchedulable, @HoldsInventory, @TimeZone, @IsActive,
+                @TracksState, @IsSchedulable, @CanRunJob, @HoldsInventory, @TimeZone, @IsActive,
                 @At, @At)
         RETURNING xmin::text::bigint
         """;
@@ -44,6 +44,7 @@ internal sealed class EquipmentRepository(DbSession session) : IEquipmentReposit
             description = @Description,
             tracks_state = @TracksState,
             is_schedulable = @IsSchedulable,
+            can_run_job = @CanRunJob,
             holds_inventory = @HoldsInventory,
             is_active = @IsActive,
             updated_at = @At
@@ -98,6 +99,7 @@ internal sealed class EquipmentRepository(DbSession session) : IEquipmentReposit
         public string EquipmentRole { get; init; } = "";
         public bool TracksState { get; init; }
         public bool IsSchedulable { get; init; }
+        public bool CanRunJob { get; init; }
         public bool HoldsInventory { get; init; }
         public string? TimeZone { get; init; }
         public bool IsActive { get; init; }
@@ -106,7 +108,7 @@ internal sealed class EquipmentRepository(DbSession session) : IEquipmentReposit
         public Versioned<Equipment> ToVersioned() => new(
             new Equipment(
                 Id, ParentId, SiteId, Code, Name, Description, Level, EquipmentRole,
-                TracksState, IsSchedulable, HoldsInventory, TimeZone, IsActive),
+                TracksState, IsSchedulable, HoldsInventory, TimeZone, IsActive, CanRunJob),
             Version);
     }
 }

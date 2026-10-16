@@ -16,6 +16,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Respect the v1 non-goals in the charter: not an ERP, not SCADA/HMI/historian, no finite-capacity
   scheduling, no Part 11 features, no multi-tenant SaaS.
 - Every commit is signed off (DCO): `git commit -s`. License is Apache 2.0.
+- **User guide.** `docs/user_guide.md` is the end-user guide, for readers from novice to expert. Update it in
+  the same change as anything a user can see: a new or changed screen, step, button label, message, rule or
+  warning. Each topic keeps numbered steps for beginners and an "In detail" part for experienced users.
+  Keep section 11 ("What Pulaski doesn't do yet") current: add known gaps and bugs, remove them when fixed.
+  Describe only what the app does today, checked against the code, and bump the "Last updated" date.
 
 ## Stack
 
@@ -52,9 +57,28 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   stored; OEE categories are a per-site mapping.
 - Event-first: a command updates relational state and appends a CloudEvents event in the same
   transaction (D-007, D-008). `evt.event` is append-only; corrections are new events.
+- Scheduling (D-014…D-016): the planner owns line + `sequence_rank`; times come from the pure
+  projector in `Pulaski.Domain.Scheduling`, computed on read and stored only on publish.
+  Rates come from `core.run_standard`, where a modified rate beats the calculated one.
+- Work orders are planned, dispatched (= published) and firmed; their jobs follow (D-018). Jobs are
+  placed only on lines with a capability for their material (D-020); firmed jobs keep their time (D-019).
+- A job may be planned to a group (schedulable, not `can_run_job`, e.g. a department) in a window; the floor
+  assigns it to a line below that can run it (D-022). Pulaski checks the window and never picks the line.
+- Process routes (D-023): versioned templates of numbered operations, each on lines or departments with
+  shares totalling 100%, linked after start / after end. Drafts are one `jsonb` document; release writes
+  fixed rows for jobs to reference.
+- Work orders are made from a released process (D-024, proposed): each operation's equipment gets a planned job
+  for its share, at the end of its line, held until the order's start. The order keeps the version and a note.
+- BOMs (D-025, proposed) are single level, per material and optionally per process (items name the consuming
+  operation), versioned like processes. Order creation plans each job's components (`job_material`). Pulaski
+  owns lots on the floor; the ERP owns warehouse stock.
+- Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
+  deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
 
 ## Database (`db/schema-draft.sql`)
+
+- `docs/database.md` documents every table and column. Update it in the same change as the schema.
 
 - IDs are native `uuid` holding UUIDv7, generated in the app with `Guid.CreateVersion7()` behind
   `IIdGenerator` (injectable clock). `uuidv7()` is only a DB default backstop (D-006).
@@ -75,8 +99,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 Treat these as working assumptions; confirm with Bill before building anything that hard-codes them.
 
 - One `core.equipment` table for work centers, work units, machines and storage, typed by ISA-95
-  level + role, with capability flags (`tracks_state`, `is_schedulable`, `holds_inventory`).
-- v1 scheduling is dispatch sequencing (`sequence_rank`, planned times), not finite capacity.
+  level + role, with capability flags (`tracks_state`, `is_schedulable`, `can_run_job`, `holds_inventory`).
 - PackML state 0 `Undefined` records no-signal time so it stays visible in OEE.
 - `ts.process_value` keys on `(equipment_tag_id, occurred_at)` with no surrogate id or FKs.
 - Outbox ordering uses `xid8` transaction ids.
@@ -91,7 +114,9 @@ Treat these as working assumptions; confirm with Bill before building anything t
 
 - PostgreSQL 18 via Homebrew (`postgresql@18`); database `pulaski`.
 - Load schema: `psql -d pulaski -v ON_ERROR_STOP=1 -f db/schema-draft.sql`, then
-  `db/app-role.sql` (re-runnable), then `db/seed-demo.sql` (empty database only).
+  `db/app-role.sql` (re-runnable), then `db/seed-demo.sql` (empty database only), then optionally
+  `db/seed-materials.sql` (200 demo materials in 11 classes; re-runnable), then `db/seed-units.sql` (standard units
+  and demo material conversions, D-026; re-runnable).
 - Layout: production projects in `src/`, test projects in `Tests/` (shared in-memory fakes in
   `Tests/Pulaski.Testing`); `.editorconfig`,
   `Directory.Build.props`, `Directory.Packages.props` (central package versions) and

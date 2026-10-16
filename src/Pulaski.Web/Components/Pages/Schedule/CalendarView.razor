@@ -1,0 +1,211 @@
+@* A month of projected work, by site-local day. A job that spans days shows on each of them.
+   Dragging a planned job to a later day holds it until that day (its earliest start); the
+   sequence still decides everything else, so dragging earlier only clears a hold (D-014). *@
+@using System.Globalization
+
+<div class="view-toolbar">
+    <div class="btn-group" role="group" aria-label="Change month">
+        <button type="button" class="btn btn-outline-secondary btn-square" aria-label="Previous month" @onclick="() => MoveAsync(-1)">
+            <Icon Name="chevron-left" Size="18" />
+        </button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="ThisMonthAsync">This month</button>
+        <button type="button" class="btn btn-outline-secondary btn-square" aria-label="Next month" @onclick="() => MoveAsync(1)">
+            <Icon Name="chevron-right" Size="18" />
+        </button>
+    </div>
+    <span class="range-label">@_month.ToString("MMMM yyyy", CultureInfo.InvariantCulture)</span>
+
+    <div class="line-filter ms-auto" role="group" aria-label="Lines">
+        @foreach (var (line, index) in Controller.Board.Lines.Select((l, i) => (l, i)))
+        {
+            var on = !_hiddenLines.Contains(line.Id);
+            <button type="button" class="chip line-chip line-@(index % LinePalette) @(on ? "" : "is-off")"
+                    aria-pressed="@(on ? "true" : "false")" @onclick="() => ToggleLine(line.Id)">
+                @line.Code
+            </button>
+        }
+    </div>
+</div>
+
+<div class="calendar" role="grid" aria-label="@_month.ToString("MMMM yyyy", CultureInfo.InvariantCulture)">
+    <div class="calendar-row calendar-weekdays" role="row">
+        @foreach (var name in WeekdayNames)
+        {
+            <div role="columnheader">@name</div>
+        }
+    </div>
+    @foreach (var week in _grid.Chunk(7))
+    {
+        <div class="calendar-row" role="row">
+            @foreach (var day in week)
+            {
+                var items = ScheduleLayout.OnDay(VisibleItems, day, Tz);
+                var dayStart = ScheduleLayout.DayRange(day, Tz).Start;
+                <div class="calendar-day @(day.Month != _month.Month ? "is-other-month" : "") @(day == _today ? "is-today" : "") @(day < _today ? "is-past" : "")"
+                     role="gridcell" @key="day"
+                     data-drop-zone data-drop-blocked="@(Controller.DraggingItem is { } dragged && !CanHold(dragged) ? "" : null)"
+                     @ondragover:preventDefault @ondrop="() => DropOnDayAsync(day)">
+                    <div class="calendar-date">
+                        <span>@day.Day</span>
+                        @if (items.Count > 0)
+                        {
+                            <span class="calendar-load" title="Jobs running this day">@items.Count(i => !i.IsPlaceholder)</span>
+                        }
+                    </div>
+                    <div class="calendar-items">
+                        @foreach (var item in _expanded.Contains(day) ? items : items.Take(MaxPerDay))
+                        {
+                            var s = item.Segment;
+                            var continues = s.Start < dayStart;
+                            <div class="cal-item line-@(LineIndex(item.LineId) % LinePalette) @ItemClasses(item)" @key="item.Key + item.Signature"
+                                 draggable="@(CanHold(item) ? "true" : "false")" role="button" tabindex="0"
+                                 title="@Describe(item)" aria-label="@Describe(item)"
+                                 @ondragstart="() => Controller.StartDrag(item)" @ondragend="Controller.EndDrag"
+                                 @onclick="() => SelectAsync(item)" @onkeydown="e => OnKey(e, item)">
+                                <span class="cal-time">@(continues ? "…" : ScheduleFormat.Time(s.Start, Tz))</span>
+                                <span class="cal-title">@(item.IsPlaceholder ? "Changeover" : s.JobNumber)</span>
+                                <span class="cal-line">@item.LineCode</span>
+                                @if (s.IsLocked)
+                                {
+                                    <Icon Name="lock" Size="12" />
+                                }
+                            </div>
+                        }
+                        @if (items.Count > MaxPerDay)
+                        {
+                            <button type="button" class="cal-more" @onclick="() => ToggleDay(day)">
+                                @(_expanded.Contains(day) ? "Show fewer" : $"+{items.Count - MaxPerDay} more")
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<p class="small text-muted mt-2">
+    Drag a planned job to a later day to hold it until then. To run something sooner, change its place in the line on the Gantt.
+</p>
+
+@code {
+    private const int MaxPerDay = 4;
+    private const int LinePalette = 6;
+    private static readonly string[] WeekdayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+    [Parameter, EditorRequired]
+    public ScheduleController Controller { get; set; } = null!;
+
+    [Parameter]
+    public (Guid JobId, string Kind)? Selected { get; set; }
+
+    [Parameter]
+    public EventCallback<BoardItem> OnSelect { get; set; }
+
+    [Parameter]
+    public EventCallback<DateTimeOffset> OnHorizon { get; set; }
+
+    private DateOnly _month;
+    private DateOnly _today;
+    private IReadOnlyList<DateOnly> _grid = [];
+    private readonly HashSet<Guid> _hiddenLines = [];
+    private readonly HashSet<DateOnly> _expanded = [];
+    private bool _initialized;
+
+    private string? Tz => Controller.TimeZone;
+
+    private IEnumerable<BoardItem> VisibleItems => Controller.Board.Items.Where(i => !_hiddenLines.Contains(i.LineId));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _today = ScheduleLayout.SiteDate(Controller.Now, Tz);
+        if (!_initialized)
+        {
+            _initialized = true;
+            await ShowAsync(new DateOnly(_today.Year, _today.Month, 1));
+        }
+    }
+
+    private Task MoveAsync(int months) => ShowAsync(_month.AddMonths(months));
+
+    private Task ThisMonthAsync() => ShowAsync(new DateOnly(_today.Year, _today.Month, 1));
+
+    private async Task ShowAsync(DateOnly month)
+    {
+        _month = month;
+        _grid = ScheduleLayout.MonthGrid(month);
+        _expanded.Clear();
+        await OnHorizon.InvokeAsync(ScheduleLayout.DayRange(_grid[^1], Tz).End);
+    }
+
+    private void ToggleLine(Guid lineId)
+    {
+        if (!_hiddenLines.Remove(lineId))
+        {
+            _hiddenLines.Add(lineId);
+        }
+    }
+
+    private void ToggleDay(DateOnly day)
+    {
+        if (!_expanded.Remove(day))
+        {
+            _expanded.Add(day);
+        }
+    }
+
+    private int LineIndex(Guid lineId) => Math.Max(0, Controller.Board.Lines.ToList().FindIndex(l => l.Id == lineId));
+
+    private static bool CanHold(BoardItem item) => item.CanResequence;
+
+    private async Task DropOnDayAsync(DateOnly day)
+    {
+        var item = Controller.DraggingItem;
+        Controller.EndDrag();
+        if (item is null)
+        {
+            return;
+        }
+
+        if (!CanHold(item))
+        {
+            Controller.Toast("warning", $"{item.Segment.JobNumber} is {(item.Segment.IsLocked ? "locked" : item.Segment.Status)}; only planned, unlocked jobs move in time.");
+            return;
+        }
+
+        await Controller.HoldJobUntilAsync(item, day);
+    }
+
+    private Task SelectAsync(BoardItem item) =>
+        OnSelect.InvokeAsync(item.IsPlaceholder && Controller.Board.Find(item.JobId) is { } job ? job : item);
+
+    private async Task OnKey(KeyboardEventArgs e, BoardItem item)
+    {
+        if (e.Key is "Enter" or " ")
+        {
+            await SelectAsync(item);
+        }
+    }
+
+    private string ItemClasses(BoardItem item)
+    {
+        var s = item.Segment;
+        var classes = new List<string> { item.IsPlaceholder ? "is-changeover" : $"is-{s.Status}" };
+        if (item.IsWindow) classes.Add("is-window");
+        if (Selected == (item.JobId, s.Kind)) classes.Add("is-selected");
+        if (Controller.Board.IsOverlapping(item)) classes.Add("is-overlap");
+        if (s.Warnings.Any(w => w.Code == "late")) classes.Add("is-late");
+        if (Controller.Saving.Contains(item.Key)) classes.Add("is-saving");
+        if (Controller.Changed.Contains(item.Key)) classes.Add("is-updated");
+        if (Controller.DraggingItem?.Key == item.Key) classes.Add("is-dragging");
+        return string.Join(' ', classes);
+    }
+
+    private string Describe(BoardItem item)
+    {
+        var s = item.Segment;
+        var head = item.IsPlaceholder ? $"Changeover {s.FromMaterialCode} → {s.MaterialCode}" : $"{s.JobNumber} {s.MaterialCode}";
+        var text = $"{head} on {item.LineCode}, {ScheduleFormat.When(s.Start, Tz)} – {ScheduleFormat.When(s.End, Tz)}";
+        return Controller.Board.IsOverlapping(item) ? text + " — overlaps other work" : text;
+    }
+}

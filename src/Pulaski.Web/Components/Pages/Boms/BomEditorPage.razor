@@ -1,0 +1,415 @@
+@page "/boms/{Id:guid}"
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>@(_bom?.MaterialCode ?? "BOM") · BOMs · Pulaski</PageTitle>
+
+<p class="small mb-2"><a href="boms">Bills of materials</a></p>
+
+<ProblemAlert Error="_error" />
+
+@if (_bom is null || _version is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-3">
+        <div>
+            <h1 class="mb-1">@_bom.MaterialCode</h1>
+            <p class="text-muted mb-0">
+                @_bom.MaterialName · @(_bom.ProcessCode is null ? "for any process" : $"for {_bom.ProcessCode} · {_bom.ProcessName}")
+            </p>
+        </div>
+        <div class="d-flex flex-wrap gap-1 align-items-center">
+            @foreach (var v in _bom.Versions)
+            {
+                <button type="button" class="btn btn-sm @(v.Id == _version.Id ? "btn-secondary" : "btn-outline-secondary")"
+                        @onclick="() => OpenVersionAsync(v.Id)">
+                    Version @v.Number · @Display.Label(v.Status)
+                </button>
+            }
+            @if (CanStartDraft)
+            {
+                <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_saving" @onclick="StartDraftAsync">New draft</button>
+            }
+        </div>
+    </div>
+
+    @if (_bom.MissingOperations.Length > 0)
+    {
+        <div class="alert alert-warning small" role="alert">
+            The released version names operation @string.Join(", ", _bom.MissingOperations), which @_bom.ProcessCode's released version no longer has,
+            so orders for @_bom.MaterialCode made with @_bom.ProcessCode are refused.
+            @(CanStartDraft ? "Start a new draft, move those lines to operations the process has, and release it." : "Change those lines in the draft and release it.")
+        </div>
+    }
+
+    <div class="d-flex flex-wrap gap-3 align-items-end mb-3">
+        <div>
+            <label class="form-label" for="base-qty">Quantities are per</label>
+            <div class="input-group">
+                <input id="base-qty" type="number" class="form-control" min="0" step="any" style="max-width: 9rem"
+                       value="@Plain(_baseQty)" @onchange="e => Edit(() => _baseQty = Decimal(e))" disabled="@ReadOnly" />
+                <select class="form-select" style="max-width: 7rem" aria-label="BOM unit" value="@_baseUomId" disabled="@ReadOnly"
+                        @onchange="e => Edit(() => _baseUomId = Guid.Parse(e.Value!.ToString()!))">
+                    @foreach (var u in ActiveUnits(_baseUomId))
+                    {
+                        <option value="@u.Id">@u.Code</option>
+                    }
+                </select>
+                <span class="input-group-text">of @_bom.MaterialCode</span>
+            </div>
+        </div>
+        <div class="small pb-2">
+            <a href="units?material=@_bom.MaterialId">Unit conversions for @_bom.MaterialCode</a>
+            <span class="text-muted">· orders may use any unit that converts to this one</span>
+        </div>
+    </div>
+
+    <div class="table-panel mb-3">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+                <tr>
+                    <th style="width: 5rem">Line</th>
+                    <th>Component</th>
+                    <th style="width: 9rem" class="text-end">Quantity</th>
+                    <th style="width: 8rem">Unit</th>
+                    <th style="width: 7rem" class="text-end">Scrap %</th>
+                    <th style="width: 10rem">Consumed by</th>
+                    @if (_bom.ProcessId is not null)
+                    {
+                        <th style="width: 11rem">Operation</th>
+                    }
+                    <th style="width: 2.5rem"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in _items)
+                {
+                    <tr @key="item.Id" class="@(Flagged(item.Id) ? "table-warning" : "")">
+                        <td><input type="number" class="form-control form-control-sm" value="@item.LineNo" disabled="@ReadOnly"
+                                   @onchange="e => Edit(() => item.LineNo = (int)Decimal(e))" /></td>
+                        <td>
+                            <select class="form-select form-select-sm" value="@item.ComponentMaterialId" disabled="@ReadOnly"
+                                    @onchange="e => Edit(() => SetComponent(item, e))">
+                                <option value="@Guid.Empty">Choose a component…</option>
+                                @foreach (var m in _materials.Where(m => m.Id != _bom.MaterialId))
+                                {
+                                    <option value="@m.Id">@m.Code · @m.Name</option>
+                                }
+                            </select>
+                        </td>
+                        <td><input type="number" class="form-control form-control-sm text-end" min="0" step="any" value="@Plain(item.QtyPer)" disabled="@ReadOnly"
+                                   @onchange="e => Edit(() => item.QtyPer = Decimal(e))" /></td>
+                        <td>
+                            <select class="form-select form-select-sm" value="@item.UomId" disabled="@ReadOnly"
+                                    @onchange="e => Edit(() => item.UomId = Guid.Parse(e.Value!.ToString()!))">
+                                @foreach (var u in ActiveUnits(item.UomId))
+                                {
+                                    <option value="@u.Id">@u.Code</option>
+                                }
+                            </select>
+                        </td>
+                        <td><input type="number" class="form-control form-control-sm text-end" min="0" max="99" step="any" value="@Plain(item.ScrapFactor * 100m)" disabled="@ReadOnly"
+                                   @onchange="e => Edit(() => item.ScrapFactor = Decimal(e) / 100m)" /></td>
+                        <td>
+                            <select class="form-select form-select-sm" value="@item.ConsumptionMethod" disabled="@ReadOnly"
+                                    @onchange="e => Edit(() => item.ConsumptionMethod = e.Value?.ToString() ?? Methods[0].Code)">
+                                @foreach (var method in Methods)
+                                {
+                                    <option value="@method.Code">@method.Label</option>
+                                }
+                            </select>
+                        </td>
+                        @if (_bom.ProcessId is not null)
+                        {
+                            <td>
+                                <select class="form-select form-select-sm" value="@(item.OperationNumber?.ToString() ?? "")" disabled="@ReadOnly"
+                                        @onchange="e => Edit(() => item.OperationNumber = int.TryParse(e.Value?.ToString(), out var n) ? n : null)">
+                                    <option value="">First operation</option>
+                                    @foreach (var op in _operations)
+                                    {
+                                        <option value="@op.Number">@op.Number · @op.Name</option>
+                                    }
+                                    @if (item.OperationNumber is { } number && _operations.All(o => o.Number != number))
+                                    {
+                                        <option value="@number">@number · not in the process</option>
+                                    }
+                                </select>
+                            </td>
+                        }
+                        <td>
+                            @if (!ReadOnly)
+                            {
+                                <button type="button" class="btn btn-sm btn-link text-danger p-0" title="Remove line" @onclick="() => Edit(() => _items.Remove(item))">×</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (_items.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-muted small">No components yet.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (!ReadOnly)
+    {
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <button type="button" class="btn btn-outline-secondary" @onclick="AddLine"><Icon Name="plus" /> Add component</button>
+            <button type="button" class="btn btn-primary" disabled="@(_saving || !_dirty)" @onclick="SaveAsync">@(_dirty ? "Save draft" : "Saved")</button>
+        </div>
+
+        @if (_problems.Count > 0)
+        {
+            <div class="alert alert-warning small">
+                <strong>Before this version can be released:</strong>
+                <ul class="mb-0">
+                    @foreach (var p in _problems)
+                    {
+                        <li>@p.Message</li>
+                    }
+                </ul>
+            </div>
+        }
+        else
+        {
+            <div class="d-flex flex-wrap gap-2 align-items-end">
+                <div class="flex-grow-1" style="max-width: 28rem">
+                    <label class="form-label" for="note">Release note</label>
+                    <input id="note" class="form-control" maxlength="500" @bind="_note" />
+                </div>
+                <button type="button" class="btn btn-success" disabled="@(_saving || _dirty)" @onclick="ReleaseAsync">Release version @_version.Number</button>
+            </div>
+        }
+    }
+    else
+    {
+        <p class="small text-muted">
+            Version @_version.Number is @Display.Label(_version.Status)@(_version.ReleasedAt is { } at ? $", released {at:yyyy-MM-dd}" : "")@(_version.Note is null ? "" : $": {_version.Note}").
+            A released version never changes; start a new draft to change the BOM.
+        </p>
+    }
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private static readonly (string Code, string Label)[] Methods =
+    [
+        ("backflush", "Backflush on count"),
+        ("time_window", "Time window (loaded lot)"),
+        ("declared", "Declared by operator"),
+        ("scan", "Scanned lot"),
+    ];
+
+    private BomDto? _bom;
+    private BomVersionDto? _version;
+    private IReadOnlyList<MaterialDto> _materials = [];
+    private IReadOnlyList<UomDto> _uoms = [];
+    private IReadOnlyList<ProcessOperationDto> _operations = [];
+    private List<ItemModel> _items = [];
+    private IReadOnlyList<BomProblemDto> _problems = [];
+    private decimal _baseQty;
+    private Guid _baseUomId;
+    private string? _note;
+    private bool _dirty;
+    private bool _saving;
+    private ApiException? _error;
+
+    private bool ReadOnly => _version?.Status != "draft";
+
+    private bool CanStartDraft => _bom is not null
+        && _bom.Versions.All(v => v.Status != "draft")
+        && _bom.Versions.Any(v => v.Status == "released");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _materials = await Api.ListMaterialsAsync();
+            _uoms = await Api.ListUomsAsync();
+            await LoadAsync(versionId: null);
+            if (_bom?.ProcessId is { } processId)
+            {
+                var process = await Api.GetProcessAsync(processId);
+                if (process.Versions.FirstOrDefault(v => v.Status == "released") is { } released)
+                {
+                    _operations = [.. (await Api.GetProcessVersionAsync(processId, released.Id)).Definition.Operations.OrderBy(o => o.Number)];
+                }
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    // Opens the draft if there is one, else the newest version.
+    private async Task LoadAsync(Guid? versionId)
+    {
+        _bom = await Api.GetBomAsync(Id);
+        var pick = versionId
+            ?? _bom.Versions.FirstOrDefault(v => v.Status == "draft")?.Id
+            ?? _bom.Versions.First().Id;
+        _version = await Api.GetBomVersionAsync(Id, pick);
+        _baseQty = _version.Definition.BaseQty;
+        _baseUomId = _version.Definition.BaseUomId;
+        _items = [.. _version.Definition.Items.OrderBy(i => i.LineNo).Select(ItemModel.From)];
+        _problems = _version.Problems;
+        _dirty = false;
+        _note = null;
+    }
+
+    private async Task OpenVersionAsync(Guid versionId)
+    {
+        _error = null;
+        try
+        {
+            await LoadAsync(versionId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private void Edit(Action change)
+    {
+        change();
+        _dirty = true;
+    }
+
+    private void AddLine() => Edit(() => _items.Add(new ItemModel
+    {
+        Id = Guid.CreateVersion7(),
+        LineNo = (_items.Count == 0 ? 0 : _items.Max(i => i.LineNo)) + 10,
+        UomId = _uoms.FirstOrDefault()?.Id ?? Guid.Empty,
+        ConsumptionMethod = Methods[0].Code,
+    }));
+
+    // A new component brings its base unit with it.
+    private void SetComponent(ItemModel item, ChangeEventArgs e)
+    {
+        item.ComponentMaterialId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty;
+        if (_materials.FirstOrDefault(m => m.Id == item.ComponentMaterialId) is { } material)
+        {
+            item.UomId = material.BaseUomId;
+        }
+    }
+
+    private bool Flagged(Guid itemId) => _problems.Any(p => p.ItemId == itemId);
+
+    // numeric(18,6) comes back with trailing zeros; show 1000, not 1000.000000.
+    private static string Plain(decimal value) => value.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture);
+
+    // Active units, plus the one already chosen even if it has since been switched off.
+    private IEnumerable<UomDto> ActiveUnits(Guid current) => _uoms.Where(u => u.IsActive || u.Id == current);
+
+    private static decimal Decimal(ChangeEventArgs e) =>
+        decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var value) ? value : 0m;
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var saved = await Api.SaveBomDraftAsync(Id, _version!.Id, new SaveBomDraftRequest
+            {
+                Version = _version.Version,
+                Definition = new BomDefinitionDto { BaseQty = _baseQty, BaseUomId = _baseUomId, Items = [.. _items.Select(i => i.ToDto())] },
+            });
+            _version = _version with { Version = saved.Version };
+            _problems = saved.Problems;
+            _dirty = false;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ReleaseAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await Api.ReleaseBomVersionAsync(Id, _version!.Id, new ReleaseBomVersionRequest { Version = _version.Version, Note = _note });
+            await LoadAsync(_version.Id);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task StartDraftAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var draft = await Api.StartBomDraftAsync(Id);
+            await LoadAsync(draft.Id);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private sealed class ItemModel
+    {
+        public Guid Id { get; init; }
+        public int LineNo { get; set; }
+        public Guid ComponentMaterialId { get; set; }
+        public decimal QtyPer { get; set; }
+        public Guid UomId { get; set; }
+        public decimal ScrapFactor { get; set; }
+        public string ConsumptionMethod { get; set; } = "backflush";
+        public int? OperationNumber { get; set; }
+
+        public static ItemModel From(BomItemDto dto) => new()
+        {
+            Id = dto.Id,
+            LineNo = dto.LineNo,
+            ComponentMaterialId = dto.ComponentMaterialId,
+            QtyPer = dto.QtyPer,
+            UomId = dto.UomId,
+            ScrapFactor = dto.ScrapFactor,
+            ConsumptionMethod = dto.ConsumptionMethod,
+            OperationNumber = dto.OperationNumber,
+        };
+
+        public BomItemDto ToDto() => new()
+        {
+            Id = Id,
+            LineNo = LineNo,
+            ComponentMaterialId = ComponentMaterialId,
+            QtyPer = QtyPer,
+            UomId = UomId,
+            ScrapFactor = ScrapFactor,
+            ConsumptionMethod = ConsumptionMethod,
+            OperationNumber = OperationNumber,
+        };
+    }
+}

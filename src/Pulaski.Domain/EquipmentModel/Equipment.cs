@@ -14,8 +14,15 @@ public sealed record Equipment(
     bool IsSchedulable,
     bool HoldsInventory,
     string? TimeZone,
-    bool IsActive)
+    bool IsActive,
+    bool CanRunJob = false)
 {
+    /// <summary>
+    /// A planning target that runs nothing itself, such as a department: jobs planned to it are
+    /// run by its descendants that <see cref="CanRunJob"/> (D-022).
+    /// </summary>
+    public bool IsSchedulingGroup => IsSchedulable && !CanRunJob;
+
     /// <summary>
     /// Creates equipment under <paramref name="parent"/> (null only for the enterprise) and works out
     /// its owning site: a site owns itself, the enterprise has none, everything else inherits.
@@ -32,7 +39,8 @@ public sealed record Equipment(
         bool tracksState,
         bool isSchedulable,
         bool holdsInventory,
-        string? timeZone)
+        string? timeZone,
+        bool canRunJob = false)
     {
         if (!EquipmentTypes.IsValidLevelRole(level, equipmentRole))
         {
@@ -58,6 +66,6 @@ public sealed record Equipment(
 
         return new Equipment(
             id, parent?.Id, siteId, code, name, description, level, equipmentRole,
-            tracksState, isSchedulable, holdsInventory, timeZone, IsActive: true);
+            tracksState, isSchedulable, holdsInventory, timeZone, IsActive: true, canRunJob);
     }
 }

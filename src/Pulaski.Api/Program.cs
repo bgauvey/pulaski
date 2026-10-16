@@ -32,5 +32,9 @@ var api = app.MapGroup("/api");
 api.MapEquipmentEndpoints();
 api.MapWorkOrderEndpoints();
 api.MapReferenceDataEndpoints();
+api.MapSchedulingEndpoints();
+api.MapProcessEndpoints();
+api.MapBomEndpoints();
+api.MapUnitEndpoints();
 
 app.Run();

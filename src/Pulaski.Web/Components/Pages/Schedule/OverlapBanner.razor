@@ -1,0 +1,59 @@
+@* Tells the planner, on every view, when two pieces of work on one line are projected at the same
+   time. The projector lays work end to end, so an overlap means work ran into a firmed job's
+   anchor (D-019); it never resolves itself, so it stays here until the planner fixes it. *@
+
+@if (Board.Overlaps.Count > 0)
+{
+    <section class="overlap-banner" role="alert" aria-labelledby="overlap-title">
+        <div class="overlap-banner-head">
+            <Icon Name="alert" />
+            <strong id="overlap-title">
+                @(Board.Overlaps.Count == 1 ? "1 overlap" : $"{Board.Overlaps.Count} overlaps"):
+                a line can't run these at the same time
+            </strong>
+            @if (Board.Overlaps.Count > Collapsed)
+            {
+                <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _expanded = !_expanded">
+                    @(_expanded ? "Show fewer" : $"Show all {Board.Overlaps.Count}")
+                </button>
+            }
+        </div>
+        <ul class="overlap-list">
+            @foreach (var overlap in _expanded ? Board.Overlaps : Board.Overlaps.Take(Collapsed))
+            {
+                <li @key="overlap.Key">
+                    <span>
+                        @overlap.Describe(),
+                        @ScheduleFormat.When(overlap.Start, TimeZone)–@ScheduleFormat.Time(overlap.End, TimeZone).
+                        @Hint(overlap)
+                    </span>
+                    <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => OnShow.InvokeAsync(Target(overlap))">
+                        Show
+                    </button>
+                </li>
+            }
+        </ul>
+    </section>
+}
+
+@code {
+    private const int Collapsed = 3;
+    private bool _expanded;
+
+    [Parameter, EditorRequired]
+    public ScheduleBoard Board { get; set; } = ScheduleBoard.Empty;
+
+    [Parameter]
+    public string? TimeZone { get; set; }
+
+    [Parameter]
+    public EventCallback<BoardItem> OnShow { get; set; }
+
+    /// <summary>The work that ran into the later segment; a placeholder can't be edited, so show its job instead.</summary>
+    private static BoardItem Target(BoardOverlap overlap) => overlap.First.IsPlaceholder ? overlap.Second : overlap.First;
+
+    private static string Hint(BoardOverlap overlap) =>
+        overlap.First.Segment.Status == "firmed" || overlap.Second.Segment.Status == "firmed"
+            ? "A firmed job keeps its start: move the work before it, or hold that work until after it."
+            : "";
+}

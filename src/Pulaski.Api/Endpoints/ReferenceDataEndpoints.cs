@@ -22,6 +22,12 @@ internal static class ReferenceDataEndpoints
             TypedResults.Ok(await handler.HandleAsync(new ListMaterialsQuery(includeInactive ?? false), ct)))
             .WithTags("Reference data");
 
+        routes.MapGet("/material-classes", async Task<Ok<IReadOnlyList<MaterialClassDto>>> (
+            IQueryHandler<ListMaterialClassesQuery, IReadOnlyList<MaterialClassDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListMaterialClassesQuery(), ct)))
+            .WithTags("Reference data");
+
         return routes;
     }
 }

@@ -1,0 +1,245 @@
+@page "/schedule"
+@implements IDisposable
+@inject PulaskiApiClient Api
+@inject TimeProvider Time
+@inject NavigationManager Navigation
+
+<PageTitle>Schedule · Pulaski</PageTitle>
+
+<div class="schedule-head">
+    <div>
+        <h1 class="mb-1">Schedule</h1>
+        <div class="live-status" role="status">
+            <span class="live-dot @(_controller.IsRefreshing ? "is-busy" : "")" aria-hidden="true"></span>
+            @if (_controller.Board.LoadedAt > DateTimeOffset.MinValue)
+            {
+                <span>Live · updated @ScheduleFormat.Time(_controller.Board.LoadedAt, _controller.TimeZone) site time</span>
+            }
+            else
+            {
+                <span>Connecting…</span>
+            }
+        </div>
+    </div>
+
+    <div class="schedule-tools">
+        @if (_controller.Sites.Count > 1)
+        {
+            <select class="form-select" aria-label="Site" value="@_controller.SiteId" @onchange="OnSiteChanged">
+                @foreach (var site in _controller.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+
+        <div class="segmented" role="tablist" aria-label="View">
+            @foreach (var (key, label, icon) in Views)
+            {
+                <a role="tab" href="@ViewHref(key)" aria-label="@label" aria-selected="@(CurrentView == key ? "true" : "false")"
+                   class="segmented-item @(CurrentView == key ? "is-active" : "")">
+                    <Icon Name="@icon" Size="18" /><span>@label</span>
+                </a>
+            }
+        </div>
+
+        <a class="btn btn-primary text-nowrap" href="schedule/work-orders/new">New work order</a>
+
+        <button type="button" class="btn btn-outline-secondary btn-square" aria-label="Refresh now"
+                title="Refresh now" disabled="@_controller.IsRefreshing" @onclick="RefreshAsync">
+            <Icon Name="refresh" Size="18" />
+        </button>
+    </div>
+</div>
+
+<ProblemAlert Error="_controller.LoadError" />
+
+<OverlapBanner Board="_controller.Board" TimeZone="@_controller.TimeZone" OnShow="SelectItem" />
+
+@if (!_controller.IsLoaded)
+{
+    @if (_controller.LoadError is null)
+    {
+        <p class="text-muted">Loading the schedule…</p>
+    }
+}
+else if (_controller.Board.Lines.Count == 0)
+{
+    <div class="empty-panel">
+        <h2>No schedulable lines</h2>
+        <p class="text-muted mb-0">Mark a work center as schedulable on the <a href="equipment">Equipment</a> page to plan work on it.</p>
+    </div>
+}
+else
+{
+    @switch (CurrentView)
+    {
+        case "calendar":
+            <CalendarView Controller="_controller" Selected="_selected" OnSelect="SelectItem" OnHorizon="OnHorizonAsync" />
+            break;
+        case "kanban":
+            <KanbanView Controller="_controller" SelectedWorkOrder="_selectedWorkOrder" OnSelect="SelectWorkOrder" />
+            break;
+        case "table":
+            <ScheduleTable Controller="_controller" Selected="_selected" OnSelect="SelectItem" />
+            break;
+        default:
+            <GanttView Controller="_controller" Selected="_selected" OnSelect="SelectItem" OnSelectWorkOrder="SelectWorkOrder"
+                       OnHorizon="OnHorizonAsync" OnPlanToGroup="PlanToGroup" />
+            break;
+    }
+}
+
+<ScheduleDrawer Controller="_controller"
+                Selected="_selected"
+                SelectedWorkOrder="_selectedWorkOrder"
+                OnSelect="SelectItem"
+                OnSelectWorkOrder="SelectWorkOrder"
+                OnClose="CloseDrawer"
+                Preset="_preset" />
+
+<div class="toast-stack" role="status" aria-live="polite">
+    @foreach (var toast in _controller.Toasts)
+    {
+        <div class="toast-item toast-@toast.Kind" @key="toast.Id">
+            @if (toast.Kind is "danger" or "warning")
+            {
+                <Icon Name="alert" Size="18" />
+            }
+            <span>@toast.Text</span>
+            <button type="button" class="toast-close" aria-label="Dismiss" @onclick="() => _controller.Dismiss(toast.Id)">
+                <Icon Name="close" Size="16" />
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly (string Key, string Label, string Icon)[] Views =
+    [
+        ("gantt", "Gantt", "gantt"),
+        ("calendar", "Calendar", "calendar"),
+        ("kanban", "Kanban", "kanban"),
+        ("table", "Table", "table"),
+    ];
+
+    [SupplyParameterFromQuery(Name = "view")]
+    public string? View { get; set; }
+
+    /// <summary>Opens the page with this work order's editor showing (from the work orders screen).</summary>
+    [SupplyParameterFromQuery(Name = "workOrder")]
+    public Guid? WorkOrder { get; set; }
+
+    private ScheduleController _controller = null!;
+    private readonly CancellationTokenSource _cts = new();
+    private (Guid JobId, string Kind)? _selected;
+    private Guid? _selectedWorkOrder;
+    private PlacementPreset? _preset;
+
+    private string CurrentView => Views.Any(v => v.Key == View) ? View! : "gantt";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _controller = new ScheduleController(Api, Time);
+        _controller.StateChanged += OnControllerChanged;
+        await _controller.InitializeAsync(_cts.Token);
+        if (WorkOrder is { } workOrder && _controller.Board.FindWorkOrder(workOrder) is not null)
+        {
+            SelectWorkOrder(workOrder);
+        }
+
+        _ = TickAsync(_cts.Token);
+    }
+
+    /// <summary>
+    /// One clock for the page: expires toasts every second and re-reads the board every
+    /// <see cref="ScheduleController.RefreshInterval"/>, so other planners' edits and live
+    /// production show up without anyone asking. A drag in progress holds the refresh back.
+    /// </summary>
+    private async Task TickAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1), Time);
+        var nextRefresh = Time.GetUtcNow() + ScheduleController.RefreshInterval;
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                await InvokeAsync(async () =>
+                {
+                    var changed = _controller.ExpireToasts();
+                    if (Time.GetUtcNow() >= nextRefresh && !_controller.IsDragging && !_controller.IsRefreshing)
+                    {
+                        await _controller.RefreshAsync(ct);
+                        nextRefresh = Time.GetUtcNow() + ScheduleController.RefreshInterval;
+                        changed = true;
+                    }
+
+                    if (changed)
+                    {
+                        StateHasChanged();
+                    }
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Page closed.
+        }
+    }
+
+    private string ViewHref(string key) => Navigation.GetUriWithQueryParameter("view", key == "gantt" ? null : key);
+
+    private Task RefreshAsync() => _controller.RefreshAsync(_cts.Token);
+
+    private async Task OnHorizonAsync(DateTimeOffset until)
+    {
+        if (_controller.EnsureHorizon(until))
+        {
+            await _controller.RefreshAsync(_cts.Token);
+        }
+    }
+
+    private async Task OnSiteChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value as string, out var siteId))
+        {
+            CloseDrawer();
+            await _controller.SelectSiteAsync(siteId, _cts.Token);
+        }
+    }
+
+    private void SelectItem(BoardItem item)
+    {
+        _selected = (item.JobId, item.Segment.Kind);
+        _selectedWorkOrder = null;
+    }
+
+    private void SelectWorkOrder(Guid workOrderId)
+    {
+        _selectedWorkOrder = workOrderId;
+        _selected = null;
+    }
+
+    /// <summary>An order dropped on a department opens its editor there, with a window from the drop time to its due date.</summary>
+    private void PlanToGroup((WorkOrderDto WorkOrder, Guid GroupId, DateTimeOffset At) drop)
+    {
+        var (start, end) = ScheduleLayout.SuggestWindow(_controller.Now, drop.WorkOrder.DueAt, _controller.TimeZone, drop.At);
+        _preset = new PlacementPreset(drop.WorkOrder.Id, drop.GroupId, start, end);
+        SelectWorkOrder(drop.WorkOrder.Id);
+    }
+
+    private void CloseDrawer()
+    {
+        _selected = null;
+        _selectedWorkOrder = null;
+    }
+
+    private void OnControllerChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        _controller.StateChanged -= OnControllerChanged;
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

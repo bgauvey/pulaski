@@ -55,12 +55,13 @@ public sealed class DatabaseFixture : IAsyncLifetime
         await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(dbDir, "app-role.sql")));
         await ExecuteAsync($"GRANT pulaski_app TO {_appLogin}");
         await ExecuteAsync("SELECT ts.create_month_partitions('evt.event', current_date - 31, 3)");
+        await ExecuteAsync("SELECT ts.create_month_partitions('ts.job_status_change', current_date - 31, 3)");
 
         UomId = Guid.CreateVersion7();
         MaterialId = Guid.CreateVersion7();
         await ExecuteAsync(
             $"""
-            INSERT INTO core.uom (id, code, name, dimension) VALUES ('{UomId}', 'm', 'Metre', 'length');
+            INSERT INTO core.uom (id, code, name, dimension, to_base_factor) VALUES ('{UomId}', 'm', 'Metre', 'length', 1);
             INSERT INTO core.material (id, code, name, material_type, base_uom_id)
             VALUES ('{MaterialId}', 'PRF-1', 'Profile 1', 'finished', '{UomId}');
             """);

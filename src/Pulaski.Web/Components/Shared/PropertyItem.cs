@@ -11,6 +11,9 @@ public enum PropertyEditor
 
     /// <summary>One of <see cref="PropertyItem.Choices"/>, committed on selection.</summary>
     Choice,
+
+    /// <summary>A number within <see cref="PropertyItem.Min"/> and <see cref="PropertyItem.Max"/>, committed like text; sent in invariant culture.</summary>
+    Number,
 }
 
 /// <summary>An option of a <see cref="PropertyEditor.Choice"/> property.</summary>
@@ -43,6 +46,22 @@ public sealed record PropertyItem
     public string? Placeholder { get; init; }
 
     public int? MaxLength { get; init; }
+
+    /// <summary>Bounds and step of a <see cref="PropertyEditor.Number"/> property.</summary>
+    public double? Min { get; init; }
+
+    public double? Max { get; init; }
+
+    public double? Step { get; init; }
+
+    /// <summary>A unit shown after the value, such as "%" or "min".</summary>
+    public string? Suffix { get; init; }
+
+    /// <summary>The row is one entry of a list (an equipment entity, a material…) that can be taken out with its × button.</summary>
+    public bool Removable { get; init; }
+
+    /// <summary>Marks the value as needing attention (e.g. shares that don't add up); <see cref="Description"/> says why.</summary>
+    public bool IsFlagged { get; init; }
 
     /// <summary>The text shown for the value: a choice's label, or the value itself.</summary>
     public string DisplayValue =>

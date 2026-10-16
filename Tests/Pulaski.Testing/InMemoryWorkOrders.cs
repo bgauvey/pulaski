@@ -37,6 +37,14 @@ public sealed class InMemoryWorkOrders : IWorkOrderRepository, IWorkOrderReadSto
     public Task<Versioned<WorkOrder>?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(Find(id));
 
+    public Task<Versioned<WorkOrder>?> GetForShareAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(Find(id));
+
+    /// <summary>Answers <see cref="HasOpenJobsAsync"/>; <see cref="InMemoryStores"/> points it at its scheduling store.</summary>
+    public Func<Guid, bool> OpenJobs { get; set; } = _ => false;
+
+    public Task<bool> HasOpenJobsAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(OpenJobs(id));
+
     public Task<long> InsertAsync(WorkOrder workOrder, DateTimeOffset at, CancellationToken cancellationToken)
     {
         lock (_lock)
@@ -67,6 +75,18 @@ public sealed class InMemoryWorkOrders : IWorkOrderRepository, IWorkOrderReadSto
         }
     }
 
+    /// <summary>The equipment a progress query sees for a selection; tests set it up.</summary>
+    public Func<Guid?, IReadOnlyList<ScopeEquipmentRow>> Scope { get; set; } = _ => [];
+
+    /// <summary>Good quantity and open job count per order; orders not listed have neither.</summary>
+    public Dictionary<Guid, WorkOrderFactsRow> Facts { get; } = [];
+
+    public Task<IReadOnlyList<ScopeEquipmentRow>> GetScopeAsync(Guid? equipmentId, CancellationToken cancellationToken) =>
+        Task.FromResult(Scope(equipmentId));
+
+    public Task<IReadOnlyList<WorkOrderFactsRow>> GetFactsAsync(Guid? siteId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<WorkOrderFactsRow>>([.. Facts.Values]);
+
     public Task<WorkOrderDto?> GetAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(Find(id) is { } row ? ToDto(row) : null);
 
@@ -92,6 +112,8 @@ public sealed class InMemoryWorkOrders : IWorkOrderRepository, IWorkOrderReadSto
             Priority = w.Priority,
             Status = w.Status,
             Origin = w.Origin,
+            ProcessVersionId = w.ProcessVersionId,
+            Notes = w.Notes,
             Version = row.Version,
         };
     }
@@ -125,4 +147,7 @@ public sealed class InMemoryMaterials : IMaterialRepository, IReferenceDataReadS
 
     public Task<IReadOnlyList<MaterialDto>> ListMaterialsAsync(bool includeInactive, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<MaterialDto>>([]);
+
+    public Task<IReadOnlyList<MaterialClassDto>> ListMaterialClassesAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<MaterialClassDto>>([]);
 }

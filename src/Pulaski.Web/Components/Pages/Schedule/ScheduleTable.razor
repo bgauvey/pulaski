@@ -1,0 +1,235 @@
+@* Every open job, one row each. Line, lock and hold-until edit in place and save as soon as they
+   change; the row opens the editor for everything else. *@
+
+<div class="view-toolbar">
+    <input type="search" class="form-control table-search" placeholder="Find job, order or material"
+           aria-label="Find job, order or material" @bind="_search" @bind:event="oninput" />
+    <select class="form-select w-auto" aria-label="Line" @bind="_lineFilter">
+        <option value="">All lines</option>
+        @foreach (var line in Controller.Board.Lines)
+        {
+            <option value="@line.Id">@line.Code</option>
+        }
+    </select>
+    <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" role="switch" id="table-issues" @bind="_issuesOnly" />
+        <label class="form-check-label" for="table-issues">Only with warnings</label>
+    </div>
+    <span class="small text-muted ms-auto">@Rows.Count() jobs</span>
+</div>
+
+<div class="table-panel schedule-table">
+    <table class="table align-middle mb-0">
+        <thead>
+            <tr>
+                @foreach (var (key, label, end) in ColumnHeads)
+                {
+                    <th class="@(end ? "text-end" : "")" aria-sort="@(_sort == key ? (_descending ? "descending" : "ascending") : "none")">
+                        <button type="button" class="sort-button" @onclick="() => SortBy(key)">
+                            @label @(_sort == key ? (_descending ? "↓" : "↑") : "")
+                        </button>
+                    </th>
+                }
+                <th>Lock</th>
+                <th>Hold until</th>
+                <th>Finish by</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Rows)
+            {
+                var s = item.Segment;
+                var overlap = Controller.Board.IsOverlapping(item);
+                <tr class="@(Selected == (item.JobId, s.Kind) ? "table-active" : "") @(overlap ? "is-overlap" : "") @(Controller.Changed.Contains(item.Key) ? "is-updated" : "") @(Controller.Saving.Contains(item.Key) ? "is-saving" : "")"
+                    @key="item.Key + item.Signature">
+                    <td>
+                        <button type="button" class="link-button fw-semibold" @onclick="() => OnSelect.InvokeAsync(item)">@s.JobNumber</button>
+                        <div class="small text-muted">@Display.Label(s.JobType)</div>
+                    </td>
+                    <td>@s.WorkOrderNumber</td>
+                    <td>
+                        @if (item.IsFromGroup && item.CanChangeLine)
+                        {
+                            @* Planned to a department: the floor moves it between its lines (D-022). *@
+                            <select class="form-select form-select-sm" aria-label="Line for @s.JobNumber"
+                                    value="@item.LineId" @onchange="e => ChangeLineAsync(item, e)">
+                                <option value="@item.LineId">@item.LineCode@(item.IsWindow ? " · waiting" : "")</option>
+                                @foreach (var line in Controller.Board.AssignTargets(item))
+                                {
+                                    <option value="@line.Id">@(line.IsGroup ? $"Back to {line.Code}" : line.Code)</option>
+                                }
+                            </select>
+                        }
+                        else if (item.CanChangeLine && Controller.Board.Lines.Count(l => !l.IsGroup) > 1)
+                        {
+                            <select class="form-select form-select-sm" aria-label="Line for @s.JobNumber"
+                                    value="@item.LineId" @onchange="e => ChangeLineAsync(item, e)">
+                                @foreach (var line in Controller.Board.Lines.Where(l => !l.IsGroup))
+                                {
+                                    <option value="@line.Id">@line.Code</option>
+                                }
+                            </select>
+                        }
+                        else
+                        {
+                            @item.LineCode
+                            @if (item.IsWindow)
+                            {
+                                <div class="small text-muted">waiting for a line</div>
+                            }
+                        }
+                    </td>
+                    <td>@s.MaterialCode</td>
+                    <td class="text-end text-nowrap">@ScheduleFormat.Qty(s.RemainingQty ?? s.PlannedQty, s.UomCode)</td>
+                    <td class="text-nowrap small">@ScheduleFormat.When(s.Start, Tz)</td>
+                    <td class="text-nowrap small">@ScheduleFormat.When(s.End, Tz)</td>
+                    <td class="text-nowrap small">@ScheduleFormat.When(s.DueAt, Tz)</td>
+                    <td><span class="@Display.JobStatusChip(s.Status)">@Display.Label(s.Status)</span></td>
+                    <td>
+                        @foreach (var warning in s.Warnings)
+                        {
+                            <span class="chip @(warning.Code == "late" ? "chip-warning" : "chip-muted")" title="@warning.Message">@Display.Label(warning.Code)</span>
+                        }
+                        @if (overlap)
+                        {
+                            <span class="chip chip-danger" title="@string.Join("; ", Controller.Board.OverlapsFor(item).Select(o => o.Describe()))">Overlap</span>
+                        }
+                    </td>
+                    <td>
+                        <input class="form-check-input" type="checkbox" aria-label="Lock @s.JobNumber"
+                               checked="@s.IsLocked" @onchange="e => LockAsync(item, e)" />
+                    </td>
+                    <td>
+                        @if (item.CanResequence)
+                        {
+                            <input type="datetime-local" class="form-control form-control-sm" aria-label="Hold @s.JobNumber until"
+                                   value="@LocalValue(s.EarliestStart)" @onchange="e => HoldAsync(item, e)" />
+                        }
+                        else
+                        {
+                            <span class="small text-muted">@ScheduleFormat.When(s.EarliestStart, Tz)</span>
+                        }
+                    </td>
+                    <td>
+                        <input type="datetime-local" class="form-control form-control-sm" aria-label="@s.JobNumber must finish by"
+                               value="@LocalValue(s.LatestEnd)" @onchange="e => FinishByAsync(item, e)" />
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    @if (!Rows.Any())
+    {
+        <p class="text-muted p-4 mb-0">No jobs match.</p>
+    }
+</div>
+
+@code {
+    private static readonly (string Key, string Label, bool End)[] ColumnHeads =
+    [
+        ("job", "Job", false), ("order", "Work order", false), ("line", "Line", false), ("material", "Material", false),
+        ("qty", "To make", true), ("start", "Start", false), ("end", "End", false), ("due", "Due", false),
+        ("status", "Status", false), ("warnings", "Warnings", false),
+    ];
+
+    [Parameter, EditorRequired]
+    public ScheduleController Controller { get; set; } = null!;
+
+    [Parameter]
+    public (Guid JobId, string Kind)? Selected { get; set; }
+
+    [Parameter]
+    public EventCallback<BoardItem> OnSelect { get; set; }
+
+    private string _search = "";
+    private string _lineFilter = "";
+    private bool _issuesOnly;
+    private string _sort = "start";
+    private bool _descending;
+
+    private string? Tz => Controller.TimeZone;
+
+    private IEnumerable<BoardItem> Rows
+    {
+        get
+        {
+            var rows = Controller.Board.Items.Where(i => !i.IsPlaceholder);
+            if (Guid.TryParse(_lineFilter, out var lineId))
+            {
+                rows = rows.Where(i => i.LineId == lineId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var term = _search.Trim();
+                rows = rows.Where(i =>
+                    i.Segment.JobNumber.Contains(term, StringComparison.OrdinalIgnoreCase)
+                    || (i.Segment.WorkOrderNumber?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || (i.Segment.MaterialCode?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false));
+            }
+
+            if (_issuesOnly)
+            {
+                rows = rows.Where(i => i.Segment.Warnings.Count > 0 || Controller.Board.IsOverlapping(i));
+            }
+
+            Func<BoardItem, object?> key = _sort switch
+            {
+                "job" => i => i.Segment.JobNumber,
+                "order" => i => i.Segment.WorkOrderNumber,
+                "line" => i => i.LineCode,
+                "material" => i => i.Segment.MaterialCode,
+                "qty" => i => i.Segment.RemainingQty ?? i.Segment.PlannedQty,
+                "end" => i => i.Segment.End,
+                "due" => i => i.Segment.DueAt,
+                "status" => i => Array.IndexOf(Statuses, i.Segment.Status),
+                "warnings" => i => i.Segment.Warnings.Count + (Controller.Board.IsOverlapping(i) ? 10 : 0),
+                _ => i => i.Segment.Start,
+            };
+
+            return _descending ? rows.OrderByDescending(key).ThenBy(i => i.Segment.Start) : rows.OrderBy(key).ThenBy(i => i.Segment.Start);
+        }
+    }
+
+    private static readonly string[] Statuses = ["running", "paused", "firmed", "dispatched", "planned"];
+
+    private void SortBy(string key)
+    {
+        _descending = _sort == key && !_descending;
+        _sort = key;
+    }
+
+    private string LocalValue(DateTimeOffset? at) =>
+        at is null ? "" : Display.ToSite(at.Value, Tz).ToString("yyyy-MM-ddTHH:mm", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A firmed job keeps its time, so the API places it on the new line by time; others go to the end.</summary>
+    private Task ChangeLineAsync(BoardItem item, ChangeEventArgs e) =>
+        Guid.TryParse(e.Value as string, out var lineId) && lineId != item.LineId
+            ? Controller.MoveJobAsync(item, lineId, null)
+            : Task.CompletedTask;
+
+    private Task LockAsync(BoardItem item, ChangeEventArgs e) =>
+        Controller.PinJobAsync(item, e.Value is true, item.Segment.EarliestStart);
+
+    private Task FinishByAsync(BoardItem item, ChangeEventArgs e)
+    {
+        var at = Parse(e);
+        return at == item.Segment.LatestEnd
+            ? Task.CompletedTask
+            : Controller.PinJobAsync(item, item.Segment.IsLocked, item.Segment.EarliestStart, at);
+    }
+
+    private DateTimeOffset? Parse(ChangeEventArgs e) =>
+        DateTime.TryParse(e.Value as string, System.Globalization.CultureInfo.InvariantCulture, out var local)
+            ? Display.FromSiteLocal(local, Tz)
+            : null;
+
+    private Task HoldAsync(BoardItem item, ChangeEventArgs e)
+    {
+        var text = e.Value as string;
+        DateTimeOffset? at = DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out var local)
+            ? Display.FromSiteLocal(local, Tz)
+            : null;
+        return at == item.Segment.EarliestStart ? Task.CompletedTask : Controller.PinJobAsync(item, item.Segment.IsLocked, at);
+    }
+}

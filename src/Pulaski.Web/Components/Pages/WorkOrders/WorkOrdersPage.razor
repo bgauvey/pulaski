@@ -1,108 +1,375 @@
 @page "/work-orders"
+@using System.Globalization
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
+@inject EquipmentSelection Selection
+@inject TimeProvider Time
 
 <PageTitle>Work orders · Pulaski</PageTitle>
 
-<div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+<div class="wo-head">
     <h1 class="mb-0">Work orders</h1>
-    <div class="d-flex gap-2">
-        <select class="form-select" aria-label="Filter by status" value="@Status" @onchange="OnFilterChanged">
-            <option value="">All statuses</option>
-            @foreach (var status in Display.WorkOrderStatuses)
-            {
-                <option value="@status">@Display.Label(status)</option>
-            }
-        </select>
-        <a class="btn btn-primary text-nowrap" href="work-orders/new">New work order</a>
+    <div class="wo-head-tools">
+        @* New work orders are created by planners, from the Schedule page. *@
+        <EquipmentPicker Equipment="_equipment" Value="EquipmentId" ValueChanged="OnEquipmentChanged" />
     </div>
 </div>
 
 <ProblemAlert Error="_error" />
 
-@if (_workOrders is null)
-{
-    @if (_error is null)
+@* The tiles count everything in the selection; picking one filters the list below to it. *@
+<div class="wo-tiles" role="group" aria-label="Filter by">
+    @foreach (var tile in WorkOrderTiles.All)
     {
-        <p class="text-muted">Loading…</p>
-    }
-}
-else if (_workOrders.Count == 0)
-{
-    <p class="text-muted">No work orders@(string.IsNullOrEmpty(Status) ? "" : $" with status {Display.Label(Status).ToLowerInvariant()}").</p>
-}
-else
-{
-    <div class="table-panel">
-        <table class="table align-middle">
-            <thead>
-                <tr>
-                    <th>Order</th>
-                    <th>Material</th>
-                    <th class="text-end">Planned qty</th>
-                    <th>Line</th>
-                    <th>Planned window</th>
-                    <th>Due</th>
-                    <th>Status</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var wo in _workOrders)
+        var count = _tiles.GetValueOrDefault(tile.Key);
+        var active = _tile == tile.Key;
+        <button type="button" class="wo-tile tone-@tile.Tone @(active ? "is-active" : "") @(count == 0 ? "is-zero" : "")"
+                aria-pressed="@(active ? "true" : "false")" title="@tile.Help" @onclick="() => ToggleTile(tile.Key)">
+            <span class="wo-tile-count">
+                @(_progress is null ? "–" : count.ToString(CultureInfo.InvariantCulture))
+                @if (tile.Key == WorkOrderTiles.NeedAttention && count > 0)
                 {
-                    var tz = SiteZone(wo.SiteId);
-                    <tr>
-                        <td>
-                            <span class="fw-semibold">@wo.OrderNumber</span>
-                            <div class="small text-muted">@wo.SiteCode</div>
-                        </td>
-                        <td>
-                            @wo.MaterialCode
-                            <div class="small text-muted">@wo.MaterialName</div>
-                        </td>
-                        <td class="text-end text-nowrap">@wo.PlannedQty.ToString("#,##0.###") @wo.UomCode</td>
-                        <td>@wo.TargetEquipmentCode</td>
-                        <td class="small text-nowrap">
-                            @Display.SiteTime(wo.PlannedStart, tz)
-                            @if (wo.PlannedEnd is not null)
+                    <Icon Name="alert" Size="22" />
+                }
+            </span>
+            <span class="wo-tile-label">@tile.Label</span>
+            <span class="wo-tile-foot" aria-hidden="true"><Icon Name="chevron-down" Size="16" /></span>
+        </button>
+    }
+</div>
+
+<div class="table-panel wo-panel">
+    <div class="wo-toolbar">
+        <div class="wo-menu">
+            <button type="button" class="btn btn-outline-secondary btn-sm btn-with-icon" aria-haspopup="menu" aria-expanded="@(_actionsOpen ? "true" : "false")"
+                    disabled="@(_selected.Count == 0 || _busy)" @onclick="() => _actionsOpen = !_actionsOpen">
+                Actions @(_selected.Count > 0 ? $"({_selected.Count})" : "") <Icon Name="chevron-down" Size="16" />
+            </button>
+            @if (_actionsOpen)
+            {
+                <div class="wo-menu-backdrop" @onclick="() => _actionsOpen = false"></div>
+                <ul class="wo-menu-list" role="menu">
+                    @foreach (var (status, label) in BulkActions)
+                    {
+                        var eligible = SelectedOrders.Count(o => o.Order.NextStatuses.Contains(status));
+                        <li role="none">
+                            <button type="button" role="menuitem" class="wo-menu-item @(status == "cancelled" ? "is-danger" : "")" disabled="@(eligible == 0)"
+                                    @onclick="() => StartBulk(status)">
+                                @label <span class="text-muted">@eligible of @_selected.Count</span>
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+
+        <label class="wo-toolbar-label" for="wo-find-by">Find by</label>
+        <select id="wo-find-by" class="form-select form-select-sm w-auto" @bind="_findBy">
+            <option value="order">Order</option>
+            <option value="material">Material</option>
+            <option value="line">Line or department</option>
+        </select>
+        <div class="wo-search">
+            <input type="search" class="form-control form-control-sm" placeholder="Search" aria-label="Search"
+                   @bind="_search" @bind:event="oninput" />
+            <Icon Name="search" Size="16" />
+        </div>
+        <select class="form-select form-select-sm w-auto" aria-label="Status" @bind="_status">
+            <option value="">Open orders</option>
+            @foreach (var status in Display.WorkOrderStatuses)
+            {
+                <option value="@status">@Display.Label(status)</option>
+            }
+            <option value="*">All statuses</option>
+        </select>
+        <button type="button" class="btn btn-outline-secondary btn-square btn-sm-square" aria-label="Refresh" title="Refresh"
+                disabled="@_loading" @onclick="LoadAsync">
+            <Icon Name="refresh" Size="16" />
+        </button>
+        <span class="small text-muted ms-auto">
+            @Rows.Count() of @(_progress?.Count ?? 0) orders
+            @if (_tile is not null)
+            {
+                <button type="button" class="link-button ms-1" @onclick="() => _tile = null">Show all</button>
+            }
+        </span>
+    </div>
+
+    @if (_pendingBulk is { } pending)
+    {
+        <div class="wo-confirm" role="alert">
+            <span>Cancel @SelectedOrders.Count(o => o.Order.NextStatuses.Contains(pending)) work orders? Their open jobs must be cancelled first.</span>
+            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => RunBulkAsync(pending)">Cancel orders</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _pendingBulk = null">Keep them</button>
+        </div>
+    }
+
+    @if (_result is not null)
+    {
+        <div class="wo-result @(_resultFailed ? "is-failed" : "")" role="status">
+            <span>@_result</span>
+            <button type="button" class="toast-close" aria-label="Dismiss" @onclick="() => _result = null"><Icon Name="close" Size="16" /></button>
+        </div>
+    }
+
+    <div class="wo-select-links small">
+        <button type="button" class="link-button" @onclick="SelectAll">Select all</button>
+        <span aria-hidden="true">|</span>
+        <button type="button" class="link-button" @onclick="() => _selected.Clear()">Select none</button>
+    </div>
+
+    <table class="table align-middle wo-table">
+        <thead>
+            <tr>
+                <th rowspan="2" class="wo-col-select">Select</th>
+                <th rowspan="2" class="wo-col-flag"><span class="visually-hidden">Flags</span></th>
+                <th rowspan="2">Order</th>
+                <th rowspan="2">Status</th>
+                <th rowspan="2">Material</th>
+                <th rowspan="2" class="wo-col-info"><span class="visually-hidden">Details</span></th>
+                <th rowspan="2">Schedule</th>
+                <th colspan="2" class="text-center wo-qty-head">Quantity</th>
+                <th rowspan="2">Unit</th>
+                <th rowspan="2" class="text-center">Actions</th>
+            </tr>
+            <tr>
+                <th class="text-end">Planned</th>
+                <th class="text-end">Made</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (_progress is null)
+            {
+                <tr><td colspan="11" class="text-muted">@(_error is null ? "Loading…" : "")</td></tr>
+            }
+            else if (!Rows.Any())
+            {
+                <tr><td colspan="11" class="text-muted">No work orders match.</td></tr>
+            }
+            @foreach (var p in Rows)
+            {
+                var wo = p.Order;
+                var tz = ZoneOf(wo.SiteId);
+                var expanded = _expanded.Contains(wo.Id);
+                var flags = Flags(p);
+                <tr class="@(_selected.Contains(wo.Id) ? "table-active" : "") @(_busyId == wo.Id ? "is-saving" : "")" @key="wo.Id">
+                    <td class="wo-col-select">
+                        <input class="form-check-input" type="checkbox" aria-label="Select @wo.OrderNumber"
+                               checked="@_selected.Contains(wo.Id)" @onchange="e => ToggleSelected(wo.Id, e.Value is true)" />
+                    </td>
+                    <td class="wo-col-flag">
+                        @if (flags.Count > 0)
+                        {
+                            <span class="wo-flag @(WorkOrderTiles.IsBehind(p) ? "is-danger" : "")" title="@string.Join("\n", flags)" aria-label="@string.Join(". ", flags)">
+                                <Icon Name="alert" Size="18" />
+                            </span>
+                        }
+                    </td>
+                    <td><a class="fw-semibold" href="schedule?workOrder=@wo.Id">@wo.OrderNumber</a></td>
+                    <td class="text-nowrap">
+                        <span class="@Display.StatusChip(wo.Status)">@Display.Label(wo.Status)</span>
+                        @if (wo.Priority > 0)
+                        {
+                            <span class="wo-priority" title="Priority @wo.Priority" aria-label="Priority @wo.Priority"><Icon Name="arrow-up" Size="16" /></span>
+                        }
+                    </td>
+                    <td>
+                        @wo.MaterialCode
+                        <div class="small text-muted">@wo.MaterialName</div>
+                    </td>
+                    <td class="wo-col-info">
+                        <button type="button" class="wo-icon-button" aria-expanded="@(expanded ? "true" : "false")"
+                                aria-label="@(expanded ? "Hide" : "Show") details for @wo.OrderNumber" @onclick="() => ToggleExpanded(wo.Id)">
+                            <Icon Name="info" Size="20" />
+                        </button>
+                    </td>
+                    <td class="wo-schedule">
+                        @if (p.ProjectedStart is null)
+                        {
+                            <span class="text-muted">Not on a line</span>
+                            @if (wo.DueAt is not null)
                             {
-                                <br />@Display.SiteTime(wo.PlannedEnd, tz)
+                                <div class="small">Due @Display.SiteTime(wo.DueAt, tz)</div>
                             }
-                        </td>
-                        <td class="small text-nowrap">@Display.SiteTime(wo.DueAt, tz)</td>
-                        <td><span class="@Display.StatusChip(wo.Status)">@Display.Label(wo.Status)</span></td>
-                        <td class="text-end text-nowrap">
-                            @foreach (var next in wo.NextStatuses)
+                        }
+                        else
+                        {
+                            <div><span class="wo-date-label">Start</span> @Display.SiteTime(p.ProjectedStart, tz)</div>
+                            <div><span class="wo-date-label">Finish</span> @Display.SiteTime(p.ProjectedEnd, tz)</div>
+                            @if (p.StartSlip is { } startSlip && startSlip > WorkOrderTiles.SlipTolerance)
                             {
-                                <button class="btn btn-sm @(next == "cancelled" ? "btn-outline-danger" : "btn-outline-primary") ms-1"
-                                        disabled="@(_busyId == wo.Id)"
-                                        @onclick="() => ChangeStatusAsync(wo, next)">
-                                    @Display.StatusAction(wo.Status, next)
-                                </button>
+                                <div class="wo-slip">Starts @ScheduleFormat.Duration(startSlip) after its baseline</div>
                             }
+                            @if (p.FinishSlip is { } finishSlip)
+                            {
+                                <div class="wo-slip">Finishes @ScheduleFormat.Duration(finishSlip) after due</div>
+                            }
+                        }
+                    </td>
+                    <td class="text-end">@Number(wo.PlannedQty)</td>
+                    <td class="text-end">@Number(p.CompletedQty)</td>
+                    <td>@wo.UomCode</td>
+                    <td class="text-center">
+                        <div class="wo-menu">
+                            <button type="button" class="wo-icon-button" aria-haspopup="menu" aria-expanded="@(_menuFor == wo.Id ? "true" : "false")"
+                                    aria-label="Actions for @wo.OrderNumber" disabled="@(_busyId == wo.Id)"
+                                    @onclick="() => _menuFor = _menuFor == wo.Id ? null : wo.Id">
+                                <Icon Name="more" Size="22" />
+                            </button>
+                            @if (_menuFor == wo.Id)
+                            {
+                                <div class="wo-menu-backdrop" @onclick="() => _menuFor = null"></div>
+                                <ul class="wo-menu-list is-right" role="menu">
+                                    @foreach (var next in wo.NextStatuses)
+                                    {
+                                        <li role="none">
+                                            <button type="button" role="menuitem" class="wo-menu-item @(next == "cancelled" ? "is-danger" : "")"
+                                                    @onclick="() => ChangeStatusAsync(p, next)">
+                                                @Display.StatusAction(wo.Status, next)
+                                            </button>
+                                        </li>
+                                    }
+                                    <li role="none"><a role="menuitem" class="wo-menu-item" href="schedule?workOrder=@wo.Id">Show on the schedule</a></li>
+                                </ul>
+                            }
+                        </div>
+                    </td>
+                </tr>
+                @if (expanded)
+                {
+                    <tr class="wo-details" @key="(wo.Id, true)">
+                        <td colspan="11">
+                            <div class="wo-details-grid">
+                                <dl class="facts mb-0">
+                                    <dt>Due</dt>
+                                    <dd>@(wo.DueAt is null ? "No due date" : Display.SiteTime(wo.DueAt, tz))</dd>
+                                    <dt>Baseline</dt>
+                                    <dd>@(p.BaselineStart is null ? "Not published yet" : $"{Display.SiteTime(p.BaselineStart, tz)} – {Display.SiteTime(p.BaselineEnd, tz)}")</dd>
+                                    <dt>On lines</dt>
+                                    <dd>@Number(p.PlacedQty) of @Number(wo.PlannedQty) @wo.UomCode</dd>
+                                    <dt>Process</dt>
+                                    <dd>@(wo.ProcessCode is null ? "None" : $"{wo.ProcessCode} · {wo.ProcessName} (v{wo.ProcessVersionNumber})")</dd>
+                                    <dt>BOM</dt>
+                                    <dd>@(wo.BomVersionNumber is { } bomVersion ? $"Version {bomVersion}" : "None: no components planned")</dd>
+                                    <dt>Origin</dt>
+                                    <dd>@Display.Label(wo.Origin) · @wo.SiteCode</dd>
+                                    @if (wo.Notes is not null)
+                                    {
+                                        <dt>Notes</dt>
+                                        <dd class="wo-notes">@wo.Notes</dd>
+                                    }
+                                </dl>
+                                <div>
+                                    @if (p.Jobs.Count == 0)
+                                    {
+                                        <p class="text-muted mb-0">No open jobs.</p>
+                                    }
+                                    else
+                                    {
+                                        <table class="table table-sm mb-0 wo-jobs">
+                                            <thead>
+                                                <tr><th>Job</th><th>Where</th><th>Status</th><th>When</th><th class="text-end">To make</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var job in p.Jobs)
+                                                {
+                                                    <tr @key="job.JobId">
+                                                        <td>@job.JobNumber</td>
+                                                        <td>@job.EquipmentCode@(job.Kind == "window" ? " · waiting for a line" : "")</td>
+                                                        <td><span class="@Display.JobStatusChip(job.Status)">@Display.Label(job.Status)</span></td>
+                                                        <td class="text-nowrap">@Display.SiteTime(job.Start, tz) – @Display.SiteTime(job.End, tz)</td>
+                                                        <td class="text-end">@Number(job.RemainingQty ?? job.PlannedQty ?? 0m)</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    }
+                                    @foreach (var warning in p.Warnings)
+                                    {
+                                        <div class="small wo-warning"><Icon Name="alert" Size="14" /> @warning.Message</div>
+                                    }
+                                    @if (p.HasOverlap)
+                                    {
+                                        <div class="small wo-warning is-danger"><Icon Name="alert" Size="14" /> A job overlaps other work on its line.</div>
+                                    }
+                                    @if (_components.GetValueOrDefault(wo.Id) is { Count: > 0 } components)
+                                    {
+                                        <table class="table table-sm mb-0 mt-3 wo-jobs">
+                                            <thead>
+                                                <tr><th>Component</th><th>For job</th><th>Consumed by</th><th class="text-end">Planned</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var c in components)
+                                                {
+                                                    <tr>
+                                                        <td>@c.MaterialCode <span class="small text-muted">@c.MaterialName</span></td>
+                                                        <td>@c.JobNumber · @c.EquipmentCode</td>
+                                                        <td>@Display.Label(c.ConsumptionMethod)</td>
+                                                        <td class="text-end text-nowrap">@Number(c.PlannedQty) @c.UomCode</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    }
+                                </div>
+                            </div>
                         </td>
                     </tr>
                 }
-            </tbody>
-        </table>
-    </div>
-}
+            }
+        </tbody>
+    </table>
+</div>
 
 @code {
-    [SupplyParameterFromQuery]
+    private static readonly (string Status, string Label)[] BulkActions =
+    [
+        ("dispatched", "Dispatch"),
+        ("planned", "Un-dispatch"),
+        ("firmed", "Firm"),
+        ("cancelled", "Cancel…"),
+    ];
+
+    [SupplyParameterFromQuery(Name = "equipment")]
+    public Guid? EquipmentId { get; set; }
+
+    /// <summary>Opens the list on one status, e.g. from the Overview cards.</summary>
+    [SupplyParameterFromQuery(Name = "status")]
     public string? Status { get; set; }
 
-    private IReadOnlyList<WorkOrderDto>? _workOrders;
+    private string? _statusApplied;
+
+    private IReadOnlyList<EquipmentDto> _equipment = [];
     private Dictionary<Guid, string?> _siteZones = [];
+    private IReadOnlyList<WorkOrderProgressDto>? _progress;
+    private Dictionary<string, int> _tiles = [];
+    private Dictionary<Guid, IReadOnlySet<string>> _tilesOf = [];
     private ApiException? _error;
+    private bool _loading;
+    private Guid? _loadedFor;
+    private bool _loadedOnce;
+
+    private string? _tile;
+    private string _findBy = "order";
+    private string _search = "";
+    private string _status = "";
+    private readonly HashSet<Guid> _selected = [];
+    private readonly HashSet<Guid> _expanded = [];
+    private readonly Dictionary<Guid, IReadOnlyList<PlannedComponentDto>> _components = [];
+    private Guid? _menuFor;
+    private bool _actionsOpen;
+    private string? _pendingBulk;
+    private bool _busy;
     private Guid? _busyId;
+    private string? _result;
+    private bool _resultFailed;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            var equipment = await Api.ListEquipmentAsync();
-            _siteZones = equipment.Where(e => e.Level == "site").ToDictionary(e => e.Id, e => e.TimeZone);
+            _equipment = await Api.ListEquipmentAsync();
+            _siteZones = _equipment.Where(e => e.Level == "site").ToDictionary(e => e.Id, e => e.TimeZone);
         }
         catch (ApiException ex)
         {
@@ -110,13 +377,144 @@ else
         }
     }
 
-    protected override Task OnParametersSetAsync() => LoadAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        // No selection in the address (e.g. the menu link): open on the one remembered for the
+        // session. Choosing "All equipment" clears the remembered one first, so it isn't restored.
+        if (EquipmentId is null && Selection.EquipmentId is { } remembered)
+        {
+            Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("equipment", remembered), replace: true);
+            return;
+        }
+
+        Selection.EquipmentId = EquipmentId;
+        if (Status != _statusApplied)
+        {
+            _statusApplied = Status;
+            _status = Status is not null && Display.WorkOrderStatuses.Contains(Status) ? Status : "";
+        }
+
+        if (!_loadedOnce || _loadedFor != EquipmentId)
+        {
+            _selected.Clear();
+            _expanded.Clear();
+            _tile = null;
+            _result = null;
+            await LoadAsync();
+        }
+    }
 
     private async Task LoadAsync()
     {
+        _loading = true;
         try
         {
-            _workOrders = await Api.ListWorkOrdersAsync(Status);
+            _progress = await Api.ListWorkOrderProgressAsync(EquipmentId);
+            _loadedFor = EquipmentId;
+            _loadedOnce = true;
+            _error = null;
+            var now = Time.GetUtcNow();
+            _tilesOf = _progress.ToDictionary(p => p.Order.Id, p => WorkOrderTiles.Of(p, now, ZoneOf(p.Order.SiteId)));
+            _tiles = _tilesOf.Values.SelectMany(t => t).GroupBy(t => t).ToDictionary(g => g.Key, g => g.Count());
+            _selected.IntersectWith(_progress.Select(p => p.Order.Id));
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            _loadedOnce = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private IEnumerable<WorkOrderProgressDto> Rows
+    {
+        get
+        {
+            IEnumerable<WorkOrderProgressDto> rows = _progress ?? [];
+            if (_tile is not null)
+            {
+                rows = rows.Where(p => _tilesOf.TryGetValue(p.Order.Id, out var tiles) && tiles.Contains(_tile));
+            }
+
+            rows = _status switch
+            {
+                "" => rows.Where(WorkOrderTiles.IsOpen),
+                "*" => rows,
+                var status => rows.Where(p => p.Order.Status == status),
+            };
+
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var term = _search.Trim();
+                rows = _findBy switch
+                {
+                    "material" => rows.Where(p => Contains(p.Order.MaterialCode, term) || Contains(p.Order.MaterialName, term)),
+                    "line" => rows.Where(p => p.Jobs.Any(j => Contains(j.EquipmentCode, term)) || Contains(p.Order.TargetEquipmentCode, term)),
+                    _ => rows.Where(p => Contains(p.Order.OrderNumber, term)),
+                };
+            }
+
+            return rows;
+        }
+    }
+
+    private IEnumerable<WorkOrderProgressDto> SelectedOrders => (_progress ?? []).Where(p => _selected.Contains(p.Order.Id));
+
+    private static bool Contains(string? text, string term) => text?.Contains(term, StringComparison.OrdinalIgnoreCase) == true;
+
+    private string? ZoneOf(Guid siteId) => _siteZones.GetValueOrDefault(siteId);
+
+    private static string Number(decimal value) => value.ToString("#,##0.###", CultureInfo.InvariantCulture);
+
+    /// <summary>Why the row is flagged, one reason per line, for its tooltip.</summary>
+    private static List<string> Flags(WorkOrderProgressDto p)
+    {
+        var flags = new List<string>();
+        if (p.FinishSlip is { } late)
+        {
+            flags.Add($"Projected to finish {ScheduleFormat.Duration(late)} after its due date.");
+        }
+
+        if (p.StartSlip is { } slip && slip > WorkOrderTiles.SlipTolerance)
+        {
+            flags.Add($"Projected to start {ScheduleFormat.Duration(slip)} after its published baseline.");
+        }
+
+        if (p.HasOverlap)
+        {
+            flags.Add("A job overlaps other work on its line.");
+        }
+
+        flags.AddRange(p.Warnings.Where(w => w.Code != "late").Select(w => w.Message));
+        return flags;
+    }
+
+    private void OnEquipmentChanged(Guid? id)
+    {
+        Selection.EquipmentId = id;
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("equipment", id));
+    }
+
+    private void ToggleTile(string key) => _tile = _tile == key ? null : key;
+
+    private async Task ToggleExpanded(Guid id)
+    {
+        if (_expanded.Remove(id))
+        {
+            return;
+        }
+
+        _expanded.Add(id);
+        try
+        {
+            // Planned components never change after the order is made (D-025), so load them once.
+            if (!_components.ContainsKey(id))
+            {
+                _components[id] = await Api.ListWorkOrderComponentsAsync(id);
+            }
         }
         catch (ApiException ex)
         {
@@ -124,27 +522,78 @@ else
         }
     }
 
-    private string? SiteZone(Guid siteId) => _siteZones.GetValueOrDefault(siteId);
-
-    private void OnFilterChanged(ChangeEventArgs e)
+    private void ToggleSelected(Guid id, bool selected)
     {
-        var status = e.Value as string;
-        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("status", string.IsNullOrEmpty(status) ? null : status));
+        if (selected)
+        {
+            _selected.Add(id);
+        }
+        else
+        {
+            _selected.Remove(id);
+        }
     }
 
-    private async Task ChangeStatusAsync(WorkOrderDto workOrder, string status)
+    private void SelectAll() => _selected.UnionWith(Rows.Select(p => p.Order.Id));
+
+    /// <summary>Cancelling asks once more; the other bulk actions run straight away.</summary>
+    private Task StartBulk(string status)
     {
-        _busyId = workOrder.Id;
-        _error = null;
+        _actionsOpen = false;
+        if (status == "cancelled")
+        {
+            _pendingBulk = status;
+            return Task.CompletedTask;
+        }
+
+        return RunBulkAsync(status);
+    }
+
+    /// <summary>Applies the action to every selected order that allows it, one by one, then reports what happened.</summary>
+    private async Task RunBulkAsync(string status)
+    {
+        _pendingBulk = null;
+        _busy = true;
+        var orders = SelectedOrders.ToList();
+        var eligible = orders.Where(o => o.Order.NextStatuses.Contains(status)).ToList();
+        var failures = new List<string>();
+        foreach (var order in eligible)
+        {
+            try
+            {
+                await Api.MoveWorkOrderAsync(order.Order, status);
+            }
+            catch (ApiException ex)
+            {
+                failures.Add($"{order.Order.OrderNumber}: {ex.Detail ?? ex.Title}");
+            }
+        }
+
+        var done = eligible.Count - failures.Count;
+        var skipped = orders.Count - eligible.Count;
+        var action = BulkActions.First(a => a.Status == status).Label.TrimEnd('…');
+        _result = $"{action}: {done} done"
+            + (skipped > 0 ? $", {skipped} skipped (not allowed from their status)" : "")
+            + (failures.Count > 0 ? $", {failures.Count} failed. {string.Join(" ", failures)}" : ".");
+        _resultFailed = failures.Count > 0;
+        _busy = false;
+        await LoadAsync();
+    }
+
+    private async Task ChangeStatusAsync(WorkOrderProgressDto progress, string status)
+    {
+        _menuFor = null;
+        _busyId = progress.Order.Id;
         try
         {
-            await Api.ChangeWorkOrderStatusAsync(
-                workOrder.Id,
-                new ChangeWorkOrderStatusRequest { Version = workOrder.Version, Status = status });
+            await Api.MoveWorkOrderAsync(progress.Order, status);
+            _result = $"{progress.Order.OrderNumber} is now {Display.Label(status).ToLowerInvariant()}.";
+            _resultFailed = false;
         }
         catch (ApiException ex)
         {
-            _error = ex;
+            _result = $"{progress.Order.OrderNumber}: {ex.Detail ?? ex.Title}";
+            _resultFailed = true;
         }
         finally
         {

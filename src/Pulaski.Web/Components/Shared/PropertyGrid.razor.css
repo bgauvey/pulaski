@@ -227,8 +227,57 @@
 
 .pg-footer {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
     gap: var(--space-2);
     padding: var(--space-3) var(--space-4);
     border-top: 1px solid var(--border);
+}
+
+/* Value cell: the editor, then an optional unit and remove button. */
+.pg-value-cell {
+    display: flex;
+    align-items: center;
+}
+
+    .pg-value-cell > .pg-input,
+    .pg-value-cell > .pg-readonly {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+.pg-number {
+    text-align: right;
+}
+
+.pg-suffix {
+    flex: none;
+    padding-right: var(--space-2);
+    color: var(--text-muted);
+    font: var(--type-caption);
+}
+
+.pg-remove {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    margin-right: var(--space-1);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--text-faint);
+}
+
+    .pg-remove:hover {
+        color: var(--danger);
+        background: var(--surface-2);
+    }
+
+.pg-row.is-flagged .pg-name,
+.pg-row.is-flagged .pg-readonly,
+.pg-row.is-flagged .pg-input {
+    color: var(--warning);
 }

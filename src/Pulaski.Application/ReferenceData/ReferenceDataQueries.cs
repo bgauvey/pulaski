@@ -8,6 +8,8 @@ public interface IReferenceDataReadStore
     Task<IReadOnlyList<UomDto>> ListUomsAsync(CancellationToken cancellationToken);
 
     Task<IReadOnlyList<MaterialDto>> ListMaterialsAsync(bool includeInactive, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<MaterialClassDto>> ListMaterialClassesAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>Write-side lookups used by commands, inside the current unit of work.</summary>
@@ -20,6 +22,15 @@ public interface IMaterialRepository
 public sealed record ListUomsQuery : IQuery<IReadOnlyList<UomDto>>;
 
 public sealed record ListMaterialsQuery(bool IncludeInactive) : IQuery<IReadOnlyList<MaterialDto>>;
+
+public sealed record ListMaterialClassesQuery : IQuery<IReadOnlyList<MaterialClassDto>>;
+
+internal sealed class ListMaterialClassesHandler(IReferenceDataReadStore store)
+    : IQueryHandler<ListMaterialClassesQuery, IReadOnlyList<MaterialClassDto>>
+{
+    public Task<IReadOnlyList<MaterialClassDto>> HandleAsync(ListMaterialClassesQuery query, CancellationToken cancellationToken) =>
+        store.ListMaterialClassesAsync(cancellationToken);
+}
 
 internal sealed class ListUomsHandler(IReferenceDataReadStore store)
     : IQueryHandler<ListUomsQuery, IReadOnlyList<UomDto>>

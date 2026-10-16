@@ -1,12 +1,20 @@
 using Microsoft.Extensions.DependencyInjection;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Boms;
 using Pulaski.Application.EquipmentModel;
+using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
+using Pulaski.Application.Scheduling;
+using Pulaski.Application.Units;
 using Pulaski.Application.WorkOrders;
+using Pulaski.Infrastructure.Boms;
 using Pulaski.Infrastructure.EquipmentModel;
 using Pulaski.Infrastructure.Events;
 using Pulaski.Infrastructure.Persistence;
+using Pulaski.Infrastructure.Processes;
 using Pulaski.Infrastructure.ReferenceData;
+using Pulaski.Infrastructure.Scheduling;
+using Pulaski.Infrastructure.Units;
 using Pulaski.Infrastructure.WorkOrders;
 
 namespace Pulaski.Infrastructure;
@@ -26,6 +34,10 @@ public static class DependencyInjection
         services.AddSingleton<IEquipmentReadStore, EquipmentQueries>();
         services.AddSingleton<IWorkOrderReadStore, WorkOrderQueries>();
         services.AddSingleton<IReferenceDataReadStore, ReferenceDataQueries>();
+        services.AddSingleton<ISchedulingReadStore, SchedulingQueries>();
+        services.AddSingleton<IProcessReadStore, ProcessQueries>();
+        services.AddSingleton<IBomReadStore, BomQueries>();
+        services.AddSingleton<IUnitReadStore, UnitQueries>();
 
         services.AddScoped<DbSession>();
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DbSession>());
@@ -33,6 +45,10 @@ public static class DependencyInjection
         services.AddScoped<IEquipmentRepository, EquipmentRepository>();
         services.AddScoped<IWorkOrderRepository, WorkOrderRepository>();
         services.AddScoped<IMaterialRepository, MaterialRepository>();
+        services.AddScoped<ISchedulingRepository, SchedulingRepository>();
+        services.AddScoped<IProcessRepository, ProcessRepository>();
+        services.AddScoped<IBomRepository, BomRepository>();
+        services.AddScoped<IUnitRepository, UnitRepository>();
 
         return services;
     }

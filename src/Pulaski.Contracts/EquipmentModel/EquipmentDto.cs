@@ -12,7 +12,11 @@ public sealed record EquipmentDto
     public required string Level { get; init; }
     public required string EquipmentRole { get; init; }
     public bool TracksState { get; init; }
+    /// <summary>A planning target: jobs can be planned to it. Without <see cref="CanRunJob"/> it is a group, such as a department (D-022).</summary>
     public bool IsSchedulable { get; init; }
+
+    /// <summary>Executes jobs, either planned to it directly or released to it from a group above it.</summary>
+    public bool CanRunJob { get; init; }
     public bool HoldsInventory { get; init; }
     public string? TimeZone { get; init; }
     public bool IsActive { get; init; }

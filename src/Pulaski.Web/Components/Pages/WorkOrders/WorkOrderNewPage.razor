@@ -1,10 +1,12 @@
-@page "/work-orders/new"
+@* Planners create work orders from the Schedule page; access control comes later. *@
+@page "/schedule/work-orders/new"
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
 
 <PageTitle>New work order · Pulaski</PageTitle>
 
 <h1>New work order</h1>
+<p class="text-muted">The process decides where the order runs: each of its operations becomes a job on its lines or departments.</p>
 
 <ProblemAlert Error="_error" />
 
@@ -21,11 +23,12 @@ else if (_sites.Count == 0)
 }
 else
 {
-    <EditForm Model="_form" OnSubmit="SaveAsync" FormName="work-order" class="col-lg-8 col-xl-6">
+    <EditForm Model="_form" OnSubmit="SaveAsync" FormName="work-order" class="col-lg-9 col-xl-7">
         <div class="row g-3">
             <div class="col-sm-6">
                 <label class="form-label" for="site">Site</label>
-                <InputSelect id="site" class="form-select" @bind-Value="_form.SiteId">
+                <InputSelect id="site" class="form-select" Value="_form.SiteId" ValueExpression="() => _form.SiteId"
+                             ValueChanged="(Guid id) => OnSiteChangedAsync(id)">
                     @foreach (var site in _sites)
                     {
                         <option value="@site.Id">@site.Code · @site.Name</option>
@@ -38,15 +41,46 @@ else
             </div>
 
             <div class="col-12">
-                <label class="form-label" for="material">Material</label>
+                <label class="form-label" for="material">Material produced</label>
                 <InputSelect id="material" class="form-select" Value="_form.MaterialId" ValueExpression="() => _form.MaterialId"
-                             ValueChanged="(Guid id) => OnMaterialChanged(id)">
+                             ValueChanged="(Guid id) => OnMaterialChangedAsync(id)">
                     <option value="@Guid.Empty">Choose a material…</option>
                     @foreach (var m in _materials)
                     {
                         <option value="@m.Id">@m.Code · @m.Name</option>
                     }
                 </InputSelect>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label" for="process">Process</label>
+                <InputSelect id="process" class="form-select" Value="_form.ProcessId" ValueExpression="() => _form.ProcessId"
+                             ValueChanged="(Guid id) => OnProcessChangedAsync(id)" disabled="@(_form.MaterialId == Guid.Empty)">
+                    <option value="@Guid.Empty">@ProcessPrompt</option>
+                    @foreach (var p in _processes)
+                    {
+                        <option value="@p.Id" disabled="@(!CanUse(p.Id))">
+                            @p.Code · @p.Name (v@(p.ReleasedVersion))@(IsDefault(p) ? " · default" : "")@(CanUse(p.Id) ? "" : " · can't run this material")
+                        </option>
+                    }
+                </InputSelect>
+                @if (_unavailable.Count > 0)
+                {
+                    <div class="small text-muted mt-2">
+                        @foreach (var check in _unavailable)
+                        {
+                            <div>
+                                <strong>@ProcessCode(check.ProcessId)</strong> can't be used for @MaterialCode:
+                                <ul class="mb-1">
+                                    @foreach (var problem in check.Problems)
+                                    {
+                                        <li>@problem.Message</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
 
             <div class="col-sm-6">
@@ -57,48 +91,97 @@ else
                 <label class="form-label" for="uom">Unit</label>
                 <InputSelect id="uom" class="form-select" @bind-Value="_form.UomId">
                     <option value="@Guid.Empty">Choose a unit…</option>
-                    @foreach (var u in _uoms)
+                    @foreach (var u in _uoms.Where(u => u.IsActive))
                     {
                         <option value="@u.Id">@u.Code · @u.Name</option>
                     }
                 </InputSelect>
+                @if (MaterialCode is not null)
+                {
+                    <div class="form-text">Any unit that converts to @MaterialCode's base unit. <a href="units?material=@_form.MaterialId">Its conversions</a></div>
+                }
             </div>
 
             <div class="col-sm-6">
-                <label class="form-label" for="target">Line or area</label>
-                <InputSelect id="target" class="form-select" @bind-Value="_form.TargetEquipmentId">
-                    <option value="">Not routed yet</option>
-                    @foreach (var e in TargetsFor(_form.SiteId))
-                    {
-                        <option value="@e.Id">@e.Code · @e.Name</option>
-                    }
-                </InputSelect>
+                <label class="form-label" for="start">Start</label>
+                <InputDate id="start" Type="InputDateType.DateTimeLocal" class="form-control" @bind-Value="_form.PlannedStart" />
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label" for="due">Due@(NeedsDueDate ? " (required)" : "")</label>
+                <InputDate id="due" Type="InputDateType.DateTimeLocal" class="form-control" @bind-Value="_form.DueAt" />
             </div>
             <div class="col-sm-6">
                 <label class="form-label" for="priority">Priority</label>
                 <InputNumber id="priority" class="form-control" @bind-Value="_form.Priority" />
             </div>
-
-            <div class="col-sm-6">
-                <label class="form-label" for="start">Planned start</label>
-                <InputDate id="start" Type="InputDateType.DateTimeLocal" class="form-control" @bind-Value="_form.PlannedStart" />
-            </div>
-            <div class="col-sm-6">
-                <label class="form-label" for="end">Planned end</label>
-                <InputDate id="end" Type="InputDateType.DateTimeLocal" class="form-control" @bind-Value="_form.PlannedEnd" />
-            </div>
-            <div class="col-sm-6">
-                <label class="form-label" for="due">Due</label>
-                <InputDate id="due" Type="InputDateType.DateTimeLocal" class="form-control" @bind-Value="_form.DueAt" />
-            </div>
             <div class="col-12 small text-muted">
-                Times are in the site's time zone (@(SiteZone(_form.SiteId) ?? "UTC")).
+                Times are in the site's time zone (@(SiteZone(_form.SiteId) ?? "UTC")). No job starts before the start.
+                @if (NeedsDueDate)
+                {
+                    <span>Operation @string.Join(", ", SelectedCheck!.DepartmentOperations) runs on a department, so its job must finish by the due date.</span>
+                }
+            </div>
+
+            <div class="col-12">
+                <label class="form-label" for="notes">Notes</label>
+                <InputTextArea id="notes" class="form-control" rows="3" maxlength="4000" @bind-Value="_form.Notes" />
             </div>
         </div>
 
+        @if (_operations is { Count: > 0 })
+        {
+            <h2 class="h6 mt-4">Jobs this order will create</h2>
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Operation</th>
+                        <th>Line or department</th>
+                        <th class="text-end">Share</th>
+                        <th class="text-end">Quantity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var op in _operations)
+                    {
+                        @foreach (var use in op.Equipment)
+                        {
+                            <tr>
+                                <td>@op.Number · @op.Name</td>
+                                <td>
+                                    @EquipmentCode(use.EquipmentId)
+                                    @if (IsDepartment(use.EquipmentId))
+                                    {
+                                        <span class="badge text-bg-light border ms-1">department</span>
+                                    }
+                                </td>
+                                <td class="text-end">@use.SharePercent.ToString("0.##")%</td>
+                                <td class="text-end">@((_form.PlannedQty * use.SharePercent / 100m).ToString("0.###"))</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+            <p class="small text-muted">Each job goes at the end of its line's sequence; move it on the schedule afterwards.</p>
+
+            @if (SelectedBom is { } bom)
+            {
+                <p class="small">
+                    Components are planned from the
+                    <a href="boms/@bom.Id">BOM for @(bom.ProcessCode ?? "any process"), version @bom.ReleasedVersion</a>
+                    (@bom.ReleasedItems components), for each job that consumes them.
+                </p>
+            }
+            else
+            {
+                <p class="small text-warning-strong">
+                    @MaterialCode has no released BOM, so this order plans no components. <a href="boms">Create one</a> to plan them.
+                </p>
+            }
+        }
+
         <div class="mt-4">
-            <button type="submit" class="btn btn-primary" disabled="@_saving">Create</button>
-            <a class="btn btn-link" href="work-orders">Cancel</a>
+            <button type="submit" class="btn btn-primary" disabled="@(_saving || _form.ProcessId == Guid.Empty)">Create</button>
+            <a class="btn btn-link" href="schedule">Cancel</a>
         </div>
     </EditForm>
 }
@@ -108,9 +191,15 @@ else
     private IReadOnlyList<EquipmentDto> _equipment = [];
     private IReadOnlyList<MaterialDto>? _materials;
     private IReadOnlyList<UomDto>? _uoms;
+    private IReadOnlyList<ProcessSummaryDto> _processes = [];
+    private Dictionary<Guid, ProcessOrderCheckDto> _checks = [];
+    private IReadOnlyList<BomSummaryDto> _boms = [];
+    private List<ProcessOrderCheckDto> _unavailable = [];
+    private IReadOnlyList<ProcessOperationDto>? _operations;
     private readonly FormModel _form = new();
     private ApiException? _error;
     private bool _saving;
+    private bool _loadingProcesses;
 
     protected override async Task OnInitializedAsync()
     {
@@ -121,6 +210,10 @@ else
             _uoms = await Api.ListUomsAsync();
             _sites = [.. _equipment.Where(e => e.Level == "site" && e.IsActive)];
             _form.SiteId = _sites.FirstOrDefault()?.Id ?? Guid.Empty;
+
+            // Start defaults to the next whole hour at the site.
+            var now = Display.ToSite(DateTimeOffset.UtcNow, SiteZone(_form.SiteId)).DateTime;
+            _form.PlannedStart = now.Date.AddHours(now.Hour + 1);
         }
         catch (ApiException ex)
         {
@@ -128,18 +221,120 @@ else
         }
     }
 
-    // Work orders route to an area or work center (D-003); jobs later pick the unit.
-    private IEnumerable<EquipmentDto> TargetsFor(Guid siteId) =>
-        _equipment.Where(e => e.SiteId == siteId && e.IsActive && e.Level is "area" or "work_center");
+    private string ProcessPrompt =>
+        _form.MaterialId == Guid.Empty ? "Choose a material first"
+        : _loadingProcesses ? "Loading…"
+        : _processes.Count == 0 ? "No released process at this site makes this material"
+        : !_processes.Any(p => CanUse(p.Id)) ? "No process can run this material yet; see below"
+        : "Choose a process…";
 
     private string? SiteZone(Guid siteId) => _sites?.FirstOrDefault(s => s.Id == siteId)?.TimeZone;
 
-    private void OnMaterialChanged(Guid materialId)
+    private string? MaterialCode => _materials?.FirstOrDefault(m => m.Id == _form.MaterialId)?.Code;
+
+    private bool IsDefault(ProcessSummaryDto process) => MaterialCode is { } code && process.DefaultFor.Contains(code);
+
+    // A process is usable when the same checks creating the order runs find nothing (D-020, D-024).
+    private bool CanUse(Guid processId) => _checks.TryGetValue(processId, out var check) && check.Problems.Count == 0;
+
+    private ProcessOrderCheckDto? SelectedCheck => _checks.GetValueOrDefault(_form.ProcessId);
+
+    // The material's BOM for the chosen process wins over its BOM for any process (D-025).
+    private BomSummaryDto? SelectedBom =>
+        _boms.Where(b => b.IsActive && b.ReleasedVersion is not null && (b.ProcessId == _form.ProcessId || b.ProcessId is null))
+            .OrderBy(b => b.ProcessId is null)
+            .FirstOrDefault();
+
+    private bool NeedsDueDate => SelectedCheck is { DepartmentOperations.Count: > 0 };
+
+    private string ProcessCode(Guid id) => _processes.FirstOrDefault(p => p.Id == id)?.Code ?? "?";
+
+    private string EquipmentCode(Guid id) => _equipment.FirstOrDefault(e => e.Id == id)?.Code ?? "?";
+
+    // A department plans for the lines below it and runs nothing itself (D-022).
+    private bool IsDepartment(Guid id) => _equipment.FirstOrDefault(e => e.Id == id) is { IsSchedulable: true, CanRunJob: false };
+
+    private async Task OnSiteChangedAsync(Guid siteId)
+    {
+        _form.SiteId = siteId;
+        await LoadProcessesAsync();
+    }
+
+    private async Task OnMaterialChangedAsync(Guid materialId)
     {
         _form.MaterialId = materialId;
         if (_materials?.FirstOrDefault(m => m.Id == materialId) is { } material)
         {
             _form.UomId = material.BaseUomId;
+        }
+
+        await LoadProcessesAsync();
+    }
+
+    // Offer the site's released processes that make the material; pre-select its default (D-023).
+    private async Task LoadProcessesAsync()
+    {
+        _processes = [];
+        _checks = [];
+        _boms = [];
+        _unavailable = [];
+        _form.ProcessId = Guid.Empty;
+        _operations = null;
+        if (_form.MaterialId == Guid.Empty)
+        {
+            return;
+        }
+
+        _loadingProcesses = true;
+        try
+        {
+            var found = await Api.ListProcessesAsync(_form.SiteId, _form.MaterialId);
+            _processes = [.. found.Where(p => p.IsActive && p.ReleasedVersion is not null)];
+            foreach (var process in _processes)
+            {
+                _checks[process.Id] = await Api.CheckProcessForOrderAsync(process.Id, _form.MaterialId);
+            }
+
+            _unavailable = [.. _checks.Values.Where(c => c.Problems.Count > 0)];
+            _boms = await Api.ListBomsAsync(_form.MaterialId);
+            var usable = _processes.Where(p => CanUse(p.Id)).ToList();
+            var pick = usable.FirstOrDefault(IsDefault) ?? (usable.Count == 1 ? usable[0] : null);
+            if (pick is not null)
+            {
+                await OnProcessChangedAsync(pick.Id);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _loadingProcesses = false;
+        }
+    }
+
+    private async Task OnProcessChangedAsync(Guid processId)
+    {
+        _form.ProcessId = processId;
+        _operations = null;
+        if (processId == Guid.Empty)
+        {
+            return;
+        }
+
+        try
+        {
+            var process = await Api.GetProcessAsync(processId);
+            if (process.Versions.FirstOrDefault(v => v.Status == "released") is { } released)
+            {
+                var version = await Api.GetProcessVersionAsync(processId, released.Id);
+                _operations = [.. version.Definition.Operations.OrderBy(o => o.Number)];
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
         }
     }
 
@@ -150,20 +345,20 @@ else
         var tz = SiteZone(_form.SiteId);
         try
         {
-            await Api.CreateWorkOrderAsync(new CreateWorkOrderRequest
+            var created = await Api.CreateWorkOrderAsync(new CreateWorkOrderRequest
             {
-                SiteId = _form.SiteId,
+                ProcessId = _form.ProcessId,
                 OrderNumber = _form.OrderNumber,
                 MaterialId = _form.MaterialId,
                 PlannedQty = _form.PlannedQty,
                 UomId = _form.UomId,
-                TargetEquipmentId = _form.TargetEquipmentId,
-                PlannedStart = Display.FromSiteLocal(_form.PlannedStart, tz),
-                PlannedEnd = Display.FromSiteLocal(_form.PlannedEnd, tz),
+                PlannedStart = Display.FromSiteLocal(_form.PlannedStart, tz) ?? default,
                 DueAt = Display.FromSiteLocal(_form.DueAt, tz),
                 Priority = _form.Priority,
+                Notes = string.IsNullOrWhiteSpace(_form.Notes) ? null : _form.Notes,
             });
-            Navigation.NavigateTo("work-orders");
+            // Straight back to the schedule with the new order open; its jobs are already on their lines.
+            Navigation.NavigateTo($"schedule?workOrder={created.Id}");
         }
         catch (ApiException ex)
         {
@@ -180,12 +375,12 @@ else
         public Guid SiteId { get; set; }
         public string OrderNumber { get; set; } = "";
         public Guid MaterialId { get; set; }
+        public Guid ProcessId { get; set; }
         public decimal PlannedQty { get; set; }
         public Guid UomId { get; set; }
-        public Guid? TargetEquipmentId { get; set; }
         public DateTime? PlannedStart { get; set; }
-        public DateTime? PlannedEnd { get; set; }
         public DateTime? DueAt { get; set; }
         public int Priority { get; set; }
+        public string? Notes { get; set; }
     }
 }

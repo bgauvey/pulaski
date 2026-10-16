@@ -40,12 +40,19 @@ CREATE DOMAIN core.qty AS numeric(18,6);
 -- 1. REFERENCE DATA
 -- =====================================================================
 
+-- Units of measure (D-026). A unit with a factor converts to every other unit of its
+-- dimension for any material (kg, lb, m, ft). A packaging unit (box, bag, pallet) has no
+-- factor: it converts only through a material's own conversion.
 CREATE TABLE core.uom (
     id              uuid PRIMARY KEY DEFAULT uuidv7(),
-    code            text NOT NULL UNIQUE,              -- 'kg', 'lb', 'm', 'ft', 'ea'
+    code            text NOT NULL UNIQUE,              -- 'kg', 'lb', 'm', 'ft', 'ea', 'box'
     name            text NOT NULL,
     dimension       text NOT NULL CHECK (dimension IN ('mass','length','count','volume','area','time','other')),
-    to_base_factor  numeric(24,12) NOT NULL DEFAULT 1   -- multiply to reach the dimension's base unit
+    to_base_factor  numeric(24,12) CHECK (to_base_factor > 0),  -- multiply to reach the dimension's base unit; null: packaging
+    is_active       boolean NOT NULL DEFAULT true,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT uom_packaging_ck CHECK (to_base_factor IS NOT NULL OR dimension = 'other')
 );
 
 -- PackML StateCurrent numbering (ISA-TR88.00.02). Code is the standard number,
@@ -74,7 +81,8 @@ CREATE TABLE core.equipment (
     equipment_role          text NOT NULL,
     -- capability flags: what the rest of the model may do with this row
     tracks_state            boolean NOT NULL DEFAULT false,         -- has PackML state, downtime, OEE
-    is_schedulable          boolean NOT NULL DEFAULT false,         -- jobs can be placed on it
+    is_schedulable          boolean NOT NULL DEFAULT false,         -- a planning target: jobs can be planned to it (a line, or a department)
+    can_run_job             boolean NOT NULL DEFAULT false,         -- executes jobs; a schedulable row without it is a group whose runners do (D-022)
     holds_inventory         boolean NOT NULL DEFAULT false,         -- lots can be located here
     -- line state derivation (open question: constraint vs worst vs configured)
     state_derivation        text CHECK (state_derivation IN ('own_tags','constraint_machine','worst_child','rule')),
@@ -220,40 +228,166 @@ CREATE UNIQUE INDEX material_external_uq ON core.material (external_system, exte
 ALTER TABLE core.residence_time
     ADD CONSTRAINT residence_time_material_fk FOREIGN KEY (material_id) REFERENCES core.material(id);
 
+-- A conversion true for one material only (D-026): 1 from_uom = factor to_uom, e.g.
+-- 1 m of a profile = 1.6 kg, or 1 box of end caps = 500 ea. It works both ways and
+-- combines with the standard factors (so ft to lb follows from m to kg). A material's
+-- conversions never form two routes between the same units. Removing one switches it off.
 CREATE TABLE core.material_uom_conversion (
-    material_id     uuid NOT NULL REFERENCES core.material(id) ON DELETE CASCADE,
+    material_id     uuid NOT NULL REFERENCES core.material(id),
     from_uom_id     uuid NOT NULL REFERENCES core.uom(id),
     to_uom_id       uuid NOT NULL REFERENCES core.uom(id),
     factor          numeric(24,12) NOT NULL CHECK (factor > 0),
-    PRIMARY KEY (material_id, from_uom_id, to_uom_id)
+    is_active       boolean NOT NULL DEFAULT true,
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (material_id, from_uom_id, to_uom_id),
+    CONSTRAINT material_uom_conversion_self_ck CHECK (from_uom_id <> to_uom_id)
 );
 
+-- Process routes (D-023, ISA-95 operations definition): a reusable template such as
+-- "Extrude and Pack". Operations run on one or more lines or departments, each with a
+-- share of the quantity; links say whether an operation starts after the one before it
+-- starts or ends. Versions: a draft is edited, a released version is fixed and is what
+-- orders are made from, releasing a newer one makes it obsolete.
+CREATE TABLE core.process (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id         uuid NOT NULL REFERENCES core.equipment(id),
+    code            text NOT NULL,
+    name            text NOT NULL,
+    description     text,
+    makes_all_materials boolean NOT NULL DEFAULT false,         -- the scope: every material, or the classes and items below
+    is_active       boolean NOT NULL DEFAULT true,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT process_code_uq UNIQUE (site_id, code)
+);
+
+-- What a process can make, beyond makes_all_materials: whole material classes and single
+-- materials. A row taken out of the scope is switched off, not deleted (the app never deletes).
+CREATE TABLE core.process_material_class (
+    process_id          uuid NOT NULL REFERENCES core.process(id),
+    material_class_id   uuid NOT NULL REFERENCES core.material_class(id),
+    is_active           boolean NOT NULL DEFAULT true,
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (process_id, material_class_id)
+);
+
+CREATE TABLE core.process_material (
+    process_id      uuid NOT NULL REFERENCES core.process(id),
+    material_id     uuid NOT NULL REFERENCES core.material(id),
+    is_active       boolean NOT NULL DEFAULT true,
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (process_id, material_id)
+);
+CREATE INDEX process_material_material_ix ON core.process_material (material_id) WHERE is_active;
+
+-- The definition (operations, their equipment and the links) is one document, so editing a
+-- draft never deletes rows. A released version is also written out below, row by row,
+-- because jobs will reference its operations (D-010).
+CREATE TABLE core.process_version (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    process_id      uuid NOT NULL REFERENCES core.process(id),
+    version_number  integer NOT NULL CHECK (version_number > 0),
+    status          text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','released','obsolete')),
+    definition      jsonb NOT NULL DEFAULT '{"operations":[],"dependencies":[]}',
+    released_at     timestamptz,
+    note            text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT process_version_uq UNIQUE (process_id, version_number),
+    CONSTRAINT process_version_released_ck CHECK ((status = 'draft') = (released_at IS NULL))
+);
+-- At most one draft and one released version per process.
+CREATE UNIQUE INDEX process_version_draft_uq ON core.process_version (process_id) WHERE status = 'draft';
+CREATE UNIQUE INDEX process_version_released_uq ON core.process_version (process_id) WHERE status = 'released';
+
+-- A released version's operations, fixed from release on.
+CREATE TABLE core.process_operation (
+    id                  uuid PRIMARY KEY,                       -- the id in the definition
+    process_version_id  uuid NOT NULL REFERENCES core.process_version(id),
+    operation_number    integer NOT NULL CHECK (operation_number > 0),
+    name                text NOT NULL,
+    description         text,
+    CONSTRAINT process_operation_uq UNIQUE (process_version_id, operation_number)
+);
+
+CREATE TABLE core.process_operation_equipment (
+    operation_id    uuid NOT NULL REFERENCES core.process_operation(id),
+    equipment_id    uuid NOT NULL REFERENCES core.equipment(id),
+    share_percent   numeric(5,2) NOT NULL CHECK (share_percent > 0 AND share_percent <= 100),
+    PRIMARY KEY (operation_id, equipment_id)
+);
+
+CREATE TABLE core.process_dependency (
+    id                  uuid PRIMARY KEY,                       -- the id in the definition
+    from_operation_id   uuid NOT NULL REFERENCES core.process_operation(id),
+    to_operation_id     uuid NOT NULL REFERENCES core.process_operation(id),
+    dependency_type     text NOT NULL CHECK (dependency_type IN ('after_start','after_end')),
+    lag                 interval NOT NULL DEFAULT interval '0' CHECK (lag >= interval '0'),
+    CONSTRAINT process_dependency_self_ck CHECK (from_operation_id <> to_operation_id),
+    CONSTRAINT process_dependency_uq UNIQUE (from_operation_id, to_operation_id)
+);
+
+-- The process order creation pre-selects for a material, among those whose scope covers it;
+-- the planner may pick another.
+ALTER TABLE core.material
+    ADD COLUMN default_process_id uuid REFERENCES core.process(id);
+
+-- Bills of materials (D-025): what one material is made from, one level deep. A BOM
+-- belongs to a material and may name a process (one BOM per material and process, and
+-- one with none); its items then name the operation that consumes them. Versioned like
+-- processes: a draft's items are one document, a released version is written out as
+-- fixed rows that planned components reference.
 CREATE TABLE core.bom (
-    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
-    material_id         uuid NOT NULL REFERENCES core.material(id),   -- the output
-    revision            text NOT NULL,
-    base_qty            core.qty NOT NULL CHECK (base_qty > 0),
-    base_uom_id         uuid NOT NULL REFERENCES core.uom(id),
-    effective_from      timestamptz NOT NULL,
-    effective_to        timestamptz,
-    origin              text NOT NULL DEFAULT 'local' CHECK (origin IN ('erp','local')),
-    external_key        text,
-    CONSTRAINT bom_uq UNIQUE (material_id, revision)
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    material_id     uuid NOT NULL REFERENCES core.material(id),   -- the output
+    process_id      uuid REFERENCES core.process(id),             -- null: any process
+    is_active       boolean NOT NULL DEFAULT true,
+    origin          text NOT NULL DEFAULT 'local' CHECK (origin IN ('erp','local')),
+    external_system text,
+    external_key    text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT bom_uq UNIQUE NULLS NOT DISTINCT (material_id, process_id),
+    CONSTRAINT bom_erp_ck CHECK (origin = 'local' OR (external_system IS NOT NULL AND external_key IS NOT NULL))
 );
 
+CREATE TABLE core.bom_version (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    bom_id          uuid NOT NULL REFERENCES core.bom(id),
+    version_number  integer NOT NULL CHECK (version_number > 0),
+    status          text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','released','obsolete')),
+    base_qty        core.qty NOT NULL CHECK (base_qty > 0),        -- items are per this much output
+    base_uom_id     uuid NOT NULL REFERENCES core.uom(id),
+    definition      jsonb NOT NULL DEFAULT '{"items":[]}',
+    released_at     timestamptz,
+    note            text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT bom_version_uq UNIQUE (bom_id, version_number),
+    CONSTRAINT bom_version_released_ck CHECK ((status = 'draft') = (released_at IS NULL))
+);
+-- At most one draft and one released version per BOM.
+CREATE UNIQUE INDEX bom_version_draft_uq ON core.bom_version (bom_id) WHERE status = 'draft';
+CREATE UNIQUE INDEX bom_version_released_uq ON core.bom_version (bom_id) WHERE status = 'released';
+
+-- A released version's items, fixed from release on.
 CREATE TABLE core.bom_item (
-    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
-    bom_id                  uuid NOT NULL REFERENCES core.bom(id) ON DELETE CASCADE,
-    line_no                 integer NOT NULL,
+    id                      uuid PRIMARY KEY,                   -- the id in the definition
+    bom_version_id          uuid NOT NULL REFERENCES core.bom_version(id),
+    line_no                 integer NOT NULL CHECK (line_no > 0),
     component_material_id   uuid NOT NULL REFERENCES core.material(id),
-    qty_per                 core.qty NOT NULL,                  -- per bom.base_qty
+    qty_per                 core.qty NOT NULL CHECK (qty_per > 0),   -- per bom_version.base_qty
     uom_id                  uuid NOT NULL REFERENCES core.uom(id),
-    scrap_factor            numeric(9,6) NOT NULL DEFAULT 0,
+    scrap_factor            numeric(9,6) NOT NULL DEFAULT 0 CHECK (scrap_factor >= 0 AND scrap_factor < 1),
     consumption_method      text NOT NULL CHECK (consumption_method IN ('time_window','declared','backflush','scan')),
-    CONSTRAINT bom_item_uq UNIQUE (bom_id, line_no)
+    operation_number        integer CHECK (operation_number > 0),   -- null: the first operation
+    CONSTRAINT bom_item_uq UNIQUE (bom_version_id, line_no)
 );
+CREATE INDEX bom_item_component_ix ON core.bom_item (component_material_id);
 
--- What a work center / unit can run, and how fast. ideal_rate drives OEE performance.
+-- What a work center / unit can run, and how fast (D-020). A job may only be
+-- placed on a line with a current row for its material. ideal_rate drives OEE
+-- performance and seeds the run standard; standard_crew_size is the labor estimate.
 CREATE TABLE core.equipment_capability (
     id                      uuid PRIMARY KEY DEFAULT uuidv7(),
     equipment_id            uuid NOT NULL REFERENCES core.equipment(id),
@@ -511,7 +645,8 @@ CREATE TABLE core.work_order (
     manufacturing_order_id      uuid REFERENCES core.manufacturing_order(id),
     order_number                text NOT NULL,
     material_id                 uuid NOT NULL REFERENCES core.material(id),
-    bom_id                      uuid REFERENCES core.bom(id),
+    bom_version_id              uuid REFERENCES core.bom_version(id),  -- the BOM it was planned with (D-025)
+    process_version_id          uuid REFERENCES core.process_version(id),  -- the released process it was made from (D-024)
     planned_qty                 core.qty NOT NULL CHECK (planned_qty > 0),
     uom_id                      uuid NOT NULL REFERENCES core.uom(id),
     target_equipment_id         uuid REFERENCES core.equipment(id),   -- area or work center it is routed to
@@ -519,12 +654,14 @@ CREATE TABLE core.work_order (
     planned_end                 timestamptz,
     due_at                      timestamptz,
     priority                    integer NOT NULL DEFAULT 0,
-    status                      text NOT NULL DEFAULT 'planned' CHECK (status IN ('planned','released','in_progress','completed','closed','cancelled')),
+    -- plan → dispatch (publish the baseline) → firm (frozen in time) → execute → complete  [D-018]
+    status                      text NOT NULL DEFAULT 'planned' CHECK (status IN ('planned','dispatched','firmed','in_progress','completed','closed','cancelled')),
     origin                      text NOT NULL DEFAULT 'local' CHECK (origin IN ('erp','local')),
     external_system             text,
     external_key                text,
     external_version            text,
     erp_change_pending          boolean NOT NULL DEFAULT false,       -- ERP changed after release; planner must accept
+    notes                       text CHECK (length(notes) <= 4000),   -- the planner's note on the order
     created_at                  timestamptz NOT NULL DEFAULT now(),
     updated_at                  timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT wo_number_uq UNIQUE (site_id, order_number),
@@ -551,18 +688,28 @@ CREATE TABLE core.job (
     planned_end         timestamptz,
     sequence_rank       numeric(20,10) NOT NULL DEFAULT 0,     -- fractional rank: insert between jobs without renumbering
     is_locked           boolean NOT NULL DEFAULT false,         -- pinned; resequencing skips it
+    earliest_start      timestamptz,                            -- hold until (material arrival, customer window)
+    latest_end          timestamptz,                            -- finish by; with earliest_start, the window of a job planned to a group (D-022)
+    group_equipment_id  uuid REFERENCES core.equipment(id),     -- the group (e.g. department) it was planned to; kept after a line takes it (D-022)
+    process_operation_id uuid REFERENCES core.process_operation(id), -- the operation it was made for (D-024)
+    planned_duration    interval CHECK (planned_duration > interval '0'),  -- non-production jobs; production uses the run standard
     counts_as_planned_downtime boolean NOT NULL DEFAULT false,  -- e.g. planned maintenance excluded from OEE
+    -- planned/dispatched/firmed follow the work order (D-018); the rest is execution
     status              text NOT NULL DEFAULT 'planned' CHECK (status IN (
-                            'planned','scheduled','dispatched','running','paused','completed','closed','cancelled')),
+                            'planned','dispatched','firmed','running','paused','completed','closed','cancelled')),
     dispatched_at       timestamptz,
+    firmed_at           timestamptz,                            -- planned_start is frozen from here on (D-019)
+    replaces_job_id     uuid REFERENCES core.job(id),           -- set on the replacement for a cancelled, started job
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT job_number_uq UNIQUE (site_id, job_number),
     CONSTRAINT job_production_ck CHECK (job_type <> 'production' OR (work_order_id IS NOT NULL AND material_id IS NOT NULL AND planned_qty IS NOT NULL)),
-    CONSTRAINT job_window_ck CHECK (planned_end IS NULL OR planned_start IS NULL OR planned_end > planned_start)
+    CONSTRAINT job_window_ck CHECK (planned_end IS NULL OR planned_start IS NULL OR planned_end > planned_start),
+    CONSTRAINT job_finish_by_ck CHECK (latest_end IS NULL OR earliest_start IS NULL OR latest_end > earliest_start)
 );
 CREATE INDEX job_dispatch_ix ON core.job (equipment_id, status, sequence_rank);
 CREATE INDEX job_wo_ix ON core.job (work_order_id);
+CREATE INDEX job_group_ix ON core.job (group_equipment_id) WHERE group_equipment_id IS NOT NULL;
 
 -- Planned material for a job, exploded from the BOM or entered directly.
 CREATE TABLE core.job_material (
@@ -597,6 +744,64 @@ CREATE TABLE core.job_run (
     CONSTRAINT job_run_no_overlap EXCLUDE USING gist (
         equipment_id WITH =, tstzrange(started_at, ended_at) WITH &&)
 );
+
+-- Per-site scheduling policy (D-015). A site without a row uses the defaults.
+CREATE TABLE core.scheduling_policy (
+    site_id             uuid PRIMARY KEY REFERENCES core.equipment(id),
+    changeover_mode     text NOT NULL DEFAULT 'auto' CHECK (changeover_mode IN ('auto','scheduler')),
+    updated_at          timestamptz NOT NULL DEFAULT now()
+);
+
+-- Planning rate per line and material (D-016). Pulaski writes the calculated
+-- rate (first from the ideal rate, later from run history); a person may set
+-- a modified rate, which is the gold standard until cleared. Runtime of a job
+-- = remaining qty / effective rate. History of changes lives in evt.event.
+CREATE TABLE core.run_standard (
+    id                          uuid PRIMARY KEY DEFAULT uuidv7(),
+    equipment_id                uuid NOT NULL REFERENCES core.equipment(id),
+    material_id                 uuid NOT NULL REFERENCES core.material(id),
+    uom_id                      uuid NOT NULL REFERENCES core.uom(id),          -- rate is uom per hour
+    calculated_rate_per_hour    numeric(18,6) NOT NULL CHECK (calculated_rate_per_hour > 0),
+    calculation_basis           text NOT NULL CHECK (calculation_basis IN ('ideal_rate','run_history')),
+    calculated_at               timestamptz NOT NULL,
+    modified_rate_per_hour      numeric(18,6) CHECK (modified_rate_per_hour > 0),
+    modified_at                 timestamptz,
+    modified_by                 text,
+    modified_note               text,
+    rate_source                 text GENERATED ALWAYS AS (
+                                    CASE WHEN modified_rate_per_hour IS NULL THEN 'calculated' ELSE 'modified' END) STORED,
+    effective_rate_per_hour     numeric(18,6) GENERATED ALWAYS AS (
+                                    coalesce(modified_rate_per_hour, calculated_rate_per_hour)) STORED,
+    created_at                  timestamptz NOT NULL DEFAULT now(),
+    updated_at                  timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT run_standard_uq UNIQUE (equipment_id, material_id),
+    CONSTRAINT run_standard_modified_ck CHECK (
+        (modified_rate_per_hour IS NULL) = (modified_at IS NULL)
+        AND (modified_rate_per_hour IS NULL) = (modified_by IS NULL))
+);
+
+-- Sequence-dependent changeover matrix (D-015). Each side matches a material,
+-- a material class or anything (both NULL); equipment_id NULL means every line
+-- in the site. The most specific active rule wins (see ChangeoverMatrix).
+CREATE TABLE core.changeover_rule (
+    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
+    equipment_id            uuid REFERENCES core.equipment(id),
+    from_material_id        uuid REFERENCES core.material(id),
+    from_material_class_id  uuid REFERENCES core.material_class(id),
+    to_material_id          uuid REFERENCES core.material(id),
+    to_material_class_id    uuid REFERENCES core.material_class(id),
+    duration                interval NOT NULL CHECK (duration >= interval '0'),
+    note                    text,
+    is_active               boolean NOT NULL DEFAULT true,
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    updated_at              timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT changeover_rule_from_ck CHECK (from_material_id IS NULL OR from_material_class_id IS NULL),
+    CONSTRAINT changeover_rule_to_ck   CHECK (to_material_id IS NULL OR to_material_class_id IS NULL)
+);
+CREATE UNIQUE INDEX changeover_rule_uq ON core.changeover_rule
+    (site_id, equipment_id, from_material_id, from_material_class_id, to_material_id, to_material_class_id)
+    NULLS NOT DISTINCT WHERE is_active;
 
 -- =====================================================================
 -- 9. INVENTORY AND GENEALOGY
