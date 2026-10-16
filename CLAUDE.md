@@ -16,6 +16,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Respect the v1 non-goals in the charter: not an ERP, not SCADA/HMI/historian, no finite-capacity
   scheduling, no Part 11 features, no multi-tenant SaaS.
 - Every commit is signed off (DCO): `git commit -s`. License is Apache 2.0.
+- **User guide.** `docs/user_guide.md` is the end-user guide, for readers from novice to expert. Update it in
+  the same change as anything a user can see: a new or changed screen, step, button label, message, rule or
+  warning. Each topic keeps numbered steps for beginners and an "In detail" part for experienced users.
+  Keep section 11 ("What Pulaski doesn't do yet") current: add known gaps and bugs, remove them when fixed.
+  Describe only what the app does today, checked against the code, and bump the "Last updated" date.
 
 ## Stack
 
