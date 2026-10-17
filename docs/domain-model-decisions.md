@@ -31,9 +31,15 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-022 | Group scheduling: equipment can be a planning target (`is_schedulable`) and runs jobs only with `can_run_job`. A job planned to a group (e.g. a department) waits there in a window until the floor assigns it to a line below the group that can run it; Pulaski checks the window, never picks the line | Decided | 2026-10-14 |
 | D-023 | Process routes: a process (ISA-95 operations definition) has numbered operations, each run by one or more lines or departments with shares totalling 100%, linked "after start" or "after end" with a lag. Versioned: drafts are edited, released versions are fixed and are what orders are made from. A process makes all materials, or chosen classes and materials; a material may name one of those as its default | Decided | 2026-10-14 |
 | D-024 | Work orders are made from a process: the planner picks the material, a released process that makes it, the quantity, start, due date, priority and a note; each operation's equipment gets a planned job for its share, at the end of its line | Proposed | 2026-10-15 |
-| D-025 | Bills of materials: single level, one per material and optionally per process, whose items name the operation that consumes them; versioned like processes (draft, released, obsolete). A work order takes the released BOM and plans each job's components. Pulaski owns lots on the floor; the ERP stays the book of record for stock | Proposed | 2026-10-15 |
+| D-025 | Bills of materials: single level, one per material and optionally per process, whose items name the operation that consumes them; versioned like processes (draft, released, obsolete). A work order takes the released BOM and plans each job's components. Pulaski owns lots on the floor; the ERP stays the book of record for stock (inventory amended by D-027) | Proposed | 2026-10-15 |
 | D-026 | Units: standard units convert within a dimension by fixed factors for every material; a material's own conversions link dimensions and packaging units, and never give two routes. Orders, BOMs and run rates may each use any unit that converts | Proposed | 2026-10-15 |
 | D-021 | Scheduling board: Gantt, calendar, Kanban and table views over one live board. Each view edits only what the planner owns (line, sequence, pins, order status); overlaps are reported by the projector and shown on every view; the board re-reads every 10 s | Proposed | 2026-10-14 |
+| D-027 | Inventory: Pulaski keeps lot balances at every `holds_inventory` location in a site (stores, staging, feed points), in the material's base unit. Receive, write up, write off, move, hold and release lots; declare consumption into and production from a job, with job-level genealogy. Materials that aren't lot-tracked keep one bulk balance per location. The ERP stays the financial book of record and gets an event for every movement (amends D-025) | Proposed | 2026-10-16 |
+| D-028 | Schema changes ship as numbered, re-runnable migrations in `db/migrations`, applied by `db/migrate.sh` and recorded in `public.schema_migration`; `schema-draft.sql` stays the complete schema for new databases. The API refuses to start without the newest migration, and keeps every partitioned history table three months ahead through `ts.ensure_partitions` | Proposed | 2026-10-16 |
+| D-029 | Inventory lookups: a material shortage check sets each open job's remaining components, in the order the jobs are needed, against available stock; a movement journal searches every lot movement by time, kind, material, location, job and person. Neither plans purchases nor nets incoming supply (charter: not MRP) | Proposed | 2026-10-16 |
+| D-030 | Inventory completion: split, merge and ship lots; correct a lot's details; reverse a lot's latest movement; count a location and post the differences; maintain reason codes; stock on a past date and an aging report; CSV export. Pallets, labels and lot certificates are deferred | Proposed | 2026-10-16 |
+| D-031 | Indistinguishable lots: a location that holds inventory can mix lots (`commingles_lots`), like a silo or tank. Everything that arrives there joins one balance per material, with no lot number; a numbered receipt is kept as its own lot and merged in, so genealogy still reaches the supplier lot. Every balance, lot-tracked or not, has a NULL lot number | Proposed | 2026-10-17 |
+| D-032 | Location and expiry rules: a location can take one material at a time (`single_material`); a location holding stock can't be deactivated or stop holding inventory; materials have a shelf life that sets a new lot's expiry; an expired lot can't be consumed, shipped or merged until its expiry is corrected | Proposed | 2026-10-17 |
 
 ## Order hierarchy
 
@@ -319,8 +325,8 @@ A bill of materials says what one material is made from: "1000 m of PRF-5100-BR 
 - **Planned components.** Creating a work order (D-024) writes one `core.job_material` row (`consume`) per item and job of the consuming operation. An item's total is order quantity ÷ base quantity × quantity per × (1 + scrap factor), rounded to six places; the operation's jobs share it in proportion to their quantities, the last taking the remainder. The order quantity is first converted to the BOM's base unit (D-026).
 - **Jobs added later (amended 2026-10-16).** A production job added to an order after it was made (from the schedule, or as the replacement for a cancelled job) gets the same treatment. It takes an operation: a replacement keeps the cancelled job's; a new job takes the first operation in flow order that runs on its line or group, or else the first operation. It is then planned components from the order's BOM version: the items of its operation for its own quantity, with no sharing.
 - **Process changes.** A released BOM keeps the operation numbers it was released with. When a process release leaves a BOM naming an operation the new version doesn't have, the release goes ahead but reports each such BOM. The BOMs page, the BOM editor and the order form flag it, and orders for the material made with that process are refused, naming the BOM, until a new BOM version is released.
-- **Inventory.** The ERP is the book of record for warehouse stock. Pulaski tracks lots on the floor, from issue or receipt at the line through loading, consumption and production, and reports consumption and output back to the ERP as events. Receiving and putaway, balances outside the plant floor and purchasing stay in the ERP (charter: not an ERP).
-- **Build passes.** 1. BOMs and planned components (this pass). 2. Lots on the floor: receive or issue a lot to a location (equipment with `holds_inventory`) and load it onto a feed point (`core.material_load`). 3. Consumption, with execution: runs and counts, then each item consumed by its method, and genealogy (charter slice step 4).
+- **Inventory (amended by D-027).** Pulaski keeps lot balances at the site's stores, staging areas and feed points, receives lots into them, and reports every movement to the ERP as an event. The ERP stays the financial book of record; purchasing, valuation and stock outside the site stay there (charter: not an ERP).
+- **Build passes.** 1. BOMs and planned components *(built)*. 2. Lots in the plant: receive, adjust, move, hold, and declared consumption and production with job-level genealogy (D-027, *built*). 3. With execution: loading feed points (`core.material_load`), runs and counts, each item consumed by its method (time window, backflush, scan), and time-window genealogy (charter slice step 4).
 
 ## Units of measure and conversions (D-026, proposed)
 
@@ -335,6 +341,149 @@ Quantities are entered in the unit that suits the person entering them: a planne
   - The projector converts a job's quantity to its run standard's unit (D-016). Only when the material has no conversion between them does it warn `uom_mismatch` and leave the duration unknown. A department's lines are compared in the job's unit.
 - **Rounding.** Factors are kept exact (decimal) along the route; a converted quantity is rounded to six places, as `core.qty` stores.
 - **Screens.** Configure → Units lists the catalog by dimension and maintains each material's conversions, with a calculator to try a conversion. The BOM editor and the order form link to the material's conversions.
+
+## Inventory (D-027, proposed)
+
+Inventory answers "what do we have, where, and what happened to it": 1,200 kg of PVC-K67 lot 24-0917 sits in raw-material stores, 300 kg of it went into job WO-1001-10, and that job made profile lots WO-1001-10-01 and -02. This amends D-025, where the ERP kept every balance outside the line.
+
+**Scope (amends D-025).** Pulaski keeps the balance of every lot at every location in a site that holds inventory: raw-material stores, staging, finished-goods staging and the feed points on a line. The ERP stays the financial book of record. Pulaski posts each receipt, adjustment, move, consumption and production as an event for the ERP to pick up (D-008); purchasing, valuation, costing and stock outside the site stay in the ERP (charter: not an ERP).
+
+- **Locations** are equipment with `holds_inventory` (D-010): a storage zone or unit, or a feed point. A lot is in one location at a time, in its site; an inactive location takes nothing new.
+- **Quantities** are kept in the material's base unit (D-026). Every command takes a quantity in any unit that converts for the material, converts it to the base unit (six places) and refuses one that doesn't. Event payloads keep what was entered as well.
+- **No negative stock.** A lot can't go below zero. Taking out more than is there is refused, naming what is left.
+- **Statuses.** `available`, `on_hold` and `quarantine` are on hand; `consumed` and `scrapped` are a lot taken down to zero by consumption or write-off. Only an available lot can be consumed. A lot on hold or in quarantine can still be moved, written up or written off. `planned`, `in_production` and `shipped` stay in the schema for execution and shipping, which are not built.
+
+**Commands.** Each one locks the lot (and the job, for consumption and production), writes the lot, appends one `ts.lot_event` row with the quantity after it, and appends one event on the lot (`pulaski.lot.<kind>.v1`), in one transaction (D-007).
+
+| Command | What it does | Lot event |
+| --- | --- | --- |
+| Receive | A new lot of a material at a location, with an optional supplier lot and expiry. The lot number is required for a lot-tracked material and unique per site and material | `received` (+) |
+| Write up | Adds found or miscounted stock. A lot at zero comes back as available | `adjusted` (+) |
+| Write off | Removes stock (damage, loss, count correction), all of the lot or part of it. At zero the lot is `scrapped` | `scrapped` (−) |
+| Move | Moves the whole lot to another location in the site. Splitting a lot is not built | `moved` |
+| Hold, quarantine, release | Changes the status between the three on-hand statuses | `status_changed` |
+| Consume | Declares quantity of an available lot used by a job | `consumed` (−) |
+| Produce | Declares output of a job's material into a new lot at a location | `produced` (+) |
+
+- **Reasons.** Write up and write off need a reason code of kind `inventory_adjustment`; hold and quarantine need one of kind `hold`; release takes none. The reason must be active, selectable, and enterprise-wide or the lot's site. A reason with `requires_comment` refuses a blank comment. `db/seed-reasons.sql` loads a starter set; there is no screen to maintain them yet.
+- **Versions.** Write up, write off, move and status changes take the lot's version and return 409 if it changed: the person is looking at that lot. Consume and produce don't: they are declarations against a job on a busy floor, protected by the quantity check under the lock instead.
+- **Time.** Every movement is recorded at the server's time. Back-dating is not built.
+
+**Consumption and production (declared against a job).** Execution doesn't exist yet, so an operator declares what a job used and made; `run_id` stays empty until runs are built, and runs then fill it.
+
+- The job must be a production job in the lot's site that isn't completed, closed or cancelled.
+- Consuming a material the job has no planned component for (`core.job_material`) is allowed, as a substitution, with a `not_planned` warning in the response.
+- Production makes the job's material. A blank lot number is generated as `<job number>-<nn>`, counting the job's lots. Producing into an existing lot number adds to it only when that lot was made by the same job at the same location; otherwise it is refused.
+- **Job-level genealogy.** Every lot consumed into a job is a parent of every lot the job produced, whichever came first: consuming links the lot to the job's outputs so far, and producing links the job's inputs so far to the new lot (`link_basis` `declared`, with the job). Edges are never duplicated. This over-links on purpose: it is the safe superset until time-window genealogy narrows it with execution.
+- **Locks.** Consumption and production lock the job row (`FOR UPDATE`), then the lot, so declarations on one job serialize and both halves of the genealogy see each other. Scheduling locks lines, then the order, then jobs (D-017) and never lots, so the two can't deadlock.
+
+**Bulk balances.** A material that isn't lot-tracked (`is_lot_tracked = false`) keeps one hidden lot per location (`is_bulk`, lot number `@<location code>`), created on its first receipt or production there. Every movement still goes through `core.lot` and `ts.lot_event`, so one code path covers both. Receiving or producing adds to it; moving a bulk balance takes a quantity and transfers it to the destination's bulk lot (two `moved` rows, linked by `related_lot_id`). Screens show the location instead of a lot number.
+
+**Lookups.**
+
+| Lookup | Answers |
+| --- | --- |
+| Stock by material | Every active material, grouped by class, with on hand, available, held, lots and locations; filter by text, class, location, and in stock only |
+| Material | Its lots, its balance per location, and where it is used |
+| Where used | The released and draft BOMs that list it as a component (with quantity, unit and operation), and the open jobs planned to consume it, with what they have consumed |
+| Lot search | By lot or supplier lot number, material, location, status, and expiring before a date |
+| Lot | Its facts, its history (every movement with the quantity after it, who, why and the job) and its direct parents and children |
+| Trace | Every lot downstream (forward) or upstream (backward), from `core.trace_forward` / `core.trace_backward`, recursive `LANGUAGE sql STABLE` functions (D-012) |
+| Locations | Each location holding inventory, with its lots and materials |
+| Job materials | A job's planned components against what it has consumed, and the lots it produced |
+
+**Not built yet:** splitting and merging lots, loading feed points and time-window consumption, backflush, scanning, shipping, cycle-count sessions, back-dated movements, a reason-code screen, and pushing movements to an ERP (the outbox relay).
+
+## Schema migrations and partition maintenance (D-028, proposed)
+
+A database already in use has to follow the schema as it changes, without being reloaded and losing its data; and the history tables need partitions created ahead, or writes stop when the last one fills.
+
+**Migrations.**
+
+- **Two ways to the same schema.** `db/schema-draft.sql` stays the complete current schema, for a new database. Each change also ships as a migration, `db/migrations/NNNN_description.sql`, that brings an existing database to the same place. For 0001 and 0002 this was checked by hand: a database built from the commit before them and migrated has the same columns, indexes, constraints, functions and grants as a fresh load. That comparison isn't automated yet.
+- **Recorded.** `public.schema_migration` holds one row per applied migration, named by its file. `schema-draft.sql` inserts every migration it already contains, so a fresh database has nothing to apply. The table is in `public`, outside the four application schemas, and the application role can only read it.
+- **Applied by `db/migrate.sh [database]`.** It runs each unrecorded file in name order, in its own transaction with the row that records it, then re-runs `db/app-role.sql` for the grants. Files therefore have no `BEGIN`/`COMMIT`.
+- **Re-runnable.** Every migration is guarded (`IF NOT EXISTS`, `CREATE OR REPLACE`, a `DO` block for constraints), so a database changed by hand, or migrated twice, isn't broken. A test re-runs them all on the current schema.
+- **Checked at startup.** The API knows the newest migration it needs (`DatabaseMaintenance.RequiredMigration`, tested against the newest file) and refuses to start without it, naming the migration and the command. A database it can't reach is only logged.
+- **No down migrations.** Going back is restoring a backup; the event log is append-only anyway.
+
+**Partition maintenance.**
+
+- `ts.ensure_partitions(months)` creates the current month and the months after it for every range-partitioned table in `ts` and `evt`, and returns how many it made. It is `SECURITY DEFINER`, because creating a partition needs ownership of its parent, and only `pulaski_app` may execute it. It is called with `SELECT`, never `CALL` (D-012).
+- The API calls it at startup and every 12 hours, keeping three months ready (`Pulaski:PartitionMonthsAhead`). A failure is logged and retried on the next round. The seed calls it once instead of naming each table.
+- Every history table is monthly for now. Daily partitions for `ts.process_value`, and retention (dropping old telemetry partitions), come with machine data.
+
+## Shortages and the movement journal (D-029, proposed)
+
+Two lookups on top of inventory (D-027): "will we have the material for the jobs coming up?" and "what moved, when, and who did it?".
+
+**Material shortage check.** For a site, optionally one line or department and everything under it, and optionally a horizon:
+
+- **Demand** is each open production job's planned components (`core.job_material`, `consume`) less what has been declared consumed into it, never below zero. Open means planned, dispatched, firmed, running or paused. Planned quantities are converted to the component's base unit (D-026); a line whose unit doesn't convert is left out and reported, never guessed.
+- **Supply** is the component's **available** stock in the site. Held and quarantined stock is shown beside it but not counted: it can't be consumed until released.
+- **Order.** Jobs take supply in the order they are needed: by the job's published start (`planned_start`), else its hold-until (`earliest_start`), then job number; jobs with neither come last. Each line shows the running total and how much of it is not covered, so the first job that comes up short is visible. A horizon (for example the next 3 days) leaves out jobs needed after it, and jobs with no time at all.
+- **The projected time is not used yet.** A job's live projection (D-014) is calculated per line on read; the check uses the baseline and hold times instead. A job that has slipped is therefore ordered by its published time.
+- **Not MRP (charter non-goal).** No purchase or transfer suggestions, no incoming receipts or open purchase orders netted in, no lead times, no multi-level explosion: an intermediate's own components show only on the jobs of its own orders (D-025). The calculation is a pure function (`ShortageCalculator`), redone on every read.
+
+**Movement journal.** Every `ts.lot_event` row of a site, newest first, filtered by a time range (required, the last 7 days by default, so only those partitions are read), movement kind, material, location (where the stock left or arrived), job, and the person who recorded it; and a lot or supplier lot number. Pages of 200 rows continue from the last row read (`occurred_at`, `id`), so a page never repeats or skips a row as new movements arrive. A BRIN index on `occurred_at` keeps a range read cheap (migration 0003).
+
+## Completing inventory (D-030, proposed)
+
+What a plant needs to keep floor stock right without the ERP, beyond receiving and adjusting (D-027). Consumption, production, allocation to jobs and labels are not part of this; they come back with execution.
+
+**Split, merge and ship** (whole lots, never a bulk balance, which is already a quantity).
+
+| Command | Rule | Lot events |
+| --- | --- | --- |
+| Split | Takes part of an on-hand lot (less than all of it) into a new lot of the same material, status, supplier lot and expiry, at the same or another location in the site. A blank number becomes `<lot>-1`, `-2`…, the first free one. Genealogy: the lot is the new one's parent (`split`) | `split` (−) on the source and (+) on the new lot, each naming the other |
+| Merge | Combines lots of one material, at one location, in one status, into a target lot. The sources go to zero (`consumed`, "merged into"); the target takes the earliest expiry of them all, since mixed stock is only as good as its oldest part. Genealogy: each source is the target's parent (`merge`) | `merged` (−) on each source and (+) on the target per source |
+| Ship | Sends quantity of an **available** lot or balance out of the site, with a reference (delivery or shipment number, required). At zero a lot is `shipped`. Shipping documents and customers stay in the ERP | `shipped` (−) |
+
+**Corrections.**
+
+- **Correct details.** A lot's number, supplier lot and expiry can be corrected, with a comment. The number stays unique per site and material; a bulk balance's number can't change. The event keeps before and after. Lot event `corrected`.
+- **Reverse a movement.** The lot's **latest** movement can be reversed, once, for an adjustment reason: a receipt, write-up, write-off, move, status change or shipment. The lot returns to its quantity, location and status before it, and the reversal names the movement it undoes (`reverses_event_id`, `reverses_occurred_at`; no FK into history, D-010). A reversed receipt that leaves a lot at zero makes it `cancelled`. Consumption and production (job declarations), splits, merges, bulk transfers and corrections aren't reversed: the first two wait for execution, the rest touch two lots or nothing countable, and are put right with another movement. Lot event `reversed`.
+
+**Stock counts.**
+
+- A count is of one location. Starting it takes a snapshot of every on-hand lot there (`core.stock_count_line.expected_qty`). People record what they count, as often as they like, until it is posted.
+- **Posting** writes, for each counted lot whose count differs from its quantity now, a write-up (`adjusted`) or write-off (`scrapped`) for the chosen reason (normally *Count correction*), referencing the count number. Every line must be counted first (enter 0 for a lot that isn't there). A lot that moved after its line was counted is refused, named, until it is recounted; one that moved between the snapshot and the count is fine, because the count is what is there.
+- Stock found that isn't in the count is received separately. A count can be cancelled until posted. Count numbers are `CNT-<yyyyMMdd>-<n>` per site.
+
+**Reason codes.** A screen lists, adds and changes reasons for inventory (and the other kinds), enterprise-wide or for a site. A code and its kind never change once created, since history refers to them; the name, whether a comment is required, the order and the active flag can. Reason trees (`parent_id`) are not edited yet.
+
+**Reports.**
+
+- **Stock on a date:** each material's on-hand quantity at the end of a day, from each lot's latest movement up to then (`qty_after`). It reads every movement before the date, so it is slower for older dates. Status at the time isn't reconstructed: held stock counts.
+- **Aging:** on-hand stock by how long ago each lot was received or made: up to 30, 31–90, 91–180 and over 180 days, per material.
+- **Export:** stock, lots, the journal (up to 10,000 rows) and both reports download as CSV.
+
+**Deferred:** pallets or containers (with labeling), lot attributes and certificates of analysis (with quality), allocation and picking suggestions (with execution).
+
+## Indistinguishable lots (D-031, proposed)
+
+A resin silo or a tank can't keep lots apart: what goes in mixes with what is there. Pulaski models that as the location, not the material.
+
+- **The flag.** Equipment that holds inventory can also have **lots are indistinguishable** (`core.equipment.commingles_lots`). It can't be set without `holds_inventory`, and it can't be turned on while the location holds separate lots (merge or move them first). Turned off, an existing balance stays a balance until it is used up; new arrivals are separate lots again.
+- **One balance per material.** Stock there is held as a balance (`is_bulk`), exactly as a material that isn't lot-tracked is anywhere (D-027). A balance has no lot number: `lot_number` is NULL exactly when `is_bulk`. This replaces the `@<location code>` numbers D-027 gave balances; screens show *Balance at SILO-1*.
+- **Every arrival merges.** A receipt, a move, a split sent there and production into it all end in the balance, created on the first arrival. Only stock in the balance's status can join it (normally available): a held lot is released first, or the balance held too.
+- **Traceability kept.** A receipt with a lot number creates that lot, then merges it into the balance (`received`, then `merged` out of the lot and into the balance, genealogy `merge`), so a trace from a finished lot goes through the silo back to the supplier's lot. A lot moved or split there is merged the same way, and so is production with a lot number. A receipt or production with no number goes straight into the balance, the supplier lot kept only in the event. The balance takes the earliest expiry of everything in it.
+- **Genealogy over-links here too.** Every lot that ever joined a balance is a parent of everything taken from it afterwards: the silo has no first-in, first-out. Time-window genealogy with residence time narrows it with execution (charter slice step 4).
+- **Counting, writing off and shipping** a balance work as for any balance. Merging by hand, splitting and correcting the number don't apply to a balance.
+
+## Location and expiry rules (D-032, proposed)
+
+Rules that keep floor stock honest where D-027 and D-031 left a gap.
+
+**One material at a time.** A location that holds inventory can take **one material at a time** (`core.equipment.single_material`), like a silo dedicated to a resin. While any stock of one material is there (a quantity above zero, held or not), nothing of another material can arrive: receipts, moves, splits sent there, balance transfers and production are refused, naming what is there. Once that quantity is zero, any material can go in. It is independent of lots being indistinguishable (D-031), which only ever merges lots of one material number; a silo normally has both. Arrivals lock the location row first (`FOR UPDATE`) when it takes one material, so two receipts of different materials can't both land in an empty silo. It can't be turned on while two materials are there.
+
+**Locations holding stock.** Equipment holding on-hand stock can't be deactivated or stop holding inventory; move, use or write off the stock first. Otherwise its lots would sit in a place nothing can reach.
+
+**Shelf life and expiry.**
+
+- A material may have a shelf life in days (`core.material.shelf_life_days`). A new lot received or produced without an expiry expires that long after it arrives; an expiry entered by hand wins. A balance takes the earliest expiry of what joins it, as before (D-031).
+- An **expired** lot (its expiry is now or past) can't be consumed, shipped, or merged into another lot or a balance. It can still be moved, held, written off or counted. To use it after all, correct its expiry with a comment (D-030): the quality decision is then on record.
+- Shelf life is set on the material's inventory page until there is a materials screen; the change is an event on the material.
 
 ## Application architecture
 

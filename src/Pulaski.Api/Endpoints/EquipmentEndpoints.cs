@@ -40,7 +40,9 @@ internal static class EquipmentEndpoints
                 request.IsSchedulable,
                 request.HoldsInventory,
                 request.TimeZone,
-                request.CanRunJob);
+                request.CanRunJob,
+                request.ComminglesLots,
+                request.SingleMaterial);
             var created = await handler.HandleAsync(command, ct);
             return TypedResults.Created($"/api/equipment/{created.Id}", created);
         });
@@ -60,7 +62,9 @@ internal static class EquipmentEndpoints
                 request.IsSchedulable,
                 request.HoldsInventory,
                 request.IsActive,
-                request.CanRunJob);
+                request.CanRunJob,
+                request.ComminglesLots,
+                request.SingleMaterial);
             return TypedResults.Ok(await handler.HandleAsync(command, ct));
         });
 

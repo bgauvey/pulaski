@@ -18,7 +18,8 @@ This is the reference for every table and column in `db/schema-draft.sql` (Postg
 | Quantities | `core.qty` is a domain over `numeric(18,6)`. |
 | Concurrency | No version columns. The application reads `xmin::text::bigint AS version`, locks the row `FOR UPDATE`, compares and writes. A mismatch is a 409. |
 | `created_at` / `updated_at` | When the row was inserted and last changed, set by the application in the command's transaction. |
-| Partitioned tables | Range-partitioned by a time column, monthly by default (`ts.create_month_partitions`). The primary key always includes that column. There is no default partition: a missing partition makes inserts fail. |
+| Partitioned tables | Range-partitioned by a time column, monthly by default (`ts.create_month_partitions`). The primary key always includes that column. There is no default partition: a missing partition makes inserts fail, so the API keeps three months ahead through `ts.ensure_partitions` (D-028). |
+| Migrations (D-028) | `schema-draft.sql` is the complete schema for a new database; each change also ships as a re-runnable `db/migrations/NNNN_*.sql`, applied by `db/migrate.sh` and recorded in `public.schema_migration`. |
 | Foreign keys into history | None. A row pointing at a partitioned table stores the id (and its time) without an FK, so old partitions can be dropped. |
 | Deletes | The application role (`pulaski_app`, `db/app-role.sql`) has no `DELETE` anywhere. Master data is deactivated (`is_active`), and corrections are new rows or events. |
 
@@ -34,7 +35,8 @@ Equipment model            Material & capability          Calendar
 
 Orders & scheduling                       Execution & inventory
  manufacturing_order                       job_run ─── ts.production_count, ts.downtime
-  └─ work_order                            lot ─ material_load, lot_genealogy, ts.lot_event
+  └─ work_order                            lot ─ material_load, lot_genealogy, ts.lot_event,
+                                                stock_count ─ stock_count_line
       └─ job ── job_material               labor_session
           └─ job_run                       quality_characteristic ─ spec_limit, control_limit,
  scheduling_policy, run_standard,             characteristic_rule, spc_alert,
@@ -94,6 +96,8 @@ One self-referencing table holds enterprise, sites, areas, work centers (lines),
 | `is_schedulable` | boolean | no | A planning target: jobs can be planned to it, a line or a group such as a department (D-022). |
 | `can_run_job` | boolean | no | Jobs actually run here (a line or cell). A schedulable row without it is a group: its jobs wait in a window until a line below it that can run jobs takes them (D-022). |
 | `holds_inventory` | boolean | no | Lots can be located here (storage, feed point). |
+| `single_material` | boolean | no | Takes one material at a time (D-032): another material can arrive only when the quantity of the one there is zero. Needs `holds_inventory`. |
+| `commingles_lots` | boolean | no | Lots here mix and can't be told apart, like a silo or tank (D-031): every arrival joins one balance per material. Needs `holds_inventory`. |
 | `state_derivation` | text | yes | How a line's state is derived: `own_tags`, `constraint_machine`, `worst_child` or `rule`. Open question; not used yet. |
 | `constraint_equipment_id` | uuid → equipment | yes | The constraint machine, required when `state_derivation = 'constraint_machine'`. |
 | `micro_stop_threshold` | interval | no | Stops shorter than this count as micro-stops. Default 2 minutes. |
@@ -198,6 +202,7 @@ Groups materials (e.g. all resins), so changeover rules can match a class instea
 | `material_type` | text | no | `raw`, `intermediate`, `finished`, `packaging`, `consumable` or `rework`. |
 | `material_class_id` | uuid → material_class | yes | Its class, if any. |
 | `base_uom_id` | uuid → uom | no | The unit it is counted in by default. |
+| `shelf_life_days` | integer | yes | A new lot received or produced without an expiry expires this many days after it arrives (D-032). |
 | `is_lot_tracked` | boolean | no | Whether inventory of it is tracked by lot. Default true. |
 | `origin` | text | no | `local` (created in Pulaski) or `erp` (imported). |
 | `external_system`, `external_key`, `external_version` | text | yes | The ERP record this came from. System and key are required for `erp` rows and unique together. |
@@ -413,9 +418,9 @@ Shifts generated ahead of time by a worker. They apply to the nearest ancestor o
 
 ## 5. Reason codes
 
-### core.reason_code — reason trees · *Planned*
+### core.reason_code — reason trees · *In use*
 
-One tree per kind of reason. Branches group; leaves are selected.
+One tree per kind of reason. Branches group; leaves are selected. Inventory uses the `inventory_adjustment` and `hold` kinds (D-027); `db/seed-reasons.sql` loads a starter set, and the Reasons screen adds and changes them (D-030). A code and its kind never change once created; the name, `requires_comment`, `sort_order` and `is_active` can. The tree (`parent_id`) isn't edited yet.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -726,22 +731,26 @@ Each side matches a material, a material class or anything. The most specific ac
 
 ## 9. Inventory and genealogy
 
-Lots are relational because they are referenced for years. Every movement is a `ts.lot_event`. Storage locations are equipment with `holds_inventory`.
+Lots are relational because they are referenced for years. Every movement is a `ts.lot_event`. Storage locations are equipment with `holds_inventory` (D-027). Quantities are kept in the material's base unit.
 
-### core.lot — current state of each lot · *Planned*
+### core.lot — current state of each lot · *In use*
+
+A balance (`is_bulk`) is the one quantity of a material at a location: for a material that isn't lot-tracked (D-027), or for any material at a location whose lots are indistinguishable (`commingles_lots`, D-031). It has no lot number, is unique per material and location, and stays `available` at zero.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
 | `site_id` | uuid → equipment | no | The site. |
-| `lot_number` | text | no | Unique per site and material. |
+| `lot_number` | text | yes | Unique per site and material. Null exactly for a balance (`is_bulk`, D-031). |
 | `material_id` | uuid → material | no | What it is. |
-| `status` | text | no | `planned`, `in_production`, `available`, `on_hold`, `quarantine`, `consumed`, `scrapped` or `shipped`. |
-| `quantity` | qty | no | Current quantity; the running result of its lot events. Zero or more. |
-| `uom_id` | uuid → uom | no | Its unit. |
-| `location_equipment_id` | uuid → equipment | yes | Where it is now. |
-| `produced_by_run_id` | uuid → job_run | yes | The run that made it. |
-| `origin` | text | no | `produced`, `received`, `erp`, `split` or `merge`. |
+| `status` | text | no | `planned`, `in_production`, `available`, `on_hold`, `quarantine`, `consumed`, `scrapped`, `shipped` or `cancelled` (its receipt was reversed, D-030). A lot merged into another is `consumed`. |
+| `quantity` | qty | no | Current quantity; the running result of its lot events. Zero or more, never negative. |
+| `uom_id` | uuid → uom | no | Its unit: the material's base unit. |
+| `location_equipment_id` | uuid → equipment | yes | Where it is now. Required for a bulk lot. |
+| `is_bulk` | boolean | no | The one balance of a material that isn't lot-tracked at its location. |
+| `produced_by_job_id` | uuid → job | yes | The job that declared it produced (D-027). |
+| `produced_by_run_id` | uuid → job_run | yes | The run that made it; filled once execution exists. |
+| `origin` | text | no | `produced`, `received`, `erp`, `split` or `merge`. A lot split off another is `split` (D-030). |
 | `supplier_lot` | text | yes | Supplier's lot number, for received lots. |
 | `external_key` | text | yes | ERP key. |
 | `produced_from`, `produced_to` | timestamptz | yes | The production window, for output lots cut by time or quantity. |
@@ -764,9 +773,9 @@ Windows may overlap: a silo can hold several lots at once. Time-window consumpti
 | `load_method` | text | no | `scan`, `declared`, `erp_issue` or `auto`. |
 | `loaded_by_person_id` | uuid → person | yes | Who loaded it. |
 
-### core.lot_genealogy — parent and child lots · *Planned*
+### core.lot_genealogy — parent and child lots · *In use*
 
-Derived edges can be recalculated when windows or residence times change; the old edge is marked superseded, never deleted.
+Derived edges can be recalculated when windows or residence times change; the old edge is marked superseded, never deleted. Declared consumption and production (D-027) link every lot consumed into a job to every lot it produced (`declared`, with `job_id`). A split links the lot to the lot split off it, and a merge each source to the target (`split`, `merge`, no job; D-030). A current edge is unique per parent, child and basis (`lot_genealogy_edge_uq`).
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -776,10 +785,42 @@ Derived edges can be recalculated when windows or residence times change; the ol
 | `link_basis` | text | no | `time_window`, `declared`, `split`, `merge` or `rework`. |
 | `quantity` | qty | yes | Quantity carried over; estimated for `time_window`. |
 | `uom_id` | uuid → uom | yes | Its unit. |
+| `job_id` | uuid → job | yes | The job that consumed the parent and made the child (declared edges). |
 | `run_id` | uuid → job_run | yes | The run that linked them. |
 | `window_start`, `window_end` | timestamptz | yes | The time window used. |
 | `derived_at` | timestamptz | no | When the edge was derived. |
 | `superseded_at` | timestamptz | yes | When a newer derivation replaced it. |
+
+### core.trace_forward(lot), core.trace_backward(lot) — genealogy trace · *In use*
+
+`LANGUAGE sql STABLE` functions (D-012) that walk current genealogy edges from a lot: forward to every lot made from it, backward to every lot it was made from. Each returns `lot_id`, `via_lot_id` (the lot it was reached from; null for the start) and `depth` (0 for the start), stops at 50 steps and skips cycles. A lot reached by two paths appears once per path; the inventory query keeps the nearest.
+
+### core.stock_count — a count of one location (D-030) · *In use*
+
+Starting a count snapshots the location's on-hand lots into `core.stock_count_line`. Posting writes a write-up or write-off for every counted lot that differs from its quantity then, referencing `count_number`.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The site. |
+| `count_number` | text | no | `CNT-<yyyyMMdd>-<n>`: the site's nth count started that UTC day. Unique per site. |
+| `location_equipment_id` | uuid → equipment | no | The location counted. |
+| `status` | text | no | `open`, `posted` or `cancelled`. |
+| `note` | text | yes | Why or how it was counted, at most 1000 characters. |
+| `created_by` | text | no | Who started it. |
+| `posted_at`, `posted_by` | timestamptz, text | yes | When and by whom it was posted; set exactly when the status is `posted`. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.stock_count_line — one lot in a count (D-030) · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `stock_count_id` | uuid → stock_count | no | The count. Unique with `lot_id`. |
+| `lot_id` | uuid → lot | no | The lot (or balance) counted. |
+| `expected_qty` | qty | no | What the lot held when the count started. |
+| `counted_qty` | qty | yes | What was counted, in the lot's unit; null until counted. Zero or more. |
+| `counted_at`, `counted_by` | timestamptz, text | yes | When and by whom; set exactly when `counted_qty` is. Posting refuses a lot changed after this time. |
 
 ## 10. Labor
 
@@ -993,24 +1034,30 @@ One row for every job status change, written in the same transaction as the chan
 | `actor_user_id` | uuid | yes | Who. Not filled until sign-in exists; the actor is on the matching event. |
 | `reason_code_id` | uuid → reason_code | yes | Why, when a reason was given. |
 
-### ts.lot_event — every inventory movement · *Planned*
+### ts.lot_event — every inventory movement · *In use*
 
-`core.lot` quantity and location are the running result of these rows.
+`core.lot` quantity and location are the running result of these rows. The application appends one row per movement and lot (D-027), in the base unit; it never updates or deletes them. The movement journal (D-029) reads it by site and time range, helped by a BRIN index on `occurred_at`.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key with `occurred_at`. |
 | `occurred_at` | timestamptz | no | When. Partition key. |
 | `lot_id` | uuid → lot | no | The lot. |
-| `event_kind` | text | no | `created`, `received`, `moved`, `loaded`, `consumed`, `produced`, `split`, `merged`, `status_changed`, `adjusted`, `scrapped` or `shipped`. |
-| `qty_delta` | qty | yes | Quantity change. |
+| `event_kind` | text | no | `created`, `received`, `moved`, `loaded`, `consumed`, `produced`, `split`, `merged`, `status_changed`, `adjusted`, `scrapped` or `shipped`. In use: `received`, `produced`, `adjusted` (write-up), `scrapped` (write-off), `consumed`, `moved`, `status_changed`, and (D-030) `split`, `merged`, `shipped`, `corrected` (details changed; no quantity) and `reversed`. A count posts `adjusted` and `scrapped` rows. |
+| `qty_delta` | qty | yes | Quantity change: positive in, negative out; null for a whole-lot move or a status change. |
+| `qty_after` | qty | yes | The lot's quantity once this row is applied. |
 | `uom_id` | uuid → uom | yes | Its unit. |
-| `from_location_id`, `to_location_id` | uuid → equipment | yes | For moves. |
-| `related_lot_id` | uuid → lot | yes | The other lot in a split or merge. |
+| `from_location_id`, `to_location_id` | uuid → equipment | yes | Where the stock left and arrived. |
+| `related_lot_id` | uuid → lot | yes | The other lot in a split or merge, or the other bulk lot in a transfer. |
+| `job_id` | uuid → job | yes | The job for declared consumption or production. |
 | `run_id` | uuid | yes | The run involved. |
-| `from_status`, `to_status` | text | yes | For status changes. |
-| `reason_code_id` | uuid → reason_code | yes | Why. |
-| `actor_user_id` | uuid | yes | Who. |
+| `from_status`, `to_status` | text | yes | For status changes, and when a lot is used up or comes back. |
+| `reason_code_id` | uuid → reason_code | yes | Why: required for write-ups, write-offs and holds. |
+| `comment` | text | yes | The person's note, at most 1000 characters. |
+| `reference` | text | yes | A shipment's delivery number, or the count a count adjustment came from (D-030). At most 100 characters. |
+| `reverses_event_id`, `reverses_occurred_at` | uuid, timestamptz | yes | For a reversal, the movement it undoes and that movement's time (no FK into history, D-010). |
+| `actor_user_id` | uuid | yes | Who, once `sec.app_user` exists. |
+| `actor_id` | text | yes | Who, as on `evt.event` (`issuer\|subject`, `anonymous` until sign-in). |
 
 ### ts.quality_sample — one subgroup per row · *Planned*
 
@@ -1130,4 +1177,19 @@ Direct user grants expanded down the equipment tree: one row per user, permissio
 
 ### ts.create_month_partitions(parent, from, months) — function
 
-Creates monthly partitions (UTC bounds) for a partitioned table, starting at the month of `from`, for `months` months. Safe to re-run. A worker will call it ahead of time; until then the seed and the tests call it for `evt.event` and `ts.job_status_change`.
+Creates monthly partitions (UTC bounds) for a partitioned table, starting at the month of `from`, for `months` months. Safe to re-run. `ts.ensure_partitions` calls it for every partitioned table; the tests also call it directly for the month before.
+
+### ts.ensure_partitions(months) — function (D-028)
+
+Creates the current month and the next `months` − 1 for every range-partitioned table in `ts` and `evt`, by calling `ts.create_month_partitions` for each, and returns how many partitions it created (0 when all were there). `months` is 1 to 24. `SECURITY DEFINER`, with a fixed `search_path`: it runs as the schema owner, since creating a partition needs ownership of its parent. Only `pulaski_app` may execute it. The API calls it at startup and every 12 hours with 3; the seed calls it once.
+
+## 16. Schema version
+
+### public.schema_migration — applied migrations (D-028) · *In use*
+
+One row per file in `db/migrations` that the database has: `db/migrate.sh` adds a row with each migration it applies, and `schema-draft.sql` inserts every migration it already contains. In `public`, outside the application schemas; `pulaski_app` can only read it. The API refuses to start when the newest migration it needs is missing.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `version` | text | no | Primary key: the file name without `.sql`, such as `0001_inventory`. |
+| `applied_at` | timestamptz | no | When it was applied, or when the schema was loaded. |

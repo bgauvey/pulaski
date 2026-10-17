@@ -1,0 +1,26 @@
+@* What the last movement did, with any warning (a substitution, for example) and a link to the lot. *@
+
+@if (Result is { } result)
+{
+    // A lot joining a balance where lots mix is news, not a warning (D-031).
+    var warned = result.Response.Warnings.Any(w => w.Code != "commingled");
+    <div class="inv-result @(warned ? "has-warning" : "")" role="status">
+        <Icon Name="@(warned ? "alert" : "info")" Size="18" />
+        <div>
+            <div>@result.Message <a href="inventory/lots/@result.Response.LotId">Open the lot</a></div>
+            @foreach (var warning in result.Response.Warnings)
+            {
+                <div class="small @(warning.Code == "commingled" ? "text-muted" : "text-warning-strong")">@warning.Message</div>
+            }
+        </div>
+        <button type="button" class="btn btn-sm btn-link p-0" aria-label="Dismiss" @onclick="OnDismiss"><Icon Name="close" Size="16" /></button>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public LotActionResult? Result { get; set; }
+
+    [Parameter]
+    public EventCallback OnDismiss { get; set; }
+}

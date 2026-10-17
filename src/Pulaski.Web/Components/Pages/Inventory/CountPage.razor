@@ -1,0 +1,242 @@
+@page "/inventory/counts/{CountId:guid}"
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+
+<PageTitle>@(_count?.Count.CountNumber ?? "Count") · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="@(_count?.Count.CountNumber ?? "Count")">
+    <Back><a href="inventory/counts">← Counts</a></Back>
+    <Description>
+        @if (_count?.Count is { } c)
+        {
+            <span>@c.LocationCode · @Display.Label(c.Status)@(c.Note is { } n ? $" · {n}" : "")</span>
+        }
+    </Description>
+    <Actions>
+        @if (Open)
+        {
+            <button type="button" class="btn btn-outline-secondary" disabled="@_saving" @onclick="CancelAsync">Cancel count</button>
+            <button type="button" class="btn btn-primary" disabled="@(_saving || !Dirty)" @onclick="SaveAsync">Save counts</button>
+        }
+    </Actions>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+@if (_message is { } message)
+{
+    <div class="inv-result" role="status"><Icon Name="info" Size="18" /><div>@message</div></div>
+}
+
+@if (_count is { } detail)
+{
+    var uncounted = detail.Lines.Count(l => Counted(l) is null);
+    <div class="table-panel mb-3">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Lot</th>
+                    <th class="inv-num">Expected</th>
+                    <th class="inv-num">Now</th>
+                    <th class="inv-num" style="width: 12rem">Counted</th>
+                    <th class="inv-num">Difference</th>
+                    <th>Counted by</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var l in detail.Lines)
+                {
+                    var counted = Counted(l);
+                    <tr @key="l.Id">
+                        <td>
+                            <a class="fw-semibold" href="inventory/lots/@l.LotId">@InventoryView.LotLabel(l.LotNumber, l.IsBulk, detail.Count.LocationCode)</a>
+                            <div class="small text-muted">@l.MaterialCode · @l.MaterialName</div>
+                        </td>
+                        <td class="inv-num">@InventoryView.Qty(l.ExpectedQty) <span class="small text-muted">@l.UomCode</span></td>
+                        <td class="inv-num @(Open && l.CurrentQty != l.ExpectedQty ? "inv-held" : "")" title="@(Open && l.CurrentQty != l.ExpectedQty ? "Moved since the count started" : "")">@InventoryView.Qty(l.CurrentQty)</td>
+                        <td class="inv-num">
+                            @if (Open)
+                            {
+                                <input type="number" class="form-control form-control-sm text-end" min="0" step="any" aria-label="Counted @l.LotNumber"
+                                       value="@counted?.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)" @oninput="e => Enter(l.Id, e.Value?.ToString())" />
+                            }
+                            else
+                            {
+                                @(l.CountedQty is { } q ? InventoryView.Qty(q) : "—")
+                            }
+                        </td>
+                        <td class="inv-num">
+                            @if (Open && counted is { } c && c != l.CurrentQty)
+                            {
+                                <span class="@(c < l.CurrentQty ? "text-danger fw-semibold" : "fw-semibold")">@InventoryView.Delta(c - l.CurrentQty)</span>
+                            }
+                        </td>
+                        <td class="small">
+                            @* Posting changes the lots itself, so only an open count warns. *@
+                            @if (Open && l.ChangedSinceCounted)
+                            {
+                                <span class="chip chip-warning">changed since counted</span>
+                            }
+                            else if (l.CountedAt is { } at)
+                            {
+                                @Display.SiteTime(at, Sites.Site?.TimeZone) <div class="text-muted">@l.CountedBy</div>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (detail.Lines.Count == 0)
+        {
+            <p class="text-muted p-4 mb-0">There was nothing on hand at @detail.Count.LocationCode when the count started. Stock found there is received separately.</p>
+        }
+    </div>
+
+    @if (Open)
+    {
+        <form class="inv-facts" @onsubmit="PostAsync" @onsubmit:preventDefault>
+            <h2 class="h6">Post the count</h2>
+            <p class="small text-muted">
+                Each lot whose count differs from what it holds now is written up or off, for the reason below, with the count number as its reference.
+                @(uncounted > 0 ? $"{uncounted} {(uncounted == 1 ? "lot is" : "lots are")} still to count; enter 0 for a lot that isn't there." : "")
+                @(Dirty ? "Save the counts first." : "")
+            </p>
+            <div class="row g-2 align-items-end">
+                <div class="col-sm-5">
+                    <label class="form-label" for="count-reason">Reason</label>
+                    <select id="count-reason" class="form-select" @bind="_reasonId">
+                        @foreach (var r in _reasons)
+                        {
+                            <option value="@r.Id">@r.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-sm-5">
+                    <label class="form-label" for="count-comment">Comment</label>
+                    <input id="count-comment" class="form-control" maxlength="1000" @bind="_comment" />
+                </div>
+                <div class="col-sm-2">
+                    <button type="submit" class="btn btn-primary w-100" disabled="@(_saving || Dirty || uncounted > 0 || _reasonId == Guid.Empty)">Post</button>
+                </div>
+            </div>
+        </form>
+    }
+}
+else if (_error is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+
+@code {
+    [Parameter]
+    public Guid CountId { get; set; }
+
+    private StockCountDto? _count;
+    private IReadOnlyList<ReasonCodeDto> _reasons = [];
+    private readonly Dictionary<Guid, decimal?> _entered = [];
+    private ApiException? _error;
+    private string? _message;
+    private Guid _reasonId;
+    private string? _comment;
+    private bool _saving;
+
+    private bool Open => _count?.Count.Status == "open";
+
+    private bool Dirty => _entered.Count > 0;
+
+    private decimal? Counted(StockCountLineDto line) => _entered.TryGetValue(line.Id, out var entered) ? entered : line.CountedQty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _reasons = await Api.ListReasonCodesAsync("inventory_adjustment", Sites.SiteId);
+            _reasonId = (_reasons.FirstOrDefault(r => r.Code == "COUNT") ?? _reasons.FirstOrDefault())?.Id ?? Guid.Empty;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _count = await Api.GetStockCountAsync(CountId);
+            _entered.Clear();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private void Enter(Guid lineId, string? text)
+    {
+        var line = _count!.Lines.First(l => l.Id == lineId);
+        decimal? value = decimal.TryParse(text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var q) ? q : null;
+        if (value == line.CountedQty)
+        {
+            _entered.Remove(lineId);
+        }
+        else
+        {
+            _entered[lineId] = value;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        await RunAsync(async () =>
+        {
+            await Api.RecordCountsAsync(CountId, new RecordCountsRequest
+            {
+                Version = _count!.Count.Version,
+                Lines = [.. _entered.Select(e => new CountedLineRequest(e.Key, e.Value))],
+            });
+            _message = "Counts saved.";
+        });
+    }
+
+    private async Task PostAsync()
+    {
+        await RunAsync(async () =>
+        {
+            var posted = await Api.PostStockCountAsync(CountId, new PostStockCountRequest { Version = _count!.Count.Version, ReasonCodeId = _reasonId, Comment = _comment });
+            _message = posted.Adjusted == 0
+                ? "Posted. Every lot matched; nothing was adjusted."
+                : $"Posted. {posted.Adjusted} {(posted.Adjusted == 1 ? "lot was" : "lots were")} adjusted.";
+        });
+    }
+
+    private async Task CancelAsync()
+    {
+        await RunAsync(async () =>
+        {
+            await Api.CancelStockCountAsync(CountId, new CancelStockCountRequest { Version = _count!.Count.Version });
+            _message = "Count cancelled. Nothing was adjusted.";
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _saving = true;
+        _error = null;
+        _message = null;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

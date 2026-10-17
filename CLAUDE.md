@@ -19,7 +19,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - **User guide.** `docs/user_guide.md` is the end-user guide, for readers from novice to expert. Update it in
   the same change as anything a user can see: a new or changed screen, step, button label, message, rule or
   warning. Each topic keeps numbered steps for beginners and an "In detail" part for experienced users.
-  Keep section 11 ("What Pulaski doesn't do yet") current: add known gaps and bugs, remove them when fixed.
+  Keep the "What Pulaski doesn't do yet" section current: add known gaps and bugs, remove them when fixed.
   Describe only what the app does today, checked against the code, and bump the "Last updated" date.
 
 ## Stack
@@ -70,8 +70,21 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Work orders are made from a released process (D-024, proposed): each operation's equipment gets a planned job
   for its share, at the end of its line, held until the order's start. The order keeps the version and a note.
 - BOMs (D-025, proposed) are single level, per material and optionally per process (items name the consuming
-  operation), versioned like processes. Order creation plans each job's components (`job_material`). Pulaski
-  owns lots on the floor; the ERP owns warehouse stock.
+  operation), versioned like processes. Order creation plans each job's components (`job_material`).
+- Inventory (D-027, proposed): Pulaski keeps lot balances at `holds_inventory` locations in a site, in the
+  material's base unit, never below zero; the ERP stays the financial book of record. Every movement writes
+  `core.lot` + one `ts.lot_event` row + one event. Consumption and production are declared against a job (lock
+  the job, then lots) with job-level `declared` genealogy. Materials that aren't lot-tracked keep one bulk lot per
+  location (`@<location code>`).
+- Inventory lookups (D-029) and completion (D-030, proposed): shortages are a pure calculator over open jobs' remaining
+  components; lots split, merge (lock lots in id order, in SQL), ship, correct and reverse only their latest movement;
+  counts snapshot a location and post differences. Job declarations, allocation and labels are deferred.
+- Indistinguishable lots (D-031, proposed): equipment with `commingles_lots` (needs `holds_inventory`) keeps one balance per
+  material; every arrival merges into it (`Commingling.MergeArrivalAsync`), a numbered receipt first kept as its lot.
+  Balances (`is_bulk`) have a NULL `lot_number`; name them by location (`Lot.Name`, `InventoryView.LotLabel`).
+- Location and expiry rules (D-032, proposed): `single_material` admits another material only when the one there is at
+  zero (`InventoryRules.EnsureAcceptsAsync`, locks the location); a location with stock can't be deactivated; shelf life
+  sets new lots' expiry; expired lots can't be consumed, shipped or merged (`EnsureNotExpired`) until corrected.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
@@ -79,6 +92,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 ## Database (`db/schema-draft.sql`)
 
 - `docs/database.md` documents every table and column. Update it in the same change as the schema.
+- Every schema change goes in `db/schema-draft.sql` **and** a new `db/migrations/NNNN_description.sql` (D-028):
+  re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`, `DO` blocks), no `BEGIN`/`COMMIT`. Add its name to the
+  `public.schema_migration` insert at the end of `schema-draft.sql` and set `DatabaseMaintenance.RequiredMigration`.
+- New partitioned tables need nothing else: the API keeps every range-partitioned `ts`/`evt` table three months
+  ahead through `ts.ensure_partitions`.
 
 - IDs are native `uuid` holding UUIDv7, generated in the app with `Guid.CreateVersion7()` behind
   `IIdGenerator` (injectable clock). `uuidv7()` is only a DB default backstop (D-006).
@@ -113,10 +131,12 @@ Treat these as working assumptions; confirm with Bill before building anything t
 ## Local dev
 
 - PostgreSQL 18 via Homebrew (`postgresql@18`); database `pulaski`.
+- Existing database after pulling schema changes: `db/migrate.sh pulaski` (the API won't start until it's current).
 - Load schema: `psql -d pulaski -v ON_ERROR_STOP=1 -f db/schema-draft.sql`, then
   `db/app-role.sql` (re-runnable), then `db/seed-demo.sql` (empty database only), then optionally
   `db/seed-materials.sql` (200 demo materials in 11 classes; re-runnable), then `db/seed-units.sql` (standard units
-  and demo material conversions, D-026; re-runnable).
+  and demo material conversions, D-026; re-runnable), then `db/seed-reasons.sql` (starter adjustment and hold
+  reasons, D-027; re-runnable).
 - Layout: production projects in `src/`, test projects in `Tests/` (shared in-memory fakes in
   `Tests/Pulaski.Testing`); `.editorconfig`,
   `Directory.Build.props`, `Directory.Packages.props` (central package versions) and

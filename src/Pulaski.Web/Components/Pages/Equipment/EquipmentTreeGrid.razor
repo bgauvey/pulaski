@@ -67,6 +67,8 @@
                             @if (item.IsSchedulable) { <span class="chip">@(item.CanRunJob ? "Schedulable" : "Plans for children")</span> }
                             @if (item.CanRunJob) { <span class="chip">Runs jobs</span> }
                             @if (item.HoldsInventory) { <span class="chip">Inventory</span> }
+                            @if (item.ComminglesLots) { <span class="chip" title="Lots here mix into one balance per material">Mixes lots</span> }
+                            @if (item.SingleMaterial) { <span class="chip" title="Takes one material at a time">One material</span> }
                             @if (!item.IsActive) { <span class="chip chip-muted">Inactive</span> }
                         }
                     </td>

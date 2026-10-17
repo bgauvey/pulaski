@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Boms;
 using Pulaski.Application.EquipmentModel;
+using Pulaski.Application.Inventory;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
 using Pulaski.Application.Scheduling;
@@ -41,6 +42,8 @@ public sealed class InMemoryStores
 
     public InMemoryUnits Units { get; } = new();
 
+    public InMemoryInventory Inventory { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -60,6 +63,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IBomRepository>();
         services.RemoveAll<IUnitReadStore>();
         services.RemoveAll<IUnitRepository>();
+        services.RemoveAll<IInventoryReadStore>();
+        services.RemoveAll<IInventoryRepository>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -77,6 +82,8 @@ public sealed class InMemoryStores
         services.AddSingleton<IBomRepository>(Boms);
         services.AddSingleton<IUnitReadStore>(Units);
         services.AddSingleton<IUnitRepository>(Units);
+        services.AddSingleton<IInventoryReadStore>(Inventory);
+        services.AddSingleton<IInventoryRepository>(Inventory);
         return services;
     }
 }

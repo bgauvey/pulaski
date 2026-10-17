@@ -1,0 +1,143 @@
+@page "/inventory/jobs/{JobId:guid}"
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+
+<PageTitle>@(_job?.Job.JobNumber ?? "Job") · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="@(_job?.Job.JobNumber ?? "Job")">
+    <Back><a href="inventory/jobs">← Jobs</a></Back>
+    <Description>
+        @if (_job?.Job is { } j)
+        {
+            <span>Makes @j.MaterialCode · @j.MaterialName on @j.LineCode@(j.WorkOrderNumber is { } o ? $" · {o}" : "")</span>
+        }
+    </Description>
+    <Actions>
+        @if (_job is { } job)
+        {
+            var open = job.Job.Status is not ("completed" or "closed" or "cancelled");
+            <a class="btn btn-outline-secondary" href="inventory/journal?jobId=@JobId">Movements</a>
+            <button type="button" class="btn btn-outline-secondary" disabled="@(!open)" @onclick="() => _action = LotAction.Consume">Consume a lot</button>
+            <button type="button" class="btn btn-primary" disabled="@(!open)" @onclick="() => _action = LotAction.Produce">Declare production</button>
+        }
+    </Actions>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+<LotResultBanner Result="_result" OnDismiss="() => _result = null" />
+
+@if (_job is { } detail)
+{
+    var j = detail.Job;
+    <div class="inv-tiles">
+        <div class="inv-tile"><span class="metric">@InventoryView.Qty(j.PlannedQty)</span><span class="inv-tile-label">Planned, @j.UomCode</span></div>
+        <div class="inv-tile"><span class="metric @(detail.ProducedQty == 0 ? "is-zero" : "")">@InventoryView.Qty(detail.ProducedQty)</span><span class="inv-tile-label">Produced, @detail.ProducedUomCode</span></div>
+        <div class="inv-tile"><span class="metric @(detail.Produced.Count == 0 ? "is-zero" : "")">@detail.Produced.Count</span><span class="inv-tile-label">Output lots</span></div>
+        <div class="inv-tile"><span><span class="@Display.JobStatusChip(j.Status)">@Display.Label(j.Status)</span></span><span class="inv-tile-label d-block mt-2">Job status</span></div>
+    </div>
+
+    <div class="inv-layout">
+        <section class="inv-section" aria-labelledby="components-title">
+            <h2 id="components-title">Components</h2>
+            @if (detail.Components.Count == 0)
+            {
+                <p class="text-muted">No components are planned for this job, and nothing has been consumed. Its order had no BOM.</p>
+            }
+            else
+            {
+                <div class="table-panel">
+                    <table class="table table-sm align-middle">
+                        <thead><tr><th>Material</th><th class="inv-num">Planned</th><th class="inv-num">Consumed</th><th class="inv-num">Still to use</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in detail.Components)
+                            {
+                                <tr @key="(c.MaterialId, c.PlannedUomCode)">
+                                    <td>
+                                        <a class="fw-semibold" href="inventory/materials/@c.MaterialId">@c.MaterialCode</a>
+                                        @if (!c.IsPlanned)
+                                        {
+                                            <span class="chip chip-warning ms-1">substitution</span>
+                                        }
+                                        <div class="small text-muted">@c.MaterialName</div>
+                                    </td>
+                                    <td class="inv-num">@(c.PlannedQty is { } p ? $"{InventoryView.Qty(p)} {c.PlannedUomCode}" : "—")</td>
+                                    <td class="inv-num">@InventoryView.Qty(c.ConsumedQty) @c.BaseUomCode</td>
+                                    <td class="inv-num">
+                                        @* Only when planned in the unit consumption is kept in; otherwise the two don't compare directly. *@
+                                        @(c.PlannedQty is { } planned && c.PlannedUomCode == c.BaseUomCode ? $"{InventoryView.Qty(Math.Max(0, planned - c.ConsumedQty))} {c.BaseUomCode}" : "—")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="inv-section" aria-labelledby="produced-title">
+            <h2 id="produced-title">Lots it made</h2>
+            @if (detail.Produced.Count == 0)
+            {
+                <p class="text-muted">None yet.</p>
+            }
+            else
+            {
+                <div class="table-panel">
+                    <table class="table table-sm align-middle">
+                        <thead><tr><th>Lot</th><th>Status</th><th class="inv-num">Now</th><th>Location</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in detail.Produced)
+                            {
+                                <tr @key="l.Id">
+                                    <td><a class="fw-semibold" href="inventory/lots/@l.Id">@InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode)</a></td>
+                                    <td><span class="@InventoryView.StatusChip(l.Status)">@Display.Label(l.Status)</span></td>
+                                    <td class="inv-num">@InventoryView.Qty(l.Quantity) @l.UomCode</td>
+                                    <td>@l.LocationCode</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    </div>
+}
+else if (_error is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+
+<LotActionDrawer Action="_action" Job="_job?.Job" OnDone="OnDoneAsync" OnClose="() => _action = null" />
+
+@code {
+    [Parameter]
+    public Guid JobId { get; set; }
+
+    private JobMaterialsDto? _job;
+    private ApiException? _error;
+    private LotActionResult? _result;
+    private LotAction? _action;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _job = await Api.GetJobMaterialsAsync(JobId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnDoneAsync(LotActionResult result)
+    {
+        _action = null;
+        _result = result;
+        await LoadAsync();
+    }
+}

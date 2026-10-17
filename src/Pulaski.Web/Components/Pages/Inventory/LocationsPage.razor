@@ -1,0 +1,90 @@
+@page "/inventory/locations"
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+
+<PageTitle>Locations · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="Locations" SiteChanged="LoadAsync">
+    <Description>Equipment that holds inventory: stores, staging areas and the feed points on a line. Mark more on the <a href="equipment">Equipment</a> page with <strong>Holds inventory</strong>.</Description>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+
+@if (_locations is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_locations.Count == 0)
+{
+    <div class="empty-panel">
+        <h2>No locations yet</h2>
+        <p class="text-muted mb-0">Lots need somewhere to be. On the Equipment page, add a storage zone (for example <em>Raw material stores</em>) and tick <strong>Holds inventory</strong>.</p>
+    </div>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Location</th>
+                    <th>Kind</th>
+                    <th>In</th>
+                    <th class="inv-num">Lots</th>
+                    <th class="inv-num">Materials</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var l in _locations)
+                {
+                    <tr @key="l.Id" class="@(l.IsActive ? "" : "text-muted")">
+                        <td><span class="fw-semibold">@l.Code</span> <div class="small text-muted">@l.Name@(l.IsActive ? "" : " · inactive")</div></td>
+                        <td>
+                            @Display.Label(l.EquipmentRole)
+                            @if (l.ComminglesLots)
+                            {
+                                <span class="chip ms-1" title="Lots here mix into one balance per material">Mixes lots</span>
+                            }
+                            @if (l.SingleMaterial)
+                            {
+                                <span class="chip ms-1" title="Takes one material at a time">One material</span>
+                            }
+                        </td>
+                        <td>@l.ParentCode</td>
+                        <td class="inv-num">@l.LotCount</td>
+                        <td class="inv-num">@l.MaterialCount</td>
+                        <td class="text-end text-nowrap">
+                            <a class="btn btn-sm btn-outline-secondary" href="inventory?locationId=@l.Id">Stock</a>
+                            <a class="btn btn-sm btn-outline-secondary" href="inventory/lots?locationId=@l.Id">Lots</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<InventoryLocationDto>? _locations;
+    private ApiException? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _locations = await Api.ListInventoryLocationsAsync(Sites.SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+}

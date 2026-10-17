@@ -1,8 +1,8 @@
 # Pulaski User Guide
 
-*Last updated: 2026-10-16 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-10-17 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
-This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#11-reference) tables give the exact rules.
+This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#12-reference) tables give the exact rules.
 
 ## Contents
 
@@ -16,10 +16,11 @@ This guide explains how to use Pulaski to set up your plant, plan production and
 8. [Creating a work order](#8-creating-a-work-order)
 9. [The Work orders screen](#9-the-work-orders-screen)
 10. [The Schedule](#10-the-schedule)
-11. [Reference](#11-reference)
-12. [What Pulaski doesn't do yet](#12-what-pulaski-doesnt-do-yet)
-13. [Troubleshooting and questions](#13-troubleshooting-and-questions)
-14. [Glossary](#14-glossary)
+11. [Inventory](#11-inventory)
+11. [Reference](#12-reference)
+12. [What Pulaski doesn't do yet](#13-what-pulaski-doesnt-do-yet)
+13. [Troubleshooting and questions](#14-troubleshooting-and-questions)
+14. [Glossary](#15-glossary)
 
 ---
 
@@ -35,9 +36,10 @@ Today you can use Pulaski to:
 - describe how products are made (**processes**) and what they are made from (**bills of materials**);
 - create **work orders**, which Pulaski turns into **jobs** on your lines;
 - plan and sequence those jobs on a live **schedule**, and see when each one is expected to run;
-- publish the plan to the floor and freeze it.
+- publish the plan to the floor and freeze it;
+- keep **inventory**: receive material lots into stores, write stock up or off, move and hold lots, record what each job used and made, and trace any lot back to what it was made from or forward to what was made from it.
 
-Recording what actually happens on the floor (running jobs, counts, downtime, material lots) is still being built; see [What Pulaski doesn't do yet](#12-what-pulaski-doesnt-do-yet).
+Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#13-what-pulaski-doesnt-do-yet).
 
 ### Opening Pulaski
 
@@ -135,6 +137,10 @@ A **bill of materials (BOM)** lists what one material is made from: "1000 m of d
 - A **job** is the piece of a work order that runs on one line (or waits on one department). One order usually has several jobs: one per line in each operation.
 - Later, a **run** will record the actual execution of a job.
 
+### What you have: lots and locations
+
+A **lot** is one batch of a material with its own number: a delivery of resin, a pallet of profile. Pulaski keeps every lot's quantity, where it is (its **location**: a store, a staging area, a hopper on a line) and its **status** (*available*, *on hold*, *in quarantine*, or used up). Every change is recorded, so each lot has a full history, and Pulaski knows which lots were made from which (**genealogy**). Some materials, such as end caps or stretch wrap, aren't tracked by lot: Pulaski keeps one **balance** of them per location instead. Your ERP still holds the financial stock figures; Pulaski tells it about every movement.
+
 ### Planning: you decide where and in what order; Pulaski works out when
 
 This is the most important idea in the schedule:
@@ -171,8 +177,10 @@ If you are starting from an empty Pulaski, work through this list in order. Each
 | 6 | Processes: the routes, what they make, released | [Processes](#5-processes) | Every work order is made from a process. |
 | 7 | BOMs for the materials you make (optional, recommended) | [BOMs](#7-bills-of-materials-boms) | Without a BOM, an order plans no components. |
 | 8 | Work orders | [Schedule → New work order](#8-creating-a-work-order) | Now you can plan. |
+| 9 | Inventory locations: stores, staging areas and feed points, with **Holds inventory** ticked | [Equipment](#4-equipment) | Lots have to be somewhere. |
+| 10 | Reason codes for write-ups, write-offs and holds | [Reasons](#reason-codes) (a starter set comes with `db/seed-reasons.sql`) | Every adjustment and hold needs a reason. |
 
-The demo data that comes with Pulaski already contains steps 1 to 4 (plant PLT1 with EXT-01, EXT-02 and PACK1, 200 materials, and the standard units with conversions for the demo materials), so you can start at step 6.
+The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plant PLT1 with EXT-01, EXT-02 and PACK1, the stores RM-STORE and staging FG-STAGE, 200 materials, and the standard units with conversions for the demo materials), so you can start at step 6.
 
 ### The Overview page
 
@@ -214,7 +222,7 @@ At the bottom, **Work orders** counts orders at each stage, Planned → Dispatch
 
 ### The screen
 
-- **Left: the tree.** Each row shows the code, name, level, role and chips for its settings: **State** (tracks machine state), **Schedulable** or **Plans for children** (a department), **Runs jobs**, **Inventory**, and **Inactive** in grey.
+- **Left: the tree.** Each row shows the code, name, level, role and chips for its settings: **State** (tracks machine state), **Schedulable** or **Plans for children** (a department), **Runs jobs**, **Inventory**, **Mixes lots** (lots are indistinguishable), **One material**, and **Inactive** in grey.
   - Click the arrow beside a row to open or close it, or use **Expand all** / **Collapse all**.
   - Type in **Filter by code or name** to find equipment; matching rows stay visible with their parents.
   - Arrow keys move through the tree when it has focus.
@@ -248,6 +256,10 @@ Select it and edit a property on the right. Text saves when you press **Enter** 
 | **Schedulable** | Work should be planned to it. | Lines, process cells, production units |
 | **Can run jobs** | Work actually runs on it. | Same as Schedulable |
 | **Holds inventory** | Material lots can be stored or loaded here. | Feed points, storage zones and units |
+| **One material at a time** | Shown once **Holds inventory** is ticked. Another material can arrive only when the quantity of the one there is 0 (stock on hold still counts). It can't be turned on while two materials are there. | Silos and tanks dedicated to one material |
+| **Lots are indistinguishable** | Shown once **Holds inventory** is ticked. Lots here mix and can't be told apart, like a silo or tank: everything that arrives joins one balance per material. See [Inventory](#11-inventory). It can't be turned on while separate lots are there; merge or move them first. | Silos, tanks, mixing hoppers |
+
+**A location holding stock** can't be deactivated or stop holding inventory: move, use or write off the stock first.
 
 **Lines vs departments.** A line has *Schedulable* and *Can run jobs*. A department (an area that you plan to, with lines below it) has *Schedulable* only; the tree shows it as **Plans for children**. A line can also have *Can run jobs* without *Schedulable*: it then only takes jobs from a department above it.
 
@@ -342,7 +354,7 @@ Orders already made keep the version they were made from. If a draft already exi
 - Operations with no path of links between them run in parallel; links make them sequential. Links must flow one way; a loop is refused.
 - A released process with more than one operation must be connected.
 - Only lines and departments of the process's own site can be used; machines and other equipment that neither runs nor plans jobs are refused.
-- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#12-what-pulaski-doesnt-do-yet).
+- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#13-what-pulaski-doesnt-do-yet).
 
 ---
 
@@ -670,7 +682,167 @@ Pulaski lays work end to end on each line, so two jobs on a line only overlap wh
 
 ---
 
-## 11. Reference
+## 11. Inventory
+
+**Inventory** (in the side menu under *Operate*) shows what material you have, where it is and what happened to it. It has eight tabs: **Stock**, **Lots**, **Locations**, **Jobs**, **Shortages**, **Journal**, **Counts** and **Reports**. If your company has more than one site, pick the site at the top right; Pulaski remembers it while you move between the tabs.
+
+### Ideas to know first
+
+- **Quantities are in the material's base unit.** You can enter a quantity in any unit that converts (pounds for a resin stocked in kilograms, for example); Pulaski converts it and keeps the base unit. If a unit doesn't convert you'll see *"… doesn't convert to …"*: add a [conversion](#6-units-and-conversions).
+- **Stock can't go below zero.** Pulaski refuses to take out more than a lot holds and tells you how much is left.
+- **Statuses.** *Available* lots can be used. *On hold* (waiting for a decision) and *quarantine* (kept apart, suspected bad) lots count as on hand but can't be consumed until released. A lot taken down to zero becomes *consumed* or *scrapped*; it stays on record for genealogy.
+- **Lot-tracked or not.** For a lot-tracked material every receipt is its own numbered lot. For one that isn't, such as end caps, there is one **balance** at each location (shown as *Balance at RM-STORE*, with no lot number); receipts add to it.
+- **Expiry and shelf life.** A material can have a **shelf life** (set on its inventory page): a new lot received or produced without an expiry date expires that many days later. An **expired** lot is marked in amber; it can't be consumed, shipped or merged (into another lot or a silo's balance). It can still be moved, held, written off or counted. If quality extends it, use **Correct…** on the lot to set the new expiry, with a comment saying why.
+- **One material at a time.** A location marked **One material at a time** refuses another material, whether received, moved, split there or produced, until the quantity of the material already there is 0.
+- **Locations where lots mix.** A silo or tank marked **Lots are indistinguishable** on the Equipment page keeps one balance of each material, whatever it is. Everything that arrives joins it: receipts, moves, splits sent there and production. A receipt with a lot number is kept as that lot first, then merged in, so a trace still leads back to the supplier's lot; with no number it goes straight into the balance. Only available stock can join an available balance (release a held lot first), and the balance takes the earliest expiry of what joins it. A confirmation says when a lot has joined a balance. A balance that is moved somewhere else stays a balance there: mixed stock stays mixed.
+
+### Find what you have: the Stock tab
+
+1. Open **Inventory**. Every active material is listed, grouped by **material class** (*Resins*, *Extruded profiles*…). Each class header shows how many of its materials are in stock.
+2. Type in **Find a material** to filter by code or name, or pick a class.
+3. Pick a **location** to see only the stock held there.
+4. Tick **In stock only** to hide materials with nothing on hand.
+5. Click a group header to fold it; use the two buttons at the end of the toolbar to unfold or fold them all.
+6. Click a material's code to open it.
+
+Each row shows **On hand** (everything not used up), **Available**, **Held** (on hold or in quarantine, in amber), the number of **lots** and **locations**, and the **next expiry** (amber when it is within 14 days or past).
+
+### A material: lots, locations and where used
+
+The material page shows tiles for on hand, available, held, lots and locations, and its **shelf life** in days: click **Change** to set it, or leave it blank for none (lots already on hand keep their expiry). Then:
+
+- **Lots on hand**, with status, quantity, location, supplier lot, expiry and where each came from. **Used-up lots** at the top lists the consumed ones.
+- **By location**: the balance at each location. Click one to list its lots.
+- **Where used**: every released or draft **BOM** that lists the material as a component (with the quantity per base quantity and the operation that consumes it), and every **open job** planned to consume it, with how much it has consumed so far. **Made from** links to the material's own BOMs.
+
+### Find a lot: the Lots tab
+
+1. Type a **lot number**, a **supplier lot** number or a material code, and/or choose a material, location, status or expiry window (*Expired*, *within 7, 30 or 90 days*).
+2. Click **Search**. Without a status, only lots with stock on hand are found; choose *Consumed* or *Scrapped* to find used-up lots.
+3. Click a lot to open it. At most 500 lots are listed; narrow the search if you hit that.
+
+### Receive a lot
+
+1. Click **Receive** (on the Stock tab, or on a material's page, where the material is filled in).
+2. Choose the **material** and the **location** it goes to.
+3. For a lot-tracked material, enter the **lot number** (required, and unique for that material in the site; optional where lots mix), and if you have them the **supplier lot** and **expiry date**.
+4. Enter the **quantity** and its **unit**, and an optional comment.
+5. Click **Receive**. A green bar confirms it, with a link to the lot.
+
+### A lot's page
+
+The lot page shows its facts (status, quantity, location, where it came from, supplier lot, expiry), its **genealogy** and its **history**: every movement with the time, what happened, the change, the quantity after it, where, the job, the reason and comment, and who did it. The buttons at the top act on the lot:
+
+| Button | Does | Needs |
+| --- | --- | --- |
+| **Consume** | Records that a job used some of the lot. | An available lot with stock. Choose the job; jobs planned to use this material come first, marked *planned*. |
+| **Move** | Moves the whole lot to another location in the site. For a balance, enter how much to move; it joins the balance there. | A lot on hand. |
+| **Write up** | Adds stock that was found or miscounted. A used-up lot comes back as available. | A quantity and an adjustment reason. |
+| **Write off** | Removes stock: damage, loss, a count correction. Leave the quantity blank to write off the whole lot. At zero the lot becomes *scrapped*. | An adjustment reason. |
+| **Split** | Splits part of the lot into a new lot with the same material, status, supplier lot and expiry, here or at another location. A blank number becomes *R-24-0917-1*, *-2*… | Less than the whole lot (to move all of it, use **Move**). |
+| **Merge…** | Takes other lots into this one: tick them in the list. They go to zero (*merged into*), and this lot takes the earliest expiry of them all. | Lots of the same material, at the same location, in the same status. |
+| **Ship** | Sends stock out of the site, for example to a customer or another plant. At zero the lot is *shipped*. | An available lot, and a delivery or shipment number. |
+| **Hold…** / **Change hold…** | Puts the lot **on hold** or in **quarantine**, or switches between the two. | A hold reason. |
+| **Release** | Makes a held or quarantined lot available again. | — |
+| **Correct…** | Fixes the lot number, supplier lot or expiry, for example after a typo on receipt. | A comment saying why. A balance's number can't change. |
+| **Reverse** (on the latest row of the history) | Undoes the lot's latest movement: a receipt, write-up, write-off, move, hold or release, or shipment. The lot goes back to how it was; a reversed receipt of a whole lot makes it *cancelled*. | An adjustment reason. Only the latest movement, once. |
+
+Some reasons ask for a comment; the form says *(required)* when they do.
+
+### Record what a job used and made: the Jobs tab
+
+Until Pulaski records production from the machines, operators declare it here.
+
+1. Open the **Jobs** tab and click a job (search by job, order or material). Only open production jobs are listed.
+2. The job page shows the **components** planned for it (from its order's BOM) with how much has been consumed and how much is still to use, and the **lots it made**.
+3. To record material used: click **Consume a lot**, choose the material (planned ones are marked), choose the lot, enter the quantity and click **Record consumption**.
+4. To record output: click **Declare production**, choose the location the output goes to, enter the quantity (the job's unit is filled in) and click **Record production**. Leave **Lot number** blank and Pulaski numbers it after the job: *WO-1001-10-01*, *-02*… Enter an existing number of a lot this job made at the same place to add to it.
+
+You can also consume from a lot's own page, and declare production from the Stock tab (choose the job there).
+
+### Trace a lot
+
+On a lot's page, **Genealogy** first shows the lots it was **made from** and the lots made from it (**used in**). Click **Trace back** to see everything it was made from, all the way up, or **Trace forward** to see everything made from it, all the way down. Each lot is indented under the one it was reached from; click any lot to open it.
+
+### Check for shortages
+
+The **Shortages** tab answers *"will we have the material for the jobs coming up?"*.
+
+1. Open **Inventory → Shortages**. It lists every component the site's open jobs still need, short ones first.
+2. Narrow it to a line or department (and everything under it) with the equipment picker, or to jobs needed soon: the next 24 hours, 3, 7 or 14 days.
+3. Clear **Short only** to see covered components too.
+4. Click a component to see each job that needs it, in the order they are needed: what it still needs, the running total, and whether it is **covered** or how much is short.
+5. Click a job to open it, or **stock** to open the component.
+
+Each row shows **Needed** (what the jobs still need: planned less consumed), **Available**, **Held** (on hold or quarantine, in amber: releasing it might cover the gap), **Short** (in red), and the **first short** job with when it is needed.
+
+**In detail**
+
+- Jobs take stock in the order they are needed: their published start, else their hold-until time, then job number; jobs with neither come last. The live projected time isn't used yet, so a job that has slipped is ordered by its published time.
+- With a horizon, jobs needed after it, and jobs with no time at all, are left out.
+- Only **available** stock counts. Incoming deliveries and purchase orders aren't counted, and nothing is suggested: ordering stays in the ERP.
+- A component planned in a unit that doesn't convert to its base unit is left out, with an amber note naming the job.
+
+### The movement journal
+
+The **Journal** tab lists every movement in the site, newest first: receipts, write-ups, write-offs, moves, holds, consumption and production.
+
+1. Open **Inventory → Journal**. It shows the last 7 days.
+2. Change the **From** and **to** dates (whole days at the site; at most a year), or filter by movement, material, location, lot or supplier lot number, and **Who** (part of the person's name).
+3. Click **Search**. Click **Show older** at the bottom for the next 200.
+4. Click a lot, a material or a job to open it.
+
+A material's and a job's pages have a **Movements** button that opens the journal filtered to them.
+
+### Count a location
+
+A **count** checks what is really at a location and puts the records right.
+
+1. Open **Inventory → Counts**, choose the **location**, add a note if you like (*month end*), and click **Start a count**. Pulaski takes a snapshot of every lot there and opens the count.
+2. Count each lot and type what you find in **Counted** (in the lot's unit; enter **0** for a lot that isn't there). The **Difference** shows how far it is from what the lot holds now.
+3. Click **Save counts** as you go; you can come back and carry on later.
+4. When every lot is counted, choose the **reason** (normally *Count correction*) and click **Post**. Each lot that differs is written up or written off, with the count number as its reference. Lots that match aren't touched.
+5. **Cancel count** drops it without changing anything.
+
+**In detail**
+
+- If a lot moves after you counted it (someone consumed or moved it), posting is refused for it, marked *changed since counted*: count it again. A lot that moved after the count started but before you counted it is fine: the count is what is there.
+- **Now** turns amber when a lot changed since the count started.
+- Stock you find that isn't in the count is received separately. Count numbers are *CNT-* and the date the count started (UTC), then a number.
+
+### Reports and exports
+
+**Inventory → Reports** has two reports:
+
+- **Stock on a date:** each material's on-hand quantity at the end of the day you choose. It is worked out from every lot's last movement up to then, so older dates take longer. Held stock is included: a lot's status at that time isn't reconstructed.
+- **Aging:** on-hand stock by how long ago each lot was received or made: up to 30 days, 31–90, 91–180 and over 180 (in amber). Balances of materials that aren't lot-tracked aren't aged, and a split lot counts from the day it was split.
+
+**Export CSV** downloads a spreadsheet file from the **Stock** tab (what is on screen, with its filters), the **Lots** tab (every matching lot, up to 10,000), the **Journal** (every matching movement, up to 10,000) and both reports. Lot search shows 200 at a time: click **Show more** for the next.
+
+### Reason codes
+
+**Configure → Reasons** lists the reasons people choose, one tab per kind: inventory adjustments, holds, and the kinds later screens will use (downtime, scrap…).
+
+1. To add one, type a **code** (letters, digits, `-`, `_` or `.`), a **name**, choose **Every site** or one site, tick **Needs a comment** if people must explain, and click **Add**.
+2. To change one, edit its name, comment setting, order or **Active** box, then click **Save** on its row (**Undo** throws the change away).
+3. A code and its kind can't change once created, because history refers to them. To stop using a reason, untick **Active**.
+
+### Locations
+
+The **Locations** tab lists every piece of equipment that holds inventory, with how many lots and materials are there. **Stock** and **Lots** open those lists for that location. To add a location, add equipment (for example a storage zone) on the [Equipment](#4-equipment) page and tick **Holds inventory**.
+
+### In detail
+
+- **One site per lot.** Moves stay within the lot's site; consumption needs a job in the same site.
+- **Concurrency.** Write up, write off, move, hold and release check that the lot hasn't changed since you opened it; if it has you'll see *"changed by someone else"*: reload and try again. Consumption and production don't check, so several people can declare against a busy line; the no-negative-stock rule still protects them.
+- **Substitutions.** Consuming a material the job has no planned component of is allowed, and recorded as a **substitution** (amber on the job page and in the confirmation).
+- **Genealogy is per job for now.** Every lot consumed into a job is recorded as a parent of every lot the job made, whichever came first. That can link more than really mixed (a resin lot used in the first hour shows as a parent of the last pallet). It narrows to time windows once Pulaski records production from the machines.
+- **Times** are the moment you click; you can't yet back-date a movement.
+- **What the ERP sees.** Each movement is an event in Pulaski's event log (`pulaski.lot.received.v1`, `…consumed.v1` and so on), ready to be sent to the ERP once the connection is built.
+
+---
+
+## 12. Reference
 
 ### Work order statuses
 
@@ -736,13 +908,19 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 ---
 
-## 12. What Pulaski doesn't do yet
+## 13. What Pulaski doesn't do yet
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
 - **No screens yet for** materials and material classes, capabilities, run standards (rates), shift calendars or the changeover setting. Your administrator sets these up.
 - **No execution yet:** starting and stopping jobs, counts, downtime, OEE and quality charts are planned. Order statuses after Firmed exist but nothing records production yet.
-- **No inventory yet:** receiving lots, loading them at feed points and consuming them (backflush, time window…) come next. BOMs today only plan components.
+- **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning come with execution. Genealogy is per job (see [Inventory, in detail](#in-detail-4)).
+- **Not in inventory yet:** pallets or containers that hold several lots, lot labels and barcode scanning, lot attributes and certificates of analysis, setting stock aside for a job, and suggestions of which lot to use first. Movements can't be back-dated.
+- **Reversing is limited** to a lot's latest movement, and not consumption, production, splits, merges, transfers between balances or corrections: put those right with another movement.
+- **Reason trees** (a reason grouped under another) can't be edited.
+- **Where lots mix, genealogy is approximate:** every lot that ever joined a silo's balance counts as a parent of everything taken from it afterwards. Residence time and first-in, first-out through a silo come with machine data.
+- **Inventory movements aren't sent to the ERP yet:** they are recorded as events, but the connection that delivers them isn't built.
+- **Shortages use published times, not the live schedule,** and don't count incoming deliveries.
 - **Process links don't drive the schedule yet:** a Pack job can be projected to start before the Extrude job it follows. The link only sets the earliest start, counted from the order's start.
 - **The Overview** shows no machine state, counts, OEE, downtime, quality, lots or labor yet: those parts are hatched placeholders until the data exists. Its line strip is a rolling 24 hours rather than the shift, since there are no shift calendars on screen yet.
 - **Notes** can only be written when the order is created.
@@ -750,7 +928,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 
 ---
 
-## 13. Troubleshooting and questions
+## 14. Troubleshooting and questions
 
 **I can't find a process when creating an order.**
 The process must be at the order's site, be active, have a released version, and make the material (all materials, its class, or the material itself). If it is listed but greyed out, read the reason under the field: usually a missing capability.
@@ -782,38 +960,75 @@ Cancel its open jobs first (from each job's side panel), then the order.
 **"…doesn't convert to…" when creating an order or saving a BOM.**
 Pulaski doesn't know how this material converts between those units. Open **Units**, choose the material, and add a conversion (for example 1 m = 1.6 kg). Then try again.
 
+**I can't receive a lot: "No location holds inventory".**
+Tick **Holds inventory** on a store or staging area on the Equipment page.
+
+**"Lot … has only 12 kg".**
+You tried to take more than the lot holds. Check the quantity and unit, or write the lot up first if the count was wrong.
+
+**I can't consume a lot.**
+Only an **available** lot with stock can be consumed. Release a held lot first; a used-up lot has nothing left.
+
+**"Choose an adjustment reason" with an empty list.**
+No reasons are set up: ask your administrator to load `db/seed-reasons.sql`.
+
+**"Only … latest movement can be reversed".**
+Someone recorded another movement on the lot since you opened it. Reload the lot: **Reverse** shows on the row that can be undone.
+
+**I can't post a count.**
+Every lot must have a count (enter 0 if it isn't there), the counts must be saved, and a lot marked *changed since counted* must be counted again.
+
+**I can't merge two lots.**
+They must be the same material, at the same location, and in the same status. Move or release one first.
+
 **A BOM won't release.**
 Read the yellow box: a component that doesn't exist or is inactive, an operation number the process's released version doesn't have, a unit with no conversion, or no components at all. Save the draft after fixing.
 
 ---
 
-## 14. Glossary
+## 15. Glossary
 
 | Term | Meaning |
 | --- | --- |
+| **Balance** | The one quantity of a material at a location, with no lot number: for a material that isn't lot-tracked, or at a location where lots mix. |
 | **Base unit** | The unit a material is stocked in; also the base unit of a kind of unit (kg, m, ea…). |
 | **Baseline** | A job's times as published when its order was dispatched; the plan you're measured against. |
 | **BOM** | Bill of materials: what one material is made from, per a base quantity. |
 | **Capability** | A line's permission to run a material, with its ideal rate. |
-| **Conversion** | How a quantity in one unit becomes another: standard for units of one kind, or set per material. |
 | **Changeover** | Time to switch a line from one product to another. |
+| **Conversion** | How a quantity in one unit becomes another: standard for units of one kind, or set per material. |
+| **Count** | Checking what is really at a location, then posting the differences. |
 | **Department / group** | Equipment you can plan to that doesn't run jobs itself; its lines do. |
 | **Dispatch** | Publish an order to the floor, fixing its baseline. |
 | **Draft / released / obsolete** | Versions of a process or BOM: being edited / in use for new orders / replaced. |
 | **Firm** | Freeze an order's plan; its jobs keep their start times. |
+| **Genealogy** | Which lots were made from which. |
+| **Hold / quarantine** | Statuses that keep a lot on hand but stop it being consumed until released. |
 | **Hold until** | The earliest a job may start. |
 | **Job** | The part of a work order on one line (or department). |
+| **Journal** | The list of every lot movement in a site. |
 | **Line** | Equipment that runs jobs, such as an extrusion line. |
+| **Location** | Equipment that holds inventory: a store, staging area or feed point. |
 | **Lock** | Pin a job so it keeps its place. |
+| **Lot** | One numbered batch of a material, with its quantity, location and history. |
 | **Material class** | A group of similar materials, such as *Extruded profiles*. |
+| **Merge** | Combine lots of one material into one. |
 | **Operation** | One step of a process, run on one or more lines or departments. |
 | **Packaging unit** | A unit like box, bag or pallet whose size depends on the material; it converts only through a material conversion. |
 | **Process (route)** | The operations an order goes through, and where each runs. |
 | **Projection** | Pulaski's calculation of when each job will run, redone on every read. |
+| **Reverse** | Undo a lot's latest movement. |
 | **Run standard** | The rate Pulaski plans with for a material on a line. |
 | **Scrap factor** | Extra component quantity planned for losses. |
 | **Sequence** | The order of jobs on a line. |
 | **Share** | The part of an operation's quantity one line or department takes. |
+| **Ship** | Send stock out of the site. |
+| **Shortage** | What open jobs still need of a component beyond the stock available. |
 | **Site** | A plant, with its own time zone. |
+| **Split** | Divide part of a lot into a new lot. |
+| **Substitution** | Consuming a material a job had no planned component of. |
+| **Trace** | Following genealogy back to everything a lot was made from, or forward to everything made from it. |
+| **Where used** | The BOMs and open jobs that use a material as a component. |
 | **Window** | The time span a department job must be run in. |
 | **Work order** | A request to make a quantity of one material by a due date. |
+| **Write up / write off** | Add found stock to a lot / remove damaged, lost or miscounted stock, each for a reason. |

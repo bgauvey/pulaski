@@ -17,7 +17,9 @@ public sealed record CreateEquipmentCommand(
     bool IsSchedulable,
     bool HoldsInventory,
     string? TimeZone,
-    bool? CanRunJob = null) : ICommand<CreatedResponse>;
+    bool? CanRunJob = null,
+    bool ComminglesLots = false,
+    bool SingleMaterial = false) : ICommand<CreatedResponse>;
 
 public sealed record UpdateEquipmentCommand(
     Guid Id,
@@ -28,7 +30,9 @@ public sealed record UpdateEquipmentCommand(
     bool IsSchedulable,
     bool HoldsInventory,
     bool IsActive,
-    bool? CanRunJob = null) : ICommand<VersionResponse>;
+    bool? CanRunJob = null,
+    bool? ComminglesLots = null,
+    bool? SingleMaterial = null) : ICommand<VersionResponse>;
 
 internal sealed class CreateEquipmentHandler(
     IUnitOfWork unitOfWork,
@@ -84,7 +88,9 @@ internal sealed class CreateEquipmentHandler(
             command.IsSchedulable,
             command.HoldsInventory,
             timeZone,
-            command.CanRunJob ?? command.IsSchedulable);
+            command.CanRunJob ?? command.IsSchedulable,
+            command.ComminglesLots,
+            command.SingleMaterial);
 
         var envelope = events.Create(EventTypes.EquipmentCreated, "equipment", created.Id, new { After = created });
         var version = await equipment.InsertAsync(created, envelope.OccurredAt, cancellationToken);
@@ -124,8 +130,13 @@ internal sealed class UpdateEquipmentHandler(
             IsSchedulable = command.IsSchedulable,
             CanRunJob = command.CanRunJob ?? current.Value.CanRunJob,
             HoldsInventory = command.HoldsInventory,
+            ComminglesLots = command.ComminglesLots ?? current.Value.ComminglesLots,
+            SingleMaterial = command.SingleMaterial ?? current.Value.SingleMaterial,
             IsActive = command.IsActive,
         };
+
+        Equipment.EnsureStorageFlags(updated.HoldsInventory, updated.ComminglesLots, updated.SingleMaterial);
+        await EnsureStockAllowsAsync(current.Value, updated, cancellationToken);
 
         var envelope = events.Create(
             EventTypes.EquipmentUpdated, "equipment", updated.Id, new { Before = current.Value, After = updated });
@@ -134,5 +145,26 @@ internal sealed class UpdateEquipmentHandler(
         await transaction.CommitAsync(cancellationToken);
 
         return new VersionResponse(version);
+    }
+
+    // What the stock already there allows (D-031, D-032): nothing is stranded, separated or mixed by a change of settings.
+    private async Task EnsureStockAllowsAsync(Equipment before, Equipment after, CancellationToken cancellationToken)
+    {
+        var closing = before.HoldsInventory && (!after.HoldsInventory || (before.IsActive && !after.IsActive));
+        if (closing && await equipment.HoldsStockAsync(after.Id, cancellationToken))
+        {
+            throw new DomainRuleException(
+                $"{after.Code} holds stock; move, use or write it off before it can {(after.IsActive ? "stop holding inventory" : "be deactivated")}.");
+        }
+
+        if (after.ComminglesLots && !before.ComminglesLots && await equipment.HoldsSeparateLotsAsync(after.Id, cancellationToken))
+        {
+            throw new DomainRuleException($"{after.Code} holds separate lots; merge them or move them elsewhere before their lots can be indistinguishable.");
+        }
+
+        if (after.SingleMaterial && !before.SingleMaterial && await equipment.CountMaterialsHeldAsync(after.Id, cancellationToken) > 1)
+        {
+            throw new DomainRuleException($"{after.Code} holds more than one material; empty all but one before it takes one material at a time.");
+        }
     }
 }

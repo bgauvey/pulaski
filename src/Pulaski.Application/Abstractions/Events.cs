@@ -87,4 +87,24 @@ public static class EventTypes
     public const string UnitUpdated = "pulaski.uom.updated.v1";
     public const string MaterialConversionSet = "pulaski.material.conversion_set.v1";
     public const string MaterialConversionRemoved = "pulaski.material.conversion_removed.v1";
+    public const string LotReceived = "pulaski.lot.received.v1";
+    public const string LotWrittenUp = "pulaski.lot.written_up.v1";
+    public const string LotWrittenOff = "pulaski.lot.written_off.v1";
+    public const string LotMoved = "pulaski.lot.moved.v1";
+    public const string LotStatusChanged = "pulaski.lot.status_changed.v1";
+    public const string LotConsumed = "pulaski.lot.consumed.v1";
+    public const string LotProduced = "pulaski.lot.produced.v1";
+    public const string LotSplit = "pulaski.lot.split.v1";
+    public const string LotMerged = "pulaski.lot.merged.v1";
+    public const string LotShipped = "pulaski.lot.shipped.v1";
+    public const string LotCorrected = "pulaski.lot.corrected.v1";
+    public const string LotReversed = "pulaski.lot.reversed.v1";
+    public const string LotCountAdjusted = "pulaski.lot.count_adjusted.v1";
+    public const string StockCountStarted = "pulaski.stock_count.started.v1";
+    public const string StockCountRecorded = "pulaski.stock_count.recorded.v1";
+    public const string StockCountPosted = "pulaski.stock_count.posted.v1";
+    public const string StockCountCancelled = "pulaski.stock_count.cancelled.v1";
+    public const string ReasonCodeCreated = "pulaski.reason_code.created.v1";
+    public const string ReasonCodeUpdated = "pulaski.reason_code.updated.v1";
+    public const string MaterialShelfLifeSet = "pulaski.material.shelf_life_set.v1";
 }

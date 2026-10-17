@@ -1,0 +1,208 @@
+@page "/inventory"
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject TimeProvider Time
+@inject Downloads Downloads
+
+<PageTitle>Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="Inventory" SiteChanged="LoadAsync">
+    <Description>Stock of every material at @(Sites.Site?.Code ?? "the site"), grouped by class. Quantities are in each material's base unit.</Description>
+    <Actions>
+        <button type="button" class="btn btn-outline-secondary" disabled="@(_stock is null)" @onclick="ExportAsync">Export CSV</button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Produce">Declare production</button>
+        <button type="button" class="btn btn-primary" @onclick="() => _action = LotAction.Receive">Receive</button>
+    </Actions>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+<LotResultBanner Result="_result" OnDismiss="() => _result = null" />
+
+<div class="inv-toolbar" role="search">
+    <div class="inv-search inv-grow">
+        <input type="search" class="form-control" placeholder="Find a material by code or name" aria-label="Find a material"
+               @bind="_search" @bind:event="oninput" />
+        <Icon Name="search" Size="16" />
+    </div>
+    <select class="form-select" aria-label="Material class" @bind="_classCode">
+        <option value="">All classes</option>
+        @foreach (var g in _groups)
+        {
+            <option value="@g.Key">@g.Label</option>
+        }
+    </select>
+    <select class="form-select" aria-label="Location" value="@_locationId" @onchange="OnLocationChangedAsync">
+        <option value="">All locations</option>
+        @foreach (var l in _locations)
+        {
+            <option value="@l.Id">@l.Code · @l.Name</option>
+        }
+    </select>
+    <div class="form-check ms-1">
+        <input class="form-check-input" type="checkbox" id="inv-in-stock" @bind="_inStockOnly" />
+        <label class="form-check-label" for="inv-in-stock">In stock only</label>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary btn-square" title="Expand all" aria-label="Expand all" @onclick="() => _collapsed.Clear()">
+        <Icon Name="expand-all" Size="18" />
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-secondary btn-square" title="Collapse all" aria-label="Collapse all"
+            @onclick="() => _collapsed = [.. _groups.Select(g => g.Key)]">
+        <Icon Name="collapse-all" Size="18" />
+    </button>
+</div>
+
+@if (_stock is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (Sites.Sites.Count == 0)
+{
+    <div class="empty-panel">
+        <h2>No site yet</h2>
+        <p class="text-muted mb-0">Create a site under <a href="equipment">Equipment</a>, and mark the stores and staging areas in it as <strong>Holds inventory</strong>.</p>
+    </div>
+}
+else
+{
+    var shown = Shown;
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Material</th>
+                    <th class="inv-num">On hand</th>
+                    <th class="inv-num">Available</th>
+                    <th class="inv-num">Held</th>
+                    <th class="inv-num">Lots</th>
+                    <th class="inv-num">Locations</th>
+                    <th>Next expiry</th>
+                </tr>
+            </thead>
+            @foreach (var group in shown)
+            {
+                var open = !_collapsed.Contains(group.Key) || Filtering;
+                <tbody @key="group.Key">
+                    <tr class="inv-group">
+                        <th colspan="7">
+                            <button type="button" class="inv-group-toggle" aria-expanded="@(open ? "true" : "false")" @onclick="() => Toggle(group.Key)">
+                                <Icon Name="chevron-right" Size="16" />
+                                @group.Label
+                                <span class="text-muted">@group.Items.Count @(group.Items.Count == 1 ? "material" : "materials") · @group.InStock in stock · @group.Lots @(group.Lots == 1 ? "lot" : "lots")</span>
+                            </button>
+                        </th>
+                    </tr>
+                    @if (open)
+                    {
+                        @foreach (var s in group.Items)
+                        {
+                            <tr @key="s.MaterialId" class="@(s.LotCount == 0 ? "inv-empty-row" : "")">
+                                <td>
+                                    <a class="fw-semibold" href="inventory/materials/@s.MaterialId">@s.Code</a>
+                                    <div class="small text-muted">@s.Name · @Display.Label(s.MaterialType)@(s.IsLotTracked ? "" : " · not lot-tracked")</div>
+                                </td>
+                                <td class="inv-num">@InventoryView.Qty(s.OnHand) <span class="small text-muted">@s.BaseUomCode</span></td>
+                                <td class="inv-num">@InventoryView.Qty(s.Available)</td>
+                                <td class="inv-num @(s.Held > 0 ? "inv-held" : "")">@InventoryView.Qty(s.Held)</td>
+                                <td class="inv-num">@s.LotCount</td>
+                                <td class="inv-num">@s.LocationCount</td>
+                                <td class="small text-nowrap @(InventoryView.ExpiresSoon(s.NextExpiry, Time.GetUtcNow()) ? "inv-held" : "")">
+                                    @Display.SiteTime(s.NextExpiry, Sites.Site?.TimeZone)
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            }
+        </table>
+        @if (shown.Count == 0)
+        {
+            <p class="text-muted p-4 mb-0">Nothing matches. @(_inStockOnly ? "Clear In stock only to see materials with no stock." : "")</p>
+        }
+    </div>
+}
+
+<LotActionDrawer Action="_action" OnDone="OnDoneAsync" OnClose="() => _action = null" />
+
+@code {
+    [SupplyParameterFromQuery(Name = "locationId")]
+    public Guid? LocationQuery { get; set; }
+
+    private IReadOnlyList<MaterialStockDto>? _stock;
+    private IReadOnlyList<StockGroup> _groups = [];
+    private IReadOnlyList<InventoryLocationDto> _locations = [];
+    private HashSet<string> _collapsed = [];
+    private ApiException? _error;
+    private LotActionResult? _result;
+    private LotAction? _action;
+    private string _search = "";
+    private string _classCode = "";
+    private Guid? _locationId;
+    private bool _inStockOnly;
+
+    private bool Filtering => !string.IsNullOrWhiteSpace(_search);
+
+    // Search, class and in-stock filter what is loaded; a location reloads, since quantities are per location.
+    private IReadOnlyList<StockGroup> Shown => InventoryView.Group(_stock!
+        .Where(s => _classCode.Length == 0 || (s.MaterialClassCode ?? InventoryView.NoClass) == _classCode)
+        .Where(s => !_inStockOnly || s.LotCount > 0)
+        .Where(s => !Filtering
+            || s.Code.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)
+            || s.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _locationId = LocationQuery;
+        _inStockOnly = LocationQuery is not null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _locations = await Api.ListInventoryLocationsAsync(Sites.SiteId);
+            _stock = await Api.ListStockAsync(Sites.SiteId, locationId: _locationId);
+            _groups = InventoryView.Group(_stock);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnLocationChangedAsync(ChangeEventArgs e)
+    {
+        _locationId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await LoadAsync();
+    }
+
+    // What is on screen: the same filters, every group open.
+    private Task ExportAsync() =>
+        Downloads.CsvAsync(
+            Csv.FileName("stock", Sites.Site?.Code, Time.GetUtcNow()),
+            Csv.Write(
+                ["Class", "Material", "Name", "Type", "Lot-tracked", "On hand", "Available", "Held", "Unit", "Lots", "Locations", "Next expiry"],
+                Shown.SelectMany(g => g.Items).Select(s => (IReadOnlyList<object?>)[
+                    s.MaterialClassName, s.Code, s.Name, s.MaterialType, s.IsLotTracked ? "yes" : "no", s.OnHand, s.Available, s.Held, s.BaseUomCode,
+                    s.LotCount, s.LocationCount, s.NextExpiry is { } x ? Display.SiteTime(x, Sites.Site?.TimeZone) : null]))).AsTask();
+
+    private void Toggle(string key)
+    {
+        if (!_collapsed.Remove(key))
+        {
+            _collapsed.Add(key);
+        }
+    }
+
+    private async Task OnDoneAsync(LotActionResult result)
+    {
+        _action = null;
+        _result = result;
+        await LoadAsync();
+    }
+}

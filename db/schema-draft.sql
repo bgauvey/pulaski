@@ -84,6 +84,8 @@ CREATE TABLE core.equipment (
     is_schedulable          boolean NOT NULL DEFAULT false,         -- a planning target: jobs can be planned to it (a line, or a department)
     can_run_job             boolean NOT NULL DEFAULT false,         -- executes jobs; a schedulable row without it is a group whose runners do (D-022)
     holds_inventory         boolean NOT NULL DEFAULT false,         -- lots can be located here
+    commingles_lots         boolean NOT NULL DEFAULT false,         -- lots here mix into one balance per material, like a silo (D-031)
+    single_material         boolean NOT NULL DEFAULT false,         -- takes one material at a time (D-032)
     -- line state derivation (open question: constraint vs worst vs configured)
     state_derivation        text CHECK (state_derivation IN ('own_tags','constraint_machine','worst_child','rule')),
     constraint_equipment_id uuid REFERENCES core.equipment(id),
@@ -112,6 +114,8 @@ CREATE TABLE core.equipment (
     CONSTRAINT equipment_tz_ck   CHECK (level <> 'site' OR time_zone IS NOT NULL),
     CONSTRAINT equipment_root_ck CHECK ((level = 'enterprise') = (parent_id IS NULL)),
     CONSTRAINT equipment_derivation_ck CHECK (state_derivation <> 'constraint_machine' OR constraint_equipment_id IS NOT NULL),
+    CONSTRAINT equipment_commingles_ck CHECK (NOT commingles_lots OR holds_inventory),
+    CONSTRAINT equipment_single_material_ck CHECK (NOT single_material OR holds_inventory),
     CONSTRAINT equipment_code_uq UNIQUE (site_id, code)
 );
 CREATE INDEX equipment_parent_ix ON core.equipment (parent_id);
@@ -214,6 +218,7 @@ CREATE TABLE core.material (
     material_class_id   uuid REFERENCES core.material_class(id),
     base_uom_id         uuid NOT NULL REFERENCES core.uom(id),
     is_lot_tracked      boolean NOT NULL DEFAULT true,
+    shelf_life_days     integer CHECK (shelf_life_days > 0),    -- a new lot expires this long after it arrives (D-032)
     origin              text NOT NULL DEFAULT 'local' CHECK (origin IN ('erp','local')),
     external_system     text,
     external_key        text,
@@ -804,22 +809,25 @@ CREATE UNIQUE INDEX changeover_rule_uq ON core.changeover_rule
     NULLS NOT DISTINCT WHERE is_active;
 
 -- =====================================================================
--- 9. INVENTORY AND GENEALOGY
+-- 9. INVENTORY AND GENEALOGY (D-027)
 --    Lots are relational (referenced for years); every movement is a
 --    ts.lot_event. Storage locations are equipment with holds_inventory.
+--    Quantities are in the material's base unit.
 -- =====================================================================
 
 CREATE TABLE core.lot (
     id                      uuid PRIMARY KEY DEFAULT uuidv7(),
     site_id                 uuid NOT NULL REFERENCES core.equipment(id),
-    lot_number              text NOT NULL,
+    lot_number              text,                               -- null exactly for a balance (D-031)
     material_id             uuid NOT NULL REFERENCES core.material(id),
     status                  text NOT NULL CHECK (status IN (
                                 'planned','in_production','available','on_hold','quarantine',
-                                'consumed','scrapped','shipped')),
+                                'consumed','scrapped','shipped','cancelled')),   -- cancelled: its receipt was reversed (D-030)
     quantity                core.qty NOT NULL DEFAULT 0 CHECK (quantity >= 0),
     uom_id                  uuid NOT NULL REFERENCES core.uom(id),
     location_equipment_id   uuid REFERENCES core.equipment(id),
+    is_bulk                 boolean NOT NULL DEFAULT false,     -- a balance: one per material and location, for a material that isn't lot-tracked or a location whose lots mix (D-031)
+    produced_by_job_id      uuid REFERENCES core.job(id),       -- declared production (D-027); a run fills produced_by_run_id once execution exists
     produced_by_run_id      uuid REFERENCES core.job_run(id),
     origin                  text NOT NULL CHECK (origin IN ('produced','received','erp','split','merge')),
     supplier_lot            text,
@@ -829,10 +837,16 @@ CREATE TABLE core.lot (
     expires_at              timestamptz,
     created_at              timestamptz NOT NULL DEFAULT now(),
     updated_at              timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT lot_uq UNIQUE (site_id, material_id, lot_number)
+    CONSTRAINT lot_uq UNIQUE (site_id, material_id, lot_number),
+    CONSTRAINT lot_bulk_location_ck CHECK (NOT is_bulk OR location_equipment_id IS NOT NULL),
+    CONSTRAINT lot_number_bulk_ck CHECK ((lot_number IS NULL) = is_bulk)
 );
 CREATE INDEX lot_location_ix ON core.lot (location_equipment_id) WHERE status IN ('available','on_hold','quarantine');
+CREATE INDEX lot_material_ix ON core.lot (material_id, site_id) WHERE status IN ('available','on_hold','quarantine');
 CREATE INDEX lot_run_ix ON core.lot (produced_by_run_id);
+CREATE INDEX lot_job_ix ON core.lot (produced_by_job_id) WHERE produced_by_job_id IS NOT NULL;
+-- One bulk balance per material and location.
+CREATE UNIQUE INDEX lot_bulk_uq ON core.lot (material_id, location_equipment_id) WHERE is_bulk;
 
 -- A lot present at a feed point or storage unit over a window. Overlap is
 -- allowed: a silo can hold several lots at once. Time-window consumption
@@ -861,6 +875,7 @@ CREATE TABLE core.lot_genealogy (
     link_basis          text NOT NULL CHECK (link_basis IN ('time_window','declared','split','merge','rework')),
     quantity            core.qty,                               -- estimated for time_window
     uom_id              uuid REFERENCES core.uom(id),
+    job_id              uuid REFERENCES core.job(id),           -- the job that consumed the parent and made the child (declared)
     run_id              uuid REFERENCES core.job_run(id),
     window_start        timestamptz,
     window_end          timestamptz,
@@ -870,6 +885,70 @@ CREATE TABLE core.lot_genealogy (
 );
 CREATE INDEX lot_genealogy_parent_ix ON core.lot_genealogy (parent_lot_id) WHERE superseded_at IS NULL;
 CREATE INDEX lot_genealogy_child_ix  ON core.lot_genealogy (child_lot_id)  WHERE superseded_at IS NULL;
+-- A current edge is recorded once per basis, however often the same lots meet.
+CREATE UNIQUE INDEX lot_genealogy_edge_uq ON core.lot_genealogy (parent_lot_id, child_lot_id, link_basis) WHERE superseded_at IS NULL;
+
+-- Every lot downstream of (forward) or upstream of (backward) a lot through current genealogy
+-- edges, with the lot it was reached from and how many steps away. A lot reached by two paths
+-- appears once per path; callers keep the shortest.
+CREATE FUNCTION core.trace_forward(p_lot_id uuid)
+RETURNS TABLE (lot_id uuid, via_lot_id uuid, depth integer)
+LANGUAGE sql STABLE AS $$
+    WITH RECURSIVE walk (lot_id, via_lot_id, depth) AS (
+        SELECT p_lot_id, NULL::uuid, 0
+        UNION ALL
+        SELECT g.child_lot_id, w.lot_id, w.depth + 1
+        FROM walk w
+        JOIN core.lot_genealogy g ON g.parent_lot_id = w.lot_id AND g.superseded_at IS NULL
+        WHERE w.depth < 50
+    ) CYCLE lot_id SET is_cycle USING path
+    SELECT walk.lot_id, walk.via_lot_id, walk.depth FROM walk WHERE NOT walk.is_cycle
+$$;
+
+CREATE FUNCTION core.trace_backward(p_lot_id uuid)
+RETURNS TABLE (lot_id uuid, via_lot_id uuid, depth integer)
+LANGUAGE sql STABLE AS $$
+    WITH RECURSIVE walk (lot_id, via_lot_id, depth) AS (
+        SELECT p_lot_id, NULL::uuid, 0
+        UNION ALL
+        SELECT g.parent_lot_id, w.lot_id, w.depth + 1
+        FROM walk w
+        JOIN core.lot_genealogy g ON g.child_lot_id = w.lot_id AND g.superseded_at IS NULL
+        WHERE w.depth < 50
+    ) CYCLE lot_id SET is_cycle USING path
+    SELECT walk.lot_id, walk.via_lot_id, walk.depth FROM walk WHERE NOT walk.is_cycle
+$$;
+
+-- A count of one location (D-030): a snapshot of its on-hand lots, the quantities counted, and
+-- once posted, a write-up or write-off for every difference.
+CREATE TABLE core.stock_count (
+    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
+    count_number            text NOT NULL,
+    location_equipment_id   uuid NOT NULL REFERENCES core.equipment(id),
+    status                  text NOT NULL DEFAULT 'open' CHECK (status IN ('open','posted','cancelled')),
+    note                    text CHECK (length(note) <= 1000),
+    created_by              text NOT NULL,
+    posted_at               timestamptz,
+    posted_by               text,
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    updated_at              timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT stock_count_number_uq UNIQUE (site_id, count_number),
+    CONSTRAINT stock_count_posted_ck CHECK ((status = 'posted') = (posted_at IS NOT NULL))
+);
+CREATE INDEX stock_count_site_ix ON core.stock_count (site_id, created_at);
+
+CREATE TABLE core.stock_count_line (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    stock_count_id      uuid NOT NULL REFERENCES core.stock_count(id),
+    lot_id              uuid NOT NULL REFERENCES core.lot(id),
+    expected_qty        core.qty NOT NULL,
+    counted_qty         core.qty CHECK (counted_qty >= 0),
+    counted_at          timestamptz,
+    counted_by          text,
+    CONSTRAINT stock_count_line_uq UNIQUE (stock_count_id, lot_id),
+    CONSTRAINT stock_count_line_counted_ck CHECK ((counted_qty IS NULL) = (counted_at IS NULL))
+);
 
 -- =====================================================================
 -- 10. LABOR
@@ -1103,28 +1182,37 @@ CREATE TABLE ts.job_status_change (
 ) PARTITION BY RANGE (occurred_at);
 CREATE INDEX ON ts.job_status_change (job_id, occurred_at);
 
--- Every inventory movement. Lot quantity/location in core.lot is the
--- running result of these rows.
+-- Every inventory movement (D-027). Lot quantity/location in core.lot is the
+-- running result of these rows; qty_after is the lot's quantity once applied.
 CREATE TABLE ts.lot_event (
     id                  uuid NOT NULL DEFAULT uuidv7(),
     occurred_at         timestamptz NOT NULL,
     lot_id              uuid NOT NULL REFERENCES core.lot(id),
     event_kind          text NOT NULL CHECK (event_kind IN (
                             'created','received','moved','loaded','consumed','produced',
-                            'split','merged','status_changed','adjusted','scrapped','shipped')),
+                            'split','merged','status_changed','adjusted','scrapped','shipped','corrected','reversed')),
     qty_delta           core.qty,
+    qty_after           core.qty,
     uom_id              uuid REFERENCES core.uom(id),
     from_location_id    uuid REFERENCES core.equipment(id),
     to_location_id      uuid REFERENCES core.equipment(id),
-    related_lot_id      uuid REFERENCES core.lot(id),           -- split/merge counterpart
+    related_lot_id      uuid REFERENCES core.lot(id),           -- split/merge counterpart, or the other bulk lot in a transfer
+    job_id              uuid REFERENCES core.job(id),           -- declared consumption into / production from a job
     run_id              uuid,
     from_status         text,
     to_status           text,
     reason_code_id      uuid REFERENCES core.reason_code(id),
+    comment             text CHECK (length(comment) <= 1000),
+    reference           text CHECK (length(reference) <= 100),  -- a shipment or count number (D-030)
+    reverses_event_id   uuid,                                   -- the movement a reversal undoes, with its time (no FK into history)
+    reverses_occurred_at timestamptz,
     actor_user_id       uuid,
+    actor_id            text,                                   -- issuer|subject, as on evt.event, until sec.app_user exists
     PRIMARY KEY (id, occurred_at)
 ) PARTITION BY RANGE (occurred_at);
 CREATE INDEX ON ts.lot_event (lot_id, occurred_at);
+CREATE INDEX lot_event_job_id_idx ON ts.lot_event (job_id) WHERE job_id IS NOT NULL;
+CREATE INDEX lot_event_occurred_at_brin ON ts.lot_event USING brin (occurred_at);   -- the movement journal reads by time (D-029)
 
 -- One row per subgroup. Variables: values[] plus computed statistics.
 -- Attributes: inspected/defect counts. Limits in force are stamped on.
@@ -1319,8 +1407,64 @@ BEGIN
     END LOOP;
 END $$;
 
+-- Keeps every partitioned history table ready ahead of time (D-028).
+-- Creates the current month and the next p_months - 1 for every range-partitioned table in ts
+-- and evt, and returns how many partitions it created (0 when all were there). SECURITY
+-- DEFINER: it runs as the schema owner, because creating a partition needs ownership of its
+-- parent, which pulaski_app doesn't have. db/app-role.sql grants EXECUTE to pulaski_app only.
+CREATE FUNCTION ts.ensure_partitions(p_months integer)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+    v_parent regclass;
+    v_before integer;
+    v_after  integer;
+BEGIN
+    IF p_months IS NULL OR p_months < 1 OR p_months > 24 THEN
+        RAISE EXCEPTION 'ensure_partitions: months must be between 1 and 24, not %', p_months;
+    END IF;
+
+    SELECT count(*) INTO v_before FROM pg_class WHERE relispartition AND relkind = 'r';
+    FOR v_parent IN
+        SELECT pt.partrelid::regclass
+        FROM pg_partitioned_table pt
+        JOIN pg_class c ON c.oid = pt.partrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname IN ('ts', 'evt') AND pt.partstrat = 'r'
+        ORDER BY 1
+    LOOP
+        PERFORM ts.create_month_partitions(v_parent, current_date, p_months);
+    END LOOP;
+    SELECT count(*) INTO v_after FROM pg_class WHERE relispartition AND relkind = 'r';
+    RETURN v_after - v_before;
+END $$;
+
+REVOKE ALL ON FUNCTION ts.ensure_partitions(integer) FROM PUBLIC;
+
 -- =====================================================================
--- 16. SEED DATA
+-- 16. SCHEMA VERSION (D-028)
+--     Each db/migrations file brings an existing database up to this
+--     schema; a fresh load already has them all. db/migrate.sh records
+--     what it applies; the API refuses to start without the newest.
+-- =====================================================================
+
+CREATE TABLE public.schema_migration (
+    version     text PRIMARY KEY,                               -- the file name without .sql
+    applied_at  timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO public.schema_migration (version) VALUES
+    ('0001_inventory'),
+    ('0002_partition_maintenance'),
+    ('0003_lot_event_time_index'),
+    ('0004_inventory_completion'),
+    ('0005_indistinguishable_lots'),
+    ('0006_location_and_expiry_rules');
+
+-- =====================================================================
+-- 17. SEED DATA
 -- =====================================================================
 
 INSERT INTO core.packml_state (code, name, is_acting) VALUES

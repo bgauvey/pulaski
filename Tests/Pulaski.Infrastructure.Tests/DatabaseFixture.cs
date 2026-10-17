@@ -7,7 +7,7 @@ using Pulaski.Testing;
 namespace Pulaski.Infrastructure.Tests;
 
 /// <summary>
-/// Creates a throwaway database from db/schema-draft.sql and db/app-role.sql, and drops it
+/// Creates a throwaway database from db/schema-draft.sql, db/app-role.sql and db/seed-reasons.sql, and drops it
 /// afterwards. The application under test connects as a throwaway login that is a member of
 /// pulaski_app, so it has exactly the production privileges (D-012): for example, no UPDATE or
 /// DELETE on evt.event. Set PULASKI_TEST_ADMIN_CONNECTION to point at a server where the user can
@@ -56,6 +56,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
         await ExecuteAsync($"GRANT pulaski_app TO {_appLogin}");
         await ExecuteAsync("SELECT ts.create_month_partitions('evt.event', current_date - 31, 3)");
         await ExecuteAsync("SELECT ts.create_month_partitions('ts.job_status_change', current_date - 31, 3)");
+        await ExecuteAsync("SELECT ts.create_month_partitions('ts.lot_event', current_date - 31, 3)");
+        await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(dbDir, "seed-reasons.sql")));
 
         UomId = Guid.CreateVersion7();
         MaterialId = Guid.CreateVersion7();
@@ -79,6 +81,23 @@ public sealed class DatabaseFixture : IAsyncLifetime
         Services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
+    private readonly List<string> _scratch = [];
+
+    /// <summary>An empty extra database on the same server, dropped with the fixture.</summary>
+    public async Task<NpgsqlDataSource> CreateScratchDatabaseAsync()
+    {
+        var name = $"pulaski_scratch_{Guid.NewGuid():N}"[..24];
+        await using (var admin = new NpgsqlConnection(_adminConnection))
+        {
+            await admin.OpenAsync();
+            await using var create = new NpgsqlCommand($"CREATE DATABASE {name}", admin);
+            await create.ExecuteNonQueryAsync();
+        }
+
+        _scratch.Add(name);
+        return NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(_adminConnection) { Database = name }.ConnectionString);
+    }
+
     public async Task DisposeAsync()
     {
         await Services.DisposeAsync();
@@ -88,7 +107,10 @@ public sealed class DatabaseFixture : IAsyncLifetime
         await using var admin = new NpgsqlConnection(_adminConnection);
         await admin.OpenAsync();
         await using var drop = new NpgsqlCommand(
-            $"DROP DATABASE IF EXISTS {_databaseName} WITH (FORCE); DROP ROLE IF EXISTS {_appLogin}", admin);
+            string.Join("; ", _scratch.Select(d => $"DROP DATABASE IF EXISTS {d} WITH (FORCE)")
+                .Append($"DROP DATABASE IF EXISTS {_databaseName} WITH (FORCE)")
+                .Append($"DROP ROLE IF EXISTS {_appLogin}")),
+            admin);
         await drop.ExecuteNonQueryAsync();
     }
 
@@ -116,7 +138,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         await command.ExecuteNonQueryAsync();
     }
 
-    private static string FindDbDirectory()
+    internal static string FindDbDirectory()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {

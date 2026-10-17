@@ -22,4 +22,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The schema as it was before db/migrations existed (commit 9948061), frozen: migrating it must give today's schema. -->
+    <None Include="Baseline\*.sql" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

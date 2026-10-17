@@ -1,0 +1,65 @@
+@* The heading every inventory screen shares: title, tabs, the site (when there is more than one)
+   and the screen's own buttons. *@
+@inject SiteSelection Sites
+
+<div class="inv-head">
+    <div>
+        @if (Back is not null)
+        {
+            <div class="small mb-1">@Back</div>
+        }
+        <h1 class="mb-1">@Title</h1>
+        @if (Description is not null)
+        {
+            <p class="text-muted mb-0">@Description</p>
+        }
+    </div>
+    <div class="inv-head-tools">
+        @if (Sites.Sites.Count > 1)
+        {
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+        @Actions
+    </div>
+</div>
+
+<nav class="inv-tabs" aria-label="Inventory">
+    <NavLink class="inv-tab" href="inventory" Match="NavLinkMatch.All">Stock</NavLink>
+    <NavLink class="inv-tab" href="inventory/lots">Lots</NavLink>
+    <NavLink class="inv-tab" href="inventory/locations">Locations</NavLink>
+    <NavLink class="inv-tab" href="inventory/jobs">Jobs</NavLink>
+    <NavLink class="inv-tab" href="inventory/shortages">Shortages</NavLink>
+    <NavLink class="inv-tab" href="inventory/journal">Journal</NavLink>
+    <NavLink class="inv-tab" href="inventory/counts">Counts</NavLink>
+    <NavLink class="inv-tab" href="inventory/reports">Reports</NavLink>
+</nav>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public RenderFragment? Description { get; set; }
+
+    /// <summary>A link back to where the screen was opened from.</summary>
+    [Parameter]
+    public RenderFragment? Back { get; set; }
+
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+
+    /// <summary>Called after the user picks another site.</summary>
+    [Parameter]
+    public EventCallback SiteChanged { get; set; }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await SiteChanged.InvokeAsync();
+    }
+}

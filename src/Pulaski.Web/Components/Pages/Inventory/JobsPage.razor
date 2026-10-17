@@ -1,0 +1,90 @@
+@page "/inventory/jobs"
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+
+<PageTitle>Jobs · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="Declare against a job" SiteChanged="SearchAsync">
+    <Description>Open production jobs. Pick one to record the lots it used and the lots it made.</Description>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+
+<form class="inv-toolbar" role="search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+    <div class="inv-search inv-grow">
+        <input type="search" class="form-control" placeholder="Job, order or material" aria-label="Find a job" @bind="_search" />
+        <Icon Name="search" Size="16" />
+    </div>
+    <button type="submit" class="btn btn-primary">Search</button>
+</form>
+
+@if (_jobs is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_jobs.Count == 0)
+{
+    <div class="empty-panel">
+        <h2>No open production jobs</h2>
+        <p class="text-muted mb-0">Jobs come from work orders. Create one from the <a href="schedule">Schedule</a>.</p>
+    </div>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Job</th>
+                    <th>Makes</th>
+                    <th>Line</th>
+                    <th>Status</th>
+                    <th class="inv-num">Planned</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var j in _jobs)
+                {
+                    <tr @key="j.Id">
+                        <td>
+                            <a class="fw-semibold" href="inventory/jobs/@j.Id">@j.JobNumber</a>
+                            @if (j.WorkOrderNumber is { } order)
+                            {
+                                <div class="small text-muted">@order</div>
+                            }
+                        </td>
+                        <td>@j.MaterialCode <div class="small text-muted">@j.MaterialName</div></td>
+                        <td>@j.LineCode</td>
+                        <td><span class="@Display.JobStatusChip(j.Status)">@Display.Label(j.Status)</span></td>
+                        <td class="inv-num">@InventoryView.Qty(j.PlannedQty) <span class="small text-muted">@j.UomCode</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<DeclarableJobDto>? _jobs;
+    private ApiException? _error;
+    private string? _search;
+
+    protected override Task OnInitializedAsync() => SearchAsync();
+
+    private async Task SearchAsync()
+    {
+        _error = null;
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _jobs = await Api.ListDeclarableJobsAsync(Sites.SiteId, _search);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+}

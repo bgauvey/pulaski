@@ -18,6 +18,13 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApplicationExceptionHandler>();
 builder.Services.AddOpenApi();
 
+// Schema version check and partition maintenance (D-028); tests without a database turn them off.
+if (builder.Configuration.GetValue("Pulaski:DatabaseMaintenance", true))
+{
+    builder.Services.AddHostedService<SchemaVersionCheck>();
+    builder.Services.AddHostedService<PartitionMaintenance>();
+}
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -36,5 +43,6 @@ api.MapSchedulingEndpoints();
 api.MapProcessEndpoints();
 api.MapBomEndpoints();
 api.MapUnitEndpoints();
+api.MapInventoryEndpoints();
 
 app.Run();
