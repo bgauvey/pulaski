@@ -82,6 +82,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Indistinguishable lots (D-031, proposed): equipment with `commingles_lots` (needs `holds_inventory`) keeps one balance per
   material; every arrival merges into it (`Commingling.MergeArrivalAsync`), a numbered receipt first kept as its lot.
   Balances (`is_bulk`) have a NULL `lot_number`; name them by location (`Lot.Name`, `InventoryView.LotLabel`).
+- Location and expiry rules (D-032, proposed): `single_material` admits another material only when the one there is at
+  zero (`InventoryRules.EnsureAcceptsAsync`, locks the location); a location with stock can't be deactivated; shelf life
+  sets new lots' expiry; expired lots can't be consumed, shipped or merged (`EnsureNotExpired`) until corrected.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

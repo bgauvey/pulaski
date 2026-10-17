@@ -19,6 +19,9 @@ public sealed record CreateEquipmentRequest
 
     /// <summary>Lots here mix into one balance per material, like a silo (D-031). Needs <see cref="HoldsInventory"/>.</summary>
     public bool ComminglesLots { get; init; }
+
+    /// <summary>Takes one material at a time, like a silo for one resin (D-032). Needs <see cref="HoldsInventory"/>.</summary>
+    public bool SingleMaterial { get; init; }
     public string? TimeZone { get; init; }
 }
 
@@ -38,5 +41,8 @@ public sealed record UpdateEquipmentRequest
 
     /// <summary>Lots here mix into one balance per material (D-031). Left out, it keeps the current value.</summary>
     public bool? ComminglesLots { get; init; }
+
+    /// <summary>Takes one material at a time (D-032). Left out, it keeps the current value.</summary>
+    public bool? SingleMaterial { get; init; }
     public bool IsActive { get; init; } = true;
 }

@@ -85,6 +85,7 @@ CREATE TABLE core.equipment (
     can_run_job             boolean NOT NULL DEFAULT false,         -- executes jobs; a schedulable row without it is a group whose runners do (D-022)
     holds_inventory         boolean NOT NULL DEFAULT false,         -- lots can be located here
     commingles_lots         boolean NOT NULL DEFAULT false,         -- lots here mix into one balance per material, like a silo (D-031)
+    single_material         boolean NOT NULL DEFAULT false,         -- takes one material at a time (D-032)
     -- line state derivation (open question: constraint vs worst vs configured)
     state_derivation        text CHECK (state_derivation IN ('own_tags','constraint_machine','worst_child','rule')),
     constraint_equipment_id uuid REFERENCES core.equipment(id),
@@ -114,6 +115,7 @@ CREATE TABLE core.equipment (
     CONSTRAINT equipment_root_ck CHECK ((level = 'enterprise') = (parent_id IS NULL)),
     CONSTRAINT equipment_derivation_ck CHECK (state_derivation <> 'constraint_machine' OR constraint_equipment_id IS NOT NULL),
     CONSTRAINT equipment_commingles_ck CHECK (NOT commingles_lots OR holds_inventory),
+    CONSTRAINT equipment_single_material_ck CHECK (NOT single_material OR holds_inventory),
     CONSTRAINT equipment_code_uq UNIQUE (site_id, code)
 );
 CREATE INDEX equipment_parent_ix ON core.equipment (parent_id);
@@ -216,6 +218,7 @@ CREATE TABLE core.material (
     material_class_id   uuid REFERENCES core.material_class(id),
     base_uom_id         uuid NOT NULL REFERENCES core.uom(id),
     is_lot_tracked      boolean NOT NULL DEFAULT true,
+    shelf_life_days     integer CHECK (shelf_life_days > 0),    -- a new lot expires this long after it arrives (D-032)
     origin              text NOT NULL DEFAULT 'local' CHECK (origin IN ('erp','local')),
     external_system     text,
     external_key        text,
@@ -1457,7 +1460,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0002_partition_maintenance'),
     ('0003_lot_event_time_index'),
     ('0004_inventory_completion'),
-    ('0005_indistinguishable_lots');
+    ('0005_indistinguishable_lots'),
+    ('0006_location_and_expiry_rules');
 
 -- =====================================================================
 -- 17. SEED DATA

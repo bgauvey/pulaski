@@ -196,6 +196,18 @@ public interface IInventoryRepository
     /// <returns>The new row version.</returns>
     Task<long> UpdateReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken);
 
+    /// <summary>Locks the location row, so arrivals at a one-material location serialize (D-032).</summary>
+    Task LockLocationAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>The code of a material other than <paramref name="materialId"/> with stock on hand at the location; null when there is none.</summary>
+    Task<string?> OtherMaterialAtAsync(Guid locationId, Guid materialId, CancellationToken cancellationToken);
+
+    /// <summary>The material locked <c>FOR UPDATE</c>, with its version, to change its shelf life.</summary>
+    Task<Versioned<InventoryMaterial>?> GetMaterialForUpdateAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <returns>The material's new row version.</returns>
+    Task<long> UpdateShelfLifeAsync(Guid materialId, int? shelfLifeDays, DateTimeOffset at, CancellationToken cancellationToken);
+
     /// <summary>The site row read <c>FOR SHARE</c>: true when it exists and is a site.</summary>
     Task<bool> IsSiteAsync(Guid id, CancellationToken cancellationToken);
 
@@ -263,6 +275,9 @@ public sealed record InventoryLocation
 
     /// <summary>Lots here mix into one balance per material (D-031).</summary>
     public bool ComminglesLots { get; init; }
+
+    /// <summary>Takes one material at a time (D-032).</summary>
+    public bool SingleMaterial { get; init; }
     public bool IsActive { get; init; }
 }
 
@@ -274,6 +289,9 @@ public sealed record InventoryMaterial
     public required string BaseUomCode { get; init; }
     public bool IsLotTracked { get; init; }
     public bool IsActive { get; init; }
+
+    /// <summary>A new lot expires this many days after it arrives (D-032); null: no shelf life.</summary>
+    public int? ShelfLifeDays { get; init; }
 }
 
 public sealed record InventoryJob

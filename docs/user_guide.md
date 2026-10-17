@@ -222,7 +222,7 @@ At the bottom, **Work orders** counts orders at each stage, Planned → Dispatch
 
 ### The screen
 
-- **Left: the tree.** Each row shows the code, name, level, role and chips for its settings: **State** (tracks machine state), **Schedulable** or **Plans for children** (a department), **Runs jobs**, **Inventory**, and **Inactive** in grey.
+- **Left: the tree.** Each row shows the code, name, level, role and chips for its settings: **State** (tracks machine state), **Schedulable** or **Plans for children** (a department), **Runs jobs**, **Inventory**, **Mixes lots** (lots are indistinguishable), **One material**, and **Inactive** in grey.
   - Click the arrow beside a row to open or close it, or use **Expand all** / **Collapse all**.
   - Type in **Filter by code or name** to find equipment; matching rows stay visible with their parents.
   - Arrow keys move through the tree when it has focus.
@@ -256,7 +256,10 @@ Select it and edit a property on the right. Text saves when you press **Enter** 
 | **Schedulable** | Work should be planned to it. | Lines, process cells, production units |
 | **Can run jobs** | Work actually runs on it. | Same as Schedulable |
 | **Holds inventory** | Material lots can be stored or loaded here. | Feed points, storage zones and units |
+| **One material at a time** | Shown once **Holds inventory** is ticked. Another material can arrive only when the quantity of the one there is 0 (stock on hold still counts). It can't be turned on while two materials are there. | Silos and tanks dedicated to one material |
 | **Lots are indistinguishable** | Shown once **Holds inventory** is ticked. Lots here mix and can't be told apart, like a silo or tank: everything that arrives joins one balance per material. See [Inventory](#11-inventory). It can't be turned on while separate lots are there; merge or move them first. | Silos, tanks, mixing hoppers |
+
+**A location holding stock** can't be deactivated or stop holding inventory: move, use or write off the stock first.
 
 **Lines vs departments.** A line has *Schedulable* and *Can run jobs*. A department (an area that you plan to, with lines below it) has *Schedulable* only; the tree shows it as **Plans for children**. A line can also have *Can run jobs* without *Schedulable*: it then only takes jobs from a department above it.
 
@@ -689,6 +692,8 @@ Pulaski lays work end to end on each line, so two jobs on a line only overlap wh
 - **Stock can't go below zero.** Pulaski refuses to take out more than a lot holds and tells you how much is left.
 - **Statuses.** *Available* lots can be used. *On hold* (waiting for a decision) and *quarantine* (kept apart, suspected bad) lots count as on hand but can't be consumed until released. A lot taken down to zero becomes *consumed* or *scrapped*; it stays on record for genealogy.
 - **Lot-tracked or not.** For a lot-tracked material every receipt is its own numbered lot. For one that isn't, such as end caps, there is one **balance** at each location (shown as *Balance at RM-STORE*, with no lot number); receipts add to it.
+- **Expiry and shelf life.** A material can have a **shelf life** (set on its inventory page): a new lot received or produced without an expiry date expires that many days later. An **expired** lot is marked in amber; it can't be consumed, shipped or merged (into another lot or a silo's balance). It can still be moved, held, written off or counted. If quality extends it, use **Correct…** on the lot to set the new expiry, with a comment saying why.
+- **One material at a time.** A location marked **One material at a time** refuses another material, whether received, moved, split there or produced, until the quantity of the material already there is 0.
 - **Locations where lots mix.** A silo or tank marked **Lots are indistinguishable** on the Equipment page keeps one balance of each material, whatever it is. Everything that arrives joins it: receipts, moves, splits sent there and production. A receipt with a lot number is kept as that lot first, then merged in, so a trace still leads back to the supplier's lot; with no number it goes straight into the balance. Only available stock can join an available balance (release a held lot first), and the balance takes the earliest expiry of what joins it. A confirmation says when a lot has joined a balance. A balance that is moved somewhere else stays a balance there: mixed stock stays mixed.
 
 ### Find what you have: the Stock tab
@@ -704,7 +709,7 @@ Each row shows **On hand** (everything not used up), **Available**, **Held** (on
 
 ### A material: lots, locations and where used
 
-The material page shows tiles for on hand, available, held, lots and locations, then:
+The material page shows tiles for on hand, available, held, lots and locations, and its **shelf life** in days: click **Change** to set it, or leave it blank for none (lots already on hand keep their expiry). Then:
 
 - **Lots on hand**, with status, quantity, location, supplier lot, expiry and where each came from. **Used-up lots** at the top lists the consumed ones.
 - **By location**: the balance at each location. Click one to list its lots.

@@ -30,7 +30,7 @@ public class ComminglingHandlerTests
     private InMemoryInventory Inventory => _f.Stores.Inventory;
 
     private Task<LotTransactionResponse> Receive(string? number, decimal qty, Guid location) =>
-        new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids)
+        new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
             .HandleAsync(new ReceiveLotCommand(_resin.Id, location, number, qty, _kg.Id), CancellationToken.None);
 
     private Lot Balance() => Assert.Single(Inventory.Lots, l => l.IsBulk && l.LocationId == _silo.Id);
@@ -64,8 +64,8 @@ public class ComminglingHandlerTests
     {
         await Receive(null, 100m, _silo.Id);
         var lot = await Receive("R-5", 80m, _stores.Id);
-        var move = new MoveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids);
-        var split = new SplitLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids);
+        var move = new MoveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
+        var split = new SplitLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
 
         var part = await split.HandleAsync(new SplitLotCommand(lot.LotId, lot.Version, 30m, _kg.Id, ToLocationId: _silo.Id), CancellationToken.None);
         Assert.Equal((Balance().Id, 130m), (part.LotId, part.Quantity));
@@ -85,8 +85,8 @@ public class ComminglingHandlerTests
     [Fact]
     public void Lots_can_only_mix_where_inventory_is_held()
     {
-        Assert.Throws<DomainRuleException>(() => Equipment.EnsureCanCommingle(holdsInventory: false, comminglesLots: true));
-        Equipment.EnsureCanCommingle(holdsInventory: true, comminglesLots: true);
+        Assert.Throws<DomainRuleException>(() => Equipment.EnsureStorageFlags(holdsInventory: false, comminglesLots: true, singleMaterial: false));
+        Equipment.EnsureStorageFlags(holdsInventory: true, comminglesLots: true, singleMaterial: true);
     }
 
     [Fact]

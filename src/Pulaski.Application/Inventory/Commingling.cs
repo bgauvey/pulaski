@@ -45,8 +45,11 @@ internal static class Commingling
         Lot arrived,
         string locationCode,
         string? comment,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        // An expired lot would make the whole balance expired (D-032).
+        InventoryRules.EnsureNotExpired(arrived, now, $"put into the balance at {locationCode}");
         var (balance, isNew) = await BalanceAsync(
             inventory, ids, arrived.SiteId, arrived.MaterialId, arrived.UomId, arrived.LocationId!.Value, arrived.Origin, cancellationToken, arrived.Status);
         var (merged, incoming, emptied, outgoing) = balance.Commingle(arrived);

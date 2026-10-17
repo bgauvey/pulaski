@@ -32,7 +32,7 @@ public class LotOperationHandlerTests
     private InMemoryInventory Inventory => _f.Stores.Inventory;
 
     private async Task<LotTransactionResponse> Receive(string number, decimal qty, Guid? location = null) =>
-        await new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids)
+        await new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
             .HandleAsync(new ReceiveLotCommand(_resin.Id, location ?? _stores.Id, number, qty, _kg.Id), CancellationToken.None);
 
     private long VersionOf(Guid lotId) => Inventory.Find(lotId)!.Version;
@@ -42,7 +42,7 @@ public class LotOperationHandlerTests
     {
         var lot = await Receive("R-1", 100m);
         await Receive("R-1-1", 1m);
-        var split = new SplitLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids);
+        var split = new SplitLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
 
         var part = await split.HandleAsync(new SplitLotCommand(lot.LotId, lot.Version, 25m, _kg.Id, ToLocationId: _hopper.Id), CancellationToken.None);
 
@@ -61,7 +61,7 @@ public class LotOperationHandlerTests
         var a = await Receive("R-2", 10m);
         var b = await Receive("R-3", 5m);
         var elsewhere = await Receive("R-4", 5m, _hopper.Id);
-        var merge = new MergeLotsHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events, _f.Ids);
+        var merge = new MergeLotsHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
 
         await Assert.ThrowsAsync<DomainRuleException>(() => merge.HandleAsync(
             new MergeLotsCommand(target.LotId, target.Version, [a.LotId, elsewhere.LotId]), CancellationToken.None));
@@ -78,7 +78,7 @@ public class LotOperationHandlerTests
     public async Task Shipping_needs_a_reference_and_records_it()
     {
         var lot = await Receive("P-1", 40m);
-        var ship = new ShipLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids);
+        var ship = new ShipLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
 
         await Assert.ThrowsAsync<ValidationException>(() => ship.HandleAsync(new ShipLotCommand(lot.LotId, lot.Version, null, null, " "), CancellationToken.None));
         var shipped = await ship.HandleAsync(new ShipLotCommand(lot.LotId, lot.Version, null, null, "DN-4471"), CancellationToken.None);

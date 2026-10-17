@@ -28,6 +28,12 @@ public sealed record MaterialStockDto
 
     /// <summary>The earliest expiry among the on-hand lots.</summary>
     public DateTimeOffset? NextExpiry { get; init; }
+
+    /// <summary>A new lot expires this many days after it arrives (D-032).</summary>
+    public int? ShelfLifeDays { get; init; }
+
+    /// <summary>The material's concurrency token, to change its shelf life.</summary>
+    public long MaterialVersion { get; init; }
 }
 
 /// <summary>A lot as listed: what, how much, where and in what state.</summary>
@@ -231,6 +237,9 @@ public sealed record InventoryLocationDto
 
     /// <summary>Lots here mix into one balance per material, like a silo (D-031).</summary>
     public bool ComminglesLots { get; init; }
+
+    /// <summary>Takes one material at a time (D-032).</summary>
+    public bool SingleMaterial { get; init; }
     public int LotCount { get; init; }
     public int MaterialCount { get; init; }
 }

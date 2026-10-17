@@ -85,6 +85,16 @@ public sealed record Lot(
     DateTimeOffset? ExpiresAt = null,
     Guid? ProducedByJobId = null)
 {
+    /// <summary>True when its expiry is <paramref name="now"/> or past (D-032).</summary>
+    public bool IsExpired(DateTimeOffset now) => ExpiresAt is { } expires && expires <= now;
+
+    /// <summary>
+    /// The expiry for new stock (D-032): the one given, or else <paramref name="shelfLifeDays"/> after
+    /// <paramref name="now"/>, or none.
+    /// </summary>
+    public static DateTimeOffset? ExpiryFor(DateTimeOffset? given, int? shelfLifeDays, DateTimeOffset now) =>
+        given ?? (shelfLifeDays is { } days ? now.AddDays(days) : null);
+
     /// <summary>How messages name it: <c>Lot R-24-0917</c>, or <c>The balance</c>.</summary>
     public string Name => LotNumber is { } number ? $"Lot {number}" : "The balance";
 

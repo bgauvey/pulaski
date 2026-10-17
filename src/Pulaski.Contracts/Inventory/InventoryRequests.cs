@@ -131,6 +131,13 @@ public sealed record ReverseMovementRequest
     public string? Comment { get; init; }
 }
 
+/// <summary>A material's shelf life in days; null clears it (D-032).</summary>
+public sealed record SetShelfLifeRequest
+{
+    public long Version { get; init; }
+    public int? ShelfLifeDays { get; init; }
+}
+
 public sealed record StartStockCountRequest
 {
     public Guid LocationId { get; init; }

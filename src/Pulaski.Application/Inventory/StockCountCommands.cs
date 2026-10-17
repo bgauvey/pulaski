@@ -261,3 +261,37 @@ internal static class StockCountLocks
         return current.Value;
     }
 }
+
+/// <summary>Sets or clears a material's shelf life in days (D-032); new lots expire that long after they arrive.</summary>
+public sealed record SetShelfLifeCommand(Guid MaterialId, long ExpectedVersion, int? ShelfLifeDays) : ICommand<VersionResponse>;
+
+internal sealed class SetShelfLifeHandler(
+    IUnitOfWork unitOfWork,
+    IInventoryRepository inventory,
+    IEventLog eventLog,
+    IEventFactory events) : ICommandHandler<SetShelfLifeCommand, VersionResponse>
+{
+    public async Task<VersionResponse> HandleAsync(SetShelfLifeCommand command, CancellationToken cancellationToken)
+    {
+        new Validator()
+            .Require(command.ShelfLifeDays is null or (> 0 and <= 36_500), nameof(command.ShelfLifeDays), "Between 1 and 36500 days, or blank for none.")
+            .ThrowIfInvalid();
+
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var current = await inventory.GetMaterialForUpdateAsync(command.MaterialId, cancellationToken)
+            ?? throw new NotFoundException($"Material {command.MaterialId} not found.");
+        if (current.Version != command.ExpectedVersion)
+        {
+            throw new ConflictException($"{current.Value.Code} was changed by someone else. Reload and try again.");
+        }
+
+        var envelope = events.Create(
+            EventTypes.MaterialShelfLifeSet, "material", current.Value.Id,
+            new { current.Value.Code, Before = current.Value.ShelfLifeDays, After = command.ShelfLifeDays });
+        var version = await inventory.UpdateShelfLifeAsync(current.Value.Id, command.ShelfLifeDays, envelope.OccurredAt, cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return new VersionResponse(version);
+    }
+}

@@ -21,6 +21,9 @@ public sealed record EquipmentDto
 
     /// <summary>Lots here mix into one balance per material, like a silo (D-031).</summary>
     public bool ComminglesLots { get; init; }
+
+    /// <summary>Takes one material at a time (D-032).</summary>
+    public bool SingleMaterial { get; init; }
     public string? TimeZone { get; init; }
     public bool IsActive { get; init; }
 

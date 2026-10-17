@@ -129,6 +129,35 @@ internal static class InventoryRules
         return job;
     }
 
+    /// <summary>
+    /// Refuses another material at a location that takes one at a time (D-032). The location is
+    /// locked first, so two arrivals can't both find it empty.
+    /// </summary>
+    public static async Task EnsureAcceptsAsync(
+        IInventoryRepository repository, InventoryLocation location, Guid materialId, CancellationToken cancellationToken)
+    {
+        if (!location.SingleMaterial)
+        {
+            return;
+        }
+
+        await repository.LockLocationAsync(location.Id, cancellationToken);
+        if (await repository.OtherMaterialAtAsync(location.Id, materialId, cancellationToken) is { } other)
+        {
+            throw new DomainRuleException($"{location.Code} holds {other} and takes one material at a time; empty it first.");
+        }
+    }
+
+    /// <summary>An expired lot can't be <paramref name="action"/> until its expiry is corrected (D-032).</summary>
+    public static void EnsureNotExpired(Lot lot, DateTimeOffset now, string action)
+    {
+        if (lot.IsExpired(now))
+        {
+            throw new DomainRuleException(
+                $"{lot.Name} expired on {lot.ExpiresAt!.Value.UtcDateTime:yyyy-MM-dd}; it can't be {action}. If quality has extended it, correct its expiry first.");
+        }
+    }
+
     /// <summary>A trimmed comment, or null when blank.</summary>
     public static string? Text(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 

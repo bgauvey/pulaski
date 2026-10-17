@@ -15,7 +15,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
                c.code AS material_class_code, c.name AS material_class_name,
                m.base_uom_id, u.code AS base_uom_code, m.is_lot_tracked,
                coalesce(s.on_hand, 0) AS on_hand, coalesce(s.available, 0) AS available, coalesce(s.held, 0) AS held,
-               s.lot_count, s.location_count, s.next_expiry
+               s.lot_count, s.location_count, s.next_expiry, m.shelf_life_days, m.xmin::text::bigint AS material_version
         FROM core.material m
         JOIN core.uom u ON u.id = m.base_uom_id
         LEFT JOIN core.material_class c ON c.id = m.material_class_id
@@ -263,7 +263,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         """;
 
     private const string LocationsSql = $"""
-        SELECT e.id, e.site_id, e.code, e.name, e.equipment_role, p.code AS parent_code, e.is_active, e.commingles_lots,
+        SELECT e.id, e.site_id, e.code, e.name, e.equipment_role, p.code AS parent_code, e.is_active, e.commingles_lots, e.single_material,
                coalesce(s.lot_count, 0) AS lot_count, coalesce(s.material_count, 0) AS material_count
         FROM core.equipment e
         LEFT JOIN core.equipment p ON p.id = e.parent_id

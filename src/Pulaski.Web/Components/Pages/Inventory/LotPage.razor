@@ -22,14 +22,15 @@
         @if (_lot?.Lot is { } lot)
         {
             var onHand = lot.Status is "available" or "on_hold" or "quarantine";
-            var usable = lot.Status == "available" && lot.Quantity > 0;
+            var expired = lot.ExpiresAt is { } ends && ends <= Time.GetUtcNow();
+            var usable = lot.Status == "available" && lot.Quantity > 0 && !expired;
             <div class="inv-actions">
                 <button type="button" class="btn btn-primary" disabled="@(!usable)" @onclick="() => _action = LotAction.Consume">Consume</button>
                 <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Move">Move</button>
                 @if (!lot.IsBulk)
                 {
                     <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || lot.Quantity == 0)" @onclick="() => _action = LotAction.Split">Split</button>
-                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Merge">Merge…</button>
+                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || expired)" @onclick="() => _action = LotAction.Merge">Merge…</button>
                 }
                 <button type="button" class="btn btn-outline-secondary" disabled="@(!usable)" @onclick="() => _action = LotAction.Ship">Ship</button>
                 <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.WriteUp">Write up</button>
@@ -47,6 +48,14 @@
 
 <ProblemAlert Error="_error" />
 <LotResultBanner Result="_result" OnDismiss="() => _result = null" />
+
+@if (_lot?.Lot is { ExpiresAt: { } expiredAt } && expiredAt <= Time.GetUtcNow() && _lot.Lot.Quantity > 0)
+{
+    <div class="drawer-alert is-warning mb-3" role="status">
+        <Icon Name="alert" Size="18" />
+        <span>Expired on @Display.SiteTime(expiredAt, _lot.SiteTimeZone): it can't be consumed, shipped or merged. If quality has extended it, use <strong>Correct…</strong> to set the new expiry.</span>
+    </div>
+}
 
 @if (_lot is { } detail)
 {

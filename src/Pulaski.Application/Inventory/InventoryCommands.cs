@@ -61,7 +61,8 @@ internal sealed class ReceiveLotHandler(
     IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events,
-    IIdGenerator ids) : ICommandHandler<ReceiveLotCommand, LotTransactionResponse>
+    IIdGenerator ids,
+    TimeProvider timeProvider) : ICommandHandler<ReceiveLotCommand, LotTransactionResponse>
 {
     public async Task<LotTransactionResponse> HandleAsync(ReceiveLotCommand command, CancellationToken cancellationToken)
     {
@@ -86,6 +87,9 @@ internal sealed class ReceiveLotHandler(
 
         // A lot-tracked material needs a number, except where lots mix: there a blank one goes straight into the balance (D-031).
         var location = await InventoryRules.LocationAsync(inventory, command.LocationId, null, cancellationToken);
+        await InventoryRules.EnsureAcceptsAsync(inventory, location, material.Id, cancellationToken);
+        var now = timeProvider.GetUtcNow();
+        var expiresAt = Lot.ExpiryFor(command.ExpiresAt, material.ShelfLifeDays, now);
         new Validator()
             .Require(!material.IsLotTracked || location.ComminglesLots || lotNumber is not null, nameof(command.LotNumber), $"Required: {material.Code} is lot-tracked.")
             .Require(material.IsLotTracked || lotNumber is null, nameof(command.LotNumber), $"Leave blank: {material.Code} isn't lot-tracked, so it is kept as one balance per location.")
@@ -104,13 +108,13 @@ internal sealed class ReceiveLotHandler(
             }
 
             lot = Lot.Create(ids.NewId(), siteId, material.Id, lotNumber!, material.BaseUomId, location.Id, isBulk: false,
-                LotOrigin.Received, InventoryRules.Text(command.SupplierLot), command.ExpiresAt);
+                LotOrigin.Received, InventoryRules.Text(command.SupplierLot), expiresAt);
             isNew = true;
         }
         else
         {
             (lot, isNew) = await Commingling.BalanceAsync(inventory, ids, siteId, material.Id, material.BaseUomId, location.Id, LotOrigin.Received, cancellationToken);
-            lot = lot with { ExpiresAt = Commingling.Earliest(lot.ExpiresAt, command.ExpiresAt) };
+            lot = lot with { ExpiresAt = Commingling.Earliest(lot.ExpiresAt, expiresAt) };
         }
 
         var (received, movement) = lot.Add(quantity, LotEventKind.Received);
@@ -140,7 +144,7 @@ internal sealed class ReceiveLotHandler(
         // A numbered receipt where lots mix is kept, for its genealogy, then joins the balance (D-031).
         if (location.ComminglesLots && !received.IsBulk)
         {
-            var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(inventory, eventLog, events, ids, received, location.Code, comment, cancellationToken);
+            var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(inventory, eventLog, events, ids, received, location.Code, comment, now, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return InventoryRules.Response(balance, balanceVersion, [note]);
         }
@@ -246,7 +250,8 @@ internal sealed class MoveLotHandler(
     IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events,
-    IIdGenerator ids) : ICommandHandler<MoveLotCommand, LotTransactionResponse>
+    IIdGenerator ids,
+    TimeProvider timeProvider) : ICommandHandler<MoveLotCommand, LotTransactionResponse>
 {
     public async Task<LotTransactionResponse> HandleAsync(MoveLotCommand command, CancellationToken cancellationToken)
     {
@@ -261,6 +266,7 @@ internal sealed class MoveLotHandler(
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var lot = await InventoryRules.LotAsync(inventory, command.LotId, command.ExpectedVersion, cancellationToken);
         var to = await InventoryRules.LocationAsync(inventory, command.ToLocationId, lot.SiteId, cancellationToken);
+        await InventoryRules.EnsureAcceptsAsync(inventory, to, lot.MaterialId, cancellationToken);
 
         if (!lot.IsBulk)
         {
@@ -274,7 +280,8 @@ internal sealed class MoveLotHandler(
             // Moved where lots mix, the lot joins the balance there (D-031).
             if (to.ComminglesLots)
             {
-                var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(inventory, eventLog, events, ids, moved, to.Code, comment, cancellationToken);
+                var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(
+                    inventory, eventLog, events, ids, moved, to.Code, comment, timeProvider.GetUtcNow(), cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 return InventoryRules.Response(balance, balanceVersion, [note]);
             }
@@ -380,7 +387,8 @@ internal sealed class ConsumeLotHandler(
     IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events,
-    IIdGenerator ids) : ICommandHandler<ConsumeLotCommand, LotTransactionResponse>
+    IIdGenerator ids,
+    TimeProvider timeProvider) : ICommandHandler<ConsumeLotCommand, LotTransactionResponse>
 {
     public async Task<LotTransactionResponse> HandleAsync(ConsumeLotCommand command, CancellationToken cancellationToken)
     {
@@ -403,6 +411,7 @@ internal sealed class ConsumeLotHandler(
             throw new DomainRuleException($"{lot.Name} is in another site than {job.JobNumber}.");
         }
 
+        InventoryRules.EnsureNotExpired(lot, timeProvider.GetUtcNow(), "consumed");
         var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
         var quantity = await InventoryRules.ToBaseAsync(units, material, command.Quantity, command.UomId, cancellationToken);
         var (after, movement) = lot.Take(quantity, LotEventKind.Consumed, material.BaseUomCode);
@@ -447,7 +456,8 @@ internal sealed class ProduceLotHandler(
     IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events,
-    IIdGenerator ids) : ICommandHandler<ProduceLotCommand, LotTransactionResponse>
+    IIdGenerator ids,
+    TimeProvider timeProvider) : ICommandHandler<ProduceLotCommand, LotTransactionResponse>
 {
     public async Task<LotTransactionResponse> HandleAsync(ProduceLotCommand command, CancellationToken cancellationToken)
     {
@@ -466,6 +476,9 @@ internal sealed class ProduceLotHandler(
         var job = await InventoryRules.JobAsync(inventory, command.JobId, null, cancellationToken);
         var location = await InventoryRules.LocationAsync(inventory, command.LocationId, job.SiteId, cancellationToken);
         var material = await InventoryRules.MaterialAsync(inventory, job.MaterialId!.Value, cancellationToken);
+        await InventoryRules.EnsureAcceptsAsync(inventory, location, material.Id, cancellationToken);
+        var now = timeProvider.GetUtcNow();
+        var expiresAt = Lot.ExpiryFor(command.ExpiresAt, material.ShelfLifeDays, now);
         var quantity = await InventoryRules.ToBaseAsync(units, material, command.Quantity, command.UomId, cancellationToken);
         var produced = await inventory.ListLotsProducedByJobAsync(job.Id, cancellationToken);
 
@@ -497,7 +510,7 @@ internal sealed class ProduceLotHandler(
             }
 
             lot = existing?.Value ?? Lot.Create(ids.NewId(), job.SiteId, material.Id, lotNumber, material.BaseUomId, location.Id,
-                isBulk: false, LotOrigin.Produced, expiresAt: command.ExpiresAt, producedByJobId: job.Id);
+                isBulk: false, LotOrigin.Produced, expiresAt: expiresAt, producedByJobId: job.Id);
         }
         else
         {
@@ -512,7 +525,7 @@ internal sealed class ProduceLotHandler(
             var (balance, isNew) = await Commingling.BalanceAsync(
                 inventory, ids, job.SiteId, material.Id, material.BaseUomId, location.Id, LotOrigin.Produced, cancellationToken);
             existing = isNew ? null : new Versioned<Lot>(balance, Version: 0); // only whether it exists matters below
-            lot = balance with { ExpiresAt = Commingling.Earliest(balance.ExpiresAt, command.ExpiresAt) };
+            lot = balance with { ExpiresAt = Commingling.Earliest(balance.ExpiresAt, expiresAt) };
         }
 
         var (after, movement) = lot.Add(quantity, LotEventKind.Produced);
@@ -545,7 +558,7 @@ internal sealed class ProduceLotHandler(
 
         if (location.ComminglesLots && !after.IsBulk)
         {
-            var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(inventory, eventLog, events, ids, after, location.Code, comment, cancellationToken);
+            var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(inventory, eventLog, events, ids, after, location.Code, comment, now, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return InventoryRules.Response(balance, balanceVersion, [note]);
         }

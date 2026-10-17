@@ -39,6 +39,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-029 | Inventory lookups: a material shortage check sets each open job's remaining components, in the order the jobs are needed, against available stock; a movement journal searches every lot movement by time, kind, material, location, job and person. Neither plans purchases nor nets incoming supply (charter: not MRP) | Proposed | 2026-10-16 |
 | D-030 | Inventory completion: split, merge and ship lots; correct a lot's details; reverse a lot's latest movement; count a location and post the differences; maintain reason codes; stock on a past date and an aging report; CSV export. Pallets, labels and lot certificates are deferred | Proposed | 2026-10-16 |
 | D-031 | Indistinguishable lots: a location that holds inventory can mix lots (`commingles_lots`), like a silo or tank. Everything that arrives there joins one balance per material, with no lot number; a numbered receipt is kept as its own lot and merged in, so genealogy still reaches the supplier lot. Every balance, lot-tracked or not, has a NULL lot number | Proposed | 2026-10-17 |
+| D-032 | Location and expiry rules: a location can take one material at a time (`single_material`); a location holding stock can't be deactivated or stop holding inventory; materials have a shelf life that sets a new lot's expiry; an expired lot can't be consumed, shipped or merged until its expiry is corrected | Proposed | 2026-10-17 |
 
 ## Order hierarchy
 
@@ -469,6 +470,20 @@ A resin silo or a tank can't keep lots apart: what goes in mixes with what is th
 - **Traceability kept.** A receipt with a lot number creates that lot, then merges it into the balance (`received`, then `merged` out of the lot and into the balance, genealogy `merge`), so a trace from a finished lot goes through the silo back to the supplier's lot. A lot moved or split there is merged the same way, and so is production with a lot number. A receipt or production with no number goes straight into the balance, the supplier lot kept only in the event. The balance takes the earliest expiry of everything in it.
 - **Genealogy over-links here too.** Every lot that ever joined a balance is a parent of everything taken from it afterwards: the silo has no first-in, first-out. Time-window genealogy with residence time narrows it with execution (charter slice step 4).
 - **Counting, writing off and shipping** a balance work as for any balance. Merging by hand, splitting and correcting the number don't apply to a balance.
+
+## Location and expiry rules (D-032, proposed)
+
+Rules that keep floor stock honest where D-027 and D-031 left a gap.
+
+**One material at a time.** A location that holds inventory can take **one material at a time** (`core.equipment.single_material`), like a silo dedicated to a resin. While any stock of one material is there (a quantity above zero, held or not), nothing of another material can arrive: receipts, moves, splits sent there, balance transfers and production are refused, naming what is there. Once that quantity is zero, any material can go in. It is independent of lots being indistinguishable (D-031), which only ever merges lots of one material number; a silo normally has both. Arrivals lock the location row first (`FOR UPDATE`) when it takes one material, so two receipts of different materials can't both land in an empty silo. It can't be turned on while two materials are there.
+
+**Locations holding stock.** Equipment holding on-hand stock can't be deactivated or stop holding inventory; move, use or write off the stock first. Otherwise its lots would sit in a place nothing can reach.
+
+**Shelf life and expiry.**
+
+- A material may have a shelf life in days (`core.material.shelf_life_days`). A new lot received or produced without an expiry expires that long after it arrives; an expiry entered by hand wins. A balance takes the earliest expiry of what joins it, as before (D-031).
+- An **expired** lot (its expiry is now or past) can't be consumed, shipped, or merged into another lot or a balance. It can still be moved, held, written off or counted. To use it after all, correct its expiry with a comment (D-030): the quality decision is then on record.
+- Shelf life is set on the material's inventory page until there is a materials screen; the change is an event on the material.
 
 ## Application architecture
 

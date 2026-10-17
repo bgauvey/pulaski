@@ -25,6 +25,12 @@ public interface IEquipmentRepository
     /// <returns>The new row version.</returns>
     Task<long> UpdateAsync(Equipment equipment, DateTimeOffset at, CancellationToken cancellationToken);
 
+    /// <summary>True when any stock is on hand at the location (D-032).</summary>
+    Task<bool> HoldsStockAsync(Guid equipmentId, CancellationToken cancellationToken);
+
+    /// <summary>How many materials have stock on hand at the location (D-032).</summary>
+    Task<int> CountMaterialsHeldAsync(Guid equipmentId, CancellationToken cancellationToken);
+
     /// <summary>True when lots (not balances) with stock sit at the location (D-031).</summary>
     Task<bool> HoldsSeparateLotsAsync(Guid equipmentId, CancellationToken cancellationToken);
 

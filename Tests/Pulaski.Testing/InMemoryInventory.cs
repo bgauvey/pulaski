@@ -20,6 +20,7 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
     private readonly Dictionary<Guid, StockCountLine> _countLines = [];
     private readonly Dictionary<Guid, Versioned<ReasonCode>> _reasonCodes = [];
     private readonly HashSet<Guid> _sites = [];
+    private readonly Dictionary<Guid, long> _materialVersions = [];
     private readonly List<GenealogyEdge> _edges = [];
     private readonly Dictionary<Guid, InventoryLocation> _locations = [];
     private readonly Dictionary<Guid, InventoryMaterial> _materials = [];
@@ -50,7 +51,8 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         }
     }
 
-    public InventoryLocation AddLocation(string code, Guid siteId, bool holdsInventory = true, bool isActive = true, bool comminglesLots = false)
+    public InventoryLocation AddLocation(
+        string code, Guid siteId, bool holdsInventory = true, bool isActive = true, bool comminglesLots = false, bool singleMaterial = false)
     {
         var location = new InventoryLocation
         {
@@ -59,6 +61,7 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
             SiteId = siteId,
             HoldsInventory = holdsInventory,
             ComminglesLots = comminglesLots,
+            SingleMaterial = singleMaterial,
             IsActive = isActive,
         };
         lock (_lock)
@@ -69,7 +72,7 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         return location;
     }
 
-    public InventoryMaterial AddMaterial(string code, Guid baseUomId, string baseUomCode, bool isLotTracked = true, bool isActive = true)
+    public InventoryMaterial AddMaterial(string code, Guid baseUomId, string baseUomCode, bool isLotTracked = true, bool isActive = true, int? shelfLifeDays = null)
     {
         var material = new InventoryMaterial
         {
@@ -79,6 +82,7 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
             BaseUomCode = baseUomCode,
             IsLotTracked = isLotTracked,
             IsActive = isActive,
+            ShelfLifeDays = shelfLifeDays,
         };
         lock (_lock)
         {
@@ -438,6 +442,45 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
             var version = ++_next;
             _reasonCodes[reason.Id] = new(reason, version);
             return Task.FromResult(version);
+        }
+    }
+
+    public Task LockLocationAsync(Guid id, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task<string?> OtherMaterialAtAsync(Guid locationId, Guid materialId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var other = _lots.Values.Select(l => l.Value)
+                .FirstOrDefault(l => l.LocationId == locationId && l.MaterialId != materialId && l.Quantity > 0 && LotStatus.IsOnHand(l.Status));
+            return Task.FromResult(other is null ? null : _materials.GetValueOrDefault(other.MaterialId)?.Code ?? other.MaterialId.ToString());
+        }
+    }
+
+    public Task<Versioned<InventoryMaterial>?> GetMaterialForUpdateAsync(Guid id, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_materials.TryGetValue(id, out var m) ? new Versioned<InventoryMaterial>(m, _materialVersions.GetValueOrDefault(id, 1)) : null);
+        }
+    }
+
+    public Task<long> UpdateShelfLifeAsync(Guid materialId, int? shelfLifeDays, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _materials[materialId] = _materials[materialId] with { ShelfLifeDays = shelfLifeDays };
+            var version = ++_next;
+            _materialVersions[materialId] = version;
+            return Task.FromResult(version);
+        }
+    }
+
+    public InventoryMaterial? FindMaterial(Guid id)
+    {
+        lock (_lock)
+        {
+            return _materials.GetValueOrDefault(id);
         }
     }
 

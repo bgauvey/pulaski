@@ -55,15 +55,40 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         """;
 
     private const string GetLocation = """
-        SELECT id, code, site_id, holds_inventory, commingles_lots, is_active FROM core.equipment WHERE id = @Id FOR SHARE
+        SELECT id, code, site_id, holds_inventory, commingles_lots, single_material, is_active FROM core.equipment WHERE id = @Id FOR SHARE
         """;
 
     private const string GetMaterial = """
-        SELECT m.id, m.code, m.base_uom_id, u.code AS base_uom_code, m.is_lot_tracked, m.is_active
+        SELECT m.id, m.code, m.base_uom_id, u.code AS base_uom_code, m.is_lot_tracked, m.is_active, m.shelf_life_days
         FROM core.material m
         JOIN core.uom u ON u.id = m.base_uom_id
         WHERE m.id = @Id
         FOR SHARE OF m
+        """;
+
+    private const string GetMaterialForUpdate = """
+        SELECT m.id, m.code, m.base_uom_id, u.code AS base_uom_code, m.is_lot_tracked, m.is_active, m.shelf_life_days,
+               m.xmin::text::bigint AS version
+        FROM core.material m
+        JOIN core.uom u ON u.id = m.base_uom_id
+        WHERE m.id = @Id
+        FOR UPDATE OF m
+        """;
+
+    private const string UpdateShelfLife = """
+        UPDATE core.material SET shelf_life_days = @Days, updated_at = @At WHERE id = @Id RETURNING xmin::text::bigint
+        """;
+
+    private const string LockLocation = "SELECT 1 FROM core.equipment WHERE id = @Id FOR UPDATE";
+
+    private const string OtherMaterialAt = """
+        SELECT m.code
+        FROM core.lot l
+        JOIN core.material m ON m.id = l.material_id
+        WHERE l.location_equipment_id = @LocationId AND l.material_id <> @MaterialId
+          AND l.quantity > 0 AND l.status IN ('available','on_hold','quarantine')
+        ORDER BY m.code
+        LIMIT 1
         """;
 
     private const string GetJobForUpdate = """
@@ -319,6 +344,29 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
     public Task<long> UpdateReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(UpdateReasonCode, reason, cancellationToken);
 
+    public Task LockLocationAsync(Guid id, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(LockLocation, new { Id = id }, cancellationToken);
+
+    public Task<string?> OtherMaterialAtAsync(Guid locationId, Guid materialId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<string>(OtherMaterialAt, new { LocationId = locationId, MaterialId = materialId }, cancellationToken);
+
+    public async Task<Versioned<InventoryMaterial>?> GetMaterialForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<MaterialRow>(GetMaterialForUpdate, new { Id = id }, cancellationToken) is { } r
+            ? new(new InventoryMaterial
+            {
+                Id = r.Id,
+                Code = r.Code,
+                BaseUomId = r.BaseUomId,
+                BaseUomCode = r.BaseUomCode,
+                IsLotTracked = r.IsLotTracked,
+                IsActive = r.IsActive,
+                ShelfLifeDays = r.ShelfLifeDays,
+            }, r.Version)
+            : null;
+
+    public Task<long> UpdateShelfLifeAsync(Guid materialId, int? shelfLifeDays, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(UpdateShelfLife, new { Id = materialId, Days = shelfLifeDays, At = at }, cancellationToken);
+
     public Task<bool> IsSiteAsync(Guid id, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(IsSite, new { Id = id }, cancellationToken);
 
@@ -346,6 +394,18 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         public Versioned<Lot> ToVersioned() => new(
             new Lot(Id, SiteId, MaterialId, LotNumber, Status, Quantity, UomId, LocationId, IsBulk, Origin, SupplierLot, ExpiresAt, ProducedByJobId),
             Version);
+    }
+
+    private sealed class MaterialRow
+    {
+        public Guid Id { get; init; }
+        public string Code { get; init; } = "";
+        public Guid BaseUomId { get; init; }
+        public string BaseUomCode { get; init; } = "";
+        public bool IsLotTracked { get; init; }
+        public bool IsActive { get; init; }
+        public int? ShelfLifeDays { get; init; }
+        public long Version { get; init; }
     }
 
     private sealed class EventRow

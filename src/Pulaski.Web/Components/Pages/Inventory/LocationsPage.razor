@@ -49,6 +49,10 @@ else
                             {
                                 <span class="chip ms-1" title="Lots here mix into one balance per material">Mixes lots</span>
                             }
+                            @if (l.SingleMaterial)
+                            {
+                                <span class="chip ms-1" title="Takes one material at a time">One material</span>
+                            }
                         </td>
                         <td>@l.ParentCode</td>
                         <td class="inv-num">@l.LotCount</td>

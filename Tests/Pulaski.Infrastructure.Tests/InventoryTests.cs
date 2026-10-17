@@ -278,6 +278,39 @@ public sealed class InventoryTests(DatabaseFixture db)
             plant.Stores, stores.Version, stores.Name, null, false, false, true, true, ComminglesLots: true)));
     }
 
+    [Fact]
+    public async Task One_material_locations_shelf_life_and_stock_holding_rules_run_against_the_database()
+    {
+        var plant = await CreatePlantAsync();
+        CreatedResponse silo = await db.SendAsync(new CreateEquipmentCommand(
+            plant.Site, "SILO-" + _suffix, "Resin silo", null, "work_center", "storage_zone", false, false, true, null,
+            ComminglesLots: true, SingleMaterial: true));
+
+        // Shelf life from the material's own page.
+        var stock = await QueryAsync<GetMaterialStockQuery, MaterialStockDetailDto>(new GetMaterialStockQuery(plant.Resin, plant.Site));
+        await db.SendAsync(new SetShelfLifeCommand(plant.Resin, stock.Material.MaterialVersion, 120));
+        var lot = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-E-" + _suffix, 10m, plant.Kg));
+        var expires = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId))).Lot.ExpiresAt!.Value;
+        Assert.InRange(expires, DateTimeOffset.UtcNow.AddDays(119), DateTimeOffset.UtcNow.AddDays(121));
+        Assert.Equal(120, (await QueryAsync<GetMaterialStockQuery, MaterialStockDetailDto>(new GetMaterialStockQuery(plant.Resin, plant.Site))).Material.ShelfLifeDays);
+
+        // The silo takes resin, then refuses the caps until it is empty.
+        await db.SendAsync(new ReceiveLotCommand(plant.Resin, silo.Id, null, 500m, plant.Kg));
+        var refused = await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new ReceiveLotCommand(plant.Caps, silo.Id, null, 5m, plant.Kg)));
+        Assert.Contains("RESIN-" + _suffix, refused.Message, StringComparison.Ordinal);
+        var locations = await QueryAsync<ListInventoryLocationsQuery, IReadOnlyList<InventoryLocationDto>>(new ListInventoryLocationsQuery(plant.Site));
+        Assert.True(Assert.Single(locations, l => l.Id == silo.Id).SingleMaterial);
+
+        // A location with stock can't be deactivated; the stores also hold two materials, so they can't take one at a time.
+        await db.SendAsync(new ReceiveLotCommand(plant.Caps, plant.Stores, null, 5m, plant.Kg));
+        var stores = await QueryAsync<GetEquipmentQuery, Contracts.EquipmentModel.EquipmentDto>(new GetEquipmentQuery(plant.Stores));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new UpdateEquipmentCommand(
+            plant.Stores, stores.Version, stores.Name, null, false, false, true, IsActive: false)));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new UpdateEquipmentCommand(
+            plant.Stores, stores.Version, stores.Name, null, false, false, true, true, SingleMaterial: true)));
+        Assert.True((await QueryAsync<GetEquipmentQuery, Contracts.EquipmentModel.EquipmentDto>(new GetEquipmentQuery(silo.Id))).SingleMaterial);
+    }
+
     private async Task<TResult> QueryAsync<TQuery, TResult>(TQuery query)
         where TQuery : IQuery<TResult>
     {

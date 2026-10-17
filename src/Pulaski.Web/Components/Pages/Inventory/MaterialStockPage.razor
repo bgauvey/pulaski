@@ -32,6 +32,24 @@
         <div class="inv-tile @(m.Held > 0 ? "is-warning" : "")"><span class="metric @(m.Held == 0 ? "is-zero" : "")">@InventoryView.Qty(m.Held)</span><span class="inv-tile-label">On hold or quarantine</span></div>
         <div class="inv-tile"><span class="metric @(m.LotCount == 0 ? "is-zero" : "")">@m.LotCount</span><span class="inv-tile-label">@(m.IsLotTracked ? "Lots" : "Balances")</span></div>
         <div class="inv-tile"><span class="metric @(m.LocationCount == 0 ? "is-zero" : "")">@m.LocationCount</span><span class="inv-tile-label">Locations</span></div>
+        <div class="inv-tile">
+            @if (_editingShelfLife)
+            {
+                <form class="d-flex gap-1 align-items-center" @onsubmit="SaveShelfLifeAsync" @onsubmit:preventDefault>
+                    <input type="number" class="form-control form-control-sm" min="1" max="36500" placeholder="None" aria-label="Shelf life in days" @bind="_shelfLife" />
+                    <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save</button>
+                </form>
+                <span class="inv-tile-label">Shelf life, days (blank for none)</span>
+            }
+            else
+            {
+                <span class="metric @(m.ShelfLifeDays is null ? "is-zero" : "")">@(m.ShelfLifeDays?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "—")</span>
+                <span class="inv-tile-label">
+                    Shelf life, days
+                    <button type="button" class="btn btn-link btn-sm p-0 ms-1" @onclick="() => { _shelfLife = m.ShelfLifeDays; _editingShelfLife = true; }">Change</button>
+                </span>
+            }
+        </div>
     </div>
 
     <section class="inv-section" aria-labelledby="lots-title">
@@ -194,6 +212,9 @@ else if (_error is null)
     private ApiException? _error;
     private LotActionResult? _result;
     private LotAction? _action;
+    private bool _editingShelfLife;
+    private int? _shelfLife;
+    private bool _saving;
 
     private string? Tz => Sites.Site?.TimeZone;
 
@@ -212,6 +233,27 @@ else if (_error is null)
         catch (ApiException ex)
         {
             _error = ex;
+        }
+    }
+
+    // New lots expire this long after they arrive; lots already here keep their expiry (D-032).
+    private async Task SaveShelfLifeAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await Api.SetShelfLifeAsync(MaterialId, new SetShelfLifeRequest { Version = _detail!.Material.MaterialVersion, ShelfLifeDays = _shelfLife });
+            _editingShelfLife = false;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
         }
     }
 

@@ -36,7 +36,8 @@ internal sealed class SplitLotHandler(
     IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events,
-    IIdGenerator ids) : ICommandHandler<SplitLotCommand, LotTransactionResponse>
+    IIdGenerator ids,
+    TimeProvider timeProvider) : ICommandHandler<SplitLotCommand, LotTransactionResponse>
 {
     public async Task<LotTransactionResponse> HandleAsync(SplitLotCommand command, CancellationToken cancellationToken)
     {
@@ -52,6 +53,11 @@ internal sealed class SplitLotHandler(
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var lot = await InventoryRules.LotAsync(inventory, command.LotId, command.ExpectedVersion, cancellationToken);
         var destination = command.ToLocationId is { } to ? await InventoryRules.LocationAsync(inventory, to, lot.SiteId, cancellationToken) : null;
+        if (destination is not null)
+        {
+            await InventoryRules.EnsureAcceptsAsync(inventory, destination, lot.MaterialId, cancellationToken);
+        }
+
         var locationId = destination?.Id
             ?? lot.LocationId ?? throw new DomainRuleException($"{lot.Name} has no location; choose where the new lot goes.");
         var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
@@ -95,7 +101,8 @@ internal sealed class SplitLotHandler(
         // Split off to where lots mix, the new lot joins the balance there (D-031).
         if (destination is { ComminglesLots: true })
         {
-            var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(inventory, eventLog, events, ids, part, destination.Code, comment, cancellationToken);
+            var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(
+                inventory, eventLog, events, ids, part, destination.Code, comment, timeProvider.GetUtcNow(), cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return InventoryRules.Response(balance, balanceVersion, [note]);
         }
@@ -110,7 +117,8 @@ internal sealed class MergeLotsHandler(
     IInventoryRepository inventory,
     IEventLog eventLog,
     IEventFactory events,
-    IIdGenerator ids) : ICommandHandler<MergeLotsCommand, LotTransactionResponse>
+    IIdGenerator ids,
+    TimeProvider timeProvider) : ICommandHandler<MergeLotsCommand, LotTransactionResponse>
 {
     private const int MaxSources = 50;
 
@@ -145,6 +153,12 @@ internal sealed class MergeLotsHandler(
         }
 
         var target = targetRow.Lot;
+        var now = timeProvider.GetUtcNow();
+        InventoryRules.EnsureNotExpired(target, now, "merged into");
+        foreach (var id in sources)
+        {
+            InventoryRules.EnsureNotExpired(locked[id].Lot, now, "merged");
+        }
         var merged = new List<(Lot Source, LotMovement Out, LotMovement In)>();
         foreach (var source in sources.Select(id => locked[id].Lot).OrderBy(l => l.LotNumber, StringComparer.Ordinal))
         {
@@ -185,7 +199,8 @@ internal sealed class ShipLotHandler(
     IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events,
-    IIdGenerator ids) : ICommandHandler<ShipLotCommand, LotTransactionResponse>
+    IIdGenerator ids,
+    TimeProvider timeProvider) : ICommandHandler<ShipLotCommand, LotTransactionResponse>
 {
     public async Task<LotTransactionResponse> HandleAsync(ShipLotCommand command, CancellationToken cancellationToken)
     {
@@ -200,6 +215,7 @@ internal sealed class ShipLotHandler(
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var lot = await InventoryRules.LotAsync(inventory, command.LotId, command.ExpectedVersion, cancellationToken);
+        InventoryRules.EnsureNotExpired(lot, timeProvider.GetUtcNow(), "shipped");
         var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
         var quantity = command.Quantity is { } entered
             ? await InventoryRules.ToBaseAsync(units, material, entered, command.UomId!.Value, cancellationToken)

@@ -16,7 +16,8 @@ public sealed record Equipment(
     string? TimeZone,
     bool IsActive,
     bool CanRunJob = false,
-    bool ComminglesLots = false)
+    bool ComminglesLots = false,
+    bool SingleMaterial = false)
 {
     /// <summary>
     /// A planning target that runs nothing itself, such as a department: jobs planned to it are
@@ -42,7 +43,8 @@ public sealed record Equipment(
         bool holdsInventory,
         string? timeZone,
         bool canRunJob = false,
-        bool comminglesLots = false)
+        bool comminglesLots = false,
+        bool singleMaterial = false)
     {
         if (!EquipmentTypes.IsValidLevelRole(level, equipmentRole))
         {
@@ -59,7 +61,7 @@ public sealed record Equipment(
             throw new DomainRuleException($"Level {level} cannot be placed under level {parent.Level}.");
         }
 
-        EnsureCanCommingle(holdsInventory, comminglesLots);
+        EnsureStorageFlags(holdsInventory, comminglesLots, singleMaterial);
 
         var siteId = level switch
         {
@@ -70,16 +72,17 @@ public sealed record Equipment(
 
         return new Equipment(
             id, parent?.Id, siteId, code, name, description, level, equipmentRole,
-            tracksState, isSchedulable, holdsInventory, timeZone, IsActive: true, canRunJob, comminglesLots);
+            tracksState, isSchedulable, holdsInventory, timeZone, IsActive: true, canRunJob, comminglesLots, singleMaterial);
     }
 
-    /// <summary>Lots can only mix where lots are kept (D-031).</summary>
-    /// <exception cref="DomainRuleException">Indistinguishable lots without holding inventory.</exception>
-    public static void EnsureCanCommingle(bool holdsInventory, bool comminglesLots)
+    /// <summary>Lots can only mix (D-031), and a location only take one material (D-032), where lots are kept.</summary>
+    /// <exception cref="DomainRuleException">A storage rule without holding inventory.</exception>
+    public static void EnsureStorageFlags(bool holdsInventory, bool comminglesLots, bool singleMaterial)
     {
-        if (comminglesLots && !holdsInventory)
+        if ((comminglesLots || singleMaterial) && !holdsInventory)
         {
-            throw new DomainRuleException("Lots can only be indistinguishable where inventory is held; tick Holds inventory too.");
+            throw new DomainRuleException(
+                $"{(comminglesLots ? "Lots can only be indistinguishable" : "One material at a time only applies")} where inventory is held; tick Holds inventory too.");
         }
     }
 }

@@ -18,6 +18,7 @@ public sealed class EquipmentDraft
     public bool CanRunJob { get; set; }
     public bool HoldsInventory { get; set; }
     public bool ComminglesLots { get; set; }
+    public bool SingleMaterial { get; set; }
 
     /// <summary>A placeholder row for the tree grid.</summary>
     public EquipmentDto AsRow() => new()
@@ -44,6 +45,7 @@ public sealed class EquipmentDraft
         CanRunJob = CanRunJob,
         HoldsInventory = HoldsInventory,
         ComminglesLots = HoldsInventory && ComminglesLots,
+        SingleMaterial = HoldsInventory && SingleMaterial,
         TimeZone = Level == "site" ? EquipmentProperties.NullIfBlank(TimeZone) : null,
     };
 }
@@ -72,6 +74,9 @@ public static class EquipmentProperties
     private const string HoldsInventoryHelp = "Material lots can be located here.";
     private const string ComminglesLotsHelp =
         "Lots here mix and can't be told apart, like a silo or tank: everything received, moved or produced here joins one balance per material, with no lot number. A numbered lot is kept for its genealogy, then merged in.";
+
+    private const string SingleMaterialHelp =
+        "Takes one material at a time, like a silo for one resin: while one material is here, nothing of another can arrive. Once it is empty, any material can go in.";
     private const string TimeZoneHelp = "IANA time zone the site's shifts and reports use, e.g. America/Chicago.";
 
     // ---- Existing equipment ----
@@ -97,6 +102,7 @@ public static class EquipmentProperties
         if (e.HoldsInventory)
         {
             items.Add(Bool("comminglesLots", "Lots are indistinguishable", Capabilities, ComminglesLotsHelp, e.ComminglesLots));
+            items.Add(Bool("singleMaterial", "One material at a time", Capabilities, SingleMaterialHelp, e.SingleMaterial));
         }
 
         if (e.Level == "site")
@@ -135,6 +141,7 @@ public static class EquipmentProperties
             CanRunJob = e.CanRunJob,
             HoldsInventory = e.HoldsInventory,
             ComminglesLots = e.ComminglesLots,
+            SingleMaterial = e.SingleMaterial,
             IsActive = e.IsActive,
         };
 
@@ -146,8 +153,14 @@ public static class EquipmentProperties
             "isSchedulable" => request with { IsSchedulable = change.Value == "true" },
             "canRunJob" => request with { CanRunJob = change.Value == "true" },
             // Lots can only mix where inventory is held, so dropping one drops the other.
-            "holdsInventory" => request with { HoldsInventory = change.Value == "true", ComminglesLots = change.Value == "true" && e.ComminglesLots },
+            "holdsInventory" => request with
+            {
+                HoldsInventory = change.Value == "true",
+                ComminglesLots = change.Value == "true" && e.ComminglesLots,
+                SingleMaterial = change.Value == "true" && e.SingleMaterial,
+            },
             "comminglesLots" => request with { ComminglesLots = change.Value == "true" },
+            "singleMaterial" => request with { SingleMaterial = change.Value == "true" },
             "isActive" => request with { IsActive = change.Value == "true" },
             _ => null,
         };
@@ -203,6 +216,7 @@ public static class EquipmentProperties
         if (d.HoldsInventory)
         {
             items.Add(Bool("comminglesLots", "Lots are indistinguishable", Capabilities, ComminglesLotsHelp, d.ComminglesLots));
+            items.Add(Bool("singleMaterial", "One material at a time", Capabilities, SingleMaterialHelp, d.SingleMaterial));
         }
 
         if (d.Level == "site")
@@ -257,9 +271,13 @@ public static class EquipmentProperties
             case "holdsInventory":
                 d.HoldsInventory = change.Value == "true";
                 d.ComminglesLots &= d.HoldsInventory;
+                d.SingleMaterial &= d.HoldsInventory;
                 break;
             case "comminglesLots":
                 d.ComminglesLots = change.Value == "true";
+                break;
+            case "singleMaterial":
+                d.SingleMaterial = change.Value == "true";
                 break;
         }
     }
@@ -284,6 +302,7 @@ public static class EquipmentProperties
         d.CanRunJob = d.IsSchedulable;
         d.HoldsInventory = role is "feed_point" or "storage_zone" or "storage_unit";
         d.ComminglesLots = false;
+        d.SingleMaterial = false;
     }
 
     private static PropertyItem Bool(string key, string name, string category, string description, bool value) => new()

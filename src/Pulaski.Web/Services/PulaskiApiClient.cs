@@ -260,6 +260,9 @@ public sealed class PulaskiApiClient(HttpClient http)
     public Task<MaterialStockDetailDto> GetMaterialStockAsync(Guid materialId, Guid? siteId, CancellationToken ct = default) =>
         GetAsync<MaterialStockDetailDto>(Query($"api/inventory/materials/{materialId}", ("siteId", siteId)), ct);
 
+    public Task<VersionResponse> SetShelfLifeAsync(Guid materialId, SetShelfLifeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/inventory/materials/{materialId}/shelf-life", request, ct);
+
     public Task<WhereUsedDto> GetWhereUsedAsync(Guid materialId, CancellationToken ct = default) =>
         GetAsync<WhereUsedDto>($"api/inventory/materials/{materialId}/where-used", ct);
 

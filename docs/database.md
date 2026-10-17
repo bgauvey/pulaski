@@ -96,6 +96,7 @@ One self-referencing table holds enterprise, sites, areas, work centers (lines),
 | `is_schedulable` | boolean | no | A planning target: jobs can be planned to it, a line or a group such as a department (D-022). |
 | `can_run_job` | boolean | no | Jobs actually run here (a line or cell). A schedulable row without it is a group: its jobs wait in a window until a line below it that can run jobs takes them (D-022). |
 | `holds_inventory` | boolean | no | Lots can be located here (storage, feed point). |
+| `single_material` | boolean | no | Takes one material at a time (D-032): another material can arrive only when the quantity of the one there is zero. Needs `holds_inventory`. |
 | `commingles_lots` | boolean | no | Lots here mix and can't be told apart, like a silo or tank (D-031): every arrival joins one balance per material. Needs `holds_inventory`. |
 | `state_derivation` | text | yes | How a line's state is derived: `own_tags`, `constraint_machine`, `worst_child` or `rule`. Open question; not used yet. |
 | `constraint_equipment_id` | uuid → equipment | yes | The constraint machine, required when `state_derivation = 'constraint_machine'`. |
@@ -201,6 +202,7 @@ Groups materials (e.g. all resins), so changeover rules can match a class instea
 | `material_type` | text | no | `raw`, `intermediate`, `finished`, `packaging`, `consumable` or `rework`. |
 | `material_class_id` | uuid → material_class | yes | Its class, if any. |
 | `base_uom_id` | uuid → uom | no | The unit it is counted in by default. |
+| `shelf_life_days` | integer | yes | A new lot received or produced without an expiry expires this many days after it arrives (D-032). |
 | `is_lot_tracked` | boolean | no | Whether inventory of it is tracked by lot. Default true. |
 | `origin` | text | no | `local` (created in Pulaski) or `erp` (imported). |
 | `external_system`, `external_key`, `external_version` | text | yes | The ERP record this came from. System and key are required for `erp` rows and unique together. |

@@ -34,6 +34,13 @@ internal static class InventoryEndpoints
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new GetMaterialStockQuery(id, siteId), ct)));
 
+        inventory.MapPut("/materials/{id:guid}/shelf-life", async Task<Ok<VersionResponse>> (
+            Guid id,
+            SetShelfLifeRequest request,
+            ICommandHandler<SetShelfLifeCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetShelfLifeCommand(id, request.Version, request.ShelfLifeDays), ct)));
+
         inventory.MapGet("/materials/{id:guid}/where-used", async Task<Ok<WhereUsedDto>> (
             Guid id,
             IQueryHandler<WhereUsedQuery, WhereUsedDto> handler,

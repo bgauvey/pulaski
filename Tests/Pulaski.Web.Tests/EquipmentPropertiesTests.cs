@@ -34,11 +34,23 @@ public class EquipmentPropertiesTests
     [Fact]
     public void Lots_can_be_indistinguishable_only_where_inventory_is_held()
     {
-        var silo = Line with { Code = "SILO-1", EquipmentRole = "storage_zone", TracksState = false, IsSchedulable = false, HoldsInventory = true, ComminglesLots = true };
+        var silo = Line with
+        {
+            Code = "SILO-1",
+            EquipmentRole = "storage_zone",
+            TracksState = false,
+            IsSchedulable = false,
+            HoldsInventory = true,
+            ComminglesLots = true,
+            SingleMaterial = true,
+        };
 
         Assert.True(EquipmentProperties.ApplyChange(silo, new PropertyChange("comminglesLots", "true"))!.ComminglesLots);
         var dropped = EquipmentProperties.ApplyChange(silo, new PropertyChange("holdsInventory", "false"))!;
-        Assert.Equal((false, false), (dropped.HoldsInventory, dropped.ComminglesLots));
+        Assert.Equal((false, false, false), (dropped.HoldsInventory, dropped.ComminglesLots, dropped.SingleMaterial));
+        Assert.False(EquipmentProperties.ApplyChange(silo, new PropertyChange("singleMaterial", "false"))!.SingleMaterial);
+        Assert.Contains(EquipmentProperties.ForExisting(silo, new EquipmentTree([silo])), i => i.Key == "singleMaterial");
+        Assert.DoesNotContain(EquipmentProperties.ForExisting(Line, new EquipmentTree([Line])), i => i.Key == "singleMaterial");
         Assert.Equal(true, EquipmentProperties.ApplyChange(silo, new PropertyChange("name", "Silo"))!.ComminglesLots);
     }
 

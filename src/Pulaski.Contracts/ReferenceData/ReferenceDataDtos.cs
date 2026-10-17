@@ -38,6 +38,9 @@ public sealed record MaterialDto
 
     /// <summary>False for a material kept as one balance per location rather than in numbered lots (D-027).</summary>
     public bool IsLotTracked { get; init; } = true;
+
+    /// <summary>A new lot expires this many days after it arrives (D-032).</summary>
+    public int? ShelfLifeDays { get; init; }
     public bool IsActive { get; init; }
 }
 

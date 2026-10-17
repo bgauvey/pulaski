@@ -62,6 +62,15 @@ public sealed class InMemoryEquipment : IEquipmentRepository, IEquipmentReadStor
     public Task<bool> HoldsSeparateLotsAsync(Guid equipmentId, CancellationToken cancellationToken) =>
         Task.FromResult(WithSeparateLots.Contains(equipmentId));
 
+    /// <summary>How many materials a test says each location holds (D-032).</summary>
+    public Dictionary<Guid, int> MaterialsHeld { get; } = [];
+
+    public Task<bool> HoldsStockAsync(Guid equipmentId, CancellationToken cancellationToken) =>
+        Task.FromResult(MaterialsHeld.GetValueOrDefault(equipmentId) > 0 || WithSeparateLots.Contains(equipmentId));
+
+    public Task<int> CountMaterialsHeldAsync(Guid equipmentId, CancellationToken cancellationToken) =>
+        Task.FromResult(MaterialsHeld.GetValueOrDefault(equipmentId));
+
     public Task<bool> IsInSubtreeAsync(Guid ancestorId, Guid descendantId, CancellationToken cancellationToken)
     {
         for (var node = Find(descendantId)?.Value; node is not null; node = node.ParentId is { } p ? Find(p)?.Value : null)
@@ -111,6 +120,7 @@ public sealed class InMemoryEquipment : IEquipmentRepository, IEquipmentReadStor
             CanRunJob = e.CanRunJob,
             HoldsInventory = e.HoldsInventory,
             ComminglesLots = e.ComminglesLots,
+            SingleMaterial = e.SingleMaterial,
             TimeZone = e.TimeZone,
             IsActive = e.IsActive,
             Depth = depth,

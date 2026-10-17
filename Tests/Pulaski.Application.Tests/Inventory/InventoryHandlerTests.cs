@@ -48,15 +48,15 @@ public class InventoryHandlerTests
     private InMemoryInventory Inventory => _f.Stores.Inventory;
 
     private Task<LotTransactionResponseOf> Receive(string? lot, decimal qty, Guid? uom = null, Guid? material = null, Guid? location = null) =>
-        Run(new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids)
+        Run(new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
             .HandleAsync(new ReceiveLotCommand(material ?? _resin.Id, location ?? _stores.Id, lot, qty, uom ?? _kg.Id), CancellationToken.None));
 
     private Task<LotTransactionResponseOf> Consume(Guid lotId, decimal qty, Guid? job = null) =>
-        Run(new ConsumeLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids)
+        Run(new ConsumeLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
             .HandleAsync(new ConsumeLotCommand(lotId, job ?? _job.Id, qty, _kg.Id), CancellationToken.None));
 
     private Task<LotTransactionResponseOf> Produce(decimal qty, string? lot = null, Guid? location = null) =>
-        Run(new ProduceLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids)
+        Run(new ProduceLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
             .HandleAsync(new ProduceLotCommand(_job.Id, location ?? _stores.Id, qty, _m.Id, lot), CancellationToken.None));
 
     private static async Task<LotTransactionResponseOf> Run(Task<Contracts.Inventory.LotTransactionResponse> task) => new(await task);
@@ -134,7 +134,7 @@ public class InventoryHandlerTests
     public async Task A_lot_moves_whole_within_its_site()
     {
         var lot = (await Receive("R-1", 100m)).Value;
-        var move = new MoveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids);
+        var move = new MoveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
         var elsewhere = Inventory.AddLocation("OTHER-SITE", Guid.CreateVersion7());
 
         await move.HandleAsync(new MoveLotCommand(lot.LotId, lot.Version, _hopper.Id), CancellationToken.None);
@@ -149,7 +149,7 @@ public class InventoryHandlerTests
     public async Task A_bulk_balance_transfers_a_quantity_to_the_other_locations_balance()
     {
         var bulk = (await Receive(null, 500m, _ea.Id, _caps.Id)).Value;
-        var move = new MoveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids);
+        var move = new MoveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
 
         await Assert.ThrowsAsync<ValidationException>(() =>
             move.HandleAsync(new MoveLotCommand(bulk.LotId, bulk.Version, _hopper.Id), CancellationToken.None));

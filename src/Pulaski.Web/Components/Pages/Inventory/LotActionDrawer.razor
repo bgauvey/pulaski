@@ -54,6 +54,10 @@
                                         <label class="form-label" for="lot-expires">Expires</label>
                                         <input id="lot-expires" type="date" class="form-control" @bind="_expires" />
                                     </div>
+                                    @if (received.ShelfLifeDays is { } days)
+                                    {
+                                        <div class="col-12 form-text mt-1">Blank: @days days from today, @(received.Code)'s shelf life.</div>
+                                    }
                                 </div>
                             }
                             else
