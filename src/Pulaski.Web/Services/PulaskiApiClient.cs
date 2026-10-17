@@ -4,6 +4,7 @@ using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Inventory;
+using Pulaski.Contracts.Materials;
 using Pulaski.Contracts.Processes;
 using Pulaski.Contracts.ReferenceData;
 using Pulaski.Contracts.Scheduling;
@@ -407,6 +408,52 @@ public sealed class PulaskiApiClient(HttpClient http)
 
     public Task<IReadOnlyList<MaterialDto>> ListMaterialsAsync(CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<MaterialDto>>("api/materials", ct);
+
+    public Task<IReadOnlyList<MaterialDto>> ListAllMaterialsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MaterialDto>>("api/materials?includeInactive=true", ct);
+
+    // Materials management (D-033)
+
+    public Task<MaterialDetailDto> GetMaterialAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<MaterialDetailDto>($"api/materials/{id}", ct);
+
+    public Task<CreatedResponse> CreateMaterialAsync(CreateMaterialRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/materials", request, ct);
+
+    public Task<UpdateMaterialResponse> UpdateMaterialAsync(Guid id, UpdateMaterialRequest request, CancellationToken ct = default) =>
+        SendAsync<UpdateMaterialResponse>(HttpMethod.Put, $"api/materials/{id}", request, ct);
+
+    public Task<CreatedResponse> CreateMaterialClassAsync(CreateMaterialClassRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/material-classes", request, ct);
+
+    public Task<VersionResponse> UpdateMaterialClassAsync(Guid id, UpdateMaterialClassRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/material-classes/{id}", request, ct);
+
+    public Task<CapabilityResponse> AddCapabilityAsync(Guid materialId, AddCapabilityRequest request, CancellationToken ct = default) =>
+        SendAsync<CapabilityResponse>(HttpMethod.Post, $"api/materials/{materialId}/capabilities", request, ct);
+
+    public Task<CapabilityResponse> UpdateCapabilityAsync(Guid id, UpdateCapabilityRequest request, CancellationToken ct = default) =>
+        SendAsync<CapabilityResponse>(HttpMethod.Put, $"api/capabilities/{id}", request, ct);
+
+    public Task<CapabilityResponse> EndCapabilityAsync(Guid id, long version, CancellationToken ct = default) =>
+        SendAsync<CapabilityResponse>(HttpMethod.Post, $"api/capabilities/{id}/end", new EndCapabilityRequest { Version = version }, ct);
+
+    public Task<VersionResponse> ModifyRunStandardAsync(Guid id, ModifyRunStandardRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/scheduling/run-standards/{id}/modify", request, ct);
+
+    public Task<VersionResponse> ClearRunStandardAsync(Guid id, ClearRunStandardRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/scheduling/run-standards/{id}/clear", request, ct);
+
+    /// <summary>Checks (<paramref name="dryRun"/>) or imports a materials CSV file, all or nothing (D-034).</summary>
+    public async Task<ImportMaterialsResponse> ImportMaterialsCsvAsync(string csv, bool dryRun, CancellationToken ct = default)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/materials/import/csv?dryRun={(dryRun ? "true" : "false")}")
+        {
+            Content = new StringContent(csv, System.Text.Encoding.UTF8, "text/csv"),
+        };
+        using var response = await SendCoreAsync(request, ct);
+        return await ReadAsync<ImportMaterialsResponse>(response, ct);
+    }
 
     private async Task<T> GetAsync<T>(string uri, CancellationToken ct)
     {

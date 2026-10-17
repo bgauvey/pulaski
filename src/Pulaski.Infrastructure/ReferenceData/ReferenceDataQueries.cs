@@ -18,17 +18,18 @@ internal sealed class ReferenceDataQueries(NpgsqlDataSource dataSource) : IRefer
         ORDER BY u.dimension, u.to_base_factor NULLS LAST, u.code
         """;
 
-    private const string Materials = """
-        SELECT m.id, m.code, m.name, m.material_type, m.base_uom_id, u.code AS base_uom_code,
-               m.material_class_id, c.code AS material_class_code, m.is_lot_tracked, m.shelf_life_days, m.is_active
-        FROM core.material m
-        JOIN core.uom u ON u.id = m.base_uom_id
-        LEFT JOIN core.material_class c ON c.id = m.material_class_id
+    private const string Materials = $"""
+        {Pulaski.Infrastructure.Materials.MaterialSql.Select}
         WHERE @IncludeInactive OR m.is_active
         ORDER BY m.code
         """;
 
-    private const string MaterialClasses = "SELECT id, code, name FROM core.material_class ORDER BY code";
+    private const string MaterialClasses = """
+        SELECT c.id, c.code, c.name, c.is_active, c.xmin::text::bigint AS version,
+               (SELECT count(*)::int FROM core.material m WHERE m.material_class_id = c.id) AS material_count
+        FROM core.material_class c
+        ORDER BY c.code
+        """;
 
     public async Task<IReadOnlyList<MaterialClassDto>> ListMaterialClassesAsync(CancellationToken cancellationToken)
     {

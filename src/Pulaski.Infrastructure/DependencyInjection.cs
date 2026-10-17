@@ -3,6 +3,7 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.Boms;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Inventory;
+using Pulaski.Application.Materials;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
 using Pulaski.Application.Scheduling;
@@ -12,6 +13,7 @@ using Pulaski.Infrastructure.Boms;
 using Pulaski.Infrastructure.EquipmentModel;
 using Pulaski.Infrastructure.Events;
 using Pulaski.Infrastructure.Inventory;
+using Pulaski.Infrastructure.Materials;
 using Pulaski.Infrastructure.Persistence;
 using Pulaski.Infrastructure.Processes;
 using Pulaski.Infrastructure.ReferenceData;
@@ -42,6 +44,7 @@ public static class DependencyInjection
         services.AddSingleton<IUnitReadStore, UnitQueries>();
         services.AddSingleton<IInventoryReadStore, InventoryQueries>();
         services.AddSingleton<DatabaseMaintenance>();
+        services.AddSingleton<IMaterialReadStore, MaterialQueries>();
 
         services.AddScoped<DbSession>();
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DbSession>());
@@ -54,6 +57,8 @@ public static class DependencyInjection
         services.AddScoped<IBomRepository, BomRepository>();
         services.AddScoped<IUnitRepository, UnitRepository>();
         services.AddScoped<IInventoryRepository, InventoryRepository>();
+        services.AddScoped<IMaterialAdminRepository, MaterialAdminRepository>();
+        services.AddScoped<ICapabilityRepository, CapabilityRepository>();
 
         return services;
     }

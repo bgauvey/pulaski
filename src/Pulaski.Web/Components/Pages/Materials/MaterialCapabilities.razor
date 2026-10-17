@@ -1,0 +1,331 @@
+@using System.Globalization
+@inject PulaskiApiClient Api
+@inject TimeProvider Clock
+
+@* Which lines can run the material, and how fast (D-020, D-034). *@
+<section class="inv-section" aria-labelledby="cap-title">
+    <div class="inv-section-head">
+        <h2 id="cap-title">Where it can run</h2>
+        <div class="d-flex gap-2 align-items-center">
+            @if (_ended > 0)
+            {
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="cap-ended" @bind="_showEnded" />
+                    <label class="form-check-label small" for="cap-ended">Show ended (@_ended)</label>
+                </div>
+            }
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(_busy || !Material.IsActive)"
+                    title="@(Material.IsActive ? "Add a line that can run " + Material.Code : Material.Code + " is inactive")"
+                    @onclick="StartAdd">
+                Add line
+            </button>
+        </div>
+    </div>
+
+    <ProblemAlert Error="_error" />
+    @if (_notes.Count > 0)
+    {
+        <div class="drawer-alert mb-3" role="status">
+            <Icon Name="info" Size="18" />
+            <span>@string.Join(" ", _notes)</span>
+        </div>
+    }
+
+    @if (_form is { } form)
+    {
+        <form class="inv-facts mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+            <h3 class="h6">@(form.IsNew ? "Add a line" : "Change the capability on " + LineCode(form.EquipmentId))</h3>
+            <div class="row g-2">
+                <div class="col-sm-5">
+                    <label class="form-label" for="cap-line">Line</label>
+                    <select id="cap-line" class="form-select" @bind="form.EquipmentId" disabled="@(!form.IsNew)">
+                        <option value="@Guid.Empty">Choose…</option>
+                        @foreach (var (line, label) in _lines)
+                        {
+                            <option value="@line.Id">@label</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label" for="cap-rate">Ideal rate, per hour</label>
+                    <input id="cap-rate" type="number" class="form-control" min="0" step="any" @bind="form.IdealRatePerHour" @bind:event="oninput" />
+                </div>
+                <div class="col-sm-4">
+                    <label class="form-label" for="cap-unit">Rate unit</label>
+                    <select id="cap-unit" class="form-select" @bind="form.RateUomId">
+                        @foreach (var u in Units.Where(u => u.IsActive || u.Id == form.RateUomId))
+                        {
+                            <option value="@u.Id">@u.Code · @u.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label" for="cap-changeover">Standard changeover (min)</label>
+                    <input id="cap-changeover" type="number" class="form-control" min="0" max="10080" step="1" placeholder="None" @bind="form.ChangeoverMinutes" />
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label" for="cap-crew">Crew size</label>
+                    <input id="cap-crew" type="number" class="form-control" min="0" step="0.5" placeholder="None" @bind="form.CrewSize" />
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label" for="cap-from">Starts</label>
+                    <input id="cap-from" type="date" class="form-control" @bind="form.From" />
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label" for="cap-to">Ends on <span class="text-muted">(optional)</span></label>
+                    <input id="cap-to" type="date" class="form-control" @bind="form.EndsOn" />
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="cap-preferred" @bind="form.IsPreferred" />
+                        <label class="form-check-label" for="cap-preferred">Preferred line for @Material.Code</label>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-primary" disabled="@(_busy || !form.CanSubmit)">@(form.IsNew ? "Add" : "Save")</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="Cancel">Cancel</button>
+            </div>
+            <p class="small text-muted mt-2 mb-0">
+                Dates are days at the line's site; it stops applying at the start of its end day.
+                @(form.IsNew ? "If the line has no planning rate for " + Material.Code + " yet, the ideal rate becomes it." : "A new ideal rate also updates the calculated planning rate.")
+            </p>
+        </form>
+    }
+
+    @if (_rate is { } rate)
+    {
+        <form class="inv-facts mb-3" @onsubmit="SetRateAsync" @onsubmit:preventDefault>
+            <h3 class="h6">Planning rate for @Material.Code on @rate.Capability.EquipmentCode</h3>
+            <p class="small mb-2">
+                Calculated: @Qty(rate.Capability.CalculatedRatePerHour) @rate.Capability.RunStandardUomCode/h
+                (@(rate.Capability.CalculationBasis == "run_history" ? "from run history" : "from the ideal rate")).
+                A modified rate replaces it for planning until you clear it.
+            </p>
+            <div class="row g-2">
+                <div class="col-sm-3">
+                    <label class="form-label" for="rate-value">Modified rate, @rate.Capability.RunStandardUomCode/h</label>
+                    <input id="rate-value" type="number" class="form-control" min="0" step="any" @bind="rate.Value" @bind:event="oninput" />
+                </div>
+                <div class="col-sm-9">
+                    <label class="form-label" for="rate-note">Note or reason</label>
+                    <input id="rate-note" class="form-control" maxlength="500" placeholder="Why, e.g. trial on new die" @bind="rate.Note" />
+                </div>
+            </div>
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-primary" disabled="@(_busy || !(rate.Value > 0))">Set modified rate</button>
+                @if (rate.Capability.ModifiedRatePerHour is not null)
+                {
+                    <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="ClearRateAsync">Back to calculated</button>
+                }
+                <button type="button" class="btn btn-link" @onclick="Cancel">Cancel</button>
+            </div>
+        </form>
+    }
+
+    @if (Capabilities.Count == 0)
+    {
+        <p class="text-muted">No line has a capability for @Material.Code, so no job for it can be placed yet.</p>
+    }
+    else
+    {
+        <div class="table-panel">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Line</th><th class="inv-num">Ideal rate</th><th class="inv-num">Planning rate</th><th>Changeover</th>
+                        <th class="inv-num">Crew</th><th>Starts</th><th>Ends on</th><th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in Shown)
+                    {
+                        <tr @key="c.Id" class="@(c.IsInEffect ? "" : "text-muted")">
+                            <td>
+                                <span class="fw-semibold">@c.EquipmentCode</span>@(c.IsPreferred ? " ★" : "") <span class="small text-muted">@c.EquipmentName</span>
+                                @if (!c.IsInEffect)
+                                {
+                                    <span class="chip chip-muted ms-1">@(c.EffectiveFrom > Clock.GetUtcNow() ? "Not started" : "Ended")</span>
+                                }
+                            </td>
+                            <td class="inv-num">@Qty(c.IdealRatePerHour) @c.RateUomCode/h</td>
+                            <td class="inv-num">
+                                @if (c.EffectiveRatePerHour is { } r)
+                                {
+                                    @($"{Qty(r)} {c.RunStandardUomCode}/h ")
+                                    <span class="small text-muted" title="@(c.ModifiedRatePerHour is null ? "" : $"Set by {c.ModifiedBy}{(c.ModifiedNote is { } n ? ": " + n : "")}; calculated {Qty(c.CalculatedRatePerHour)}")">@c.RateSource</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">none</span>
+                                }
+                            </td>
+                            <td>@(c.StandardChangeover is { } ch ? $"{(int)ch.TotalMinutes} min" : "—")</td>
+                            <td class="inv-num">@(c.StandardCrewSize?.ToString("0.##", CultureInfo.InvariantCulture) ?? "—")</td>
+                            <td class="small">@Day(c.EffectiveFrom, c.SiteTimeZone)</td>
+                            <td class="small">@(c.EffectiveTo is { } to ? Day(to, c.SiteTimeZone) : "—")</td>
+                            <td class="text-end text-nowrap">
+                                <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => StartEdit(c)">Change</button>
+                                @if (c.RunStandardId is not null)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => StartRate(c)">Rate</button>
+                                }
+                                @if (c.IsInEffect)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => EndAsync(c)">End now</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public MaterialDto Material { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<MaterialCapabilityDto> Capabilities { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<UomDto> Units { get; set; } = [];
+
+    /// <summary>Called after a change, so the page reloads the material.</summary>
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private IReadOnlyList<EquipmentDto> _equipment = [];
+    private IReadOnlyList<(EquipmentDto Line, string Label)> _lines = [];
+    private CapabilityForm? _form;
+    private RateForm? _rate;
+    private IReadOnlyList<string> _notes = [];
+    private ApiException? _error;
+    private bool _busy;
+    private bool _showEnded;
+
+    private int _ended => Capabilities.Count(c => !c.IsInEffect && c.EffectiveTo is not null && c.EffectiveTo <= Clock.GetUtcNow());
+
+    private IEnumerable<MaterialCapabilityDto> Shown =>
+        Capabilities.Where(c => _showEnded || c.IsInEffect || c.EffectiveTo is null || c.EffectiveTo > Clock.GetUtcNow());
+
+    private sealed class RateForm(MaterialCapabilityDto capability)
+    {
+        public MaterialCapabilityDto Capability { get; } = capability;
+        public decimal? Value { get; set; } = capability.ModifiedRatePerHour is { } v ? CapabilityForm.Trim(v) : null;
+        public string? Note { get; set; } = capability.ModifiedNote;
+    }
+
+    private async Task LoadLinesAsync()
+    {
+        if (_equipment.Count == 0)
+        {
+            _equipment = await Api.ListEquipmentAsync();
+            _lines = CapabilityForm.Lines(_equipment);
+        }
+    }
+
+    private async Task StartAdd() => await RunAsync(async () =>
+    {
+        await LoadLinesAsync();
+        _rate = null;
+        _form = CapabilityForm.New(Material.BaseUomId, Clock.GetUtcNow(), null);
+    }, reload: false);
+
+    private async Task StartEdit(MaterialCapabilityDto c) => await RunAsync(async () =>
+    {
+        await LoadLinesAsync();
+        _rate = null;
+        _form = CapabilityForm.For(c);
+    }, reload: false);
+
+    private void StartRate(MaterialCapabilityDto c)
+    {
+        _form = null;
+        _rate = new RateForm(c);
+    }
+
+    private void Cancel()
+    {
+        _form = null;
+        _rate = null;
+    }
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        var form = _form!;
+        var zone = CapabilityForm.TimeZoneOf(form.EquipmentId, _equipment);
+        var result = form.IsNew
+            ? await Api.AddCapabilityAsync(Material.Id, form.ToAdd(zone, Clock.GetUtcNow()))
+            : await Api.UpdateCapabilityAsync(form.CapabilityId!.Value, form.ToUpdate(zone));
+        _notes = result.Notes;
+        _form = null;
+    });
+
+    private Task EndAsync(MaterialCapabilityDto c) => RunAsync(async () =>
+    {
+        var result = await Api.EndCapabilityAsync(c.Id, c.Version);
+        _notes = [$"{c.EquipmentCode} no longer runs {Material.Code}.", .. result.Notes];
+    });
+
+    private Task SetRateAsync() => RunAsync(async () =>
+    {
+        var rate = _rate!;
+        await Api.ModifyRunStandardAsync(rate.Capability.RunStandardId!.Value, new ModifyRunStandardRequest
+        {
+            Version = rate.Capability.RunStandardVersion ?? 0,
+            RatePerHour = rate.Value ?? 0,
+            Note = rate.Note,
+        });
+        _notes = [$"Planning rate on {rate.Capability.EquipmentCode} set to {Qty(rate.Value)} {rate.Capability.RunStandardUomCode}/h."];
+        _rate = null;
+    });
+
+    private Task ClearRateAsync() => RunAsync(async () =>
+    {
+        var rate = _rate!;
+        await Api.ClearRunStandardAsync(rate.Capability.RunStandardId!.Value, new ClearRunStandardRequest
+        {
+            Version = rate.Capability.RunStandardVersion ?? 0,
+            Reason = string.IsNullOrWhiteSpace(rate.Note) ? null : rate.Note.Trim(),
+        });
+        _notes = [$"Planning rate on {rate.Capability.EquipmentCode} is the calculated {Qty(rate.Capability.CalculatedRatePerHour)} {rate.Capability.RunStandardUomCode}/h again."];
+        _rate = null;
+    });
+
+    private async Task RunAsync(Func<Task> action, bool reload = true)
+    {
+        _busy = true;
+        _error = null;
+        if (reload)
+        {
+            _notes = [];
+        }
+
+        try
+        {
+            await action();
+            if (reload)
+            {
+                await OnChanged.InvokeAsync();
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private string LineCode(Guid id) => Capabilities.FirstOrDefault(c => c.EquipmentId == id)?.EquipmentCode ?? "";
+
+    private static string Qty(decimal? value) => value is { } v ? InventoryView.Qty(v) : "—";
+
+    private static string Day(DateTimeOffset at, string? zone) =>
+        Display.ToSite(at, zone).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+}

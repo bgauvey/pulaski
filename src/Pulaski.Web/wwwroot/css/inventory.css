@@ -243,3 +243,12 @@
     .inv-picker .form-control {
         width: 100%;
     }
+
+/* Materials CSV import (D-034): rows with errors get an accent bar, like overlaps on the schedule table. */
+.import-table tr.is-error > td:first-child {
+    box-shadow: inset 4px 0 0 var(--warning);
+}
+
+.import-table tr.is-error > td:last-child {
+    color: var(--warning);
+}

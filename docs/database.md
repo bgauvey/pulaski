@@ -184,29 +184,32 @@ Per-site mapping of raw state to an OEE category (D-005). Raw state is always st
 
 ### core.material_class — material groups · *In use*
 
-Groups materials (e.g. all resins), so changeover rules can match a class instead of each material.
+Groups materials (e.g. all resins), so processes and changeover rules can match a class instead of each material. Flat: a class has no parent (D-033). Never deleted; switched off instead.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `code` | text | no | Unique code. |
+| `code` | text | no | Unique code. Fixed once created. |
 | `name` | text | no | Display name. |
+| `is_active` | boolean | no | False when switched off: not offered for new materials, and no material can move into it. Default true. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ### core.material — items and parts · *In use*
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `code` | text | no | Unique item or part number. |
-| `name` | text | no | Display name. |
-| `material_type` | text | no | `raw`, `intermediate`, `finished`, `packaging`, `consumable` or `rework`. |
+| `code` | text | no | Unique item or part number. For `local` rows fixed once the material is in use; for `erp` rows owned by the ERP, which may rename it (D-033). |
+| `name` | text | no | Display name. Owned by the ERP for `erp` rows (D-033). |
+| `description` | text | yes | Notes for the people who use it, at most 2000 characters. Kept in Pulaski for every origin. |
+| `material_type` | text | no | `raw`, `intermediate`, `finished`, `packaging`, `consumable` or `rework`: a label from the item master (such as the ERP's MRP class) that drives no rules. Owned by the ERP for `erp` rows. |
 | `material_class_id` | uuid → material_class | yes | Its class, if any. |
-| `base_uom_id` | uuid → uom | no | The unit it is counted in by default. |
+| `base_uom_id` | uuid → uom | no | The unit it is counted in by default. Fixed once the material is in use, whatever its origin (D-033). |
 | `shelf_life_days` | integer | yes | A new lot received or produced without an expiry expires this many days after it arrives (D-032). |
-| `is_lot_tracked` | boolean | no | Whether inventory of it is tracked by lot. Default true. |
+| `is_lot_tracked` | boolean | no | Whether inventory of it is tracked by lot. Default true. Changes only while none of it is on hand. |
 | `origin` | text | no | `local` (created in Pulaski) or `erp` (imported). |
-| `external_system`, `external_key`, `external_version` | text | yes | The ERP record this came from. System and key are required for `erp` rows and unique together. |
-| `is_active` | boolean | no | False when retired; inactive materials can't be put on new orders. |
+| `external_system`, `external_key`, `external_version` | text | yes | The ERP record this came from. System and key are required for `erp` rows and unique together; the import matches on them. |
+| `is_active` | boolean | no | False when retired; inactive materials can't be received, put on new orders or added to BOMs. Always settable; what already uses it carries on. |
 | `default_process_id` | uuid → process | yes | The process order creation pre-selects for it (D-023), among those whose scope covers it; the planner may pick another. Can only be set to a process that makes the material. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
@@ -343,20 +346,20 @@ Written once, when the version is released; planned components reference them.
 
 ### core.equipment_capability — what can run where (D-020) · *In use*
 
-The list of which material can run on which equipment. A production job may only be created on, moved to or dispatched on a line with a capability in effect for its material.
+The list of which material can run on which equipment. A production job may only be created on, moved to or dispatched on a line with a capability in effect for its material. Maintained on the material page (D-034): only on active equipment with `can_run_job`; never deleted, ended by setting `effective_to`. Adding one creates the line's `run_standard` for the material when it has none.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `equipment_id` | uuid → equipment | no | The line or unit. |
-| `material_id` | uuid → material | no | The material it can run. |
+| `equipment_id` | uuid → equipment | no | The line or unit. Fixed once created. |
+| `material_id` | uuid → material | no | The material it can run. Fixed once created. |
 | `ideal_rate_per_hour` | qty | no | Nameplate rate, in `rate_uom_id` per hour. Drives OEE performance and seeds the run standard. Positive. |
-| `rate_uom_id` | uuid → uom | no | Unit of the rate. |
-| `standard_changeover` | interval | yes | Changeover time into this material when no changeover rule matches (D-015). |
+| `rate_uom_id` | uuid → uom | no | Unit of the rate; must convert to the material's base unit (D-026). |
+| `standard_changeover` | interval | yes | Changeover time into this material when no changeover rule matches (D-015). 0 to 7 days. |
 | `standard_crew_size` | numeric(6,2) | yes | The labor estimate: people needed to run it. |
 | `is_preferred` | boolean | no | Marks the preferred line for the material. Informational; Pulaski never picks a line (D-014). |
-| `effective_from` | timestamptz | no | When the capability starts. |
-| `effective_to` | timestamptz | yes | When it ends; null means open-ended. Periods for the same equipment and material may not overlap. |
+| `effective_from` | timestamptz | no | When the capability starts (included). |
+| `effective_to` | timestamptz | yes | When it stops applying (not included); null means open-ended. Later than `effective_from`. Periods for the same equipment and material may not overlap (`capability_no_overlap`). |
 
 ## 4. Calendar
 
@@ -699,8 +702,8 @@ The rate the projection uses: runtime = remaining quantity ÷ effective rate. Hi
 | `id` | uuid | no | Primary key. |
 | `equipment_id` | uuid → equipment | no | The line. Unique with the material. |
 | `material_id` | uuid → material | no | The material. |
-| `uom_id` | uuid → uom | no | The rate is this unit per hour. |
-| `calculated_rate_per_hour` | numeric(18,6) | no | Written only by Pulaski: first from the capability's ideal rate, later from run history. Positive. |
+| `uom_id` | uuid → uom | no | The rate is this unit per hour. Follows the capability's rate unit while the basis is `ideal_rate` and no modified rate is set. |
+| `calculated_rate_per_hour` | numeric(18,6) | no | Written only by Pulaski: from the capability's ideal rate, recalculated when that changes while the basis is `ideal_rate` (D-034); later from run history. Positive. |
 | `calculation_basis` | text | no | `ideal_rate` or `run_history`. |
 | `calculated_at` | timestamptz | no | When it was last calculated. |
 | `modified_rate_per_hour` | numeric(18,6) | yes | Set by a person. While set it is the gold standard; recalculation never overwrites it. |

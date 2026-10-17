@@ -1,0 +1,310 @@
+@page "/materials"
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>Materials · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Materials</h1>
+        <p class="text-muted mb-0">
+            Every item and part, grouped by class. Materials imported from the ERP keep their code, name, base unit and type there; Pulaski owns the rest.
+        </p>
+    </div>
+    <div class="inv-head-tools">
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => _importing = !_importing">Import CSV</button>
+        <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New material</button>
+    </div>
+</div>
+
+<MaterialsTabs />
+<ProblemAlert Error="_error" />
+
+@if (_importing)
+{
+    <MaterialCsvImport OnImported="ReloadAsync" OnClose="() => _importing = false" />
+}
+
+@if (_adding)
+{
+    <form class="inv-facts mb-3" @onsubmit="CreateAsync" @onsubmit:preventDefault>
+        <h2 class="h6">New material</h2>
+        <div class="row g-2">
+            <div class="col-sm-3">
+                <label class="form-label" for="new-code">Code</label>
+                <input id="new-code" class="form-control" maxlength="50" @bind="_new.Code" @bind:event="oninput" />
+            </div>
+            <div class="col-sm-5">
+                <label class="form-label" for="new-name">Name</label>
+                <input id="new-name" class="form-control" maxlength="200" @bind="_new.Name" @bind:event="oninput" />
+            </div>
+            <div class="col-sm-4">
+                <label class="form-label" for="new-type">Type</label>
+                <select id="new-type" class="form-select" @bind="_new.MaterialType">
+                    @foreach (var t in MaterialProperties.Types)
+                    {
+                        <option value="@t">@Display.Label(t)</option>
+                    }
+                </select>
+            </div>
+            <div class="col-sm-4">
+                <label class="form-label" for="new-class">Class</label>
+                <select id="new-class" class="form-select" @bind="_new.MaterialClassId">
+                    <option value="">No class</option>
+                    @foreach (var c in _classes.Where(c => c.IsActive))
+                    {
+                        <option value="@c.Id">@c.Code · @c.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label" for="new-uom">Base unit</label>
+                <select id="new-uom" class="form-select" @bind="_new.BaseUomId">
+                    <option value="@Guid.Empty">Choose…</option>
+                    @foreach (var u in _uoms.Where(u => u.IsActive))
+                    {
+                        <option value="@u.Id">@u.Code · @u.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-sm-2">
+                <label class="form-label" for="new-shelf">Shelf life (days)</label>
+                <input id="new-shelf" type="number" class="form-control" min="1" max="36500" placeholder="None" @bind="_new.ShelfLifeDays" />
+            </div>
+            <div class="col-sm-3 d-flex align-items-end">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="new-tracked" @bind="_new.IsLotTracked" />
+                    <label class="form-check-label" for="new-tracked">Lot-tracked</label>
+                </div>
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="new-description">Description</label>
+                <input id="new-description" class="form-control" maxlength="2000" @bind="_new.Description" />
+            </div>
+        </div>
+        <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary"
+                    disabled="@(_saving || string.IsNullOrWhiteSpace(_new.Code) || string.IsNullOrWhiteSpace(_new.Name) || _new.BaseUomId == Guid.Empty)">Create and open</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _adding = false">Cancel</button>
+        </div>
+        <p class="small text-muted mt-2 mb-0">Materials from the ERP arrive through its import, not this form.</p>
+    </form>
+}
+
+<div class="inv-toolbar" role="search">
+    <div class="inv-search inv-grow">
+        <input type="search" class="form-control" placeholder="Find by code, name or description" aria-label="Find a material"
+               @bind="_search" @bind:event="oninput" />
+        <Icon Name="search" Size="16" />
+    </div>
+    <select class="form-select" aria-label="Class" @bind="_class">
+        <option value="">All classes</option>
+        @foreach (var c in _classes)
+        {
+            <option value="@c.Code">@c.Code · @c.Name</option>
+        }
+        <option value="@NoClassFilter">No class</option>
+    </select>
+    <select class="form-select" aria-label="Type" @bind="_type">
+        <option value="">All types</option>
+        @foreach (var t in MaterialProperties.Types)
+        {
+            <option value="@t">@Display.Label(t)</option>
+        }
+    </select>
+    <select class="form-select" aria-label="Origin" @bind="_origin">
+        <option value="">Any origin</option>
+        <option value="local">Pulaski</option>
+        <option value="erp">ERP</option>
+    </select>
+    <div class="form-check ms-1">
+        <input class="form-check-input" type="checkbox" id="show-inactive" @bind="_showInactive" />
+        <label class="form-check-label" for="show-inactive">Show inactive</label>
+    </div>
+</div>
+
+@if (_materials is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    var groups = MaterialProperties.Group(Shown);
+    <p class="small text-muted">@groups.Sum(g => g.Items.Count) of @_materials.Count materials</p>
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Material</th>
+                    <th>Type</th>
+                    <th>Base unit</th>
+                    <th>Tracking</th>
+                    <th class="inv-num">Shelf life</th>
+                    <th>Origin</th>
+                </tr>
+            </thead>
+            @foreach (var group in groups)
+            {
+                var open = !_collapsed.Contains(group.Key) || !string.IsNullOrWhiteSpace(_search);
+                <tbody @key="group.Key">
+                    <tr class="inv-group">
+                        <th colspan="6">
+                            <button type="button" class="inv-group-toggle" aria-expanded="@(open ? "true" : "false")" @onclick="() => Toggle(group.Key)">
+                                <Icon Name="chevron-right" Size="16" />
+                                @group.Label
+                                <span class="text-muted">@group.Items.Count @(group.Items.Count == 1 ? "material" : "materials")</span>
+                            </button>
+                        </th>
+                    </tr>
+                    @if (open)
+                    {
+                        @foreach (var m in group.Items)
+                        {
+                            <tr @key="m.Id" class="@(m.IsActive ? "" : "inv-empty-row")">
+                                <td>
+                                    <a class="fw-semibold" href="materials/@m.Id">@m.Code</a>
+                                    <div class="small text-muted">@m.Name@(m.IsActive ? "" : " · inactive")</div>
+                                </td>
+                                <td>@Display.Label(m.MaterialType)</td>
+                                <td>@m.BaseUomCode</td>
+                                <td>@(m.IsLotTracked ? "Lots" : "Balance")</td>
+                                <td class="inv-num">@(m.ShelfLifeDays is { } d ? $"{d} days" : "—")</td>
+                                <td>
+                                    @if (MaterialProperties.IsFromErp(m))
+                                    {
+                                        <span class="chip" title="@m.ExternalSystem · @m.ExternalKey">@m.ExternalSystem</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="small text-muted">Pulaski</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            }
+        </table>
+        @if (groups.Count == 0)
+        {
+            <p class="text-muted p-4 mb-0">Nothing matches.</p>
+        }
+    </div>
+}
+
+@code {
+    private IReadOnlyList<MaterialDto>? _materials;
+    private IReadOnlyList<MaterialClassDto> _classes = [];
+    private IReadOnlyList<UomDto> _uoms = [];
+    private HashSet<string> _collapsed = [];
+    private ApiException? _error;
+    private string _search = "";
+    private const string NoClassFilter = "~none";
+    private string _class = "";
+    private string _type = "";
+    private string _origin = "";
+    private bool _showInactive;
+    private bool _adding;
+    private bool _importing;
+    private bool _saving;
+    private NewMaterial _new = new();
+
+    /// <summary>A class code to filter by, from a class's material count on the Classes tab.</summary>
+    [SupplyParameterFromQuery(Name = "class")]
+    public string? ClassCode { get; set; }
+
+    private IEnumerable<MaterialDto> Shown => _materials!
+        .Where(m => _showInactive || m.IsActive)
+        .Where(m => _class.Length == 0 || (_class == NoClassFilter ? m.MaterialClassCode is null : m.MaterialClassCode == _class))
+        .Where(m => _type.Length == 0 || m.MaterialType == _type)
+        .Where(m => _origin.Length == 0 || m.Origin == _origin)
+        .Where(m => string.IsNullOrWhiteSpace(_search)
+            || m.Code.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)
+            || m.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)
+            || (m.Description?.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false));
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(ClassCode))
+        {
+            // The class's count includes switched-off materials, so show them too.
+            _class = ClassCode;
+            _showInactive = true;
+        }
+
+        try
+        {
+            _materials = await Api.ListAllMaterialsAsync();
+            _classes = await Api.ListMaterialClassesAsync();
+            _uoms = await Api.ListUomsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            _materials = await Api.ListAllMaterialsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private void Toggle(string key)
+    {
+        if (!_collapsed.Remove(key))
+        {
+            _collapsed.Add(key);
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var created = await Api.CreateMaterialAsync(new CreateMaterialRequest
+            {
+                Code = _new.Code,
+                Name = _new.Name,
+                Description = _new.Description,
+                MaterialType = _new.MaterialType,
+                MaterialClassId = _new.MaterialClassId,
+                BaseUomId = _new.BaseUomId,
+                IsLotTracked = _new.IsLotTracked,
+                ShelfLifeDays = _new.ShelfLifeDays,
+            });
+            Navigation.NavigateTo($"materials/{created.Id}");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private sealed class NewMaterial
+    {
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? Description { get; set; }
+        public string MaterialType { get; set; } = "raw";
+        public Guid? MaterialClassId { get; set; }
+        public Guid BaseUomId { get; set; }
+        public bool IsLotTracked { get; set; } = true;
+        public int? ShelfLifeDays { get; set; }
+    }
+}

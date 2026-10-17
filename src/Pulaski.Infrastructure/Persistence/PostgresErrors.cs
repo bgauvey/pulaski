@@ -19,6 +19,9 @@ internal static class PostgresErrors
         ["lot_bulk_uq"] = "Someone else started this material's balance at that location at the same moment. Try again.",
         ["stock_count_number_uq"] = "Another count was started at the same moment. Try again.",
         ["reason_code_uq"] = "That code is already used for this kind of reason.",
+        ["material_code_key"] = "That material code is already used.",
+        ["material_external_uq"] = "Another material already has that external key.",
+        ["material_class_code_key"] = "That class code is already used.",
     };
 
     public static bool TryTranslate(PostgresException ex, out Exception translated)
@@ -33,6 +36,9 @@ internal static class PostgresErrors
                 "A referenced record does not exist."),
             PostgresErrorCodes.CheckViolation => new DomainRuleException(
                 $"The change breaks the rule '{ex.ConstraintName}'."),
+            // Two periods of one capability overlap (D-034): another change got in between the check and the write.
+            PostgresErrorCodes.ExclusionViolation when ex.ConstraintName == "capability_no_overlap" => new ConflictException(
+                "Another capability for this material on this line was changed at the same moment, and the periods now overlap. Reload and try again."),
             // Two commands took the same rows in opposite order (e.g. opposite bulk transfers, D-027); one was rolled back.
             PostgresErrorCodes.DeadlockDetected => new ConflictException(
                 "Someone else changed the same records at the same moment. Try again."),
