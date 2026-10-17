@@ -1,0 +1,239 @@
+@using Pulaski.Web.Services.Execution
+@inject PulaskiApiClient Api
+
+@* Reports good and scrap into one of a job's runs (D-035): its open run, or an earlier one for production found later. *@
+<form class="inv-facts mb-3" @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+    <h3 class="h6">Report production for @Job.JobNumber</h3>
+    <ProblemAlert Error="_error" />
+
+    <div class="row g-2">
+        <div class="col-12">
+            <label class="form-label" for="rep-run-@Job.JobId">Run</label>
+            <select id="rep-run-@Job.JobId" class="form-select" @bind="_runId">
+                @foreach (var r in Job.Runs.Reverse())
+                {
+                    <option value="@r.Id">
+                        Run @r.RunNo on @r.LineCode · @Display.SiteTime(r.StartedAt, Job.SiteTimeZone)@(r.EndedAt is { } end ? $" to {Display.SiteTime(end, Job.SiteTimeZone)}" : " · running now")
+                    </option>
+                }
+            </select>
+            @if (SelectedRun is { } run)
+            {
+                <div class="form-text">
+                    @if (run.EndedAt is not null)
+                    {
+                        <span>Recorded late, into a run that has ended. </span>
+                    }
+                    @if (FloorView.RoomLeft(run.CapQty, run.GoodQty, run.ScrapQty) is { } room)
+                    {
+                        <span>Up to @FloorView.Qty(room) @Job.UomCode more fits this run at the line's rate.</span>
+                    }
+                    else
+                    {
+                        <span>The line has no ideal rate for this material, so the rate isn't checked.</span>
+                    }
+                </div>
+            }
+        </div>
+        @if (IsBatch)
+        {
+            <div class="col-12">
+                <div class="form-label">Good batches, @Job.BaseUomCode each <span class="text-muted">(batch size @FloorView.Qty(Job.BatchSize) @Job.BaseUomCode@(Job.BatchRule == "exact" ? ", exact" : $", ± {FloorView.Qty(Job.BatchTolerancePct)}%"))</span></div>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    @for (var i = 0; i < _goodBatches.Count; i++)
+                    {
+                        var index = i;
+                        <input type="number" min="0" step="any" class="form-control" style="width: 7rem" aria-label="Good batch @(index + 1)"
+                               value="@_goodBatches[index]" @oninput="e => SetBatch(_goodBatches, index, e)" />
+                    }
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _goodBatches.Add(BatchSize)">Add batch</button>
+                    @if (_goodBatches.Count > 0)
+                    {
+                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _goodBatches.RemoveAt(_goodBatches.Count - 1)">Remove last</button>
+                    }
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="form-label">Rejected batches <span class="text-muted">(scrap)</span></div>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    @for (var i = 0; i < _scrapBatches.Count; i++)
+                    {
+                        var index = i;
+                        <input type="number" min="0" step="any" class="form-control" style="width: 7rem" aria-label="Rejected batch @(index + 1)"
+                               value="@_scrapBatches[index]" @oninput="e => SetBatch(_scrapBatches, index, e)" />
+                    }
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _scrapBatches.Add(BatchSize)">Add rejected batch</button>
+                    @if (_scrapBatches.Count > 0)
+                    {
+                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _scrapBatches.RemoveAt(_scrapBatches.Count - 1)">Remove last</button>
+                    }
+                </div>
+            </div>
+            @if (SelectedRun is { EndedWithReason: true, HasPartialBatch: false })
+            {
+                <div class="col-6">
+                    <label class="form-label" for="rep-partial-@Job.JobId">Partial batch, @Job.BaseUomCode</label>
+                    <input id="rep-partial-@Job.JobId" type="number" min="0" step="any" class="form-control" placeholder="None" @bind="_partial" @bind:event="oninput" />
+                    <div class="form-text">This run stopped with a reason, so the batch it was making can be added.@(Job.BatchRule == "exact" ? " It waits on hold for approval." : "")</div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="col-6">
+                <label class="form-label" for="rep-good-@Job.JobId">Good, @Job.UomCode</label>
+                <input id="rep-good-@Job.JobId" type="number" min="0" step="any" class="form-control" @bind="_good" @bind:event="oninput" />
+            </div>
+            <div class="col-6">
+                <label class="form-label" for="rep-scrap-@Job.JobId">Scrap, @Job.UomCode</label>
+                <input id="rep-scrap-@Job.JobId" type="number" min="0" step="any" class="form-control" @bind="_scrap" @bind:event="oninput" />
+            </div>
+        }
+        @if (GoodTotal > 0)
+        {
+            <div class="col-sm-6">
+                <label class="form-label" for="rep-loc-@Job.JobId">Good output goes to</label>
+                <select id="rep-loc-@Job.JobId" class="form-select" @bind="_locationId">
+                    <option value="@Guid.Empty">Choose a location…</option>
+                    @foreach (var l in _locations)
+                    {
+                        <option value="@l.Id">@l.Code · @l.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label" for="rep-lot-@Job.JobId">Lot number</label>
+                <input id="rep-lot-@Job.JobId" class="form-control" maxlength="100" placeholder="Blank: @Job.JobNumber-01, -02…" @bind="_lotNumber"
+                       disabled="@(IsBatch && _goodBatches.Count + (_partial > 0 ? 1 : 0) > 1)" title="@(IsBatch ? "Each batch is numbered after the job" : null)" />
+            </div>
+        }
+        @if (ScrapTotal > 0)
+        {
+            <div class="col-sm-6">
+                <label class="form-label" for="rep-reason-@Job.JobId">Scrap reason</label>
+                <select id="rep-reason-@Job.JobId" class="form-select" @bind="_reasonId">
+                    <option value="@Guid.Empty">Choose a reason…</option>
+                    @foreach (var r in _reasons)
+                    {
+                        <option value="@r.Id">@r.Name</option>
+                    }
+                </select>
+            </div>
+        }
+        <div class="col-12">
+            <label class="form-label" for="rep-comment-@Job.JobId">Comment @(NeedsComment ? "(required)" : "")</label>
+            <input id="rep-comment-@Job.JobId" class="form-control" maxlength="1000" @bind="_comment" @bind:event="oninput" />
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary" disabled="@(!CanSubmit)">Report</button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="OnCancel">Cancel</button>
+    </div>
+</form>
+
+@code {
+    [Parameter, EditorRequired]
+    public JobExecutionDto Job { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<ReportProductionResponse> OnReported { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private IReadOnlyList<InventoryLocationDto> _locations = [];
+    private IReadOnlyList<ReasonCodeDto> _reasons = [];
+    private Guid _runId;
+    private decimal? _good;
+    private decimal? _scrap;
+    private Guid _locationId;
+    private Guid _reasonId;
+    private string? _lotNumber;
+    private string? _comment;
+    private bool _saving;
+    private ApiException? _error;
+
+    private readonly List<decimal?> _goodBatches = [];
+    private readonly List<decimal?> _scrapBatches = [];
+    private decimal? _partial;
+
+    private JobRunDto? SelectedRun => Job.Runs.FirstOrDefault(r => r.Id == _runId);
+
+    // A material made in batches is reported batch by batch, in its base unit (D-036).
+    private bool IsBatch => Job.BatchSize is not null;
+
+    // The batch size without the trailing zeros of its stored scale, to prefill a batch.
+    private decimal? BatchSize => Job.BatchSize is { } size ? Pulaski.Web.Services.Materials.CapabilityForm.Trim(size) : null;
+
+    private decimal GoodTotal => IsBatch ? _goodBatches.Sum(b => b ?? 0) + (_partial ?? 0) : _good ?? 0;
+
+    private decimal ScrapTotal => IsBatch ? _scrapBatches.Sum(b => b ?? 0) : _scrap ?? 0;
+
+    private bool NeedsComment => ScrapTotal > 0 && _reasons.FirstOrDefault(r => r.Id == _reasonId)?.RequiresComment == true;
+
+    private bool CanSubmit =>
+        !_saving && SelectedRun is not null && GoodTotal + ScrapTotal > 0 && GoodTotal >= 0 && ScrapTotal >= 0
+        && (!IsBatch || (_goodBatches.All(b => b > 0) && _scrapBatches.All(b => b > 0)))
+        && (GoodTotal <= 0 || _locationId != Guid.Empty)
+        && (ScrapTotal <= 0 || _reasonId != Guid.Empty)
+        && (!NeedsComment || !string.IsNullOrWhiteSpace(_comment));
+
+    private static void SetBatch(List<decimal?> batches, int index, ChangeEventArgs e) =>
+        batches[index] = decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _runId = FloorView.DefaultRun(Job.Runs) ?? Guid.Empty;
+        if (IsBatch)
+        {
+            _goodBatches.Add(BatchSize);
+        }
+
+        try
+        {
+            _locations = [.. (await Api.ListInventoryLocationsAsync(Job.SiteId)).Where(l => l.IsActive)];
+            _reasons = await Api.ListReasonCodesAsync("scrap", Job.SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!CanSubmit)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        try
+        {
+            var result = await Api.ReportProductionAsync(Job.JobId, new ReportProductionRequest
+            {
+                RunId = _runId,
+                GoodQty = IsBatch ? 0 : _good ?? 0,
+                ScrapQty = IsBatch ? 0 : _scrap ?? 0,
+                GoodBatches = IsBatch ? [.. _goodBatches.Select(b => b!.Value)] : [],
+                ScrapBatches = IsBatch ? [.. _scrapBatches.Select(b => b!.Value)] : [],
+                PartialQty = IsBatch && _partial > 0 ? _partial : null,
+                ScrapReasonCodeId = ScrapTotal > 0 ? _reasonId : null,
+                LocationId = GoodTotal > 0 ? _locationId : null,
+                LotNumber = string.IsNullOrWhiteSpace(_lotNumber) ? null : _lotNumber,
+                Comment = string.IsNullOrWhiteSpace(_comment) ? null : _comment,
+            });
+            await OnReported.InvokeAsync(result);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

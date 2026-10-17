@@ -61,6 +61,9 @@ public sealed record ConsumeLotRequest
     public decimal Quantity { get; init; }
     public Guid UomId { get; init; }
     public string? Comment { get; init; }
+
+    /// <summary>The run it was used in; the job's open run when left out (D-035).</summary>
+    public Guid? RunId { get; init; }
 }
 
 /// <summary>
@@ -75,6 +78,9 @@ public sealed record ProduceLotRequest
     public string? LotNumber { get; init; }
     public DateTimeOffset? ExpiresAt { get; init; }
     public string? Comment { get; init; }
+
+    /// <summary>The run it was made in; the job's open run when left out (D-035).</summary>
+    public Guid? RunId { get; init; }
 }
 
 /// <summary>Splits part of a lot into a new lot (D-030). A blank number becomes <c>&lt;lot&gt;-1</c>, <c>-2</c>…</summary>

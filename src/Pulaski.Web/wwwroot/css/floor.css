@@ -1,0 +1,78 @@
+/* The floor board (D-035): one card per line with its running job and what comes next.
+   Colours come from css/tokens.css; a running line gets the accent edge, nothing else is coloured. */
+
+.floor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+    gap: var(--space-4);
+    align-items: start;
+}
+
+.floor-card {
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    min-width: 0;
+}
+
+    .floor-card.is-running {
+        box-shadow: inset 4px 0 0 var(--accent);
+    }
+
+.floor-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.floor-running {
+    padding: var(--space-3);
+    background: var(--surface-2);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-2);
+}
+
+.floor-bar {
+    height: 6px;
+    margin-top: var(--space-1);
+    background: var(--border);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+
+    .floor-bar > span {
+        display: block;
+        height: 100%;
+        background: var(--accent);
+    }
+
+.floor-next-title {
+    font: var(--type-label);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: var(--space-3) 0 var(--space-1);
+}
+
+.floor-next {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+    .floor-next > li {
+        padding: var(--space-2) 0;
+        border-top: 1px solid var(--border);
+    }
+
+        .floor-next > li:first-child {
+            border-top: 0;
+        }
+
+.floor-inline {
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border);
+}

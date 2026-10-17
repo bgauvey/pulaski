@@ -383,6 +383,10 @@ public sealed class InventoryTests(DatabaseFixture db)
             VALUES (@job, @site, @wo, @jobNumber, 'production', @line, @profile, 1000, @m);
             INSERT INTO core.job_material (job_id, material_id, direction, planned_qty, uom_id, consumption_method, bom_item_id)
             VALUES (@job, @resin, 'consume', 1450, @kg, 'declared', @item);
+
+            -- Consumption and production happen in a run (D-035): the job has been running for a day.
+            UPDATE core.job SET status = 'running' WHERE id = @job;
+            INSERT INTO core.job_run (job_id, equipment_id, run_no, started_at, uom_id) VALUES (@job, @line, 1, now() - interval '1 day', @m);
             """,
             new
             {

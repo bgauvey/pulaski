@@ -38,6 +38,20 @@ internal sealed class MaterialAdminRepository(DbSession session) : IMaterialAdmi
         RETURNING xmin::text::bigint
         """;
 
+    private const string GetBatching = "SELECT batch_size AS size, batch_tolerance_pct AS tolerance_pct, batch_rule AS rule FROM core.material WHERE id = @Id";
+
+    private const string UpdateBatching = """
+        UPDATE core.material SET batch_size = @Size, batch_tolerance_pct = @TolerancePct, batch_rule = @Rule, updated_at = @At
+        WHERE id = @Id
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string OpenOrders = """
+        SELECT order_number, planned_qty AS quantity, uom_id FROM core.work_order
+        WHERE material_id = @Id AND status NOT IN ('completed','closed','cancelled')
+        ORDER BY order_number
+        """;
+
     private const string FindUom = "SELECT id, is_active FROM core.uom WHERE code = @Code FOR SHARE";
 
     private const string UomActive = "SELECT EXISTS (SELECT 1 FROM core.uom WHERE id = @Id AND is_active)";
@@ -97,6 +111,15 @@ internal sealed class MaterialAdminRepository(DbSession session) : IMaterialAdmi
             u.Capabilities > 0 ? $"a capability on {Count(u.Capabilities, "line")}" : null,
         }.OfType<string>()];
     }
+
+    public async Task<(decimal? Size, decimal TolerancePct, string? Rule)> GetBatchingAsync(Guid id, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<BatchingRow>(GetBatching, new { Id = id }, cancellationToken) is { } r ? (r.Size, r.TolerancePct, r.Rule) : (null, 2m, null);
+
+    public Task<long> UpdateBatchingAsync(Guid id, decimal? size, decimal tolerancePct, string? rule, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(UpdateBatching, new { Id = id, Size = size, TolerancePct = tolerancePct, Rule = rule, At = at }, cancellationToken);
+
+    public async Task<IReadOnlyList<(string OrderNumber, decimal Quantity, Guid UomId)>> ListOpenOrdersAsync(Guid id, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<OrderRow>(OpenOrders, new { Id = id }, cancellationToken)).Select(o => (o.OrderNumber, o.Quantity, o.UomId))];
 
     public async Task<(Guid Id, bool IsActive)?> FindUomAsync(string code, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<UomRow>(FindUom, new { Code = code }, cancellationToken) is { } r ? (r.Id, r.IsActive) : null;
@@ -161,6 +184,20 @@ internal sealed class MaterialAdminRepository(DbSession session) : IMaterialAdmi
             new Material(Id, Code, Name, Description, MaterialType, MaterialClassId, BaseUomId, IsLotTracked, ShelfLifeDays,
                 Origin, ExternalSystem, ExternalKey, ExternalVersion, IsActive),
             Version);
+    }
+
+    private sealed class BatchingRow
+    {
+        public decimal? Size { get; init; }
+        public decimal TolerancePct { get; init; }
+        public string? Rule { get; init; }
+    }
+
+    private sealed class OrderRow
+    {
+        public string OrderNumber { get; init; } = "";
+        public decimal Quantity { get; init; }
+        public Guid UomId { get; init; }
     }
 
     private sealed class UseRow

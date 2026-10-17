@@ -15,7 +15,9 @@
     <Actions>
         @if (_job is { } job)
         {
-            var open = job.Job.Status is not ("completed" or "closed" or "cancelled");
+            // Declarations go into the job's runs (D-035): from its first start until it is closed.
+            var open = job.Job.Status is "running" or "paused" or "completed";
+            <a class="btn btn-outline-secondary" href="jobs/@JobId">Runs and reports</a>
             <a class="btn btn-outline-secondary" href="inventory/journal?jobId=@JobId">Movements</a>
             <button type="button" class="btn btn-outline-secondary" disabled="@(!open)" @onclick="() => _action = LotAction.Consume">Consume a lot</button>
             <button type="button" class="btn btn-primary" disabled="@(!open)" @onclick="() => _action = LotAction.Produce">Declare production</button>

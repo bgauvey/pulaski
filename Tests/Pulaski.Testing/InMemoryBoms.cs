@@ -29,9 +29,17 @@ public sealed class InMemoryBoms : IBomReadStore, IBomRepository
         }
     }
 
-    public BomMaterialRow AddMaterial(Guid id, Guid baseUomId, bool isActive = true)
+    public BomMaterialRow AddMaterial(Guid id, Guid baseUomId, bool isActive = true, decimal? batchSize = null, string batchRule = "near")
     {
-        var row = new BomMaterialRow { Id = id, Code = "M-" + id.ToString("N")[^4..], BaseUomId = baseUomId, IsActive = isActive };
+        var row = new BomMaterialRow
+        {
+            Id = id,
+            Code = "M-" + id.ToString("N")[^4..],
+            BaseUomId = baseUomId,
+            IsActive = isActive,
+            BatchSize = batchSize,
+            BatchRule = batchSize is null ? null : batchRule,
+        };
         lock (_lock)
         {
             _materials[id] = row;

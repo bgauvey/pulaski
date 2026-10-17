@@ -46,6 +46,15 @@ public sealed record MaterialDto
     public int? ShelfLifeDays { get; init; }
     public bool IsActive { get; init; }
 
+    /// <summary>Made in batches of this many base units (D-036); null when made continuously.</summary>
+    public decimal? BatchSize { get; init; }
+
+    /// <summary>How far a batch may be from the size under the near rule, in percent.</summary>
+    public decimal BatchTolerancePct { get; init; } = 2m;
+
+    /// <summary><c>exact</c> or <c>near</c>; null when made continuously.</summary>
+    public string? BatchRule { get; init; }
+
     /// <summary><c>local</c>, or <c>erp</c> for one imported from an external item master.</summary>
     public string Origin { get; init; } = "local";
     public string? ExternalSystem { get; init; }

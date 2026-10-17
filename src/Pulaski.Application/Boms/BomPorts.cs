@@ -84,6 +84,13 @@ public sealed record BomMaterialRow
     public required string Code { get; init; }
     public required Guid BaseUomId { get; init; }
     public bool IsActive { get; init; }
+    public string MaterialType { get; init; } = "";
+    public decimal? BatchSize { get; init; }
+    public decimal BatchTolerancePct { get; init; }
+    public string? BatchRule { get; init; }
+
+    /// <summary>How the material is made in batches (D-036); null when it is made continuously.</summary>
+    public Domain.Materials.Batching? Batching => BatchSize is { } size ? new(size, BatchTolerancePct, BatchRule ?? Domain.Materials.BatchRule.Near) : null;
 }
 
 /// <summary>A planned component of a job (<c>core.job_material</c>).</summary>

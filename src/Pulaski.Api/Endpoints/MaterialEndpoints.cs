@@ -76,6 +76,14 @@ internal static class MaterialEndpoints
         })
         .Accepts<string>("text/csv", "text/plain");
 
+        // Made in batches, or continuously again with a blank size (D-036).
+        materials.MapPut("/{id:guid}/batching", async Task<Ok<UpdateMaterialResponse>> (
+            Guid id,
+            SetBatchingRequest request,
+            ICommandHandler<SetBatchingCommand, UpdateMaterialResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetBatchingCommand(id, request.Version, request.BatchSize, request.TolerancePct, request.Rule), ct)));
+
         materials.MapPost("/{id:guid}/capabilities", async Task<Created<CapabilityResponse>> (
             Guid id,
             AddCapabilityRequest request,

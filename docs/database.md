@@ -206,11 +206,35 @@ Groups materials (e.g. all resins), so processes and changeover rules can match 
 | `material_class_id` | uuid → material_class | yes | Its class, if any. |
 | `base_uom_id` | uuid → uom | no | The unit it is counted in by default. Fixed once the material is in use, whatever its origin (D-033). |
 | `shelf_life_days` | integer | yes | A new lot received or produced without an expiry expires this many days after it arrives (D-032). |
+| `batch_size` | numeric(18,6) | yes | Made in batches of this many base units (D-036): orders and jobs are whole batches, and production is reported batch by batch. Null for a material made continuously. Pulaski-owned. |
+| `batch_tolerance_pct` | numeric(5,2) | no | Under the `near` rule, how far a batch may be from `batch_size`, 0 to 50. Default 2. |
+| `batch_rule` | text | yes | `exact` (every batch is the batch size; a partial batch waits for approval) or `near` (within the tolerance; a partial batch is accepted). Set exactly when `batch_size` is (`material_batch_ck`); defaults from the type, `exact` for finished goods. |
 | `is_lot_tracked` | boolean | no | Whether inventory of it is tracked by lot. Default true. Changes only while none of it is on hand. |
 | `origin` | text | no | `local` (created in Pulaski) or `erp` (imported). |
 | `external_system`, `external_key`, `external_version` | text | yes | The ERP record this came from. System and key are required for `erp` rows and unique together; the import matches on them. |
 | `is_active` | boolean | no | False when retired; inactive materials can't be received, put on new orders or added to BOMs. Always settable; what already uses it carries on. |
 | `default_process_id` | uuid → process | yes | The process order creation pre-selects for it (D-023), among those whose scope covers it; the planner may pick another. Can only be set to a process that makes the material. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.partial_batch — batches cut short when a line stopped (D-036) · *In use*
+
+A partial batch is reported only as a run ends with a reason (or later, into a run that did), at most one per run, in a lot of its own. Under the `exact` rule it waits on hold for a decision.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `job_id` | uuid → job | no | The job. |
+| `run_id` | uuid → job_run | no | The run it belongs to. Unique: one partial batch per run. |
+| `lot_id` | uuid → lot | no | Its lot: on hold while `pending`, released when approved, written off when rejected. |
+| `quantity` | qty | no | How much it held, in `uom_id`. |
+| `uom_id` | uuid → uom | no | The material's base unit. |
+| `batch_size`, `batch_rule` | numeric(18,6), text | no | The material's batch size and rule when it was reported. |
+| `status` | text | no | `accepted` (near rule), `pending`, `approved` or `rejected`. |
+| `occurred_at` | timestamptz | no | When it counts as made. |
+| `reported_by` | text | yes | Who reported it. |
+| `decided_at`, `decided_by` | timestamptz, text | yes | When and by whom it was approved or rejected; set exactly when decided (`partial_batch_decided_ck`). |
+| `decision_comment` | text | yes | Why, at most 1000 characters. |
+| `scrap_reason_code_id` | uuid → reason_code | yes | For a rejection, the scrap reason. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ### core.material_uom_conversion — a material's own conversions (D-026) · *In use*
@@ -648,6 +672,7 @@ A job is what the planner places and sequences on a line and what operators exec
 | `dispatched_at` | timestamptz | yes | When its order was dispatched. |
 | `firmed_at` | timestamptz | yes | When its order was firmed; from then on `planned_start` is frozen. |
 | `replaces_job_id` | uuid → job | yes | On a replacement, the cancelled job whose remaining quantity it took. |
+| `completed_at` | timestamptz | yes | When it was last completed (D-035); cleared on reopening. Downstream *after end* links count their lag from it. |
 | `process_operation_id` | uuid → process_operation | yes | The process operation the job belongs to, when its order came from a process (D-024). Set when the order makes the job; a job added later takes the operation that runs on its line (or the first), and a replacement keeps the cancelled job's (D-025). Order quantities are counted per operation, and the links will drive the projection later. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
@@ -666,9 +691,9 @@ Planned when the work order is made (D-025): one `consume` row per BOM item and 
 | `consumption_method` | text | yes | `time_window`, `declared`, `backflush` or `scan`, from the BOM item. |
 | `bom_item_id` | uuid → bom_item | yes | The BOM line it came from. |
 
-### core.job_run — actual execution (ISA-95 job response) · *In use (read)*
+### core.job_run — actual execution (ISA-95 job response) · *In use*
 
-A job may run several times (interruptions, shifts, resumes). Counts, downtime and lots attach to the run.
+A job may run several times (interruptions, shifts, resumes). Counts, downtime and lots attach to the run. Starting a job opens one; pausing or completing it ends it (D-035).
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -678,10 +703,21 @@ A job may run several times (interruptions, shifts, resumes). Counts, downtime a
 | `run_no` | integer | no | 1, 2, 3… per job. |
 | `started_at` | timestamptz | no | Start. |
 | `ended_at` | timestamptz | yes | End; null while running. Cancelling a job ends its open run. |
-| `status` | text | no | `running`, `paused` or `ended`. |
-| `end_reason_code_id` | uuid → reason_code | yes | Why it ended. |
-| `good_qty`, `scrap_qty` | qty | no | Running totals, cached from `ts.production_count`. The projection uses good quantity to size what is left. |
-| `uom_id` | uuid → uom | yes | Unit of the quantities. |
+| `status` | text | no | `running` or `ended`. `paused` is allowed but unused: a pause ends the run, and resuming opens the next. |
+| `end_reason_code_id` | uuid → reason_code | yes | Why it ended: a reason of kind `run_end`, given when pausing. |
+| `good_qty`, `scrap_qty` | qty | no | Running totals of the reports into it, kept with `ts.production_count`, late reports included. The projection uses good quantity to size what is left; the rate check caps good plus scrap at the run's length × the ideal rate × the site's tolerance. |
+| `uom_id` | uuid → uom | yes | Unit of the quantities: the job's unit. |
+
+### core.execution_policy — per-site reporting tolerances (D-035) · *In use*
+
+A site without a row uses the defaults.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key: the site. |
+| `rate_tolerance_pct` | numeric(6,1) | no | A run can hold up to its length × the ideal rate × this percent. 100 to 1000; default 110. |
+| `consumption_tolerance_pct` | numeric(6,1) | no | Consumption beyond the planned components × this percent is recorded with a warning. 100 to 1000; default 110. |
+| `updated_at` | timestamptz | no | Last change. |
 
 ### core.scheduling_policy — per-site scheduling settings (D-015) · *In use*
 
@@ -992,14 +1028,14 @@ Updated while open and when coded; each change is also an event.
 | `alarm_value` | integer | yes | Its value. |
 | `message` | text | yes | Its text. |
 
-### ts.production_count — count deltas · *Planned*
+### ts.production_count — count deltas · *In use (operator reports)*
 
-Deltas calculated at the edge, with rollover handled there; the raw counter is kept for reconciliation.
+Deltas calculated at the edge, with rollover handled there; the raw counter is kept for reconciliation. Operator reports (D-035) write a `processed` row for good plus scrap and, with scrap, a `defective` row for the scrap, in the job's unit; good is processed minus defective.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key with `occurred_at`. |
-| `occurred_at` | timestamptz | no | When counted. Partition key. |
+| `occurred_at` | timestamptz | no | When counted. Partition key. For a report into a run that has ended, the run's end. |
 | `equipment_id` | uuid → equipment | no | The equipment. |
 | `run_id` | uuid | yes | The run. |
 | `count_kind` | text | no | `processed`, `defective` or `consumed`. |
@@ -1009,6 +1045,10 @@ Deltas calculated at the edge, with rollover handled there; the raw counter is k
 | `scrap_reason_code_id` | uuid → reason_code | yes | Why, for defective counts. |
 | `source` | text | no | `machine`, `operator` or `correction`. |
 | `corrects_id` | uuid | yes | For corrections: the row being offset. |
+| `job_id` | uuid | yes | The run's job. No FK, as for `run_id`. |
+| `recorded_at` | timestamptz | no | When it was entered. Later than the run's end for a late report. |
+| `actor_id` | text | yes | Who reported it (issuer\|subject, as on `evt.event`). |
+| `comment` | text | yes | The reporter's comment, at most 1000 characters. |
 
 ### ts.process_value — high-rate telemetry · *Planned*
 
@@ -1053,7 +1093,7 @@ One row for every job status change, written in the same transaction as the chan
 | `from_location_id`, `to_location_id` | uuid → equipment | yes | Where the stock left and arrived. |
 | `related_lot_id` | uuid → lot | yes | The other lot in a split or merge, or the other bulk lot in a transfer. |
 | `job_id` | uuid → job | yes | The job for declared consumption or production. |
-| `run_id` | uuid | yes | The run involved. |
+| `run_id` | uuid | yes | The run of the job a consumption or production went into (D-035); every one has one since execution. |
 | `from_status`, `to_status` | text | yes | For status changes, and when a lot is used up or comes back. |
 | `reason_code_id` | uuid → reason_code | yes | Why: required for write-ups, write-offs and holds. |
 | `comment` | text | yes | The person's note, at most 1000 characters. |

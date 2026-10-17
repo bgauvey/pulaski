@@ -72,10 +72,14 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         return location;
     }
 
-    public InventoryMaterial AddMaterial(string code, Guid baseUomId, string baseUomCode, bool isLotTracked = true, bool isActive = true, int? shelfLifeDays = null)
+    public InventoryMaterial AddMaterial(
+        string code, Guid baseUomId, string baseUomCode, bool isLotTracked = true, bool isActive = true, int? shelfLifeDays = null,
+        decimal? batchSize = null, string? batchRule = null)
     {
         var material = new InventoryMaterial
         {
+            BatchSize = batchSize,
+            BatchRule = batchSize is null ? null : batchRule ?? "near",
             Id = Guid.CreateVersion7(),
             Code = code,
             BaseUomId = baseUomId,
@@ -92,9 +96,22 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         return material;
     }
 
-    public InventoryJob AddJob(string number, Guid siteId, Guid? materialId, string status = "planned", string jobType = "production")
+    public InventoryJob AddJob(
+        string number, Guid siteId, Guid? materialId, string status = "planned", string jobType = "production", Guid? uomId = null, decimal? plannedQty = null)
     {
-        var job = new InventoryJob { Id = Guid.CreateVersion7(), SiteId = siteId, JobNumber = number, JobType = jobType, Status = status, MaterialId = materialId };
+        var job = new InventoryJob
+        {
+            Id = Guid.CreateVersion7(),
+            SiteId = siteId,
+            JobNumber = number,
+            JobType = jobType,
+            Status = status,
+            MaterialId = materialId,
+            EquipmentId = Guid.CreateVersion7(),
+            LineCode = "EXT-01",
+            UomId = uomId,
+            PlannedQty = plannedQty,
+        };
         lock (_lock)
         {
             _jobs[job.Id] = job;

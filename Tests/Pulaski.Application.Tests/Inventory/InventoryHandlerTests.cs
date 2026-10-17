@@ -41,7 +41,8 @@ public class InventoryHandlerTests
         _count = Inventory.AddReason(ReasonKinds.InventoryAdjustment, "COUNT");
         _other = Inventory.AddReason(ReasonKinds.InventoryAdjustment, "OTHER", requiresComment: true);
         _qaHold = Inventory.AddReason(ReasonKinds.Hold, "QA-HOLD");
-        _job = Inventory.AddJob("WO-1001-10", _site, _profile.Id);
+        _job = Inventory.AddJob("WO-1001-10", _site, _profile.Id, status: "running", uomId: _m.Id, plannedQty: 1000m);
+        _f.Stores.Execution.OpenRun(_job.Id, _job.EquipmentId, HandlerFixture.Now.AddHours(-8), _m.Id);
         Inventory.PlanComponent(_job.Id, _resin.Id);
     }
 
@@ -52,11 +53,11 @@ public class InventoryHandlerTests
             .HandleAsync(new ReceiveLotCommand(material ?? _resin.Id, location ?? _stores.Id, lot, qty, uom ?? _kg.Id), CancellationToken.None));
 
     private Task<LotTransactionResponseOf> Consume(Guid lotId, decimal qty, Guid? job = null) =>
-        Run(new ConsumeLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
+        Run(new ConsumeLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Execution, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
             .HandleAsync(new ConsumeLotCommand(lotId, job ?? _job.Id, qty, _kg.Id), CancellationToken.None));
 
     private Task<LotTransactionResponseOf> Produce(decimal qty, string? lot = null, Guid? location = null) =>
-        Run(new ProduceLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
+        Run(new ProduceLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Execution, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
             .HandleAsync(new ProduceLotCommand(_job.Id, location ?? _stores.Id, qty, _m.Id, lot), CancellationToken.None));
 
     private static async Task<LotTransactionResponseOf> Run(Task<Contracts.Inventory.LotTransactionResponse> task) => new(await task);

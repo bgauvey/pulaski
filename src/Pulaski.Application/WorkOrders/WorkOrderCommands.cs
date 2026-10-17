@@ -1,4 +1,5 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Execution;
 using Pulaski.Application.Boms;
 using Pulaski.Application.Errors;
 using Pulaski.Contracts.Common;
@@ -87,7 +88,27 @@ internal sealed class CreateWorkOrderHandler(
         }
 
         var orderNumber = command.OrderNumber.Trim();
-        var plan = ProcessJobPlan.For(route.Version.Definition, orderNumber, command.PlannedQty, command.PlannedStart);
+
+        // The order may be in any unit that converts to the material's base unit (D-026).
+        var output = (await boms.GetMaterialsAsync([command.MaterialId], cancellationToken)).Single();
+        var converter = UnitConversions.For(
+            output.Id, await units.GetUnitsAsync(cancellationToken), await units.GetConversionsAsync([output.Id], cancellationToken));
+        if (!converter.CanConvert(command.UomId, output.BaseUomId))
+        {
+            throw new DomainRuleException(
+                $"{converter.Code(command.UomId)} doesn't convert to {converter.Code(output.BaseUomId)}, the base unit of {output.Code}; enter the quantity in another unit, or add a conversion for {output.Code} on the Units page.");
+        }
+
+        // A material made in batches is ordered in whole batches, and each line gets whole batches of it (D-036).
+        decimal? batchQuantity = null;
+        if (output.Batching is { } batching)
+        {
+            batching.EnsureWholeBatches(
+                converter.Convert(command.PlannedQty, command.UomId, output.BaseUomId), $"Work order {orderNumber}", converter.Code(output.BaseUomId));
+            batchQuantity = converter.Convert(batching.Size, output.BaseUomId, command.UomId);
+        }
+
+        var plan = ProcessJobPlan.For(route.Version.Definition, orderNumber, command.PlannedQty, command.PlannedStart, batchQuantity);
         var lines = (await scheduling.LockLinesAsync([.. plan.Select(j => j.EquipmentId).Distinct()], cancellationToken))
             .ToDictionary(l => l.Id);
 
@@ -106,16 +127,6 @@ internal sealed class CreateWorkOrderHandler(
         if (problems.Count > 0)
         {
             throw new DomainRuleException(string.Join(" ", problems));
-        }
-
-        // The order may be in any unit that converts to the material's base unit (D-026).
-        var output = (await boms.GetMaterialsAsync([command.MaterialId], cancellationToken)).Single();
-        var converter = UnitConversions.For(
-            output.Id, await units.GetUnitsAsync(cancellationToken), await units.GetConversionsAsync([output.Id], cancellationToken));
-        if (!converter.CanConvert(command.UomId, output.BaseUomId))
-        {
-            throw new DomainRuleException(
-                $"{converter.Code(command.UomId)} doesn't convert to {converter.Code(output.BaseUomId)}, the base unit of {output.Code}; enter the quantity in another unit, or add a conversion for {output.Code} on the Units page.");
         }
 
         // Read FOR SHARE after the lines and the route, so the BOM can't be replaced while it is used.
@@ -204,6 +215,7 @@ internal sealed class CreateWorkOrderHandler(
 internal sealed class ChangeWorkOrderStatusHandler(
     IUnitOfWork unitOfWork,
     IWorkOrderRepository workOrders,
+    IExecutionRepository execution,
     IEventLog eventLog,
     IEventFactory events) : ICommandHandler<ChangeWorkOrderStatusCommand, VersionResponse>
 {
@@ -231,6 +243,12 @@ internal sealed class ChangeWorkOrderStatusHandler(
                 $"Moving a work order from '{current.Value.Status}' to '{command.Status}' also changes its jobs; use the dispatch, un-dispatch or firm command.");
         }
 
+        if (WorkOrderStatus.IsExecutionTransition(current.Value.Status, command.Status))
+        {
+            throw new DomainRuleException(
+                $"Work order {current.Value.OrderNumber} follows its jobs from here: it is in progress once a job starts and completed when the last one is.");
+        }
+
         var changed = current.Value.WithStatus(command.Status);
         if (changed.Status == WorkOrderStatus.Cancelled && await workOrders.HasOpenJobsAsync(changed.Id, cancellationToken))
         {
@@ -244,6 +262,13 @@ internal sealed class ChangeWorkOrderStatusHandler(
             new { Before = new { current.Value.Status }, After = new { changed.Status } },
             command.Reason);
         var version = await workOrders.UpdateStatusAsync(changed.Id, changed.Status, envelope.OccurredAt, cancellationToken);
+
+        // Closing the order closes its completed jobs: nothing more can be reported into them (D-035).
+        if (changed.Status == WorkOrderStatus.Closed)
+        {
+            await execution.CloseCompletedJobsAsync(changed.Id, envelope.OccurredAt, cancellationToken);
+        }
+
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 

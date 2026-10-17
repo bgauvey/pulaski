@@ -86,6 +86,10 @@ else
             <div class="col-sm-6">
                 <label class="form-label" for="qty">Planned quantity</label>
                 <InputNumber id="qty" class="form-control" @bind-Value="_form.PlannedQty" min="0" step="any" />
+                @if (_materials?.FirstOrDefault(m => m.Id == _form.MaterialId) is { BatchSize: { } batch } batchMaterial)
+                {
+                    <div class="form-text">Made in batches of @batch.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) @batchMaterial.BaseUomCode: plan whole batches.</div>
+                }
             </div>
             <div class="col-sm-6">
                 <label class="form-label" for="uom">Unit</label>

@@ -35,6 +35,14 @@
     </div>
 }
 
+@if (_batchNotes.Count > 0)
+{
+    <div class="drawer-alert is-warning mb-3" role="status">
+        <Icon Name="alert" Size="18" />
+        <span>@string.Join(" ", _batchNotes)</span>
+    </div>
+}
+
 @if (_detail is { } detail)
 {
     var m = detail.Material;
@@ -178,6 +186,7 @@ else if (_error is null)
     private IReadOnlyList<MaterialConversionDto> _conversions = [];
     private WhereUsedDto? _whereUsed;
     private IReadOnlyList<string>? _stillUsedBy;
+    private IReadOnlyList<string> _batchNotes = [];
     private ApiException? _error;
     private bool _saving;
     private int _revision;
@@ -208,6 +217,33 @@ else if (_error is null)
         _revision++;
     }
 
+    /// <summary>Batch settings are saved on their own (D-036); the answer names open orders that are no longer whole batches.</summary>
+    private async Task SetBatchingAsync(PropertyChange change)
+    {
+        if (MaterialProperties.ApplyBatching(_detail!.Material, change) is not { } request)
+        {
+            _revision++;
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        try
+        {
+            _batchNotes = (await Api.SetBatchingAsync(MaterialId, request)).StillUsedBy;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            _revision++;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
     private async Task ReloadAsync()
     {
         try
@@ -222,6 +258,12 @@ else if (_error is null)
 
     private async Task OnChangeAsync(PropertyChange change)
     {
+        if (_detail is not null && MaterialProperties.IsBatchingKey(change.Key))
+        {
+            await SetBatchingAsync(change);
+            return;
+        }
+
         if (_detail is null || MaterialProperties.ApplyChange(_detail.Material, change) is not { } request)
         {
             return;

@@ -74,12 +74,13 @@ public class LocationRuleHandlerTests
     [Fact]
     public async Task An_expired_lot_cant_be_consumed_shipped_or_merged_until_its_expiry_is_corrected()
     {
-        var job = Inventory.AddJob("WO-1-10", _site, _blend.Id);
+        var job = Inventory.AddJob("WO-1-10", _site, _blend.Id, status: "running");
+        _f.Stores.Execution.OpenRun(job.Id, job.EquipmentId, HandlerFixture.Now.AddHours(-1));
         var lot = await Receive(_resin.Id, "R-1", 10m, _stores.Id, HandlerFixture.Now.AddDays(1));
         var other = await Receive(_resin.Id, "R-2", 10m, _stores.Id, HandlerFixture.Now.AddDays(1));
         _f.Time.Advance(TimeSpan.FromDays(2));
 
-        var consume = new ConsumeLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
+        var consume = new ConsumeLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Execution, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
         var ex = await Assert.ThrowsAsync<DomainRuleException>(() =>
             consume.HandleAsync(new ConsumeLotCommand(lot.LotId, job.Id, 1m, _kg.Id), CancellationToken.None));
         Assert.Contains("correct its expiry", ex.Message, StringComparison.Ordinal);

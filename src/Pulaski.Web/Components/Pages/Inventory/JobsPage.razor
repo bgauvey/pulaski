@@ -5,7 +5,7 @@
 <PageTitle>Jobs · Inventory · Pulaski</PageTitle>
 
 <InventoryHeader Title="Declare against a job" SiteChanged="SearchAsync">
-    <Description>Open production jobs. Pick one to record the lots it used and the lots it made.</Description>
+    <Description>Production jobs that are running, paused, or completed but not yet closed. Pick one to record the lots it used and the lots it made.</Description>
 </InventoryHeader>
 
 <ProblemAlert Error="_error" />
@@ -28,8 +28,8 @@
 else if (_jobs.Count == 0)
 {
     <div class="empty-panel">
-        <h2>No open production jobs</h2>
-        <p class="text-muted mb-0">Jobs come from work orders. Create one from the <a href="schedule">Schedule</a>.</p>
+        <h2>No job has run yet</h2>
+        <p class="text-muted mb-0">Material is used and made while a job runs. Start a job on the <a href="floor">Floor</a> first; jobs come from work orders on the <a href="schedule">Schedule</a>.</p>
     </div>
 }
 else

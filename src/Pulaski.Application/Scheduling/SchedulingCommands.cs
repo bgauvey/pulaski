@@ -105,6 +105,7 @@ internal sealed class CreateJobHandler(
             }
 
             await SchedulingRules.EnsureCanRunAsync(scheduling, line, workOrder.MaterialId, at, cancellationToken);
+            await BatchPlanning.EnsureWholeAsync(boms, units, workOrder.MaterialId, command.PlannedQty!.Value, workOrder.UomId, $"Job {command.JobNumber.Trim()}", cancellationToken);
         }
         else if (line.IsGroup)
         {
@@ -361,6 +362,13 @@ internal sealed class CancelJobHandler(
                 : null;
             var workOrderStatus = workOrder?.Status ?? WorkOrderStatus.Planned;
             var remaining = (job.PlannedQty ?? 0m) - await scheduling.GetGoodQtyAsync(job.Id, cancellationToken);
+
+            // What is left of a batch material is planned in whole batches, rounded up to meet the order (D-036).
+            if (remaining > 0 && job.MaterialId is { } materialId && job.UomId is { } uomId)
+            {
+                remaining = await BatchPlanning.RoundUpAsync(boms, units, materialId, remaining, uomId, cancellationToken);
+            }
+
             replacement = job.Replacement(ids.NewId(), remaining, workOrderStatus, at);
         }
 
@@ -492,4 +500,36 @@ internal static class SchedulingRules
 
     private static ConflictException Changed(Job job) =>
         new($"Job {job.JobNumber} was changed by someone else. Reload and try again.");
+}
+
+/// <summary>Whole batches for the jobs of a material made in batches (D-036).</summary>
+internal static class BatchPlanning
+{
+    /// <exception cref="DomainRuleException">The quantity would need a partial batch.</exception>
+    public static async Task EnsureWholeAsync(
+        IBomRepository boms, IUnitRepository units, Guid materialId, decimal quantity, Guid uomId, string what, CancellationToken cancellationToken)
+    {
+        var material = (await boms.GetMaterialsAsync([materialId], cancellationToken)).SingleOrDefault();
+        if (material?.Batching is not { } batching)
+        {
+            return;
+        }
+
+        var converter = UnitConversions.For(materialId, await units.GetUnitsAsync(cancellationToken), await units.GetConversionsAsync([materialId], cancellationToken));
+        batching.EnsureWholeBatches(converter.Convert(quantity, uomId, material.BaseUomId), what, converter.Code(material.BaseUomId));
+    }
+
+    /// <summary>The quantity rounded up to whole batches, in its own unit; unchanged for a material made continuously.</summary>
+    public static async Task<decimal> RoundUpAsync(
+        IBomRepository boms, IUnitRepository units, Guid materialId, decimal quantity, Guid uomId, CancellationToken cancellationToken)
+    {
+        var material = (await boms.GetMaterialsAsync([materialId], cancellationToken)).SingleOrDefault();
+        if (material?.Batching is not { } batching)
+        {
+            return quantity;
+        }
+
+        var converter = UnitConversions.For(materialId, await units.GetUnitsAsync(cancellationToken), await units.GetConversionsAsync([materialId], cancellationToken));
+        return converter.Convert(batching.RoundUp(converter.Convert(quantity, uomId, material.BaseUomId)), material.BaseUomId, uomId);
+    }
 }

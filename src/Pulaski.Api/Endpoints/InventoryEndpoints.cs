@@ -166,7 +166,7 @@ internal static class InventoryEndpoints
             ICommandHandler<ConsumeLotCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new ConsumeLotCommand(id, request.JobId, request.Quantity, request.UomId, request.Comment), ct)));
+                new ConsumeLotCommand(id, request.JobId, request.Quantity, request.UomId, request.Comment, request.RunId), ct)));
 
         lots.MapPost("/{id:guid}/split", async Task<Created<LotTransactionResponse>> (
             Guid id,
@@ -307,7 +307,7 @@ internal static class InventoryEndpoints
             CancellationToken ct) =>
         {
             var produced = await handler.HandleAsync(
-                new ProduceLotCommand(id, request.LocationId, request.Quantity, request.UomId, request.LotNumber, request.ExpiresAt, request.Comment),
+                new ProduceLotCommand(id, request.LocationId, request.Quantity, request.UomId, request.LotNumber, request.ExpiresAt, request.Comment, request.RunId),
                 ct);
             return TypedResults.Created($"/api/lots/{produced.LotId}", produced);
         })

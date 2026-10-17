@@ -45,5 +45,6 @@ api.MapBomEndpoints();
 api.MapUnitEndpoints();
 api.MapInventoryEndpoints();
 api.MapMaterialEndpoints();
+api.MapExecutionEndpoints();
 
 app.Run();

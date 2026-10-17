@@ -15,7 +15,8 @@ internal static class InventoryRules
     public const int MaxComment = 1000;
     public const int MaxReference = 100;
 
-    private static readonly HashSet<string> ClosedJobStatuses = ["completed", "closed", "cancelled"];
+    // A completed job still takes reports into its runs until it is closed (D-035).
+    private static readonly HashSet<string> ClosedJobStatuses = ["closed", "cancelled"];
 
     /// <summary>The lot, locked, at the version the caller read (when one is given).</summary>
     public static async Task<Lot> LotAsync(IInventoryRepository repository, Guid id, long? expectedVersion, CancellationToken cancellationToken)
@@ -85,9 +86,13 @@ internal static class InventoryRules
         var reason = await repository.GetReasonAsync(id, cancellationToken);
         if (reason is null || reason.Kind != kind || (reason.SiteId is { } site && site != siteId))
         {
-            throw new DomainRuleException(kind == ReasonKinds.Hold
-                ? "Choose a hold reason."
-                : "Choose an adjustment reason.");
+            throw new DomainRuleException(kind switch
+            {
+                ReasonKinds.Hold => "Choose a hold reason.",
+                ReasonKinds.Scrap => "Choose a scrap reason.",
+                ReasonKinds.RunEnd => "Choose a reason for ending the run.",
+                _ => "Choose an adjustment reason.",
+            });
         }
 
         if (!reason.IsActive || !reason.IsSelectable)

@@ -245,6 +245,9 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
 
     private const string OpenJobs = "j.job_type = 'production' AND j.status NOT IN ('completed','closed','cancelled')";
 
+    // Consumption and production go into a run (D-035): jobs that are running, paused, or completed but not yet closed.
+    private const string DeclarableJobs = "j.job_type = 'production' AND j.status IN ('running','paused','completed')";
+
     private const string JobUsesSql = $"""
         SELECT j.id AS job_id, j.job_number, j.status AS job_status, wo.order_number AS work_order_number,
                eq.code AS line_code, om.code AS material_code, sum(jm.planned_qty) AS planned_qty, u.code AS uom_code,
@@ -294,7 +297,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
                    SELECT 1 FROM core.job_material jm
                    WHERE jm.job_id = j.id AND jm.material_id = @MaterialId AND jm.direction = 'consume')) AS plans_component
         {JobFrom}
-        WHERE {OpenJobs}
+        WHERE {DeclarableJobs}
           AND (@SiteId::uuid IS NULL OR j.site_id = @SiteId)
           AND (@Pattern::text IS NULL OR j.job_number ILIKE @Pattern OR m.code ILIKE @Pattern OR wo.order_number ILIKE @Pattern)
         ORDER BY plans_component DESC, j.job_number
