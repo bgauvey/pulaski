@@ -74,47 +74,7 @@
         </section>
     </div>
 
-    <section class="inv-section" aria-labelledby="cap-title">
-        <div class="inv-section-head">
-            <h2 id="cap-title">Where it can run</h2>
-            <span class="small text-muted">Capabilities and rates are maintained here in a coming release.</span>
-        </div>
-        @if (detail.Capabilities.Count == 0)
-        {
-            <p class="text-muted">No line has a capability for @m.Code, so no job for it can be placed yet.</p>
-        }
-        else
-        {
-            <div class="table-panel">
-                <table class="table table-sm align-middle">
-                    <thead><tr><th>Line</th><th class="inv-num">Ideal rate</th><th class="inv-num">Planning rate</th><th>Changeover</th><th class="inv-num">Crew</th><th>From</th><th>To</th></tr></thead>
-                    <tbody>
-                        @foreach (var c in detail.Capabilities)
-                        {
-                            <tr @key="(c.EquipmentId, c.EffectiveFrom)">
-                                <td><span class="fw-semibold">@c.EquipmentCode</span>@(c.IsPreferred ? " ★" : "") <span class="small text-muted">@c.EquipmentName</span></td>
-                                <td class="inv-num">@InventoryView.Qty(c.IdealRatePerHour) @c.RateUomCode/h</td>
-                                <td class="inv-num">
-                                    @if (c.EffectiveRatePerHour is { } rate)
-                                    {
-                                        @($"{InventoryView.Qty(rate)} {c.RunStandardUomCode}/h") <span class="small text-muted">@c.RateSource</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">none</span>
-                                    }
-                                </td>
-                                <td>@(c.StandardChangeover is { } ch ? $"{(int)ch.TotalMinutes} min" : "—")</td>
-                                <td class="inv-num">@(c.StandardCrewSize?.ToString("0.##", CultureInfo.InvariantCulture) ?? "—")</td>
-                                <td class="small">@c.EffectiveFrom.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</td>
-                                <td class="small">@(c.EffectiveTo?.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "—")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
-    </section>
+    <MaterialCapabilities Material="m" Capabilities="detail.Capabilities" Units="_uoms" OnChanged="ReloadAsync" />
 
     <div class="inv-layout">
         <section class="inv-section" aria-labelledby="made-title">
@@ -246,6 +206,18 @@ else if (_error is null)
         _detail = await Api.GetMaterialAsync(MaterialId);
         _items = MaterialProperties.For(_detail.Material, _detail.Usage, _classes, _uoms);
         _revision++;
+    }
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
     }
 
     private async Task OnChangeAsync(PropertyChange change)

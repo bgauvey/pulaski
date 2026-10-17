@@ -15,7 +15,7 @@ public class MaterialTests
     private static readonly Material Local = Material.CreateLocal(
         Guid.CreateVersion7(), new MaterialChange("PVC-K67", "PVC compound", null, "raw", null, Kg, true, null, true));
 
-    private static readonly Material FromErp = Material.CreateFromErp(Guid.CreateVersion7(), "SAP", "000100", "1", "PVC-K67", "PVC compound", Kg, "raw");
+    private static readonly Material FromErp = Material.CreateFromErp(Guid.CreateVersion7(), "ERP1", "000100", "1", "PVC-K67", "PVC compound", Kg, "raw");
 
     [Fact]
     public void A_material_from_the_erp_keeps_its_erp_fields_but_takes_pulaskis_own()

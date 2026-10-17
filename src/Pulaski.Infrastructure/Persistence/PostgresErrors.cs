@@ -36,6 +36,9 @@ internal static class PostgresErrors
                 "A referenced record does not exist."),
             PostgresErrorCodes.CheckViolation => new DomainRuleException(
                 $"The change breaks the rule '{ex.ConstraintName}'."),
+            // Two periods of one capability overlap (D-034): another change got in between the check and the write.
+            PostgresErrorCodes.ExclusionViolation when ex.ConstraintName == "capability_no_overlap" => new ConflictException(
+                "Another capability for this material on this line was changed at the same moment, and the periods now overlap. Reload and try again."),
             // Two commands took the same rows in opposite order (e.g. opposite bulk transfers, D-027); one was rolled back.
             PostgresErrorCodes.DeadlockDetected => new ConflictException(
                 "Someone else changed the same records at the same moment. Try again."),

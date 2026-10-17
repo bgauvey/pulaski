@@ -41,6 +41,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-031 | Indistinguishable lots: a location that holds inventory can mix lots (`commingles_lots`), like a silo or tank. Everything that arrives there joins one balance per material, with no lot number; a numbered receipt is kept as its own lot and merged in, so genealogy still reaches the supplier lot. Every balance, lot-tracked or not, has a NULL lot number | Proposed | 2026-10-17 |
 | D-032 | Location and expiry rules: a location can take one material at a time (`single_material`); a location holding stock can't be deactivated or stop holding inventory; materials have a shelf life that sets a new lot's expiry; an expired lot can't be consumed, shipped or merged until its expiry is corrected | Proposed | 2026-10-17 |
 | D-033 | Materials management: materials and material classes are maintained in Pulaski. For a material from the ERP, its code, name, base unit and type change only through the ERP (an idempotent import by external key); Pulaski owns everything else. A base unit can't change and a local code is fixed once the material is used; lot tracking changes only with nothing on hand. Classes stay flat. Type is a label, no rules. Capabilities, run standards and CSV import come next; imports and label printing will later go through adapters | Proposed | 2026-10-17 |
+| D-034 | Capabilities, run standards and bulk import: capabilities are maintained per material and line over half-open periods that never overlap, and are ended rather than deleted. A new capability creates the line's run standard from its ideal rate; a changed ideal rate recalculates it while it is still based on the ideal rate, and never touches a modified rate. Materials load in bulk from a CSV file, checked first and saved all or nothing; the parser yields source-neutral rows, so later adapters feed the same importer | Proposed | 2026-10-17 |
 
 ## Order hierarchy
 
@@ -513,7 +514,36 @@ Materials are the items everything else refers to: BOMs, processes, capabilities
 
 **Screens.** Configure → Materials lists materials grouped by class, with search and filters, and creates local materials. Each material has a page with its properties (ERP-owned ones read-only), what it is used in, its conversions, the processes that make it, its BOMs, where it is used, its capabilities and its stock. Material classes have a tab of their own.
 
-**Next:** capabilities and run standards maintained from the material page (D-020, D-016); CSV import; an adapter interface for external data sources (ERP item masters, label printing such as BarTender).
+**Next:** capabilities, run standards and CSV import are D-034; still to come is an adapter interface for external data sources (ERP item masters, label printing such as BarTender).
+
+## Capabilities, run standards and bulk import (D-034, proposed)
+
+**Capabilities (amends D-020).** A capability says a material can run on a line from `effective_from` (included) to `effective_to` (not included, open when null).
+
+- **Where.** Only on active equipment with `can_run_job`. A department gets its eligibility from the lines below it (D-022), so it never has capabilities of its own. The material must be active, and the rate unit must convert to its base unit (D-026).
+- **No overlap.** Two periods of one material on one line never share an instant, so "is there a capability now?" always has one answer. The handler checks first and says so in words; the `capability_no_overlap` exclusion constraint is the backstop for a race.
+- **Ended, not deleted.** The app role has no DELETE, and history should still say what could run where. *End now* sets `effective_to` to now; a capability that hasn't started yet is changed instead. Ending one under open jobs reports how many stay on the line, unable to be moved there or dispatched until it has a capability again; nothing is moved for the planner (D-014).
+- **Lock order.** Each change locks the line row first, as every scheduling write does (D-017), then the material and the capability, so it serializes with the eligibility checks of job placement and dispatch.
+- **Events:** `pulaski.capability.added.v1`, `…changed.v1` and `…ended.v1`, each with the capability before and after.
+
+**Run standards follow the ideal rate (amends D-016).** The run standard is one row per line and material, shared by all its capability periods.
+
+| Event | Run standard |
+| --- | --- |
+| A capability is added and the line has none for the material | Created from the ideal rate, in its unit, basis `ideal_rate` (`pulaski.run_standard.created.v1`) |
+| A capability is added, or its ideal rate or unit changes, and the basis is still `ideal_rate` | The calculated rate takes the new ideal rate (`…recalculated.v1`); a modified rate stays in force |
+| The basis is `run_history` | Unchanged: measured performance beats a nameplate figure |
+| The rate unit would change under a modified rate | Refused: the modified rate is in the old unit, so clear it first |
+
+The material page also sets and clears the modified rate, through the existing run-standard commands.
+
+**Bulk import.** `POST /api/materials/import/csv` takes a CSV file (`text/csv`, at most 5 MB and 5,000 rows); `?dryRun=true` checks it and saves nothing.
+
+- **The file.** The header names the columns, in any order or case, with a few common alternative names; comma or semicolon separators; RFC 4180 quotes. `code`, `name`, `type` and `base_unit` are required. A column left out keeps what each material has; a blank cell clears an optional field (class, description, shelf life). An unknown column is a problem with the file, so a misspelt header can't be silently ignored.
+- **Matching.** A row with `external_system` and `external_key` is the ERP's item, matched on them as in the single import (D-033); its Pulaski-owned columns are applied too, because the person loading the file is a Pulaski user. A row without them is a Pulaski material matched on its code; a code that belongs to an ERP material is an error.
+- **All or nothing.** Every row goes through the same rules as a single change, in one transaction, so later rows see earlier ones. Any error, or a dry run, rolls the whole file back; the answer lists each row as *create*, *update* (with the fields that change), *unchanged* or *error* (with why). A code or key twice in a file is an error. Each saved row records its usual event, with the reason `CSV import`.
+- **The adapter seam.** `MaterialCsv` only turns text into `MaterialImportRow`s (source-neutral; a field the source didn't supply is null). `ImportMaterialsCommand` applies the rules to rows from any source. An adapter for another item master, or for label printing, will produce or consume the same rows; designing that interface is the next step.
+- **Not yet:** capabilities in the file, creating missing classes, and exporting a template file (the screen shows the header line).
 
 ## Application architecture
 

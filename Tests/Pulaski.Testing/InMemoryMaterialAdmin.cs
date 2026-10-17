@@ -18,15 +18,15 @@ public sealed class InMemoryMaterialAdmin : IMaterialAdminRepository, IMaterialR
     /// <summary>What a test says uses each material.</summary>
     public Dictionary<Guid, MaterialUse> Use { get; } = [];
 
-    public Guid AddUom(string code, bool isActive = true)
+    public Guid AddUom(string code, bool isActive = true, Guid? id = null)
     {
-        var id = Guid.CreateVersion7();
+        var uomId = id ?? Guid.CreateVersion7();
         lock (_lock)
         {
-            _uoms[code] = (id, isActive);
+            _uoms[code] = (uomId, isActive);
         }
 
-        return id;
+        return uomId;
     }
 
     public MaterialClass AddClass(string code, bool isActive = true)
@@ -63,6 +63,22 @@ public sealed class InMemoryMaterialAdmin : IMaterialAdminRepository, IMaterialR
         lock (_lock)
         {
             return Task.FromResult(_materials.Values.FirstOrDefault(m => m.Value.ExternalSystem == externalSystem && m.Value.ExternalKey == externalKey));
+        }
+    }
+
+    public Task<Versioned<Material>?> FindByCodeForUpdateAsync(string code, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_materials.Values.FirstOrDefault(m => m.Value.Code == code));
+        }
+    }
+
+    public Task<MaterialClass?> FindClassByCodeAsync(string code, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_classes.Values.Select(c => c.Value).FirstOrDefault(c => c.Code == code));
         }
     }
 

@@ -24,10 +24,15 @@ public sealed record MaterialUsageDto
 /// <summary>A line or unit that can run the material (D-020), with its planning rate (D-016).</summary>
 public sealed record MaterialCapabilityDto
 {
+    public required Guid Id { get; init; }
     public required Guid EquipmentId { get; init; }
     public required string EquipmentCode { get; init; }
     public required string EquipmentName { get; init; }
+
+    /// <summary>The time zone of the line's site, for showing and entering its dates.</summary>
+    public string? SiteTimeZone { get; init; }
     public decimal IdealRatePerHour { get; init; }
+    public required Guid RateUomId { get; init; }
     public required string RateUomCode { get; init; }
     public TimeSpan? StandardChangeover { get; init; }
     public decimal? StandardCrewSize { get; init; }
@@ -35,11 +40,65 @@ public sealed record MaterialCapabilityDto
     public DateTimeOffset EffectiveFrom { get; init; }
     public DateTimeOffset? EffectiveTo { get; init; }
 
+    /// <summary>True when it applies now: jobs for the material can be placed on the line.</summary>
+    public bool IsInEffect { get; init; }
+
+    /// <summary>Concurrency token; send it back when changing or ending the capability.</summary>
+    public long Version { get; init; }
+
+    /// <summary>The line's run standard for the material, shared by all its capability periods; null when there is none.</summary>
+    public Guid? RunStandardId { get; init; }
+    public long? RunStandardVersion { get; init; }
+    public decimal? CalculatedRatePerHour { get; init; }
+    public string? CalculationBasis { get; init; }
+    public decimal? ModifiedRatePerHour { get; init; }
+    public string? ModifiedBy { get; init; }
+    public DateTimeOffset? ModifiedAt { get; init; }
+    public string? ModifiedNote { get; init; }
+
     /// <summary>The run standard's rate in force, modified or calculated; null when there is none.</summary>
     public decimal? EffectiveRatePerHour { get; init; }
     public string? RateSource { get; init; }
     public string? RunStandardUomCode { get; init; }
 }
+
+/// <summary>A new capability: the material can run on the line over a period (D-020, D-034).</summary>
+public sealed record AddCapabilityRequest
+{
+    public Guid EquipmentId { get; init; }
+    public decimal IdealRatePerHour { get; init; }
+    public Guid RateUomId { get; init; }
+    public int? StandardChangeoverMinutes { get; init; }
+    public decimal? StandardCrewSize { get; init; }
+    public bool IsPreferred { get; init; }
+
+    /// <summary>When it starts; now when left out.</summary>
+    public DateTimeOffset? EffectiveFrom { get; init; }
+
+    /// <summary>When it stops applying (not included); open-ended when null.</summary>
+    public DateTimeOffset? EffectiveTo { get; init; }
+}
+
+/// <summary>A capability's new values; the line and material can't change.</summary>
+public sealed record UpdateCapabilityRequest
+{
+    public long Version { get; init; }
+    public decimal IdealRatePerHour { get; init; }
+    public Guid RateUomId { get; init; }
+    public int? StandardChangeoverMinutes { get; init; }
+    public decimal? StandardCrewSize { get; init; }
+    public bool IsPreferred { get; init; }
+    public DateTimeOffset EffectiveFrom { get; init; }
+    public DateTimeOffset? EffectiveTo { get; init; }
+}
+
+public sealed record EndCapabilityRequest
+{
+    public long Version { get; init; }
+}
+
+/// <summary>The capability as it is now, and notes on what the change did: a new or recalculated planning rate, open jobs left without one.</summary>
+public sealed record CapabilityResponse(Guid Id, long Version, IReadOnlyList<string> Notes);
 
 /// <summary>A material with what uses it and where it can run.</summary>
 public sealed record MaterialDetailDto
@@ -87,7 +146,7 @@ public sealed record UpdateMaterialResponse(long Version, IReadOnlyList<string> 
 /// </summary>
 public sealed record ImportMaterialRequest
 {
-    /// <summary>Which system mastered it, such as <c>SAP-PRD</c>.</summary>
+    /// <summary>Which system mastered it, such as <c>ERP1</c>.</summary>
     public string ExternalSystem { get; init; } = "";
 
     /// <summary>Its key there; with the system, it identifies the material for every later import.</summary>
@@ -117,4 +176,44 @@ public sealed record UpdateMaterialClassRequest
     public long Version { get; init; }
     public string Name { get; init; } = "";
     public bool IsActive { get; init; } = true;
+}
+
+/// <summary>What a bulk import did, or would do, with one row of the file (D-034).</summary>
+public sealed record ImportRowResultDto
+{
+    /// <summary>The row's line in the file, counting the header as line 1.</summary>
+    public int Line { get; init; }
+    public string Code { get; init; } = "";
+
+    /// <summary><c>create</c>, <c>update</c>, <c>unchanged</c> or <c>error</c>.</summary>
+    public string Action { get; init; } = "";
+
+    /// <summary>The fields that change, for an update.</summary>
+    public IReadOnlyList<string> Changes { get; init; } = [];
+
+    /// <summary>Why the row can't be imported, for an error.</summary>
+    public string? Message { get; init; }
+}
+
+/// <summary>
+/// A bulk import's outcome (D-034). It is all or nothing: <see cref="Applied"/> is true only when every
+/// row was valid and it wasn't a check run; otherwise nothing was saved.
+/// </summary>
+public sealed record ImportMaterialsResponse
+{
+    public bool Applied { get; init; }
+    public int Created { get; init; }
+    public int Updated { get; init; }
+    public int Unchanged { get; init; }
+    public int Errors { get; init; }
+
+    /// <summary>Problems with the file as a whole, such as a missing or unknown column.</summary>
+    public IReadOnlyList<string> FileProblems { get; init; } = [];
+    public IReadOnlyList<ImportRowResultDto> Rows { get; init; } = [];
+}
+
+/// <summary>The materials CSV file (D-034): its header line with every column, for a template.</summary>
+public static class MaterialCsvFormat
+{
+    public const string Header = "code,name,type,base_unit,class,description,lot_tracked,shelf_life_days,active,external_system,external_key,external_version";
 }

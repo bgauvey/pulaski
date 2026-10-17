@@ -60,4 +60,28 @@ public class RunStandardTests
         Assert.Throws<DomainRuleException>(() => New().Recalculate(10m, "guess", At));
         Assert.Throws<DomainRuleException>(() => New().ClearModification());
     }
+
+    [Fact]
+    public void It_follows_the_ideal_rate_until_run_history_takes_over()
+    {
+        var standard = New();
+        var otherUnit = Guid.CreateVersion7();
+
+        var followed = standard.FollowIdealRate(1500m, otherUnit, At.AddDays(1));
+        Assert.Equal((1500m, otherUnit, At.AddDays(1)), (followed.CalculatedRatePerHour, followed.UomId, followed.CalculatedAt));
+        Assert.Same(standard, standard.FollowIdealRate(1200m, standard.UomId, At.AddDays(1)));
+
+        var fromHistory = standard.Recalculate(1100m, CalculationBasis.RunHistory, At);
+        Assert.Same(fromHistory, fromHistory.FollowIdealRate(2000m, otherUnit, At.AddDays(2)));
+    }
+
+    [Fact]
+    public void Following_the_ideal_rate_keeps_a_modified_rate_and_its_unit()
+    {
+        var modified = New().Modify(950m, "planner-1", null, At);
+
+        var followed = modified.FollowIdealRate(1300m, modified.UomId, At.AddDays(1));
+        Assert.Equal((1300m, 950m, RateSource.Modified), (followed.CalculatedRatePerHour, followed.EffectiveRatePerHour, followed.RateSource));
+        Assert.Throws<DomainRuleException>(() => modified.FollowIdealRate(1300m, Guid.CreateVersion7(), At));
+    }
 }

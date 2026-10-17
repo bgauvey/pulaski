@@ -112,4 +112,9 @@ public static class EventTypes
     public const string MaterialImported = "pulaski.material.imported.v1";
     public const string MaterialClassCreated = "pulaski.material_class.created.v1";
     public const string MaterialClassUpdated = "pulaski.material_class.updated.v1";
+    public const string CapabilityAdded = "pulaski.capability.added.v1";
+    public const string CapabilityChanged = "pulaski.capability.changed.v1";
+    public const string CapabilityEnded = "pulaski.capability.ended.v1";
+    public const string RunStandardCreated = "pulaski.run_standard.created.v1";
+    public const string RunStandardRecalculated = "pulaski.run_standard.recalculated.v1";
 }

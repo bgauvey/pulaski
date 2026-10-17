@@ -47,6 +47,8 @@ public sealed class InMemoryStores
 
     public InMemoryMaterialAdmin MaterialAdmin { get; } = new();
 
+    public InMemoryCapabilities Capabilities { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -70,6 +72,7 @@ public sealed class InMemoryStores
         services.RemoveAll<IInventoryRepository>();
         services.RemoveAll<IMaterialReadStore>();
         services.RemoveAll<IMaterialAdminRepository>();
+        services.RemoveAll<ICapabilityRepository>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -91,6 +94,7 @@ public sealed class InMemoryStores
         services.AddSingleton<IInventoryRepository>(Inventory);
         services.AddSingleton<IMaterialReadStore>(MaterialAdmin);
         services.AddSingleton<IMaterialAdminRepository>(MaterialAdmin);
+        services.AddSingleton<ICapabilityRepository>(Capabilities);
         return services;
     }
 }

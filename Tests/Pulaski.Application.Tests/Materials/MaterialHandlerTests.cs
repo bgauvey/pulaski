@@ -74,23 +74,23 @@ public class MaterialHandlerTests
     [Fact]
     public async Task An_import_creates_then_updates_only_the_erp_fields_and_a_repeat_changes_nothing()
     {
-        var first = await Import().HandleAsync(new ImportMaterialCommand("SAP", "000100", "1", "PVC-K67", "PVC compound", "kg", "raw"), CancellationToken.None);
+        var first = await Import().HandleAsync(new ImportMaterialCommand("ERP1", "000100", "1", "PVC-K67", "PVC compound", "kg", "raw"), CancellationToken.None);
         Assert.True(first.Created);
         await Update().HandleAsync(Edit(first.Id, c => c with { ShelfLifeDays = 180 }), CancellationToken.None);
 
-        var renamed = await Import().HandleAsync(new ImportMaterialCommand("SAP", "000100", "2", "PVC-K67", "PVC compound, white", "kg", "raw"), CancellationToken.None);
+        var renamed = await Import().HandleAsync(new ImportMaterialCommand("ERP1", "000100", "2", "PVC-K67", "PVC compound, white", "kg", "raw"), CancellationToken.None);
         Assert.Equal((first.Id, false, true), (renamed.Id, renamed.Created, renamed.Changed));
         var m = Admin.Find(first.Id)!.Value;
         Assert.Equal(("PVC compound, white", 180, "2", MaterialOrigin.Erp), (m.Name, m.ShelfLifeDays, m.ExternalVersion, m.Origin));
 
-        var again = await Import().HandleAsync(new ImportMaterialCommand("SAP", "000100", "2", "PVC-K67", "PVC compound, white", "kg", "raw"), CancellationToken.None);
+        var again = await Import().HandleAsync(new ImportMaterialCommand("ERP1", "000100", "2", "PVC-K67", "PVC compound, white", "kg", "raw"), CancellationToken.None);
         Assert.False(again.Changed);
         Assert.Equal(3, _f.Stores.Events.Appended.Count);
 
         await Assert.ThrowsAsync<DomainRuleException>(() => Update().HandleAsync(Edit(first.Id, c => c with { Name = "Mine" }), CancellationToken.None));
-        await Assert.ThrowsAsync<DomainRuleException>(() => Import().HandleAsync(new ImportMaterialCommand("SAP", "000200", null, "X", "X", "bags", "raw"), CancellationToken.None));
+        await Assert.ThrowsAsync<DomainRuleException>(() => Import().HandleAsync(new ImportMaterialCommand("ERP1", "000200", null, "X", "X", "bags", "raw"), CancellationToken.None));
         Admin.Use[first.Id] = new MaterialUse(true, false);
-        await Assert.ThrowsAsync<DomainRuleException>(() => Import().HandleAsync(new ImportMaterialCommand("SAP", "000100", "3", "PVC-K67", "PVC compound, white", "lb", "raw"), CancellationToken.None));
+        await Assert.ThrowsAsync<DomainRuleException>(() => Import().HandleAsync(new ImportMaterialCommand("ERP1", "000100", "3", "PVC-K67", "PVC compound, white", "lb", "raw"), CancellationToken.None));
     }
 
     [Fact]

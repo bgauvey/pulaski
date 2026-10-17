@@ -346,20 +346,20 @@ Written once, when the version is released; planned components reference them.
 
 ### core.equipment_capability — what can run where (D-020) · *In use*
 
-The list of which material can run on which equipment. A production job may only be created on, moved to or dispatched on a line with a capability in effect for its material.
+The list of which material can run on which equipment. A production job may only be created on, moved to or dispatched on a line with a capability in effect for its material. Maintained on the material page (D-034): only on active equipment with `can_run_job`; never deleted, ended by setting `effective_to`. Adding one creates the line's `run_standard` for the material when it has none.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `equipment_id` | uuid → equipment | no | The line or unit. |
-| `material_id` | uuid → material | no | The material it can run. |
+| `equipment_id` | uuid → equipment | no | The line or unit. Fixed once created. |
+| `material_id` | uuid → material | no | The material it can run. Fixed once created. |
 | `ideal_rate_per_hour` | qty | no | Nameplate rate, in `rate_uom_id` per hour. Drives OEE performance and seeds the run standard. Positive. |
-| `rate_uom_id` | uuid → uom | no | Unit of the rate. |
-| `standard_changeover` | interval | yes | Changeover time into this material when no changeover rule matches (D-015). |
+| `rate_uom_id` | uuid → uom | no | Unit of the rate; must convert to the material's base unit (D-026). |
+| `standard_changeover` | interval | yes | Changeover time into this material when no changeover rule matches (D-015). 0 to 7 days. |
 | `standard_crew_size` | numeric(6,2) | yes | The labor estimate: people needed to run it. |
 | `is_preferred` | boolean | no | Marks the preferred line for the material. Informational; Pulaski never picks a line (D-014). |
-| `effective_from` | timestamptz | no | When the capability starts. |
-| `effective_to` | timestamptz | yes | When it ends; null means open-ended. Periods for the same equipment and material may not overlap. |
+| `effective_from` | timestamptz | no | When the capability starts (included). |
+| `effective_to` | timestamptz | yes | When it stops applying (not included); null means open-ended. Later than `effective_from`. Periods for the same equipment and material may not overlap (`capability_no_overlap`). |
 
 ## 4. Calendar
 
@@ -702,8 +702,8 @@ The rate the projection uses: runtime = remaining quantity ÷ effective rate. Hi
 | `id` | uuid | no | Primary key. |
 | `equipment_id` | uuid → equipment | no | The line. Unique with the material. |
 | `material_id` | uuid → material | no | The material. |
-| `uom_id` | uuid → uom | no | The rate is this unit per hour. |
-| `calculated_rate_per_hour` | numeric(18,6) | no | Written only by Pulaski: first from the capability's ideal rate, later from run history. Positive. |
+| `uom_id` | uuid → uom | no | The rate is this unit per hour. Follows the capability's rate unit while the basis is `ideal_rate` and no modified rate is set. |
+| `calculated_rate_per_hour` | numeric(18,6) | no | Written only by Pulaski: from the capability's ideal rate, recalculated when that changes while the basis is `ideal_rate` (D-034); later from run history. Positive. |
 | `calculation_basis` | text | no | `ideal_rate` or `run_history`. |
 | `calculated_at` | timestamptz | no | When it was last calculated. |
 | `modified_rate_per_hour` | numeric(18,6) | yes | Set by a person. While set it is the gold standard; recalculation never overwrites it. |

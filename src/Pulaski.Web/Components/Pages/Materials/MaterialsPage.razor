@@ -12,12 +12,18 @@
         </p>
     </div>
     <div class="inv-head-tools">
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => _importing = !_importing">Import CSV</button>
         <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New material</button>
     </div>
 </div>
 
 <MaterialsTabs />
 <ProblemAlert Error="_error" />
+
+@if (_importing)
+{
+    <MaterialCsvImport OnImported="ReloadAsync" OnClose="() => _importing = false" />
+}
 
 @if (_adding)
 {
@@ -202,6 +208,7 @@ else
     private string _origin = "";
     private bool _showInactive;
     private bool _adding;
+    private bool _importing;
     private bool _saving;
     private NewMaterial _new = new();
 
@@ -233,6 +240,18 @@ else
             _materials = await Api.ListAllMaterialsAsync();
             _classes = await Api.ListMaterialClassesAsync();
             _uoms = await Api.ListUomsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            _materials = await Api.ListAllMaterialsAsync();
         }
         catch (ApiException ex)
         {

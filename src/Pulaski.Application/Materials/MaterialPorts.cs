@@ -1,6 +1,7 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Contracts.Materials;
 using Pulaski.Domain.Materials;
+using Pulaski.Domain.Scheduling;
 
 namespace Pulaski.Application.Materials;
 
@@ -15,6 +16,12 @@ public interface IMaterialReadStore
 public interface IMaterialAdminRepository
 {
     Task<Versioned<Material>?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>The material with this code, locked; null when there is none.</summary>
+    Task<Versioned<Material>?> FindByCodeForUpdateAsync(string code, CancellationToken cancellationToken);
+
+    /// <summary>The class with this code, read <c>FOR SHARE</c>; null when there is none.</summary>
+    Task<MaterialClass?> FindClassByCodeAsync(string code, CancellationToken cancellationToken);
 
     /// <summary>The material an external system knows by <paramref name="externalKey"/>, locked.</summary>
     Task<Versioned<Material>?> FindByExternalKeyForUpdateAsync(string externalSystem, string externalKey, CancellationToken cancellationToken);
@@ -47,4 +54,39 @@ public interface IMaterialAdminRepository
 
     /// <returns>The new row version.</returns>
     Task<long> UpdateClassAsync(MaterialClass materialClass, DateTimeOffset at, CancellationToken cancellationToken);
+}
+
+/// <summary>A line as a capability change sees it, locked <c>FOR UPDATE</c> like every scheduling write (D-017).</summary>
+public sealed record CapabilityLine(Guid Id, string Code, bool CanRunJob, bool IsActive);
+
+/// <summary>Write side for capabilities and the run standards they seed (D-020, D-034); runs inside the current <see cref="IUnitOfWork"/>.</summary>
+public interface ICapabilityRepository
+{
+    /// <summary>The line, locked <c>FOR UPDATE</c>; null when it doesn't exist.</summary>
+    Task<CapabilityLine?> LockLineAsync(Guid equipmentId, CancellationToken cancellationToken);
+
+    /// <summary>The capability's line, without locking; null when the capability doesn't exist.</summary>
+    Task<Guid?> GetLineOfAsync(Guid capabilityId, CancellationToken cancellationToken);
+
+    Task<Versioned<Capability>?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>The material's other capabilities on the line, for the no-overlap rule.</summary>
+    Task<IReadOnlyList<Capability>> ListOnLineAsync(Guid equipmentId, Guid materialId, CancellationToken cancellationToken);
+
+    /// <returns>The new row version.</returns>
+    Task<long> InsertAsync(Capability capability, CancellationToken cancellationToken);
+
+    /// <returns>The new row version.</returns>
+    Task<long> UpdateAsync(Capability capability, CancellationToken cancellationToken);
+
+    /// <summary>The line's run standard for the material, locked; null when it has none.</summary>
+    Task<Versioned<RunStandard>?> GetRunStandardForUpdateAsync(Guid equipmentId, Guid materialId, CancellationToken cancellationToken);
+
+    Task InsertRunStandardAsync(RunStandard standard, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Writes the calculated rate, its basis and unit; the modified rate belongs to people (D-016).</summary>
+    Task UpdateRunStandardCalculationAsync(RunStandard standard, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Open production jobs for the material on the line (not completed, closed or cancelled).</summary>
+    Task<int> CountOpenJobsAsync(Guid equipmentId, Guid materialId, CancellationToken cancellationToken);
 }

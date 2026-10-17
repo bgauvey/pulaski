@@ -19,6 +19,8 @@ internal sealed class MaterialAdminRepository(DbSession session) : IMaterialAdmi
 
     private const string FindByExternal = $"SELECT {Columns} FROM core.material WHERE external_system = @System AND external_key = @Key FOR UPDATE";
 
+    private const string FindByCode = $"SELECT {Columns} FROM core.material WHERE code = @Code FOR UPDATE";
+
     private const string Insert = """
         INSERT INTO core.material (id, code, name, description, material_type, material_class_id, base_uom_id, is_lot_tracked,
                                    shelf_life_days, origin, external_system, external_key, external_version, is_active, created_at, updated_at)
@@ -44,6 +46,8 @@ internal sealed class MaterialAdminRepository(DbSession session) : IMaterialAdmi
 
     private const string GetClass = $"SELECT {ClassColumns} FROM core.material_class WHERE id = @Id FOR SHARE";
 
+    private const string FindClassByCode = $"SELECT {ClassColumns} FROM core.material_class WHERE code = @Code FOR SHARE";
+
     private const string GetClassForUpdate = $"SELECT {ClassColumns} FROM core.material_class WHERE id = @Id FOR UPDATE";
 
     private const string InsertClass = """
@@ -61,6 +65,12 @@ internal sealed class MaterialAdminRepository(DbSession session) : IMaterialAdmi
 
     public async Task<Versioned<Material>?> FindByExternalKeyForUpdateAsync(string externalSystem, string externalKey, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<MaterialRow>(FindByExternal, new { System = externalSystem, Key = externalKey }, cancellationToken))?.ToVersioned();
+
+    public async Task<Versioned<Material>?> FindByCodeForUpdateAsync(string code, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<MaterialRow>(FindByCode, new { Code = code }, cancellationToken))?.ToVersioned();
+
+    public async Task<MaterialClass?> FindClassByCodeAsync(string code, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<ClassRow>(FindClassByCode, new { Code = code }, cancellationToken))?.ToDomain();
 
     public Task<long> InsertAsync(Material material, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(Insert, Args(material, at), cancellationToken);

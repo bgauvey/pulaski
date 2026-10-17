@@ -89,6 +89,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   by the idempotent import, matched on external system + key); Pulaski owns the rest. Base unit is fixed once in use, a
   local code too; lot tracking changes only with nothing on hand; deactivation is always allowed and reports what still
   uses it. Type is a label with no rules. Classes are flat, code fixed, switched off rather than deleted.
+- Capabilities and bulk import (D-034, proposed): capabilities change on the material page, locking the line first (D-017);
+  periods never overlap and are ended, not deleted. Adding one creates the run standard from the ideal rate; a new ideal
+  rate recalculates it while its basis is `ideal_rate` (`RunStandard.FollowIdealRate`). CSV import is all or nothing
+  (`?dryRun=true` checks); `MaterialCsv` yields source-neutral `MaterialImportRow`s for `ImportMaterialsCommand`, the
+  seam future adapters plug into.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

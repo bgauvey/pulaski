@@ -42,6 +42,29 @@ public sealed record RunStandard(
         return this with { CalculatedRatePerHour = ratePerHour, CalculationBasis = basis, CalculatedAt = at };
     }
 
+    /// <summary>
+    /// Follows a capability's new ideal rate (D-034): while the calculated rate is still based on the
+    /// ideal rate it takes the new one, in its unit; a rate calculated from run history is left alone.
+    /// A modified rate stays in force either way.
+    /// </summary>
+    /// <exception cref="DomainRuleException">The unit would change under a modified rate, which is in the old unit.</exception>
+    public RunStandard FollowIdealRate(decimal ratePerHour, Guid uomId, DateTimeOffset at)
+    {
+        if (CalculationBasis != Scheduling.CalculationBasis.IdealRate)
+        {
+            return this;
+        }
+
+        if (uomId != UomId && ModifiedRatePerHour is not null)
+        {
+            throw new DomainRuleException("The planning rate has a modified rate in the old unit; clear it before changing the rate unit.");
+        }
+
+        return ratePerHour == CalculatedRatePerHour && uomId == UomId
+            ? this
+            : Recalculate(ratePerHour, Scheduling.CalculationBasis.IdealRate, at) with { UomId = uomId };
+    }
+
     /// <summary>Sets the gold-standard rate.</summary>
     /// <exception cref="DomainRuleException">The rate is invalid.</exception>
     public RunStandard Modify(decimal ratePerHour, string by, string? note, DateTimeOffset at)
