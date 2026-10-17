@@ -96,6 +96,7 @@ One self-referencing table holds enterprise, sites, areas, work centers (lines),
 | `is_schedulable` | boolean | no | A planning target: jobs can be planned to it, a line or a group such as a department (D-022). |
 | `can_run_job` | boolean | no | Jobs actually run here (a line or cell). A schedulable row without it is a group: its jobs wait in a window until a line below it that can run jobs takes them (D-022). |
 | `holds_inventory` | boolean | no | Lots can be located here (storage, feed point). |
+| `commingles_lots` | boolean | no | Lots here mix and can't be told apart, like a silo or tank (D-031): every arrival joins one balance per material. Needs `holds_inventory`. |
 | `state_derivation` | text | yes | How a line's state is derived: `own_tags`, `constraint_machine`, `worst_child` or `rule`. Open question; not used yet. |
 | `constraint_equipment_id` | uuid → equipment | yes | The constraint machine, required when `state_derivation = 'constraint_machine'`. |
 | `micro_stop_threshold` | interval | no | Stops shorter than this count as micro-stops. Default 2 minutes. |
@@ -732,13 +733,13 @@ Lots are relational because they are referenced for years. Every movement is a `
 
 ### core.lot — current state of each lot · *In use*
 
-A material that isn't lot-tracked keeps one bulk lot per location, the location's balance of it (`is_bulk`, lot number `@<location code>`, unique per material and location). A bulk lot stays `available` at zero.
+A balance (`is_bulk`) is the one quantity of a material at a location: for a material that isn't lot-tracked (D-027), or for any material at a location whose lots are indistinguishable (`commingles_lots`, D-031). It has no lot number, is unique per material and location, and stays `available` at zero.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
 | `site_id` | uuid → equipment | no | The site. |
-| `lot_number` | text | no | Unique per site and material. |
+| `lot_number` | text | yes | Unique per site and material. Null exactly for a balance (`is_bulk`, D-031). |
 | `material_id` | uuid → material | no | What it is. |
 | `status` | text | no | `planned`, `in_production`, `available`, `on_hold`, `quarantine`, `consumed`, `scrapped`, `shipped` or `cancelled` (its receipt was reversed, D-030). A lot merged into another is `consumed`. |
 | `quantity` | qty | no | Current quantity; the running result of its lot events. Zero or more, never negative. |

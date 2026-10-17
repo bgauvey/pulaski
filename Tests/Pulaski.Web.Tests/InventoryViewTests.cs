@@ -72,9 +72,9 @@ public class InventoryViewTests
 
     [Theory]
     [InlineData("R-24-0917", false, "RM", "R-24-0917")]
-    [InlineData("@RM-STORE", true, "RM-STORE", "Balance at RM-STORE")]
-    [InlineData("@RM-STORE", true, null, "Balance at RM-STORE")]
-    public void A_bulk_balance_is_named_by_its_location(string number, bool bulk, string? location, string expected) =>
+    [InlineData(null, true, "RM-STORE", "Balance at RM-STORE")]
+    [InlineData(null, true, null, "Balance")]
+    public void A_bulk_balance_is_named_by_its_location(string? number, bool bulk, string? location, string expected) =>
         Assert.Equal(expected, InventoryView.LotLabel(number, bulk, location));
 
     [Fact]

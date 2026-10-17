@@ -50,6 +50,20 @@ public class LotOperationTests
     }
 
     [Fact]
+    public void A_balance_takes_in_arriving_lots_in_its_status_with_the_earliest_expiry()
+    {
+        var balance = Lot("R-0", 300m, June) with { LotNumber = null, IsBulk = true };
+        var arrived = Lot("R-7", 50m, June.AddMonths(-1));
+
+        var (silo, incoming, emptied, _) = balance.Commingle(arrived);
+
+        Assert.Equal((350m, June.AddMonths(-1), true), (silo.Quantity, silo.ExpiresAt, silo.IsBulk));
+        Assert.Equal((0m, LotStatus.Consumed, 50m), (emptied.Quantity, emptied.Status, incoming.QtyDelta!.Value));
+        Assert.Throws<DomainRuleException>(() => Lot("R-1", 5m).Commingle(arrived));
+        Assert.Throws<DomainRuleException>(() => balance.Commingle(Lot("R-8", 5m, status: LotStatus.OnHold)));
+    }
+
+    [Fact]
     public void Shipping_takes_available_stock_and_ships_the_lot_at_zero()
     {
         var (shipped, movement) = Lot("P-1", 400m).Take(400m, LotEventKind.Shipped, "m");
@@ -65,8 +79,10 @@ public class LotOperationTests
 
         Assert.Equal(("R-01", "SUP-2", June, 10m), (corrected.LotNumber, corrected.SupplierLot, corrected.ExpiresAt, movement.QtyAfter));
         Assert.Throws<DomainRuleException>(() => corrected.Correct("R-01", "SUP-2", June));
-        var bulk = Lot("@RM", 5m) with { IsBulk = true };
-        Assert.Throws<DomainRuleException>(() => bulk.Correct("@HOP", null, null));
+        var bulk = Lot("R-0", 5m) with { LotNumber = null, IsBulk = true };
+        Assert.Throws<DomainRuleException>(() => bulk.Correct("HOP-1", null, null));
+        Assert.Equal(June, bulk.Correct(null, null, June).Lot.ExpiresAt);
+        Assert.Throws<DomainRuleException>(() => Lot("R-2", 5m).Correct(null, null, null));
     }
 
     [Fact]

@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-10-16 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-10-17 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#12-reference) tables give the exact rules.
 
@@ -256,6 +256,7 @@ Select it and edit a property on the right. Text saves when you press **Enter** 
 | **Schedulable** | Work should be planned to it. | Lines, process cells, production units |
 | **Can run jobs** | Work actually runs on it. | Same as Schedulable |
 | **Holds inventory** | Material lots can be stored or loaded here. | Feed points, storage zones and units |
+| **Lots are indistinguishable** | Shown once **Holds inventory** is ticked. Lots here mix and can't be told apart, like a silo or tank: everything that arrives joins one balance per material. See [Inventory](#11-inventory). It can't be turned on while separate lots are there; merge or move them first. | Silos, tanks, mixing hoppers |
 
 **Lines vs departments.** A line has *Schedulable* and *Can run jobs*. A department (an area that you plan to, with lines below it) has *Schedulable* only; the tree shows it as **Plans for children**. A line can also have *Can run jobs* without *Schedulable*: it then only takes jobs from a department above it.
 
@@ -687,7 +688,8 @@ Pulaski lays work end to end on each line, so two jobs on a line only overlap wh
 - **Quantities are in the material's base unit.** You can enter a quantity in any unit that converts (pounds for a resin stocked in kilograms, for example); Pulaski converts it and keeps the base unit. If a unit doesn't convert you'll see *"… doesn't convert to …"*: add a [conversion](#6-units-and-conversions).
 - **Stock can't go below zero.** Pulaski refuses to take out more than a lot holds and tells you how much is left.
 - **Statuses.** *Available* lots can be used. *On hold* (waiting for a decision) and *quarantine* (kept apart, suspected bad) lots count as on hand but can't be consumed until released. A lot taken down to zero becomes *consumed* or *scrapped*; it stays on record for genealogy.
-- **Lot-tracked or not.** For a lot-tracked material every receipt is its own numbered lot. For one that isn't, such as end caps, there is one **balance at** each location (shown as *Balance at RM-STORE*); receipts add to it.
+- **Lot-tracked or not.** For a lot-tracked material every receipt is its own numbered lot. For one that isn't, such as end caps, there is one **balance** at each location (shown as *Balance at RM-STORE*, with no lot number); receipts add to it.
+- **Locations where lots mix.** A silo or tank marked **Lots are indistinguishable** on the Equipment page keeps one balance of each material, whatever it is. Everything that arrives joins it: receipts, moves, splits sent there and production. A receipt with a lot number is kept as that lot first, then merged in, so a trace still leads back to the supplier's lot; with no number it goes straight into the balance. Only available stock can join an available balance (release a held lot first), and the balance takes the earliest expiry of what joins it. A confirmation says when a lot has joined a balance. A balance that is moved somewhere else stays a balance there: mixed stock stays mixed.
 
 ### Find what you have: the Stock tab
 
@@ -718,7 +720,7 @@ The material page shows tiles for on hand, available, held, lots and locations, 
 
 1. Click **Receive** (on the Stock tab, or on a material's page, where the material is filled in).
 2. Choose the **material** and the **location** it goes to.
-3. For a lot-tracked material, enter the **lot number** (required, and unique for that material in the site), and if you have them the **supplier lot** and **expiry date**.
+3. For a lot-tracked material, enter the **lot number** (required, and unique for that material in the site; optional where lots mix), and if you have them the **supplier lot** and **expiry date**.
 4. Enter the **quantity** and its **unit**, and an optional comment.
 5. Click **Receive**. A green bar confirms it, with a link to the lot.
 
@@ -911,6 +913,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Not in inventory yet:** pallets or containers that hold several lots, lot labels and barcode scanning, lot attributes and certificates of analysis, setting stock aside for a job, and suggestions of which lot to use first. Movements can't be back-dated.
 - **Reversing is limited** to a lot's latest movement, and not consumption, production, splits, merges, transfers between balances or corrections: put those right with another movement.
 - **Reason trees** (a reason grouped under another) can't be edited.
+- **Where lots mix, genealogy is approximate:** every lot that ever joined a silo's balance counts as a parent of everything taken from it afterwards. Residence time and first-in, first-out through a silo come with machine data.
 - **Inventory movements aren't sent to the ERP yet:** they are recorded as events, but the connection that delivers them isn't built.
 - **Shortages use published times, not the live schedule,** and don't count incoming deliveries.
 - **Process links don't drive the schedule yet:** a Pack job can be projected to start before the Extrude job it follows. The link only sets the earliest start, counted from the order's start.
@@ -982,7 +985,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 
 | Term | Meaning |
 | --- | --- |
-| **Balance** | The stock of a material that isn't lot-tracked at one location. |
+| **Balance** | The one quantity of a material at a location, with no lot number: for a material that isn't lot-tracked, or at a location where lots mix. |
 | **Base unit** | The unit a material is stocked in; also the base unit of a kind of unit (kg, m, ea…). |
 | **Baseline** | A job's times as published when its order was dispatched; the plan you're measured against. |
 | **BOM** | Bill of materials: what one material is made from, per a base quantity. |

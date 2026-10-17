@@ -11,7 +11,7 @@ public class LotTests
     private static readonly Guid Hopper = Guid.CreateVersion7();
 
     private static Lot Received(decimal quantity, bool bulk = false) =>
-        Lot.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), bulk ? "@RM" : "R-1", Kg, Stores, bulk, LotOrigin.Received)
+        Lot.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), bulk ? null : "R-1", Kg, Stores, bulk, LotOrigin.Received)
             .Add(quantity, LotEventKind.Received).Lot;
 
     [Fact]
@@ -93,6 +93,6 @@ public class LotTests
     {
         Assert.Equal("WO-1001-10-03", Lot.ProducedNumber("WO-1001-10", 3));
         Assert.Equal("WO-1001-10-112", Lot.ProducedNumber("WO-1001-10", 112));
-        Assert.Equal("@RM-STORE", Lot.BulkNumber("RM-STORE"));
+        Assert.Equal(("Lot R-1", "The balance"), (Received(1m).Name, Received(1m, bulk: true).Name));
     }
 }

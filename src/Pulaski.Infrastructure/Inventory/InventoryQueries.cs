@@ -107,7 +107,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         e.id, e.occurred_at, e.event_kind AS kind, e.qty_delta, e.qty_after, eu.code AS uom_code,
         fl.code AS from_location_code, tl.code AS to_location_code, e.from_status, e.to_status,
         e.job_id, ej.job_number, r.code AS reason_code, r.name AS reason_name, e.comment, e.actor_id,
-        e.related_lot_id, rl.lot_number AS related_lot_number, e.reference, e.reverses_event_id
+        e.related_lot_id, rl.lot_number AS related_lot_number, rll.code AS related_lot_location_code, e.reference, e.reverses_event_id
         """;
 
     private const string EventJoins = """
@@ -117,6 +117,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         LEFT JOIN core.job ej ON ej.id = e.job_id
         LEFT JOIN core.reason_code r ON r.id = e.reason_code_id
         LEFT JOIN core.lot rl ON rl.id = e.related_lot_id
+        LEFT JOIN core.equipment rll ON rll.id = rl.location_equipment_id
         """;
 
     private const string HistorySql = $"""
@@ -130,10 +131,11 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
     // Newest first; the range bounds the partitions read, the cursor continues after the last row read.
     private const string JournalSql = $"""
         SELECT {EventColumns},
-               l.id AS lot_id, l.lot_number, l.is_bulk, l.material_id, m.code AS material_code
+               l.id AS lot_id, l.lot_number, l.is_bulk, jl.code AS location_code, l.material_id, m.code AS material_code
         FROM ts.lot_event e
         JOIN core.lot l ON l.id = e.lot_id
         JOIN core.material m ON m.id = l.material_id
+        LEFT JOIN core.equipment jl ON jl.id = l.location_equipment_id
         {EventJoins}
         WHERE l.site_id = @SiteId
           AND e.occurred_at >= @From AND e.occurred_at < @To
@@ -261,7 +263,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         """;
 
     private const string LocationsSql = $"""
-        SELECT e.id, e.site_id, e.code, e.name, e.equipment_role, p.code AS parent_code, e.is_active,
+        SELECT e.id, e.site_id, e.code, e.name, e.equipment_role, p.code AS parent_code, e.is_active, e.commingles_lots,
                coalesce(s.lot_count, 0) AS lot_count, coalesce(s.material_count, 0) AS material_count
         FROM core.equipment e
         LEFT JOIN core.equipment p ON p.id = e.parent_id
@@ -647,6 +649,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
                 LotId = lot.LotId,
                 LotNumber = lot.LotNumber,
                 IsBulk = lot.IsBulk,
+                LocationCode = lot.LocationCode,
                 MaterialId = lot.MaterialId,
                 MaterialCode = lot.MaterialCode,
             },
@@ -750,8 +753,9 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
     private sealed class JournalLotRow
     {
         public Guid LotId { get; init; }
-        public string LotNumber { get; init; } = "";
+        public string? LotNumber { get; init; }
         public bool IsBulk { get; init; }
+        public string? LocationCode { get; init; }
         public Guid MaterialId { get; init; }
         public string MaterialCode { get; init; } = "";
     }

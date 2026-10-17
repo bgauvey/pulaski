@@ -50,9 +50,17 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         }
     }
 
-    public InventoryLocation AddLocation(string code, Guid siteId, bool holdsInventory = true, bool isActive = true)
+    public InventoryLocation AddLocation(string code, Guid siteId, bool holdsInventory = true, bool isActive = true, bool comminglesLots = false)
     {
-        var location = new InventoryLocation { Id = Guid.CreateVersion7(), Code = code, SiteId = siteId, HoldsInventory = holdsInventory, IsActive = isActive };
+        var location = new InventoryLocation
+        {
+            Id = Guid.CreateVersion7(),
+            Code = code,
+            SiteId = siteId,
+            HoldsInventory = holdsInventory,
+            ComminglesLots = comminglesLots,
+            IsActive = isActive,
+        };
         lock (_lock)
         {
             _locations[location.Id] = location;

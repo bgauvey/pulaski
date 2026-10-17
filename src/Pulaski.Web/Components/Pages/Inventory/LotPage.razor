@@ -72,17 +72,23 @@
                         @Display.Label(l.Origin)
                     }
                 </dd>
-                @if (detail.MaterialIsLotTracked)
+                @if (l.IsBulk)
                 {
-                    <dt>Supplier lot</dt>
-                    <dd>@(l.SupplierLot ?? "—")</dd>
-                    <dt>Expires</dt>
-                    <dd class="@(InventoryView.ExpiresSoon(l.ExpiresAt, Time.GetUtcNow()) ? "inv-held" : "")">@(l.ExpiresAt is null ? "—" : Display.SiteTime(l.ExpiresAt, tz))</dd>
+                    <dt>Kept as</dt>
+                    <dd>
+                        The balance of @l.MaterialCode at @l.LocationCode:
+                        @(detail.MaterialIsLotTracked ? "lots mix there, so what arrives joins it." : $"{l.MaterialCode} isn't lot-tracked.")
+                    </dd>
                 }
                 else
                 {
-                    <dt>Kept as</dt>
-                    <dd>The balance of @l.MaterialCode at @l.LocationCode: @l.MaterialCode isn't lot-tracked.</dd>
+                    <dt>Supplier lot</dt>
+                    <dd>@(l.SupplierLot ?? "—")</dd>
+                }
+                @if (!l.IsBulk || l.ExpiresAt is not null)
+                {
+                    <dt>Expires</dt>
+                    <dd class="@(InventoryView.ExpiresSoon(l.ExpiresAt, Time.GetUtcNow()) ? "inv-held" : "")">@(l.ExpiresAt is null ? "—" : Display.SiteTime(l.ExpiresAt, tz))</dd>
                 }
                 <dt>Created</dt>
                 <dd>@Display.SiteTime(l.CreatedAt, tz)</dd>

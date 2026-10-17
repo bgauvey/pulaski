@@ -43,7 +43,13 @@ else
                 {
                     <tr @key="l.Id" class="@(l.IsActive ? "" : "text-muted")">
                         <td><span class="fw-semibold">@l.Code</span> <div class="small text-muted">@l.Name@(l.IsActive ? "" : " · inactive")</div></td>
-                        <td>@Display.Label(l.EquipmentRole)</td>
+                        <td>
+                            @Display.Label(l.EquipmentRole)
+                            @if (l.ComminglesLots)
+                            {
+                                <span class="chip ms-1" title="Lots here mix into one balance per material">Mixes lots</span>
+                            }
+                        </td>
                         <td>@l.ParentCode</td>
                         <td class="inv-num">@l.LotCount</td>
                         <td class="inv-num">@l.MaterialCount</td>

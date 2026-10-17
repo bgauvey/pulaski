@@ -79,6 +79,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Inventory lookups (D-029) and completion (D-030, proposed): shortages are a pure calculator over open jobs' remaining
   components; lots split, merge (lock lots in id order, in SQL), ship, correct and reverse only their latest movement;
   counts snapshot a location and post differences. Job declarations, allocation and labels are deferred.
+- Indistinguishable lots (D-031, proposed): equipment with `commingles_lots` (needs `holds_inventory`) keeps one balance per
+  material; every arrival merges into it (`Commingling.MergeArrivalAsync`), a numbered receipt first kept as its lot.
+  Balances (`is_bulk`) have a NULL `lot_number`; name them by location (`Lot.Name`, `InventoryView.LotLabel`).
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

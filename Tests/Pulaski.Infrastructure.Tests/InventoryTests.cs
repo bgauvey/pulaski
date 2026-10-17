@@ -124,7 +124,7 @@ public sealed class InventoryTests(DatabaseFixture db)
 
         var first = await db.SendAsync(new ReceiveLotCommand(plant.Caps, plant.Stores, null, 500m, plant.Kg));
         var second = await db.SendAsync(new ReceiveLotCommand(plant.Caps, plant.Stores, null, 250m, plant.Kg));
-        Assert.Equal((first.LotId, "@" + plant.StoresCode, 750m), (second.LotId, second.LotNumber, second.Quantity));
+        Assert.Equal((first.LotId, (string?)null, 750m), (second.LotId, second.LotNumber, second.Quantity));
 
         var sent = await db.SendAsync(new MoveLotCommand(first.LotId, second.Version, plant.Staging, 200m, plant.Kg));
         Assert.Equal(550m, sent.Quantity);
@@ -245,6 +245,37 @@ public sealed class InventoryTests(DatabaseFixture db)
         var page = await QueryAsync<SearchLotsQuery, IReadOnlyList<LotSummaryDto>>(new SearchLotsQuery(new LotFilter(MaterialId: plant.Resin, Limit: 1)));
         var next = await QueryAsync<SearchLotsQuery, IReadOnlyList<LotSummaryDto>>(new SearchLotsQuery(new LotFilter(MaterialId: plant.Resin, Offset: 1, Limit: 1)));
         Assert.NotEqual(Assert.Single(page).Id, Assert.Single(next).Id);
+    }
+
+    [Fact]
+    public async Task A_silo_mixes_every_arrival_into_one_balance_that_traces_back_to_the_lots()
+    {
+        var plant = await CreatePlantAsync();
+        CreatedResponse silo = await db.SendAsync(new CreateEquipmentCommand(
+            plant.Site, "SILO-" + _suffix, "Resin silo", null, "work_center", "storage_zone", false, false, true, null, ComminglesLots: true));
+
+        var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, silo.Id, "R-A-" + _suffix, 600m, plant.Kg, "SUP-A"));
+        await db.SendAsync(new ReceiveLotCommand(plant.Resin, silo.Id, null, 100m, plant.Kg));
+        var b = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-B-" + _suffix, 300m, plant.Kg));
+        var moved = await db.SendAsync(new MoveLotCommand(b.LotId, b.Version, silo.Id));
+
+        Assert.Equal((a.LotId, (string?)null, 1000m), (moved.LotId, moved.LotNumber, moved.Quantity));
+        var balance = await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(a.LotId));
+        Assert.True(balance.Lot.IsBulk);
+        Assert.Equal("SILO-" + _suffix, balance.Lot.LocationCode);
+        Assert.Equal(2, balance.Parents.Count(p => p.LinkBasis == "merge"));
+
+        var back = await QueryAsync<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>(new TraceLotQuery(a.LotId, Forward: false));
+        Assert.Equal(new HashSet<string?> { "R-A-" + _suffix, "R-B-" + _suffix }, back.Where(n => n.Depth == 1).Select(n => n.LotNumber).ToHashSet());
+
+        var locations = await QueryAsync<ListInventoryLocationsQuery, IReadOnlyList<InventoryLocationDto>>(new ListInventoryLocationsQuery(plant.Site));
+        Assert.True(Assert.Single(locations, l => l.Id == silo.Id).ComminglesLots);
+
+        // The stores hold a separate lot now, so they can't start mixing lots.
+        await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-C-" + _suffix, 5m, plant.Kg));
+        var stores = await QueryAsync<GetEquipmentQuery, Contracts.EquipmentModel.EquipmentDto>(new GetEquipmentQuery(plant.Stores));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new UpdateEquipmentCommand(
+            plant.Stores, stores.Version, stores.Name, null, false, false, true, true, ComminglesLots: true)));
     }
 
     private async Task<TResult> QueryAsync<TQuery, TResult>(TQuery query)

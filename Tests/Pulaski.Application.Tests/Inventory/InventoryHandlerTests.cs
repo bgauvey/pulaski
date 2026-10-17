@@ -84,7 +84,6 @@ public class InventoryHandlerTests
         var missing = await Assert.ThrowsAsync<ValidationException>(() => Receive(null, 5m));
         Assert.Contains("LotNumber", missing.Errors.Keys);
         await Assert.ThrowsAsync<DomainRuleException>(() => Receive("R-2", 5m, _m.Id));
-        await Assert.ThrowsAsync<ValidationException>(() => Receive("@R-3", 5m));
     }
 
     [Fact]
@@ -105,7 +104,7 @@ public class InventoryHandlerTests
 
         Assert.Equal(first.Value.LotId, second.Value.LotId);
         var bulk = Inventory.Find(first.Value.LotId)!.Value;
-        Assert.Equal(("@RM-STORE", true, 750m), (bulk.LotNumber, bulk.IsBulk, bulk.Quantity));
+        Assert.Equal(((string?)null, true, 750m), (bulk.LotNumber, bulk.IsBulk, bulk.Quantity));
         await Assert.ThrowsAsync<ValidationException>(() => Receive("C-1", 1m, _ea.Id, _caps.Id));
     }
 
@@ -158,7 +157,7 @@ public class InventoryHandlerTests
 
         Assert.Equal(380m, sent.Quantity);
         var target = Assert.Single(Inventory.Lots, l => l.LocationId == _hopper.Id);
-        Assert.Equal(("@EXT-01-HOP", 120m, true), (target.LotNumber, target.Quantity, target.IsBulk));
+        Assert.Equal(((string?)null, 120m, true), (target.LotNumber, target.Quantity, target.IsBulk));
         var (outgoing, incoming) = (Inventory.Events[^2], Inventory.Events[^1]);
         Assert.Equal((target.Id, bulk.LotId), (outgoing.RelatedLotId, incoming.RelatedLotId));
         Assert.Equal(2, _f.Stores.Events.Appended.Count(e => e.Type == EventTypes.LotMoved));

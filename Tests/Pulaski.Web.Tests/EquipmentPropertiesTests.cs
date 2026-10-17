@@ -31,6 +31,17 @@ public class EquipmentPropertiesTests
         Version = 42,
     };
 
+    [Fact]
+    public void Lots_can_be_indistinguishable_only_where_inventory_is_held()
+    {
+        var silo = Line with { Code = "SILO-1", EquipmentRole = "storage_zone", TracksState = false, IsSchedulable = false, HoldsInventory = true, ComminglesLots = true };
+
+        Assert.True(EquipmentProperties.ApplyChange(silo, new PropertyChange("comminglesLots", "true"))!.ComminglesLots);
+        var dropped = EquipmentProperties.ApplyChange(silo, new PropertyChange("holdsInventory", "false"))!;
+        Assert.Equal((false, false), (dropped.HoldsInventory, dropped.ComminglesLots));
+        Assert.Equal(true, EquipmentProperties.ApplyChange(silo, new PropertyChange("name", "Silo"))!.ComminglesLots);
+    }
+
     [Theory]
     [InlineData("name", "  Line one  ", "Line one")]
     [InlineData("description", "   ", null)]

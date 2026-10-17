@@ -38,8 +38,12 @@
                             @if (received.IsLotTracked)
                             {
                                 <div class="mb-3">
-                                    <label class="form-label" for="lot-number">Lot number</label>
+                                    <label class="form-label" for="lot-number">Lot number@(Mixing ? " (optional)" : "")</label>
                                     <input id="lot-number" class="form-control" maxlength="100" @bind="_lotNumber" />
+                                    @if (Mixing)
+                                    {
+                                        <div class="form-text">Lots mix at @LocationCode(_locationId): this joins its balance of @received.Code. Give the supplier's lot number to keep it traceable.</div>
+                                    }
                                 </div>
                                 <div class="row g-2 mb-3">
                                     <div class="col-7">
@@ -68,7 +72,7 @@
                             <div class="row g-2 mb-3">
                                 <div class="col-7">
                                     <label class="form-label" for="lot-number">Lot number</label>
-                                    <input id="lot-number" class="form-control" maxlength="100" placeholder="Blank: @(SelectedJob?.JobNumber ?? "job")-01, -02…" @bind="_lotNumber" />
+                                    <input id="lot-number" class="form-control" maxlength="100" placeholder="@(Mixing ? "Blank: straight into the balance" : $"Blank: {SelectedJob?.JobNumber ?? "job"}-01, -02…")" @bind="_lotNumber" />
                                 </div>
                                 <div class="col-5">
                                     <label class="form-label" for="lot-expires">Expires</label>
@@ -153,7 +157,7 @@
                         break;
 
                     case LotAction.Release:
-                        <p>Lot @Lot!.LotNumber becomes available again, and can be consumed.</p>
+                        <p>@InventoryView.LotLabel(Lot!.LotNumber, Lot.IsBulk, Lot.LocationCode) becomes available again, and can be consumed.</p>
                         break;
 
                     case LotAction.Split:
@@ -217,7 +221,7 @@
                             <input id="lot-number" class="form-control" maxlength="100" disabled="@Lot!.IsBulk" @bind="_lotNumber" />
                             @if (Lot.IsBulk)
                             {
-                                <div class="form-text">A balance is named by its location.</div>
+                                <div class="form-text">A balance has no lot number; it is named by its location.</div>
                             }
                         </div>
                         <div class="row g-2 mb-3">
@@ -323,6 +327,9 @@
 
     private MaterialDto? ReceivingMaterial => _materials.FirstOrDefault(m => m.Id == _materialId);
 
+    // The chosen location mixes lots into one balance per material (D-031).
+    private bool Mixing => _locations.FirstOrDefault(l => l.Id == _locationId)?.ComminglesLots == true;
+
     private DeclarableJobDto? SelectedJob => Job ?? _jobs.FirstOrDefault(j => j.Id == _jobId);
 
     private ReasonCodeDto? SelectedReason => _reasons.FirstOrDefault(r => r.Id == _reasonId);
@@ -363,7 +370,7 @@
         LotAction.Split => _quantity > 0 && _uomId != Guid.Empty,
         LotAction.Merge => _mergeIds.Count > 0,
         LotAction.Ship => !string.IsNullOrWhiteSpace(_reference),
-        LotAction.Correct => !string.IsNullOrWhiteSpace(_lotNumber) && !string.IsNullOrWhiteSpace(_comment),
+        LotAction.Correct => (Lot?.IsBulk == true || !string.IsNullOrWhiteSpace(_lotNumber)) && !string.IsNullOrWhiteSpace(_comment),
         LotAction.Reverse => Movement is not null && _reasonId != Guid.Empty,
         _ => true,
     };
@@ -582,7 +589,7 @@
                     await Api.CorrectLotAsync(Lot!.Id, new CorrectLotRequest
                     {
                         Version = Lot.Version,
-                        LotNumber = _lotNumber!.Trim(),
+                        LotNumber = Lot.IsBulk ? null : _lotNumber!.Trim(),
                         SupplierLot = string.IsNullOrWhiteSpace(_supplierLot) ? null : _supplierLot.Trim(),
                         ExpiresAt = Display.FromSiteLocal(_expires, Sites.Site?.TimeZone),
                         Comment = comment!,
