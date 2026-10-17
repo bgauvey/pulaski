@@ -33,3 +33,4 @@ GRANT USAGE ON SEQUENCE evt.event_position_seq TO pulaski_app;
 
 -- History the application appends to (D-010). Like evt.event, never updated or deleted.
 GRANT SELECT, INSERT ON ts.job_status_change TO pulaski_app;
+GRANT SELECT, INSERT ON ts.lot_event TO pulaski_app;

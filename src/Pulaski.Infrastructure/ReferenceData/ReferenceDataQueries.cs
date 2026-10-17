@@ -20,7 +20,7 @@ internal sealed class ReferenceDataQueries(NpgsqlDataSource dataSource) : IRefer
 
     private const string Materials = """
         SELECT m.id, m.code, m.name, m.material_type, m.base_uom_id, u.code AS base_uom_code,
-               m.material_class_id, c.code AS material_class_code, m.is_active
+               m.material_class_id, c.code AS material_class_code, m.is_lot_tracked, m.is_active
         FROM core.material m
         JOIN core.uom u ON u.id = m.base_uom_id
         LEFT JOIN core.material_class c ON c.id = m.material_class_id

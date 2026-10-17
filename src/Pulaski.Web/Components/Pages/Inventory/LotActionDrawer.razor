@@ -1,0 +1,614 @@
+@* One drawer for every movement of a lot (D-027): receive, declare production or consumption,
+   write up, write off, move, hold and release. The page opens it with what it already knows (the
+   lot, the material or the job) and reloads when it reports a result. *@
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+
+@if (Action is { } action)
+{
+    <aside class="drawer" role="dialog" aria-modal="false" aria-labelledby="lot-drawer-title" @onkeydown="OnKeyDown">
+        <header class="drawer-head">
+            <div>
+                <div class="small text-muted">@Context</div>
+                <h2 id="lot-drawer-title" class="mb-0">@LotActions.Title(action)</h2>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary btn-square" aria-label="Close" @onclick="OnClose"><Icon Name="close" Size="18" /></button>
+        </header>
+
+        <form class="drawer-body" @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+            <ProblemAlert Error="_error" />
+
+            @if (_loading)
+            {
+                <p class="text-muted">Loading…</p>
+            }
+            else
+            {
+                @switch (action)
+                {
+                    case LotAction.Receive:
+                        <div class="mb-3">
+                            <label class="form-label" for="lot-material">Material</label>
+                            <select id="lot-material" class="form-select" value="@_materialId" @onchange="OnMaterialChanged">
+                                <option value="@Guid.Empty">Choose a material…</option>
+                                @foreach (var m in _materials)
+                                {
+                                    <option value="@m.Id">@m.Code · @m.Name</option>
+                                }
+                            </select>
+                        </div>
+                        @LocationField(null)
+                        @if (ReceivingMaterial is { } received)
+                        {
+                            @if (received.IsLotTracked)
+                            {
+                                <div class="mb-3">
+                                    <label class="form-label" for="lot-number">Lot number</label>
+                                    <input id="lot-number" class="form-control" maxlength="100" @bind="_lotNumber" />
+                                </div>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-7">
+                                        <label class="form-label" for="lot-supplier">Supplier lot</label>
+                                        <input id="lot-supplier" class="form-control" maxlength="100" @bind="_supplierLot" />
+                                    </div>
+                                    <div class="col-5">
+                                        <label class="form-label" for="lot-expires">Expires</label>
+                                        <input id="lot-expires" type="date" class="form-control" @bind="_expires" />
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="small text-muted">@received.Code isn't lot-tracked: the quantity is added to its balance at the location.</p>
+                            }
+                        }
+                        @QuantityField(true, null)
+                        break;
+
+                    case LotAction.Produce:
+                        @JobField()
+                        @LocationField(null)
+                        @if (_producedTracked)
+                        {
+                            <div class="row g-2 mb-3">
+                                <div class="col-7">
+                                    <label class="form-label" for="lot-number">Lot number</label>
+                                    <input id="lot-number" class="form-control" maxlength="100" placeholder="Blank: @(SelectedJob?.JobNumber ?? "job")-01, -02…" @bind="_lotNumber" />
+                                </div>
+                                <div class="col-5">
+                                    <label class="form-label" for="lot-expires">Expires</label>
+                                    <input id="lot-expires" type="date" class="form-control" @bind="_expires" />
+                                </div>
+                            </div>
+                        }
+                        @QuantityField(true, null)
+                        break;
+
+                    case LotAction.Consume:
+                        @if (Lot is null)
+                        {
+                            <div class="mb-3">
+                                <label class="form-label" for="lot-component">Material</label>
+                                <select id="lot-component" class="form-select" value="@_materialId" @onchange="OnComponentChangedAsync">
+                                    <option value="@Guid.Empty">Choose a material…</option>
+                                    @foreach (var c in _components)
+                                    {
+                                        <option value="@c.MaterialId">@c.MaterialCode · @c.MaterialName@(c.IsPlanned ? " · planned" : "")</option>
+                                    }
+                                    <option disabled>──────────</option>
+                                    @foreach (var m in _materials.Where(m => _components.All(c => c.MaterialId != m.Id)))
+                                    {
+                                        <option value="@m.Id">@m.Code · @m.Name</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label" for="lot-pick">Lot</label>
+                                <select id="lot-pick" class="form-select" @bind="_lotId" disabled="@(_materialId == Guid.Empty)">
+                                    <option value="@Guid.Empty">@(_lots.Count == 0 && _materialId != Guid.Empty ? "No available lot of this material" : "Choose a lot…")</option>
+                                    @foreach (var l in _lots)
+                                    {
+                                        <option value="@l.Id">@InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode) · @InventoryView.Qty(l.Quantity) @l.UomCode@(l.IsBulk ? "" : $" · {l.LocationCode}")</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        else
+                        {
+                            @JobField()
+                        }
+                        @QuantityField(true, ConsumeLot is { } lot ? $"{InventoryView.Qty(lot.Quantity)} {lot.UomCode} available" : null)
+                        break;
+
+                    case LotAction.WriteUp:
+                        @QuantityField(true, null)
+                        @ReasonField()
+                        break;
+
+                    case LotAction.WriteOff:
+                        @QuantityField(false, $"Leave blank to write off all {InventoryView.Qty(Lot!.Quantity)} {Lot.UomCode}.")
+                        @ReasonField()
+                        break;
+
+                    case LotAction.Move:
+                        @LocationField(Lot!.LocationId)
+                        @if (Lot.IsBulk)
+                        {
+                            @QuantityField(true, $"{InventoryView.Qty(Lot.Quantity)} {Lot.UomCode} here. It joins the balance at the new location.")
+                        }
+                        else
+                        {
+                            <p class="small text-muted">The whole lot moves, all @InventoryView.Qty(Lot.Quantity) @Lot.UomCode.</p>
+                        }
+                        break;
+
+                    case LotAction.Hold:
+                        <fieldset class="mb-3">
+                            <legend class="form-label">Set to</legend>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" id="lot-hold" name="lot-hold" checked="@(_holdStatus == "on_hold")" @onchange='() => _holdStatus = "on_hold"' disabled="@(Lot!.Status == "on_hold")" />
+                                <label class="form-check-label" for="lot-hold">On hold: waiting for a decision</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" id="lot-quarantine" name="lot-hold" checked="@(_holdStatus == "quarantine")" @onchange='() => _holdStatus = "quarantine"' disabled="@(Lot.Status == "quarantine")" />
+                                <label class="form-check-label" for="lot-quarantine">Quarantine: kept apart, suspected bad</label>
+                            </div>
+                        </fieldset>
+                        @ReasonField()
+                        break;
+
+                    case LotAction.Release:
+                        <p>Lot @Lot!.LotNumber becomes available again, and can be consumed.</p>
+                        break;
+                }
+
+                <div class="mb-3">
+                    <label class="form-label" for="lot-comment">Comment@(SelectedReason?.RequiresComment == true ? " (required)" : "")</label>
+                    <textarea id="lot-comment" class="form-control" rows="2" maxlength="1000" @bind="_comment"></textarea>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary" disabled="@(_saving || !CanSubmit)">@SubmitLabel</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="OnClose">Cancel</button>
+                </div>
+            }
+        </form>
+    </aside>
+}
+
+@code {
+    [Parameter]
+    public LotAction? Action { get; set; }
+
+    /// <summary>The lot acted on; required for everything but receive and produce, optional for consume.</summary>
+    [Parameter]
+    public LotSummaryDto? Lot { get; set; }
+
+    /// <summary>The material to receive, pre-selected.</summary>
+    [Parameter]
+    public Guid? MaterialId { get; set; }
+
+    /// <summary>The job to declare against, pre-selected.</summary>
+    [Parameter]
+    public DeclarableJobDto? Job { get; set; }
+
+    [Parameter]
+    public EventCallback<LotActionResult> OnDone { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private LotAction? _openFor;
+    private bool _loading;
+    private bool _saving;
+    private ApiException? _error;
+
+    private IReadOnlyList<UomDto> _uoms = [];
+    private IReadOnlyList<MaterialDto> _materials = [];
+    private IReadOnlyList<InventoryLocationDto> _locations = [];
+    private IReadOnlyList<ReasonCodeDto> _reasons = [];
+    private IReadOnlyList<DeclarableJobDto> _jobs = [];
+    private IReadOnlyList<JobComponentUseDto> _components = [];
+    private IReadOnlyList<LotSummaryDto> _lots = [];
+
+    private Guid _materialId;
+    private Guid _locationId;
+    private Guid _jobId;
+    private Guid _lotId;
+    private Guid _reasonId;
+    private Guid _uomId;
+    private decimal? _quantity;
+    private string? _lotNumber;
+    private string? _supplierLot;
+    private DateTime? _expires;
+    private string? _comment;
+    private string _holdStatus = "on_hold";
+    private bool _producedTracked = true;
+
+    private Guid SiteId => Sites.SiteId ?? Lot?.SiteId ?? Guid.Empty;
+
+    private MaterialDto? ReceivingMaterial => _materials.FirstOrDefault(m => m.Id == _materialId);
+
+    private DeclarableJobDto? SelectedJob => Job ?? _jobs.FirstOrDefault(j => j.Id == _jobId);
+
+    private ReasonCodeDto? SelectedReason => _reasons.FirstOrDefault(r => r.Id == _reasonId);
+
+    private LotSummaryDto? ConsumeLot => Lot ?? _lots.FirstOrDefault(l => l.Id == _lotId);
+
+    private string Context => Lot is { } lot
+        ? $"{lot.MaterialCode} · {InventoryView.LotLabel(lot.LotNumber, lot.IsBulk, lot.LocationCode)}"
+        : Job is { } job ? $"{job.JobNumber} · {job.MaterialCode}" : Sites.Site?.Code ?? "";
+
+    private string SubmitLabel => Action switch
+    {
+        LotAction.Receive => "Receive",
+        LotAction.Produce => "Record production",
+        LotAction.Consume => "Record consumption",
+        LotAction.WriteUp => "Write up",
+        LotAction.WriteOff => "Write off",
+        LotAction.Move => "Move",
+        LotAction.Hold => _holdStatus == "quarantine" ? "Quarantine" : "Hold",
+        LotAction.Release => "Release",
+        _ => "Save",
+    };
+
+    private bool CanSubmit => Action switch
+    {
+        LotAction.Receive => _materialId != Guid.Empty && _locationId != Guid.Empty && _quantity > 0,
+        LotAction.Produce => SelectedJob is not null && _locationId != Guid.Empty && _quantity > 0,
+        LotAction.Consume => SelectedJob is not null && ConsumeLot is not null && _quantity > 0,
+        LotAction.WriteUp => _quantity > 0 && _reasonId != Guid.Empty,
+        LotAction.WriteOff => _reasonId != Guid.Empty,
+        LotAction.Move => _locationId != Guid.Empty && (Lot?.IsBulk != true || _quantity > 0),
+        LotAction.Hold => _reasonId != Guid.Empty,
+        _ => true,
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Action == _openFor)
+        {
+            return;
+        }
+
+        _openFor = Action;
+        if (Action is not { } action)
+        {
+            return;
+        }
+
+        Reset();
+        _loading = true;
+        try
+        {
+            _uoms = [.. (await Api.ListUomsAsync()).Where(u => u.IsActive)];
+            if (action is LotAction.Receive or LotAction.Produce or LotAction.Move)
+            {
+                _locations = [.. (await Api.ListInventoryLocationsAsync(SiteId)).Where(l => l.IsActive)];
+            }
+
+            if (action is LotAction.Receive or LotAction.Produce || (action == LotAction.Consume && Lot is null))
+            {
+                _materials = await Api.ListMaterialsAsync();
+            }
+
+            if (action is LotAction.WriteUp or LotAction.WriteOff or LotAction.Hold)
+            {
+                _reasons = await Api.ListReasonCodesAsync(action == LotAction.Hold ? "hold" : "inventory_adjustment", SiteId);
+            }
+
+            if (action is LotAction.Produce or LotAction.Consume && Job is null)
+            {
+                _jobs = await Api.ListDeclarableJobsAsync(SiteId, materialId: action == LotAction.Consume ? Lot?.MaterialId : null);
+                _jobId = _jobs.FirstOrDefault(j => j.PlansComponent)?.Id ?? Guid.Empty;
+            }
+
+            if (action == LotAction.Consume && Lot is null && Job is not null)
+            {
+                _components = (await Api.GetJobMaterialsAsync(Job.Id)).Components;
+            }
+
+            switch (action)
+            {
+                case LotAction.Receive when MaterialId is { } materialId:
+                    SelectMaterial(materialId);
+                    break;
+                case LotAction.Produce:
+                    await OnJobChangedAsync(_jobId);
+                    break;
+                case LotAction.Consume or LotAction.WriteUp or LotAction.WriteOff when Lot is not null:
+                    _uomId = Lot.UomId;
+                    break;
+                case LotAction.Move when Lot is not null:
+                    _uomId = Lot.UomId;
+                    break;
+                case LotAction.Hold when Lot?.Status == "on_hold":
+                    _holdStatus = "quarantine";
+                    break;
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void Reset()
+    {
+        _error = null;
+        _saving = false;
+        _materials = [];
+        _locations = [];
+        _reasons = [];
+        _jobs = [];
+        _components = [];
+        _lots = [];
+        _materialId = Guid.Empty;
+        _locationId = Guid.Empty;
+        _jobId = Guid.Empty;
+        _lotId = Guid.Empty;
+        _reasonId = Guid.Empty;
+        _uomId = Guid.Empty;
+        _quantity = null;
+        _lotNumber = null;
+        _supplierLot = null;
+        _expires = null;
+        _comment = null;
+        _holdStatus = "on_hold";
+        _producedTracked = true;
+    }
+
+    private void OnMaterialChanged(ChangeEventArgs e) =>
+        SelectMaterial(Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty);
+
+    private void SelectMaterial(Guid id)
+    {
+        _materialId = id;
+        if (ReceivingMaterial is { } material)
+        {
+            _uomId = material.BaseUomId;
+        }
+    }
+
+    // Consuming from a job: pick the material, then one of its available lots.
+    private async Task OnComponentChangedAsync(ChangeEventArgs e)
+    {
+        _materialId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty;
+        _lotId = Guid.Empty;
+        _lots = [];
+        if (_materialId == Guid.Empty)
+        {
+            return;
+        }
+
+        try
+        {
+            _lots = await Api.SearchLotsAsync(SiteId, materialId: _materialId, status: "available");
+            _lots = [.. _lots.Where(l => l.Quantity > 0)];
+            _lotId = _lots.Count == 1 ? _lots[0].Id : Guid.Empty;
+            _uomId = _lots.FirstOrDefault()?.UomId ?? _materials.FirstOrDefault(m => m.Id == _materialId)?.BaseUomId ?? Guid.Empty;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    // Producing: the job's unit is the default, and a material that isn't lot-tracked takes no lot number.
+    private async Task OnJobChangedAsync(Guid id)
+    {
+        _jobId = id;
+        if (SelectedJob is not { } job)
+        {
+            return;
+        }
+
+        if (Action == LotAction.Produce && _materials.FirstOrDefault(m => m.Id == job.MaterialId) is { } material)
+        {
+            _producedTracked = material.IsLotTracked;
+            _uomId = _uoms.FirstOrDefault(u => u.Code == job.UomCode)?.Id ?? material.BaseUomId;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (Action is not { } action || !CanSubmit)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        var comment = string.IsNullOrWhiteSpace(_comment) ? null : _comment.Trim();
+        try
+        {
+            var (response, message) = action switch
+            {
+                LotAction.Receive => await ReceiveAsync(comment),
+                LotAction.Produce => await ProduceAsync(comment),
+                LotAction.Consume => await ConsumeAsync(comment),
+                LotAction.WriteUp => Done(await Api.WriteUpLotAsync(Lot!.Id, Adjustment(comment)), $"written up by {QtyText}"),
+                LotAction.WriteOff => Done(await Api.WriteOffLotAsync(Lot!.Id, Adjustment(comment)), _quantity is null ? "written off" : $"{QtyText} written off"),
+                LotAction.Move => Done(
+                    await Api.MoveLotAsync(Lot!.Id, new MoveLotRequest
+                    {
+                        Version = Lot.Version,
+                        ToLocationId = _locationId,
+                        Quantity = Lot.IsBulk ? _quantity : null,
+                        UomId = Lot.IsBulk ? _uomId : null,
+                        Comment = comment,
+                    }),
+                    $"{(Lot.IsBulk ? QtyText + " " : "")}moved to {LocationCode(_locationId)}"),
+                LotAction.Hold => Done(
+                    await Api.ChangeLotStatusAsync(Lot!.Id, new ChangeLotStatusRequest { Version = Lot.Version, Status = _holdStatus, ReasonCodeId = _reasonId, Comment = comment }),
+                    _holdStatus == "quarantine" ? "quarantined" : "put on hold"),
+                LotAction.Release => Done(
+                    await Api.ChangeLotStatusAsync(Lot!.Id, new ChangeLotStatusRequest { Version = Lot.Version, Status = "available", Comment = comment }),
+                    "released"),
+                _ => throw new InvalidOperationException(),
+            };
+            await OnDone.InvokeAsync(new LotActionResult(response, message));
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task<(LotTransactionResponse, string)> ReceiveAsync(string? comment)
+    {
+        var response = await Api.ReceiveLotAsync(new ReceiveLotRequest
+        {
+            MaterialId = _materialId,
+            LocationId = _locationId,
+            LotNumber = ReceivingMaterial?.IsLotTracked == true ? _lotNumber : null,
+            Quantity = _quantity!.Value,
+            UomId = _uomId,
+            SupplierLot = _supplierLot,
+            ExpiresAt = Display.FromSiteLocal(_expires, Sites.Site?.TimeZone),
+            Comment = comment,
+        });
+        return (response, $"{QtyText} of {ReceivingMaterial?.Code} received into {LocationCode(_locationId)}");
+    }
+
+    private async Task<(LotTransactionResponse, string)> ProduceAsync(string? comment)
+    {
+        var job = SelectedJob!;
+        var response = await Api.ProduceLotAsync(job.Id, new ProduceLotRequest
+        {
+            LocationId = _locationId,
+            Quantity = _quantity!.Value,
+            UomId = _uomId,
+            LotNumber = _producedTracked ? _lotNumber : null,
+            ExpiresAt = Display.FromSiteLocal(_expires, Sites.Site?.TimeZone),
+            Comment = comment,
+        });
+        return (response, $"{QtyText} of {job.MaterialCode} produced by {job.JobNumber}");
+    }
+
+    private async Task<(LotTransactionResponse, string)> ConsumeAsync(string? comment)
+    {
+        var job = SelectedJob!;
+        var lot = ConsumeLot!;
+        var response = await Api.ConsumeLotAsync(lot.Id, new ConsumeLotRequest
+        {
+            JobId = job.Id,
+            Quantity = _quantity!.Value,
+            UomId = _uomId,
+            Comment = comment,
+        });
+        return (response, $"{QtyText} of {InventoryView.LotLabel(lot.LotNumber, lot.IsBulk, lot.LocationCode)} consumed by {job.JobNumber}");
+    }
+
+    private (LotTransactionResponse, string) Done(LotTransactionResponse response, string what) =>
+        (response, $"{InventoryView.LotLabel(response.LotNumber, Lot?.IsBulk == true, Lot?.LocationCode)} {what}.");
+
+    private AdjustLotRequest Adjustment(string? comment) => new()
+    {
+        Version = Lot!.Version,
+        Quantity = _quantity,
+        UomId = _quantity is null ? null : _uomId,
+        ReasonCodeId = _reasonId,
+        Comment = comment,
+    };
+
+    private string QtyText => _quantity is { } q ? $"{InventoryView.Qty(q)} {_uoms.FirstOrDefault(u => u.Id == _uomId)?.Code}" : "";
+
+    private string LocationCode(Guid id) => _locations.FirstOrDefault(l => l.Id == id)?.Code ?? "";
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            OnClose.InvokeAsync();
+        }
+    }
+
+    private RenderFragment LocationField(Guid? exclude) => __builder =>
+    {
+        <div class="mb-3">
+            <label class="form-label" for="lot-location">@(Action == LotAction.Move ? "To location" : "Location")</label>
+            <select id="lot-location" class="form-select" @bind="_locationId">
+                <option value="@Guid.Empty">@(_locations.Count == 0 ? "No location holds inventory: mark one on the Equipment page" : "Choose a location…")</option>
+                @foreach (var l in _locations.Where(l => l.Id != exclude))
+                {
+                    <option value="@l.Id">@l.Code · @l.Name</option>
+                }
+            </select>
+        </div>
+    };
+
+    private RenderFragment QuantityField(bool required, string? hint) => __builder =>
+    {
+        <div class="row g-2 mb-3">
+            <div class="col-7">
+                <label class="form-label" for="lot-qty">Quantity@(required ? "" : " (optional)")</label>
+                <input id="lot-qty" type="number" class="form-control" min="0" step="any" @bind="_quantity" @bind:event="oninput" />
+            </div>
+            <div class="col-5">
+                <label class="form-label" for="lot-uom">Unit</label>
+                <select id="lot-uom" class="form-select" @bind="_uomId">
+                    <option value="@Guid.Empty">Unit…</option>
+                    @foreach (var u in _uoms)
+                    {
+                        <option value="@u.Id">@u.Code</option>
+                    }
+                </select>
+            </div>
+            @if (hint is not null)
+            {
+                <div class="col-12 form-text mt-1">@hint</div>
+            }
+        </div>
+    };
+
+    private RenderFragment ReasonField() => __builder =>
+    {
+        <div class="mb-3">
+            <label class="form-label" for="lot-reason">Reason</label>
+            <select id="lot-reason" class="form-select" @bind="_reasonId">
+                <option value="@Guid.Empty">@(_reasons.Count == 0 ? "No reasons set up: load db/seed-reasons.sql" : "Choose a reason…")</option>
+                @foreach (var r in _reasons)
+                {
+                    <option value="@r.Id">@r.Name</option>
+                }
+            </select>
+        </div>
+    };
+
+    private RenderFragment JobField() => __builder =>
+    {
+        @if (Job is { } fixedJob)
+        {
+            <dl class="facts">
+                <dt>Job</dt>
+                <dd>@fixedJob.JobNumber · @fixedJob.MaterialCode on @fixedJob.LineCode</dd>
+            </dl>
+        }
+        else
+        {
+            <div class="mb-3">
+                <label class="form-label" for="lot-job">Job</label>
+                <select id="lot-job" class="form-select" value="@_jobId" @onchange="e => OnJobChangedAsync(Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty)">
+                    <option value="@Guid.Empty">@(_jobs.Count == 0 ? "No open production job" : "Choose a job…")</option>
+                    @foreach (var j in _jobs)
+                    {
+                        <option value="@j.Id">@j.JobNumber · @j.MaterialCode on @j.LineCode@(j.PlansComponent ? " · planned" : "")</option>
+                    }
+                </select>
+                @if (Action == LotAction.Consume && SelectedJob is { PlansComponent: false })
+                {
+                    <div class="form-text text-warning-strong">This job has no planned component of @Lot?.MaterialCode; it will be recorded as a substitution.</div>
+                }
+            </div>
+        }
+    };
+}

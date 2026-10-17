@@ -11,6 +11,7 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<EquipmentSelection>();
+builder.Services.AddScoped<SiteSelection>();
 builder.Services.AddHttpClient<PulaskiApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl));
 
 var app = builder.Build();

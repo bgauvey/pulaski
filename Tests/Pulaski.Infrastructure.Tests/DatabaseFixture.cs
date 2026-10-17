@@ -7,7 +7,7 @@ using Pulaski.Testing;
 namespace Pulaski.Infrastructure.Tests;
 
 /// <summary>
-/// Creates a throwaway database from db/schema-draft.sql and db/app-role.sql, and drops it
+/// Creates a throwaway database from db/schema-draft.sql, db/app-role.sql and db/seed-reasons.sql, and drops it
 /// afterwards. The application under test connects as a throwaway login that is a member of
 /// pulaski_app, so it has exactly the production privileges (D-012): for example, no UPDATE or
 /// DELETE on evt.event. Set PULASKI_TEST_ADMIN_CONNECTION to point at a server where the user can
@@ -56,6 +56,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
         await ExecuteAsync($"GRANT pulaski_app TO {_appLogin}");
         await ExecuteAsync("SELECT ts.create_month_partitions('evt.event', current_date - 31, 3)");
         await ExecuteAsync("SELECT ts.create_month_partitions('ts.job_status_change', current_date - 31, 3)");
+        await ExecuteAsync("SELECT ts.create_month_partitions('ts.lot_event', current_date - 31, 3)");
+        await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(dbDir, "seed-reasons.sql")));
 
         UomId = Guid.CreateVersion7();
         MaterialId = Guid.CreateVersion7();

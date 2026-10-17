@@ -1,0 +1,237 @@
+/* Inventory (D-027): stock by class, lots, their history and genealogy. Colours come from
+   css/tokens.css; held stock and near expiry use the warning colour, nothing else is coloured. */
+
+.inv-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--space-3);
+}
+
+.inv-head-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+}
+
+.inv-tabs {
+    display: flex;
+    gap: var(--space-1);
+    margin-bottom: var(--space-4);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+}
+
+.inv-tab {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    font: var(--type-body-strong);
+    color: var(--text-muted);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+    .inv-tab:hover {
+        color: var(--text);
+    }
+
+    .inv-tab.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+    }
+
+.inv-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+    margin-bottom: var(--space-3);
+}
+
+    .inv-toolbar .form-control,
+    .inv-toolbar .form-select {
+        width: auto;
+        min-width: 12rem;
+    }
+
+    .inv-toolbar .inv-grow {
+        flex: 1 1 16rem;
+    }
+
+.inv-search {
+    position: relative;
+}
+
+    .inv-search .form-control {
+        padding-left: 32px;
+        width: 100%;
+    }
+
+    .inv-search .icon {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-faint);
+        pointer-events: none;
+    }
+
+/* Result of the last movement. */
+.inv-result {
+    display: flex;
+    gap: var(--space-2);
+    align-items: flex-start;
+    margin-bottom: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--success);
+    border-left-width: 4px;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+}
+
+    .inv-result > div {
+        flex: 1 1 auto;
+    }
+
+    .inv-result.has-warning {
+        border-color: var(--warning);
+    }
+
+/* Stock grouped by material class: a header row per class, collapsible. */
+.inv-group > th {
+    background: var(--surface-2);
+    padding: 0 !important;
+}
+
+.inv-group-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: var(--space-2) var(--space-4);
+    border: 0;
+    background: none;
+    color: var(--text);
+    font: var(--type-body-strong);
+    text-align: left;
+}
+
+    .inv-group-toggle .icon {
+        transition: transform 0.12s ease-out;
+    }
+
+    .inv-group-toggle[aria-expanded="true"] .icon {
+        transform: rotate(90deg);
+    }
+
+    .inv-group-toggle .text-muted {
+        font: var(--type-caption);
+    }
+
+.inv-empty-row > td {
+    color: var(--text-faint);
+}
+
+.inv-held {
+    color: var(--warning);
+    font-weight: 600;
+}
+
+.inv-num {
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Metric tiles on a material or job. */
+.inv-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+}
+
+.inv-tile {
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+    .inv-tile .metric {
+        display: block;
+    }
+
+    .inv-tile .inv-tile-label {
+        font: var(--type-label);
+        color: var(--text-muted);
+    }
+
+    .inv-tile.is-warning {
+        border-color: var(--warning);
+    }
+
+.inv-section {
+    margin-bottom: var(--space-5);
+}
+
+.inv-section-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.inv-layout {
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+}
+
+@media (max-width: 992px) {
+    .inv-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.inv-facts {
+    padding: var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+    .inv-facts .facts {
+        margin: 0;
+    }
+
+/* A trace: each lot indented under the lot it was reached from. */
+.inv-trace {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+    .inv-trace li {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-1) 0;
+        border-left: 1px solid transparent;
+    }
+
+    .inv-trace .inv-trace-step {
+        color: var(--text-faint);
+    }
+
+.inv-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}

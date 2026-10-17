@@ -1,0 +1,201 @@
+using Pulaski.Application.Abstractions;
+using Pulaski.Application.Inventory;
+using Pulaski.Domain.Inventory;
+using Pulaski.Infrastructure.Persistence;
+
+namespace Pulaski.Infrastructure.Inventory;
+
+/// <summary>Write side for inventory (D-027). Every statement runs in the command's transaction.</summary>
+internal sealed class InventoryRepository(DbSession session) : IInventoryRepository
+{
+    private const string LotColumns = """
+        id, site_id, material_id, lot_number, status, quantity, uom_id, location_equipment_id AS location_id,
+        is_bulk, origin, supplier_lot, expires_at, produced_by_job_id, xmin::text::bigint AS version
+        """;
+
+    private const string GetLotForUpdate = $"SELECT {LotColumns} FROM core.lot WHERE id = @Id FOR UPDATE";
+
+    private const string FindLotForUpdate = $"""
+        SELECT {LotColumns} FROM core.lot
+        WHERE site_id = @SiteId AND material_id = @MaterialId AND lot_number = @LotNumber
+        FOR UPDATE
+        """;
+
+    private const string FindBulkForUpdate = $"""
+        SELECT {LotColumns} FROM core.lot
+        WHERE material_id = @MaterialId AND location_equipment_id = @LocationId AND is_bulk
+        FOR UPDATE
+        """;
+
+    private const string InsertLot = """
+        INSERT INTO core.lot (id, site_id, lot_number, material_id, status, quantity, uom_id, location_equipment_id, is_bulk,
+                              produced_by_job_id, origin, supplier_lot, expires_at, created_at, updated_at)
+        VALUES (@Id, @SiteId, @LotNumber, @MaterialId, @Status, @Quantity, @UomId, @LocationId, @IsBulk,
+                @ProducedByJobId, @Origin, @SupplierLot, @ExpiresAt, @At, @At)
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string UpdateLot = """
+        UPDATE core.lot
+        SET status = @Status, quantity = @Quantity, location_equipment_id = @LocationId, updated_at = @At
+        WHERE id = @Id
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string InsertEvent = """
+        INSERT INTO ts.lot_event (id, occurred_at, lot_id, event_kind, qty_delta, qty_after, uom_id,
+                                  from_location_id, to_location_id, related_lot_id, job_id,
+                                  from_status, to_status, reason_code_id, comment, actor_id)
+        VALUES (@Id, @At, @LotId, @Kind, @QtyDelta, @QtyAfter, @UomId,
+                @FromLocationId, @ToLocationId, @RelatedLotId, @JobId,
+                @FromStatus, @ToStatus, @ReasonCodeId, @Comment, @ActorId)
+        """;
+
+    private const string GetLocation = """
+        SELECT id, code, site_id, holds_inventory, is_active FROM core.equipment WHERE id = @Id FOR SHARE
+        """;
+
+    private const string GetMaterial = """
+        SELECT m.id, m.code, m.base_uom_id, u.code AS base_uom_code, m.is_lot_tracked, m.is_active
+        FROM core.material m
+        JOIN core.uom u ON u.id = m.base_uom_id
+        WHERE m.id = @Id
+        FOR SHARE OF m
+        """;
+
+    private const string GetJobForUpdate = """
+        SELECT id, site_id, job_number, job_type, status, material_id FROM core.job WHERE id = @Id FOR UPDATE
+        """;
+
+    private const string LotsOfJob = """
+        SELECT DISTINCT lot_id FROM ts.lot_event WHERE job_id = @JobId AND event_kind = @Kind
+        """;
+
+    private const string InsertGenealogy = """
+        INSERT INTO core.lot_genealogy (id, parent_lot_id, child_lot_id, link_basis, job_id, derived_at)
+        VALUES (@Id, @ParentLotId, @ChildLotId, 'declared', @JobId, @At)
+        ON CONFLICT (parent_lot_id, child_lot_id, link_basis) WHERE superseded_at IS NULL DO NOTHING
+        """;
+
+    private const string GetReason = """
+        SELECT id, site_id, reason_kind AS kind, code, name, is_selectable, requires_comment, is_active
+        FROM core.reason_code WHERE id = @Id
+        """;
+
+    private const string PlansComponent = """
+        SELECT EXISTS (SELECT 1 FROM core.job_material WHERE job_id = @JobId AND material_id = @MaterialId AND direction = 'consume')
+        """;
+
+    public async Task<Versioned<Lot>?> GetLotForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<LotRow>(GetLotForUpdate, new { Id = id }, cancellationToken))?.ToVersioned();
+
+    public async Task<Versioned<Lot>?> FindLotForUpdateAsync(Guid siteId, Guid materialId, string lotNumber, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<LotRow>(
+            FindLotForUpdate, new { SiteId = siteId, MaterialId = materialId, LotNumber = lotNumber }, cancellationToken))?.ToVersioned();
+
+    public async Task<Versioned<Lot>?> FindBulkLotForUpdateAsync(Guid materialId, Guid locationId, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<LotRow>(
+            FindBulkForUpdate, new { MaterialId = materialId, LocationId = locationId }, cancellationToken))?.ToVersioned();
+
+    public Task<long> InsertLotAsync(Lot lot, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(
+            InsertLot,
+            new
+            {
+                lot.Id,
+                lot.SiteId,
+                lot.LotNumber,
+                lot.MaterialId,
+                lot.Status,
+                lot.Quantity,
+                lot.UomId,
+                lot.LocationId,
+                lot.IsBulk,
+                lot.ProducedByJobId,
+                lot.Origin,
+                lot.SupplierLot,
+                lot.ExpiresAt,
+                At = at,
+            },
+            cancellationToken);
+
+    public Task<long> UpdateLotAsync(Lot lot, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(
+            UpdateLot, new { lot.Id, lot.Status, lot.Quantity, lot.LocationId, At = at }, cancellationToken);
+
+    public Task InsertEventAsync(LotEventRow row, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(
+            InsertEvent,
+            new
+            {
+                row.Id,
+                At = at,
+                row.LotId,
+                row.Movement.Kind,
+                row.Movement.QtyDelta,
+                row.Movement.QtyAfter,
+                row.UomId,
+                row.Movement.FromLocationId,
+                row.Movement.ToLocationId,
+                row.RelatedLotId,
+                row.JobId,
+                row.Movement.FromStatus,
+                row.Movement.ToStatus,
+                row.ReasonCodeId,
+                row.Comment,
+                row.ActorId,
+            },
+            cancellationToken);
+
+    public Task<InventoryLocation?> GetLocationAsync(Guid id, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<InventoryLocation>(GetLocation, new { Id = id }, cancellationToken);
+
+    public Task<InventoryMaterial?> GetMaterialAsync(Guid id, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<InventoryMaterial>(GetMaterial, new { Id = id }, cancellationToken);
+
+    public Task<InventoryJob?> GetJobForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<InventoryJob>(GetJobForUpdate, new { Id = id }, cancellationToken);
+
+    public Task<IReadOnlyList<Guid>> ListLotsProducedByJobAsync(Guid jobId, CancellationToken cancellationToken) =>
+        session.QueryAsync<Guid>(LotsOfJob, new { JobId = jobId, Kind = LotEventKind.Produced }, cancellationToken);
+
+    public Task<IReadOnlyList<Guid>> ListLotsConsumedByJobAsync(Guid jobId, CancellationToken cancellationToken) =>
+        session.QueryAsync<Guid>(LotsOfJob, new { JobId = jobId, Kind = LotEventKind.Consumed }, cancellationToken);
+
+    public async Task InsertGenealogyAsync(IReadOnlyList<GenealogyEdge> edges, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        foreach (var edge in edges)
+        {
+            await session.ExecuteAsync(
+                InsertGenealogy, new { edge.Id, edge.ParentLotId, edge.ChildLotId, edge.JobId, At = at }, cancellationToken);
+        }
+    }
+
+    public Task<InventoryReason?> GetReasonAsync(Guid id, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<InventoryReason>(GetReason, new { Id = id }, cancellationToken);
+
+    public Task<bool> PlansComponentAsync(Guid jobId, Guid materialId, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(PlansComponent, new { JobId = jobId, MaterialId = materialId }, cancellationToken);
+
+    private sealed class LotRow
+    {
+        public Guid Id { get; init; }
+        public Guid SiteId { get; init; }
+        public Guid MaterialId { get; init; }
+        public string LotNumber { get; init; } = "";
+        public string Status { get; init; } = "";
+        public decimal Quantity { get; init; }
+        public Guid UomId { get; init; }
+        public Guid? LocationId { get; init; }
+        public bool IsBulk { get; init; }
+        public string Origin { get; init; } = "";
+        public string? SupplierLot { get; init; }
+        public DateTimeOffset? ExpiresAt { get; init; }
+        public Guid? ProducedByJobId { get; init; }
+        public long Version { get; init; }
+
+        public Versioned<Lot> ToVersioned() => new(
+            new Lot(Id, SiteId, MaterialId, LotNumber, Status, Quantity, UomId, LocationId, IsBulk, Origin, SupplierLot, ExpiresAt, ProducedByJobId),
+            Version);
+    }
+}

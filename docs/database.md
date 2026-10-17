@@ -413,9 +413,9 @@ Shifts generated ahead of time by a worker. They apply to the nearest ancestor o
 
 ## 5. Reason codes
 
-### core.reason_code — reason trees · *Planned*
+### core.reason_code — reason trees · *In use (read)*
 
-One tree per kind of reason. Branches group; leaves are selected.
+One tree per kind of reason. Branches group; leaves are selected. Inventory reads the `inventory_adjustment` and `hold` kinds (D-027); `db/seed-reasons.sql` loads a starter set, and there is no screen to maintain them yet.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -726,9 +726,11 @@ Each side matches a material, a material class or anything. The most specific ac
 
 ## 9. Inventory and genealogy
 
-Lots are relational because they are referenced for years. Every movement is a `ts.lot_event`. Storage locations are equipment with `holds_inventory`.
+Lots are relational because they are referenced for years. Every movement is a `ts.lot_event`. Storage locations are equipment with `holds_inventory` (D-027). Quantities are kept in the material's base unit.
 
-### core.lot — current state of each lot · *Planned*
+### core.lot — current state of each lot · *In use*
+
+A material that isn't lot-tracked keeps one bulk lot per location, the location's balance of it (`is_bulk`, lot number `@<location code>`, unique per material and location). A bulk lot stays `available` at zero.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -737,10 +739,12 @@ Lots are relational because they are referenced for years. Every movement is a `
 | `lot_number` | text | no | Unique per site and material. |
 | `material_id` | uuid → material | no | What it is. |
 | `status` | text | no | `planned`, `in_production`, `available`, `on_hold`, `quarantine`, `consumed`, `scrapped` or `shipped`. |
-| `quantity` | qty | no | Current quantity; the running result of its lot events. Zero or more. |
-| `uom_id` | uuid → uom | no | Its unit. |
-| `location_equipment_id` | uuid → equipment | yes | Where it is now. |
-| `produced_by_run_id` | uuid → job_run | yes | The run that made it. |
+| `quantity` | qty | no | Current quantity; the running result of its lot events. Zero or more, never negative. |
+| `uom_id` | uuid → uom | no | Its unit: the material's base unit. |
+| `location_equipment_id` | uuid → equipment | yes | Where it is now. Required for a bulk lot. |
+| `is_bulk` | boolean | no | The one balance of a material that isn't lot-tracked at its location. |
+| `produced_by_job_id` | uuid → job | yes | The job that declared it produced (D-027). |
+| `produced_by_run_id` | uuid → job_run | yes | The run that made it; filled once execution exists. |
 | `origin` | text | no | `produced`, `received`, `erp`, `split` or `merge`. |
 | `supplier_lot` | text | yes | Supplier's lot number, for received lots. |
 | `external_key` | text | yes | ERP key. |
@@ -764,9 +768,9 @@ Windows may overlap: a silo can hold several lots at once. Time-window consumpti
 | `load_method` | text | no | `scan`, `declared`, `erp_issue` or `auto`. |
 | `loaded_by_person_id` | uuid → person | yes | Who loaded it. |
 
-### core.lot_genealogy — parent and child lots · *Planned*
+### core.lot_genealogy — parent and child lots · *In use*
 
-Derived edges can be recalculated when windows or residence times change; the old edge is marked superseded, never deleted.
+Derived edges can be recalculated when windows or residence times change; the old edge is marked superseded, never deleted. Declared consumption and production (D-027) link every lot consumed into a job to every lot it produced (`declared`, with `job_id`). A current edge is unique per parent, child and basis (`lot_genealogy_edge_uq`).
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -776,10 +780,15 @@ Derived edges can be recalculated when windows or residence times change; the ol
 | `link_basis` | text | no | `time_window`, `declared`, `split`, `merge` or `rework`. |
 | `quantity` | qty | yes | Quantity carried over; estimated for `time_window`. |
 | `uom_id` | uuid → uom | yes | Its unit. |
+| `job_id` | uuid → job | yes | The job that consumed the parent and made the child (declared edges). |
 | `run_id` | uuid → job_run | yes | The run that linked them. |
 | `window_start`, `window_end` | timestamptz | yes | The time window used. |
 | `derived_at` | timestamptz | no | When the edge was derived. |
 | `superseded_at` | timestamptz | yes | When a newer derivation replaced it. |
+
+### core.trace_forward(lot), core.trace_backward(lot) — genealogy trace · *In use*
+
+`LANGUAGE sql STABLE` functions (D-012) that walk current genealogy edges from a lot: forward to every lot made from it, backward to every lot it was made from. Each returns `lot_id`, `via_lot_id` (the lot it was reached from; null for the start) and `depth` (0 for the start), stops at 50 steps and skips cycles. A lot reached by two paths appears once per path; the inventory query keeps the nearest.
 
 ## 10. Labor
 
@@ -993,24 +1002,28 @@ One row for every job status change, written in the same transaction as the chan
 | `actor_user_id` | uuid | yes | Who. Not filled until sign-in exists; the actor is on the matching event. |
 | `reason_code_id` | uuid → reason_code | yes | Why, when a reason was given. |
 
-### ts.lot_event — every inventory movement · *Planned*
+### ts.lot_event — every inventory movement · *In use*
 
-`core.lot` quantity and location are the running result of these rows.
+`core.lot` quantity and location are the running result of these rows. The application appends one row per movement and lot (D-027), in the base unit; it never updates or deletes them.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key with `occurred_at`. |
 | `occurred_at` | timestamptz | no | When. Partition key. |
 | `lot_id` | uuid → lot | no | The lot. |
-| `event_kind` | text | no | `created`, `received`, `moved`, `loaded`, `consumed`, `produced`, `split`, `merged`, `status_changed`, `adjusted`, `scrapped` or `shipped`. |
-| `qty_delta` | qty | yes | Quantity change. |
+| `event_kind` | text | no | `created`, `received`, `moved`, `loaded`, `consumed`, `produced`, `split`, `merged`, `status_changed`, `adjusted`, `scrapped` or `shipped`. In use: `received`, `produced`, `adjusted` (write-up), `scrapped` (write-off), `consumed`, `moved`, `status_changed`. |
+| `qty_delta` | qty | yes | Quantity change: positive in, negative out; null for a whole-lot move or a status change. |
+| `qty_after` | qty | yes | The lot's quantity once this row is applied. |
 | `uom_id` | uuid → uom | yes | Its unit. |
-| `from_location_id`, `to_location_id` | uuid → equipment | yes | For moves. |
-| `related_lot_id` | uuid → lot | yes | The other lot in a split or merge. |
+| `from_location_id`, `to_location_id` | uuid → equipment | yes | Where the stock left and arrived. |
+| `related_lot_id` | uuid → lot | yes | The other lot in a split or merge, or the other bulk lot in a transfer. |
+| `job_id` | uuid → job | yes | The job for declared consumption or production. |
 | `run_id` | uuid | yes | The run involved. |
-| `from_status`, `to_status` | text | yes | For status changes. |
-| `reason_code_id` | uuid → reason_code | yes | Why. |
-| `actor_user_id` | uuid | yes | Who. |
+| `from_status`, `to_status` | text | yes | For status changes, and when a lot is used up or comes back. |
+| `reason_code_id` | uuid → reason_code | yes | Why: required for write-ups, write-offs and holds. |
+| `comment` | text | yes | The person's note, at most 1000 characters. |
+| `actor_user_id` | uuid | yes | Who, once `sec.app_user` exists. |
+| `actor_id` | text | yes | Who, as on `evt.event` (`issuer\|subject`, `anonymous` until sign-in). |
 
 ### ts.quality_sample — one subgroup per row · *Planned*
 
@@ -1130,4 +1143,4 @@ Direct user grants expanded down the equipment tree: one row per user, permissio
 
 ### ts.create_month_partitions(parent, from, months) — function
 
-Creates monthly partitions (UTC bounds) for a partitioned table, starting at the month of `from`, for `months` months. Safe to re-run. A worker will call it ahead of time; until then the seed and the tests call it for `evt.event` and `ts.job_status_change`.
+Creates monthly partitions (UTC bounds) for a partitioned table, starting at the month of `from`, for `months` months. Safe to re-run. A worker will call it ahead of time; until then the seed and the tests call it for `evt.event`, `ts.job_status_change` and `ts.lot_event`.

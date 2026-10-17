@@ -87,4 +87,11 @@ public static class EventTypes
     public const string UnitUpdated = "pulaski.uom.updated.v1";
     public const string MaterialConversionSet = "pulaski.material.conversion_set.v1";
     public const string MaterialConversionRemoved = "pulaski.material.conversion_removed.v1";
+    public const string LotReceived = "pulaski.lot.received.v1";
+    public const string LotWrittenUp = "pulaski.lot.written_up.v1";
+    public const string LotWrittenOff = "pulaski.lot.written_off.v1";
+    public const string LotMoved = "pulaski.lot.moved.v1";
+    public const string LotStatusChanged = "pulaski.lot.status_changed.v1";
+    public const string LotConsumed = "pulaski.lot.consumed.v1";
+    public const string LotProduced = "pulaski.lot.produced.v1";
 }

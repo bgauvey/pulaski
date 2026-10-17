@@ -804,9 +804,10 @@ CREATE UNIQUE INDEX changeover_rule_uq ON core.changeover_rule
     NULLS NOT DISTINCT WHERE is_active;
 
 -- =====================================================================
--- 9. INVENTORY AND GENEALOGY
+-- 9. INVENTORY AND GENEALOGY (D-027)
 --    Lots are relational (referenced for years); every movement is a
 --    ts.lot_event. Storage locations are equipment with holds_inventory.
+--    Quantities are in the material's base unit.
 -- =====================================================================
 
 CREATE TABLE core.lot (
@@ -820,6 +821,8 @@ CREATE TABLE core.lot (
     quantity                core.qty NOT NULL DEFAULT 0 CHECK (quantity >= 0),
     uom_id                  uuid NOT NULL REFERENCES core.uom(id),
     location_equipment_id   uuid REFERENCES core.equipment(id),
+    is_bulk                 boolean NOT NULL DEFAULT false,     -- the one balance of a material that isn't lot-tracked, at its location
+    produced_by_job_id      uuid REFERENCES core.job(id),       -- declared production (D-027); a run fills produced_by_run_id once execution exists
     produced_by_run_id      uuid REFERENCES core.job_run(id),
     origin                  text NOT NULL CHECK (origin IN ('produced','received','erp','split','merge')),
     supplier_lot            text,
@@ -829,10 +832,15 @@ CREATE TABLE core.lot (
     expires_at              timestamptz,
     created_at              timestamptz NOT NULL DEFAULT now(),
     updated_at              timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT lot_uq UNIQUE (site_id, material_id, lot_number)
+    CONSTRAINT lot_uq UNIQUE (site_id, material_id, lot_number),
+    CONSTRAINT lot_bulk_location_ck CHECK (NOT is_bulk OR location_equipment_id IS NOT NULL)
 );
 CREATE INDEX lot_location_ix ON core.lot (location_equipment_id) WHERE status IN ('available','on_hold','quarantine');
+CREATE INDEX lot_material_ix ON core.lot (material_id, site_id) WHERE status IN ('available','on_hold','quarantine');
 CREATE INDEX lot_run_ix ON core.lot (produced_by_run_id);
+CREATE INDEX lot_job_ix ON core.lot (produced_by_job_id) WHERE produced_by_job_id IS NOT NULL;
+-- One bulk balance per material and location.
+CREATE UNIQUE INDEX lot_bulk_uq ON core.lot (material_id, location_equipment_id) WHERE is_bulk;
 
 -- A lot present at a feed point or storage unit over a window. Overlap is
 -- allowed: a silo can hold several lots at once. Time-window consumption
@@ -861,6 +869,7 @@ CREATE TABLE core.lot_genealogy (
     link_basis          text NOT NULL CHECK (link_basis IN ('time_window','declared','split','merge','rework')),
     quantity            core.qty,                               -- estimated for time_window
     uom_id              uuid REFERENCES core.uom(id),
+    job_id              uuid REFERENCES core.job(id),           -- the job that consumed the parent and made the child (declared)
     run_id              uuid REFERENCES core.job_run(id),
     window_start        timestamptz,
     window_end          timestamptz,
@@ -870,6 +879,39 @@ CREATE TABLE core.lot_genealogy (
 );
 CREATE INDEX lot_genealogy_parent_ix ON core.lot_genealogy (parent_lot_id) WHERE superseded_at IS NULL;
 CREATE INDEX lot_genealogy_child_ix  ON core.lot_genealogy (child_lot_id)  WHERE superseded_at IS NULL;
+-- A current edge is recorded once per basis, however often the same lots meet.
+CREATE UNIQUE INDEX lot_genealogy_edge_uq ON core.lot_genealogy (parent_lot_id, child_lot_id, link_basis) WHERE superseded_at IS NULL;
+
+-- Every lot downstream of (forward) or upstream of (backward) a lot through current genealogy
+-- edges, with the lot it was reached from and how many steps away. A lot reached by two paths
+-- appears once per path; callers keep the shortest.
+CREATE FUNCTION core.trace_forward(p_lot_id uuid)
+RETURNS TABLE (lot_id uuid, via_lot_id uuid, depth integer)
+LANGUAGE sql STABLE AS $$
+    WITH RECURSIVE walk (lot_id, via_lot_id, depth) AS (
+        SELECT p_lot_id, NULL::uuid, 0
+        UNION ALL
+        SELECT g.child_lot_id, w.lot_id, w.depth + 1
+        FROM walk w
+        JOIN core.lot_genealogy g ON g.parent_lot_id = w.lot_id AND g.superseded_at IS NULL
+        WHERE w.depth < 50
+    ) CYCLE lot_id SET is_cycle USING path
+    SELECT walk.lot_id, walk.via_lot_id, walk.depth FROM walk WHERE NOT walk.is_cycle
+$$;
+
+CREATE FUNCTION core.trace_backward(p_lot_id uuid)
+RETURNS TABLE (lot_id uuid, via_lot_id uuid, depth integer)
+LANGUAGE sql STABLE AS $$
+    WITH RECURSIVE walk (lot_id, via_lot_id, depth) AS (
+        SELECT p_lot_id, NULL::uuid, 0
+        UNION ALL
+        SELECT g.parent_lot_id, w.lot_id, w.depth + 1
+        FROM walk w
+        JOIN core.lot_genealogy g ON g.child_lot_id = w.lot_id AND g.superseded_at IS NULL
+        WHERE w.depth < 50
+    ) CYCLE lot_id SET is_cycle USING path
+    SELECT walk.lot_id, walk.via_lot_id, walk.depth FROM walk WHERE NOT walk.is_cycle
+$$;
 
 -- =====================================================================
 -- 10. LABOR
@@ -1103,8 +1145,8 @@ CREATE TABLE ts.job_status_change (
 ) PARTITION BY RANGE (occurred_at);
 CREATE INDEX ON ts.job_status_change (job_id, occurred_at);
 
--- Every inventory movement. Lot quantity/location in core.lot is the
--- running result of these rows.
+-- Every inventory movement (D-027). Lot quantity/location in core.lot is the
+-- running result of these rows; qty_after is the lot's quantity once applied.
 CREATE TABLE ts.lot_event (
     id                  uuid NOT NULL DEFAULT uuidv7(),
     occurred_at         timestamptz NOT NULL,
@@ -1113,18 +1155,23 @@ CREATE TABLE ts.lot_event (
                             'created','received','moved','loaded','consumed','produced',
                             'split','merged','status_changed','adjusted','scrapped','shipped')),
     qty_delta           core.qty,
+    qty_after           core.qty,
     uom_id              uuid REFERENCES core.uom(id),
     from_location_id    uuid REFERENCES core.equipment(id),
     to_location_id      uuid REFERENCES core.equipment(id),
-    related_lot_id      uuid REFERENCES core.lot(id),           -- split/merge counterpart
+    related_lot_id      uuid REFERENCES core.lot(id),           -- split/merge counterpart, or the other bulk lot in a transfer
+    job_id              uuid REFERENCES core.job(id),           -- declared consumption into / production from a job
     run_id              uuid,
     from_status         text,
     to_status           text,
     reason_code_id      uuid REFERENCES core.reason_code(id),
+    comment             text CHECK (length(comment) <= 1000),
     actor_user_id       uuid,
+    actor_id            text,                                   -- issuer|subject, as on evt.event, until sec.app_user exists
     PRIMARY KEY (id, occurred_at)
 ) PARTITION BY RANGE (occurred_at);
 CREATE INDEX ON ts.lot_event (lot_id, occurred_at);
+CREATE INDEX ON ts.lot_event (job_id) WHERE job_id IS NOT NULL;
 
 -- One row per subgroup. Variables: values[] plus computed statistics.
 -- Attributes: inspected/defect counts. Limits in force are stamped on.

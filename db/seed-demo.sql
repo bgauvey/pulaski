@@ -12,6 +12,7 @@
 -- Partitions for the current month and the next two.
 SELECT ts.create_month_partitions('evt.event', current_date, 3);
 SELECT ts.create_month_partitions('ts.job_status_change', current_date, 3);
+SELECT ts.create_month_partitions('ts.lot_event', current_date, 3);
 
 INSERT INTO core.uom (code, name, dimension, to_base_factor) VALUES
     ('kg', 'Kilogram', 'mass',   1),
@@ -52,7 +53,10 @@ SELECT v.* FROM ids, LATERAL (VALUES
     (uuidv7(),  line, site, 'EXT-01-SAW', 'Saw',                NULL,                     'work_unit',        'machine',         true,  false, false, NULL,              false),
     (line2,     area, site, 'EXT-02',     'Extrusion line 2',   'Profile extrusion line', 'work_center',      'production_line', true,  true,  false, NULL,              true),
     (pkg,       site, site, 'PKG',        'Packaging',          NULL,                     'area',             'area',            false, false, false, NULL,              false),
-    (pack,      pkg,  site, 'PACK1',      'Packer 1',           'Bundles and wraps profile for transfer to stock', 'work_center', 'production_line', true, true, false, NULL, true)
+    (pack,      pkg,  site, 'PACK1',      'Packer 1',           'Bundles and wraps profile for transfer to stock', 'work_center', 'production_line', true, true, false, NULL, true),
+    -- Where lots are kept (D-027): raw material comes into stores, finished profile waits in staging.
+    (uuidv7(),  site, site, 'RM-STORE',   'Raw material stores', 'Resin, additives and packaging', 'work_center', 'storage_zone', false, false, true, NULL, false),
+    (uuidv7(),  site, site, 'FG-STAGE',   'Finished goods staging', 'Packed profile awaiting transfer to the warehouse', 'work_center', 'storage_zone', false, false, true, NULL, false)
 ) AS v;
 
 -- Closure table: every ancestor/descendant pair, including self at depth 0.

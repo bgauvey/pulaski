@@ -1,0 +1,153 @@
+@page "/inventory/lots"
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject TimeProvider Time
+
+<PageTitle>Lots · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="Find a lot" SiteChanged="SearchAsync">
+    <Description>By lot or supplier lot number, material, location, status or expiry. Without a status, only lots with stock on hand are found.</Description>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+
+<form class="inv-toolbar" role="search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+    <div class="inv-search inv-grow">
+        <input type="search" class="form-control" placeholder="Lot, supplier lot or material code" aria-label="Lot number" @bind="_search" />
+        <Icon Name="search" Size="16" />
+    </div>
+    <select class="form-select" aria-label="Material" @bind="_materialId">
+        <option value="">Any material</option>
+        @foreach (var m in _materials)
+        {
+            <option value="@m.Id">@m.Code · @m.Name</option>
+        }
+    </select>
+    <select class="form-select" aria-label="Location" @bind="_locationId">
+        <option value="">Any location</option>
+        @foreach (var l in _locations)
+        {
+            <option value="@l.Id">@l.Code · @l.Name</option>
+        }
+    </select>
+    <select class="form-select" aria-label="Status" @bind="_status">
+        <option value="">On hand</option>
+        @foreach (var s in InventoryView.Statuses)
+        {
+            <option value="@s">@Display.Label(s)</option>
+        }
+    </select>
+    <select class="form-select" aria-label="Expiry" @bind="_expiryDays">
+        <option value="">Any expiry</option>
+        <option value="0">Expired</option>
+        <option value="7">Expiring within 7 days</option>
+        <option value="30">Expiring within 30 days</option>
+        <option value="90">Expiring within 90 days</option>
+    </select>
+    <button type="submit" class="btn btn-primary">Search</button>
+</form>
+
+@if (_lots is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_lots.Count == 0)
+{
+    <div class="empty-panel">
+        <h2>No lots found</h2>
+        <p class="text-muted mb-0">Try fewer filters. Used-up lots show only when you choose the Consumed or Scrapped status.</p>
+    </div>
+}
+else
+{
+    <p class="small text-muted">@_lots.Count @(_lots.Count == 1 ? "lot" : "lots")@(_lots.Count >= 500 ? " (the first 500; narrow the search)" : "")</p>
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Lot</th>
+                    <th>Material</th>
+                    <th>Status</th>
+                    <th class="inv-num">Quantity</th>
+                    <th>Location</th>
+                    <th>Supplier lot</th>
+                    <th>Expires</th>
+                    <th>Updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var l in _lots)
+                {
+                    <tr @key="l.Id">
+                        <td><a class="fw-semibold" href="inventory/lots/@l.Id">@InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode)</a></td>
+                        <td><a href="inventory/materials/@l.MaterialId">@l.MaterialCode</a> <div class="small text-muted">@l.MaterialName</div></td>
+                        <td><span class="@InventoryView.StatusChip(l.Status)">@Display.Label(l.Status)</span></td>
+                        <td class="inv-num">@InventoryView.Qty(l.Quantity) <span class="small text-muted">@l.UomCode</span></td>
+                        <td>@l.LocationCode</td>
+                        <td>@l.SupplierLot</td>
+                        <td class="small text-nowrap @(InventoryView.ExpiresSoon(l.ExpiresAt, Time.GetUtcNow()) ? "inv-held" : "")">@Display.SiteTime(l.ExpiresAt, Sites.Site?.TimeZone)</td>
+                        <td class="small text-muted text-nowrap">@Display.SiteTime(l.UpdatedAt, Sites.Site?.TimeZone)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "materialId")]
+    public Guid? MaterialQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "locationId")]
+    public Guid? LocationQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "status")]
+    public string? StatusQuery { get; set; }
+
+    private IReadOnlyList<LotSummaryDto>? _lots;
+    private IReadOnlyList<MaterialDto> _materials = [];
+    private IReadOnlyList<InventoryLocationDto> _locations = [];
+    private ApiException? _error;
+    private string? _search;
+    private Guid? _materialId;
+    private Guid? _locationId;
+    private string _status = "";
+    private int? _expiryDays;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _materialId = MaterialQuery;
+        _locationId = LocationQuery;
+        _status = StatusQuery ?? "";
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _materials = await Api.ListMaterialsAsync();
+            _locations = await Api.ListInventoryLocationsAsync(Sites.SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        _error = null;
+        try
+        {
+            var expiresBefore = _expiryDays is { } days ? Time.GetUtcNow().AddDays(days) : (DateTimeOffset?)null;
+            _lots = await Api.SearchLotsAsync(
+                Sites.SiteId, _search, _materialId, _locationId, string.IsNullOrEmpty(_status) ? null : _status, expiresBefore);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+}

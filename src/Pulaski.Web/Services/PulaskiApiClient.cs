@@ -3,6 +3,7 @@ using System.Text.Json;
 using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
+using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Processes;
 using Pulaski.Contracts.ReferenceData;
 using Pulaski.Contracts.Scheduling;
@@ -248,6 +249,75 @@ public sealed class PulaskiApiClient(HttpClient http)
 
     public Task<VersionResponse> SetDefaultProcessAsync(Guid materialId, Guid? processId, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/materials/{materialId}/default-process", new SetDefaultProcessRequest { ProcessId = processId }, ct);
+
+    // Inventory (D-027)
+
+    public Task<IReadOnlyList<MaterialStockDto>> ListStockAsync(
+        Guid? siteId, string? search = null, Guid? materialClassId = null, Guid? locationId = null, bool inStockOnly = false, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MaterialStockDto>>(
+            Query("api/inventory/stock", ("siteId", siteId), ("search", search), ("materialClassId", materialClassId), ("locationId", locationId), ("inStockOnly", inStockOnly ? "true" : null)), ct);
+
+    public Task<MaterialStockDetailDto> GetMaterialStockAsync(Guid materialId, Guid? siteId, CancellationToken ct = default) =>
+        GetAsync<MaterialStockDetailDto>(Query($"api/inventory/materials/{materialId}", ("siteId", siteId)), ct);
+
+    public Task<WhereUsedDto> GetWhereUsedAsync(Guid materialId, CancellationToken ct = default) =>
+        GetAsync<WhereUsedDto>($"api/inventory/materials/{materialId}/where-used", ct);
+
+    public Task<IReadOnlyList<InventoryLocationDto>> ListInventoryLocationsAsync(Guid? siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<InventoryLocationDto>>(Query("api/inventory/locations", ("siteId", siteId)), ct);
+
+    public Task<IReadOnlyList<DeclarableJobDto>> ListDeclarableJobsAsync(Guid? siteId, string? search = null, Guid? materialId = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<DeclarableJobDto>>(Query("api/inventory/jobs", ("siteId", siteId), ("search", search), ("materialId", materialId)), ct);
+
+    public Task<JobMaterialsDto> GetJobMaterialsAsync(Guid jobId, CancellationToken ct = default) =>
+        GetAsync<JobMaterialsDto>($"api/jobs/{jobId}/materials", ct);
+
+    public Task<IReadOnlyList<LotSummaryDto>> SearchLotsAsync(
+        Guid? siteId, string? search = null, Guid? materialId = null, Guid? locationId = null, string? status = null, DateTimeOffset? expiresBefore = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<LotSummaryDto>>(
+            Query("api/lots", ("siteId", siteId), ("search", search), ("materialId", materialId), ("locationId", locationId), ("status", status),
+                ("expiresBefore", expiresBefore?.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture))), ct);
+
+    public Task<LotDto> GetLotAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<LotDto>($"api/lots/{id}", ct);
+
+    public Task<IReadOnlyList<LotTraceNodeDto>> TraceLotAsync(Guid id, bool forward, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<LotTraceNodeDto>>($"api/lots/{id}/trace?direction={(forward ? "forward" : "backward")}", ct);
+
+    public Task<LotTransactionResponse> ReceiveLotAsync(ReceiveLotRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, "api/lots", request, ct);
+
+    public Task<LotTransactionResponse> WriteUpLotAsync(Guid id, AdjustLotRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{id}/write-up", request, ct);
+
+    public Task<LotTransactionResponse> WriteOffLotAsync(Guid id, AdjustLotRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{id}/write-off", request, ct);
+
+    public Task<LotTransactionResponse> MoveLotAsync(Guid id, MoveLotRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{id}/move", request, ct);
+
+    public Task<LotTransactionResponse> ChangeLotStatusAsync(Guid id, ChangeLotStatusRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{id}/status", request, ct);
+
+    public Task<LotTransactionResponse> ConsumeLotAsync(Guid id, ConsumeLotRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{id}/consume", request, ct);
+
+    public Task<LotTransactionResponse> ProduceLotAsync(Guid jobId, ProduceLotRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/produce", request, ct);
+
+    public Task<IReadOnlyList<ReasonCodeDto>> ListReasonCodesAsync(string kind, Guid? siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ReasonCodeDto>>(Query("api/reason-codes", ("kind", kind), ("siteId", siteId)), ct);
+
+    /// <summary>A path with the given query parameters, leaving out the null and blank ones.</summary>
+    private static string Query(string path, params (string Name, object? Value)[] parameters)
+    {
+        var pairs = parameters
+            .Select(p => (p.Name, Value: p.Value?.ToString()))
+            .Where(p => !string.IsNullOrWhiteSpace(p.Value))
+            .Select(p => $"{p.Name}={Uri.EscapeDataString(p.Value!.Trim())}")
+            .ToList();
+        return pairs.Count == 0 ? path : $"{path}?{string.Join('&', pairs)}";
+    }
 
     // Reference data
 

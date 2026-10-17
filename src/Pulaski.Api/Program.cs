@@ -36,5 +36,6 @@ api.MapSchedulingEndpoints();
 api.MapProcessEndpoints();
 api.MapBomEndpoints();
 api.MapUnitEndpoints();
+api.MapInventoryEndpoints();
 
 app.Run();

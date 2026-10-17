@@ -19,7 +19,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - **User guide.** `docs/user_guide.md` is the end-user guide, for readers from novice to expert. Update it in
   the same change as anything a user can see: a new or changed screen, step, button label, message, rule or
   warning. Each topic keeps numbered steps for beginners and an "In detail" part for experienced users.
-  Keep section 11 ("What Pulaski doesn't do yet") current: add known gaps and bugs, remove them when fixed.
+  Keep the "What Pulaski doesn't do yet" section current: add known gaps and bugs, remove them when fixed.
   Describe only what the app does today, checked against the code, and bump the "Last updated" date.
 
 ## Stack
@@ -70,8 +70,12 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Work orders are made from a released process (D-024, proposed): each operation's equipment gets a planned job
   for its share, at the end of its line, held until the order's start. The order keeps the version and a note.
 - BOMs (D-025, proposed) are single level, per material and optionally per process (items name the consuming
-  operation), versioned like processes. Order creation plans each job's components (`job_material`). Pulaski
-  owns lots on the floor; the ERP owns warehouse stock.
+  operation), versioned like processes. Order creation plans each job's components (`job_material`).
+- Inventory (D-027, proposed): Pulaski keeps lot balances at `holds_inventory` locations in a site, in the
+  material's base unit, never below zero; the ERP stays the financial book of record. Every movement writes
+  `core.lot` + one `ts.lot_event` row + one event. Consumption and production are declared against a job (lock
+  the job, then lots) with job-level `declared` genealogy. Materials that aren't lot-tracked keep one bulk lot per
+  location (`@<location code>`).
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
@@ -116,7 +120,8 @@ Treat these as working assumptions; confirm with Bill before building anything t
 - Load schema: `psql -d pulaski -v ON_ERROR_STOP=1 -f db/schema-draft.sql`, then
   `db/app-role.sql` (re-runnable), then `db/seed-demo.sql` (empty database only), then optionally
   `db/seed-materials.sql` (200 demo materials in 11 classes; re-runnable), then `db/seed-units.sql` (standard units
-  and demo material conversions, D-026; re-runnable).
+  and demo material conversions, D-026; re-runnable), then `db/seed-reasons.sql` (starter adjustment and hold
+  reasons, D-027; re-runnable).
 - Layout: production projects in `src/`, test projects in `Tests/` (shared in-memory fakes in
   `Tests/Pulaski.Testing`); `.editorconfig`,
   `Directory.Build.props`, `Directory.Packages.props` (central package versions) and

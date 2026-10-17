@@ -35,6 +35,9 @@ public sealed record MaterialDto
     public required string BaseUomCode { get; init; }
     public Guid? MaterialClassId { get; init; }
     public string? MaterialClassCode { get; init; }
+
+    /// <summary>False for a material kept as one balance per location rather than in numbered lots (D-027).</summary>
+    public bool IsLotTracked { get; init; } = true;
     public bool IsActive { get; init; }
 }
 

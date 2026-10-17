@@ -1,0 +1,223 @@
+@page "/inventory/materials/{MaterialId:guid}"
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject TimeProvider Time
+
+<PageTitle>@(_detail?.Material.Code ?? "Material") · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="@(_detail?.Material.Code ?? "Material")" SiteChanged="LoadAsync">
+    <Back><a href="inventory">← Stock</a></Back>
+    <Description>
+        @if (_detail?.Material is { } m)
+        {
+            <span>@m.Name · @(m.MaterialClassName ?? "No class") · stocked in <strong>@m.BaseUomCode</strong> · @(m.IsLotTracked ? "lot-tracked" : "kept as one balance per location")</span>
+        }
+    </Description>
+    <Actions>
+        <a class="btn btn-outline-secondary" href="inventory/lots?materialId=@MaterialId&status=consumed">Used-up lots</a>
+        <button type="button" class="btn btn-primary" @onclick="() => _action = LotAction.Receive" disabled="@(_detail is null)">Receive</button>
+    </Actions>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+<LotResultBanner Result="_result" OnDismiss="() => _result = null" />
+
+@if (_detail is { } detail)
+{
+    var m = detail.Material;
+    <div class="inv-tiles">
+        <div class="inv-tile"><span class="metric @(m.OnHand == 0 ? "is-zero" : "")">@InventoryView.Qty(m.OnHand)</span><span class="inv-tile-label">On hand, @m.BaseUomCode</span></div>
+        <div class="inv-tile"><span class="metric @(m.Available == 0 ? "is-zero" : "")">@InventoryView.Qty(m.Available)</span><span class="inv-tile-label">Available</span></div>
+        <div class="inv-tile @(m.Held > 0 ? "is-warning" : "")"><span class="metric @(m.Held == 0 ? "is-zero" : "")">@InventoryView.Qty(m.Held)</span><span class="inv-tile-label">On hold or quarantine</span></div>
+        <div class="inv-tile"><span class="metric @(m.LotCount == 0 ? "is-zero" : "")">@m.LotCount</span><span class="inv-tile-label">@(m.IsLotTracked ? "Lots" : "Balances")</span></div>
+        <div class="inv-tile"><span class="metric @(m.LocationCount == 0 ? "is-zero" : "")">@m.LocationCount</span><span class="inv-tile-label">Locations</span></div>
+    </div>
+
+    <section class="inv-section" aria-labelledby="lots-title">
+        <h2 id="lots-title">@(m.IsLotTracked ? "Lots on hand" : "Balances")</h2>
+        @if (detail.Lots.Count == 0)
+        {
+            <p class="text-muted">None on hand. Receive some, or declare production from a job.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>@(m.IsLotTracked ? "Lot" : "Balance")</th>
+                            <th>Status</th>
+                            <th class="inv-num">Quantity</th>
+                            <th>Location</th>
+                            <th>Supplier lot</th>
+                            <th>Expires</th>
+                            <th>From</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in detail.Lots)
+                        {
+                            <tr @key="l.Id">
+                                <td><a class="fw-semibold" href="inventory/lots/@l.Id">@InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode)</a></td>
+                                <td><span class="@InventoryView.StatusChip(l.Status)">@Display.Label(l.Status)</span></td>
+                                <td class="inv-num">@InventoryView.Qty(l.Quantity) <span class="small text-muted">@l.UomCode</span></td>
+                                <td>@l.LocationCode</td>
+                                <td>@l.SupplierLot</td>
+                                <td class="small text-nowrap @(InventoryView.ExpiresSoon(l.ExpiresAt, Time.GetUtcNow()) ? "inv-held" : "")">@Display.SiteTime(l.ExpiresAt, Tz)</td>
+                                <td class="small">@(l.ProducedByJobNumber is { } job ? $"Made by {job}" : Display.Label(l.Origin))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <div class="inv-layout">
+        <section class="inv-section" aria-labelledby="locations-title">
+            <h2 id="locations-title">By location</h2>
+            @if (detail.Locations.Count == 0)
+            {
+                <p class="text-muted">Nowhere yet.</p>
+            }
+            else
+            {
+                <div class="table-panel">
+                    <table class="table table-sm align-middle">
+                        <thead><tr><th>Location</th><th class="inv-num">Lots</th><th class="inv-num">On hand</th><th class="inv-num">Available</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in detail.Locations)
+                            {
+                                <tr @key="l.LocationId">
+                                    <td><a href="inventory/lots?locationId=@l.LocationId&materialId=@MaterialId">@l.LocationCode</a> <span class="small text-muted">@l.LocationName</span></td>
+                                    <td class="inv-num">@l.LotCount</td>
+                                    <td class="inv-num">@InventoryView.Qty(l.OnHand)</td>
+                                    <td class="inv-num">@InventoryView.Qty(l.Available)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="inv-section" aria-labelledby="used-title">
+            <div class="inv-section-head">
+                <h2 id="used-title">Where used</h2>
+                <span class="small">
+                    Made from:
+                    @if (_boms.Count == 0)
+                    {
+                        <span class="text-muted">no BOM</span>
+                    }
+                    @foreach (var b in _boms)
+                    {
+                        <a class="ms-1" href="boms/@b.Id">BOM for @(b.ProcessCode ?? "any process")</a>
+                    }
+                </span>
+            </div>
+            @if (_whereUsed is { } used)
+            {
+                @if (used.Boms.Count == 0)
+                {
+                    <p class="text-muted">No released or draft BOM lists @m.Code as a component.</p>
+                }
+                else
+                {
+                    <div class="table-panel mb-3">
+                        <table class="table table-sm align-middle">
+                            <thead><tr><th>In BOM of</th><th>Version</th><th class="inv-num">Per</th><th>Operation</th></tr></thead>
+                            <tbody>
+                                @foreach (var b in used.Boms)
+                                {
+                                    <tr @key="(b.VersionId, b.LineNo)" class="@(b.BomIsActive ? "" : "text-muted")">
+                                        <td>
+                                            <a class="fw-semibold" href="boms/@b.BomId">@b.MaterialCode</a>
+                                            <div class="small text-muted">@b.MaterialName · @(b.ProcessCode ?? "any process")</div>
+                                        </td>
+                                        <td><span class="@(b.VersionStatus == "released" ? "chip chip-strong" : "chip")">v@(b.VersionNumber) @b.VersionStatus</span></td>
+                                        <td class="inv-num">@InventoryView.Qty(b.QtyPer) @b.UomCode <span class="small text-muted">per @InventoryView.Qty(b.BaseQty) @b.BaseUomCode</span></td>
+                                        <td>@(b.OperationNumber?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "first")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                <h3 class="h6">Open jobs planned to use it</h3>
+                @if (used.Jobs.Count == 0)
+                {
+                    <p class="text-muted">None.</p>
+                }
+                else
+                {
+                    <div class="table-panel">
+                        <table class="table table-sm align-middle">
+                            <thead><tr><th>Job</th><th>Line</th><th class="inv-num">Planned</th><th class="inv-num">Consumed</th></tr></thead>
+                            <tbody>
+                                @foreach (var j in used.Jobs)
+                                {
+                                    <tr @key="j.JobId">
+                                        <td>
+                                            <a class="fw-semibold" href="inventory/jobs/@j.JobId">@j.JobNumber</a>
+                                            <div class="small text-muted">makes @j.MaterialCode · <span class="@Display.JobStatusChip(j.JobStatus)">@Display.Label(j.JobStatus)</span></div>
+                                        </td>
+                                        <td>@j.LineCode</td>
+                                        <td class="inv-num">@InventoryView.Qty(j.PlannedQty) @j.UomCode</td>
+                                        <td class="inv-num">@InventoryView.Qty(j.ConsumedQty) @used.BaseUomCode</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+        </section>
+    </div>
+}
+else if (_error is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+
+<LotActionDrawer Action="_action" MaterialId="MaterialId" OnDone="OnDoneAsync" OnClose="() => _action = null" />
+
+@code {
+    [Parameter]
+    public Guid MaterialId { get; set; }
+
+    private MaterialStockDetailDto? _detail;
+    private WhereUsedDto? _whereUsed;
+    private IReadOnlyList<BomSummaryDto> _boms = [];
+    private ApiException? _error;
+    private LotActionResult? _result;
+    private LotAction? _action;
+
+    private string? Tz => Sites.Site?.TimeZone;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _detail = await Api.GetMaterialStockAsync(MaterialId, Sites.SiteId);
+            _whereUsed = await Api.GetWhereUsedAsync(MaterialId);
+            _boms = await Api.ListBomsAsync(MaterialId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnDoneAsync(LotActionResult result)
+    {
+        _action = null;
+        _result = result;
+        await LoadAsync();
+    }
+}

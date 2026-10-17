@@ -1,0 +1,275 @@
+@page "/inventory/lots/{LotId:guid}"
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject TimeProvider Time
+
+<PageTitle>@(Title) · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="@Title">
+    <Back>
+        @if (_lot is { } back)
+        {
+            <a href="inventory/materials/@back.Lot.MaterialId">← @back.Lot.MaterialCode</a>
+        }
+    </Back>
+    <Description>
+        @if (_lot is { } d)
+        {
+            <span>@d.Lot.MaterialCode · @d.Lot.MaterialName</span>
+        }
+    </Description>
+    <Actions>
+        @if (_lot?.Lot is { } lot)
+        {
+            var onHand = lot.Status is "available" or "on_hold" or "quarantine";
+            <div class="inv-actions">
+                <button type="button" class="btn btn-primary" disabled="@(lot.Status != "available" || lot.Quantity == 0)" @onclick="() => _action = LotAction.Consume">Consume</button>
+                <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Move">Move</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.WriteUp">Write up</button>
+                <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || lot.Quantity == 0)" @onclick="() => _action = LotAction.WriteOff">Write off</button>
+                @if (lot.Status is "on_hold" or "quarantine")
+                {
+                    <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Release">Release</button>
+                }
+                <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || lot.Status == "quarantine")" @onclick="() => _action = LotAction.Hold">Hold…</button>
+            </div>
+        }
+    </Actions>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+<LotResultBanner Result="_result" OnDismiss="() => _result = null" />
+
+@if (_lot is { } detail)
+{
+    var l = detail.Lot;
+    var tz = detail.SiteTimeZone;
+    <div class="inv-layout mb-4">
+        <div class="inv-facts">
+            <dl class="facts">
+                <dt>Status</dt>
+                <dd><span class="@InventoryView.StatusChip(l.Status)">@Display.Label(l.Status)</span></dd>
+                <dt>Quantity</dt>
+                <dd><strong>@InventoryView.Qty(l.Quantity)</strong> @l.UomCode</dd>
+                <dt>Location</dt>
+                <dd>@(l.LocationCode is null ? "—" : $"{l.LocationCode} · {l.LocationName}")</dd>
+                <dt>From</dt>
+                <dd>
+                    @if (l.ProducedByJobId is { } jobId)
+                    {
+                        <span>Made by <a href="inventory/jobs/@jobId">@l.ProducedByJobNumber</a></span>
+                    }
+                    else
+                    {
+                        @Display.Label(l.Origin)
+                    }
+                </dd>
+                @if (detail.MaterialIsLotTracked)
+                {
+                    <dt>Supplier lot</dt>
+                    <dd>@(l.SupplierLot ?? "—")</dd>
+                    <dt>Expires</dt>
+                    <dd class="@(InventoryView.ExpiresSoon(l.ExpiresAt, Time.GetUtcNow()) ? "inv-held" : "")">@(l.ExpiresAt is null ? "—" : Display.SiteTime(l.ExpiresAt, tz))</dd>
+                }
+                else
+                {
+                    <dt>Kept as</dt>
+                    <dd>The balance of @l.MaterialCode at @l.LocationCode: @l.MaterialCode isn't lot-tracked.</dd>
+                }
+                <dt>Created</dt>
+                <dd>@Display.SiteTime(l.CreatedAt, tz)</dd>
+                <dt>Last change</dt>
+                <dd>@Display.SiteTime(l.UpdatedAt, tz)</dd>
+            </dl>
+        </div>
+
+        <section aria-labelledby="genealogy-title">
+            <div class="inv-section-head">
+                <h2 id="genealogy-title">Genealogy</h2>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => TraceAsync(false)">Trace back</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => TraceAsync(true)">Trace forward</button>
+                </div>
+            </div>
+            @if (_trace is { } trace)
+            {
+                <h3 class="h6 mt-2">@(_traceForward ? "Everything made from it" : "Everything it was made from")</h3>
+                @if (trace.Count <= 1)
+                {
+                    <p class="text-muted">@(_traceForward ? "Nothing has been made from this lot yet." : "This lot wasn't made from other lots.")</p>
+                }
+                else
+                {
+                    <ul class="inv-trace">
+                        @foreach (var row in trace)
+                        {
+                            <li @key="row.Node.LotId" style="padding-left:@(row.Indent * 20)px">
+                                @if (row.Indent > 0)
+                                {
+                                    <span class="inv-trace-step" aria-hidden="true">@(_traceForward ? "↳" : "↰")</span>
+                                }
+                                <a class="fw-semibold" href="inventory/lots/@row.Node.LotId">@InventoryView.LotLabel(row.Node.LotNumber, row.Node.IsBulk, row.Node.LocationCode)</a>
+                                <span class="small">@row.Node.MaterialCode</span>
+                                <span class="@InventoryView.StatusChip(row.Node.Status)">@Display.Label(row.Node.Status)</span>
+                                <span class="small text-muted">@InventoryView.Qty(row.Node.Quantity) @row.Node.UomCode</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+            else
+            {
+                @LinkTable("Made from", detail.Parents, "Not made from other lots.")
+                @LinkTable("Used in", detail.Children, "Nothing made from it yet.")
+            }
+        </section>
+    </div>
+
+    <section class="inv-section" aria-labelledby="history-title">
+        <h2 id="history-title">History</h2>
+        <div class="table-panel">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>When</th>
+                        <th>What</th>
+                        <th class="inv-num">Change</th>
+                        <th class="inv-num">After</th>
+                        <th>Where</th>
+                        <th>Job</th>
+                        <th>Reason</th>
+                        <th>Who</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var e in detail.History)
+                    {
+                        <tr @key="e.Id">
+                            <td class="small text-nowrap">@Display.SiteTime(e.OccurredAt, tz)</td>
+                            <td>
+                                @InventoryView.EventLabel(e.Kind)
+                                @if (e.ToStatus is { } to)
+                                {
+                                    <div class="small text-muted">@Display.Label(e.FromStatus) → @Display.Label(to)</div>
+                                }
+                            </td>
+                            <td class="inv-num">@(e.QtyDelta is { } d ? InventoryView.Delta(d) : "")</td>
+                            <td class="inv-num">@(e.QtyAfter is { } a ? InventoryView.Qty(a) : "") <span class="small text-muted">@e.UomCode</span></td>
+                            <td class="small">
+                                @(e.Kind == "moved" ? $"{e.FromLocationCode} → {e.ToLocationCode}" : e.ToLocationCode ?? e.FromLocationCode)
+                                @if (e.RelatedLotId is { } related)
+                                {
+                                    <div><a href="inventory/lots/@related">@InventoryView.LotLabel(e.RelatedLotNumber ?? "", e.RelatedLotNumber?.StartsWith('@') == true, null)</a></div>
+                                }
+                            </td>
+                            <td class="small">
+                                @if (e.JobId is { } job)
+                                {
+                                    <a href="inventory/jobs/@job">@e.JobNumber</a>
+                                }
+                            </td>
+                            <td class="small">
+                                @e.ReasonName
+                                @if (e.Comment is { } comment)
+                                {
+                                    <div class="text-muted">@comment</div>
+                                }
+                            </td>
+                            <td class="small text-muted">@e.ActorId</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+else if (_error is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+
+<LotActionDrawer Action="_action" Lot="_lot?.Lot" OnDone="OnDoneAsync" OnClose="() => _action = null" />
+
+@code {
+    [Parameter]
+    public Guid LotId { get; set; }
+
+    private LotDto? _lot;
+    private IReadOnlyList<TraceRow>? _trace;
+    private bool _traceForward;
+    private ApiException? _error;
+    private LotActionResult? _result;
+    private LotAction? _action;
+
+    private string Title => _lot?.Lot is { } l ? InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode) : "Lot";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _trace = null;
+        _result = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _lot = await Api.GetLotAsync(LotId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task TraceAsync(bool forward)
+    {
+        _error = null;
+        try
+        {
+            _traceForward = forward;
+            _trace = InventoryView.Tree(await Api.TraceLotAsync(LotId, forward));
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnDoneAsync(LotActionResult result)
+    {
+        _action = null;
+        _result = result;
+        _trace = null;
+        await LoadAsync();
+    }
+
+    private static RenderFragment LinkTable(string title, IReadOnlyList<LotLinkDto> links, string empty) => __builder =>
+    {
+        <h3 class="h6 mt-2">@title</h3>
+        @if (links.Count == 0)
+        {
+            <p class="text-muted small">@empty</p>
+        }
+        else
+        {
+            <div class="table-panel mb-3">
+                <table class="table table-sm align-middle">
+                    <tbody>
+                        @foreach (var link in links)
+                        {
+                            <tr @key="link.LotId">
+                                <td><a class="fw-semibold" href="inventory/lots/@link.LotId">@InventoryView.LotLabel(link.LotNumber, link.IsBulk, link.LocationCode)</a></td>
+                                <td>@link.MaterialCode <div class="small text-muted">@link.MaterialName</div></td>
+                                <td><span class="@InventoryView.StatusChip(link.Status)">@Display.Label(link.Status)</span></td>
+                                <td class="small">@(link.JobNumber is null ? Display.Label(link.LinkBasis) : $"via {link.JobNumber}")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    };
+}
