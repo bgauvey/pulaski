@@ -85,6 +85,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Location and expiry rules (D-032, proposed): `single_material` admits another material only when the one there is at
   zero (`InventoryRules.EnsureAcceptsAsync`, locks the location); a location with stock can't be deactivated; shelf life
   sets new lots' expiry; expired lots can't be consumed, shipped or merged (`EnsureNotExpired`) until corrected.
+- Materials management (D-033, proposed): for `origin = 'erp'` the ERP owns code, name, base unit and type (changed only
+  by the idempotent import, matched on external system + key); Pulaski owns the rest. Base unit is fixed once in use, a
+  local code too; lot tracking changes only with nothing on hand; deactivation is always allowed and reports what still
+  uses it. Type is a label with no rules. Classes are flat, code fixed, switched off rather than deleted.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

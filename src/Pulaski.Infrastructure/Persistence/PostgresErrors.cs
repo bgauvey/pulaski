@@ -19,6 +19,9 @@ internal static class PostgresErrors
         ["lot_bulk_uq"] = "Someone else started this material's balance at that location at the same moment. Try again.",
         ["stock_count_number_uq"] = "Another count was started at the same moment. Try again.",
         ["reason_code_uq"] = "That code is already used for this kind of reason.",
+        ["material_code_key"] = "That material code is already used.",
+        ["material_external_uq"] = "Another material already has that external key.",
+        ["material_class_code_key"] = "That class code is already used.",
     };
 
     public static bool TryTranslate(PostgresException ex, out Exception translated)

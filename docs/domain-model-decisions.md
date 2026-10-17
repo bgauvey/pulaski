@@ -40,6 +40,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-030 | Inventory completion: split, merge and ship lots; correct a lot's details; reverse a lot's latest movement; count a location and post the differences; maintain reason codes; stock on a past date and an aging report; CSV export. Pallets, labels and lot certificates are deferred | Proposed | 2026-10-16 |
 | D-031 | Indistinguishable lots: a location that holds inventory can mix lots (`commingles_lots`), like a silo or tank. Everything that arrives there joins one balance per material, with no lot number; a numbered receipt is kept as its own lot and merged in, so genealogy still reaches the supplier lot. Every balance, lot-tracked or not, has a NULL lot number | Proposed | 2026-10-17 |
 | D-032 | Location and expiry rules: a location can take one material at a time (`single_material`); a location holding stock can't be deactivated or stop holding inventory; materials have a shelf life that sets a new lot's expiry; an expired lot can't be consumed, shipped or merged until its expiry is corrected | Proposed | 2026-10-17 |
+| D-033 | Materials management: materials and material classes are maintained in Pulaski. For a material from the ERP, its code, name, base unit and type change only through the ERP (an idempotent import by external key); Pulaski owns everything else. A base unit can't change and a local code is fixed once the material is used; lot tracking changes only with nothing on hand. Classes stay flat. Type is a label, no rules. Capabilities, run standards and CSV import come next; imports and label printing will later go through adapters | Proposed | 2026-10-17 |
 
 ## Order hierarchy
 
@@ -484,6 +485,35 @@ Rules that keep floor stock honest where D-027 and D-031 left a gap.
 - A material may have a shelf life in days (`core.material.shelf_life_days`). A new lot received or produced without an expiry expires that long after it arrives; an expiry entered by hand wins. A balance takes the earliest expiry of what joins it, as before (D-031).
 - An **expired** lot (its expiry is now or past) can't be consumed, shipped, or merged into another lot or a balance. It can still be moved, held, written off or counted. To use it after all, correct its expiry with a comment (D-030): the quality decision is then on record.
 - Shelf life is set on the material's inventory page until there is a materials screen; the change is an event on the material.
+
+## Materials management (D-033, proposed)
+
+Materials are the items everything else refers to: BOMs, processes, capabilities, run standards, orders, jobs and lots. This module maintains them; until now they came from a seed script.
+
+**Who owns what.**
+
+| Field | Local material | Material from the ERP |
+| --- | --- | --- |
+| Code, name, base unit, type | Pulaski (code and base unit subject to the rules below) | **The ERP only**, through the import; read-only on screen |
+| Class, description, lot tracking, shelf life, active | Pulaski | Pulaski |
+| Default process (D-023), conversions (D-026) | Pulaski | Pulaski |
+
+- **The import.** `POST /api/materials/import` takes one item from an external system: its system and key (`external_system`, `external_key`), an optional version, code, name, base unit code and type. It creates the material (`origin = erp`) or updates the ERP-owned fields of the one with that key; Pulaski-owned fields are never touched by it. Sending the same item twice changes nothing and records no event. It is the way in that CSV import and, later, adapters for other data sources (D-033 next steps) will use.
+- **Type** is a label from the ERP's item master (an MRP class or item type, mapped onto Pulaski's list). It drives no rules.
+
+**Rules that keep references valid.**
+
+- **Base unit.** Quantities in lots, BOMs, orders, jobs and run standards are stored in or against it, so it can't change once anything refers to the material. That applies to the ERP too: an import changing the base unit of a material in use is refused.
+- **Code.** A local material's code is fixed once the material is used, as a business key people and other systems recognise. The ERP may rename its own items: it is the master, and Pulaski refers to materials by id.
+- **Lot tracking** can change only while nothing is on hand, since lots would have to become balances or the other way round (D-027, D-031).
+- **Deactivating** is always allowed and stops new use: receipts, new orders, new BOM components and process scope pick only active materials. Whatever already uses it carries on; the change reports what still uses it (stock on hand, open work orders and jobs, released BOMs, capabilities).
+- **In use** means referenced by any lot, BOM, BOM item, work order, job, planned component, capability, run standard, process scope or changeover rule.
+
+**Classes** are flat: a code, a name and an active flag. The code is fixed; an inactive class can't be given to a material but stays on the ones that have it. Process scope (D-023) and the changeover matrix (D-015) refer to classes, so they are never deleted.
+
+**Screens.** Configure → Materials lists materials grouped by class, with search and filters, and creates local materials. Each material has a page with its properties (ERP-owned ones read-only), what it is used in, its conversions, the processes that make it, its BOMs, where it is used, its capabilities and its stock. Material classes have a tab of their own.
+
+**Next:** capabilities and run standards maintained from the material page (D-020, D-016); CSV import; an adapter interface for external data sources (ERP item masters, label printing such as BarTender).
 
 ## Application architecture
 

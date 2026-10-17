@@ -184,29 +184,32 @@ Per-site mapping of raw state to an OEE category (D-005). Raw state is always st
 
 ### core.material_class — material groups · *In use*
 
-Groups materials (e.g. all resins), so changeover rules can match a class instead of each material.
+Groups materials (e.g. all resins), so processes and changeover rules can match a class instead of each material. Flat: a class has no parent (D-033). Never deleted; switched off instead.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `code` | text | no | Unique code. |
+| `code` | text | no | Unique code. Fixed once created. |
 | `name` | text | no | Display name. |
+| `is_active` | boolean | no | False when switched off: not offered for new materials, and no material can move into it. Default true. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ### core.material — items and parts · *In use*
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `code` | text | no | Unique item or part number. |
-| `name` | text | no | Display name. |
-| `material_type` | text | no | `raw`, `intermediate`, `finished`, `packaging`, `consumable` or `rework`. |
+| `code` | text | no | Unique item or part number. For `local` rows fixed once the material is in use; for `erp` rows owned by the ERP, which may rename it (D-033). |
+| `name` | text | no | Display name. Owned by the ERP for `erp` rows (D-033). |
+| `description` | text | yes | Notes for the people who use it, at most 2000 characters. Kept in Pulaski for every origin. |
+| `material_type` | text | no | `raw`, `intermediate`, `finished`, `packaging`, `consumable` or `rework`: a label from the item master (such as the ERP's MRP class) that drives no rules. Owned by the ERP for `erp` rows. |
 | `material_class_id` | uuid → material_class | yes | Its class, if any. |
-| `base_uom_id` | uuid → uom | no | The unit it is counted in by default. |
+| `base_uom_id` | uuid → uom | no | The unit it is counted in by default. Fixed once the material is in use, whatever its origin (D-033). |
 | `shelf_life_days` | integer | yes | A new lot received or produced without an expiry expires this many days after it arrives (D-032). |
-| `is_lot_tracked` | boolean | no | Whether inventory of it is tracked by lot. Default true. |
+| `is_lot_tracked` | boolean | no | Whether inventory of it is tracked by lot. Default true. Changes only while none of it is on hand. |
 | `origin` | text | no | `local` (created in Pulaski) or `erp` (imported). |
-| `external_system`, `external_key`, `external_version` | text | yes | The ERP record this came from. System and key are required for `erp` rows and unique together. |
-| `is_active` | boolean | no | False when retired; inactive materials can't be put on new orders. |
+| `external_system`, `external_key`, `external_version` | text | yes | The ERP record this came from. System and key are required for `erp` rows and unique together; the import matches on them. |
+| `is_active` | boolean | no | False when retired; inactive materials can't be received, put on new orders or added to BOMs. Always settable; what already uses it carries on. |
 | `default_process_id` | uuid → process | yes | The process order creation pre-selects for it (D-023), among those whose scope covers it; the planner may pick another. Can only be set to a process that makes the material. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 

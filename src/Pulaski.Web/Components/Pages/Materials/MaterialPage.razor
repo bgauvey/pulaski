@@ -1,0 +1,276 @@
+@page "/materials/{MaterialId:guid}"
+@using System.Globalization
+@inject PulaskiApiClient Api
+
+<PageTitle>@(_detail?.Material.Code ?? "Material") · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <div class="small mb-1"><a href="materials">← Materials</a></div>
+        <h1 class="mb-1">
+            @(_detail?.Material.Code ?? "Material")
+            @if (_detail?.Material is { } h && MaterialProperties.IsFromErp(h))
+            {
+                <span class="chip ms-2 align-middle" title="Code, name, base unit and type come from @h.ExternalSystem">From @h.ExternalSystem</span>
+            }
+            @if (_detail?.Material is { IsActive: false })
+            {
+                <span class="chip chip-muted ms-2 align-middle">Inactive</span>
+            }
+        </h1>
+        <p class="text-muted mb-0">@_detail?.Material.Name</p>
+    </div>
+    <div class="inv-head-tools">
+        <a class="btn btn-outline-secondary" href="units?material=@MaterialId">Conversions</a>
+        <a class="btn btn-outline-secondary" href="inventory/materials/@MaterialId">Stock</a>
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+@if (_stillUsedBy is { Count: > 0 } still)
+{
+    <div class="drawer-alert is-warning mb-3" role="status">
+        <Icon Name="alert" Size="18" />
+        <span>Switched off. It can't be received, ordered or added to BOMs any more; these carry on: @string.Join("; ", still).</span>
+    </div>
+}
+
+@if (_detail is { } detail)
+{
+    var m = detail.Material;
+    var u = detail.Usage;
+    <div class="inv-layout mb-4">
+        <div class="props-panel">
+            <PropertyGrid Items="_items" Title="@m.Code" Subtitle="@(MaterialProperties.IsFromErp(m) ? $"From {m.ExternalSystem}" : "Maintained in Pulaski")"
+                          Disabled="_saving" Revision="_revision" OnChange="OnChangeAsync" />
+        </div>
+
+        <section aria-labelledby="use-title">
+            <h2 id="use-title">What uses it</h2>
+            <div class="inv-tiles">
+                <a class="inv-tile text-decoration-none" href="inventory/materials/@MaterialId">
+                    <span class="metric @(u.LotsOnHand == 0 ? "is-zero" : "")">@InventoryView.Qty(u.QuantityOnHand)</span>
+                    <span class="inv-tile-label">On hand, @m.BaseUomCode · @u.LotsOnHand @(u.LotsOnHand == 1 ? "lot" : "lots")</span>
+                </a>
+                <div class="inv-tile"><span class="metric @(u.OpenWorkOrders == 0 ? "is-zero" : "")">@u.OpenWorkOrders</span><span class="inv-tile-label">Open work orders</span></div>
+                <div class="inv-tile"><span class="metric @(u.OpenJobs == 0 ? "is-zero" : "")">@u.OpenJobs</span><span class="inv-tile-label">Open jobs</span></div>
+                <div class="inv-tile"><span class="metric @(u.UsedInReleasedBoms == 0 ? "is-zero" : "")">@u.UsedInReleasedBoms</span><span class="inv-tile-label">Released BOMs using it</span></div>
+                <div class="inv-tile"><span class="metric @(u.Capabilities == 0 ? "is-zero" : "")">@u.Capabilities</span><span class="inv-tile-label">Lines that can run it</span></div>
+            </div>
+            <p class="small text-muted">
+                @(u.InUse
+                    ? MaterialProperties.IsFromErp(m)
+                        ? $"In use. Its code, name, base unit and type come from {m.ExternalSystem}."
+                        : "In use, so its code and base unit are fixed."
+                    : MaterialProperties.IsFromErp(m)
+                        ? $"Nothing uses it yet. Its code, name, base unit and type come from {m.ExternalSystem}."
+                        : "Nothing uses it yet: every field can still change.")
+                Base unit: @m.BaseUomCode (@detail.BaseUomName).
+            </p>
+            @if (!string.IsNullOrWhiteSpace(m.Description))
+            {
+                <p>@m.Description</p>
+            }
+        </section>
+    </div>
+
+    <section class="inv-section" aria-labelledby="cap-title">
+        <div class="inv-section-head">
+            <h2 id="cap-title">Where it can run</h2>
+            <span class="small text-muted">Capabilities and rates are maintained here in a coming release.</span>
+        </div>
+        @if (detail.Capabilities.Count == 0)
+        {
+            <p class="text-muted">No line has a capability for @m.Code, so no job for it can be placed yet.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Line</th><th class="inv-num">Ideal rate</th><th class="inv-num">Planning rate</th><th>Changeover</th><th class="inv-num">Crew</th><th>From</th><th>To</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in detail.Capabilities)
+                        {
+                            <tr @key="(c.EquipmentId, c.EffectiveFrom)">
+                                <td><span class="fw-semibold">@c.EquipmentCode</span>@(c.IsPreferred ? " ★" : "") <span class="small text-muted">@c.EquipmentName</span></td>
+                                <td class="inv-num">@InventoryView.Qty(c.IdealRatePerHour) @c.RateUomCode/h</td>
+                                <td class="inv-num">
+                                    @if (c.EffectiveRatePerHour is { } rate)
+                                    {
+                                        @($"{InventoryView.Qty(rate)} {c.RunStandardUomCode}/h") <span class="small text-muted">@c.RateSource</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">none</span>
+                                    }
+                                </td>
+                                <td>@(c.StandardChangeover is { } ch ? $"{(int)ch.TotalMinutes} min" : "—")</td>
+                                <td class="inv-num">@(c.StandardCrewSize?.ToString("0.##", CultureInfo.InvariantCulture) ?? "—")</td>
+                                <td class="small">@c.EffectiveFrom.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</td>
+                                <td class="small">@(c.EffectiveTo?.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <div class="inv-layout">
+        <section class="inv-section" aria-labelledby="made-title">
+            <h2 id="made-title">How it is made</h2>
+            <h3 class="h6">Processes that make it</h3>
+            @if (_processes.Count == 0)
+            {
+                <p class="text-muted small">No process names @m.Code, its class, or all materials.</p>
+            }
+            else
+            {
+                <ul class="list-unstyled mb-3">
+                    @foreach (var p in _processes)
+                    {
+                        <li @key="p.Id">
+                            <a href="processes/@p.Id">@p.Code</a> · @p.Name
+                            @if (p.DefaultFor.Contains(m.Code))
+                            {
+                                <span class="chip ms-1">default</span>
+                            }
+                            @if (p.ReleasedVersion is null)
+                            {
+                                <span class="small text-muted">· no released version</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+            <h3 class="h6">Its BOMs</h3>
+            @if (_boms.Count == 0)
+            {
+                <p class="text-muted small">No BOM. <a href="boms">Create one</a> to plan its components.</p>
+            }
+            else
+            {
+                <ul class="list-unstyled">
+                    @foreach (var b in _boms)
+                    {
+                        <li @key="b.Id">
+                            <a href="boms/@b.Id">BOM for @(b.ProcessCode ?? "any process")</a>
+                            <span class="small text-muted">· @(b.ReleasedVersion is { } r ? $"version {r} released, {b.ReleasedItems} components" : "not released")</span>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section class="inv-section" aria-labelledby="used-title">
+            <h2 id="used-title">Where it is used</h2>
+            @if (_whereUsed is { } used)
+            {
+                @if (used.Boms.Count == 0 && used.Jobs.Count == 0)
+                {
+                    <p class="text-muted small">No BOM lists @m.Code as a component, and no open job plans to use it.</p>
+                }
+                @foreach (var b in used.Boms)
+                {
+                    <div class="small" @key="(b.VersionId, b.LineNo)">
+                        <a href="materials/@b.MaterialId">@b.MaterialCode</a> · @InventoryView.Qty(b.QtyPer) @b.UomCode per @InventoryView.Qty(b.BaseQty) @b.BaseUomCode
+                        <span class="text-muted">(v@(b.VersionNumber) @b.VersionStatus@(b.OperationNumber is { } op ? $", operation {op}" : ""))</span>
+                    </div>
+                }
+                @if (used.Jobs.Count > 0)
+                {
+                    <div class="small mt-2">@used.Jobs.Count open @(used.Jobs.Count == 1 ? "job plans" : "jobs plan") to use it. <a href="inventory/materials/@MaterialId">See them</a></div>
+                }
+            }
+
+            <h3 class="h6 mt-3">Its own conversions</h3>
+            @if (_conversions.Count == 0)
+            {
+                <p class="text-muted small">None: it converts only between standard units of its own kind. <a href="units?material=@MaterialId">Add one</a></p>
+            }
+            else
+            {
+                <ul class="list-unstyled small">
+                    @foreach (var c in _conversions)
+                    {
+                        <li @key="(c.FromUomId, c.ToUomId)">1 @c.FromUomCode = @c.Factor.ToString("0.######", CultureInfo.InvariantCulture) @c.ToUomCode</li>
+                    }
+                </ul>
+            }
+        </section>
+    </div>
+}
+else if (_error is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+
+@code {
+    [Parameter]
+    public Guid MaterialId { get; set; }
+
+    private MaterialDetailDto? _detail;
+    private IReadOnlyList<PropertyItem> _items = [];
+    private IReadOnlyList<MaterialClassDto> _classes = [];
+    private IReadOnlyList<UomDto> _uoms = [];
+    private IReadOnlyList<ProcessSummaryDto> _processes = [];
+    private IReadOnlyList<BomSummaryDto> _boms = [];
+    private IReadOnlyList<MaterialConversionDto> _conversions = [];
+    private WhereUsedDto? _whereUsed;
+    private IReadOnlyList<string>? _stillUsedBy;
+    private ApiException? _error;
+    private bool _saving;
+    private int _revision;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _stillUsedBy = null;
+        try
+        {
+            _classes = await Api.ListMaterialClassesAsync();
+            _uoms = await Api.ListUomsAsync();
+            await LoadAsync();
+            _processes = await Api.ListProcessesAsync(materialId: MaterialId);
+            _boms = await Api.ListBomsAsync(MaterialId);
+            _whereUsed = await Api.GetWhereUsedAsync(MaterialId);
+            _conversions = await Api.ListMaterialConversionsAsync(MaterialId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _detail = await Api.GetMaterialAsync(MaterialId);
+        _items = MaterialProperties.For(_detail.Material, _detail.Usage, _classes, _uoms);
+        _revision++;
+    }
+
+    private async Task OnChangeAsync(PropertyChange change)
+    {
+        if (_detail is null || MaterialProperties.ApplyChange(_detail.Material, change) is not { } request)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        try
+        {
+            var result = await Api.UpdateMaterialAsync(MaterialId, request);
+            _stillUsedBy = result.StillUsedBy;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            _revision++;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

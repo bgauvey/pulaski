@@ -204,16 +204,21 @@ CREATE TABLE core.oee_state_category (
 -- 3. MATERIAL, BOM AND CAPABILITY
 -- =====================================================================
 
+-- Flat groups of materials (D-033). The code is fixed; a class is switched off, never deleted.
 CREATE TABLE core.material_class (
-    id      uuid PRIMARY KEY DEFAULT uuidv7(),
-    code    text NOT NULL UNIQUE,
-    name    text NOT NULL
+    id          uuid PRIMARY KEY DEFAULT uuidv7(),
+    code        text NOT NULL UNIQUE,
+    name        text NOT NULL,
+    is_active   boolean NOT NULL DEFAULT true,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE core.material (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     code                text NOT NULL UNIQUE,                   -- item / part number
     name                text NOT NULL,
+    description         text CHECK (length(description) <= 2000),
     material_type       text NOT NULL CHECK (material_type IN ('raw','intermediate','finished','packaging','consumable','rework')),
     material_class_id   uuid REFERENCES core.material_class(id),
     base_uom_id         uuid NOT NULL REFERENCES core.uom(id),
@@ -1461,7 +1466,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0003_lot_event_time_index'),
     ('0004_inventory_completion'),
     ('0005_indistinguishable_lots'),
-    ('0006_location_and_expiry_rules');
+    ('0006_location_and_expiry_rules'),
+    ('0007_materials_management');
 
 -- =====================================================================
 -- 17. SEED DATA

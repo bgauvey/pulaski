@@ -4,6 +4,7 @@ using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Inventory;
+using Pulaski.Contracts.Materials;
 using Pulaski.Contracts.Processes;
 using Pulaski.Contracts.ReferenceData;
 using Pulaski.Contracts.Scheduling;
@@ -407,6 +408,26 @@ public sealed class PulaskiApiClient(HttpClient http)
 
     public Task<IReadOnlyList<MaterialDto>> ListMaterialsAsync(CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<MaterialDto>>("api/materials", ct);
+
+    public Task<IReadOnlyList<MaterialDto>> ListAllMaterialsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MaterialDto>>("api/materials?includeInactive=true", ct);
+
+    // Materials management (D-033)
+
+    public Task<MaterialDetailDto> GetMaterialAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<MaterialDetailDto>($"api/materials/{id}", ct);
+
+    public Task<CreatedResponse> CreateMaterialAsync(CreateMaterialRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/materials", request, ct);
+
+    public Task<UpdateMaterialResponse> UpdateMaterialAsync(Guid id, UpdateMaterialRequest request, CancellationToken ct = default) =>
+        SendAsync<UpdateMaterialResponse>(HttpMethod.Put, $"api/materials/{id}", request, ct);
+
+    public Task<CreatedResponse> CreateMaterialClassAsync(CreateMaterialClassRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/material-classes", request, ct);
+
+    public Task<VersionResponse> UpdateMaterialClassAsync(Guid id, UpdateMaterialClassRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/material-classes/{id}", request, ct);
 
     private async Task<T> GetAsync<T>(string uri, CancellationToken ct)
     {

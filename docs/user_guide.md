@@ -2,7 +2,7 @@
 
 *Last updated: 2026-10-17 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
-This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#12-reference) tables give the exact rules.
+This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#13-reference) tables give the exact rules.
 
 ## Contents
 
@@ -17,10 +17,11 @@ This guide explains how to use Pulaski to set up your plant, plan production and
 9. [The Work orders screen](#9-the-work-orders-screen)
 10. [The Schedule](#10-the-schedule)
 11. [Inventory](#11-inventory)
-11. [Reference](#12-reference)
-12. [What Pulaski doesn't do yet](#13-what-pulaski-doesnt-do-yet)
-13. [Troubleshooting and questions](#14-troubleshooting-and-questions)
-14. [Glossary](#15-glossary)
+12. [Materials](#12-materials)
+13. [Reference](#13-reference)
+14. [What Pulaski doesn't do yet](#14-what-pulaski-doesnt-do-yet)
+15. [Troubleshooting and questions](#15-troubleshooting-and-questions)
+16. [Glossary](#16-glossary)
 
 ---
 
@@ -39,7 +40,7 @@ Today you can use Pulaski to:
 - publish the plan to the floor and freeze it;
 - keep **inventory**: receive material lots into stores, write stock up or off, move and hold lots, record what each job used and made, and trace any lot back to what it was made from or forward to what was made from it.
 
-Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#13-what-pulaski-doesnt-do-yet).
+Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#14-what-pulaski-doesnt-do-yet).
 
 ### Opening Pulaski
 
@@ -112,7 +113,7 @@ A line is both. A **department** (for example the Extrusion area) is schedulable
 
 ### What you make: materials
 
-A **material** is anything you make or use: a finished profile, a resin, a dry blend, a pallet, an end cap. Each material has a code (its item number), a base unit (metres, kilograms, each) and usually a **material class** that groups similar materials, such as *Extruded profiles*.
+A **material** is anything you make or use: a finished profile, a resin, a dry blend, a pallet, an end cap. Each material has a code (its item number), a base unit (metres, kilograms, each) and usually a **material class** that groups similar materials, such as *Extruded profiles*. Materials are kept on the [Materials](#12-materials) page; those your ERP sends keep their code, name, base unit and type in the ERP.
 
 **Capabilities** say which material can run on which line, and how fast (its ideal rate). Pulaski never puts a material's job on a line without a capability for it.
 
@@ -170,7 +171,7 @@ If you are starting from an empty Pulaski, work through this list in order. Each
 | --- | --- | --- | --- |
 | 1 | The enterprise and at least one site, with its time zone | [Equipment](#4-equipment) | Everything else belongs to a site. |
 | 2 | Areas (departments) and lines under the site | [Equipment](#4-equipment) | Jobs are planned on lines and departments. |
-| 3 | Materials and material classes | *Your administrator* (no screen yet) | Orders and BOMs need materials. |
+| 3 | Material classes, then materials (or import them from the ERP) | [Materials](#12-materials) | Orders and BOMs need materials. |
 | 3a | Units, and conversions for materials you order or use in other units | [Units](#6-units-and-conversions) | So orders, BOMs and rates can use any unit that converts. |
 | 4 | Capabilities: which material runs on which line, and how fast | *Your administrator* (no screen yet) | Without one, a line can't take a material's job. |
 | 5 | Shift calendar (optional) | *Your administrator* (no screen yet) | Without one, Pulaski assumes lines run around the clock and marks them **24/7**. |
@@ -354,7 +355,7 @@ Orders already made keep the version they were made from. If a draft already exi
 - Operations with no path of links between them run in parallel; links make them sequential. Links must flow one way; a loop is refused.
 - A released process with more than one operation must be connected.
 - Only lines and departments of the process's own site can be used; machines and other equipment that neither runs nor plans jobs are refused.
-- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#13-what-pulaski-doesnt-do-yet).
+- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#14-what-pulaski-doesnt-do-yet).
 
 ---
 
@@ -842,7 +843,82 @@ The **Locations** tab lists every piece of equipment that holds inventory, with 
 
 ---
 
-## 12. Reference
+## 12. Materials
+
+**Configure → Materials.** Every item and part Pulaski knows about: what you make, what you make it from, and what you pack it in. The page has two tabs, **Materials** and **Classes**.
+
+### Ideas to know first
+
+- **Where a material comes from.** A material is either created here (origin **Pulaski**) or **imported from the ERP** (its origin chip shows the ERP's name, such as **ERP1**). For an imported material the ERP owns the **code, name, base unit and type**: you change those in the ERP, and the next import brings them in. Pulaski owns everything else: description, class, lot tracking, shelf life and whether it is active.
+- **Type** is a label from the item master, such as the ERP's MRP class: *raw*, *intermediate*, *finished*, *packaging*, *consumable* or *rework*. It is for finding and grouping; no rule depends on it.
+- **Classes** group similar materials, such as *Extruded profiles*, so a process or a changeover rule can name a class instead of each material. Classes are one level deep: a class has no parent class.
+- **In use** means something refers to the material: a lot, an order, a job, a BOM, a capability or rate, a process or a changeover rule. Some fields are fixed once it is in use (below).
+
+### Find a material: the Materials tab
+
+1. Open **Configure → Materials**. Materials are listed by class, with *No class* last. Click a class heading to fold it.
+2. Narrow the list: type in **Find by code, name or description**, or pick a class, a type or an origin (**Pulaski** or **ERP**).
+3. Inactive materials are hidden; tick **Show inactive** to see them.
+4. Click a material's code to open its page.
+
+Each row shows the type, base unit, tracking (**Lots** for numbered lots, **Balance** for one quantity per location), shelf life and origin.
+
+### Create a material
+
+1. On the Materials tab, click **New material**.
+2. Fill in **Code** (the item or part number, unique) and **Name**, both required.
+3. Choose the **Type**, the **Class** (optional; only active classes are offered) and the **Base unit**, the unit stock is counted in (required).
+4. Optionally enter a **Shelf life** in days, untick **Lot-tracked** for a material kept as one balance per location, and add a **Description**.
+5. Click **Create and open**. The new material's page opens.
+
+Materials from the ERP don't use this form: they arrive through the import (see *In detail*).
+
+### The material page
+
+The left side lists the material's properties, grouped into *Identity*, *Classification*, *Stock* and *Status*. Edit one the same way as equipment: text saves when you press **Enter** or leave the field, and a choice saves as soon as you pick it. Click a property to read what it means and, when it is greyed out, why it can't change.
+
+The rest of the page shows what the material is connected to:
+
+- **What uses it:** stock on hand (with the number of lots), open work orders, open jobs, released BOMs that use it as a component, and the lines that can run it. Click the stock tile, or **Stock** at the top, for its inventory.
+- **Where it can run:** each line with a capability for it: its ideal rate, the planning rate and where that rate comes from (*calculated* or *modified*), the standard changeover and crew, and the dates it applies. ★ marks a preferred line. You can't change these here yet.
+- **How it is made:** the processes that make it (**default** marks the one order creation picks first) and its BOMs.
+- **Where it is used:** the BOMs that list it as a component, and how many open jobs plan to use it.
+- **Its own conversions,** such as *1 m = 1.2 kg*. Click **Conversions** at the top to add one on the Units page.
+
+### What can change, and when
+
+| Field | Pulaski material | ERP material |
+| --- | --- | --- |
+| Code | Until it is in use | In the ERP only |
+| Name, type | Always | In the ERP only |
+| Base unit | Until it is in use | In the ERP, until it is in use |
+| Lot-tracked | While none of it is on hand | Same |
+| Description, class, shelf life, active | Always | Same |
+
+- **Base unit.** Quantities are stored in the base unit, so it can't change once the material is in use, not even from the ERP: an import that tries is refused.
+- **Lot-tracked.** Switching between lots and balances needs no stock on hand: use, move out or write off what is there first.
+- **Shelf life** applies to lots that arrive from now on; lots already on hand keep their expiry.
+- **Switching a material off** (setting **Active** to *false*) is always allowed. Afterwards it can't be received, put on new orders or added to BOMs, but what already uses it carries on. A yellow notice lists what still uses it, for example *a capability on 3 lines*. Pulaski never deletes a material.
+
+### Classes
+
+1. Open the **Classes** tab. Each class shows its code, name, how many materials are in it, and whether it is active.
+2. **Add a class:** type a **CODE** (up to 30 characters, unique) and a name, then click **Add class**.
+3. **Rename or switch off a class:** change its name or untick **Active**. **Save** and **Undo** appear on the row; click **Save**.
+4. Click a class's material count to see its materials (inactive ones included).
+
+A class's code can't change and a class is never deleted: switch it off instead. An inactive class isn't offered for new materials, and a material can't be moved into one, but materials already in it stay there.
+
+### In detail
+
+- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. Importing from a file, and adapters for other external sources, are coming (see [What Pulaski doesn't do yet](#14-what-pulaski-doesnt-do-yet)).
+- **Codes** are unique across all materials, whatever their origin; an import whose code is already used by another material is refused.
+- **Events.** Each change is recorded in the event log as `pulaski.material.created.v1`, `…updated.v1` or `…imported.v1` (and `pulaski.material_class.created.v1` / `…updated.v1`), with the material before and after.
+- **Concurrency.** As elsewhere, if someone else changed the material or class since you opened it, you'll see *"changed by someone else"*: reload and try again.
+
+---
+
+## 13. Reference
 
 ### Work order statuses
 
@@ -908,11 +984,12 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 ---
 
-## 13. What Pulaski doesn't do yet
+## 14. What Pulaski doesn't do yet
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
-- **No screens yet for** materials and material classes, capabilities, run standards (rates), shift calendars or the changeover setting. Your administrator sets these up.
+- **No screens yet for** capabilities, run standards (rates), shift calendars or the changeover setting. Your administrator sets these up. A material's page shows its capabilities and rates but can't change them yet.
+- **Materials can't be imported from a file yet,** and there are no adapters for other external sources (or for label printing) yet: the ERP sends items one at a time through the API.
 - **No execution yet:** starting and stopping jobs, counts, downtime, OEE and quality charts are planned. Order statuses after Firmed exist but nothing records production yet.
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning come with execution. Genealogy is per job (see [Inventory, in detail](#in-detail-4)).
 - **Not in inventory yet:** pallets or containers that hold several lots, lot labels and barcode scanning, lot attributes and certificates of analysis, setting stock aside for a job, and suggestions of which lot to use first. Movements can't be back-dated.
@@ -928,7 +1005,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 
 ---
 
-## 14. Troubleshooting and questions
+## 15. Troubleshooting and questions
 
 **I can't find a process when creating an order.**
 The process must be at the order's site, be active, have a released version, and make the material (all materials, its class, or the material itself). If it is listed but greyed out, read the reason under the field: usually a missing capability.
@@ -986,7 +1063,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 
 ---
 
-## 15. Glossary
+## 16. Glossary
 
 | Term | Meaning |
 | --- | --- |
@@ -1012,6 +1089,8 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Lock** | Pin a job so it keeps its place. |
 | **Lot** | One numbered batch of a material, with its quantity, location and history. |
 | **Material class** | A group of similar materials, such as *Extruded profiles*. |
+| **Material type** | A label from the item master, such as its MRP class (raw, finished, packaging…); it drives no rules. |
+| **Origin** | Where a material is maintained: in Pulaski, or in the ERP, which then owns its code, name, base unit and type. |
 | **Merge** | Combine lots of one material into one. |
 | **Operation** | One step of a process, run on one or more lines or departments. |
 | **Packaging unit** | A unit like box, bag or pallet whose size depends on the material; it converts only through a material conversion. |
