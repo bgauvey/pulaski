@@ -8,6 +8,7 @@
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject CurrentUser User
 
 <PageTitle>@(_process?.Code ?? "Process") · Pulaski</PageTitle>
 
@@ -33,7 +34,10 @@
 
         <div class="process-actions">
             <span class="save-state" role="status">@SaveState</span>
-            @if (IsDraft)
+            @if (!CanEdit)
+            {
+            }
+            else if (IsDraft)
             {
                 @if (_releasing)
                 {
@@ -75,7 +79,12 @@
         </div>
     }
 
-    @if (!IsDraft)
+    @if (!CanEdit)
+    {
+        <ViewOnlyNote Permission="@PermissionCodes.Processes" What="maintain processes" SiteId="_process?.SiteId" />
+    }
+
+    @if (!IsDraftVersion)
     {
         <div class="process-banner">
             @VersionSummary(_version) It can't be changed; start a new version to change the process.
@@ -233,7 +242,7 @@
         @* Properties: the selected operation or link, or the process itself (D-023). *@
         <div class="process-properties" hidden="@_hideProperties">
             <PropertyGrid Items="PropertyItems" Title="@PropertiesTitle" Subtitle="@PropertiesSubtitle"
-                          Revision="_revision" OnChange="OnPropertyChangeAsync" OnRemove="OnPropertyRemoveAsync"
+                          Disabled="@(!CanEdit)" Revision="_revision" OnChange="OnPropertyChangeAsync" OnRemove="OnPropertyRemoveAsync"
                           Footer="PropertiesFooter" />
         </div>
     </div>
@@ -326,7 +335,12 @@ else if (_error is null)
     private DotNetObjectReference<ProcessEditorPage>? _self;
     private IJSObjectReference? _canvas;
 
-    private bool IsDraft => _version?.Status == "draft";
+    private bool IsDraftVersion => _version?.Status == "draft";
+
+    // Only someone who maintains processes edits a draft (D-037); everyone else sees it as it is.
+    private bool CanEdit => User.Can(PermissionCodes.Processes, _process?.SiteId);
+
+    private bool IsDraft => IsDraftVersion && CanEdit;
 
     private ProcessOperationDto? SelectedOperation => _definition.Operations.FirstOrDefault(o => o.Id == _selectedOp);
 

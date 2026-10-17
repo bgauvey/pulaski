@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
@@ -9,13 +10,54 @@ using Pulaski.Contracts.Materials;
 using Pulaski.Contracts.Processes;
 using Pulaski.Contracts.ReferenceData;
 using Pulaski.Contracts.Scheduling;
+using Pulaski.Contracts.Security;
 using Pulaski.Contracts.WorkOrders;
+using Pulaski.Web.Services.Security;
 
 namespace Pulaski.Web.Services;
 
-/// <summary>Typed client for the Pulaski API. The UI never talks to the database directly.</summary>
-public sealed class PulaskiApiClient(HttpClient http)
+/// <summary>
+/// Typed client for the Pulaski API. The UI never talks to the database directly. Every call carries the
+/// signed-in user's token (D-037).
+/// </summary>
+public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 {
+    // Security (D-037)
+
+    /// <summary>Checks a user name and password; the only call made without signing in.</summary>
+    public async Task<SignInResponse> SignInAsync(SignInRequest request, CancellationToken ct = default)
+    {
+        var message = new HttpRequestMessage(HttpMethod.Post, "api/auth/sign-in") { Content = JsonContent.Create(request) };
+        using var response = await SendCoreAsync(message, ct, signedIn: false);
+        return await ReadAsync<SignInResponse>(response, ct);
+    }
+
+    public Task<VersionResponse> ChangePasswordAsync(ChangePasswordRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, "api/auth/password", request, ct);
+
+    public Task<MeDto> GetMeAsync(CancellationToken ct = default) => GetAsync<MeDto>("api/me", ct);
+
+    public Task<IReadOnlyList<RoleDto>> ListRolesAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<RoleDto>>("api/roles", ct);
+
+    public Task<IReadOnlyList<UserDto>> ListUsersAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<UserDto>>("api/users", ct);
+
+    public Task<CreatedResponse> CreateUserAsync(CreateUserRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/users", request, ct);
+
+    public Task<VersionResponse> UpdateUserAsync(Guid id, UpdateUserRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/users/{id}", request, ct);
+
+    public Task<VersionResponse> ResetPasswordAsync(Guid id, ResetPasswordRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/users/{id}/password", request, ct);
+
+    public Task<CreatedResponse> AssignRoleAsync(Guid userId, AssignRoleRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/users/{userId}/roles", request, ct);
+
+    public Task<VersionResponse> EndRoleAsync(Guid assignmentId, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/users/roles/{assignmentId}/end", new { }, ct);
+
     // Equipment
 
     public Task<IReadOnlyList<EquipmentDto>> ListEquipmentAsync(Guid? siteId = null, CancellationToken ct = default) =>
@@ -511,18 +553,31 @@ public sealed class PulaskiApiClient(HttpClient http)
         return await ReadAsync<T>(response, ct);
     }
 
-    private async Task<HttpResponseMessage> SendCoreAsync(HttpRequestMessage request, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendCoreAsync(HttpRequestMessage request, CancellationToken ct, bool signedIn = true)
     {
         using (request)
         {
+            if (signedIn && await session.TokenAsync() is { } token)
+            {
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            HttpResponseMessage response;
             try
             {
-                return await http.SendAsync(request, ct);
+                response = await http.SendAsync(request, ct);
             }
             catch (HttpRequestException ex)
             {
                 throw new ApiException(0, "The Pulaski API is not reachable.", ex.Message, null);
             }
+
+            if (signedIn && response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                session.SignInAgain();
+            }
+
+            return response;
         }
     }
 

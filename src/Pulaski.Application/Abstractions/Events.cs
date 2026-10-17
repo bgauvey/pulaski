@@ -120,6 +120,14 @@ public static class EventTypes
     public const string MaterialClassCreated = "pulaski.material_class.created.v1";
     public const string MaterialClassUpdated = "pulaski.material_class.updated.v1";
     public const string MaterialBatchingSet = "pulaski.material.batching_set.v1";
+    public const string SignedIn = "pulaski.user.signed_in.v1";
+    public const string SignInFailed = "pulaski.user.sign_in_failed.v1";
+    public const string PasswordChanged = "pulaski.user.password_changed.v1";
+    public const string PasswordReset = "pulaski.user.password_reset.v1";
+    public const string UserCreated = "pulaski.user.created.v1";
+    public const string UserUpdated = "pulaski.user.updated.v1";
+    public const string RoleAssigned = "pulaski.user.role_assigned.v1";
+    public const string RoleEnded = "pulaski.user.role_ended.v1";
     public const string PartialBatchReported = "pulaski.partial_batch.reported.v1";
     public const string PartialBatchApproved = "pulaski.partial_batch.approved.v1";
     public const string PartialBatchRejected = "pulaski.partial_batch.rejected.v1";

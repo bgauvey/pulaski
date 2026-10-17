@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Security;
 using Pulaski.Application.Inventory;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Inventory;
+using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
 
@@ -39,7 +42,8 @@ internal static class InventoryEndpoints
             SetShelfLifeRequest request,
             ICommandHandler<SetShelfLifeCommand, VersionResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new SetShelfLifeCommand(id, request.Version, request.ShelfLifeDays), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new SetShelfLifeCommand(id, request.Version, request.ShelfLifeDays), ct)))
+        .RequirePermission(Permissions.Materials);
 
         inventory.MapGet("/materials/{id:guid}/where-used", async Task<Ok<WhereUsedDto>> (
             Guid id,
@@ -126,7 +130,8 @@ internal static class InventoryEndpoints
                     request.SupplierLot, request.ExpiresAt, request.Comment),
                 ct);
             return TypedResults.Created($"/api/lots/{received.LotId}", received);
-        });
+        })
+        .RequirePermission(Permissions.LotReceive, Site.FromBody<ReceiveLotRequest>(SiteOf.Equipment, r => r.LocationId));
 
         lots.MapPost("/{id:guid}/write-up", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -134,7 +139,8 @@ internal static class InventoryEndpoints
             ICommandHandler<WriteUpLotCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new WriteUpLotCommand(id, request.Version, request.Quantity ?? 0m, request.UomId ?? Guid.Empty, request.ReasonCodeId, request.Comment), ct)));
+                new WriteUpLotCommand(id, request.Version, request.Quantity ?? 0m, request.UomId ?? Guid.Empty, request.ReasonCodeId, request.Comment), ct)))
+        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/write-off", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -142,7 +148,8 @@ internal static class InventoryEndpoints
             ICommandHandler<WriteOffLotCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new WriteOffLotCommand(id, request.Version, request.Quantity, request.UomId, request.ReasonCodeId, request.Comment), ct)));
+                new WriteOffLotCommand(id, request.Version, request.Quantity, request.UomId, request.ReasonCodeId, request.Comment), ct)))
+        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/move", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -150,7 +157,8 @@ internal static class InventoryEndpoints
             ICommandHandler<MoveLotCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new MoveLotCommand(id, request.Version, request.ToLocationId, request.Quantity, request.UomId, request.Comment), ct)));
+                new MoveLotCommand(id, request.Version, request.ToLocationId, request.Quantity, request.UomId, request.Comment), ct)))
+        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/status", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -158,7 +166,8 @@ internal static class InventoryEndpoints
             ICommandHandler<ChangeLotStatusCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new ChangeLotStatusCommand(id, request.Version, request.Status, request.ReasonCodeId, request.Comment), ct)));
+                new ChangeLotStatusCommand(id, request.Version, request.Status, request.ReasonCodeId, request.Comment), ct)))
+        .RequirePermission(Permissions.LotHold, Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/consume", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -166,7 +175,8 @@ internal static class InventoryEndpoints
             ICommandHandler<ConsumeLotCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new ConsumeLotCommand(id, request.JobId, request.Quantity, request.UomId, request.Comment, request.RunId), ct)));
+                new ConsumeLotCommand(id, request.JobId, request.Quantity, request.UomId, request.Comment, request.RunId), ct)))
+        .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/split", async Task<Created<LotTransactionResponse>> (
             Guid id,
@@ -177,14 +187,16 @@ internal static class InventoryEndpoints
             var part = await handler.HandleAsync(
                 new SplitLotCommand(id, request.Version, request.Quantity, request.UomId, request.NewLotNumber, request.ToLocationId, request.Comment), ct);
             return TypedResults.Created($"/api/lots/{part.LotId}", part);
-        });
+        })
+        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/merge", async Task<Ok<LotTransactionResponse>> (
             Guid id,
             MergeLotsRequest request,
             ICommandHandler<MergeLotsCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new MergeLotsCommand(id, request.Version, request.SourceLotIds, request.Comment), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new MergeLotsCommand(id, request.Version, request.SourceLotIds, request.Comment), ct)))
+        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/ship", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -192,7 +204,8 @@ internal static class InventoryEndpoints
             ICommandHandler<ShipLotCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new ShipLotCommand(id, request.Version, request.Quantity, request.UomId, request.Reference, request.Comment), ct)));
+                new ShipLotCommand(id, request.Version, request.Quantity, request.UomId, request.Reference, request.Comment), ct)))
+        .RequirePermission(Permissions.LotShip, Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/correct", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -200,7 +213,8 @@ internal static class InventoryEndpoints
             ICommandHandler<CorrectLotCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new CorrectLotCommand(id, request.Version, request.LotNumber, request.SupplierLot, request.ExpiresAt, request.Comment), ct)));
+                new CorrectLotCommand(id, request.Version, request.LotNumber, request.SupplierLot, request.ExpiresAt, request.Comment), ct)))
+        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/reverse", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -208,7 +222,8 @@ internal static class InventoryEndpoints
             ICommandHandler<ReverseMovementCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new ReverseMovementCommand(id, request.Version, request.EventId, request.ReasonCodeId, request.Comment), ct)));
+                new ReverseMovementCommand(id, request.Version, request.EventId, request.ReasonCodeId, request.Comment), ct)))
+        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
 
         var counts = inventory.MapGroup("/counts");
 
@@ -231,28 +246,32 @@ internal static class InventoryEndpoints
         {
             var created = await handler.HandleAsync(new StartStockCountCommand(request.LocationId, request.Note), ct);
             return TypedResults.Created($"/api/inventory/counts/{created.Id}", created);
-        });
+        })
+        .RequirePermission(Permissions.StockCount, Site.FromBody<StartStockCountRequest>(SiteOf.Equipment, r => r.LocationId));
 
         counts.MapPut("/{id:guid}/lines", async Task<Ok<VersionResponse>> (
             Guid id,
             RecordCountsRequest request,
             ICommandHandler<RecordCountsCommand, VersionResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new RecordCountsCommand(id, request.Version, request.Lines), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new RecordCountsCommand(id, request.Version, request.Lines), ct)))
+        .RequirePermission(Permissions.StockCount, Site.Of(SiteOf.StockCount));
 
         counts.MapPost("/{id:guid}/post", async Task<Ok<PostStockCountResponse>> (
             Guid id,
             PostStockCountRequest request,
             ICommandHandler<PostStockCountCommand, PostStockCountResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new PostStockCountCommand(id, request.Version, request.ReasonCodeId, request.Comment), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new PostStockCountCommand(id, request.Version, request.ReasonCodeId, request.Comment), ct)))
+        .RequirePermission(Permissions.StockCount, Site.Of(SiteOf.StockCount));
 
         counts.MapPost("/{id:guid}/cancel", async Task<Ok<VersionResponse>> (
             Guid id,
             CancelStockCountRequest request,
             ICommandHandler<CancelStockCountCommand, VersionResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new CancelStockCountCommand(id, request.Version), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new CancelStockCountCommand(id, request.Version), ct)))
+        .RequirePermission(Permissions.StockCount, Site.Of(SiteOf.StockCount));
 
         inventory.MapGet("/reports/stock-on-date", async Task<Ok<IReadOnlyList<StockOnDateDto>>> (
             Guid siteId,
@@ -283,7 +302,8 @@ internal static class InventoryEndpoints
             var created = await handler.HandleAsync(
                 new CreateReasonCodeCommand(request.SiteId, request.Kind, request.Code, request.Name, request.RequiresComment, request.SortOrder), ct);
             return TypedResults.Created($"/api/reason-codes/{created.Id}", created);
-        });
+        })
+        .RequirePermission(Permissions.Reasons, Site.FromBody<CreateReasonCodeRequest>(SiteOf.Equipment, r => r.SiteId));
 
         reasons.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (
             Guid id,
@@ -291,7 +311,8 @@ internal static class InventoryEndpoints
             ICommandHandler<UpdateReasonCodeCommand, VersionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new UpdateReasonCodeCommand(id, request.Version, request.Name, request.RequiresComment, request.SortOrder, request.IsActive), ct)));
+                new UpdateReasonCodeCommand(id, request.Version, request.Name, request.RequiresComment, request.SortOrder, request.IsActive), ct)))
+        .RequirePermission(Permissions.Reasons, Site.Of(SiteOf.ReasonCode));
 
         routes.MapGet("/jobs/{id:guid}/materials", async Task<Ok<JobMaterialsDto>> (
             Guid id,
@@ -311,6 +332,7 @@ internal static class InventoryEndpoints
                 ct);
             return TypedResults.Created($"/api/lots/{produced.LotId}", produced);
         })
+        .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.Job))
             .WithTags("Inventory");
 
         routes.MapGet("/reason-codes", async Task<Ok<IReadOnlyList<ReasonCodeDto>>> (

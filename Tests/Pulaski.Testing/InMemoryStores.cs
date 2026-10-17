@@ -9,6 +9,7 @@ using Pulaski.Application.Materials;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
 using Pulaski.Application.Scheduling;
+using Pulaski.Application.Security;
 using Pulaski.Application.Units;
 using Pulaski.Application.WorkOrders;
 
@@ -53,6 +54,8 @@ public sealed class InMemoryStores
 
     public InMemoryExecution Execution { get; } = new();
 
+    public InMemorySecurity Security { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -79,6 +82,10 @@ public sealed class InMemoryStores
         services.RemoveAll<ICapabilityRepository>();
         services.RemoveAll<IExecutionRepository>();
         services.RemoveAll<IExecutionReadStore>();
+        services.RemoveAll<ISecurityReadStore>();
+        services.RemoveAll<ISecurityRepository>();
+        services.RemoveAll<ISiteLookup>();
+        services.RemoveAll<IPasswordHasher>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -103,13 +110,19 @@ public sealed class InMemoryStores
         services.AddSingleton<ICapabilityRepository>(Capabilities);
         services.AddSingleton<IExecutionRepository>(Execution);
         services.AddSingleton<IExecutionReadStore>(Execution);
+        services.AddSingleton<ISecurityReadStore>(Security);
+        services.AddSingleton<ISecurityRepository>(Security);
+        services.AddSingleton<ISiteLookup>(Security);
+        services.AddSingleton<IPasswordHasher>(new PlainPasswordHasher());
         return services;
     }
 }
 
-public sealed class FixedRequestContext : IRequestContext
+public sealed class FixedRequestContext(string actorId = "test-user", Guid? userId = null) : IRequestContext
 {
-    public string ActorId => "test-user";
+    public string ActorId => actorId;
+
+    public Guid? UserId => userId;
 
     public Guid CorrelationId { get; } = Guid.Parse("01900000-0000-7000-8000-000000000001");
 }

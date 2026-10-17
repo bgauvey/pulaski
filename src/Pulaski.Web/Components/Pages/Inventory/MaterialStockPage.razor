@@ -2,6 +2,7 @@
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 @inject TimeProvider Time
+@inject CurrentUser User
 
 <PageTitle>@(_detail?.Material.Code ?? "Material") · Inventory · Pulaski</PageTitle>
 
@@ -16,7 +17,10 @@
     <Actions>
         <a class="btn btn-outline-secondary" href="inventory/journal?materialId=@MaterialId">Movements</a>
         <a class="btn btn-outline-secondary" href="inventory/lots?materialId=@MaterialId&status=consumed">Used-up lots</a>
-        <button type="button" class="btn btn-primary" @onclick="() => _action = LotAction.Receive" disabled="@(_detail is null)">Receive</button>
+        @if (User.Can(LotActions.Permission(LotAction.Receive), Sites.SiteId))
+        {
+            <button type="button" class="btn btn-primary" @onclick="() => _action = LotAction.Receive" disabled="@(_detail is null)">Receive</button>
+        }
     </Actions>
 </InventoryHeader>
 
@@ -46,7 +50,10 @@
                 <span class="metric @(m.ShelfLifeDays is null ? "is-zero" : "")">@(m.ShelfLifeDays?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "—")</span>
                 <span class="inv-tile-label">
                     Shelf life, days
-                    <button type="button" class="btn btn-link btn-sm p-0 ms-1" @onclick="() => { _shelfLife = m.ShelfLifeDays; _editingShelfLife = true; }">Change</button>
+                    @if (User.Can(PermissionCodes.Materials))
+                    {
+                        <button type="button" class="btn btn-link btn-sm p-0 ms-1" @onclick="() => { _shelfLife = m.ShelfLifeDays; _editingShelfLife = true; }">Change</button>
+                    }
                 </span>
             }
         </div>

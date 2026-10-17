@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Boms;
 using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
+using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
 
@@ -32,7 +34,8 @@ internal static class BomEndpoints
         {
             var created = await handler.HandleAsync(new CreateBomCommand(request.MaterialId, request.ProcessId), ct);
             return TypedResults.Created($"/api/boms/{created.Id}", created);
-        });
+        })
+        .RequirePermission(Permissions.Processes);
 
         group.MapGet("/{id:guid}/versions/{versionId:guid}", async Task<Ok<BomVersionDto>> (
             Guid id,
@@ -47,7 +50,8 @@ internal static class BomEndpoints
             SaveBomDraftRequest request,
             ICommandHandler<SaveBomDraftCommand, SaveBomDraftResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new SaveBomDraftCommand(id, versionId, request.Version, request.Definition), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new SaveBomDraftCommand(id, versionId, request.Version, request.Definition), ct)))
+        .RequirePermission(Permissions.Processes);
 
         group.MapPost("/{id:guid}/versions/{versionId:guid}/release", async Task<Ok<VersionResponse>> (
             Guid id,
@@ -55,7 +59,8 @@ internal static class BomEndpoints
             ReleaseBomVersionRequest request,
             ICommandHandler<ReleaseBomVersionCommand, VersionResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ReleaseBomVersionCommand(id, versionId, request.Version, request.Note), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new ReleaseBomVersionCommand(id, versionId, request.Version, request.Note), ct)))
+        .RequirePermission(Permissions.Processes);
 
         group.MapPost("/{id:guid}/drafts", async Task<Created<CreatedResponse>> (
             Guid id,
@@ -64,7 +69,8 @@ internal static class BomEndpoints
         {
             var created = await handler.HandleAsync(new StartBomDraftCommand(id), ct);
             return TypedResults.Created($"/api/boms/{id}/versions/{created.Id}", created);
-        });
+        })
+        .RequirePermission(Permissions.Processes);
 
         routes.MapGet("/work-orders/{id:guid}/components", async Task<Ok<IReadOnlyList<PlannedComponentDto>>> (
             Guid id,

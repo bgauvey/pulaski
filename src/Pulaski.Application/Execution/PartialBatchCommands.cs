@@ -16,6 +16,15 @@ public sealed record RejectPartialBatchCommand(Guid Id, Guid ScrapReasonCodeId, 
 /// <summary>Locks a partial batch in the reporting order (D-027, D-036): its job, then it, then its run, then its lot.</summary>
 internal static class PartialBatchLocks
 {
+    /// <summary>Whoever reported a partial batch doesn't decide on it (D-037): someone else approves or rejects.</summary>
+    public static void EnsureNotOwn(PartialBatch partial, string actorId)
+    {
+        if (partial.ReportedBy == actorId && actorId != "anonymous")
+        {
+            throw new ForbiddenException("You reported this partial batch, so someone else must approve or reject it.");
+        }
+    }
+
     public static async Task<(InventoryJob Job, PartialBatch Partial, Lot Lot)> LockAsync(
         IInventoryRepository inventory, IExecutionRepository execution, Guid id, CancellationToken cancellationToken)
     {
@@ -44,6 +53,7 @@ internal sealed class ApprovePartialBatchHandler(
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var (job, partial, lot) = await PartialBatchLocks.LockAsync(inventory, execution, command.Id, cancellationToken);
         var envelope = events.Create(EventTypes.PartialBatchApproved, "partial_batch", partial.Id, new { Before = new { partial.Status }, LotId = lot.Id, Comment = comment });
+        PartialBatchLocks.EnsureNotOwn(partial, envelope.ActorId);
         var approved = partial.Approve(timeProvider.GetUtcNow(), envelope.ActorId, comment);
         await execution.UpdatePartialBatchAsync(approved, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
@@ -91,6 +101,7 @@ internal sealed class RejectPartialBatchHandler(
         var envelope = events.Create(
             EventTypes.PartialBatchRejected, "partial_batch", partial.Id,
             new { Before = new { partial.Status }, LotId = lot.Id, command.ScrapReasonCodeId, Comment = comment });
+        PartialBatchLocks.EnsureNotOwn(partial, envelope.ActorId);
         var rejected = partial.Reject(timeProvider.GetUtcNow(), envelope.ActorId, command.ScrapReasonCodeId, comment);
         await execution.UpdatePartialBatchAsync(rejected, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);

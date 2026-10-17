@@ -521,7 +521,20 @@ CREATE TABLE sec.app_user (
     is_active       boolean NOT NULL DEFAULT true,
     last_login_at   timestamptz,
     created_at      timestamptz NOT NULL DEFAULT now(),
+    username        text,                                       -- for local sign-in (D-037): the subject under issuer 'pulaski-local'
+    updated_at      timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT app_user_idp_uq UNIQUE (idp_issuer, idp_subject)
+);
+CREATE UNIQUE INDEX app_user_username_uq ON sec.app_user (lower(username)) WHERE username IS NOT NULL;
+
+-- A local user's password (D-037), until IT's identity provider takes over: a salted PBKDF2 hash, never the password.
+CREATE TABLE sec.local_credential (
+    app_user_id         uuid PRIMARY KEY REFERENCES sec.app_user(id),
+    password_hash       text NOT NULL,
+    must_change         boolean NOT NULL DEFAULT true,
+    failed_attempts     integer NOT NULL DEFAULT 0 CHECK (failed_attempts >= 0),
+    locked_until        timestamptz,
+    changed_at          timestamptz NOT NULL DEFAULT now()
 );
 
 -- Permissions are code-defined strings ('job.dispatch', 'downtime.code',
@@ -551,10 +564,11 @@ CREATE TABLE sec.role_assignment (
     role_id                 uuid NOT NULL REFERENCES sec.role(id),
     app_user_id             uuid REFERENCES sec.app_user(id),
     idp_group               text,                               -- group/role claim value from the IdP
-    scope_equipment_id      uuid NOT NULL REFERENCES core.equipment(id),
+    scope_equipment_id      uuid REFERENCES core.equipment(id),  -- the site (D-037); null for a role held everywhere (administrator)
     valid_from              timestamptz NOT NULL DEFAULT now(),
-    valid_to                timestamptz,
+    valid_to                timestamptz,                        -- set when the role is taken away; assignments are never deleted
     granted_by_user_id      uuid REFERENCES sec.app_user(id),
+    ended_by_user_id        uuid REFERENCES sec.app_user(id),
     CONSTRAINT role_assignment_target_ck CHECK (num_nonnulls(app_user_id, idp_group) = 1)
 );
 CREATE INDEX role_assignment_user_ix  ON sec.role_assignment (app_user_id) WHERE app_user_id IS NOT NULL;
@@ -1515,11 +1529,104 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0006_location_and_expiry_rules'),
     ('0007_materials_management'),
     ('0008_job_execution'),
-    ('0009_batches');
+    ('0009_batches'),
+    ('0010_security');
 
 -- =====================================================================
 -- 17. SEED DATA
 -- =====================================================================
+
+-- Roles and permissions are defined in code (Pulaski.Domain.Security, D-037); these rows list them.
+INSERT INTO sec.permission (code, description) VALUES
+    ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
+    ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
+    ('work_order.close', 'Cancel and close work orders'),
+    ('rate.modify', 'Set and clear the modified planning rate'),
+    ('job.execute', 'Start, pause, resume and complete jobs'),
+    ('job.reopen', 'Reopen a completed job'),
+    ('production.report', 'Report production and consumption into a job''s runs'),
+    ('lot.receive', 'Receive lots'),
+    ('lot.move', 'Move lots between locations'),
+    ('lot.ship', 'Ship lots'),
+    ('lot.hold', 'Put lots on hold or in quarantine and release them'),
+    ('inventory.correct', 'Correct inventory: write up, write off, correct, reverse, split and merge lots'),
+    ('stock_count.manage', 'Start, enter, post and cancel stock counts'),
+    ('partial_batch.decide', 'Approve or reject partial batches (not one''s own)'),
+    ('materials.manage', 'Maintain materials, classes, conversions, batching and shelf life; import materials'),
+    ('processes.manage', 'Maintain processes, BOMs and capabilities'),
+    ('units.manage', 'Maintain units of measure'),
+    ('reasons.manage', 'Maintain reason codes'),
+    ('equipment.manage', 'Maintain equipment: sites, lines, locations'),
+    ('site_settings.manage', 'Set a site''s changeover mode and reporting tolerances'),
+    ('security.manage', 'Maintain users and their roles')
+ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
+
+INSERT INTO sec.role (code, name, is_system) VALUES
+    ('administrator', 'Administrator', true),
+    ('planner', 'Planner', true),
+    ('supervisor', 'Supervisor', true),
+    ('operator', 'Operator', true),
+    ('quality', 'Quality', true),
+    ('manager', 'Manager', true),
+    ('auditor', 'Auditor', true),
+    ('process_engineer', 'Process engineer', true)
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, is_system = true;
+
+-- Each system role holds exactly the permissions the code gives it (Pulaski.Domain.Security.Roles).
+DELETE FROM sec.role_permission rp USING sec.role r WHERE r.id = rp.role_id AND r.is_system;
+INSERT INTO sec.role_permission (role_id, permission_code)
+SELECT r.id, v.permission_code FROM (VALUES
+    ('administrator', 'schedule.plan'),
+    ('administrator', 'work_order.manage'),
+    ('administrator', 'work_order.close'),
+    ('administrator', 'rate.modify'),
+    ('administrator', 'job.execute'),
+    ('administrator', 'job.reopen'),
+    ('administrator', 'production.report'),
+    ('administrator', 'lot.receive'),
+    ('administrator', 'lot.move'),
+    ('administrator', 'lot.ship'),
+    ('administrator', 'lot.hold'),
+    ('administrator', 'inventory.correct'),
+    ('administrator', 'stock_count.manage'),
+    ('administrator', 'partial_batch.decide'),
+    ('administrator', 'materials.manage'),
+    ('administrator', 'processes.manage'),
+    ('administrator', 'units.manage'),
+    ('administrator', 'reasons.manage'),
+    ('administrator', 'equipment.manage'),
+    ('administrator', 'site_settings.manage'),
+    ('administrator', 'security.manage'),
+    ('planner', 'schedule.plan'),
+    ('planner', 'work_order.manage'),
+    ('planner', 'work_order.close'),
+    ('planner', 'rate.modify'),
+    ('planner', 'materials.manage'),
+    ('supervisor', 'job.execute'),
+    ('supervisor', 'job.reopen'),
+    ('supervisor', 'production.report'),
+    ('supervisor', 'lot.receive'),
+    ('supervisor', 'lot.move'),
+    ('supervisor', 'lot.ship'),
+    ('supervisor', 'lot.hold'),
+    ('supervisor', 'stock_count.manage'),
+    ('supervisor', 'partial_batch.decide'),
+    ('operator', 'job.execute'),
+    ('operator', 'production.report'),
+    ('operator', 'lot.receive'),
+    ('operator', 'lot.move'),
+    ('quality', 'lot.hold'),
+    ('quality', 'inventory.correct'),
+    ('quality', 'partial_batch.decide'),
+    ('manager', 'job.reopen'),
+    ('manager', 'work_order.close'),
+    ('manager', 'reasons.manage'),
+    ('manager', 'site_settings.manage'),
+    ('auditor', 'inventory.correct'),
+    ('auditor', 'stock_count.manage'),
+    ('process_engineer', 'processes.manage')
+) AS v(role_code, permission_code)
+JOIN sec.role r ON r.code = v.role_code;
 
 INSERT INTO core.packml_state (code, name, is_acting) VALUES
     (0,  'Undefined',     false),

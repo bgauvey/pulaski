@@ -384,3 +384,24 @@ a.card {
         grid-template-columns: minmax(0, 1fr);
     }
 }
+
+/* A screen the user may view but not change (D-037). */
+.view-only-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    color: var(--text-muted);
+}
+
+/* A fieldset that only switches a block of controls off. */
+fieldset.view-only-scope {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}

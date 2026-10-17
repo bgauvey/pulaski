@@ -2,7 +2,7 @@
 
 *Last updated: 2026-10-17 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
-This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#14-reference) tables give the exact rules.
+This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#15-reference) tables give the exact rules.
 
 ## Contents
 
@@ -19,10 +19,11 @@ This guide explains how to use Pulaski to set up your plant, plan production and
 11. [The Floor: running jobs and reporting production](#11-the-floor-running-jobs-and-reporting-production)
 12. [Inventory](#12-inventory)
 13. [Materials](#13-materials)
-14. [Reference](#14-reference)
-15. [What Pulaski doesn't do yet](#15-what-pulaski-doesnt-do-yet)
-16. [Troubleshooting and questions](#16-troubleshooting-and-questions)
-17. [Glossary](#17-glossary)
+14. [Users, roles and signing in](#14-users-roles-and-signing-in)
+15. [Reference](#15-reference)
+16. [What Pulaski doesn't do yet](#16-what-pulaski-doesnt-do-yet)
+17. [Troubleshooting and questions](#17-troubleshooting-and-questions)
+18. [Glossary](#18-glossary)
 
 ---
 
@@ -41,20 +42,21 @@ Today you can use Pulaski to:
 - publish the plan to the floor and freeze it;
 - keep **inventory**: receive material lots into stores, write stock up or off, move and hold lots, record what each job used and made, and trace any lot back to what it was made from or forward to what was made from it.
 
-Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#15-what-pulaski-doesnt-do-yet).
+Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#16-what-pulaski-doesnt-do-yet).
 
 ### Opening Pulaski
 
 Open Pulaski in a web browser at the address your administrator gives you (on a developer's machine it is `http://localhost:5090`). Pulaski works best in a current version of Chrome, Edge, Firefox or Safari, on a desktop or a tablet in landscape.
 
-There is no sign-in yet. Everyone who can reach the address can see and change everything, so only run Pulaski where that is acceptable.
+Pulaski asks you to **sign in** with the user name and password your administrator gave you; the first time, you choose your own password. Everyone who signs in can look at every screen; your **roles** decide what you can change. See [Users, roles and signing in](#14-users-roles-and-signing-in).
 
 ### The screen
 
 - **Menu (left).** Two groups of pages:
   - **Operate:** **Overview**, **Work orders**, **Schedule**: the pages you use day to day.
-  - **Configure:** **Equipment**, **Processes**, **BOMs**, **Units**: the setup you do once and change now and then.
+  - **Configure:** **Equipment**, **Materials**, **Processes**, **BOMs**, **Units**, **Reasons** (and **Users**, for administrators): the setup you do once and change now and then.
   - The ☰ button at the top left collapses the menu to icons, to make room on small screens.
+- **You (top right).** Your name and roles; the padlock changes your password, and the door signs you out.
 - **Theme (top right).** The sun/moon button switches between light and dark.
 - **Main area.** The page you picked.
 
@@ -356,7 +358,7 @@ Orders already made keep the version they were made from. If a draft already exi
 - Operations with no path of links between them run in parallel; links make them sequential. Links must flow one way; a loop is refused.
 - A released process with more than one operation must be connected.
 - Only lines and departments of the process's own site can be used; machines and other equipment that neither runs nor plans jobs are refused.
-- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#15-what-pulaski-doesnt-do-yet).
+- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#16-what-pulaski-doesnt-do-yet).
 
 ---
 
@@ -757,7 +759,7 @@ A batch cut short is an exception, so it is reported only as the line stops:
 
 The partial batch goes into a lot of its own. Under the near rule it is **accepted**: it will be used. Under the exact rule it goes **on hold until approved**, because a finished good can't be sold as a partial; the floor shows *A partial batch waits for approval*. Each run can have one partial batch. If you forgot it, open the job's page and report it into that run: the form offers **Partial batch** for a run that ended with a reason.
 
-**Approve or reject it** on the job's page, under **Partial batches**: **Approve** releases the lot; **Reject** asks for a scrap reason, writes the lot off and moves its quantity from good to scrap. Both record who decided and when.
+**Approve or reject it** on the job's page, under **Partial batches**: **Approve** releases the lot; **Reject** asks for a scrap reason, writes the lot off and moves its quantity from good to scrap. Both record who decided and when. Only a Supervisor or Quality user at the site can decide, and never the person who reported it.
 
 ### In detail
 
@@ -1075,14 +1077,80 @@ A class's code can't change and a class is never deleted: switch it off instead.
 
 ### In detail
 
-- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#15-what-pulaski-doesnt-do-yet)).
+- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#16-what-pulaski-doesnt-do-yet)).
 - **Codes** are unique across all materials, whatever their origin; an import whose code is already used by another material is refused.
 - **Events.** Each change is recorded in the event log as `pulaski.material.created.v1`, `…updated.v1` or `…imported.v1` (and `pulaski.material_class.created.v1` / `…updated.v1`), with the material before and after.
 - **Concurrency.** As elsewhere, if someone else changed the material or class since you opened it, you'll see *"changed by someone else"*: reload and try again.
 
 ---
 
-## 14. Reference
+## 14. Users, roles and signing in
+
+Everyone signs in to Pulaski. Everyone who signs in can look at every screen; what you can **change** depends on your **roles**. An administrator gives each user their roles, each at a **site** (only Administrator is everywhere).
+
+### Sign in
+
+1. Open Pulaski. It shows **Sign in**.
+2. Type your **User name** and **Password** and click **Sign in**.
+3. The first time, or after an administrator reset your password, Pulaski asks you to **Change your password**: type the temporary password, then your new one twice, and click **Change password**.
+4. To sign out, click the door at the top right.
+
+Your session lasts up to 12 hours. When it ends, or an administrator switches you off, Pulaski shows **Your session ended. Sign in again to carry on.**
+
+### Change your password
+
+1. Click the padlock at the top right.
+2. Type your **Current password**, then the **New password** twice.
+3. Click **Change password**.
+
+A password needs at least 10 characters, with two of: lower case, upper case, digits, symbols, and must not contain your user name. Five wrong passwords in a row lock you out for 15 minutes; an administrator can unlock you sooner by resetting your password.
+
+### What each role can change
+
+| Role | Can change |
+| --- | --- |
+| **Administrator** | Everything, at every site, including users and roles. |
+| **Planner** | The schedule (place, sequence, pin, assign and cancel jobs); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; materials. |
+| **Supervisor** | Start, pause, complete and reopen jobs; report production; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches. |
+| **Operator** | Start, pause and complete jobs; report production; receive and move lots. |
+| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); approve or reject partial batches. |
+| **Manager** | Reopen jobs; cancel and close work orders; reason codes; the site's settings. |
+| **Auditor** | Correct inventory; stock counts. Can't plan or run jobs. |
+| **Process engineer** | Processes, BOMs and which lines can run each material. |
+
+Equipment and units belong to the Administrator. Someone with two roles can do what either allows. The **Users** screen shows this table too.
+
+When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator.
+
+### Add a user (administrators)
+
+1. Open **Configure → Users** and click **New user**.
+2. Fill in **User name** (letters, digits and `. - _ @`), **Name**, an optional **E-mail** and a **Temporary password**.
+3. Choose a **Role** and, for every role but Administrator, the **site** they hold it at.
+4. Click **Create user**, and tell them the user name and temporary password yourself: Pulaski sends nothing.
+
+### Change a user's roles, details or password (administrators)
+
+1. On **Configure → Users**, click **Change** on the user's row.
+2. **Details:** change the name or e-mail, or untick **Can sign in** to switch them off; click **Save details**.
+3. **Roles:** choose a role (and site) under **Add a role…** and click **Add**; click **Take away** to end one.
+4. **Password:** type a **Temporary password** and click **Reset password**. They must change it when they next sign in; this also unlocks them.
+
+### In detail
+
+- **Every user needs a role.** A new user comes with one, and a user's last role can't be taken away: add another first, or switch them off.
+- **Someone stays administrator.** The last active administrator can't lose the role or be switched off, and nobody can switch themselves off.
+- **Roles are held at a site.** A Supervisor at PLT1 can start jobs at PLT1 only. Something that belongs to no site, such as a reason for every site or an enterprise-wide process, needs the permission at any site.
+- **Partial batches:** whoever reported a partial batch can't approve or reject it; the job page says *You reported it: someone else decides*.
+- **History** names who did what by user name, such as *oli.operator* on a lot's history.
+- **Changes apply at once.** Switching someone off or taking a role away takes effect on their next click, without waiting for their session to end.
+- **Ended, not deleted.** Taking a role away ends it; Pulaski keeps who held which role when.
+- **The first administrator** is created when Pulaski starts with no users, from the `Security:BootstrapAdmin` settings, with a temporary password to change at the first sign-in.
+- **For integrators:** the API takes a bearer token from `POST /api/auth/sign-in`; every other call needs one, and a call without the permission is refused with 403 and the permission in words.
+
+---
+
+## 15. Reference
 
 ### Work order statuses
 
@@ -1150,7 +1218,7 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 ---
 
-## 15. What Pulaski doesn't do yet
+## 16. What Pulaski doesn't do yet
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
@@ -1170,11 +1238,24 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Process links don't drive the schedule yet:** a Pack job can be projected to start before the Extrude job it follows. On the floor the link is enforced: the Pack job can't start until the link is met.
 - **The Overview** shows no machine state, counts, OEE, downtime, quality, lots or labor yet: those parts are hatched placeholders until the data exists. Its line strip is a rolling 24 hours rather than the shift, since there are no shift calendars on screen yet.
 - **Notes** can only be written when the order is created.
-- **No sign-in or permissions** yet; changes are recorded as *anonymous*.
+- **Signing in through your company's identity provider** (Okta, Entra ID, AD FS, Keycloak) isn't built yet: users have Pulaski passwords, and an administrator resets forgotten ones (Pulaski sends no e-mail).
+- **Everyone sees every site.** Roles limit what you can change, and where, but not what you can look at.
+- **Reported production and consumption can't be corrected** by anyone yet, so the Auditor role can't do that part of its job; write a lot off or up instead.
+- **The schedule shows its buttons to everyone;** someone who can't plan sees them, and a click explains that planning needs permission instead of changing anything. Switched-off buttons elsewhere can look like ordinary ones.
+- **Roles are fixed:** what each role may do can't be changed per plant yet.
 
 ---
 
-## 16. Troubleshooting and questions
+## 17. Troubleshooting and questions
+
+**"You may not do this…" or a button I expected isn't there.**
+Your roles don't allow that change, or not at this site. The message names the permission; ask an administrator (see [What each role can change](#what-each-role-can-change)).
+
+**I can't sign in.**
+Check the user name and password (the password is case-sensitive). After five wrong tries you are locked out for 15 minutes; an administrator can reset your password, which unlocks you. A user who is switched off or has no role can't sign in.
+
+**"Your session ended".**
+Sessions last up to 12 hours, and end straight away if an administrator switches you off. Sign in again.
 
 **I can't find a process when creating an order.**
 The process must be at the order's site, be active, have a released version, and make the material (all materials, its class, or the material itself). If it is listed but greyed out, read the reason under the field: usually a missing capability.
@@ -1232,7 +1313,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 
 ---
 
-## 17. Glossary
+## 18. Glossary
 
 | Term | Meaning |
 | --- | --- |
@@ -1270,6 +1351,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Rate check** | A run can't hold more than its length × the line's ideal rate × the site's tolerance. |
 | **Ready** | A job that can start: its order is on the floor and its process links are met. |
 | **Reverse** | Undo a lot's latest movement. |
+| **Role** | A set of things a user may change, such as Planner or Quality, held at a site (Administrator everywhere). See [Users, roles and signing in](#14-users-roles-and-signing-in). |
 | **Run** | One stretch of a job running on a line, from a start to a pause or completion. Production and consumption go into a run. |
 | **Run standard (planning rate)** | The rate Pulaski plans with for a material on a line: calculated from the ideal rate, or modified by a person. |
 | **Scrap factor** | Extra component quantity planned for losses. |

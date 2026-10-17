@@ -1,12 +1,14 @@
 @page "/boms/{Id:guid}"
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
+@inject CurrentUser User
 
 <PageTitle>@(_bom?.MaterialCode ?? "BOM") · BOMs · Pulaski</PageTitle>
 
 <p class="small mb-2"><a href="boms">Bills of materials</a></p>
 
 <ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Processes" What="maintain BOMs" />
 
 @if (_bom is null || _version is null)
 {
@@ -32,7 +34,7 @@ else
                     Version @v.Number · @Display.Label(v.Status)
                 </button>
             }
-            @if (CanStartDraft)
+            @if (CanStartDraft && CanEdit)
             {
                 <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_saving" @onclick="StartDraftAsync">New draft</button>
             }
@@ -188,7 +190,7 @@ else
             </div>
         }
     }
-    else
+    else if (_version.Status != "draft")
     {
         <p class="small text-muted">
             Version @_version.Number is @Display.Label(_version.Status)@(_version.ReleasedAt is { } at ? $", released {at:yyyy-MM-dd}" : "")@(_version.Note is null ? "" : $": {_version.Note}").
@@ -222,7 +224,10 @@ else
     private bool _saving;
     private ApiException? _error;
 
-    private bool ReadOnly => _version?.Status != "draft";
+    // BOMs belong to process engineering (D-037); everyone else sees them as they are.
+    private bool CanEdit => User.Can(PermissionCodes.Processes);
+
+    private bool ReadOnly => _version?.Status != "draft" || !CanEdit;
 
     private bool CanStartDraft => _bom is not null
         && _bom.Versions.All(v => v.Status != "draft")

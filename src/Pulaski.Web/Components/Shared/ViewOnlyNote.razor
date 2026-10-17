@@ -1,0 +1,22 @@
+@inject CurrentUser User
+
+@* Says why a screen's changes are switched off (D-037): the user may look, but their roles don't allow the change. *@
+@if (!User.Can(Permission, SiteId))
+{
+    <div class="view-only-note small" role="note">
+        <Icon Name="lock" Size="16" />
+        <span>You can view this, but changing it needs permission to @What@(SiteId is null ? "" : " at this site"). Ask an administrator if you should have it.</span>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Permission { get; set; } = "";
+
+    /// <summary>What the permission allows, in words, such as "maintain reason codes".</summary>
+    [Parameter, EditorRequired]
+    public string What { get; set; } = "";
+
+    [Parameter]
+    public Guid? SiteId { get; set; }
+}

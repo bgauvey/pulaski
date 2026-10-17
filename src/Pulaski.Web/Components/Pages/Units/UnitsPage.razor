@@ -1,6 +1,7 @@
 @page "/units"
 @using System.Globalization
 @inject PulaskiApiClient Api
+@inject CurrentUser User
 
 <PageTitle>Units · Pulaski</PageTitle>
 
@@ -13,6 +14,7 @@
 </div>
 
 <ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Units" What="maintain units of measure" />
 
 @if (_units is null || _materials is null)
 {
@@ -45,6 +47,7 @@ else
                     and works both ways.
                 </p>
 
+                <fieldset class="view-only-scope" disabled="@(!User.Can(PermissionCodes.Materials))">
                 <div class="table-panel mb-3">
                     <table class="table table-sm align-middle mb-0">
                         <thead><tr><th>Conversion</th><th class="text-end">And back</th><th></th></tr></thead>
@@ -68,6 +71,10 @@ else
                     </table>
                 </div>
 
+                </fieldset>
+
+                @if (User.Can(PermissionCodes.Materials))
+                {
                 <form class="d-flex flex-wrap gap-2 align-items-end mb-4" @onsubmit="SetAsync" @onsubmit:preventDefault>
                     <span class="pb-2">1</span>
                     <div>
@@ -91,6 +98,11 @@ else
                         Save conversion
                     </button>
                 </form>
+                }
+                else
+                {
+                    <p class="small text-muted mb-4">Changing a material's conversions needs permission to maintain materials.</p>
+                }
             }
 
             <h3 class="h6">Try a conversion</h3>
@@ -128,7 +140,10 @@ else
         <section aria-labelledby="units-title">
             <div class="d-flex justify-content-between align-items-center">
                 <h2 id="units-title" class="h5 mb-0">Units</h2>
-                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => _adding = !_adding">New unit</button>
+                @if (User.Can(PermissionCodes.Units))
+                {
+                    <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => _adding = !_adding">New unit</button>
+                }
             </div>
 
             @if (_adding)
@@ -166,6 +181,7 @@ else
                 </form>
             }
 
+            <fieldset class="view-only-scope" disabled="@(!User.Can(PermissionCodes.Units))">
             @foreach (var group in _units.GroupBy(u => u.Dimension))
             {
                 <h3 class="h6 mt-3 mb-1">@DimensionLabel(group.Key)</h3>
@@ -196,6 +212,7 @@ else
                     </table>
                 </div>
             }
+            </fieldset>
         </section>
     </div>
 }

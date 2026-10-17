@@ -43,7 +43,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - API is CQRS (D-013): commands and queries in `Pulaski.Application` with hand-written handlers
   injected into minimal-API endpoints. No MediatR.
 - UI is Blazor Web App, interactive server (D-011); it calls the API only, never the database.
-- Identity: OpenID Connect (Entra ID, AD FS, Keycloak). Pulaski stores issuer + subject only.
+- Identity (D-037, proposed): local sign-in now (`pulaski-local`, PBKDF2 hashes in `sec.local_credential`, API-issued
+  HMAC JWT from `Security:SigningKey`); OpenID Connect (Okta, Entra ID, AD FS, Keycloak) later as another bearer scheme.
+  Users are keyed by issuer + subject. The UI keeps the token in a cookie session and sends it on every API call.
 - Machine data: MQTT Sparkplug B and OPC UA, built on the connector SDK.
 - Containers for the demo and Linux sites; Windows service option.
 
@@ -102,6 +104,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   exact). Orders and jobs are whole batches; reports list batch weights, one lot per good batch. A partial batch only with a
   pause/complete reason (or into a run that ended with one), one per run (`core.partial_batch`); exact rule → lot on hold
   until approved (release) or rejected (write off, good → scrap).
+- Roles and permissions (D-037, proposed): code-defined in `Pulaski.Domain.Security` (mirrored in
+  `Contracts.Security.PermissionCodes`); every role but administrator is held at a site; viewing is open to every
+  signed-in user, and every changing endpoint carries `.RequirePermission(permission, Site.…)`. Every user keeps a role.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
@@ -162,5 +167,7 @@ Treat these as working assumptions; confirm with Bill before building anything t
   `Pulaski.Infrastructure.Tests` creates and drops a throwaway database and a login role that is
   a member of `pulaski_app`, and drives the real handlers through it; override the server
   with `PULASKI_TEST_ADMIN_CONNECTION`.
+- First sign-in on an empty database: the API creates `admin` with the temporary password in
+  `src/Pulaski.Api/appsettings.Development.json` (`Security:BootstrapAdmin`); change it at the first sign-in.
 - Run: `dotnet run --project src/Pulaski.Api` (http://localhost:5080, OpenAPI at
   `/openapi/v1.json`) and `dotnet run --project src/Pulaski.Web` (http://localhost:5090).

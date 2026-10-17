@@ -3,6 +3,7 @@
 @inject SiteSelection Sites
 @inject TimeProvider Time
 @inject Downloads Downloads
+@inject CurrentUser User
 
 <PageTitle>Inventory · Pulaski</PageTitle>
 
@@ -10,8 +11,14 @@
     <Description>Stock of every material at @(Sites.Site?.Code ?? "the site"), grouped by class. Quantities are in each material's base unit.</Description>
     <Actions>
         <button type="button" class="btn btn-outline-secondary" disabled="@(_stock is null)" @onclick="ExportAsync">Export CSV</button>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Produce">Declare production</button>
-        <button type="button" class="btn btn-primary" @onclick="() => _action = LotAction.Receive">Receive</button>
+        @if (User.Can(LotActions.Permission(LotAction.Produce), Sites.SiteId))
+        {
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Produce">Declare production</button>
+        }
+        @if (User.Can(LotActions.Permission(LotAction.Receive), Sites.SiteId))
+        {
+            <button type="button" class="btn btn-primary" @onclick="() => _action = LotAction.Receive">Receive</button>
+        }
     </Actions>
 </InventoryHeader>
 

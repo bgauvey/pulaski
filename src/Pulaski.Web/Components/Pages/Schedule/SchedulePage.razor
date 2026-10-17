@@ -3,6 +3,7 @@
 @inject PulaskiApiClient Api
 @inject TimeProvider Time
 @inject NavigationManager Navigation
+@inject CurrentUser User
 
 <PageTitle>Schedule · Pulaski</PageTitle>
 
@@ -43,7 +44,10 @@
             }
         </div>
 
-        <a class="btn btn-primary text-nowrap" href="schedule/work-orders/new">New work order</a>
+        @if (User.Can(PermissionCodes.WorkOrderManage))
+        {
+            <a class="btn btn-primary text-nowrap" href="schedule/work-orders/new">New work order</a>
+        }
 
         <button type="button" class="btn btn-outline-secondary btn-square" aria-label="Refresh now"
                 title="Refresh now" disabled="@_controller.IsRefreshing" @onclick="RefreshAsync">
@@ -53,6 +57,7 @@
 </div>
 
 <ProblemAlert Error="_controller.LoadError" />
+<ViewOnlyNote Permission="@PermissionCodes.SchedulePlan" What="plan jobs" />
 
 <OverlapBanner Board="_controller.Board" TimeZone="@_controller.TimeZone" OnShow="SelectItem" />
 
@@ -140,7 +145,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _controller = new ScheduleController(Api, Time);
+        _controller = new ScheduleController(Api, Time) { ReadOnly = !User.Can(PermissionCodes.SchedulePlan) };
         _controller.StateChanged += OnControllerChanged;
         await _controller.InitializeAsync(_cts.Token);
         if (WorkOrder is { } workOrder && _controller.Board.FindWorkOrder(workOrder) is not null)

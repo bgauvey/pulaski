@@ -1,0 +1,83 @@
+@page "/account/login"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout AccountLayout
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+
+@* Local sign-in (D-037). A plain form: signing in sets the session cookie, which needs a real request. *@
+<PageTitle>Sign in · Pulaski</PageTitle>
+
+<h1 class="h4 mb-3">Sign in</h1>
+
+@if (Expired && _error is null)
+{
+    <div class="alert alert-warning small" role="status">Your session ended. Sign in again to carry on.</div>
+}
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger small" role="alert">@_error</div>
+}
+
+<EditForm Model="Input" FormName="sign-in" OnSubmit="SignInAsync" method="post">
+    <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
+    <div class="mb-3">
+        <label class="form-label" for="username">User name</label>
+        <InputText id="username" class="form-control" autocomplete="username" autofocus @bind-Value="Input.Username" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label" for="password">Password</label>
+        <InputText id="password" type="password" class="form-control" autocomplete="current-password" @bind-Value="Input.Password" />
+    </div>
+    <button type="submit" class="btn btn-primary w-100">Sign in</button>
+</EditForm>
+
+<p class="small text-muted mt-3 mb-0">Forgotten your password? Ask an administrator to reset it.</p>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private SignInForm Input { get; set; } = new();
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery]
+    private bool Expired { get; set; }
+
+    private string? _error;
+
+    private async Task SignInAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Input.Username) || string.IsNullOrEmpty(Input.Password))
+        {
+            _error = "Enter your user name and password.";
+            return;
+        }
+
+        SignInResponse session;
+        try
+        {
+            session = await Api.SignInAsync(new SignInRequest { Username = Input.Username, Password = Input.Password });
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Detail ?? ex.Title;
+            Input.Password = "";
+            return;
+        }
+
+        await AccountSession.SignInAsync(HttpContext, session);
+        Navigation.NavigateTo(session.User.MustChangePassword ? AccountSession.PasswordPath : AccountSession.SafeReturnUrl(ReturnUrl), forceLoad: true);
+    }
+
+    private sealed class SignInForm
+    {
+        public string Username { get; set; } = "";
+
+        public string Password { get; set; } = "";
+    }
+}

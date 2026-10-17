@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Security;
 using Pulaski.Application.Scheduling;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Scheduling;
+using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
 
@@ -55,7 +58,8 @@ internal static class SchedulingEndpoints
                 request.LatestEnd);
             var created = await handler.HandleAsync(command, ct);
             return TypedResults.Created($"/api/scheduling/jobs/{created.Id}", created);
-        });
+        })
+        .RequirePermission(Permissions.SchedulePlan, Site.FromBody<CreateJobRequest>(SiteOf.Equipment, r => r.LineId));
 
         group.MapPost("/jobs/{id:guid}/sequence", async Task<Ok<VersionResponse>> (
             Guid id,
@@ -63,7 +67,8 @@ internal static class SchedulingEndpoints
             ICommandHandler<SequenceJobCommand, VersionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new SequenceJobCommand(id, request.Version, request.LineId, request.BeforeJobId), ct)));
+                new SequenceJobCommand(id, request.Version, request.LineId, request.BeforeJobId), ct)))
+        .RequirePermission(Permissions.SchedulePlan, Site.Of(SiteOf.Job));
 
         group.MapPost("/jobs/{id:guid}/pin", async Task<Ok<VersionResponse>> (
             Guid id,
@@ -71,7 +76,8 @@ internal static class SchedulingEndpoints
             ICommandHandler<PinJobCommand, VersionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new PinJobCommand(id, request.Version, request.IsLocked, request.EarliestStart, request.LatestEnd), ct)));
+                new PinJobCommand(id, request.Version, request.IsLocked, request.EarliestStart, request.LatestEnd), ct)))
+        .RequirePermission(Permissions.SchedulePlan, Site.Of(SiteOf.Job));
 
         group.MapPost("/jobs/{id:guid}/assign", async Task<Ok<VersionResponse>> (
             Guid id,
@@ -79,7 +85,8 @@ internal static class SchedulingEndpoints
             ICommandHandler<AssignJobCommand, VersionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new AssignJobCommand(id, request.Version, request.TargetId, request.BeforeJobId), ct)));
+                new AssignJobCommand(id, request.Version, request.TargetId, request.BeforeJobId), ct)))
+        .RequirePermission(Permissions.SchedulePlan, Site.Of(SiteOf.Job));
 
         group.MapPost("/jobs/{id:guid}/cancel", async Task<Ok<CancelJobResponse>> (
             Guid id,
@@ -87,7 +94,8 @@ internal static class SchedulingEndpoints
             ICommandHandler<CancelJobCommand, CancelJobResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new CancelJobCommand(id, request.Version, request.Reason, request.Replace), ct)));
+                new CancelJobCommand(id, request.Version, request.Reason, request.Replace), ct)))
+        .RequirePermission(Permissions.SchedulePlan, Site.Of(SiteOf.Job));
 
         group.MapPost("/run-standards/{id:guid}/modify", async Task<Ok<VersionResponse>> (
             Guid id,
@@ -95,14 +103,16 @@ internal static class SchedulingEndpoints
             ICommandHandler<ModifyRunStandardCommand, VersionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new ModifyRunStandardCommand(id, request.Version, request.RatePerHour, request.Note), ct)));
+                new ModifyRunStandardCommand(id, request.Version, request.RatePerHour, request.Note), ct)))
+        .RequirePermission(Permissions.RateModify, Site.Of(SiteOf.RunStandard));
 
         group.MapPost("/run-standards/{id:guid}/clear", async Task<Ok<VersionResponse>> (
             Guid id,
             ClearRunStandardRequest request,
             ICommandHandler<ClearRunStandardCommand, VersionResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ClearRunStandardCommand(id, request.Version, request.Reason), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new ClearRunStandardCommand(id, request.Version, request.Reason), ct)))
+        .RequirePermission(Permissions.RateModify, Site.Of(SiteOf.RunStandard));
 
         group.MapGet("/sites/{siteId:guid}/policy", async Task<Ok<SchedulingPolicyDto>> (
             Guid siteId,
@@ -116,7 +126,8 @@ internal static class SchedulingEndpoints
             ICommandHandler<SetSchedulingPolicyCommand, VersionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new SetSchedulingPolicyCommand(siteId, request.Version, request.ChangeoverMode), ct)));
+                new SetSchedulingPolicyCommand(siteId, request.Version, request.ChangeoverMode), ct)))
+        .RequirePermission(Permissions.SiteSettings, Site.Route());
 
         return routes;
     }

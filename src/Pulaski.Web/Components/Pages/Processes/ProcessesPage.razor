@@ -1,6 +1,7 @@
 @page "/processes"
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
+@inject CurrentUser User
 
 <PageTitle>Processes · Pulaski</PageTitle>
 
@@ -9,10 +10,14 @@
         <h1 class="mb-1">Processes</h1>
         <p class="text-muted mb-0">Process routes: the operations an order goes through, and the lines or departments that run each one.</p>
     </div>
-    <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New process</button>
+    @if (User.Can(PermissionCodes.Processes))
+    {
+        <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New process</button>
+    }
 </div>
 
 <ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Processes" What="maintain processes" />
 
 @if (_adding)
 {

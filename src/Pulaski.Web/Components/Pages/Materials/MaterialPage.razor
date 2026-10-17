@@ -1,6 +1,7 @@
 @page "/materials/{MaterialId:guid}"
 @using System.Globalization
 @inject PulaskiApiClient Api
+@inject CurrentUser User
 
 <PageTitle>@(_detail?.Material.Code ?? "Material") · Pulaski</PageTitle>
 
@@ -50,7 +51,7 @@
     <div class="inv-layout mb-4">
         <div class="props-panel">
             <PropertyGrid Items="_items" Title="@m.Code" Subtitle="@(MaterialProperties.IsFromErp(m) ? $"From {m.ExternalSystem}" : "Maintained in Pulaski")"
-                          Disabled="_saving" Revision="_revision" OnChange="OnChangeAsync" />
+                          Disabled="@(_saving || !User.Can(PermissionCodes.Materials))" Revision="_revision" OnChange="OnChangeAsync" />
         </div>
 
         <section aria-labelledby="use-title">

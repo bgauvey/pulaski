@@ -3,6 +3,12 @@ namespace Pulaski.Application.Errors;
 /// <summary>The requested resource does not exist.</summary>
 public sealed class NotFoundException(string message) : Exception(message);
 
+/// <summary>Who is calling isn't known or can't sign in (D-037).</summary>
+public sealed class UnauthorizedException(string message) : Exception(message);
+
+/// <summary>The caller is known but may not do this (D-037).</summary>
+public sealed class ForbiddenException(string message) : Exception(message);
+
 /// <summary>The resource changed since it was read, or a unique key is taken.</summary>
 public sealed class ConflictException(string message) : Exception(message);
 

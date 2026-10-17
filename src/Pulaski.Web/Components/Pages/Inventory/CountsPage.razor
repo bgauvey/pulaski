@@ -2,6 +2,7 @@
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 @inject NavigationManager Navigation
+@inject CurrentUser User
 
 <PageTitle>Counts · Inventory · Pulaski</PageTitle>
 
@@ -10,7 +11,10 @@
 </InventoryHeader>
 
 <ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.StockCount" What="count stock" SiteId="Sites.SiteId" />
 
+@if (User.Can(PermissionCodes.StockCount, Sites.SiteId))
+{
 <form class="inv-toolbar" @onsubmit="StartAsync" @onsubmit:preventDefault>
     <select class="form-select" aria-label="Location to count" @bind="_locationId">
         <option value="@Guid.Empty">Choose a location to count…</option>
@@ -22,6 +26,7 @@
     <input class="form-control inv-grow" maxlength="1000" placeholder="Note (optional), e.g. month end" aria-label="Note" @bind="_note" />
     <button type="submit" class="btn btn-primary" disabled="@(_saving || _locationId == Guid.Empty)">Start a count</button>
 </form>
+}
 
 @if (_counts is null)
 {

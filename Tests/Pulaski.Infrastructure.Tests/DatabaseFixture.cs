@@ -78,7 +78,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         var services = new ServiceCollection();
         services.AddApplication();
         services.AddInfrastructure(AppConnectionString);
-        services.AddSingleton<IRequestContext, FixedRequestContext>();
+        services.AddSingleton<IRequestContext>(_actor);
         Services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
@@ -113,6 +113,22 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 .Append($"DROP ROLE IF EXISTS {_appLogin}")),
             admin);
         await drop.ExecuteNonQueryAsync();
+    }
+
+    private readonly ActingAs _actor = new();
+
+    /// <summary>Runs one command as someone other than the usual test user, such as whoever approves a partial batch.</summary>
+    public async Task<TResult> SendAsAsync<TResult>(string actorId, ICommand<TResult> command, Guid? userId = null)
+    {
+        _actor.Current.Value = new FixedRequestContext(actorId, userId);
+        try
+        {
+            return await SendAsync(command);
+        }
+        finally
+        {
+            _actor.Current.Value = null;
+        }
     }
 
     /// <summary>Runs one command through its real handler, in its own DI scope (one unit of work).</summary>
@@ -158,4 +174,18 @@ public sealed class DatabaseFixture : IAsyncLifetime
 public sealed class DatabaseTests : ICollectionFixture<DatabaseFixture>
 {
     public const string Name = "Database";
+}
+
+/// <summary>The test user, or whoever <see cref="DatabaseFixture.SendAsAsync"/> runs a command as.</summary>
+internal sealed class ActingAs : IRequestContext
+{
+    private static readonly FixedRequestContext Default = new();
+
+    public AsyncLocal<FixedRequestContext?> Current { get; } = new();
+
+    public string ActorId => (Current.Value ?? Default).ActorId;
+
+    public Guid CorrelationId => (Current.Value ?? Default).CorrelationId;
+
+    public Guid? UserId => (Current.Value ?? Default).UserId;
 }

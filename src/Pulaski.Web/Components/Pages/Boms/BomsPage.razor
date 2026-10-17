@@ -1,6 +1,7 @@
 @page "/boms"
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
+@inject CurrentUser User
 
 <PageTitle>BOMs · Pulaski</PageTitle>
 
@@ -9,10 +10,14 @@
         <h1 class="mb-1">Bills of materials</h1>
         <p class="text-muted mb-0">What each material is made from, one level deep. A BOM for a process says which operation consumes each component.</p>
     </div>
-    <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New BOM</button>
+    @if (User.Can(PermissionCodes.Processes))
+    {
+        <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New BOM</button>
+    }
 </div>
 
 <ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Processes" What="maintain BOMs" />
 
 @if (_adding)
 {

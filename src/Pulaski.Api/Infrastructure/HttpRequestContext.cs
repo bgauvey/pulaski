@@ -1,11 +1,10 @@
+using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Security;
 
 namespace Pulaski.Api.Infrastructure;
 
-/// <summary>
-/// Actor and correlation id for the current HTTP request.
-/// Until OIDC sign-in is wired up, unauthenticated callers act as <c>anonymous</c>.
-/// </summary>
+/// <summary>Actor and correlation id for the current HTTP request (D-037): the signed-in user (<see cref="Issuers.ActorId"/>).</summary>
 internal sealed class HttpRequestContext(IHttpContextAccessor accessor, IIdGenerator ids) : IRequestContext
 {
     public const string CorrelationHeader = "X-Correlation-Id";
@@ -19,9 +18,15 @@ internal sealed class HttpRequestContext(IHttpContextAccessor accessor, IIdGener
             var user = accessor.HttpContext?.User;
             var subject = user?.FindFirst("sub")?.Value;
             var issuer = user?.FindFirst("iss")?.Value;
-            return subject is null ? "anonymous" : $"{issuer}|{subject}";
+            return subject is null ? "anonymous" : Issuers.ActorId(issuer ?? "", subject);
         }
     }
+
+    /// <summary>The user the request's access was resolved for; local tokens also carry it.</summary>
+    public Guid? UserId =>
+        accessor.HttpContext is { } http && http.Items.TryGetValue("pulaski.access", out var access) && access is Domain.Security.UserAccess a
+            ? a.UserId
+            : Guid.TryParse(accessor.HttpContext?.User.FindFirst(TokenIssuer.UserIdClaim)?.Value, out var id) ? id : null;
 
     public Guid CorrelationId => _correlationId ??= ReadHeader() ?? ids.NewId();
 

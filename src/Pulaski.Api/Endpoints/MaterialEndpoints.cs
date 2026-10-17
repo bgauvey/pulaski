@@ -1,9 +1,12 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Security;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Materials;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Materials;
+using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
 
@@ -33,7 +36,8 @@ internal static class MaterialEndpoints
                     request.BaseUomId, request.IsLotTracked, request.ShelfLifeDays),
                 ct);
             return TypedResults.Created($"/api/materials/{created.Id}", created);
-        });
+        })
+        .RequirePermission(Permissions.Materials);
 
         materials.MapPut("/{id:guid}", async Task<Ok<UpdateMaterialResponse>> (
             Guid id,
@@ -43,7 +47,8 @@ internal static class MaterialEndpoints
             TypedResults.Ok(await handler.HandleAsync(
                 new UpdateMaterialCommand(id, request.Version, request.Code, request.Name, request.Description, request.MaterialType,
                     request.MaterialClassId, request.BaseUomId, request.IsLotTracked, request.ShelfLifeDays, request.IsActive),
-                ct)));
+                ct)))
+        .RequirePermission(Permissions.Materials);
 
         // One item from an external item master; safe to send again (D-033).
         materials.MapPost("/import", async Task<Ok<ImportMaterialResponse>> (
@@ -53,7 +58,8 @@ internal static class MaterialEndpoints
             TypedResults.Ok(await handler.HandleAsync(
                 new ImportMaterialCommand(request.ExternalSystem, request.ExternalKey, request.ExternalVersion, request.Code, request.Name,
                     request.BaseUomCode, request.MaterialType),
-                ct)));
+                ct)))
+        .RequirePermission(Permissions.Materials);
 
         // Many materials from a CSV file, all or nothing; ?dryRun=true checks them and saves nothing (D-034).
         materials.MapPost("/import/csv", async Task<Ok<ImportMaterialsResponse>> (
@@ -74,6 +80,7 @@ internal static class MaterialEndpoints
 
             return TypedResults.Ok(await handler.HandleAsync(new ImportMaterialsCommand(MaterialCsv.Parse(text), dryRun ?? false, "CSV import"), ct));
         })
+        .RequirePermission(Permissions.Materials)
         .Accepts<string>("text/csv", "text/plain");
 
         // Made in batches, or continuously again with a blank size (D-036).
@@ -82,7 +89,8 @@ internal static class MaterialEndpoints
             SetBatchingRequest request,
             ICommandHandler<SetBatchingCommand, UpdateMaterialResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new SetBatchingCommand(id, request.Version, request.BatchSize, request.TolerancePct, request.Rule), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new SetBatchingCommand(id, request.Version, request.BatchSize, request.TolerancePct, request.Rule), ct)))
+        .RequirePermission(Permissions.Materials);
 
         materials.MapPost("/{id:guid}/capabilities", async Task<Created<CapabilityResponse>> (
             Guid id,
@@ -95,7 +103,8 @@ internal static class MaterialEndpoints
                     request.StandardCrewSize, request.IsPreferred, request.EffectiveFrom, request.EffectiveTo),
                 ct);
             return TypedResults.Created($"/api/materials/{id}", created);
-        });
+        })
+        .RequirePermission(Permissions.Processes, Site.FromBody<AddCapabilityRequest>(SiteOf.Equipment, r => r.EquipmentId));
 
         var capabilities = routes.MapGroup("/capabilities").WithTags("Materials");
 
@@ -107,14 +116,16 @@ internal static class MaterialEndpoints
             TypedResults.Ok(await handler.HandleAsync(
                 new UpdateCapabilityCommand(id, request.Version, request.IdealRatePerHour, request.RateUomId, request.StandardChangeoverMinutes,
                     request.StandardCrewSize, request.IsPreferred, request.EffectiveFrom, request.EffectiveTo),
-                ct)));
+                ct)))
+        .RequirePermission(Permissions.Processes, Site.Of(SiteOf.Capability));
 
         capabilities.MapPost("/{id:guid}/end", async Task<Ok<CapabilityResponse>> (
             Guid id,
             EndCapabilityRequest request,
             ICommandHandler<EndCapabilityCommand, CapabilityResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new EndCapabilityCommand(id, request.Version), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new EndCapabilityCommand(id, request.Version), ct)))
+        .RequirePermission(Permissions.Processes, Site.Of(SiteOf.Capability));
 
         var classes = routes.MapGroup("/material-classes").WithTags("Materials");
 
@@ -125,14 +136,16 @@ internal static class MaterialEndpoints
         {
             var created = await handler.HandleAsync(new CreateMaterialClassCommand(request.Code, request.Name), ct);
             return TypedResults.Created($"/api/material-classes/{created.Id}", created);
-        });
+        })
+        .RequirePermission(Permissions.Materials);
 
         classes.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (
             Guid id,
             UpdateMaterialClassRequest request,
             ICommandHandler<UpdateMaterialClassCommand, VersionResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new UpdateMaterialClassCommand(id, request.Version, request.Name, request.IsActive), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new UpdateMaterialClassCommand(id, request.Version, request.Name, request.IsActive), ct)))
+        .RequirePermission(Permissions.Materials);
 
         return routes;
     }

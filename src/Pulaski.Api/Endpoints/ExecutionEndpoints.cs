@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Security;
 using Pulaski.Application.Execution;
 using Pulaski.Contracts.Execution;
+using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
 
@@ -18,21 +21,25 @@ internal static class ExecutionEndpoints
 
         jobs.MapPost("/{id:guid}/start", async Task<Ok<ExecutionResponse>> (
             Guid id, StartJobRequest request, ICommandHandler<StartJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new StartJobCommand(id, request.Version, request.LineId, request.SkipChangeover), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new StartJobCommand(id, request.Version, request.LineId, request.SkipChangeover), ct)))
+        .RequirePermission(Permissions.JobExecute, Site.Of(SiteOf.Job));
 
         jobs.MapPost("/{id:guid}/pause", async Task<Ok<ExecutionResponse>> (
             Guid id, PauseJobRequest request, ICommandHandler<PauseJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new PauseJobCommand(id, request.Version, request.ReasonCodeId, request.Comment, Partial(request.PartialBatch)), ct)));
+                new PauseJobCommand(id, request.Version, request.ReasonCodeId, request.Comment, Partial(request.PartialBatch)), ct)))
+        .RequirePermission(Permissions.JobExecute, Site.Of(SiteOf.Job));
 
         jobs.MapPost("/{id:guid}/complete", async Task<Ok<ExecutionResponse>> (
             Guid id, CompleteJobRequest request, ICommandHandler<CompleteJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new CompleteJobCommand(id, request.Version, request.ReasonCodeId, request.Comment, Partial(request.PartialBatch)), ct)));
+                new CompleteJobCommand(id, request.Version, request.ReasonCodeId, request.Comment, Partial(request.PartialBatch)), ct)))
+        .RequirePermission(Permissions.JobExecute, Site.Of(SiteOf.Job));
 
         jobs.MapPost("/{id:guid}/reopen", async Task<Ok<ExecutionResponse>> (
             Guid id, JobVersionRequest request, ICommandHandler<ReopenJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ReopenJobCommand(id, request.Version), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new ReopenJobCommand(id, request.Version), ct)))
+        .RequirePermission(Permissions.JobReopen, Site.Of(SiteOf.Job));
 
         // Into the open run, or into the run named, also after it ended, until the job is closed.
         jobs.MapPost("/{id:guid}/production", async Task<Ok<ReportProductionResponse>> (
@@ -45,18 +52,21 @@ internal static class ExecutionEndpoints
                     ScrapBatches = request.ScrapBatches,
                     PartialQty = request.PartialQty,
                 },
-                ct)));
+                ct)))
+        .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.Job));
 
         // Partial batches waiting for approval (D-036).
         var partials = routes.MapGroup("/partial-batches").WithTags("Execution");
 
         partials.MapPost("/{id:guid}/approve", async Task<Ok<PartialBatchDecisionResponse>> (
             Guid id, DecidePartialBatchRequest request, ICommandHandler<ApprovePartialBatchCommand, PartialBatchDecisionResponse> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ApprovePartialBatchCommand(id, request.Comment), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new ApprovePartialBatchCommand(id, request.Comment), ct)))
+        .RequirePermission(Permissions.PartialBatchDecide, Site.Of(SiteOf.PartialBatch));
 
         partials.MapPost("/{id:guid}/reject", async Task<Ok<PartialBatchDecisionResponse>> (
             Guid id, DecidePartialBatchRequest request, ICommandHandler<RejectPartialBatchCommand, PartialBatchDecisionResponse> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new RejectPartialBatchCommand(id, request.ScrapReasonCodeId ?? Guid.Empty, request.Comment), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new RejectPartialBatchCommand(id, request.ScrapReasonCodeId ?? Guid.Empty, request.Comment), ct)))
+        .RequirePermission(Permissions.PartialBatchDecide, Site.Of(SiteOf.PartialBatch));
 
         var sites = routes.MapGroup("/execution/sites").WithTags("Execution");
 
@@ -74,7 +84,8 @@ internal static class ExecutionEndpoints
 
         sites.MapPut("/{siteId:guid}/policy", async Task<Ok<ExecutionPolicyDto>> (
             Guid siteId, SetExecutionPolicyRequest request, ICommandHandler<SetExecutionPolicyCommand, ExecutionPolicyDto> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new SetExecutionPolicyCommand(siteId, request.RateTolerancePct, request.ConsumptionTolerancePct), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new SetExecutionPolicyCommand(siteId, request.RateTolerancePct, request.ConsumptionTolerancePct), ct)))
+        .RequirePermission(Permissions.SiteSettings, Site.Route());
 
         return routes;
     }

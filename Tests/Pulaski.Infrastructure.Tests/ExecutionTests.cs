@@ -218,7 +218,8 @@ public sealed class ExecutionTests(DatabaseFixture db)
         Assert.Equal("on_hold", await ScalarAsync<string>("SELECT status FROM core.lot WHERE id = @Id", new { Id = pending.LotId }));
         Assert.Equal(130m, await ScalarAsync<decimal>("SELECT good_qty FROM core.job_run WHERE id = @Id", new { Id = started.RunId }));
 
-        await db.SendAsync(new ApprovePartialBatchCommand(pending.Id, "Sold as a sample"));
+        await Assert.ThrowsAsync<Application.Errors.ForbiddenException>(() => db.SendAsync(new ApprovePartialBatchCommand(pending.Id, "My own")));
+        await db.SendAsAsync("quality-user", new ApprovePartialBatchCommand(pending.Id, "Sold as a sample"));
         Assert.Equal("available", await ScalarAsync<string>("SELECT status FROM core.lot WHERE id = @Id", new { Id = pending.LotId }));
         Assert.Empty(await QueryAsync<ListPendingPartialBatchesQuery, IReadOnlyList<PartialBatchDto>>(new ListPendingPartialBatchesQuery(site.Id)));
         var detail = await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(job));

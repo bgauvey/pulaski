@@ -21,11 +21,11 @@
     <link rel="stylesheet" href="@Assets["Pulaski.Web.styles.css"]" />
     <ImportMap />
     <link rel="icon" type="image/svg+xml" href="@Assets["favicon.svg"]" />
-    <HeadOutlet @rendermode="InteractiveServerNoPrerender" />
+    <HeadOutlet @rendermode="PageRenderMode" />
 </head>
 
 <body>
-    <Routes @rendermode="InteractiveServerNoPrerender" />
+    <Routes @rendermode="PageRenderMode" />
     <ReconnectModal />
     <script src="@Assets["js/ui.js"]"></script>
     <script src="@Assets["js/process-canvas.js"]"></script>
@@ -38,4 +38,12 @@
     // Pages load from the API; prerendering would call it twice per navigation.
     private static readonly IComponentRenderMode InteractiveServerNoPrerender =
         new InteractiveServerRenderMode(prerender: false);
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    // Signing in and changing a password are plain forms (D-037): they set the session cookie, which an
+    // interactive page can't.
+    private IComponentRenderMode? PageRenderMode =>
+        HttpContext.AcceptsInteractiveRouting() ? InteractiveServerNoPrerender : null;
 }
