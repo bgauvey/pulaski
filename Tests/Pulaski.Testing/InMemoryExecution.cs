@@ -1,6 +1,7 @@
 using Pulaski.Application.Execution;
 using Pulaski.Contracts.Execution;
 using Pulaski.Domain.Execution;
+using Pulaski.Domain.Materials;
 
 namespace Pulaski.Testing;
 
@@ -156,6 +157,56 @@ public sealed class InMemoryExecution : IExecutionRepository, IExecutionReadStor
         Task.FromResult(Downstream.GetValueOrDefault(jobId) ?? []);
 
     public Task<int> CloseCompletedJobsAsync(Guid workOrderId, DateTimeOffset at, CancellationToken cancellationToken) => Task.FromResult(0);
+
+    private readonly Dictionary<Guid, PartialBatch> _partials = [];
+
+    /// <summary>Reasons a test says exist, by kind and code.</summary>
+    public Dictionary<(string Kind, string Code), Guid> Reasons { get; } = [];
+
+    public IReadOnlyList<PartialBatch> PartialBatches
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _partials.Values];
+            }
+        }
+    }
+
+    public Task<bool> RunHasPartialBatchAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_partials.Values.Any(p => p.RunId == runId));
+        }
+    }
+
+    public Task InsertPartialBatchAsync(PartialBatch batch, DateTimeOffset at, CancellationToken cancellationToken) => UpdatePartialBatchAsync(batch, at, cancellationToken);
+
+    public Task<PartialBatch?> GetPartialBatchForUpdateAsync(Guid id, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_partials.GetValueOrDefault(id));
+        }
+    }
+
+    public Task UpdatePartialBatchAsync(PartialBatch batch, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _partials[batch.Id] = batch;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<Guid?> FindReasonAsync(string kind, string code, Guid siteId, CancellationToken cancellationToken) =>
+        Task.FromResult(Reasons.TryGetValue((kind, code), out var id) ? id : (Guid?)null);
+
+    public Task<IReadOnlyList<PartialBatchDto>> ListPendingPartialBatchesAsync(Guid siteId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<PartialBatchDto>>([]);
 
     public Task<IReadOnlyList<LineBoardRowDto>> GetLineBoardAsync(Guid siteId, DateTimeOffset now, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<LineBoardRowDto>>([]);

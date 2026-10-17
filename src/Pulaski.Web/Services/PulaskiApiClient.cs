@@ -430,6 +430,18 @@ public sealed class PulaskiApiClient(HttpClient http)
     public Task<VersionResponse> UpdateMaterialClassAsync(Guid id, UpdateMaterialClassRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/material-classes/{id}", request, ct);
 
+    public Task<UpdateMaterialResponse> SetBatchingAsync(Guid materialId, SetBatchingRequest request, CancellationToken ct = default) =>
+        SendAsync<UpdateMaterialResponse>(HttpMethod.Put, $"api/materials/{materialId}/batching", request, ct);
+
+    public Task<IReadOnlyList<PartialBatchDto>> ListPendingPartialBatchesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<PartialBatchDto>>($"api/execution/sites/{siteId}/partial-batches", ct);
+
+    public Task<PartialBatchDecisionResponse> ApprovePartialBatchAsync(Guid id, string? comment, CancellationToken ct = default) =>
+        SendAsync<PartialBatchDecisionResponse>(HttpMethod.Post, $"api/partial-batches/{id}/approve", new DecidePartialBatchRequest { Comment = comment }, ct);
+
+    public Task<PartialBatchDecisionResponse> RejectPartialBatchAsync(Guid id, Guid scrapReasonId, string? comment, CancellationToken ct = default) =>
+        SendAsync<PartialBatchDecisionResponse>(HttpMethod.Post, $"api/partial-batches/{id}/reject", new DecidePartialBatchRequest { ScrapReasonCodeId = scrapReasonId, Comment = comment }, ct);
+
     public Task<CapabilityResponse> AddCapabilityAsync(Guid materialId, AddCapabilityRequest request, CancellationToken ct = default) =>
         SendAsync<CapabilityResponse>(HttpMethod.Post, $"api/materials/{materialId}/capabilities", request, ct);
 
@@ -469,7 +481,10 @@ public sealed class PulaskiApiClient(HttpClient http)
         SendAsync<ExecutionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/pause", request, ct);
 
     public Task<ExecutionResponse> CompleteJobAsync(Guid jobId, long version, CancellationToken ct = default) =>
-        SendAsync<ExecutionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/complete", new JobVersionRequest { Version = version }, ct);
+        CompleteJobAsync(jobId, new CompleteJobRequest { Version = version }, ct);
+
+    public Task<ExecutionResponse> CompleteJobAsync(Guid jobId, CompleteJobRequest request, CancellationToken ct = default) =>
+        SendAsync<ExecutionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/complete", request, ct);
 
     public Task<ExecutionResponse> ReopenJobAsync(Guid jobId, long version, CancellationToken ct = default) =>
         SendAsync<ExecutionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/reopen", new JobVersionRequest { Version = version }, ct);

@@ -60,4 +60,17 @@ public class ProcessJobPlanTests
 
         Assert.Throws<DomainRuleException>(() => ProcessJobPlan.For(new ProcessDefinition([op], []), "WO-9", 0.000001m, Start));
     }
+
+    [Fact]
+    public void A_batch_material_is_shared_in_whole_batches()
+    {
+        var op = Op(10, 60m, 40m);
+
+        var jobs = ProcessJobPlan.For(new ProcessDefinition([op], []), "WO-B", 250m, Start, batchQuantity: 50m);
+
+        // 5 batches of 50: 60/40 gives 3 and 2; 70/30 gives 3.5 and 1.5, so 4 and 1, never half a batch.
+        Assert.Equal([150m, 100m], jobs.Select(j => j.PlannedQty));
+        var skewed = ProcessJobPlan.For(new ProcessDefinition([Op(10, 70m, 30m)], []), "WO-C", 250m, Start, batchQuantity: 50m);
+        Assert.Equal([200m, 50m], skewed.Select(j => j.PlannedQty));
+    }
 }

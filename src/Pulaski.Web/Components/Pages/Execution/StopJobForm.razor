@@ -1,0 +1,145 @@
+@using Pulaski.Web.Services.Execution
+@inject PulaskiApiClient Api
+
+@* Pauses or completes a job (D-035), with why it stopped and, for a material made in batches, the batch
+   that was in progress when the line stopped (a partial batch, D-036). *@
+<div class="floor-inline mt-2">
+    <ProblemAlert Error="_error" />
+    <div class="row g-2">
+        <div class="col-12">
+            <label class="form-label small" for="stop-reason-@JobId">@(Complete ? "Why did it stop short? (optional)" : "Why is it stopping?") @(NeedsReason ? "(required)" : "")</label>
+            <select id="stop-reason-@JobId" class="form-select form-select-sm" @bind="_reasonId">
+                <option value="@Guid.Empty">@(NeedsReason ? "Choose a reason…" : "No reason")</option>
+                @foreach (var reason in _reasons)
+                {
+                    <option value="@reason.Id">@reason.Name</option>
+                }
+            </select>
+        </div>
+        @if (BatchSize is not null)
+        {
+            <div class="col-12">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="stop-partial-@JobId" @bind="_hasPartial" />
+                    <label class="form-check-label small" for="stop-partial-@JobId">A batch was in progress: report it as a partial batch</label>
+                </div>
+            </div>
+            @if (_hasPartial)
+            {
+                <div class="col-4">
+                    <label class="form-label small" for="stop-qty-@JobId">Quantity, @BaseUomCode</label>
+                    <input id="stop-qty-@JobId" type="number" min="0" step="any" class="form-control form-control-sm" @bind="_quantity" @bind:event="oninput" />
+                </div>
+                <div class="col-8">
+                    <label class="form-label small" for="stop-loc-@JobId">Goes to</label>
+                    <select id="stop-loc-@JobId" class="form-select form-select-sm" @bind="_locationId">
+                        <option value="@Guid.Empty">Choose a location…</option>
+                        @foreach (var l in _locations)
+                        {
+                            <option value="@l.Id">@l.Code · @l.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12 small text-muted">
+                    Less than a batch of @FloorView.Qty(BatchSize) @BaseUomCode.
+                    @(BatchRule == "exact" ? "It goes into a lot of its own, on hold until someone approves it: it can't be sold as a partial." : "It is accepted: it will be used.")
+                </div>
+            }
+        }
+        <div class="col-12">
+            <label class="form-label small" for="stop-comment-@JobId">Comment</label>
+            <input id="stop-comment-@JobId" class="form-control form-control-sm" maxlength="1000" @bind="_comment" />
+        </div>
+    </div>
+    <div class="d-flex gap-2 mt-2">
+        <button type="button" class="btn btn-sm btn-primary" disabled="@(!CanSubmit)" @onclick="SubmitAsync">@(Complete ? "Complete" : "Pause")</button>
+        <button type="button" class="btn btn-sm btn-link" @onclick="OnCancel">Cancel</button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid JobId { get; set; }
+
+    [Parameter, EditorRequired]
+    public long Version { get; set; }
+
+    [Parameter, EditorRequired]
+    public Guid SiteId { get; set; }
+
+    /// <summary>Complete the job rather than pause it.</summary>
+    [Parameter]
+    public bool Complete { get; set; }
+
+    [Parameter]
+    public decimal? BatchSize { get; set; }
+
+    [Parameter]
+    public string? BatchRule { get; set; }
+
+    [Parameter]
+    public string? BaseUomCode { get; set; }
+
+    [Parameter]
+    public EventCallback<ExecutionResponse> OnDone { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private IReadOnlyList<ReasonCodeDto> _reasons = [];
+    private IReadOnlyList<InventoryLocationDto> _locations = [];
+    private Guid _reasonId;
+    private bool _hasPartial;
+    private decimal? _quantity;
+    private Guid _locationId;
+    private string? _comment;
+    private bool _saving;
+    private ApiException? _error;
+
+    // A partial batch is an exception for a line that stopped, so it needs the reason (D-036).
+    private bool NeedsReason => _hasPartial;
+
+    private bool CanSubmit =>
+        !_saving && (!NeedsReason || _reasonId != Guid.Empty) && (!_hasPartial || (_quantity > 0 && _locationId != Guid.Empty))
+        && (_reasons.FirstOrDefault(r => r.Id == _reasonId)?.RequiresComment != true || !string.IsNullOrWhiteSpace(_comment));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _reasons = await Api.ListReasonCodesAsync("run_end", SiteId);
+            if (BatchSize is not null)
+            {
+                _locations = [.. (await Api.ListInventoryLocationsAsync(SiteId)).Where(l => l.IsActive && !(BatchRule == "exact" && l.ComminglesLots))];
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var reason = _reasonId == Guid.Empty ? (Guid?)null : _reasonId;
+            var comment = string.IsNullOrWhiteSpace(_comment) ? null : _comment.Trim();
+            var partial = _hasPartial ? new PartialBatchRequest { Quantity = _quantity!.Value, LocationId = _locationId } : null;
+            var result = Complete
+                ? await Api.CompleteJobAsync(JobId, new CompleteJobRequest { Version = Version, ReasonCodeId = reason, Comment = comment, PartialBatch = partial })
+                : await Api.PauseJobAsync(JobId, new PauseJobRequest { Version = Version, ReasonCodeId = reason, Comment = comment, PartialBatch = partial });
+            await OnDone.InvokeAsync(result);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

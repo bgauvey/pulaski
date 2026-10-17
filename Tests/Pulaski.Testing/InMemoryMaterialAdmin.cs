@@ -116,6 +116,32 @@ public sealed class InMemoryMaterialAdmin : IMaterialAdminRepository, IMaterialR
     public Task<IReadOnlyList<string>> DescribeUseAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<string>>(Use.GetValueOrDefault(id, MaterialUse.None).InUse ? ["2 open jobs"] : []);
 
+    /// <summary>Each material's batch settings, and the open orders a test says it has.</summary>
+    public Dictionary<Guid, (decimal? Size, decimal TolerancePct, string? Rule)> Batching { get; } = [];
+
+    public Dictionary<Guid, List<(string OrderNumber, decimal Quantity, Guid UomId)>> OpenOrders { get; } = [];
+
+    public Task<(decimal? Size, decimal TolerancePct, string? Rule)> GetBatchingAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(Batching.TryGetValue(id, out var b) ? b : ((decimal?)null, 2m, (string?)null));
+
+    public Task<long> UpdateBatchingAsync(Guid id, decimal? size, decimal tolerancePct, string? rule, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            Batching[id] = (size, tolerancePct, rule);
+            var version = ++_next;
+            if (_materials.TryGetValue(id, out var m))
+            {
+                _materials[id] = m with { Version = version };
+            }
+
+            return Task.FromResult(version);
+        }
+    }
+
+    public Task<IReadOnlyList<(string OrderNumber, decimal Quantity, Guid UomId)>> ListOpenOrdersAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<(string, decimal, Guid)>>(OpenOrders.GetValueOrDefault(id) ?? []);
+
     public Task<(Guid Id, bool IsActive)?> FindUomAsync(string code, CancellationToken cancellationToken)
     {
         lock (_lock)

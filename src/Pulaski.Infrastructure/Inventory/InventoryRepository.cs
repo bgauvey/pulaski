@@ -59,7 +59,8 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         """;
 
     private const string GetMaterial = """
-        SELECT m.id, m.code, m.base_uom_id, u.code AS base_uom_code, m.is_lot_tracked, m.is_active, m.shelf_life_days
+        SELECT m.id, m.code, m.base_uom_id, u.code AS base_uom_code, m.is_lot_tracked, m.is_active, m.shelf_life_days,
+               m.batch_size, m.batch_tolerance_pct, m.batch_rule
         FROM core.material m
         JOIN core.uom u ON u.id = m.base_uom_id
         WHERE m.id = @Id

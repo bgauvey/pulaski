@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Execution;
+using Pulaski.Application.Materials;
 using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Execution;
@@ -166,5 +167,61 @@ public sealed class ExecutionTests(DatabaseFixture db)
 
         var resumed = await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
         Assert.Equal(2, await ScalarAsync<int>("SELECT run_no FROM core.job_run WHERE id = @Id", new { Id = resumed.RunId }));
+    }
+
+    [Fact]
+    public async Task Batches_are_reported_whole_and_a_finished_goods_partial_waits_for_approval()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "BE-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "BS-" + _s, "Site", null, "site", "site", false, false, false, "America/Chicago"));
+        CreatedResponse mixer = await db.SendAsync(new CreateEquipmentCommand(site.Id, "MIX-" + _s, "Mixer", null, "work_center", "production_line", true, true, false, null));
+        CreatedResponse staging = await db.SendAsync(new CreateEquipmentCommand(site.Id, "BST-" + _s, "Staging", null, "work_center", "storage_zone", false, false, true, null));
+        CreatedResponse material = await db.SendAsync(new CreateMaterialCommand("FG-" + _s, "Bagged blend", null, "finished", null, db.UomId, true, null));
+        var materialVersion = await ScalarAsync<long>("SELECT xmin::text::bigint FROM core.material WHERE id = @Id", new { Id = material.Id });
+        await db.SendAsync(new SetBatchingCommand(material.Id, materialVersion, 50m, 2m, null));
+        Assert.Equal("exact", await ScalarAsync<string>("SELECT batch_rule FROM core.material WHERE id = @Id", new { Id = material.Id }));
+
+        Guid order = Guid.CreateVersion7(), job = Guid.CreateVersion7();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO core.equipment_capability (equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, effective_from)
+                VALUES (@mixer, @material, 200, @uom, now() - interval '1 day');
+                INSERT INTO core.work_order (id, site_id, order_number, material_id, planned_qty, uom_id, status)
+                VALUES (@order, @site, 'BWO-' || @s, @material, 500, @uom, 'firmed');
+                INSERT INTO core.job (id, site_id, work_order_id, job_number, job_type, equipment_id, material_id, planned_qty, uom_id, status)
+                VALUES (@job, @site, @order, 'BJ-' || @s, 'production', @mixer, @material, 500, @uom, 'firmed');
+                """,
+                new { s = _s, mixer = mixer.Id, material = material.Id, uom = db.UomId, order, site = site.Id, job });
+        }
+
+        var started = await db.SendAsync(new StartJobCommand(job, await VersionAsync(job)));
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE core.job_run SET started_at = started_at - interval '1 hour' WHERE id = @Id", new { Id = started.RunId });
+        }
+
+        await Assert.ThrowsAsync<DomainRuleException>(() =>
+            db.SendAsync(new ReportProductionCommand(job, null, 0m, 0m, null, null, staging.Id) { GoodBatches = [49.3m] }));
+        var batches = await db.SendAsync(new ReportProductionCommand(job, null, 0m, 0m, null, null, staging.Id) { GoodBatches = [50m, 50m] });
+        Assert.Equal(2, batches.Lots.Count);
+
+        var breakdown = await ScalarAsync<Guid>("SELECT id FROM core.reason_code WHERE reason_kind = 'run_end' AND code = 'BREAKDOWN' AND site_id IS NULL", new { });
+        await Assert.ThrowsAsync<Application.Errors.ValidationException>(async () =>
+            await db.SendAsync(new PauseJobCommand(job, await VersionAsync(job), PartialBatch: new PartialBatchInput(30m, staging.Id, null))));
+        var paused = await db.SendAsync(new PauseJobCommand(job, await VersionAsync(job), breakdown, "Mixer tripped", new PartialBatchInput(30m, staging.Id, null)));
+        Assert.Contains(paused.Notes, n => n.Contains("on hold for approval", StringComparison.Ordinal));
+
+        var pending = Assert.Single(await QueryAsync<ListPendingPartialBatchesQuery, IReadOnlyList<PartialBatchDto>>(new ListPendingPartialBatchesQuery(site.Id)));
+        Assert.Equal(("pending", 30m), (pending.Status, pending.Quantity));
+        Assert.Equal("on_hold", await ScalarAsync<string>("SELECT status FROM core.lot WHERE id = @Id", new { Id = pending.LotId }));
+        Assert.Equal(130m, await ScalarAsync<decimal>("SELECT good_qty FROM core.job_run WHERE id = @Id", new { Id = started.RunId }));
+
+        await db.SendAsync(new ApprovePartialBatchCommand(pending.Id, "Sold as a sample"));
+        Assert.Equal("available", await ScalarAsync<string>("SELECT status FROM core.lot WHERE id = @Id", new { Id = pending.LotId }));
+        Assert.Empty(await QueryAsync<ListPendingPartialBatchesQuery, IReadOnlyList<PartialBatchDto>>(new ListPendingPartialBatchesQuery(site.Id)));
+        var detail = await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(job));
+        Assert.Equal(("approved", 50m, true), (Assert.Single(detail.PartialBatches).Status, detail.BatchSize!.Value, detail.Runs[0].HasPartialBatch));
     }
 }

@@ -30,3 +30,12 @@ internal sealed class GetExecutionPolicyHandler(IExecutionReadStore store) : IQu
     public async Task<ExecutionPolicyDto> HandleAsync(GetExecutionPolicyQuery query, CancellationToken cancellationToken) =>
         await store.GetPolicyAsync(query.SiteId, cancellationToken) ?? throw new NotFoundException($"Site {query.SiteId} not found.");
 }
+
+/// <summary>The site's partial batches waiting for approval (D-036).</summary>
+public sealed record ListPendingPartialBatchesQuery(Guid SiteId) : IQuery<IReadOnlyList<PartialBatchDto>>;
+
+internal sealed class ListPendingPartialBatchesHandler(IExecutionReadStore store) : IQueryHandler<ListPendingPartialBatchesQuery, IReadOnlyList<PartialBatchDto>>
+{
+    public Task<IReadOnlyList<PartialBatchDto>> HandleAsync(ListPendingPartialBatchesQuery query, CancellationToken cancellationToken) =>
+        store.ListPendingPartialBatchesAsync(query.SiteId, cancellationToken);
+}

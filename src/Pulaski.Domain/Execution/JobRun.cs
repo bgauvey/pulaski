@@ -47,6 +47,10 @@ public sealed record JobRun(
     /// <summary>How long the run has lasted at <paramref name="now"/>: to its end, or so far.</summary>
     public TimeSpan Elapsed(DateTimeOffset now) => (EndedAt ?? now) - StartedAt is { } span && span > TimeSpan.Zero ? span : TimeSpan.Zero;
 
+    /// <summary>Moves output already reported as good to scrap, as when a partial batch is rejected (D-036).</summary>
+    public JobRun Reclassify(decimal quantity) =>
+        this with { GoodQty = Math.Max(0m, GoodQty - quantity), ScrapQty = ScrapQty + quantity };
+
     /// <exception cref="DomainRuleException">A quantity is negative or both are zero.</exception>
     public JobRun Add(decimal good, decimal scrap)
     {

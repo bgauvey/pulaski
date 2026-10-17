@@ -1,6 +1,8 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Execution;
+using Dapper;
 using Pulaski.Domain.Execution;
+using Pulaski.Domain.Materials;
 using Pulaski.Infrastructure.Persistence;
 
 namespace Pulaski.Infrastructure.Execution;
@@ -47,9 +49,9 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
 
     private const string InsertCount = """
         INSERT INTO ts.production_count (id, occurred_at, equipment_id, run_id, job_id, count_kind, delta_qty, uom_id,
-                                         scrap_reason_code_id, source, actor_id, comment)
+                                         scrap_reason_code_id, source, actor_id, comment, recorded_at)
         VALUES (@Id, @OccurredAt, @EquipmentId, @RunId, @JobId, @CountKind, @DeltaQty, @UomId,
-                @ScrapReasonCodeId, 'operator', @ActorId, @Comment)
+                @ScrapReasonCodeId, 'operator', @ActorId, @Comment, @RecordedAt)
         """;
 
     private const string UpsertPolicy = """
@@ -97,6 +99,58 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
         INSERT INTO ts.job_status_change (id, occurred_at, job_id, from_status, to_status)
         VALUES (@Id, @At, @JobId, 'completed', 'closed')
         """;
+
+    private const string PartialColumns = """
+        id, job_id, run_id, lot_id, quantity, uom_id, batch_size, batch_rule, status, occurred_at, reported_by,
+        decided_at, decided_by, decision_comment, scrap_reason_code_id
+        """;
+
+    private const string RunHasPartial = "SELECT EXISTS (SELECT 1 FROM core.partial_batch WHERE run_id = @RunId)";
+
+    private const string InsertPartial = """
+        INSERT INTO core.partial_batch (id, job_id, run_id, lot_id, quantity, uom_id, batch_size, batch_rule, status, occurred_at, reported_by,
+                                        decided_at, decided_by, decision_comment, scrap_reason_code_id, created_at, updated_at)
+        VALUES (@Id, @JobId, @RunId, @LotId, @Quantity, @UomId, @BatchSize, @BatchRule, @Status, @OccurredAt, @ReportedBy,
+                @DecidedAt, @DecidedBy, @DecisionComment, @ScrapReasonCodeId, @At, @At)
+        """;
+
+    private const string PartialForUpdate = $"SELECT {PartialColumns} FROM core.partial_batch WHERE id = @Id FOR UPDATE";
+
+    private const string UpdatePartial = """
+        UPDATE core.partial_batch
+        SET status = @Status, decided_at = @DecidedAt, decided_by = @DecidedBy, decision_comment = @DecisionComment,
+            scrap_reason_code_id = @ScrapReasonCodeId, updated_at = @At
+        WHERE id = @Id
+        """;
+
+    private const string FindReason = """
+        SELECT id FROM core.reason_code
+        WHERE reason_kind = @Kind AND code = @Code AND is_active AND (site_id = @SiteId OR site_id IS NULL)
+        ORDER BY site_id NULLS LAST
+        LIMIT 1
+        """;
+
+    public Task<bool> RunHasPartialBatchAsync(Guid runId, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(RunHasPartial, new { RunId = runId }, cancellationToken);
+
+    public Task InsertPartialBatchAsync(PartialBatch batch, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(InsertPartial, PartialArgs(batch, at), cancellationToken);
+
+    public async Task<PartialBatch?> GetPartialBatchForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<PartialRow>(PartialForUpdate, new { Id = id }, cancellationToken))?.ToDomain();
+
+    public Task UpdatePartialBatchAsync(PartialBatch batch, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(UpdatePartial, PartialArgs(batch, at), cancellationToken);
+
+    public Task<Guid?> FindReasonAsync(string kind, string code, Guid siteId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<Guid?>(FindReason, new { Kind = kind, Code = code, SiteId = siteId }, cancellationToken);
+
+    private static DynamicParameters PartialArgs(PartialBatch batch, DateTimeOffset at)
+    {
+        var args = new DynamicParameters(batch);
+        args.Add("At", at);
+        return args;
+    }
 
     public Task<Guid?> GetJobWorkOrderAsync(Guid jobId, CancellationToken cancellationToken) =>
         session.QuerySingleOrDefaultAsync<Guid?>(JobWorkOrder, new { Id = jobId }, cancellationToken);
@@ -195,6 +249,28 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
         public Guid? UomId { get; init; }
 
         public JobRun ToDomain() => new(Id, JobId, EquipmentId, RunNo, StartedAt, EndedAt, Status, EndReasonCodeId, GoodQty, ScrapQty, UomId);
+    }
+
+    private sealed class PartialRow
+    {
+        public Guid Id { get; init; }
+        public Guid JobId { get; init; }
+        public Guid RunId { get; init; }
+        public Guid LotId { get; init; }
+        public decimal Quantity { get; init; }
+        public Guid UomId { get; init; }
+        public decimal BatchSize { get; init; }
+        public string BatchRule { get; init; } = "";
+        public string Status { get; init; } = "";
+        public DateTimeOffset OccurredAt { get; init; }
+        public string? ReportedBy { get; init; }
+        public DateTimeOffset? DecidedAt { get; init; }
+        public string? DecidedBy { get; init; }
+        public string? DecisionComment { get; init; }
+        public Guid? ScrapReasonCodeId { get; init; }
+
+        public PartialBatch ToDomain() => new(
+            Id, JobId, RunId, LotId, Quantity, UomId, BatchSize, BatchRule, Status, OccurredAt, ReportedBy, DecidedAt, DecidedBy, DecisionComment, ScrapReasonCodeId);
     }
 
     internal sealed class LinkRow

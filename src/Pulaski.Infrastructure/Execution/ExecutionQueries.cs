@@ -29,6 +29,7 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
         e.code AS line_code, j.group_equipment_id, j.work_order_id, wo.order_number AS work_order_number, wo.status AS work_order_status,
         j.material_id, m.code AS material_code, m.name AS material_name, j.planned_qty, j.uom_id, u.code AS uom_code,
         j.process_operation_id, j.completed_at, site.time_zone AS site_time_zone,
+        m.batch_size, m.batch_tolerance_pct, m.batch_rule, m.base_uom_id, bu.code AS base_uom_code,
         coalesce((SELECT sum(r.good_qty) FROM core.job_run r WHERE r.job_id = j.id), 0) AS good_qty,
         coalesce((SELECT sum(r.scrap_qty) FROM core.job_run r WHERE r.job_id = j.id), 0) AS scrap_qty
         """;
@@ -40,6 +41,7 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
         LEFT JOIN core.work_order wo ON wo.id = j.work_order_id
         LEFT JOIN core.material m ON m.id = j.material_id
         LEFT JOIN core.uom u ON u.id = j.uom_id
+        LEFT JOIN core.uom bu ON bu.id = m.base_uom_id
         """;
 
     private const string BoardJobs = $"""
@@ -62,7 +64,9 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
         """;
 
     private const string Runs = """
-        SELECT r.id, r.run_no, e.code AS line_code, r.started_at, r.ended_at, rc.name AS end_reason, r.good_qty, r.scrap_qty, r.equipment_id
+        SELECT r.id, r.run_no, e.code AS line_code, r.started_at, r.ended_at, rc.name AS end_reason, r.good_qty, r.scrap_qty, r.equipment_id,
+               r.end_reason_code_id IS NOT NULL AS ended_with_reason,
+               EXISTS (SELECT 1 FROM core.partial_batch p WHERE p.run_id = r.id) AS has_partial_batch
         FROM core.job_run r
         JOIN core.equipment e ON e.id = r.equipment_id
         LEFT JOIN core.reason_code rc ON rc.id = r.end_reason_code_id
@@ -84,6 +88,31 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
         WHERE c.job_id = @JobId
         GROUP BY c.run_id, r.run_no, c.recorded_at
         ORDER BY c.recorded_at DESC
+        """;
+
+    private const string PartialSelect = """
+        SELECT p.id, p.job_id, j.job_number, e.code AS line_code, m.code AS material_code, p.run_id, r.run_no, p.lot_id, l.lot_number,
+               p.quantity, u.code AS uom_code, p.batch_size, p.batch_rule, p.status, p.occurred_at, p.reported_by,
+               p.decided_at, p.decided_by, p.decision_comment
+        FROM core.partial_batch p
+        JOIN core.job j ON j.id = p.job_id
+        JOIN core.job_run r ON r.id = p.run_id
+        JOIN core.equipment e ON e.id = r.equipment_id
+        JOIN core.lot l ON l.id = p.lot_id
+        JOIN core.material m ON m.id = l.material_id
+        JOIN core.uom u ON u.id = p.uom_id
+        """;
+
+    private const string JobPartials = $"""
+        {PartialSelect}
+        WHERE p.job_id = @JobId
+        ORDER BY p.occurred_at
+        """;
+
+    private const string PendingPartials = $"""
+        {PartialSelect}
+        WHERE p.status = 'pending' AND j.site_id = @SiteId
+        ORDER BY p.occurred_at
         """;
 
     private const string IsSite = "SELECT EXISTS (SELECT 1 FROM core.equipment WHERE id = @SiteId AND level = 'site')";
@@ -128,6 +157,9 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
                     CapQty = await IdealRateAsync(connection, allUnits, runningJob, run, cancellationToken) is { } rate
                         ? RateCap.Cap(rate, policy.RateTolerancePct, run.Elapsed(now))
                         : null,
+                    BatchSize = runningJob.BatchSize,
+                    BatchRule = runningJob.BatchRule,
+                    BaseUomCode = runningJob.BaseUomCode,
                 };
             }
 
@@ -181,6 +213,7 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
         var allUnits = await units.GetUnitsAsync(cancellationToken);
         var runRows = (await connection.QueryAsync<RunViewRow>(new CommandDefinition(Runs, args, cancellationToken: cancellationToken))).AsList();
         var reports = (await connection.QueryAsync<ProductionReportDto>(new CommandDefinition(Reports, args, cancellationToken: cancellationToken))).AsList();
+        var partials = (await connection.QueryAsync<PartialBatchDto>(new CommandDefinition(JobPartials, args, cancellationToken: cancellationToken))).AsList();
         var readiness = JobStatusIsStarted(job.Status) ? Readiness.Ready : await ReadinessAsync(connection, job, now, cancellationToken);
 
         decimal? idealRate = null;
@@ -221,6 +254,12 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
             IsReady = readiness.IsReady,
             Waiting = readiness.Waiting,
             ReadyAt = readiness.ReadyAt,
+            BatchSize = job.BatchSize,
+            BatchTolerancePct = job.BatchTolerancePct,
+            BatchRule = job.BatchRule,
+            BaseUomId = job.BaseUomId,
+            BaseUomCode = job.BaseUomCode,
+            PartialBatches = partials,
             Runs = [.. runRows.Select(r => new JobRunDto
             {
                 Id = r.Id,
@@ -232,6 +271,8 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
                 GoodQty = r.GoodQty,
                 ScrapQty = r.ScrapQty,
                 CapQty = idealRate is { } rate ? RateCap.Cap(rate, policy.RateTolerancePct, (r.EndedAt ?? now) - r.StartedAt) : null,
+                EndedWithReason = r.EndedWithReason,
+                HasPartialBatch = r.HasPartialBatch,
             })],
             Reports = reports,
         };
@@ -255,6 +296,12 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
             ConsumptionTolerancePct = policy.ConsumptionTolerancePct,
             IsDefault = row is null,
         };
+    }
+
+    public async Task<IReadOnlyList<PartialBatchDto>> ListPendingPartialBatchesAsync(Guid siteId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return (await connection.QueryAsync<PartialBatchDto>(new CommandDefinition(PendingPartials, new { SiteId = siteId }, cancellationToken: cancellationToken))).AsList();
     }
 
     private static bool JobStatusIsStarted(string status) => status is "running" or "paused" or "completed" or "closed";
@@ -354,6 +401,11 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
         public string? SiteTimeZone { get; init; }
         public decimal GoodQty { get; init; }
         public decimal ScrapQty { get; init; }
+        public decimal? BatchSize { get; init; }
+        public decimal BatchTolerancePct { get; init; }
+        public string? BatchRule { get; init; }
+        public Guid? BaseUomId { get; init; }
+        public string? BaseUomCode { get; init; }
     }
 
     private sealed class RunViewRow
@@ -367,5 +419,7 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
         public decimal GoodQty { get; init; }
         public decimal ScrapQty { get; init; }
         public Guid EquipmentId { get; init; }
+        public bool EndedWithReason { get; init; }
+        public bool HasPartialBatch { get; init; }
     }
 }

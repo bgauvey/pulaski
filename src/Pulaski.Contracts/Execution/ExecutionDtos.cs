@@ -68,6 +68,11 @@ public sealed record RunningJobDto
 
     /// <summary>The most this run can have made by now (elapsed time x ideal rate x tolerance), in the job's unit; null when it can't be worked out.</summary>
     public decimal? CapQty { get; init; }
+
+    /// <summary>For a material made in batches (D-036): the batch size in its base unit, and the rule.</summary>
+    public decimal? BatchSize { get; init; }
+    public string? BatchRule { get; init; }
+    public string? BaseUomCode { get; init; }
 }
 
 /// <summary>A job with its execution history (D-035).</summary>
@@ -102,8 +107,42 @@ public sealed record JobExecutionDto
     public bool IsReady { get; init; }
     public string? Waiting { get; init; }
     public DateTimeOffset? ReadyAt { get; init; }
+
+    /// <summary>For a material made in batches (D-036): batches are reported in its base unit.</summary>
+    public decimal? BatchSize { get; init; }
+    public decimal BatchTolerancePct { get; init; }
+    public string? BatchRule { get; init; }
+    public Guid? BaseUomId { get; init; }
+    public string? BaseUomCode { get; init; }
     public IReadOnlyList<JobRunDto> Runs { get; init; } = [];
     public IReadOnlyList<ProductionReportDto> Reports { get; init; } = [];
+    public IReadOnlyList<PartialBatchDto> PartialBatches { get; init; } = [];
+}
+
+/// <summary>A batch cut short when a line stopped (D-036), and whether it is approved.</summary>
+public sealed record PartialBatchDto
+{
+    public required Guid Id { get; init; }
+    public required Guid JobId { get; init; }
+    public required string JobNumber { get; init; }
+    public string? LineCode { get; init; }
+    public string? MaterialCode { get; init; }
+    public required Guid RunId { get; init; }
+    public int RunNo { get; init; }
+    public required Guid LotId { get; init; }
+    public string? LotNumber { get; init; }
+    public decimal Quantity { get; init; }
+    public string? UomCode { get; init; }
+    public decimal BatchSize { get; init; }
+    public required string BatchRule { get; init; }
+
+    /// <summary><c>accepted</c> (near rule), <c>pending</c>, <c>approved</c> or <c>rejected</c>.</summary>
+    public required string Status { get; init; }
+    public DateTimeOffset OccurredAt { get; init; }
+    public string? ReportedBy { get; init; }
+    public DateTimeOffset? DecidedAt { get; init; }
+    public string? DecidedBy { get; init; }
+    public string? DecisionComment { get; init; }
 }
 
 public sealed record JobRunDto
@@ -119,6 +158,10 @@ public sealed record JobRunDto
 
     /// <summary>The most it can hold: its length (so far) x ideal rate x tolerance, in the job's unit.</summary>
     public decimal? CapQty { get; init; }
+
+    /// <summary>True when it ended with a reason: a partial batch may then be added to it later (D-036).</summary>
+    public bool EndedWithReason { get; init; }
+    public bool HasPartialBatch { get; init; }
 }
 
 /// <summary>One production report: good and scrap entered together, live or after the run.</summary>
@@ -157,8 +200,35 @@ public sealed record PauseJobRequest
 {
     public long Version { get; init; }
 
-    /// <summary>Why the run ended, a reason of kind <c>run_end</c>; optional.</summary>
+    /// <summary>Why the run ended, a reason of kind <c>run_end</c>; optional, but required with a partial batch.</summary>
     public Guid? ReasonCodeId { get; init; }
+    public string? Comment { get; init; }
+
+    /// <summary>The batch in progress when the line stopped, if any (D-036).</summary>
+    public PartialBatchRequest? PartialBatch { get; init; }
+}
+
+/// <summary>A partial batch reported as the line stops (D-036): its quantity in the material's base unit, and where it goes.</summary>
+public sealed record PartialBatchRequest
+{
+    public decimal Quantity { get; init; }
+    public Guid LocationId { get; init; }
+    public string? LotNumber { get; init; }
+}
+
+/// <summary>Completing a job, with a reason and a partial batch when it stopped short (D-036).</summary>
+public sealed record CompleteJobRequest
+{
+    public long Version { get; init; }
+    public Guid? ReasonCodeId { get; init; }
+    public string? Comment { get; init; }
+    public PartialBatchRequest? PartialBatch { get; init; }
+}
+
+/// <summary>Approves or rejects a partial batch waiting for approval; rejecting needs a scrap reason.</summary>
+public sealed record DecidePartialBatchRequest
+{
+    public Guid? ScrapReasonCodeId { get; init; }
     public string? Comment { get; init; }
 }
 
@@ -189,6 +259,16 @@ public sealed record ReportProductionRequest
     public string? LotNumber { get; init; }
     public DateTimeOffset? ExpiresAt { get; init; }
     public string? Comment { get; init; }
+
+    /// <summary>
+    /// For a material made in batches (D-036), instead of the quantities: the weight of each good batch
+    /// and of each rejected one, in its base unit. Each good batch is its own lot.
+    /// </summary>
+    public IReadOnlyList<decimal> GoodBatches { get; init; } = [];
+    public IReadOnlyList<decimal> ScrapBatches { get; init; } = [];
+
+    /// <summary>A partial batch added to a run that ended with a reason, in the base unit.</summary>
+    public decimal? PartialQty { get; init; }
 }
 
 /// <summary>What a start, pause, completion or reopening did, with notes such as downstream jobs now ready.</summary>
@@ -208,6 +288,9 @@ public sealed record ReportProductionResponse
     /// <summary>The run's cap now, in the job's unit; null when it couldn't be checked.</summary>
     public decimal? CapQty { get; init; }
     public LotTransactionResponse? Lot { get; init; }
+
+    /// <summary>Every lot the report made: one per good batch for a batch material.</summary>
+    public IReadOnlyList<LotTransactionResponse> Lots { get; init; } = [];
     public IReadOnlyList<InventoryWarningDto> Warnings { get; init; } = [];
 }
 
@@ -227,3 +310,6 @@ public sealed record SetExecutionPolicyRequest
     public decimal RateTolerancePct { get; init; } = 110m;
     public decimal ConsumptionTolerancePct { get; init; } = 110m;
 }
+
+/// <summary>A partial batch's decision (D-036) and what it did.</summary>
+public sealed record PartialBatchDecisionResponse(Guid Id, string Status, IReadOnlyList<string> Notes);

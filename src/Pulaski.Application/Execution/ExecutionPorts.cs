@@ -1,6 +1,7 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Contracts.Execution;
 using Pulaski.Domain.Execution;
+using Pulaski.Domain.Materials;
 
 namespace Pulaski.Application.Execution;
 
@@ -15,6 +16,9 @@ public interface IExecutionReadStore
 
     /// <summary>The site's tolerances; the defaults when it has no policy row. Null when <paramref name="siteId"/> isn't a site.</summary>
     Task<ExecutionPolicyDto?> GetPolicyAsync(Guid siteId, CancellationToken cancellationToken);
+
+    /// <summary>The site's partial batches waiting for approval (D-036), oldest first.</summary>
+    Task<IReadOnlyList<PartialBatchDto>> ListPendingPartialBatchesAsync(Guid siteId, CancellationToken cancellationToken);
 }
 
 /// <summary>Write side: runs inside the current <see cref="IUnitOfWork"/>. The line and job are locked first by the scheduling repository (D-017).</summary>
@@ -70,6 +74,20 @@ public interface IExecutionRepository
     Task<int> CloseCompletedJobsAsync(Guid workOrderId, DateTimeOffset at, CancellationToken cancellationToken);
 
     Task UpsertPolicyAsync(Guid siteId, ExecutionPolicy policy, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>True when the run already has its one partial batch (D-036).</summary>
+    Task<bool> RunHasPartialBatchAsync(Guid runId, CancellationToken cancellationToken);
+
+    Task InsertPartialBatchAsync(PartialBatch batch, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>A partial batch, locked; null when it doesn't exist.</summary>
+    Task<PartialBatch?> GetPartialBatchForUpdateAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Writes the status and the decision.</summary>
+    Task UpdatePartialBatchAsync(PartialBatch batch, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>An active reason of the kind and code, the site's own or enterprise-wide; null when there is none.</summary>
+    Task<Guid?> FindReasonAsync(string kind, string code, Guid siteId, CancellationToken cancellationToken);
 }
 
 /// <summary>One row of <c>ts.production_count</c>: everything processed in a report, or the defective part of it.</summary>
@@ -84,7 +102,8 @@ public sealed record ProductionCountRow(
     Guid UomId,
     Guid? ScrapReasonCodeId,
     string ActorId,
-    string? Comment);
+    string? Comment,
+    DateTimeOffset RecordedAt);
 
 /// <summary>A job waiting for another, with where it runs.</summary>
 public sealed record DownstreamJob(Guid JobId, string JobNumber, string LineCode, string Status);

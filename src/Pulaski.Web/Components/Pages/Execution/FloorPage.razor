@@ -36,6 +36,21 @@
     </div>
 }
 
+@if (_pending.Count > 0)
+{
+    <div class="drawer-alert is-warning mb-3" role="status">
+        <Icon Name="alert" Size="18" />
+        <span>
+            @(_pending.Count == 1 ? "A partial batch waits" : $"{_pending.Count} partial batches wait") for approval:
+            @for (var i = 0; i < _pending.Count; i++)
+            {
+                var p = _pending[i];
+                <a href="jobs/@p.JobId">@p.JobNumber</a>@($" ({FloorView.Qty(p.Quantity)} {p.UomCode} of {p.MaterialCode})")@(i < _pending.Count - 1 ? ", " : ".")
+            }
+        </span>
+    </div>
+}
+
 @if (_board is null)
 {
     @if (_error is null)
@@ -103,26 +118,16 @@ else
                             {
                                 <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => OpenReportAsync(r.JobId)">Report</button>
                             }
-                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => _pauseFor = r.JobId">Pause</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => CompleteAsync(r)">Complete</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => Stop(r.JobId, complete: false)">Pause</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy"
+                                    @onclick="() => CompleteOrStopAsync(r)">Complete</button>
                         </div>
 
-                        @if (_pauseFor == r.JobId)
+                        @if (_stopFor == r.JobId)
                         {
-                            <div class="floor-inline mt-2">
-                                <label class="form-label small" for="pause-reason-@r.JobId">Why is it stopping? (optional)</label>
-                                <div class="d-flex gap-2">
-                                    <select id="pause-reason-@r.JobId" class="form-select form-select-sm" @bind="_pauseReason">
-                                        <option value="@Guid.Empty">No reason</option>
-                                        @foreach (var reason in _runEndReasons)
-                                        {
-                                            <option value="@reason.Id">@reason.Name</option>
-                                        }
-                                    </select>
-                                    <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => PauseAsync(r)">Pause</button>
-                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _pauseFor = null">Cancel</button>
-                                </div>
-                            </div>
+                            <StopJobForm JobId="r.JobId" Version="r.Version" SiteId="Sites.SiteId!.Value" Complete="_stopCompletes"
+                                         BatchSize="r.BatchSize" BatchRule="@r.BatchRule" BaseUomCode="@r.BaseUomCode"
+                                         OnDone="OnStoppedAsync" OnCancel="() => _stopFor = null" />
                         }
 
                         @if (_reportJob is { } reportJob && reportJob.JobId == r.JobId)
@@ -193,17 +198,17 @@ else
 
 @code {
     private IReadOnlyList<LineBoardRowDto>? _board;
-    private IReadOnlyList<ReasonCodeDto> _runEndReasons = [];
+    private IReadOnlyList<PartialBatchDto> _pending = [];
     private IReadOnlyList<string> _notes = [];
     private ApiException? _error;
     private bool _busy;
-    private Guid? _pauseFor;
-    private Guid _pauseReason;
+    private Guid? _stopFor;
+    private bool _stopCompletes;
     private Guid _groupLine;
     private JobExecutionDto? _reportJob;
     private readonly CancellationTokenSource _cts = new();
 
-    private bool FormOpen => _pauseFor is not null || _reportJob is not null;
+    private bool FormOpen => _stopFor is not null || _reportJob is not null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -225,10 +230,7 @@ else
             if (Sites.SiteId is { } site)
             {
                 _board = await Api.GetLineBoardAsync(site);
-                if (_runEndReasons.Count == 0)
-                {
-                    _runEndReasons = await Api.ListReasonCodesAsync("run_end", site);
-                }
+                _pending = await Api.ListPendingPartialBatchesAsync(site);
             }
             else
             {
@@ -269,7 +271,6 @@ else
     private async Task OnSiteChangedAsync(ChangeEventArgs e)
     {
         Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
-        _runEndReasons = [];
         await LoadAsync();
     }
 
@@ -280,13 +281,31 @@ else
         return result.Notes.Count > 0 ? result.Notes : [$"{job.JobNumber} started."];
     });
 
-    private Task PauseAsync(RunningJobDto job) => RunAsync(async () =>
+    /// <summary>A batch job may have a partial batch to report, so it asks first (D-036); any other completes at once.</summary>
+    private Task CompleteOrStopAsync(RunningJobDto job)
     {
-        var result = await Api.PauseJobAsync(job.JobId, new PauseJobRequest { Version = job.Version, ReasonCodeId = _pauseReason == Guid.Empty ? null : _pauseReason });
-        _pauseFor = null;
-        _pauseReason = Guid.Empty;
-        return result.Notes;
-    });
+        if (job.BatchSize is null)
+        {
+            return CompleteAsync(job);
+        }
+
+        Stop(job.JobId, complete: true);
+        return Task.CompletedTask;
+    }
+
+    private void Stop(Guid jobId, bool complete)
+    {
+        _reportJob = null;
+        _stopFor = jobId;
+        _stopCompletes = complete;
+    }
+
+    private async Task OnStoppedAsync(ExecutionResponse result)
+    {
+        _stopFor = null;
+        _notes = result.Notes;
+        await LoadAsync();
+    }
 
     private Task CompleteAsync(RunningJobDto job) => RunAsync(async () =>
     {

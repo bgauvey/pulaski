@@ -23,9 +23,9 @@ public class ExecutionHandlerTests
 
     private StartJobHandler Start() => new(_f.Stores.UnitOfWork, Scheduling, _f.Stores.WorkOrders, Execution, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
 
-    private PauseJobHandler Pause() => new(_f.Stores.UnitOfWork, Scheduling, _f.Stores.WorkOrders, Execution, _f.Stores.Inventory, _f.Stores.Events, _f.Events, _f.Time);
+    private PauseJobHandler Pause() => new(_f.Stores.UnitOfWork, Scheduling, _f.Stores.WorkOrders, Execution, _f.Stores.Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
 
-    private CompleteJobHandler Complete() => new(_f.Stores.UnitOfWork, Scheduling, _f.Stores.WorkOrders, Execution, _f.Stores.Events, _f.Events, _f.Time);
+    private CompleteJobHandler Complete() => new(_f.Stores.UnitOfWork, Scheduling, _f.Stores.WorkOrders, Execution, _f.Stores.Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
 
     private ReopenJobHandler Reopen() => new(_f.Stores.UnitOfWork, Scheduling, _f.Stores.WorkOrders, Execution, _f.Stores.Events, _f.Events);
 

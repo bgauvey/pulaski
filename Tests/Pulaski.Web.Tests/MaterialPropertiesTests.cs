@@ -111,4 +111,24 @@ public class MaterialPropertiesTests
         Assert.Equal(["Additives", "Resins", "No class"], groups.Select(g => g.Label));
         Assert.Equal(["A-1", "B-2"], groups[1].Items.Select(m => m.Code));
     }
+
+    [Fact]
+    public void Batch_settings_show_once_a_batch_size_is_set_and_save_on_their_own()
+    {
+        Assert.Equal(["batchSize"], For(Local, new MaterialUsageDto()).Where(i => MaterialProperties.IsBatchingKey(i.Key)).Select(i => i.Key));
+
+        var batched = Local with { BatchSize = 50m, BatchRule = "near", BatchTolerancePct = 2m };
+        var items = For(batched, new MaterialUsageDto());
+        Assert.Equal(["batchSize", "batchRule", "batchTolerance"], items.Where(i => MaterialProperties.IsBatchingKey(i.Key)).Select(i => i.Key));
+        Assert.Contains("49 to 51 kg", items.Single(i => i.Key == "batchTolerance").Description, StringComparison.Ordinal);
+        Assert.Equal(PropertyEditor.ReadOnly, EditorOf(For(batched with { BatchRule = "exact" }, new MaterialUsageDto()), "batchTolerance"));
+
+        Assert.Null(MaterialProperties.ApplyChange(batched, new PropertyChange("batchSize", "60")));
+        var size = MaterialProperties.ApplyBatching(Local, new PropertyChange("batchSize", "50"))!;
+        Assert.Equal((50m, (string?)null, 7L), (size.BatchSize, size.Rule, size.Version));
+        var off = MaterialProperties.ApplyBatching(batched, new PropertyChange("batchSize", ""))!;
+        Assert.Equal(((decimal?)null, (string?)null), (off.BatchSize, off.Rule));
+        Assert.Equal("exact", MaterialProperties.ApplyBatching(batched, new PropertyChange("batchRule", "exact"))!.Rule);
+        Assert.Equal(1.5m, MaterialProperties.ApplyBatching(batched, new PropertyChange("batchTolerance", "1.5"))!.TolerancePct);
+    }
 }

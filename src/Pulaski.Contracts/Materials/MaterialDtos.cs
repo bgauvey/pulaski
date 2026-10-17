@@ -217,3 +217,14 @@ public static class MaterialCsvFormat
 {
     public const string Header = "code,name,type,base_unit,class,description,lot_tracked,shelf_life_days,active,external_system,external_key,external_version";
 }
+
+/// <summary>A material's batch settings (D-036); a blank size makes it continuous again. The rule defaults from the type.</summary>
+public sealed record SetBatchingRequest
+{
+    public long Version { get; init; }
+    public decimal? BatchSize { get; init; }
+    public decimal TolerancePct { get; init; } = 2m;
+
+    /// <summary><c>exact</c> or <c>near</c>; left out, it keeps the current rule or defaults from the material's type.</summary>
+    public string? Rule { get; init; }
+}

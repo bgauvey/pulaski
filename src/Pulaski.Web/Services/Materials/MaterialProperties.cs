@@ -20,6 +20,10 @@ public static class MaterialProperties
     private const string Classification = "Classification";
     private const string Stock = "Stock";
     private const string Status = "Status";
+    private const string Batches = "Batches";
+
+    /// <summary>The keys of the batch settings, saved with their own request (D-036).</summary>
+    public static bool IsBatchingKey(string key) => key is "batchSize" or "batchTolerance" or "batchRule";
 
     public static IReadOnlyList<string> Types { get; } = ["raw", "intermediate", "finished", "packaging", "consumable", "rework"];
 
@@ -109,12 +113,62 @@ public static class MaterialProperties
             },
             new()
             {
+                Key = "batchSize", Name = "Batch size", Category = Batches,
+                Value = m.BatchSize?.ToString("0.######", CultureInfo.InvariantCulture), Editor = PropertyEditor.Number,
+                Min = 0, Step = 0.001, Suffix = m.BaseUomCode, Placeholder = "Made continuously",
+                Description = "Made in batches of this size: orders and jobs are whole batches, and production is reported batch by batch. " +
+                    "A batch cut short when the line stops is a partial batch. Leave blank for a material made continuously.",
+            },
+            .. m.BatchSize is null ? Array.Empty<PropertyItem>() : [
+                new()
+                {
+                    Key = "batchRule", Name = "Batch rule", Category = Batches, Value = m.BatchRule, Editor = PropertyEditor.Choice,
+                    Choices = [new("exact", "Exact batches; partials need approval"), new("near", "Near batches; partials accepted")],
+                    Description = "Exact: every batch is exactly the batch size, and a partial batch waits on hold until approved (finished goods can't be sold as partials). " +
+                        "Near: a batch may differ by the tolerance, and a partial batch is accepted because it will be used.",
+                },
+                new()
+                {
+                    Key = "batchTolerance", Name = "Batch tolerance", Category = Batches,
+                    Value = m.BatchTolerancePct.ToString("0.##", CultureInfo.InvariantCulture),
+                    Editor = m.BatchRule == "exact" ? PropertyEditor.ReadOnly : PropertyEditor.Number, Min = 0, Max = 50, Step = 0.1, Suffix = "%",
+                    Description = m.BatchRule == "exact"
+                        ? "Not used: exact batches are always the batch size."
+                        : $"How far a batch may be from the batch size: a {Batching(m)} batch is accepted from {Low(m)} to {High(m)} {m.BaseUomCode}.",
+                },
+            ],
+            new()
+            {
                 Key = "active", Name = "Active", Category = Status, Value = PropertyItem.FromBool(m.IsActive),
                 Editor = PropertyEditor.Choice, Choices = PropertyChoice.Boolean,
                 Description = "An inactive material can't be received, ordered or added to BOMs. What already uses it carries on.",
             },
         ];
     }
+
+    /// <summary>The batch settings to send for an edited batch property; null when nothing changes (D-036).</summary>
+    public static SetBatchingRequest? ApplyBatching(MaterialDto m, PropertyChange change)
+    {
+        var text = string.IsNullOrWhiteSpace(change.Value) ? null : change.Value.Trim();
+        var request = new SetBatchingRequest { Version = m.Version, BatchSize = m.BatchSize, TolerancePct = m.BatchTolerancePct, Rule = m.BatchRule };
+        return change.Key switch
+        {
+            "batchSize" => request with
+            {
+                BatchSize = decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var size) && size > 0 ? size : null,
+                Rule = text is null ? null : m.BatchRule,
+            },
+            "batchRule" when text is not null => request with { Rule = text },
+            "batchTolerance" when decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var pct) => request with { TolerancePct = pct },
+            _ => null,
+        };
+    }
+
+    private static string Batching(MaterialDto m) => $"{m.BatchSize?.ToString("0.###", CultureInfo.InvariantCulture)} {m.BaseUomCode}";
+
+    private static string Low(MaterialDto m) => ((m.BatchSize ?? 0) * (1 - m.BatchTolerancePct / 100m)).ToString("0.###", CultureInfo.InvariantCulture);
+
+    private static string High(MaterialDto m) => ((m.BatchSize ?? 0) * (1 + m.BatchTolerancePct / 100m)).ToString("0.###", CultureInfo.InvariantCulture);
 
     /// <summary>The update to send for one edited property; null when nothing changes or the key isn't editable.</summary>
     public static UpdateMaterialRequest? ApplyChange(MaterialDto m, PropertyChange change)

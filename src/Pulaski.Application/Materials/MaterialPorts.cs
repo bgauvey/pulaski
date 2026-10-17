@@ -38,6 +38,15 @@ public interface IMaterialAdminRepository
     /// <summary>What still uses the material, in words, for a deactivation to report.</summary>
     Task<IReadOnlyList<string>> DescribeUseAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>The material's batch settings (D-036): null size when it is made continuously.</summary>
+    Task<(decimal? Size, decimal TolerancePct, string? Rule)> GetBatchingAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <returns>The new row version.</returns>
+    Task<long> UpdateBatchingAsync(Guid id, decimal? size, decimal tolerancePct, string? rule, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>The material's work orders that aren't completed, closed or cancelled, with their quantities.</summary>
+    Task<IReadOnlyList<(string OrderNumber, decimal Quantity, Guid UomId)>> ListOpenOrdersAsync(Guid id, CancellationToken cancellationToken);
+
     /// <summary>A unit read <c>FOR SHARE</c>: its id and whether it is active; null when there is no such code.</summary>
     Task<(Guid Id, bool IsActive)?> FindUomAsync(string code, CancellationToken cancellationToken);
 

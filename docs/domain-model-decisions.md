@@ -43,6 +43,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-033 | Materials management: materials and material classes are maintained in Pulaski. For a material from the ERP, its code, name, base unit and type change only through the ERP (an idempotent import by external key); Pulaski owns everything else. A base unit can't change and a local code is fixed once the material is used; lot tracking changes only with nothing on hand. Classes stay flat. Type is a label, no rules. Capabilities, run standards and CSV import come next; imports and label printing will later go through adapters | Proposed | 2026-10-17 |
 | D-034 | Capabilities, run standards and bulk import: capabilities are maintained per material and line over half-open periods that never overlap, and are ended rather than deleted. A new capability creates the line's run standard from its ideal rate; a changed ideal rate recalculates it while it is still based on the ideal rate, and never touches a modified rate. Materials load in bulk from a CSV file, checked first and saved all or nothing; the parser yields source-neutral rows, so later adapters feed the same importer | Proposed | 2026-10-17 |
 | D-035 | Job execution and production reporting: starting a job opens a run, pausing or completing ends it; one run at a time per line. A production job starts once its order is on the floor (starting firms a dispatched order) and its process links are met; Pulaski never starts a job itself. Good and scrap are reported into a run, live or after it ended until the order is closed, capped at the run's length × the capability's ideal rate × a per-site tolerance. Consumption needs a run; beyond the planned components it warns. The order's in-progress and completed statuses follow its jobs | Proposed | 2026-10-17 |
+| D-036 | Batches: a material may have a batch size, a rule (exact or near) and a tolerance, all Pulaski-owned. Orders and jobs of it are whole batches; production is reported batch by batch, each good batch its own lot. A partial batch is an exception, reported only as a run ends with a reason, one per run, in its own lot: accepted under the near rule, on hold for approval under the exact rule (finished goods by default) | Proposed | 2026-10-17 |
 
 ## Order hierarchy
 
@@ -579,6 +580,34 @@ What happens on the floor, recorded by people until the edge connectors bring ma
 **Screens.** Operate → Floor shows each line's running job and what is next, with readiness, and starts, pauses, completes and reports. `jobs/{id}` shows a job's runs and reports and takes reports into any of its runs. The tolerances have an API (`/api/execution/sites/{id}/policy`) and no screen yet.
 
 **Not yet:** machine counts and state from the edge, downtime, OEE, labor, quality samples; correcting or reversing a report; consumption by time window, backflush and scanning; time-window genealogy.
+
+## Batches and partial batches (D-036, proposed)
+
+Some materials are made a fixed amount at a time: a 50 kg mix, a 200 l tank. Pulaski plans and records them in batches.
+
+**The material.** Three Pulaski-owned fields (D-033): `batch_size` in the base unit (null: made continuously), `batch_rule` and `batch_tolerance_pct`. The rule is a setting of its own, not the material type, which stays a label with no rules (D-033). It defaults from the type when the batch size is first set:
+
+| Rule | Default for | A batch is | A partial batch |
+| --- | --- | --- | --- |
+| `exact` | finished goods | exactly the batch size | waits on hold for approval: a finished good can't be sold as a partial |
+| `near` | everything else | within ± the tolerance (2% by default: 49.3 of 50 yes, 40 no) | is accepted: work in progress will be used |
+
+`PUT /api/materials/{id}/batching` sets them; open orders keep their quantity, and the answer names those that are no longer whole batches.
+
+**Planning in whole batches.** A work order's quantity, converted to the base unit, must be a whole number of batches; the refusal names the two nearest. Shares between equipment (D-024) are whole batches each, largest remainders first, at least one batch per share. A job added by hand is whole batches. A cancelled job's replacement (D-019) rounds what is left **up** to whole batches, to meet the order.
+
+**Reporting batch by batch (amends D-035).** For a batch material a report carries `goodBatches` and `scrapBatches` (each batch's weight in the base unit) instead of quantities; each must be a batch under the rule. Each good batch is its own lot. The rate check and counts work on the total, as before.
+
+**Partial batches.** An exception for a line that stopped:
+
+- **When.** Only with a pause or completion that gives a run-end reason (the partial batch is reported into the run being ended), or later into a run that ended with a reason. Never into an open run on its own, and at most one per run (`partial_batch_run_uq`).
+- **What.** More than 0 and less than a batch (below the size less the tolerance). It goes into a lot of its own and a `core.partial_batch` row records it.
+- **Exact rule.** The lot goes on hold (reason `PARTIAL` of kind `hold` when it exists) and the partial batch is `pending`. **Approve** releases the lot. **Reject** writes it off with a scrap reason and moves its quantity from good to scrap: the run's totals change and a `defective` count is added at the partial batch's time (good = processed − defective). A pending partial needs a location that keeps lots apart.
+- **Near rule.** `accepted` at once; nothing to decide.
+- **Locks.** Approve and reject lock the job, the partial batch, its run, then its lot, the reporting order (D-027), so they serialize with reports.
+- **Events:** `pulaski.material.batching_set.v1`, `pulaski.partial_batch.reported.v1`, `…approved.v1`, `…rejected.v1`, with the lot's own movements.
+
+**Not yet:** a batch size per line (a 50 kg mixer next to a 200 kg one), a rule for ERP orders that aren't whole batches (orders aren't imported yet), choosing to round a replacement down, and permissions for who may approve (D-036 records whoever is signed in once sign-in exists).
 
 ## Application architecture
 

@@ -520,7 +520,7 @@ You choose *what*, *how much* and *when*. The process you choose decides *where*
 4. **Process:** the processes at this site that make this material and have a released version.
    - The material's **default** process (marked *· default*) is picked automatically, or the only one if there is just one.
    - A process whose lines can't run this material is **greyed out** with *can't run this material*, and the reason is listed underneath, for example *Operation 10 (Extrude): EXT-02 is not set up to run FLM-HDPE-20-BLK; add a capability for it first.*
-5. **Planned quantity** and **Unit:** how much, in any unit that converts to the material's base unit (the hint under the field links to its conversions).
+5. **Planned quantity** and **Unit:** how much, in any unit that converts to the material's base unit (the hint under the field links to its conversions). For a material made in batches it must be a whole number of batches; the hint shows the batch size.
 6. **Start:** when the order may start. No job will be planned before it. It defaults to the next whole hour at the site.
 7. **Due:** when it must be finished (optional). Jobs projected to finish later are flagged **late**. If the process uses a department, the due date is **required** (the label says so): it is the department's finish-by time.
 8. **Priority:** a number; higher is more urgent. Shown as an arrow on the Work orders screen.
@@ -738,6 +738,27 @@ The run's rate check still applies: an hour-long run can't take more than an hou
 
 `jobs/<job>` shows the job's status, planned, good and scrap quantities, its **runs** (line, start, end, length, good, scrap, the most the run can hold, and why it ended) and its **production reports** (when entered, which run, good, scrap, scrap reason, who and any comment). The buttons offer what the job's status allows: **Start** or **Resume**, **Pause**, **Complete**, **Reopen** for a completed job whose order isn't closed, and **Report production**. **Materials and lots** opens the job's inventory page.
 
+### Materials made in batches
+
+A material with a **batch size** (set on its [material page](#batches)) is planned and reported in whole batches.
+
+- **Orders and jobs are whole batches.** With a batch size of 50 kg, an order for 125 kg is refused (*125 kg is 2.5 batches of 50 kg… Plan 100 or 150 kg*). A process that shares an order between lines gives each line whole batches.
+- **Report batch by batch.** The report form lists **Good batches**, each prefilled with the batch size: change a weight if it differs, and click **Add batch** for each more. Rejected batches go under **Rejected batches**, with a scrap reason. Each good batch becomes its own lot.
+- **How close a batch must be.** Under the **near** rule a batch may differ from the batch size by the tolerance (2% by default: 49 to 51 kg for 50 kg), so 49.3 kg is a batch and 40 kg isn't. Under the **exact** rule, the default for finished goods, every batch is exactly the batch size.
+
+**A partial batch (the line went down)**
+
+A batch cut short is an exception, so it is reported only as the line stops:
+
+1. Click **Pause** (or **Complete**, if the job ends there).
+2. Choose **why** it stopped: a partial batch needs a reason.
+3. Tick **A batch was in progress**, enter its **Quantity** and where it **Goes to**.
+4. Click **Pause** or **Complete**.
+
+The partial batch goes into a lot of its own. Under the near rule it is **accepted**: it will be used. Under the exact rule it goes **on hold until approved**, because a finished good can't be sold as a partial; the floor shows *A partial batch waits for approval*. Each run can have one partial batch. If you forgot it, open the job's page and report it into that run: the form offers **Partial batch** for a run that ended with a reason.
+
+**Approve or reject it** on the job's page, under **Partial batches**: **Approve** releases the lot; **Reject** asks for a scrap reason, writes the lot off and moves its quantity from good to scrap. Both record who decided and when.
+
 ### In detail
 
 - **Statuses.** A production job starts from *dispatched* or *firmed* (starting firms a dispatched order with all its jobs, since execution freezes the plan), and resumes from *paused*. Non-production jobs (cleaning, maintenance, trial, changeover) also start from *planned*. A completed job can be reopened to *paused* until its order is closed; closing the order closes its completed jobs.
@@ -748,6 +769,7 @@ The run's rate check still applies: an hour-long run can't take more than an hou
 - **The changeover check** compares the job's material with the last job that ran on the line. If that was a production job of another material, a changeover job is started first. In *scheduler* mode, and on a line that hasn't run anything yet, no changeover is added.
 - **Process links.** *After start* is met once any job of the upstream operation has started; *after end* once all of them are completed. Each is plus its lag. Cancelled upstream jobs don't count.
 - **Events:** `pulaski.job.started.v1`, `…paused.v1`, `…completed.v1`, `…reopened.v1` and `…production_reported.v1`; the counts are kept in `ts.production_count`.
+- **Batches in detail.** Batch weights are in the material's base unit. A partial batch is more than 0 and less than a batch (under the near rule, less than the size minus the tolerance). The rate check counts it like any output. Under the exact rule a partial batch needs a location that keeps lots apart (not a silo or tank where lots mix). The lot is held with the reason *Partial batch awaiting approval*. When a job of a batch material is cancelled and replaced, what is left is rounded **up** to whole batches. Partial batches are recorded as `pulaski.partial_batch.reported.v1`, `…approved.v1` and `…rejected.v1`.
 - **Concurrency.** Start, pause, complete and reopen check the job hasn't changed since the screen read it; reports don't, so several people can report into a busy line, protected by the rate check under a lock.
 
 ---
@@ -1016,6 +1038,16 @@ Load many materials at once, for example when setting up a new site, from a spre
 - **The file:** comma or semicolon separators, quotes around a value that contains them (or line breaks), column names in any order and case (`Base unit` and `base-unit` both work, as do `item_code` and `uom`). An unknown column stops the import, so a misspelt name isn't ignored. At most 5 MB and 5,000 rows per file.
 - Each imported row is recorded in the event log as usual, with the reason *CSV import*. The same import is `POST /api/materials/import/csv` (`?dryRun=true` to check), for scripts.
 
+### Batches
+
+A material made in batches, such as a dry blend mixed 50 kg at a time, has a batch size. Set it in the property grid under **Batches**:
+
+1. Enter the **Batch size** in the material's base unit and press **Enter**. Leave it blank for a material made continuously.
+2. Check the **Batch rule** Pulaski picked: **exact** for finished goods (every batch exactly the batch size; partial batches need approval), **near** for everything else (batches may differ by the tolerance; partial batches are accepted). You can change it.
+3. For the near rule, set the **Batch tolerance** (2% by default).
+
+From then on orders and jobs must be whole batches and production is reported batch by batch (see [Materials made in batches](#materials-made-in-batches)). Orders already made keep their quantity; Pulaski names any open order that is no longer whole batches.
+
 ### What can change, and when
 
 | Field | Pulaski material | ERP material |
@@ -1025,6 +1057,7 @@ Load many materials at once, for example when setting up a new site, from a spre
 | Base unit | Until it is in use | In the ERP, until it is in use |
 | Lot-tracked | While none of it is on hand | Same |
 | Description, class, shelf life, active | Always | Same |
+| Batch size, rule, tolerance | Always; open orders keep their quantity | Same |
 
 - **Base unit.** Quantities are stored in the base unit, so it can't change once the material is in use, not even from the ERP: an import that tries is refused.
 - **Lot-tracked.** Switching between lots and balances needs no stock on hand: use, move out or write off what is there first.
@@ -1125,6 +1158,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **No adapters yet** for other external sources or for label printing: materials come from the screen, a CSV file, or the ERP one item at a time through the API. The CSV import doesn't take capabilities, doesn't create missing classes, and there is no template file to download (the panel shows the header line).
 - **Planning rates are calculated from the ideal rate only;** calculating them from run history isn't built yet.
 - **Production is reported by hand.** Counts from the machines, machine state, downtime, OEE, labor and quality aren't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
+- **Batches:** the batch size is per material, not per line (a 50 kg mixer next to a 200 kg one isn't modelled). A replacement job is always rounded up to whole batches; to make fewer, cancel it. Orders from the ERP aren't imported yet, so there is no rule yet for an ERP order that isn't whole batches. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **No screen for the reporting tolerances:** the rate and consumption tolerances (110% by default) are set per site through the API.
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
 - **Not in inventory yet:** pallets or containers that hold several lots, lot labels and barcode scanning, lot attributes and certificates of analysis, setting stock aside for a job, and suggestions of which lot to use first. Movements can't be back-dated.
@@ -1205,6 +1239,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Balance** | The one quantity of a material at a location, with no lot number: for a material that isn't lot-tracked, or at a location where lots mix. |
 | **Base unit** | The unit a material is stocked in; also the base unit of a kind of unit (kg, m, ea…). |
 | **Baseline** | A job's times as published when its order was dispatched; the plan you're measured against. |
+| **Batch** | A fixed amount of a material made at a time, such as a 50 kg mix. Orders of a batch material are whole batches. |
 | **BOM** | Bill of materials: what one material is made from, per a base quantity. |
 | **Capability** | A line's permission to run a material, with its ideal rate. |
 | **Changeover** | Time to switch a line from one product to another. |
@@ -1229,6 +1264,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Merge** | Combine lots of one material into one. |
 | **Operation** | One step of a process, run on one or more lines or departments. |
 | **Packaging unit** | A unit like box, bag or pallet whose size depends on the material; it converts only through a material conversion. |
+| **Partial batch** | A batch cut short when the line stopped. Accepted for work in progress; held for approval for finished goods. |
 | **Process (route)** | The operations an order goes through, and where each runs. |
 | **Projection** | Pulaski's calculation of when each job will run, redone on every read. |
 | **Rate check** | A run can't hold more than its length × the line's ideal rate × the site's tolerance. |

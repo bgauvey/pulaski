@@ -72,10 +72,14 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         return location;
     }
 
-    public InventoryMaterial AddMaterial(string code, Guid baseUomId, string baseUomCode, bool isLotTracked = true, bool isActive = true, int? shelfLifeDays = null)
+    public InventoryMaterial AddMaterial(
+        string code, Guid baseUomId, string baseUomCode, bool isLotTracked = true, bool isActive = true, int? shelfLifeDays = null,
+        decimal? batchSize = null, string? batchRule = null)
     {
         var material = new InventoryMaterial
         {
+            BatchSize = batchSize,
+            BatchRule = batchSize is null ? null : batchRule ?? "near",
             Id = Guid.CreateVersion7(),
             Code = code,
             BaseUomId = baseUomId,

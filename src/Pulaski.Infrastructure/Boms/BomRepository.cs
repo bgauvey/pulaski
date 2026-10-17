@@ -91,7 +91,7 @@ internal sealed class BomRepository(DbSession session) : IBomRepository
         """;
 
     internal const string Materials = """
-        SELECT id, code, base_uom_id, is_active
+        SELECT id, code, base_uom_id, is_active, material_type, batch_size, batch_tolerance_pct, batch_rule
         FROM core.material
         WHERE id = ANY(@Ids)
         """;

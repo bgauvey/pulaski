@@ -293,6 +293,13 @@ public sealed record InventoryMaterial
 
     /// <summary>A new lot expires this many days after it arrives (D-032); null: no shelf life.</summary>
     public int? ShelfLifeDays { get; init; }
+
+    public decimal? BatchSize { get; init; }
+    public decimal BatchTolerancePct { get; init; } = 2m;
+    public string? BatchRule { get; init; }
+
+    /// <summary>How it is made in batches (D-036); null when made continuously.</summary>
+    public Domain.Materials.Batching? Batching => BatchSize is { } size ? new(size, BatchTolerancePct, BatchRule ?? Domain.Materials.BatchRule.Near) : null;
 }
 
 public sealed record InventoryJob

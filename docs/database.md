@@ -206,11 +206,35 @@ Groups materials (e.g. all resins), so processes and changeover rules can match 
 | `material_class_id` | uuid → material_class | yes | Its class, if any. |
 | `base_uom_id` | uuid → uom | no | The unit it is counted in by default. Fixed once the material is in use, whatever its origin (D-033). |
 | `shelf_life_days` | integer | yes | A new lot received or produced without an expiry expires this many days after it arrives (D-032). |
+| `batch_size` | numeric(18,6) | yes | Made in batches of this many base units (D-036): orders and jobs are whole batches, and production is reported batch by batch. Null for a material made continuously. Pulaski-owned. |
+| `batch_tolerance_pct` | numeric(5,2) | no | Under the `near` rule, how far a batch may be from `batch_size`, 0 to 50. Default 2. |
+| `batch_rule` | text | yes | `exact` (every batch is the batch size; a partial batch waits for approval) or `near` (within the tolerance; a partial batch is accepted). Set exactly when `batch_size` is (`material_batch_ck`); defaults from the type, `exact` for finished goods. |
 | `is_lot_tracked` | boolean | no | Whether inventory of it is tracked by lot. Default true. Changes only while none of it is on hand. |
 | `origin` | text | no | `local` (created in Pulaski) or `erp` (imported). |
 | `external_system`, `external_key`, `external_version` | text | yes | The ERP record this came from. System and key are required for `erp` rows and unique together; the import matches on them. |
 | `is_active` | boolean | no | False when retired; inactive materials can't be received, put on new orders or added to BOMs. Always settable; what already uses it carries on. |
 | `default_process_id` | uuid → process | yes | The process order creation pre-selects for it (D-023), among those whose scope covers it; the planner may pick another. Can only be set to a process that makes the material. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.partial_batch — batches cut short when a line stopped (D-036) · *In use*
+
+A partial batch is reported only as a run ends with a reason (or later, into a run that did), at most one per run, in a lot of its own. Under the `exact` rule it waits on hold for a decision.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `job_id` | uuid → job | no | The job. |
+| `run_id` | uuid → job_run | no | The run it belongs to. Unique: one partial batch per run. |
+| `lot_id` | uuid → lot | no | Its lot: on hold while `pending`, released when approved, written off when rejected. |
+| `quantity` | qty | no | How much it held, in `uom_id`. |
+| `uom_id` | uuid → uom | no | The material's base unit. |
+| `batch_size`, `batch_rule` | numeric(18,6), text | no | The material's batch size and rule when it was reported. |
+| `status` | text | no | `accepted` (near rule), `pending`, `approved` or `rejected`. |
+| `occurred_at` | timestamptz | no | When it counts as made. |
+| `reported_by` | text | yes | Who reported it. |
+| `decided_at`, `decided_by` | timestamptz, text | yes | When and by whom it was approved or rejected; set exactly when decided (`partial_batch_decided_ck`). |
+| `decision_comment` | text | yes | Why, at most 1000 characters. |
+| `scrap_reason_code_id` | uuid → reason_code | yes | For a rejection, the scrap reason. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ### core.material_uom_conversion — a material's own conversions (D-026) · *In use*

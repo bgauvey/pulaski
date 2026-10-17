@@ -2,6 +2,7 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.Scheduling;
+using Pulaski.Application.Units;
 using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Execution;
 using Pulaski.Domain;
@@ -19,12 +20,21 @@ namespace Pulaski.Application.Execution;
 public sealed record StartJobCommand(Guid JobId, long ExpectedVersion, Guid? LineId = null, bool SkipChangeover = false)
     : ICommand<ExecutionResponse>;
 
-/// <summary>Stops a running job for now; its run ends with an optional reason of kind <c>run_end</c>.</summary>
-public sealed record PauseJobCommand(Guid JobId, long ExpectedVersion, Guid? ReasonCodeId = null, string? Comment = null)
+/// <summary>
+/// Stops a running job for now; its run ends with an optional reason of kind <c>run_end</c>. When the line
+/// stopped in the middle of a batch, <paramref name="PartialBatch"/> reports it, and needs the reason (D-036).
+/// </summary>
+public sealed record PauseJobCommand(
+    Guid JobId, long ExpectedVersion, Guid? ReasonCodeId = null, string? Comment = null, PartialBatchInput? PartialBatch = null)
     : ICommand<ExecutionResponse>;
 
-/// <summary>Finishes a running or paused job; its work order completes with its last open job.</summary>
-public sealed record CompleteJobCommand(Guid JobId, long ExpectedVersion) : ICommand<ExecutionResponse>;
+/// <summary>Finishes a running or paused job; its work order completes with its last open job. A job cut short may report its partial batch, with a reason.</summary>
+public sealed record CompleteJobCommand(
+    Guid JobId, long ExpectedVersion, Guid? ReasonCodeId = null, string? Comment = null, PartialBatchInput? PartialBatch = null)
+    : ICommand<ExecutionResponse>;
+
+/// <summary>The batch in progress when a line stopped (D-036): its quantity in the material's base unit, and where it goes.</summary>
+public sealed record PartialBatchInput(decimal Quantity, Guid LocationId, string? LotNumber);
 
 /// <summary>Takes a completed job back to paused, and its work order back to in progress.</summary>
 public sealed record ReopenJobCommand(Guid JobId, long ExpectedVersion) : ICommand<ExecutionResponse>;
@@ -111,6 +121,16 @@ internal sealed class ExecutionWrites(
             WorkOrderStatus.Completed => $"Work order {workOrder.OrderNumber} is complete: all its jobs are done.",
             _ => null,
         };
+    }
+
+    /// <summary>Reports the partial batch of a run that is being ended (D-036); returns the notes for the operator.</summary>
+    public static async Task<IReadOnlyList<string>> ReportPartialAsync(
+        ProductionReporter reporter, Job job, JobRun run, PartialBatchInput partial, string? comment, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var result = await reporter.ReportAsync(
+            new ReportProductionCommand(job.Id, run.Id, 0m, 0m, null, null, partial.LocationId, partial.LotNumber, Comment: comment) { PartialQty = partial.Quantity },
+            onStop: true, now, cancellationToken);
+        return [.. result.Warnings.Select(w => w.Message)];
     }
 
     /// <summary>Notes on the jobs that wait for this one: which can start now, and which in how long.</summary>
@@ -312,14 +332,19 @@ internal sealed class PauseJobHandler(
     IWorkOrderRepository workOrders,
     IExecutionRepository execution,
     IInventoryRepository inventory,
+    IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events,
+    IIdGenerator ids,
     TimeProvider timeProvider) : ICommandHandler<PauseJobCommand, ExecutionResponse>
 {
     public async Task<ExecutionResponse> HandleAsync(PauseJobCommand command, CancellationToken cancellationToken)
     {
         var comment = InventoryRules.Text(command.Comment);
-        new Validator().RequireComment(command.Comment).ThrowIfInvalid();
+        new Validator()
+            .RequireComment(command.Comment)
+            .Require(command.PartialBatch is null || command.ReasonCodeId is not null, nameof(command.ReasonCodeId), "Say why the line stopped: a partial batch is an exception.")
+            .ThrowIfInvalid();
         var now = timeProvider.GetUtcNow();
         var writes = new ExecutionWrites(scheduling, workOrders, execution, eventLog, events);
 
@@ -334,6 +359,14 @@ internal sealed class PauseJobHandler(
 
         var run = await execution.GetOpenRunForUpdateAsync(job.Id, cancellationToken)
             ?? throw new DomainRuleException($"Job {job.JobNumber} has no open run.");
+        var notes = new List<string>();
+        if (command.PartialBatch is { } partial)
+        {
+            notes.AddRange(await ExecutionWrites.ReportPartialAsync(
+                new ProductionReporter(inventory, units, execution, eventLog, events, ids), job, run, partial, comment, now, cancellationToken));
+            run = (await execution.GetRunForUpdateAsync(run.Id, cancellationToken))!;
+        }
+
         var ended = run.End(now, command.ReasonCodeId);
         var envelope = events.Create(
             EventTypes.JobPaused, "job", job.Id,
@@ -342,7 +375,8 @@ internal sealed class PauseJobHandler(
         var version = await writes.SaveJobAsync(job, paused, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new ExecutionResponse(job.Id, version, run.Id, [$"Run {run.RunNo} of {job.JobNumber} ended after {RateCap.Duration(ended.Elapsed(now))}. Start the job again to resume it."]);
+        notes.Insert(0, $"Run {run.RunNo} of {job.JobNumber} ended after {RateCap.Duration(ended.Elapsed(now))}. Start the job again to resume it.");
+        return new ExecutionResponse(job.Id, version, run.Id, notes);
     }
 }
 
@@ -351,12 +385,20 @@ internal sealed class CompleteJobHandler(
     ISchedulingRepository scheduling,
     IWorkOrderRepository workOrders,
     IExecutionRepository execution,
+    IInventoryRepository inventory,
+    IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events,
+    IIdGenerator ids,
     TimeProvider timeProvider) : ICommandHandler<CompleteJobCommand, ExecutionResponse>
 {
     public async Task<ExecutionResponse> HandleAsync(CompleteJobCommand command, CancellationToken cancellationToken)
     {
+        var comment = InventoryRules.Text(command.Comment);
+        new Validator()
+            .RequireComment(command.Comment)
+            .Require(command.PartialBatch is null || command.ReasonCodeId is not null, nameof(command.ReasonCodeId), "Say why the job stopped short: a partial batch is an exception.")
+            .ThrowIfInvalid();
         var now = timeProvider.GetUtcNow();
         var writes = new ExecutionWrites(scheduling, workOrders, execution, eventLog, events);
 
@@ -364,10 +406,28 @@ internal sealed class CompleteJobHandler(
         var locked = await writes.LockAsync(command.JobId, command.ExpectedVersion, null, withOrder: true, cancellationToken);
         var job = locked.Job.Value;
         var completed = job.Complete(now);
+        if (command.ReasonCodeId is { } reasonId)
+        {
+            await InventoryRules.ReasonAsync(inventory, reasonId, ReasonKinds.RunEnd, job.SiteId, comment, cancellationToken);
+        }
+
+        var notes = new List<string>();
         var run = await execution.GetOpenRunForUpdateAsync(job.Id, cancellationToken);
+        if (command.PartialBatch is { } partial)
+        {
+            if (run is null)
+            {
+                throw new DomainRuleException($"{job.JobNumber} is paused, so its last run has ended; report the partial batch into that run from the job's page.");
+            }
+
+            notes.AddRange(await ExecutionWrites.ReportPartialAsync(
+                new ProductionReporter(inventory, units, execution, eventLog, events, ids), job, run, partial, comment, now, cancellationToken));
+            run = await execution.GetRunForUpdateAsync(run.Id, cancellationToken);
+        }
+
         if (run is not null)
         {
-            await execution.UpdateRunAsync(run.End(now, null), cancellationToken);
+            await execution.UpdateRunAsync(run.End(now, command.ReasonCodeId), cancellationToken);
         }
 
         var made = await execution.GetMadeAsync(job.Id, cancellationToken);
@@ -377,7 +437,6 @@ internal sealed class CompleteJobHandler(
         var version = await writes.SaveJobAsync(job, completed, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
 
-        var notes = new List<string>();
         if (job.JobType == JobType.Production && made == 0)
         {
             notes.Add($"Nothing was reported for {job.JobNumber}; you can still report into its runs until its work order is closed.");

@@ -22,6 +22,7 @@ INSERT INTO core.reason_code (site_id, reason_kind, code, name, requires_comment
     (NULL, 'hold', 'SUSPECT',   'Suspect quality',          true,  20),
     (NULL, 'hold', 'SUPPLIER',  'Supplier notice',          true,  30),
     (NULL, 'hold', 'CUSTOMER',  'Customer complaint',       true,  40),
+    (NULL, 'hold', 'PARTIAL',   'Partial batch awaiting approval', false, 50),
     (NULL, 'hold', 'OTHER',     'Other',                    true,  90),
     -- Scrap reported against a run (D-035).
     (NULL, 'scrap', 'STARTUP',   'Start-up scrap',           false, 10),

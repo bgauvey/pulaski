@@ -22,11 +22,13 @@ internal static class ExecutionEndpoints
 
         jobs.MapPost("/{id:guid}/pause", async Task<Ok<ExecutionResponse>> (
             Guid id, PauseJobRequest request, ICommandHandler<PauseJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new PauseJobCommand(id, request.Version, request.ReasonCodeId, request.Comment), ct)));
+            TypedResults.Ok(await handler.HandleAsync(
+                new PauseJobCommand(id, request.Version, request.ReasonCodeId, request.Comment, Partial(request.PartialBatch)), ct)));
 
         jobs.MapPost("/{id:guid}/complete", async Task<Ok<ExecutionResponse>> (
-            Guid id, JobVersionRequest request, ICommandHandler<CompleteJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new CompleteJobCommand(id, request.Version), ct)));
+            Guid id, CompleteJobRequest request, ICommandHandler<CompleteJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new CompleteJobCommand(id, request.Version, request.ReasonCodeId, request.Comment, Partial(request.PartialBatch)), ct)));
 
         jobs.MapPost("/{id:guid}/reopen", async Task<Ok<ExecutionResponse>> (
             Guid id, JobVersionRequest request, ICommandHandler<ReopenJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
@@ -37,14 +39,34 @@ internal static class ExecutionEndpoints
             Guid id, ReportProductionRequest request, ICommandHandler<ReportProductionCommand, ReportProductionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
                 new ReportProductionCommand(id, request.RunId, request.GoodQty, request.ScrapQty, request.UomId, request.ScrapReasonCodeId,
-                    request.LocationId, request.LotNumber, request.ExpiresAt, request.Comment),
+                    request.LocationId, request.LotNumber, request.ExpiresAt, request.Comment)
+                {
+                    GoodBatches = request.GoodBatches,
+                    ScrapBatches = request.ScrapBatches,
+                    PartialQty = request.PartialQty,
+                },
                 ct)));
+
+        // Partial batches waiting for approval (D-036).
+        var partials = routes.MapGroup("/partial-batches").WithTags("Execution");
+
+        partials.MapPost("/{id:guid}/approve", async Task<Ok<PartialBatchDecisionResponse>> (
+            Guid id, DecidePartialBatchRequest request, ICommandHandler<ApprovePartialBatchCommand, PartialBatchDecisionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ApprovePartialBatchCommand(id, request.Comment), ct)));
+
+        partials.MapPost("/{id:guid}/reject", async Task<Ok<PartialBatchDecisionResponse>> (
+            Guid id, DecidePartialBatchRequest request, ICommandHandler<RejectPartialBatchCommand, PartialBatchDecisionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RejectPartialBatchCommand(id, request.ScrapReasonCodeId ?? Guid.Empty, request.Comment), ct)));
 
         var sites = routes.MapGroup("/execution/sites").WithTags("Execution");
 
         sites.MapGet("/{siteId:guid}/board", async Task<Ok<IReadOnlyList<LineBoardRowDto>>> (
             Guid siteId, IQueryHandler<GetLineBoardQuery, IReadOnlyList<LineBoardRowDto>> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new GetLineBoardQuery(siteId), ct)));
+
+        sites.MapGet("/{siteId:guid}/partial-batches", async Task<Ok<IReadOnlyList<PartialBatchDto>>> (
+            Guid siteId, IQueryHandler<ListPendingPartialBatchesQuery, IReadOnlyList<PartialBatchDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListPendingPartialBatchesQuery(siteId), ct)));
 
         sites.MapGet("/{siteId:guid}/policy", async Task<Ok<ExecutionPolicyDto>> (
             Guid siteId, IQueryHandler<GetExecutionPolicyQuery, ExecutionPolicyDto> handler, CancellationToken ct) =>
@@ -56,4 +78,7 @@ internal static class ExecutionEndpoints
 
         return routes;
     }
+
+    private static PartialBatchInput? Partial(PartialBatchRequest? request) =>
+        request is null ? null : new PartialBatchInput(request.Quantity, request.LocationId, request.LotNumber);
 }
