@@ -28,7 +28,7 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
         id, site_id, work_order_id, job_number, job_type, equipment_id, material_id, planned_qty, uom_id,
         planned_start, planned_end, sequence_rank, is_locked, earliest_start, planned_duration,
         counts_as_planned_downtime, status, dispatched_at, firmed_at, replaces_job_id, group_equipment_id, latest_end,
-        process_operation_id, xmin::text::bigint AS version
+        process_operation_id, completed_at, xmin::text::bigint AS version
         """;
 
     private const string GetJobForUpdate = $"SELECT {JobColumns} FROM core.job WHERE id = @Id FOR UPDATE";
@@ -147,6 +147,7 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
             firmed_at = @FirmedAt,
             planned_start = @PlannedStart,
             planned_end = @PlannedEnd,
+            completed_at = @CompletedAt,
             updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
@@ -348,13 +349,14 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
         public Guid? GroupEquipmentId { get; init; }
         public DateTimeOffset? LatestEnd { get; init; }
         public Guid? ProcessOperationId { get; init; }
+        public DateTimeOffset? CompletedAt { get; init; }
         public long Version { get; init; }
 
         public Versioned<Job> ToVersioned() => new(
             new Job(
                 Id, SiteId, WorkOrderId, JobNumber, JobType, EquipmentId, MaterialId, PlannedQty, UomId,
                 PlannedStart, PlannedEnd, SequenceRank, IsLocked, EarliestStart, PlannedDuration,
-                CountsAsPlannedDowntime, Status, DispatchedAt, FirmedAt, ReplacesJobId, GroupEquipmentId, LatestEnd, ProcessOperationId),
+                CountsAsPlannedDowntime, Status, DispatchedAt, FirmedAt, ReplacesJobId, GroupEquipmentId, LatestEnd, ProcessOperationId, CompletedAt),
             Version);
     }
 

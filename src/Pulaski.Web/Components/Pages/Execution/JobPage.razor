@@ -1,0 +1,240 @@
+@page "/jobs/{JobId:guid}"
+@using Pulaski.Web.Services.Execution
+@inject PulaskiApiClient Api
+@inject TimeProvider Clock
+
+<PageTitle>@(_job?.JobNumber ?? "Job") · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <div class="small mb-1"><a href="floor">← Floor</a></div>
+        <h1 class="mb-1">
+            @(_job?.JobNumber ?? "Job")
+            @if (_job is { } h)
+            {
+                <span class="@Display.JobStatusChip(h.Status) ms-2 align-middle">@Display.Label(h.Status)</span>
+            }
+        </h1>
+        @if (_job is { } d)
+        {
+            <p class="text-muted mb-0">
+                @(d.MaterialCode is { } code ? $"Makes {code} · {d.MaterialName} on {d.LineCode}" : $"{Display.Label(d.JobType)} on {d.LineCode}")
+                @if (d.WorkOrderNumber is { } order)
+                {
+                    <span> · work order @order (@Display.Label(d.WorkOrderStatus))</span>
+                }
+            </p>
+        }
+    </div>
+    @if (_job is { } j)
+    {
+        var actions = FloorView.ActionsFor(j);
+        <div class="inv-head-tools">
+            @if (j.JobType == "production")
+            {
+                <a class="btn btn-outline-secondary" href="inventory/jobs/@JobId">Materials and lots</a>
+            }
+            @if (actions.CanStart && !j.IsOnGroup)
+            {
+                <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="StartAsync">@(j.Status == "paused" ? "Resume" : "Start")</button>
+            }
+            @if (actions.CanPause)
+            {
+                <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="PauseAsync">Pause</button>
+            }
+            @if (actions.CanComplete)
+            {
+                <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="CompleteAsync">Complete</button>
+            }
+            @if (actions.CanReopen)
+            {
+                <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="ReopenAsync">Reopen</button>
+            }
+            @if (actions.CanReport && !_reporting)
+            {
+                <button type="button" class="btn btn-primary" @onclick="() => _reporting = true">Report production</button>
+            }
+        </div>
+    }
+</div>
+
+<ProblemAlert Error="_error" />
+@if (_notes.Count > 0)
+{
+    <div class="drawer-alert mb-3" role="status"><Icon Name="info" Size="18" /><span>@string.Join(" ", _notes)</span></div>
+}
+
+@if (_job is { } job)
+{
+    @if (!job.IsReady && job.Waiting is { } waiting)
+    {
+        <div class="drawer-alert is-warning mb-3" role="status">
+            <Icon Name="clock" Size="18" />
+            <span>@waiting@(job.ReadyAt is { } at ? $" It can start at {Display.SiteTime(at, job.SiteTimeZone)}." : "")</span>
+        </div>
+    }
+    @if (job.IsOnGroup)
+    {
+        <p class="text-muted">Waiting on its department: start it from the <a href="floor">Floor</a>, choosing the line it runs on.</p>
+    }
+
+    <div class="inv-tiles">
+        @if (job.PlannedQty is { } planned)
+        {
+            <div class="inv-tile"><span class="metric">@FloorView.Qty(planned)</span><span class="inv-tile-label">Planned, @job.UomCode</span></div>
+            <div class="inv-tile">
+                <span class="metric @(job.GoodQty == 0 ? "is-zero" : "")">@FloorView.Qty(job.GoodQty)</span>
+                <span class="inv-tile-label">Good, @job.UomCode · @FloorView.Progress(planned, job.GoodQty)%</span>
+            </div>
+            <div class="inv-tile"><span class="metric @(job.ScrapQty == 0 ? "is-zero" : "")">@FloorView.Qty(job.ScrapQty)</span><span class="inv-tile-label">Scrap, @job.UomCode</span></div>
+        }
+        <div class="inv-tile"><span class="metric @(job.Runs.Count == 0 ? "is-zero" : "")">@job.Runs.Count</span><span class="inv-tile-label">@(job.Runs.Count == 1 ? "Run" : "Runs")</span></div>
+    </div>
+
+    @if (_reporting)
+    {
+        <ReportProductionForm Job="job" OnReported="OnReportedAsync" OnCancel="() => _reporting = false" />
+    }
+
+    <section class="inv-section" aria-labelledby="runs-title">
+        <div class="inv-section-head">
+            <h2 id="runs-title">Runs</h2>
+            @if (job.IdealRatePerHour is { } rate)
+            {
+                <span class="small text-muted">Ideal rate @FloorView.Qty(rate) @job.UomCode/h; a run can hold up to @FloorView.Qty(job.RateTolerancePct)% of it.</span>
+            }
+        </div>
+        @if (job.Runs.Count == 0)
+        {
+            <p class="text-muted">It hasn't run yet.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Run</th><th>Line</th><th>Started</th><th>Ended</th><th>Length</th><th class="inv-num">Good</th><th class="inv-num">Scrap</th><th class="inv-num">Cap</th><th>Why it ended</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in job.Runs)
+                        {
+                            <tr @key="r.Id">
+                                <td class="fw-semibold">@r.RunNo</td>
+                                <td>@r.LineCode</td>
+                                <td class="small">@Display.SiteTime(r.StartedAt, job.SiteTimeZone)</td>
+                                <td class="small">@(r.EndedAt is { } end ? Display.SiteTime(end, job.SiteTimeZone) : "running")</td>
+                                <td class="small">@FloorView.Elapsed(r.StartedAt, r.EndedAt ?? Clock.GetUtcNow())</td>
+                                <td class="inv-num">@FloorView.Qty(r.GoodQty)</td>
+                                <td class="inv-num">@FloorView.Qty(r.ScrapQty)</td>
+                                <td class="inv-num">@FloorView.Qty(r.CapQty)</td>
+                                <td class="small">@(r.EndReason ?? (r.EndedAt is null ? "" : "—"))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="inv-section" aria-labelledby="reports-title">
+        <h2 id="reports-title">Production reports</h2>
+        @if (job.Reports.Count == 0)
+        {
+            <p class="text-muted">Nothing reported yet.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Entered</th><th>Run</th><th class="inv-num">Good</th><th class="inv-num">Scrap</th><th>Scrap reason</th><th>By</th><th>Comment</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in job.Reports)
+                        {
+                            <tr @key="(r.RunId, r.RecordedAt)">
+                                <td class="small">
+                                    @Display.SiteTime(r.RecordedAt, job.SiteTimeZone)
+                                    @if (r.IsLate)
+                                    {
+                                        <span class="chip ms-1" title="Entered after the run ended; counted at the run's end">late</span>
+                                    }
+                                </td>
+                                <td>@r.RunNo</td>
+                                <td class="inv-num">@FloorView.Qty(r.GoodQty)</td>
+                                <td class="inv-num">@FloorView.Qty(r.ScrapQty)</td>
+                                <td class="small">@r.ScrapReason</td>
+                                <td class="small">@r.ActorId</td>
+                                <td class="small">@r.Comment</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+else if (_error is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+
+@code {
+    [Parameter]
+    public Guid JobId { get; set; }
+
+    private JobExecutionDto? _job;
+    private ApiException? _error;
+    private IReadOnlyList<string> _notes = [];
+    private bool _busy;
+    private bool _reporting;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _notes = [];
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _job = await Api.GetJobExecutionAsync(JobId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private Task StartAsync() => RunAsync(() => Api.StartJobAsync(JobId, new StartJobRequest { Version = _job!.Version }));
+
+    private Task PauseAsync() => RunAsync(() => Api.PauseJobAsync(JobId, new PauseJobRequest { Version = _job!.Version }));
+
+    private Task CompleteAsync() => RunAsync(() => Api.CompleteJobAsync(JobId, _job!.Version));
+
+    private Task ReopenAsync() => RunAsync(() => Api.ReopenJobAsync(JobId, _job!.Version));
+
+    private async Task RunAsync(Func<Task<ExecutionResponse>> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _notes = (await action()).Notes;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnReportedAsync(ReportProductionResponse result)
+    {
+        _reporting = false;
+        _notes = [$"Reported: run now has {FloorView.Qty(result.RunGoodQty)} good and {FloorView.Qty(result.RunScrapQty)} scrap{(result.Lot is { } lot ? $"; good output in lot {lot.LotNumber ?? "balance"}" : "")}.",
+            .. result.Warnings.Select(w => w.Message)];
+        await LoadAsync();
+    }
+}

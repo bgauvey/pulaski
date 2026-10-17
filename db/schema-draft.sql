@@ -710,6 +710,7 @@ CREATE TABLE core.job (
     dispatched_at       timestamptz,
     firmed_at           timestamptz,                            -- planned_start is frozen from here on (D-019)
     replaces_job_id     uuid REFERENCES core.job(id),           -- set on the replacement for a cancelled, started job
+    completed_at        timestamptz,                            -- when it was last completed (D-035); downstream "after end" links count from it
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT job_number_uq UNIQUE (site_id, job_number),
@@ -788,6 +789,16 @@ CREATE TABLE core.run_standard (
     CONSTRAINT run_standard_modified_ck CHECK (
         (modified_rate_per_hour IS NULL) = (modified_at IS NULL)
         AND (modified_rate_per_hour IS NULL) = (modified_by IS NULL))
+);
+
+-- Per-site tolerances for production reporting (D-035). A site without a row uses the defaults.
+-- Reported output may reach the run's elapsed time x the capability's ideal rate x rate_tolerance_pct;
+-- consumption beyond the planned components x consumption_tolerance_pct is allowed, with a warning.
+CREATE TABLE core.execution_policy (
+    site_id                     uuid PRIMARY KEY REFERENCES core.equipment(id),
+    rate_tolerance_pct          numeric(6,1) NOT NULL DEFAULT 110 CHECK (rate_tolerance_pct >= 100 AND rate_tolerance_pct <= 1000),
+    consumption_tolerance_pct   numeric(6,1) NOT NULL DEFAULT 110 CHECK (consumption_tolerance_pct >= 100 AND consumption_tolerance_pct <= 1000),
+    updated_at                  timestamptz NOT NULL DEFAULT now()
 );
 
 -- Sequence-dependent changeover matrix (D-015). Each side matches a material,
@@ -1157,10 +1168,15 @@ CREATE TABLE ts.production_count (
     scrap_reason_code_id    uuid REFERENCES core.reason_code(id),
     source                  text NOT NULL CHECK (source IN ('machine','operator','correction')),
     corrects_id             uuid,                               -- for corrections: the row being offset
+    job_id                  uuid,                               -- the run's job (D-035); no FK into history from here either
+    recorded_at             timestamptz NOT NULL DEFAULT now(), -- when it was entered; occurred_at is inside the run it belongs to
+    actor_id                text,                               -- issuer|subject, as on evt.event
+    comment                 text CHECK (length(comment) <= 1000),
     PRIMARY KEY (id, occurred_at)
 ) PARTITION BY RANGE (occurred_at);
 CREATE INDEX ON ts.production_count (equipment_id, occurred_at);
 CREATE INDEX ON ts.production_count (run_id);
+CREATE INDEX production_count_job_ix ON ts.production_count (job_id) WHERE job_id IS NOT NULL;
 
 -- High-rate telemetry. No surrogate id and no FKs: 16 bytes and an FK probe
 -- per row matter at this volume. Daily partitions, short retention.
@@ -1467,7 +1483,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0004_inventory_completion'),
     ('0005_indistinguishable_lots'),
     ('0006_location_and_expiry_rules'),
-    ('0007_materials_management');
+    ('0007_materials_management'),
+    ('0008_job_execution');
 
 -- =====================================================================
 -- 17. SEED DATA

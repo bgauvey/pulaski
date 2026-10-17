@@ -92,9 +92,22 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         return material;
     }
 
-    public InventoryJob AddJob(string number, Guid siteId, Guid? materialId, string status = "planned", string jobType = "production")
+    public InventoryJob AddJob(
+        string number, Guid siteId, Guid? materialId, string status = "planned", string jobType = "production", Guid? uomId = null, decimal? plannedQty = null)
     {
-        var job = new InventoryJob { Id = Guid.CreateVersion7(), SiteId = siteId, JobNumber = number, JobType = jobType, Status = status, MaterialId = materialId };
+        var job = new InventoryJob
+        {
+            Id = Guid.CreateVersion7(),
+            SiteId = siteId,
+            JobNumber = number,
+            JobType = jobType,
+            Status = status,
+            MaterialId = materialId,
+            EquipmentId = Guid.CreateVersion7(),
+            LineCode = "EXT-01",
+            UomId = uomId,
+            PlannedQty = plannedQty,
+        };
         lock (_lock)
         {
             _jobs[job.Id] = job;

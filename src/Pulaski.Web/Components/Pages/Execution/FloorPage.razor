@@ -1,0 +1,337 @@
+@page "/floor"
+@implements IDisposable
+@using Pulaski.Web.Services.Execution
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject TimeProvider Clock
+
+<PageTitle>Floor · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Floor</h1>
+        <p class="text-muted mb-0">What runs on each line and what comes next. Start, pause and complete jobs, and report what they make.</p>
+    </div>
+    <div class="inv-head-tools">
+        @if (Sites.Sites.Count > 1)
+        {
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+        <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="LoadAsync" title="Refresh now"><Icon Name="refresh" Size="16" /></button>
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+@if (_notes.Count > 0)
+{
+    <div class="drawer-alert mb-3" role="status">
+        <Icon Name="info" Size="18" />
+        <span>@string.Join(" ", _notes)</span>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _notes = []">Dismiss</button>
+    </div>
+}
+
+@if (_board is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_board.Count == 0)
+{
+    <div class="empty-panel">
+        <h2>No lines</h2>
+        <p class="text-muted mb-0">Add lines that run jobs on the <a href="equipment">Equipment</a> page.</p>
+    </div>
+}
+else
+{
+    var lines = _board.Where(r => !r.IsGroup).ToList();
+    <div class="floor-grid">
+        @foreach (var row in _board)
+        {
+            <section class="floor-card @(row.Running is null ? "" : "is-running")" @key="row.LineId" aria-labelledby="line-@row.LineId">
+                <header class="floor-card-head">
+                    <div>
+                        <h2 id="line-@row.LineId" class="h6 mb-0">@row.LineCode</h2>
+                        <div class="small text-muted">@row.LineName@(row.IsGroup ? " · department" : "")</div>
+                    </div>
+                    @if (!row.IsGroup)
+                    {
+                        <span class="@(row.Running is null ? "chip" : "chip chip-strong chip-live")">@(row.Running is null ? "Idle" : "Running")</span>
+                    }
+                </header>
+
+                @if (row.Running is { } r)
+                {
+                    var room = FloorView.RoomLeft(r.CapQty, r.RunGoodQty, r.RunScrapQty);
+                    var pct = FloorView.CapPercent(r.CapQty, r.RunGoodQty, r.RunScrapQty);
+                    <div class="floor-running">
+                        <div class="d-flex justify-content-between align-items-baseline">
+                            <a class="fw-semibold" href="jobs/@r.JobId">@r.JobNumber</a>
+                            <span class="small text-muted">run @r.RunNo · @FloorView.Elapsed(r.StartedAt, Clock.GetUtcNow())</span>
+                        </div>
+                        <div class="small">@(r.MaterialCode ?? Display.Label(r.JobType))@(r.WorkOrderNumber is { } o ? $" · {o}" : "")</div>
+                        @if (r.PlannedQty is { } planned)
+                        {
+                            <div class="small mt-1">
+                                <span class="fw-semibold">@FloorView.Qty(r.GoodQty)</span> of @FloorView.Qty(planned) @r.UomCode good
+                                @if (r.ScrapQty > 0)
+                                {
+                                    <span class="text-muted"> · @FloorView.Qty(r.ScrapQty) scrap</span>
+                                }
+                            </div>
+                            <div class="floor-bar" role="img" aria-label="@FloorView.Progress(planned, r.GoodQty)% of the planned quantity">
+                                <span style="width: @FloorView.Progress(planned, r.GoodQty)%"></span>
+                            </div>
+                            <div class="small text-muted mt-1">
+                                This run: @FloorView.Qty(r.RunGoodQty + r.RunScrapQty) @r.UomCode@(room is { } left ? $" · room for {FloorView.Qty(left)} more at the line's rate" : " · rate not checked")
+                                @if (pct >= 90)
+                                {
+                                    <span class="text-warning-strong"> · near the rate cap</span>
+                                }
+                            </div>
+                        }
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            @if (r.JobType == "production")
+                            {
+                                <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => OpenReportAsync(r.JobId)">Report</button>
+                            }
+                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => _pauseFor = r.JobId">Pause</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => CompleteAsync(r)">Complete</button>
+                        </div>
+
+                        @if (_pauseFor == r.JobId)
+                        {
+                            <div class="floor-inline mt-2">
+                                <label class="form-label small" for="pause-reason-@r.JobId">Why is it stopping? (optional)</label>
+                                <div class="d-flex gap-2">
+                                    <select id="pause-reason-@r.JobId" class="form-select form-select-sm" @bind="_pauseReason">
+                                        <option value="@Guid.Empty">No reason</option>
+                                        @foreach (var reason in _runEndReasons)
+                                        {
+                                            <option value="@reason.Id">@reason.Name</option>
+                                        }
+                                    </select>
+                                    <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => PauseAsync(r)">Pause</button>
+                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _pauseFor = null">Cancel</button>
+                                </div>
+                            </div>
+                        }
+
+                        @if (_reportJob is { } reportJob && reportJob.JobId == r.JobId)
+                        {
+                            <div class="mt-2">
+                                <ReportProductionForm Job="reportJob" OnReported="OnReportedAsync" OnCancel="() => _reportJob = null" />
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (row.Next.Count > 0)
+                {
+                    <h3 class="floor-next-title">@(row.IsGroup ? "Waiting for a line" : "Next")</h3>
+                    <ul class="floor-next">
+                        @foreach (var job in row.Next)
+                        {
+                            <li @key="job.JobId">
+                                <div class="d-flex justify-content-between gap-2 align-items-start">
+                                    <div>
+                                        <a class="fw-semibold" href="jobs/@job.JobId">@job.JobNumber</a>
+                                        <span class="@Display.JobStatusChip(job.Status) ms-1">@Display.Label(job.Status)</span>
+                                        <div class="small">
+                                            @(job.MaterialCode ?? Display.Label(job.JobType))@(job.PlannedQty is { } q ? $" · {FloorView.Qty(q)} {job.UomCode}" : "")@(job.WorkOrderNumber is { } o ? $" · {o}" : "")
+                                        </div>
+                                        @if (!job.IsReady)
+                                        {
+                                            <div class="small text-muted">@job.Waiting@(job.ReadyAt is { } at ? $" Ready at {Display.SiteTime(at, Sites.Site?.TimeZone)}." : "")</div>
+                                        }
+                                    </div>
+                                    @if (row.IsGroup)
+                                    {
+                                        <div class="d-flex gap-1">
+                                            <select class="form-select form-select-sm" aria-label="Line for @job.JobNumber" @bind="_groupLine">
+                                                <option value="@Guid.Empty">Line…</option>
+                                                @foreach (var l in lines.Where(l => l.Running is null))
+                                                {
+                                                    <option value="@l.LineId">@l.LineCode</option>
+                                                }
+                                            </select>
+                                            <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || !job.IsReady || _groupLine == Guid.Empty)"
+                                                    @onclick="() => StartAsync(job, _groupLine)">Start</button>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm @(FloorView.CanStart(job, row) ? "btn-primary" : "btn-outline-secondary")"
+                                                disabled="@(_busy || !FloorView.CanStart(job, row))"
+                                                title="@(row.Running is not null ? "Pause or complete " + row.Running.JobNumber + " first" : job.Waiting)"
+                                                @onclick="() => StartAsync(job, null)">
+                                            @(job.Status == "paused" ? "Resume" : "Start")
+                                        </button>
+                                    }
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+                else if (row.Running is null)
+                {
+                    <p class="small text-muted mb-0">Nothing planned here.</p>
+                }
+            </section>
+        }
+    </div>
+    <p class="small text-muted mt-2">Refreshes every @((int)FloorView.RefreshInterval.TotalSeconds) seconds while no form is open.</p>
+}
+
+@code {
+    private IReadOnlyList<LineBoardRowDto>? _board;
+    private IReadOnlyList<ReasonCodeDto> _runEndReasons = [];
+    private IReadOnlyList<string> _notes = [];
+    private ApiException? _error;
+    private bool _busy;
+    private Guid? _pauseFor;
+    private Guid _pauseReason;
+    private Guid _groupLine;
+    private JobExecutionDto? _reportJob;
+    private readonly CancellationTokenSource _cts = new();
+
+    private bool FormOpen => _pauseFor is not null || _reportJob is not null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        _ = TickAsync(_cts.Token);
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            if (Sites.SiteId is { } site)
+            {
+                _board = await Api.GetLineBoardAsync(site);
+                if (_runEndReasons.Count == 0)
+                {
+                    _runEndReasons = await Api.ListReasonCodesAsync("run_end", site);
+                }
+            }
+            else
+            {
+                _board = [];
+            }
+
+            _error = null;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task TickAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(FloorView.RefreshInterval, Clock);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                await InvokeAsync(async () =>
+                {
+                    if (!FormOpen && !_busy)
+                    {
+                        await LoadAsync();
+                        StateHasChanged();
+                    }
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Page closed.
+        }
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _runEndReasons = [];
+        await LoadAsync();
+    }
+
+    private Task StartAsync(BoardJobDto job, Guid? lineId) => RunAsync(async () =>
+    {
+        var result = await Api.StartJobAsync(job.JobId, new StartJobRequest { Version = job.Version, LineId = lineId });
+        _groupLine = Guid.Empty;
+        return result.Notes.Count > 0 ? result.Notes : [$"{job.JobNumber} started."];
+    });
+
+    private Task PauseAsync(RunningJobDto job) => RunAsync(async () =>
+    {
+        var result = await Api.PauseJobAsync(job.JobId, new PauseJobRequest { Version = job.Version, ReasonCodeId = _pauseReason == Guid.Empty ? null : _pauseReason });
+        _pauseFor = null;
+        _pauseReason = Guid.Empty;
+        return result.Notes;
+    });
+
+    private Task CompleteAsync(RunningJobDto job) => RunAsync(async () =>
+    {
+        var result = await Api.CompleteJobAsync(job.JobId, job.Version);
+        return [$"{job.JobNumber} completed.", .. result.Notes];
+    });
+
+    private async Task OpenReportAsync(Guid jobId)
+    {
+        _error = null;
+        try
+        {
+            _reportJob = await Api.GetJobExecutionAsync(jobId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnReportedAsync(ReportProductionResponse result)
+    {
+        var job = _reportJob!;
+        _reportJob = null;
+        _notes = [$"{job.JobNumber}: this run now has {FloorView.Qty(result.RunGoodQty)} good and {FloorView.Qty(result.RunScrapQty)} scrap.",
+            .. result.Warnings.Select(w => w.Message)];
+        await LoadAsync();
+    }
+
+    private async Task RunAsync(Func<Task<IReadOnlyList<string>>> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _notes = await action();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

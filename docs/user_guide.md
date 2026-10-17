@@ -2,7 +2,7 @@
 
 *Last updated: 2026-10-17 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
-This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#13-reference) tables give the exact rules.
+This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#14-reference) tables give the exact rules.
 
 ## Contents
 
@@ -16,12 +16,13 @@ This guide explains how to use Pulaski to set up your plant, plan production and
 8. [Creating a work order](#8-creating-a-work-order)
 9. [The Work orders screen](#9-the-work-orders-screen)
 10. [The Schedule](#10-the-schedule)
-11. [Inventory](#11-inventory)
-12. [Materials](#12-materials)
-13. [Reference](#13-reference)
-14. [What Pulaski doesn't do yet](#14-what-pulaski-doesnt-do-yet)
-15. [Troubleshooting and questions](#15-troubleshooting-and-questions)
-16. [Glossary](#16-glossary)
+11. [The Floor: running jobs and reporting production](#11-the-floor-running-jobs-and-reporting-production)
+12. [Inventory](#12-inventory)
+13. [Materials](#13-materials)
+14. [Reference](#14-reference)
+15. [What Pulaski doesn't do yet](#15-what-pulaski-doesnt-do-yet)
+16. [Troubleshooting and questions](#16-troubleshooting-and-questions)
+17. [Glossary](#17-glossary)
 
 ---
 
@@ -40,7 +41,7 @@ Today you can use Pulaski to:
 - publish the plan to the floor and freeze it;
 - keep **inventory**: receive material lots into stores, write stock up or off, move and hold lots, record what each job used and made, and trace any lot back to what it was made from or forward to what was made from it.
 
-Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#14-what-pulaski-doesnt-do-yet).
+Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#15-what-pulaski-doesnt-do-yet).
 
 ### Opening Pulaski
 
@@ -113,7 +114,7 @@ A line is both. A **department** (for example the Extrusion area) is schedulable
 
 ### What you make: materials
 
-A **material** is anything you make or use: a finished profile, a resin, a dry blend, a pallet, an end cap. Each material has a code (its item number), a base unit (metres, kilograms, each) and usually a **material class** that groups similar materials, such as *Extruded profiles*. Materials are kept on the [Materials](#12-materials) page; those your ERP sends keep their code, name, base unit and type in the ERP.
+A **material** is anything you make or use: a finished profile, a resin, a dry blend, a pallet, an end cap. Each material has a code (its item number), a base unit (metres, kilograms, each) and usually a **material class** that groups similar materials, such as *Extruded profiles*. Materials are kept on the [Materials](#13-materials) page; those your ERP sends keep their code, name, base unit and type in the ERP.
 
 **Capabilities** say which material can run on which line, and how fast (its ideal rate). Pulaski never puts a material's job on a line without a capability for it. You add them on the material's page ([Where it can run](#where-it-can-run-capabilities-and-rates)).
 
@@ -171,7 +172,7 @@ If you are starting from an empty Pulaski, work through this list in order. Each
 | --- | --- | --- | --- |
 | 1 | The enterprise and at least one site, with its time zone | [Equipment](#4-equipment) | Everything else belongs to a site. |
 | 2 | Areas (departments) and lines under the site | [Equipment](#4-equipment) | Jobs are planned on lines and departments. |
-| 3 | Material classes, then materials (one by one, from a [CSV file](#import-materials-from-a-csv-file), or from the ERP) | [Materials](#12-materials) | Orders and BOMs need materials. |
+| 3 | Material classes, then materials (one by one, from a [CSV file](#import-materials-from-a-csv-file), or from the ERP) | [Materials](#13-materials) | Orders and BOMs need materials. |
 | 3a | Units, and conversions for materials you order or use in other units | [Units](#6-units-and-conversions) | So orders, BOMs and rates can use any unit that converts. |
 | 4 | Capabilities: which material runs on which line, and how fast | [The material's page](#where-it-can-run-capabilities-and-rates) | Without one, a line can't take a material's job. |
 | 5 | Shift calendar (optional) | *Your administrator* (no screen yet) | Without one, Pulaski assumes lines run around the clock and marks them **24/7**. |
@@ -258,7 +259,7 @@ Select it and edit a property on the right. Text saves when you press **Enter** 
 | **Can run jobs** | Work actually runs on it. | Same as Schedulable |
 | **Holds inventory** | Material lots can be stored or loaded here. | Feed points, storage zones and units |
 | **One material at a time** | Shown once **Holds inventory** is ticked. Another material can arrive only when the quantity of the one there is 0 (stock on hold still counts). It can't be turned on while two materials are there. | Silos and tanks dedicated to one material |
-| **Lots are indistinguishable** | Shown once **Holds inventory** is ticked. Lots here mix and can't be told apart, like a silo or tank: everything that arrives joins one balance per material. See [Inventory](#11-inventory). It can't be turned on while separate lots are there; merge or move them first. | Silos, tanks, mixing hoppers |
+| **Lots are indistinguishable** | Shown once **Holds inventory** is ticked. Lots here mix and can't be told apart, like a silo or tank: everything that arrives joins one balance per material. See [Inventory](#12-inventory). It can't be turned on while separate lots are there; merge or move them first. | Silos, tanks, mixing hoppers |
 
 **A location holding stock** can't be deactivated or stop holding inventory: move, use or write off the stock first.
 
@@ -355,7 +356,7 @@ Orders already made keep the version they were made from. If a draft already exi
 - Operations with no path of links between them run in parallel; links make them sequential. Links must flow one way; a loop is refused.
 - A released process with more than one operation must be connected.
 - Only lines and departments of the process's own site can be used; machines and other equipment that neither runs nor plans jobs are refused.
-- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#14-what-pulaski-doesnt-do-yet).
+- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#15-what-pulaski-doesnt-do-yet).
 
 ---
 
@@ -683,7 +684,75 @@ Pulaski lays work end to end on each line, so two jobs on a line only overlap wh
 
 ---
 
-## 11. Inventory
+## 11. The Floor: running jobs and reporting production
+
+**Operate → Floor.** Where operators start, pause and complete jobs and report what they make. The schedule says what should run; the floor records what does.
+
+### Ideas to know first
+
+- **Runs.** A job runs in one or more **runs**: starting a job opens a run, pausing or completing it ends the run, and resuming opens the next. Good and scrap are reported into a run, and so are the lots the job uses and makes.
+- **Only one run at a time on a line.** Pause or complete what is running before starting the next job.
+- **When a job can start.** Its work order must be on the floor (dispatched or firmed). If its order was made from a process, the process links must be met: a Pack operation set to start *after Extrude ends* can't start until every Extrude job of the order is completed, plus any lag. Pulaski never starts a job by itself; it tells you when one can start.
+- **The rate check.** A run can't hold more than the line could have made in it: its length × the line's **ideal rate** for the material × the site's tolerance (110% unless your administrator changed it). Reporting 1000 m after one hour on a line rated 100 m/h is refused. The check uses the ideal rate from the line's capability, not the planning rate, which is usually lower.
+- **The order follows its jobs.** Starting an order's first job firms the order (if it was only dispatched) and puts it **in progress**; completing its last open job **completes** it; reopening a job takes it back to in progress.
+
+### The board
+
+Each line is a card. A running line shows its job with the run's length, good quantity against the plan (with a bar), scrap, and how much more the run can hold at the line's rate. Below it, **Next** lists the line's other open jobs in sequence, each with its status and, when it can't start yet, why (*Waiting for operation 10 Extrude to end*) and when (*Ready at 14:30*). Departments with jobs waiting on them have a card of their own. The board refreshes every 15 seconds while no form is open.
+
+### Start a job
+
+1. Find the job under **Next** on its line's card.
+2. Click **Start** (or **Resume** for a paused job). The button is active only when the job can start and the line is free.
+3. For a job waiting on a department, choose the **Line** it runs on next to it, then click **Start**.
+
+If the material changes on a line in automatic changeover mode, Pulaski starts a **changeover** job first (named after the job, such as *WO-5002-10-CO*) and says so. Complete the changeover when the line is ready, then start the job. If no changeover is needed, complete it straight away.
+
+### Report production
+
+1. On the running line's card, click **Report**.
+2. The **Run** is the open run. Enter the **Good** quantity and the **Scrap** quantity (either can be zero), in the job's unit.
+3. For good output, choose where it **goes to** and, optionally, a **Lot number**; left blank, Pulaski numbers it after the job (*WO-5001-10-01*, *-02*…).
+4. For scrap, choose a **Scrap reason**.
+5. Click **Report**. The card updates with the new totals.
+
+If the report is more than the run can hold, Pulaski refuses it and says how much more fits.
+
+### Pause, resume and complete
+
+- **Pause** stops the job for now. Choose why (*End of shift*, *Waiting for material*…) or leave it blank, then click **Pause**. The run ends and the line is free for another job. Click **Resume** later to open a new run.
+- **Complete** ends the job. Jobs waiting on it are named when they can now start (*WO-5001-20 on PACK1 can start now.*). If it was the order's last open job, the order is completed.
+
+### Report production after the run
+
+Production found after a run has ended (counted at the end of a shift, or a pallet missed) is reported into that run.
+
+1. Open the job's page: click its number on the board, or **Runs and reports** on its inventory page.
+2. Click **Report production**.
+3. Choose the **Run** it belongs to. A run that has ended is marked *Recorded late*.
+4. Enter the quantities as above and click **Report**.
+
+The run's rate check still applies: an hour-long run can't take more than an hour's output. Late reports are allowed until the work order is closed, and show as *late* in the job's reports.
+
+### The job page
+
+`jobs/<job>` shows the job's status, planned, good and scrap quantities, its **runs** (line, start, end, length, good, scrap, the most the run can hold, and why it ended) and its **production reports** (when entered, which run, good, scrap, scrap reason, who and any comment). The buttons offer what the job's status allows: **Start** or **Resume**, **Pause**, **Complete**, **Reopen** for a completed job whose order isn't closed, and **Report production**. **Materials and lots** opens the job's inventory page.
+
+### In detail
+
+- **Statuses.** A production job starts from *dispatched* or *firmed* (starting firms a dispatched order with all its jobs, since execution freezes the plan), and resumes from *paused*. Non-production jobs (cleaning, maintenance, trial, changeover) also start from *planned*. A completed job can be reopened to *paused* until its order is closed; closing the order closes its completed jobs.
+- **The order's status** can't be set to in progress or completed by hand any more: it follows its jobs. Closing a completed order is still done on the Work orders screen.
+- **The rate check** uses the capability in effect when the run started, converted into the job's unit, and counts good plus scrap across the whole run, including late reports. If the line had no capability for the material, or its rate unit doesn't convert, the report is recorded with a warning that it wasn't checked. The tolerance is set per site, between 100% and 1000%, through `PUT /api/execution/sites/<site>/policy`; there is no screen for it yet.
+- **When a report counts.** A report into the open run counts at the moment it is entered; one into an ended run counts at the end of that run. Both keep the time they were entered.
+- **Consumption** needs a run too: the job's open run, or the run chosen (see [Record what a job used and made](#record-what-a-job-used-and-made-the-jobs-tab)). Using more of a planned component than the plan allows is recorded with a warning. The plan's quantity is scaled up when the job makes more than planned, and gets the site's consumption tolerance (also 110% by default).
+- **The changeover check** compares the job's material with the last job that ran on the line. If that was a production job of another material, a changeover job is started first. In *scheduler* mode, and on a line that hasn't run anything yet, no changeover is added.
+- **Process links.** *After start* is met once any job of the upstream operation has started; *after end* once all of them are completed. Each is plus its lag. Cancelled upstream jobs don't count.
+- **Events:** `pulaski.job.started.v1`, `…paused.v1`, `…completed.v1`, `…reopened.v1` and `…production_reported.v1`; the counts are kept in `ts.production_count`.
+- **Concurrency.** Start, pause, complete and reopen check the job hasn't changed since the screen read it; reports don't, so several people can report into a busy line, protected by the rate check under a lock.
+
+---
+
+## 12. Inventory
 
 **Inventory** (in the side menu under *Operate*) shows what material you have, where it is and what happened to it. It has eight tabs: **Stock**, **Lots**, **Locations**, **Jobs**, **Shortages**, **Journal**, **Counts** and **Reports**. If your company has more than one site, pick the site at the top right; Pulaski remembers it while you move between the tabs.
 
@@ -752,14 +821,14 @@ Some reasons ask for a comment; the form says *(required)* when they do.
 
 ### Record what a job used and made: the Jobs tab
 
-Until Pulaski records production from the machines, operators declare it here.
+Until Pulaski records production from the machines, operators declare it here. Material is used and made while a job runs, so everything goes into one of the job's runs (see [The Floor](#11-the-floor-running-jobs-and-reporting-production)).
 
-1. Open the **Jobs** tab and click a job (search by job, order or material). Only open production jobs are listed.
+1. Open the **Jobs** tab and click a job (search by job, order or material). Production jobs that are running, paused, or completed but not yet closed are listed; start a job on the Floor first.
 2. The job page shows the **components** planned for it (from its order's BOM) with how much has been consumed and how much is still to use, and the **lots it made**.
-3. To record material used: click **Consume a lot**, choose the material (planned ones are marked), choose the lot, enter the quantity and click **Record consumption**.
-4. To record output: click **Declare production**, choose the location the output goes to, enter the quantity (the job's unit is filled in) and click **Record production**. Leave **Lot number** blank and Pulaski numbers it after the job: *WO-1001-10-01*, *-02*… Enter an existing number of a lot this job made at the same place to add to it.
+3. To record material used: click **Consume a lot**, choose the material (planned ones are marked), choose the lot, check the **Run** (the open run is chosen; pick an ended one to record use found afterwards), enter the quantity and click **Record consumption**. Using more than the job's plan allows is recorded with a warning to check it.
+4. To record output: click **Declare production**, check the **Run**, choose the location the output goes to, enter the quantity (the job's unit is filled in) and click **Record production**. Leave **Lot number** blank and Pulaski numbers it after the job: *WO-1001-10-01*, *-02*… Enter an existing number of a lot this job made at the same place to add to it.
 
-You can also consume from a lot's own page, and declare production from the Stock tab (choose the job there).
+You can also consume from a lot's own page, and declare production from the Stock tab (choose the job there). Declaring production here is the same as reporting good output on the Floor, with the same rate check; report scrap on the Floor or the job's page.
 
 ### Trace a lot
 
@@ -838,12 +907,12 @@ The **Locations** tab lists every piece of equipment that holds inventory, with 
 - **Concurrency.** Write up, write off, move, hold and release check that the lot hasn't changed since you opened it; if it has you'll see *"changed by someone else"*: reload and try again. Consumption and production don't check, so several people can declare against a busy line; the no-negative-stock rule still protects them.
 - **Substitutions.** Consuming a material the job has no planned component of is allowed, and recorded as a **substitution** (amber on the job page and in the confirmation).
 - **Genealogy is per job for now.** Every lot consumed into a job is recorded as a parent of every lot the job made, whichever came first. That can link more than really mixed (a resin lot used in the first hour shows as a parent of the last pallet). It narrows to time windows once Pulaski records production from the machines.
-- **Times** are the moment you click; you can't yet back-date a movement.
+- **Times** are the moment you click; you can't back-date a movement. A movement recorded into a run that has ended keeps the time you entered it and names the run it belongs to.
 - **What the ERP sees.** Each movement is an event in Pulaski's event log (`pulaski.lot.received.v1`, `…consumed.v1` and so on), ready to be sent to the ERP once the connection is built.
 
 ---
 
-## 12. Materials
+## 13. Materials
 
 **Configure → Materials.** Every item and part Pulaski knows about: what you make, what you make it from, and what you pack it in. The page has two tabs, **Materials** and **Classes**.
 
@@ -941,7 +1010,7 @@ Load many materials at once, for example when setting up a new site, from a spre
 **In detail**
 
 - **All or nothing.** If any row has an error, nothing is imported. A check run never saves anything.
-- **Which material a row is.** A row with `external_system` and `external_key` is the ERP's item: matched on them, created if new, and its code, name, base unit and type updated (as in the [ERP import](#in-detail-5)). A row without them is a Pulaski material, matched on its code. A row whose code belongs to an ERP material is an error: give its external columns or change it in the ERP.
+- **Which material a row is.** A row with `external_system` and `external_key` is the ERP's item: matched on them, created if new, and its code, name, base unit and type updated (as in the [ERP import](#in-detail-6)). A row without them is a Pulaski material, matched on its code. A row whose code belongs to an ERP material is an error: give its external columns or change it in the ERP.
 - **Left out or blank.** A column the file doesn't have keeps what each material already has (or the default for a new one: lot-tracked, active, no class). A blank cell in `class`, `description` or `shelf_life_days` clears it; a blank `lot_tracked` or `active` keeps it.
 - **The rules are the same as on the material page:** a base unit that is in use can't change, lot tracking can't change while stock is on hand, an inactive class can't be given to a material, and a code or ERP key can appear only once in a file.
 - **The file:** comma or semicolon separators, quotes around a value that contains them (or line breaks), column names in any order and case (`Base unit` and `base-unit` both work, as do `item_code` and `uom`). An unknown column stops the import, so a misspelt name isn't ignored. At most 5 MB and 5,000 rows per file.
@@ -973,14 +1042,14 @@ A class's code can't change and a class is never deleted: switch it off instead.
 
 ### In detail
 
-- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#14-what-pulaski-doesnt-do-yet)).
+- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#15-what-pulaski-doesnt-do-yet)).
 - **Codes** are unique across all materials, whatever their origin; an import whose code is already used by another material is refused.
 - **Events.** Each change is recorded in the event log as `pulaski.material.created.v1`, `…updated.v1` or `…imported.v1` (and `pulaski.material_class.created.v1` / `…updated.v1`), with the material before and after.
 - **Concurrency.** As elsewhere, if someone else changed the material or class since you opened it, you'll see *"changed by someone else"*: reload and try again.
 
 ---
 
-## 13. Reference
+## 14. Reference
 
 ### Work order statuses
 
@@ -988,10 +1057,10 @@ A class's code can't change and a class is never deleted: switch it off instead.
 | --- | --- | --- |
 | **Planned** | Being arranged; jobs move freely. | Dispatched, Cancelled |
 | **Dispatched** | Published to the floor with a baseline. | Planned (un-dispatch), Firmed, Cancelled |
-| **Firmed** | Plan frozen; jobs anchored at their start. | In progress, Cancelled |
-| **In progress** | Being made. | Completed |
-| **Completed** | Finished. | In progress (reopen), Closed |
-| **Closed** | Done and closed; no more changes. | — |
+| **Firmed** | Plan frozen; jobs anchored at their start. | In progress (when its first job starts), Cancelled |
+| **In progress** | Being made: its first job has started. | Completed (when its last open job completes) |
+| **Completed** | All its jobs are done; production can still be reported into their runs. | In progress (a job is reopened), Closed |
+| **Closed** | Done and closed: its jobs are closed and take no more reports. | — |
 | **Cancelled** | Not going ahead. Cancel its open jobs first. | — |
 
 ### Job rules
@@ -1002,11 +1071,13 @@ A class's code can't change and a class is never deleted: switch it off instead.
 | Dispatched | No: un-dispatch the order first | No | Yes |
 | Firmed | Yes, to a line that can run it; it keeps its time | No | Yes |
 | Running, paused | No | No | Yes, optionally replaced |
+| Completed, closed | No | No | No |
 
 - A **locked** job can't be moved at all until it is unlocked.
 - A **firmed** job is placed at its firmed start (or now, if that has passed) whatever runs before it.
 - **Cancel and replace** creates `<job number>-R` for the quantity not yet made, in the same slot.
 - Non-production jobs (changeover, cleaning, maintenance, trial) belong to no order and can always be moved unless locked.
+- In progress and completed follow the order's jobs: they are set by starting and completing jobs on the [Floor](#11-the-floor-running-jobs-and-reporting-production), not by hand.
 
 ### Schedule warnings
 
@@ -1046,29 +1117,30 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 ---
 
-## 14. What Pulaski doesn't do yet
+## 15. What Pulaski doesn't do yet
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
 - **No screens yet for** shift calendars or the changeover setting. Your administrator sets these up.
 - **No adapters yet** for other external sources or for label printing: materials come from the screen, a CSV file, or the ERP one item at a time through the API. The CSV import doesn't take capabilities, doesn't create missing classes, and there is no template file to download (the panel shows the header line).
-- **Planning rates are calculated from the ideal rate only;** calculating them from run history comes with execution.
-- **No execution yet:** starting and stopping jobs, counts, downtime, OEE and quality charts are planned. Order statuses after Firmed exist but nothing records production yet.
-- **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning come with execution. Genealogy is per job (see [Inventory, in detail](#in-detail-4)).
+- **Planning rates are calculated from the ideal rate only;** calculating them from run history isn't built yet.
+- **Production is reported by hand.** Counts from the machines, machine state, downtime, OEE, labor and quality aren't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
+- **No screen for the reporting tolerances:** the rate and consumption tolerances (110% by default) are set per site through the API.
+- **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
 - **Not in inventory yet:** pallets or containers that hold several lots, lot labels and barcode scanning, lot attributes and certificates of analysis, setting stock aside for a job, and suggestions of which lot to use first. Movements can't be back-dated.
 - **Reversing is limited** to a lot's latest movement, and not consumption, production, splits, merges, transfers between balances or corrections: put those right with another movement.
 - **Reason trees** (a reason grouped under another) can't be edited.
 - **Where lots mix, genealogy is approximate:** every lot that ever joined a silo's balance counts as a parent of everything taken from it afterwards. Residence time and first-in, first-out through a silo come with machine data.
 - **Inventory movements aren't sent to the ERP yet:** they are recorded as events, but the connection that delivers them isn't built.
 - **Shortages use published times, not the live schedule,** and don't count incoming deliveries.
-- **Process links don't drive the schedule yet:** a Pack job can be projected to start before the Extrude job it follows. The link only sets the earliest start, counted from the order's start.
+- **Process links don't drive the schedule yet:** a Pack job can be projected to start before the Extrude job it follows. On the floor the link is enforced: the Pack job can't start until the link is met.
 - **The Overview** shows no machine state, counts, OEE, downtime, quality, lots or labor yet: those parts are hatched placeholders until the data exists. Its line strip is a rolling 24 hours rather than the shift, since there are no shift calendars on screen yet.
 - **Notes** can only be written when the order is created.
 - **No sign-in or permissions** yet; changes are recorded as *anonymous*.
 
 ---
 
-## 15. Troubleshooting and questions
+## 16. Troubleshooting and questions
 
 **I can't find a process when creating an order.**
 The process must be at the order's site, be active, have a released version, and make the material (all materials, its class, or the material itself). If it is listed but greyed out, read the reason under the field: usually a missing capability.
@@ -1126,7 +1198,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 
 ---
 
-## 16. Glossary
+## 17. Glossary
 
 | Term | Meaning |
 | --- | --- |
@@ -1159,7 +1231,10 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Packaging unit** | A unit like box, bag or pallet whose size depends on the material; it converts only through a material conversion. |
 | **Process (route)** | The operations an order goes through, and where each runs. |
 | **Projection** | Pulaski's calculation of when each job will run, redone on every read. |
+| **Rate check** | A run can't hold more than its length × the line's ideal rate × the site's tolerance. |
+| **Ready** | A job that can start: its order is on the floor and its process links are met. |
 | **Reverse** | Undo a lot's latest movement. |
+| **Run** | One stretch of a job running on a line, from a start to a pause or completion. Production and consumption go into a run. |
 | **Run standard (planning rate)** | The rate Pulaski plans with for a material on a line: calculated from the ideal rate, or modified by a person. |
 | **Scrap factor** | Extra component quantity planned for losses. |
 | **Sequence** | The order of jobs on a line. |

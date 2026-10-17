@@ -1,8 +1,10 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Execution;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Units;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Domain;
+using Pulaski.Domain.Execution;
 using Pulaski.Domain.Inventory;
 
 namespace Pulaski.Application.Inventory;
@@ -19,7 +21,8 @@ public sealed record ReceiveLotCommand(
     Guid UomId,
     string? SupplierLot = null,
     DateTimeOffset? ExpiresAt = null,
-    string? Comment = null) : ICommand<LotTransactionResponse>;
+    string? Comment = null,
+    Guid? RunId = null) : ICommand<LotTransactionResponse>;
 
 /// <summary>Adds found or miscounted stock to a lot, for an adjustment reason.</summary>
 public sealed record WriteUpLotCommand(
@@ -41,8 +44,11 @@ public sealed record ChangeLotStatusCommand(
     Guid LotId, long ExpectedVersion, string Status, Guid? ReasonCodeId = null, string? Comment = null)
     : ICommand<LotTransactionResponse>;
 
-/// <summary>Declares quantity of an available lot used by an open production job.</summary>
-public sealed record ConsumeLotCommand(Guid LotId, Guid JobId, decimal Quantity, Guid UomId, string? Comment = null)
+/// <summary>
+/// Declares quantity of an available lot used by a production job, in its open run or in the run named
+/// (D-035): material is used while a job runs, so a job with no run open needs the run it belongs to.
+/// </summary>
+public sealed record ConsumeLotCommand(Guid LotId, Guid JobId, decimal Quantity, Guid UomId, string? Comment = null, Guid? RunId = null)
     : ICommand<LotTransactionResponse>;
 
 /// <summary>Declares a production job's output into a lot at a location.</summary>
@@ -53,7 +59,8 @@ public sealed record ProduceLotCommand(
     Guid UomId,
     string? LotNumber = null,
     DateTimeOffset? ExpiresAt = null,
-    string? Comment = null) : ICommand<LotTransactionResponse>;
+    string? Comment = null,
+    Guid? RunId = null) : ICommand<LotTransactionResponse>;
 
 internal sealed class ReceiveLotHandler(
     IUnitOfWork unitOfWork,
@@ -385,6 +392,7 @@ internal sealed class ConsumeLotHandler(
     IUnitOfWork unitOfWork,
     IInventoryRepository inventory,
     IUnitRepository units,
+    IExecutionRepository execution,
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
@@ -405,6 +413,7 @@ internal sealed class ConsumeLotHandler(
         // The job first, then the lot (D-027): declarations on one job serialize, so consumption
         // and production on it see each other's genealogy.
         var job = await InventoryRules.JobAsync(inventory, command.JobId, null, cancellationToken);
+        var run = await RunReporting.RunForAsync(execution, job, command.RunId, "consumption", cancellationToken);
         var lot = await InventoryRules.LotAsync(inventory, command.LotId, null, cancellationToken);
         if (lot.SiteId != job.SiteId)
         {
@@ -420,6 +429,10 @@ internal sealed class ConsumeLotHandler(
         if (!await inventory.PlansComponentAsync(job.Id, material.Id, cancellationToken))
         {
             warnings.Add(new("not_planned", $"{job.JobNumber} has no planned component of {material.Code}; it was recorded as a substitution."));
+        }
+        else if (await OverPlannedAsync(job, material, quantity, cancellationToken) is { } over)
+        {
+            warnings.Add(new("over_planned", over));
         }
 
         var edges = InventoryRules.Edges(ids, [lot.Id], await inventory.ListLotsProducedByJobAsync(job.Id, cancellationToken), job.Id);
@@ -440,7 +453,7 @@ internal sealed class ConsumeLotHandler(
             });
         var version = await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
-            new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, JobId: job.Id, Comment: comment),
+            new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, JobId: job.Id, Comment: comment, RunId: run.Id),
             envelope.OccurredAt, cancellationToken);
         await inventory.InsertGenealogyAsync(edges, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
@@ -448,40 +461,86 @@ internal sealed class ConsumeLotHandler(
 
         return InventoryRules.Response(after, version, warnings);
     }
+
+    /// <summary>
+    /// Using more of a component than the job's plan allows, for what it has made, is recorded with a
+    /// warning (D-035): the floor knows what it used, but someone should look.
+    /// </summary>
+    private async Task<string?> OverPlannedAsync(InventoryJob job, InventoryMaterial material, decimal quantity, CancellationToken cancellationToken)
+    {
+        if (await execution.GetPlannedComponentAsync(job.Id, material.Id, cancellationToken) is not { } planned
+            || job.PlannedQty is not { } jobPlanned)
+        {
+            return null;
+        }
+
+        var converter = await RunReporting.ConverterAsync(units, material.Id, cancellationToken);
+        if (!converter.CanConvert(planned.UomId, material.BaseUomId))
+        {
+            return null;
+        }
+
+        var policy = await execution.GetPolicyAsync(job.SiteId, cancellationToken);
+        return ConsumptionCheck.Warning(
+            converter.Convert(planned.Quantity, planned.UomId, material.BaseUomId),
+            jobPlanned,
+            await execution.GetMadeAsync(job.Id, cancellationToken),
+            await execution.GetConsumedAsync(job.Id, material.Id, cancellationToken),
+            quantity,
+            policy.ConsumptionTolerancePct,
+            material.Code,
+            material.BaseUomCode);
+    }
 }
 
 internal sealed class ProduceLotHandler(
     IUnitOfWork unitOfWork,
     IInventoryRepository inventory,
     IUnitRepository units,
+    IExecutionRepository execution,
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
     TimeProvider timeProvider) : ICommandHandler<ProduceLotCommand, LotTransactionResponse>
 {
+    /// <summary>Production is a report of good output, so it goes through the same run and rate checks (D-035).</summary>
     public async Task<LotTransactionResponse> HandleAsync(ProduceLotCommand command, CancellationToken cancellationToken)
     {
-        var lotNumber = InventoryRules.Text(command.LotNumber);
-        var comment = InventoryRules.Text(command.Comment);
-        new Validator()
-            .Require(command.JobId != Guid.Empty, nameof(command.JobId), "Choose a job.")
-            .Require(command.LocationId != Guid.Empty, nameof(command.LocationId), "Required.")
-            .Require(command.Quantity > 0, nameof(command.Quantity), "Must be greater than zero.")
-            .Require(command.UomId != Guid.Empty, nameof(command.UomId), "Required.")
-            .RequireLotNumber(lotNumber, nameof(command.LotNumber))
-            .RequireComment(command.Comment)
-            .ThrowIfInvalid();
+        var report = await new ReportProductionHandler(unitOfWork, inventory, units, execution, eventLog, events, ids, timeProvider).HandleAsync(
+            new ReportProductionCommand(
+                command.JobId, command.RunId, command.Quantity, 0m, command.UomId, null, command.LocationId, command.LotNumber, command.ExpiresAt, command.Comment),
+            cancellationToken);
+        return report.Lot!;
+    }
+}
 
-        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
-        var job = await InventoryRules.JobAsync(inventory, command.JobId, null, cancellationToken);
-        var location = await InventoryRules.LocationAsync(inventory, command.LocationId, job.SiteId, cancellationToken);
+/// <summary>Puts a production job's good output into a lot (D-027, D-031): the lot-making half of a production report.</summary>
+internal static class ProductionOutput
+{
+    /// <summary>Runs inside the caller's transaction, with the job already locked.</summary>
+    public static async Task<LotTransactionResponse> ProduceAsync(
+        IInventoryRepository inventory,
+        IUnitRepository units,
+        IEventLog eventLog,
+        IEventFactory events,
+        IIdGenerator ids,
+        InventoryJob job,
+        Guid locationId,
+        decimal enteredQuantity,
+        Guid enteredUomId,
+        string? lotNumber,
+        DateTimeOffset? expiresAtEntered,
+        string? comment,
+        Guid? runId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var location = await InventoryRules.LocationAsync(inventory, locationId, job.SiteId, cancellationToken);
         var material = await InventoryRules.MaterialAsync(inventory, job.MaterialId!.Value, cancellationToken);
         await InventoryRules.EnsureAcceptsAsync(inventory, location, material.Id, cancellationToken);
-        var now = timeProvider.GetUtcNow();
-        var expiresAt = Lot.ExpiryFor(command.ExpiresAt, material.ShelfLifeDays, now);
-        var quantity = await InventoryRules.ToBaseAsync(units, material, command.Quantity, command.UomId, cancellationToken);
+        var expiresAt = Lot.ExpiryFor(expiresAtEntered, material.ShelfLifeDays, now);
+        var quantity = await InventoryRules.ToBaseAsync(units, material, enteredQuantity, enteredUomId, cancellationToken);
         var produced = await inventory.ListLotsProducedByJobAsync(job.Id, cancellationToken);
-
         // Where lots mix, a blank number goes straight into the balance; a number makes a lot that then joins it (D-031).
         Versioned<Lot>? existing;
         Lot lot;
@@ -518,7 +577,7 @@ internal sealed class ProduceLotHandler(
             {
                 throw new ValidationException(new Dictionary<string, string[]>
                 {
-                    [nameof(command.LotNumber)] = [$"Leave blank: {material.Code} isn't lot-tracked, so it is kept as one balance per location."],
+                    ["LotNumber"] = [$"Leave blank: {material.Code} isn't lot-tracked, so it is kept as one balance per location."],
                 });
             }
 
@@ -541,17 +600,18 @@ internal sealed class ProduceLotHandler(
                 JobId = job.Id,
                 job.JobNumber,
                 LocationId = location.Id,
-                Entered = new { command.Quantity, command.UomId },
+                Entered = new { Quantity = enteredQuantity, UomId = enteredUomId },
                 Quantity = quantity,
                 QuantityAfter = after.Quantity,
                 ParentLotIds = edges.Select(e => e.ParentLotId),
+                RunId = runId,
                 Comment = comment,
             });
         var version = existing is null
             ? await inventory.InsertLotAsync(after, envelope.OccurredAt, cancellationToken)
             : await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
-            new LotEventRow(ids.NewId(), after.Id, movement, after.UomId, envelope.ActorId, JobId: job.Id, Comment: comment),
+            new LotEventRow(ids.NewId(), after.Id, movement, after.UomId, envelope.ActorId, JobId: job.Id, Comment: comment, RunId: runId),
             envelope.OccurredAt, cancellationToken);
         await inventory.InsertGenealogyAsync(edges, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
@@ -559,11 +619,9 @@ internal sealed class ProduceLotHandler(
         if (location.ComminglesLots && !after.IsBulk)
         {
             var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(inventory, eventLog, events, ids, after, location.Code, comment, now, cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
             return InventoryRules.Response(balance, balanceVersion, [note]);
         }
 
-        await transaction.CommitAsync(cancellationToken);
         return InventoryRules.Response(after, version);
     }
 }

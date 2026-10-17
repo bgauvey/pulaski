@@ -47,11 +47,11 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         INSERT INTO ts.lot_event (id, occurred_at, lot_id, event_kind, qty_delta, qty_after, uom_id,
                                   from_location_id, to_location_id, related_lot_id, job_id,
                                   from_status, to_status, reason_code_id, comment, actor_id,
-                                  reference, reverses_event_id, reverses_occurred_at)
+                                  reference, reverses_event_id, reverses_occurred_at, run_id)
         VALUES (@Id, @At, @LotId, @Kind, @QtyDelta, @QtyAfter, @UomId,
                 @FromLocationId, @ToLocationId, @RelatedLotId, @JobId,
                 @FromStatus, @ToStatus, @ReasonCodeId, @Comment, @ActorId,
-                @Reference, @ReversesEventId, @ReversesOccurredAt)
+                @Reference, @ReversesEventId, @ReversesOccurredAt, @RunId)
         """;
 
     private const string GetLocation = """
@@ -92,7 +92,12 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         """;
 
     private const string GetJobForUpdate = """
-        SELECT id, site_id, job_number, job_type, status, material_id FROM core.job WHERE id = @Id FOR UPDATE
+        SELECT j.id, j.site_id, j.job_number, j.job_type, j.status, j.material_id,
+               j.equipment_id, e.code AS line_code, j.planned_qty, j.uom_id
+        FROM core.job j
+        JOIN core.equipment e ON e.id = j.equipment_id
+        WHERE j.id = @Id
+        FOR UPDATE OF j
         """;
 
     private const string LotsOfJob = """
@@ -254,6 +259,7 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
                 row.Reference,
                 row.ReversesEventId,
                 row.ReversesOccurredAt,
+                row.RunId,
             },
             cancellationToken);
 

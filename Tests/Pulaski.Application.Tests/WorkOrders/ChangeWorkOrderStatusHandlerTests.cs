@@ -13,7 +13,7 @@ public class ChangeWorkOrderStatusHandlerTests
     private readonly ChangeWorkOrderStatusHandler _handler;
 
     public ChangeWorkOrderStatusHandlerTests() =>
-        _handler = new ChangeWorkOrderStatusHandler(_f.Stores.UnitOfWork, _f.Stores.WorkOrders, _f.Stores.Events, _f.Events);
+        _handler = new ChangeWorkOrderStatusHandler(_f.Stores.UnitOfWork, _f.Stores.WorkOrders, _f.Stores.Execution, _f.Stores.Events, _f.Events);
 
     [Fact]
     public async Task Cancels_a_planned_work_order_and_records_the_reason()

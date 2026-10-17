@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Boms;
 using Pulaski.Application.EquipmentModel;
+using Pulaski.Application.Execution;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.Materials;
 using Pulaski.Application.Processes;
@@ -12,6 +13,7 @@ using Pulaski.Application.WorkOrders;
 using Pulaski.Infrastructure.Boms;
 using Pulaski.Infrastructure.EquipmentModel;
 using Pulaski.Infrastructure.Events;
+using Pulaski.Infrastructure.Execution;
 using Pulaski.Infrastructure.Inventory;
 using Pulaski.Infrastructure.Materials;
 using Pulaski.Infrastructure.Persistence;
@@ -42,6 +44,7 @@ public static class DependencyInjection
         services.AddSingleton<IProcessReadStore, ProcessQueries>();
         services.AddSingleton<IBomReadStore, BomQueries>();
         services.AddSingleton<IUnitReadStore, UnitQueries>();
+        services.AddSingleton<IExecutionReadStore, ExecutionQueries>();
         services.AddSingleton<IInventoryReadStore, InventoryQueries>();
         services.AddSingleton<DatabaseMaintenance>();
         services.AddSingleton<IMaterialReadStore, MaterialQueries>();
@@ -59,6 +62,7 @@ public static class DependencyInjection
         services.AddScoped<IInventoryRepository, InventoryRepository>();
         services.AddScoped<IMaterialAdminRepository, MaterialAdminRepository>();
         services.AddScoped<ICapabilityRepository, CapabilityRepository>();
+        services.AddScoped<IExecutionRepository, ExecutionRepository>();
 
         return services;
     }

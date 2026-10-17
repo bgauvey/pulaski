@@ -42,6 +42,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-032 | Location and expiry rules: a location can take one material at a time (`single_material`); a location holding stock can't be deactivated or stop holding inventory; materials have a shelf life that sets a new lot's expiry; an expired lot can't be consumed, shipped or merged until its expiry is corrected | Proposed | 2026-10-17 |
 | D-033 | Materials management: materials and material classes are maintained in Pulaski. For a material from the ERP, its code, name, base unit and type change only through the ERP (an idempotent import by external key); Pulaski owns everything else. A base unit can't change and a local code is fixed once the material is used; lot tracking changes only with nothing on hand. Classes stay flat. Type is a label, no rules. Capabilities, run standards and CSV import come next; imports and label printing will later go through adapters | Proposed | 2026-10-17 |
 | D-034 | Capabilities, run standards and bulk import: capabilities are maintained per material and line over half-open periods that never overlap, and are ended rather than deleted. A new capability creates the line's run standard from its ideal rate; a changed ideal rate recalculates it while it is still based on the ideal rate, and never touches a modified rate. Materials load in bulk from a CSV file, checked first and saved all or nothing; the parser yields source-neutral rows, so later adapters feed the same importer | Proposed | 2026-10-17 |
+| D-035 | Job execution and production reporting: starting a job opens a run, pausing or completing ends it; one run at a time per line. A production job starts once its order is on the floor (starting firms a dispatched order) and its process links are met; Pulaski never starts a job itself. Good and scrap are reported into a run, live or after it ended until the order is closed, capped at the run's length × the capability's ideal rate × a per-site tolerance. Consumption needs a run; beyond the planned components it warns. The order's in-progress and completed statuses follow its jobs | Proposed | 2026-10-17 |
 
 ## Order hierarchy
 
@@ -211,7 +212,7 @@ Only work orders are planned and dispatched. A job is a piece of a work order on
 | `planned` | `planned` | The planner creates jobs, places them on eligible lines and sequences them. |
 | `dispatched` | `dispatched` | **Dispatch is publish.** Each line holding one of the order's jobs is projected inside the transaction, and each job's projected times become its baseline (`planned_start`, `planned_end`). The order goes to the floor. Un-dispatch returns the order and its jobs to planned and clears the baseline, as long as nothing has started. |
 | `firmed` | `firmed` | The plan is frozen: no un-dispatch, and each job is anchored at its baseline start (D-019). Adherence is measured against this baseline. |
-| `in_progress`, `completed`, `closed` | `running`, `paused`, `completed`, `closed` | Execution, built in a later pass. |
+| `in_progress`, `completed`, `closed` | `running`, `paused`, `completed`, `closed` | Execution (D-035): the order follows its jobs once the first one starts. |
 | `cancelled` | `cancelled` | A work order with open jobs can't be cancelled; cancel its jobs first. |
 
 - Dispatch, un-dispatch and firm are their own commands (`POST /api/work-orders/{id}/dispatch`, `/undispatch`, `/firm`), because they change the jobs too. The plain status change refuses those three transitions.
@@ -371,9 +372,9 @@ Inventory answers "what do we have, where, and what happened to it": 1,200 kg of
 - **Versions.** Write up, write off, move and status changes take the lot's version and return 409 if it changed: the person is looking at that lot. Consume and produce don't: they are declarations against a job on a busy floor, protected by the quantity check under the lock instead.
 - **Time.** Every movement is recorded at the server's time. Back-dating is not built.
 
-**Consumption and production (declared against a job).** Execution doesn't exist yet, so an operator declares what a job used and made; `run_id` stays empty until runs are built, and runs then fill it.
+**Consumption and production (declared against a job).** An operator declares what a job used and made. Since execution (D-035) each declaration goes into one of the job's runs and records its `run_id`, and production is a report of good output with the rate check.
 
-- The job must be a production job in the lot's site that isn't completed, closed or cancelled.
+- The job must be a production job in the lot's site that isn't closed or cancelled, and has a run to declare into (amended by D-035).
 - Consuming a material the job has no planned component for (`core.job_material`) is allowed, as a substitution, with a `not_planned` warning in the response.
 - Production makes the job's material. A blank lot number is generated as `<job number>-<nn>`, counting the job's lots. Producing into an existing lot number adds to it only when that lot was made by the same job at the same location; otherwise it is refused.
 - **Job-level genealogy.** Every lot consumed into a job is a parent of every lot the job produced, whichever came first: consuming links the lot to the job's outputs so far, and producing links the job's inputs so far to the new lot (`link_basis` `declared`, with the job). Edges are never duplicated. This over-links on purpose: it is the safe superset until time-window genealogy narrows it with execution.
@@ -544,6 +545,40 @@ The material page also sets and clears the modified rate, through the existing r
 - **All or nothing.** Every row goes through the same rules as a single change, in one transaction, so later rows see earlier ones. Any error, or a dry run, rolls the whole file back; the answer lists each row as *create*, *update* (with the fields that change), *unchanged* or *error* (with why). A code or key twice in a file is an error. Each saved row records its usual event, with the reason `CSV import`.
 - **The adapter seam.** `MaterialCsv` only turns text into `MaterialImportRow`s (source-neutral; a field the source didn't supply is null). `ImportMaterialsCommand` applies the rules to rows from any source. An adapter for another item master, or for label printing, will produce or consume the same rows; designing that interface is the next step.
 - **Not yet:** capabilities in the file, creating missing classes, and exporting a template file (the screen shows the header line).
+
+## Job execution and production reporting (D-035, proposed)
+
+What happens on the floor, recorded by people until the edge connectors bring machine counts (charter slice). Runs are the ISA-95 job response (D-003): counts, lots and later downtime attach to them.
+
+**Runs and statuses.**
+
+| Command | From | Job becomes | Run |
+| --- | --- | --- | --- |
+| Start | production: `dispatched`, `firmed`; non-production: `planned`, `dispatched`, `firmed` | `running` | A new run, `run_no` + 1 |
+| Resume (start) | `paused` | `running` | A new run |
+| Pause | `running` | `paused` | Ends, with an optional `run_end` reason |
+| Complete | `running`, `paused` | `completed`, `completed_at` set | The open one ends |
+| Reopen | `completed`, order not closed | `paused` | — |
+
+- **One run at a time per line**, already enforced by `job_run_no_overlap`; a start on a busy line is refused with what runs there. A pause ends the run, so the line is free; `job_run.status = 'paused'` stays unused.
+- **Execution freezes the plan (amends D-018).** Starting a job of a *dispatched* order firms the order and its jobs first, then the order goes to `in_progress`. Its last open job's completion makes it `completed`; reopening a job takes it back. These three transitions are refused as plain status changes. Closing a completed order closes its completed jobs.
+- **A department's job (D-022)** starts on the line the floor names: the start assigns it there (`pulaski.job.assigned.v1` with `onStart`) and then starts it.
+- **Changeovers (D-015).** In `auto` mode, when the last job that ran on the line was a production job of another material, starting the next production job creates a changeover job (`<job>-CO`) in front of it and starts that instead. Completing it lets the job start; a start with `skipChangeover` skips it. In `scheduler` mode the planner's own changeover jobs run like any other.
+- **Locks (D-017).** Start, complete and reopen lock all the order's lines, then the order, then its jobs, because they may firm or roll up the order. Pause locks the job's line and the job. Reports lock the job, then the run, then lots, as declarations did (D-027), and never a line, so the two can't deadlock.
+
+**Readiness, not automation.** The process links (D-023) gate the start: an *after start* link is met once any job of the upstream operation of the same order has started, an *after end* link once all of them are completed (cancelled ones don't count), each plus its lag. A start before then is refused with what it waits for. Starting or completing a job notes which downstream jobs can start now, or in how long. Pulaski never starts a job itself: the floor does (D-014).
+
+**Production reports.** `POST /api/jobs/{id}/production` takes good and scrap in the job's unit (or one that converts), a `scrap` reason when there is scrap, and a location (and optional lot number) for good output.
+
+- **Into a run.** Without a run id it goes into the open run; with one, into that run of the job, also after it ended, until the job is closed (the post-execution report). It counts at the report's time, or at the run's end for a late report; `recorded_at` keeps when it was entered.
+- **The rate check.** Good plus scrap in the run, this report included, may not exceed the run's length (so far) × the ideal rate of the capability in effect when it started, converted to the job's unit, × `execution_policy.rate_tolerance_pct` (110% by default). The ideal rate is the line's nameplate; the planning rate (D-016) is usually lower and would refuse honest reports. With no capability, or a rate unit that doesn't convert, the report is recorded with a `not_checked` warning.
+- **What it writes.** The run's `good_qty`/`scrap_qty`; `ts.production_count` rows (`processed` = good + scrap, `defective` = scrap, with the reason, source `operator`); good output into a lot through the same code as declared production (D-027, D-031), its `ts.lot_event` row naming the run; one `pulaski.job.production_reported.v1` event. Declaring production on the inventory screens is the same report with no scrap.
+
+**Consumption (amends D-027).** Declared consumption needs a run too: the open run, or the run named for use found afterwards. Its `ts.lot_event.run_id` is set. When the job plans the component, consuming beyond the planned quantity × max(1, made ÷ planned) × `consumption_tolerance_pct` is allowed and warns (`over_planned`). The time rule is hard, the amount soft: the floor knows what it used.
+
+**Screens.** Operate → Floor shows each line's running job and what is next, with readiness, and starts, pauses, completes and reports. `jobs/{id}` shows a job's runs and reports and takes reports into any of its runs. The tolerances have an API (`/api/execution/sites/{id}/policy`) and no screen yet.
+
+**Not yet:** machine counts and state from the edge, downtime, OEE, labor, quality samples; correcting or reversing a report; consumption by time window, backflush and scanning; time-window genealogy.
 
 ## Application architecture
 

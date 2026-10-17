@@ -1,0 +1,166 @@
+@using Pulaski.Web.Services.Execution
+@inject PulaskiApiClient Api
+
+@* Reports good and scrap into one of a job's runs (D-035): its open run, or an earlier one for production found later. *@
+<form class="inv-facts mb-3" @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+    <h3 class="h6">Report production for @Job.JobNumber</h3>
+    <ProblemAlert Error="_error" />
+
+    <div class="row g-2">
+        <div class="col-12">
+            <label class="form-label" for="rep-run-@Job.JobId">Run</label>
+            <select id="rep-run-@Job.JobId" class="form-select" @bind="_runId">
+                @foreach (var r in Job.Runs.Reverse())
+                {
+                    <option value="@r.Id">
+                        Run @r.RunNo on @r.LineCode · @Display.SiteTime(r.StartedAt, Job.SiteTimeZone)@(r.EndedAt is { } end ? $" to {Display.SiteTime(end, Job.SiteTimeZone)}" : " · running now")
+                    </option>
+                }
+            </select>
+            @if (SelectedRun is { } run)
+            {
+                <div class="form-text">
+                    @if (run.EndedAt is not null)
+                    {
+                        <span>Recorded late, into a run that has ended. </span>
+                    }
+                    @if (FloorView.RoomLeft(run.CapQty, run.GoodQty, run.ScrapQty) is { } room)
+                    {
+                        <span>Up to @FloorView.Qty(room) @Job.UomCode more fits this run at the line's rate.</span>
+                    }
+                    else
+                    {
+                        <span>The line has no ideal rate for this material, so the rate isn't checked.</span>
+                    }
+                </div>
+            }
+        </div>
+        <div class="col-6">
+            <label class="form-label" for="rep-good-@Job.JobId">Good, @Job.UomCode</label>
+            <input id="rep-good-@Job.JobId" type="number" min="0" step="any" class="form-control" @bind="_good" @bind:event="oninput" />
+        </div>
+        <div class="col-6">
+            <label class="form-label" for="rep-scrap-@Job.JobId">Scrap, @Job.UomCode</label>
+            <input id="rep-scrap-@Job.JobId" type="number" min="0" step="any" class="form-control" @bind="_scrap" @bind:event="oninput" />
+        </div>
+        @if (_good > 0)
+        {
+            <div class="col-sm-6">
+                <label class="form-label" for="rep-loc-@Job.JobId">Good output goes to</label>
+                <select id="rep-loc-@Job.JobId" class="form-select" @bind="_locationId">
+                    <option value="@Guid.Empty">Choose a location…</option>
+                    @foreach (var l in _locations)
+                    {
+                        <option value="@l.Id">@l.Code · @l.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label" for="rep-lot-@Job.JobId">Lot number</label>
+                <input id="rep-lot-@Job.JobId" class="form-control" maxlength="100" placeholder="Blank: @Job.JobNumber-01, -02…" @bind="_lotNumber" />
+            </div>
+        }
+        @if (_scrap > 0)
+        {
+            <div class="col-sm-6">
+                <label class="form-label" for="rep-reason-@Job.JobId">Scrap reason</label>
+                <select id="rep-reason-@Job.JobId" class="form-select" @bind="_reasonId">
+                    <option value="@Guid.Empty">Choose a reason…</option>
+                    @foreach (var r in _reasons)
+                    {
+                        <option value="@r.Id">@r.Name</option>
+                    }
+                </select>
+            </div>
+        }
+        <div class="col-12">
+            <label class="form-label" for="rep-comment-@Job.JobId">Comment @(NeedsComment ? "(required)" : "")</label>
+            <input id="rep-comment-@Job.JobId" class="form-control" maxlength="1000" @bind="_comment" @bind:event="oninput" />
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary" disabled="@(!CanSubmit)">Report</button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="OnCancel">Cancel</button>
+    </div>
+</form>
+
+@code {
+    [Parameter, EditorRequired]
+    public JobExecutionDto Job { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<ReportProductionResponse> OnReported { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private IReadOnlyList<InventoryLocationDto> _locations = [];
+    private IReadOnlyList<ReasonCodeDto> _reasons = [];
+    private Guid _runId;
+    private decimal? _good;
+    private decimal? _scrap;
+    private Guid _locationId;
+    private Guid _reasonId;
+    private string? _lotNumber;
+    private string? _comment;
+    private bool _saving;
+    private ApiException? _error;
+
+    private JobRunDto? SelectedRun => Job.Runs.FirstOrDefault(r => r.Id == _runId);
+
+    private bool NeedsComment => _scrap > 0 && _reasons.FirstOrDefault(r => r.Id == _reasonId)?.RequiresComment == true;
+
+    private bool CanSubmit =>
+        !_saving && SelectedRun is not null && (_good ?? 0) + (_scrap ?? 0) > 0 && (_good ?? 0) >= 0 && (_scrap ?? 0) >= 0
+        && (_good is not > 0 || _locationId != Guid.Empty)
+        && (_scrap is not > 0 || _reasonId != Guid.Empty)
+        && (!NeedsComment || !string.IsNullOrWhiteSpace(_comment));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _runId = FloorView.DefaultRun(Job.Runs) ?? Guid.Empty;
+        try
+        {
+            _locations = [.. (await Api.ListInventoryLocationsAsync(Job.SiteId)).Where(l => l.IsActive)];
+            _reasons = await Api.ListReasonCodesAsync("scrap", Job.SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!CanSubmit)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        try
+        {
+            var result = await Api.ReportProductionAsync(Job.JobId, new ReportProductionRequest
+            {
+                RunId = _runId,
+                GoodQty = _good ?? 0,
+                ScrapQty = _scrap ?? 0,
+                ScrapReasonCodeId = _scrap > 0 ? _reasonId : null,
+                LocationId = _good > 0 ? _locationId : null,
+                LotNumber = string.IsNullOrWhiteSpace(_lotNumber) ? null : _lotNumber,
+                Comment = string.IsNullOrWhiteSpace(_comment) ? null : _comment,
+            });
+            await OnReported.InvokeAsync(result);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

@@ -295,14 +295,3 @@ internal sealed class EndCapabilityHandler(
         return new CapabilityResponse(ended.Id, version, note is null ? [] : [note]);
     }
 }
-
-internal static class NoteListExtensions
-{
-    public static void AddIfSet(this List<string> notes, string? note)
-    {
-        if (note is not null)
-        {
-            notes.Add(note);
-        }
-    }
-}

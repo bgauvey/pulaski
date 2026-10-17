@@ -648,6 +648,7 @@ A job is what the planner places and sequences on a line and what operators exec
 | `dispatched_at` | timestamptz | yes | When its order was dispatched. |
 | `firmed_at` | timestamptz | yes | When its order was firmed; from then on `planned_start` is frozen. |
 | `replaces_job_id` | uuid → job | yes | On a replacement, the cancelled job whose remaining quantity it took. |
+| `completed_at` | timestamptz | yes | When it was last completed (D-035); cleared on reopening. Downstream *after end* links count their lag from it. |
 | `process_operation_id` | uuid → process_operation | yes | The process operation the job belongs to, when its order came from a process (D-024). Set when the order makes the job; a job added later takes the operation that runs on its line (or the first), and a replacement keeps the cancelled job's (D-025). Order quantities are counted per operation, and the links will drive the projection later. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
@@ -666,9 +667,9 @@ Planned when the work order is made (D-025): one `consume` row per BOM item and 
 | `consumption_method` | text | yes | `time_window`, `declared`, `backflush` or `scan`, from the BOM item. |
 | `bom_item_id` | uuid → bom_item | yes | The BOM line it came from. |
 
-### core.job_run — actual execution (ISA-95 job response) · *In use (read)*
+### core.job_run — actual execution (ISA-95 job response) · *In use*
 
-A job may run several times (interruptions, shifts, resumes). Counts, downtime and lots attach to the run.
+A job may run several times (interruptions, shifts, resumes). Counts, downtime and lots attach to the run. Starting a job opens one; pausing or completing it ends it (D-035).
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -678,10 +679,21 @@ A job may run several times (interruptions, shifts, resumes). Counts, downtime a
 | `run_no` | integer | no | 1, 2, 3… per job. |
 | `started_at` | timestamptz | no | Start. |
 | `ended_at` | timestamptz | yes | End; null while running. Cancelling a job ends its open run. |
-| `status` | text | no | `running`, `paused` or `ended`. |
-| `end_reason_code_id` | uuid → reason_code | yes | Why it ended. |
-| `good_qty`, `scrap_qty` | qty | no | Running totals, cached from `ts.production_count`. The projection uses good quantity to size what is left. |
-| `uom_id` | uuid → uom | yes | Unit of the quantities. |
+| `status` | text | no | `running` or `ended`. `paused` is allowed but unused: a pause ends the run, and resuming opens the next. |
+| `end_reason_code_id` | uuid → reason_code | yes | Why it ended: a reason of kind `run_end`, given when pausing. |
+| `good_qty`, `scrap_qty` | qty | no | Running totals of the reports into it, kept with `ts.production_count`, late reports included. The projection uses good quantity to size what is left; the rate check caps good plus scrap at the run's length × the ideal rate × the site's tolerance. |
+| `uom_id` | uuid → uom | yes | Unit of the quantities: the job's unit. |
+
+### core.execution_policy — per-site reporting tolerances (D-035) · *In use*
+
+A site without a row uses the defaults.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key: the site. |
+| `rate_tolerance_pct` | numeric(6,1) | no | A run can hold up to its length × the ideal rate × this percent. 100 to 1000; default 110. |
+| `consumption_tolerance_pct` | numeric(6,1) | no | Consumption beyond the planned components × this percent is recorded with a warning. 100 to 1000; default 110. |
+| `updated_at` | timestamptz | no | Last change. |
 
 ### core.scheduling_policy — per-site scheduling settings (D-015) · *In use*
 
@@ -992,14 +1004,14 @@ Updated while open and when coded; each change is also an event.
 | `alarm_value` | integer | yes | Its value. |
 | `message` | text | yes | Its text. |
 
-### ts.production_count — count deltas · *Planned*
+### ts.production_count — count deltas · *In use (operator reports)*
 
-Deltas calculated at the edge, with rollover handled there; the raw counter is kept for reconciliation.
+Deltas calculated at the edge, with rollover handled there; the raw counter is kept for reconciliation. Operator reports (D-035) write a `processed` row for good plus scrap and, with scrap, a `defective` row for the scrap, in the job's unit; good is processed minus defective.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key with `occurred_at`. |
-| `occurred_at` | timestamptz | no | When counted. Partition key. |
+| `occurred_at` | timestamptz | no | When counted. Partition key. For a report into a run that has ended, the run's end. |
 | `equipment_id` | uuid → equipment | no | The equipment. |
 | `run_id` | uuid | yes | The run. |
 | `count_kind` | text | no | `processed`, `defective` or `consumed`. |
@@ -1009,6 +1021,10 @@ Deltas calculated at the edge, with rollover handled there; the raw counter is k
 | `scrap_reason_code_id` | uuid → reason_code | yes | Why, for defective counts. |
 | `source` | text | no | `machine`, `operator` or `correction`. |
 | `corrects_id` | uuid | yes | For corrections: the row being offset. |
+| `job_id` | uuid | yes | The run's job. No FK, as for `run_id`. |
+| `recorded_at` | timestamptz | no | When it was entered. Later than the run's end for a late report. |
+| `actor_id` | text | yes | Who reported it (issuer\|subject, as on `evt.event`). |
+| `comment` | text | yes | The reporter's comment, at most 1000 characters. |
 
 ### ts.process_value — high-rate telemetry · *Planned*
 
@@ -1053,7 +1069,7 @@ One row for every job status change, written in the same transaction as the chan
 | `from_location_id`, `to_location_id` | uuid → equipment | yes | Where the stock left and arrived. |
 | `related_lot_id` | uuid → lot | yes | The other lot in a split or merge, or the other bulk lot in a transfer. |
 | `job_id` | uuid → job | yes | The job for declared consumption or production. |
-| `run_id` | uuid | yes | The run involved. |
+| `run_id` | uuid | yes | The run of the job a consumption or production went into (D-035); every one has one since execution. |
 | `from_status`, `to_status` | text | yes | For status changes, and when a lot is used up or comes back. |
 | `reason_code_id` | uuid → reason_code | yes | Why: required for write-ups, write-offs and holds. |
 | `comment` | text | yes | The person's note, at most 1000 characters. |

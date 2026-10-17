@@ -34,7 +34,8 @@ public sealed record Job(
     Guid? ReplacesJobId,
     Guid? GroupEquipmentId = null,
     DateTimeOffset? LatestEnd = null,
-    Guid? ProcessOperationId = null)
+    Guid? ProcessOperationId = null,
+    DateTimeOffset? CompletedAt = null)
 {
     /// <summary>A production job for part of a work order, sized by the run standard.</summary>
     /// <exception cref="DomainRuleException">The quantity is invalid.</exception>
@@ -297,6 +298,71 @@ public sealed record Job(
             FirmedAt = status == JobStatus.Firmed ? at : null,
             ReplacesJobId = Id,
         };
+    }
+
+    /// <summary>
+    /// Execution begins or resumes (D-035). A production job runs once its work order is on the floor
+    /// (dispatched or firmed: starting firms the order first, in the handler); a paused job resumes; a
+    /// non-production job, which belongs to no order, starts from planned too.
+    /// </summary>
+    /// <exception cref="DomainRuleException">The job can't start from its status, or is still waiting on a group.</exception>
+    public Job Start()
+    {
+        if (IsOnGroup)
+        {
+            throw new DomainRuleException($"Job {JobNumber} is waiting on its group; choose the line it runs on.");
+        }
+
+        var startable = JobType == Scheduling.JobType.Production
+            ? Status is JobStatus.Firmed or JobStatus.Paused
+            : Status is JobStatus.Planned or JobStatus.Dispatched or JobStatus.Firmed or JobStatus.Paused;
+        if (!startable)
+        {
+            throw new DomainRuleException(Status switch
+            {
+                JobStatus.Planned or JobStatus.Dispatched => $"Job {JobNumber} is {Status}; dispatch its work order before starting it.",
+                JobStatus.Running => $"Job {JobNumber} is already running.",
+                _ => $"Job {JobNumber} is {Status}; it can no longer be started.",
+            });
+        }
+
+        return this with { Status = JobStatus.Running };
+    }
+
+    /// <summary>Stops the job for now; its run ends and a later start opens a new one (D-035).</summary>
+    /// <exception cref="DomainRuleException">The job isn't running.</exception>
+    public Job Pause()
+    {
+        EnsureStatus(JobStatus.Running, "paused");
+        return this with { Status = JobStatus.Paused };
+    }
+
+    /// <summary>The job is done. Production can still be reported into its runs until it is closed (D-035).</summary>
+    /// <exception cref="DomainRuleException">The job hasn't started, or is already finished.</exception>
+    public Job Complete(DateTimeOffset at)
+    {
+        if (Status is not (JobStatus.Running or JobStatus.Paused))
+        {
+            throw new DomainRuleException($"Job {JobNumber} is {Status}; only a running or paused job can be completed.");
+        }
+
+        return this with { Status = JobStatus.Completed, CompletedAt = at };
+    }
+
+    /// <summary>Takes a completed job back to paused, to run it again (D-035).</summary>
+    /// <exception cref="DomainRuleException">The job isn't completed.</exception>
+    public Job Reopen()
+    {
+        EnsureStatus(JobStatus.Completed, "reopened");
+        return this with { Status = JobStatus.Paused, CompletedAt = null };
+    }
+
+    /// <summary>Closes a completed job with its work order; nothing more can be reported into it.</summary>
+    /// <exception cref="DomainRuleException">The job isn't completed.</exception>
+    public Job Close()
+    {
+        EnsureStatus(JobStatus.Completed, "closed");
+        return this with { Status = JobStatus.Closed };
     }
 
     private void EnsureStatus(string expected, string action)

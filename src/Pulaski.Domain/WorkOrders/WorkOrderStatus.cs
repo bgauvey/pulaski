@@ -41,6 +41,13 @@ public static class WorkOrderStatus
     public static bool IsPlanningTransition(string from, string to) =>
         (from, to) is (Planned, Dispatched) or (Dispatched, Planned) or (Dispatched, Firmed);
 
+    /// <summary>
+    /// Once execution starts the order follows its jobs (D-035): its first job's start makes it in progress,
+    /// its last job's completion makes it completed, reopening a job takes it back. A plain status change may not.
+    /// </summary>
+    public static bool IsExecutionTransition(string from, string to) =>
+        (from, to) is (Firmed, InProgress) or (InProgress, Completed) or (Completed, InProgress);
+
     /// <exception cref="DomainRuleException">The transition is not allowed.</exception>
     public static void EnsureCanTransition(string from, string to)
     {

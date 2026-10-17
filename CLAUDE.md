@@ -94,6 +94,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   rate recalculates it while its basis is `ideal_rate` (`RunStandard.FollowIdealRate`). CSV import is all or nothing
   (`?dryRun=true` checks); `MaterialCsv` yields source-neutral `MaterialImportRow`s for `ImportMaterialsCommand`, the
   seam future adapters plug into.
+- Execution (D-035, proposed): start opens a `core.job_run`, pause/complete end it; one run per line. Starting firms a
+  dispatched order; in progress/completed follow the jobs. Downstream jobs are *ready* when process links are met
+  (`JobReadiness`), never auto-started. Reports go into a run (open, or an ended one until the order closes), capped by
+  `RateCap` (elapsed x ideal rate x site tolerance); consumption needs a run and warns beyond plan (`ConsumptionCheck`).
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

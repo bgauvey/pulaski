@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Boms;
 using Pulaski.Application.EquipmentModel;
+using Pulaski.Application.Execution;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.Materials;
 using Pulaski.Application.Processes;
@@ -23,6 +24,7 @@ public sealed class InMemoryStores
     {
         WorkOrders.OpenJobs = Scheduling.HasOpenJobs;
         Processes.Eligibility = Scheduling.Eligibility;
+        Execution.WorkOrderOf = id => Scheduling.FindJob(id)?.Value.WorkOrderId;
     }
 
     public InMemoryUnitOfWork UnitOfWork { get; } = new();
@@ -49,6 +51,8 @@ public sealed class InMemoryStores
 
     public InMemoryCapabilities Capabilities { get; } = new();
 
+    public InMemoryExecution Execution { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -73,6 +77,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IMaterialReadStore>();
         services.RemoveAll<IMaterialAdminRepository>();
         services.RemoveAll<ICapabilityRepository>();
+        services.RemoveAll<IExecutionRepository>();
+        services.RemoveAll<IExecutionReadStore>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -95,6 +101,8 @@ public sealed class InMemoryStores
         services.AddSingleton<IMaterialReadStore>(MaterialAdmin);
         services.AddSingleton<IMaterialAdminRepository>(MaterialAdmin);
         services.AddSingleton<ICapabilityRepository>(Capabilities);
+        services.AddSingleton<IExecutionRepository>(Execution);
+        services.AddSingleton<IExecutionReadStore>(Execution);
         return services;
     }
 }

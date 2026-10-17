@@ -66,6 +66,13 @@ public static class EventTypes
     public const string JobPinned = "pulaski.job.pinned.v1";
     public const string JobAssigned = "pulaski.job.assigned.v1";
     public const string JobCancelled = "pulaski.job.cancelled.v1";
+    public const string JobStarted = "pulaski.job.started.v1";
+    public const string JobPaused = "pulaski.job.paused.v1";
+    public const string JobCompleted = "pulaski.job.completed.v1";
+    public const string JobReopened = "pulaski.job.reopened.v1";
+    public const string JobClosed = "pulaski.job.closed.v1";
+    public const string ProductionReported = "pulaski.job.production_reported.v1";
+    public const string ExecutionPolicyChanged = "pulaski.execution_policy.changed.v1";
     public const string WorkOrderDispatched = "pulaski.work_order.dispatched.v1";
     public const string WorkOrderUndispatched = "pulaski.work_order.undispatched.v1";
     public const string WorkOrderFirmed = "pulaski.work_order.firmed.v1";

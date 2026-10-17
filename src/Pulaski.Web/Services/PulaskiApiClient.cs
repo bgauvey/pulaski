@@ -3,6 +3,7 @@ using System.Text.Json;
 using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
+using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Materials;
 using Pulaski.Contracts.Processes;
@@ -454,6 +455,33 @@ public sealed class PulaskiApiClient(HttpClient http)
         using var response = await SendCoreAsync(request, ct);
         return await ReadAsync<ImportMaterialsResponse>(response, ct);
     }
+
+    public Task<IReadOnlyList<LineBoardRowDto>> GetLineBoardAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<LineBoardRowDto>>($"api/execution/sites/{siteId}/board", ct);
+
+    public Task<JobExecutionDto> GetJobExecutionAsync(Guid jobId, CancellationToken ct = default) =>
+        GetAsync<JobExecutionDto>($"api/jobs/{jobId}/execution", ct);
+
+    public Task<ExecutionResponse> StartJobAsync(Guid jobId, StartJobRequest request, CancellationToken ct = default) =>
+        SendAsync<ExecutionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/start", request, ct);
+
+    public Task<ExecutionResponse> PauseJobAsync(Guid jobId, PauseJobRequest request, CancellationToken ct = default) =>
+        SendAsync<ExecutionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/pause", request, ct);
+
+    public Task<ExecutionResponse> CompleteJobAsync(Guid jobId, long version, CancellationToken ct = default) =>
+        SendAsync<ExecutionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/complete", new JobVersionRequest { Version = version }, ct);
+
+    public Task<ExecutionResponse> ReopenJobAsync(Guid jobId, long version, CancellationToken ct = default) =>
+        SendAsync<ExecutionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/reopen", new JobVersionRequest { Version = version }, ct);
+
+    public Task<ReportProductionResponse> ReportProductionAsync(Guid jobId, ReportProductionRequest request, CancellationToken ct = default) =>
+        SendAsync<ReportProductionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/production", request, ct);
+
+    public Task<ExecutionPolicyDto> GetExecutionPolicyAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<ExecutionPolicyDto>($"api/execution/sites/{siteId}/policy", ct);
+
+    public Task<ExecutionPolicyDto> SetExecutionPolicyAsync(Guid siteId, SetExecutionPolicyRequest request, CancellationToken ct = default) =>
+        SendAsync<ExecutionPolicyDto>(HttpMethod.Put, $"api/execution/sites/{siteId}/policy", request, ct);
 
     private async Task<T> GetAsync<T>(string uri, CancellationToken ct)
     {

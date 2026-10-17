@@ -250,7 +250,8 @@ public sealed record LotEventRow(
     Guid? RelatedLotId = null,
     string? Reference = null,
     Guid? ReversesEventId = null,
-    DateTimeOffset? ReversesOccurredAt = null);
+    DateTimeOffset? ReversesOccurredAt = null,
+    Guid? RunId = null);
 
 /// <summary>A parent-to-child lot edge: <c>declared</c> by a job, or from a <c>split</c> or <c>merge</c> (D-030, no job).</summary>
 public sealed record GenealogyEdge(Guid Id, Guid ParentLotId, Guid ChildLotId, Guid? JobId, string Basis = GenealogyEdge.Declared)
@@ -302,6 +303,12 @@ public sealed record InventoryJob
     public required string JobType { get; init; }
     public required string Status { get; init; }
     public Guid? MaterialId { get; init; }
+
+    /// <summary>The line it is on, and its code, for execution checks (D-035).</summary>
+    public Guid EquipmentId { get; init; }
+    public string LineCode { get; init; } = "";
+    public decimal? PlannedQty { get; init; }
+    public Guid? UomId { get; init; }
 }
 
 public sealed record InventoryReason
@@ -321,4 +328,6 @@ public static class ReasonKinds
 {
     public const string InventoryAdjustment = "inventory_adjustment";
     public const string Hold = "hold";
+    public const string Scrap = "scrap";
+    public const string RunEnd = "run_end";
 }

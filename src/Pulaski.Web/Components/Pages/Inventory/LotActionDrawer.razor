@@ -115,6 +115,7 @@
                                     }
                                 </select>
                             </div>
+                            @RunField()
                         }
                         else
                         {
@@ -311,6 +312,10 @@
     private IReadOnlyList<JobComponentUseDto> _components = [];
     private IReadOnlyList<LotSummaryDto> _lots = [];
 
+    // The job's runs (D-035): consumption and production go into one; Guid.Empty means its open run.
+    private IReadOnlyList<JobRunDto> _runs = [];
+    private Guid _runId;
+
     private Guid _materialId;
     private Guid _locationId;
     private Guid _jobId;
@@ -365,8 +370,8 @@
     private bool CanSubmit => Action switch
     {
         LotAction.Receive => _materialId != Guid.Empty && _locationId != Guid.Empty && _quantity > 0,
-        LotAction.Produce => SelectedJob is not null && _locationId != Guid.Empty && _quantity > 0,
-        LotAction.Consume => SelectedJob is not null && ConsumeLot is not null && _quantity > 0,
+        LotAction.Produce => SelectedJob is not null && _runs.Count > 0 && _locationId != Guid.Empty && _quantity > 0,
+        LotAction.Consume => SelectedJob is not null && _runs.Count > 0 && ConsumeLot is not null && _quantity > 0,
         LotAction.WriteUp => _quantity > 0 && _reasonId != Guid.Empty,
         LotAction.WriteOff => _reasonId != Guid.Empty,
         LotAction.Move => _locationId != Guid.Empty && (Lot?.IsBulk != true || _quantity > 0),
@@ -421,6 +426,11 @@
             if (action == LotAction.Consume && Lot is null && Job is not null)
             {
                 _components = (await Api.GetJobMaterialsAsync(Job.Id)).Components;
+            }
+
+            if (action is LotAction.Produce or LotAction.Consume && Job is not null)
+            {
+                await LoadRunsAsync(Job.Id);
             }
 
             switch (action)
@@ -528,10 +538,13 @@
     private async Task OnJobChangedAsync(Guid id)
     {
         _jobId = id;
+        _runs = [];
         if (SelectedJob is not { } job)
         {
             return;
         }
+
+        await LoadRunsAsync(job.Id);
 
         if (Action == LotAction.Produce && _materials.FirstOrDefault(m => m.Id == job.MaterialId) is { } material)
         {
@@ -539,6 +552,15 @@
             _uomId = _uoms.FirstOrDefault(u => u.Code == job.UomCode)?.Id ?? material.BaseUomId;
         }
     }
+
+    /// <summary>The job's runs, with its open run chosen, or else its latest one (for a report after the run).</summary>
+    private async Task LoadRunsAsync(Guid jobId)
+    {
+        _runs = (await Api.GetJobExecutionAsync(jobId)).Runs;
+        _runId = _runs.Any(r => r.EndedAt is null) ? Guid.Empty : _runs.LastOrDefault()?.Id ?? Guid.Empty;
+    }
+
+    private Guid? RunId => _runId == Guid.Empty ? null : _runId;
 
     private async Task SubmitAsync()
     {
@@ -643,6 +665,7 @@
             LotNumber = _producedTracked ? _lotNumber : null,
             ExpiresAt = Display.FromSiteLocal(_expires, Sites.Site?.TimeZone),
             Comment = comment,
+            RunId = RunId,
         });
         return (response, $"{QtyText} of {job.MaterialCode} produced by {job.JobNumber}");
     }
@@ -657,6 +680,7 @@
             Quantity = _quantity!.Value,
             UomId = _uomId,
             Comment = comment,
+            RunId = RunId,
         });
         return (response, $"{QtyText} of {InventoryView.LotLabel(lot.LotNumber, lot.IsBulk, lot.LocationCode)} consumed by {job.JobNumber}");
     }
@@ -786,6 +810,43 @@
                 @if (Action == LotAction.Consume && SelectedJob is { PlansComponent: false })
                 {
                     <div class="form-text text-warning-strong">This job has no planned component of @Lot?.MaterialCode; it will be recorded as a substitution.</div>
+                }
+            </div>
+        }
+
+        @if (SelectedJob is not null)
+        {
+            @RunField()
+        }
+    };
+
+    /// <summary>Which run the movement belongs to (D-035): the open run, or an earlier one for a late entry.</summary>
+    private RenderFragment RunField() => __builder =>
+    {
+        @if (SelectedJob is null)
+        {
+            return;
+        }
+
+        @if (_runs.Count == 0)
+        {
+            <p class="small text-warning-strong mb-3">@SelectedJob.JobNumber hasn't run yet. Start it on the <a href="floor">Floor</a> first.</p>
+        }
+        else
+        {
+            <div class="mb-3">
+                <label class="form-label" for="lot-run">Run</label>
+                <select id="lot-run" class="form-select" @bind="_runId">
+                    @foreach (var r in _runs.Reverse())
+                    {
+                        <option value="@(r.EndedAt is null ? Guid.Empty : r.Id)">
+                            Run @r.RunNo on @r.LineCode · @Display.SiteTime(r.StartedAt, Sites.Site?.TimeZone)@(r.EndedAt is { } end ? $" to {Display.SiteTime(end, Sites.Site?.TimeZone)}" : " · running now")
+                        </option>
+                    }
+                </select>
+                @if (_runId != Guid.Empty)
+                {
+                    <div class="form-text">That run has ended: this is recorded late, into it.</div>
                 }
             </div>
         }
