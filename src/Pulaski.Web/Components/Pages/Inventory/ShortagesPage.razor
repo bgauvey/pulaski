@@ -1,0 +1,208 @@
+@page "/inventory/shortages"
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+
+<PageTitle>Shortages · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="Material shortages" SiteChanged="OnSiteChangedAsync">
+    <Description>
+        What the open jobs still need of each component, against the stock available now. Jobs take stock in the order they are needed, so a shortfall shows on the first job it reaches.
+    </Description>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+
+<div class="inv-toolbar">
+    <EquipmentPicker Equipment="_equipment" Value="_equipmentId" ValueChanged="OnEquipmentChangedAsync" />
+    <select class="form-select" aria-label="Horizon" value="@_horizon" @onchange="OnHorizonChangedAsync">
+        <option value="">All open jobs</option>
+        <option value="1">Needed in the next 24 hours</option>
+        <option value="3">Next 3 days</option>
+        <option value="7">Next 7 days</option>
+        <option value="14">Next 14 days</option>
+    </select>
+    <div class="form-check ms-1">
+        <input class="form-check-input" type="checkbox" id="short-only" @bind="_shortOnly" />
+        <label class="form-check-label" for="short-only">Short only</label>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary btn-with-icon ms-auto" @onclick="LoadAsync"><Icon Name="refresh" Size="16" /> Refresh</button>
+</div>
+
+@if (Sites.Sites.Count == 0 && _error is null)
+{
+    <p class="text-muted">Create a site under <a href="equipment">Equipment</a> first.</p>
+}
+else if (_report is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    var shown = _report.Materials.Where(m => !_shortOnly || m.Shortfall > 0).ToList();
+    var shortCount = _report.Materials.Count(m => m.Shortfall > 0);
+
+    <p class="small text-muted">
+        @(shortCount == 0 ? "Nothing is short." : $"{shortCount} of {_report.Materials.Count} components short.")
+        Calculated @Display.SiteTime(_report.CalculatedAt, Sites.Site?.TimeZone). Held stock isn't counted until it is released; incoming deliveries aren't counted at all.
+    </p>
+
+    @foreach (var problem in _report.Problems)
+    {
+        <div class="drawer-alert is-warning"><Icon Name="alert" Size="18" /><span>@problem.Message</span></div>
+    }
+
+    @if (shown.Count == 0)
+    {
+        <div class="empty-panel">
+            <h2>@(_report.Materials.Count == 0 ? "No open job needs components" : "Everything is covered")</h2>
+            <p class="text-muted mb-0">
+                @(_report.Materials.Count == 0
+                    ? "Components are planned when a work order is made from a BOM. Jobs with nothing left to consume don't show."
+                    : "Available stock covers every open job's remaining components. Clear Short only to see them.")
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="table-panel">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th class="inv-num">Needed</th>
+                        <th class="inv-num">Available</th>
+                        <th class="inv-num">Held</th>
+                        <th class="inv-num">Short</th>
+                        <th>First short</th>
+                    </tr>
+                </thead>
+                @foreach (var m in shown)
+                {
+                    var open = _open.Contains(m.MaterialId);
+                    <tbody @key="m.MaterialId">
+                        <tr>
+                            <td>
+                                <button type="button" class="inv-group-toggle p-0" aria-expanded="@(open ? "true" : "false")" @onclick="() => Toggle(m.MaterialId)">
+                                    <Icon Name="chevron-right" Size="16" />
+                                    <span>@m.MaterialCode</span>
+                                </button>
+                                <div class="small text-muted">@m.MaterialName · @m.Lines.Count @(m.Lines.Count == 1 ? "job" : "jobs") · <a href="inventory/materials/@m.MaterialId">stock</a></div>
+                            </td>
+                            <td class="inv-num">@InventoryView.Qty(m.Demand) <span class="small text-muted">@m.BaseUomCode</span></td>
+                            <td class="inv-num">@InventoryView.Qty(m.Available)</td>
+                            <td class="inv-num @(m.Held > 0 ? "inv-held" : "")">@InventoryView.Qty(m.Held)</td>
+                            <td class="inv-num">
+                                @if (m.Shortfall > 0)
+                                {
+                                    <span class="chip chip-danger">@InventoryView.Qty(m.Shortfall) @m.BaseUomCode</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td class="small">
+                                @if (m.FirstShortJobId is { } jobId)
+                                {
+                                    <a href="inventory/jobs/@jobId">@m.FirstShortJobNumber</a>
+                                    <div class="text-muted">@(m.FirstShortAt is null ? "no time yet" : Display.SiteTime(m.FirstShortAt, Sites.Site?.TimeZone))</div>
+                                }
+                            </td>
+                        </tr>
+                        @if (open)
+                        {
+                            @foreach (var l in m.Lines)
+                            {
+                                <tr @key="l.JobId" class="small">
+                                    <td class="ps-5">
+                                        <a href="inventory/jobs/@l.JobId">@l.JobNumber</a>
+                                        <span class="text-muted">· @l.LineCode · @Display.Label(l.JobStatus)</span>
+                                    </td>
+                                    <td class="inv-num">@InventoryView.Qty(l.Remaining)</td>
+                                    <td class="inv-num text-muted" title="Needed by this job and every one before it">@InventoryView.Qty(l.Cumulative) in total</td>
+                                    <td></td>
+                                    <td class="inv-num @(l.Uncovered > 0 ? "text-danger fw-semibold" : "text-muted")">@(l.Uncovered > 0 ? InventoryView.Qty(l.Uncovered) : "covered")</td>
+                                    <td class="text-muted">@(l.NeededFrom is null ? "no time yet" : Display.SiteTime(l.NeededFrom, Sites.Site?.TimeZone))</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                }
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private ShortageReportDto? _report;
+    private IReadOnlyList<EquipmentDto> _equipment = [];
+    private readonly HashSet<Guid> _open = [];
+    private ApiException? _error;
+    private Guid? _equipmentId;
+    private string _horizon = "";
+    private bool _shortOnly = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _equipment = await Api.ListEquipmentAsync(Sites.SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } siteId)
+        {
+            _report = null;
+            return;
+        }
+
+        _error = null;
+        try
+        {
+            _report = await Api.GetShortagesAsync(siteId, _equipmentId, int.TryParse(_horizon, out var days) ? days : null);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnSiteChangedAsync()
+    {
+        _equipmentId = null;
+        _equipment = await Api.ListEquipmentAsync(Sites.SiteId);
+        await LoadAsync();
+    }
+
+    private async Task OnEquipmentChangedAsync(Guid? id)
+    {
+        _equipmentId = id;
+        await LoadAsync();
+    }
+
+    private async Task OnHorizonChangedAsync(ChangeEventArgs e)
+    {
+        _horizon = e.Value?.ToString() ?? "";
+        await LoadAsync();
+    }
+
+    private void Toggle(Guid materialId)
+    {
+        if (!_open.Remove(materialId))
+        {
+            _open.Add(materialId);
+        }
+    }
+}

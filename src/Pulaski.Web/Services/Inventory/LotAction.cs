@@ -11,6 +11,11 @@ public enum LotAction
     Move,
     Hold,
     Release,
+    Split,
+    Merge,
+    Ship,
+    Correct,
+    Reverse,
 }
 
 /// <summary>What the drawer did, for the page to show and reload after.</summary>
@@ -29,6 +34,11 @@ public static class LotActions
         LotAction.Move => "Move",
         LotAction.Hold => "Hold or quarantine",
         LotAction.Release => "Release",
+        LotAction.Split => "Split",
+        LotAction.Merge => "Merge lots into this one",
+        LotAction.Ship => "Ship",
+        LotAction.Correct => "Correct details",
+        LotAction.Reverse => "Reverse a movement",
         _ => action.ToString(),
     };
 }

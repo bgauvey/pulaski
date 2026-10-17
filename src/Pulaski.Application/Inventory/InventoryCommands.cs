@@ -72,8 +72,7 @@ internal sealed class ReceiveLotHandler(
             .Require(command.LocationId != Guid.Empty, nameof(command.LocationId), "Required.")
             .Require(command.UomId != Guid.Empty, nameof(command.UomId), "Required.")
             .Require(command.Quantity > 0, nameof(command.Quantity), "Must be greater than zero.")
-            .Require(lotNumber is null || lotNumber.Length <= InventoryRules.MaxLotNumber, nameof(command.LotNumber), $"At most {InventoryRules.MaxLotNumber} characters.")
-            .Require(lotNumber is null || !lotNumber.StartsWith('@'), nameof(command.LotNumber), "Can't start with @, which marks a location's balance.")
+            .RequireLotNumber(lotNumber, nameof(command.LotNumber))
             .Require(command.SupplierLot is null || command.SupplierLot.Length <= InventoryRules.MaxLotNumber, nameof(command.SupplierLot), $"At most {InventoryRules.MaxLotNumber} characters.")
             .RequireComment(command.Comment)
             .ThrowIfInvalid();
@@ -85,18 +84,19 @@ internal sealed class ReceiveLotHandler(
             throw new DomainRuleException($"{material.Code} is inactive.");
         }
 
+        // A lot-tracked material needs a number, except where lots mix: there a blank one goes straight into the balance (D-031).
+        var location = await InventoryRules.LocationAsync(inventory, command.LocationId, null, cancellationToken);
         new Validator()
-            .Require(!material.IsLotTracked || lotNumber is not null, nameof(command.LotNumber), $"Required: {material.Code} is lot-tracked.")
+            .Require(!material.IsLotTracked || location.ComminglesLots || lotNumber is not null, nameof(command.LotNumber), $"Required: {material.Code} is lot-tracked.")
             .Require(material.IsLotTracked || lotNumber is null, nameof(command.LotNumber), $"Leave blank: {material.Code} isn't lot-tracked, so it is kept as one balance per location.")
             .ThrowIfInvalid();
 
-        var location = await InventoryRules.LocationAsync(inventory, command.LocationId, null, cancellationToken);
         var quantity = await InventoryRules.ToBaseAsync(units, material, command.Quantity, command.UomId, cancellationToken);
         var siteId = location.SiteId!.Value;
 
         Lot lot;
         bool isNew;
-        if (material.IsLotTracked)
+        if (lotNumber is not null)
         {
             if (await inventory.FindLotForUpdateAsync(siteId, material.Id, lotNumber!, cancellationToken) is not null)
             {
@@ -109,10 +109,8 @@ internal sealed class ReceiveLotHandler(
         }
         else
         {
-            var bulk = await inventory.FindBulkLotForUpdateAsync(material.Id, location.Id, cancellationToken);
-            lot = bulk?.Value ?? Lot.Create(ids.NewId(), siteId, material.Id, Lot.BulkNumber(location.Code), material.BaseUomId,
-                location.Id, isBulk: true, LotOrigin.Received);
-            isNew = bulk is null;
+            (lot, isNew) = await Commingling.BalanceAsync(inventory, ids, siteId, material.Id, material.BaseUomId, location.Id, LotOrigin.Received, cancellationToken);
+            lot = lot with { ExpiresAt = Commingling.Earliest(lot.ExpiresAt, command.ExpiresAt) };
         }
 
         var (received, movement) = lot.Add(quantity, LotEventKind.Received);
@@ -138,8 +136,16 @@ internal sealed class ReceiveLotHandler(
             : await inventory.UpdateLotAsync(received, envelope.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(new LotEventRow(ids.NewId(), received.Id, movement, received.UomId, envelope.ActorId, Comment: comment), envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
 
+        // A numbered receipt where lots mix is kept, for its genealogy, then joins the balance (D-031).
+        if (location.ComminglesLots && !received.IsBulk)
+        {
+            var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(inventory, eventLog, events, ids, received, location.Code, comment, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return InventoryRules.Response(balance, balanceVersion, [note]);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
         return InventoryRules.Response(received, version);
     }
 }
@@ -213,7 +219,7 @@ internal sealed class WriteOffLotHandler(
             : lot.Quantity;
         if (quantity == 0)
         {
-            throw new DomainRuleException($"Lot {lot.LotNumber} is empty; there is nothing to write off.");
+            throw new DomainRuleException($"{lot.Name} is empty; there is nothing to write off.");
         }
 
         var (after, movement) = lot.Take(quantity, LotEventKind.Scrapped, material.BaseUomCode);
@@ -264,25 +270,39 @@ internal sealed class MoveLotHandler(
             var version = await inventory.UpdateLotAsync(moved, envelope.OccurredAt, cancellationToken);
             await inventory.InsertEventAsync(new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, Comment: comment), envelope.OccurredAt, cancellationToken);
             await eventLog.AppendAsync(envelope, cancellationToken);
+
+            // Moved where lots mix, the lot joins the balance there (D-031).
+            if (to.ComminglesLots)
+            {
+                var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(inventory, eventLog, events, ids, moved, to.Code, comment, cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return InventoryRules.Response(balance, balanceVersion, [note]);
+            }
+
             await transaction.CommitAsync(cancellationToken);
             return InventoryRules.Response(moved, version);
         }
 
-        // A bulk balance sends a quantity to the destination's balance, made on its first transfer in.
+        // A balance sends a quantity to the destination's balance, made on its first transfer in: mixed stock stays mixed.
         if (command.Quantity is not { } entered)
         {
             throw new ValidationException(new Dictionary<string, string[]>
             {
-                [nameof(command.Quantity)] = ["Required: a balance of a material that isn't lot-tracked moves by quantity."],
+                [nameof(command.Quantity)] = ["Required: a balance moves by quantity."],
             });
         }
 
         var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
         var quantity = await InventoryRules.ToBaseAsync(units, material, entered, command.UomId!.Value, cancellationToken);
         var (source, outgoing) = lot.TransferOut(quantity, to.Id, material.BaseUomCode);
-        var existing = await inventory.FindBulkLotForUpdateAsync(lot.MaterialId, to.Id, cancellationToken);
-        var target = existing?.Value
-            ?? Lot.Create(ids.NewId(), lot.SiteId, lot.MaterialId, Lot.BulkNumber(to.Code), lot.UomId, to.Id, isBulk: true, LotOrigin.Received);
+        var (target, isNewTarget) = await Commingling.BalanceAsync(
+            inventory, ids, lot.SiteId, lot.MaterialId, lot.UomId, to.Id, LotOrigin.Received, cancellationToken, lot.Status);
+        if (target.Status != lot.Status)
+        {
+            throw new DomainRuleException(
+                $"The balance at {to.Code} is {target.Status.Replace('_', ' ')} and this one is {lot.Status.Replace('_', ' ')}; stock moves between balances in the same status.");
+        }
+
         var (destination, incoming) = target.TransferIn(quantity, lot.LocationId!.Value);
 
         var sent = events.Create(
@@ -292,7 +312,7 @@ internal sealed class MoveLotHandler(
             EventTypes.LotMoved, "lot", destination.Id,
             new { destination.LotNumber, FromLocationId = lot.LocationId, ToLocationId = to.Id, Quantity = quantity, QuantityAfter = destination.Quantity, FromLotId = source.Id, Comment = comment });
         var sourceVersion = await inventory.UpdateLotAsync(source, sent.OccurredAt, cancellationToken);
-        if (existing is null)
+        if (isNewTarget)
         {
             await inventory.InsertLotAsync(destination, arrived.OccurredAt, cancellationToken);
         }
@@ -380,7 +400,7 @@ internal sealed class ConsumeLotHandler(
         var lot = await InventoryRules.LotAsync(inventory, command.LotId, null, cancellationToken);
         if (lot.SiteId != job.SiteId)
         {
-            throw new DomainRuleException($"Lot {lot.LotNumber} is in another site than {job.JobNumber}.");
+            throw new DomainRuleException($"{lot.Name} is in another site than {job.JobNumber}.");
         }
 
         var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
@@ -438,8 +458,7 @@ internal sealed class ProduceLotHandler(
             .Require(command.LocationId != Guid.Empty, nameof(command.LocationId), "Required.")
             .Require(command.Quantity > 0, nameof(command.Quantity), "Must be greater than zero.")
             .Require(command.UomId != Guid.Empty, nameof(command.UomId), "Required.")
-            .Require(lotNumber is null || lotNumber.Length <= InventoryRules.MaxLotNumber, nameof(command.LotNumber), $"At most {InventoryRules.MaxLotNumber} characters.")
-            .Require(lotNumber is null || !lotNumber.StartsWith('@'), nameof(command.LotNumber), "Can't start with @, which marks a location's balance.")
+            .RequireLotNumber(lotNumber, nameof(command.LotNumber))
             .RequireComment(command.Comment)
             .ThrowIfInvalid();
 
@@ -450,9 +469,10 @@ internal sealed class ProduceLotHandler(
         var quantity = await InventoryRules.ToBaseAsync(units, material, command.Quantity, command.UomId, cancellationToken);
         var produced = await inventory.ListLotsProducedByJobAsync(job.Id, cancellationToken);
 
+        // Where lots mix, a blank number goes straight into the balance; a number makes a lot that then joins it (D-031).
         Versioned<Lot>? existing;
         Lot lot;
-        if (material.IsLotTracked)
+        if (material.IsLotTracked && !(location.ComminglesLots && lotNumber is null))
         {
             if (lotNumber is null)
             {
@@ -481,7 +501,7 @@ internal sealed class ProduceLotHandler(
         }
         else
         {
-            if (lotNumber is not null)
+            if (lotNumber is not null && !material.IsLotTracked)
             {
                 throw new ValidationException(new Dictionary<string, string[]>
                 {
@@ -489,9 +509,10 @@ internal sealed class ProduceLotHandler(
                 });
             }
 
-            existing = await inventory.FindBulkLotForUpdateAsync(material.Id, location.Id, cancellationToken);
-            lot = existing?.Value ?? Lot.Create(ids.NewId(), job.SiteId, material.Id, Lot.BulkNumber(location.Code), material.BaseUomId,
-                location.Id, isBulk: true, LotOrigin.Produced);
+            var (balance, isNew) = await Commingling.BalanceAsync(
+                inventory, ids, job.SiteId, material.Id, material.BaseUomId, location.Id, LotOrigin.Produced, cancellationToken);
+            existing = isNew ? null : new Versioned<Lot>(balance, Version: 0); // only whether it exists matters below
+            lot = balance with { ExpiresAt = Commingling.Earliest(balance.ExpiresAt, command.ExpiresAt) };
         }
 
         var (after, movement) = lot.Add(quantity, LotEventKind.Produced);
@@ -521,8 +542,15 @@ internal sealed class ProduceLotHandler(
             envelope.OccurredAt, cancellationToken);
         await inventory.InsertGenealogyAsync(edges, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
 
+        if (location.ComminglesLots && !after.IsBulk)
+        {
+            var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(inventory, eventLog, events, ids, after, location.Code, comment, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return InventoryRules.Response(balance, balanceVersion, [note]);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
         return InventoryRules.Response(after, version);
     }
 }

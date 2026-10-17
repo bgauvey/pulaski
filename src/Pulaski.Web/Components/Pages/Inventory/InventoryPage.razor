@@ -2,12 +2,14 @@
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 @inject TimeProvider Time
+@inject Downloads Downloads
 
 <PageTitle>Inventory · Pulaski</PageTitle>
 
 <InventoryHeader Title="Inventory" SiteChanged="LoadAsync">
     <Description>Stock of every material at @(Sites.Site?.Code ?? "the site"), grouped by class. Quantities are in each material's base unit.</Description>
     <Actions>
+        <button type="button" class="btn btn-outline-secondary" disabled="@(_stock is null)" @onclick="ExportAsync">Export CSV</button>
         <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Produce">Declare production</button>
         <button type="button" class="btn btn-primary" @onclick="() => _action = LotAction.Receive">Receive</button>
     </Actions>
@@ -178,6 +180,16 @@ else
         _locationId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
         await LoadAsync();
     }
+
+    // What is on screen: the same filters, every group open.
+    private Task ExportAsync() =>
+        Downloads.CsvAsync(
+            Csv.FileName("stock", Sites.Site?.Code, Time.GetUtcNow()),
+            Csv.Write(
+                ["Class", "Material", "Name", "Type", "Lot-tracked", "On hand", "Available", "Held", "Unit", "Lots", "Locations", "Next expiry"],
+                Shown.SelectMany(g => g.Items).Select(s => (IReadOnlyList<object?>)[
+                    s.MaterialClassName, s.Code, s.Name, s.MaterialType, s.IsLotTracked ? "yes" : "no", s.OnHand, s.Available, s.Held, s.BaseUomCode,
+                    s.LotCount, s.LocationCount, s.NextExpiry is { } x ? Display.SiteTime(x, Sites.Site?.TimeZone) : null]))).AsTask();
 
     private void Toggle(string key)
     {

@@ -14,6 +14,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     {
         // Never opened: every store is replaced below.
         builder.UseSetting("ConnectionStrings:Pulaski", "Host=unused.invalid;Database=none");
+        builder.UseSetting("Pulaski:DatabaseMaintenance", "false");
         builder.ConfigureTestServices(services => Stores.Register(services));
     }
 }

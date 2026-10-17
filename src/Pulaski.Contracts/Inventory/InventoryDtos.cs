@@ -35,7 +35,8 @@ public sealed record LotSummaryDto
 {
     public required Guid Id { get; init; }
     public required Guid SiteId { get; init; }
-    public required string LotNumber { get; init; }
+    /// <summary>Null for a balance (D-031): show its location instead.</summary>
+    public string? LotNumber { get; init; }
 
     /// <summary>The one balance of a material that isn't lot-tracked at its location; show the location, not the number.</summary>
     public bool IsBulk { get; init; }
@@ -107,13 +108,23 @@ public sealed record LotEventDto
     public string? ActorId { get; init; }
     public Guid? RelatedLotId { get; init; }
     public string? RelatedLotNumber { get; init; }
+
+    /// <summary>Where the related lot is, to name it when it is a balance.</summary>
+    public string? RelatedLotLocationCode { get; init; }
+
+    /// <summary>A shipment or count number (D-030).</summary>
+    public string? Reference { get; init; }
+
+    /// <summary>For a reversal, the movement it undoes.</summary>
+    public Guid? ReversesEventId { get; init; }
 }
 
 /// <summary>A lot one genealogy step away: a parent it was made from, or a child made from it.</summary>
 public sealed record LotLinkDto
 {
     public required Guid LotId { get; init; }
-    public required string LotNumber { get; init; }
+    /// <summary>Null for a balance (D-031): show its location instead.</summary>
+    public string? LotNumber { get; init; }
     public bool IsBulk { get; init; }
     public string? LocationCode { get; init; }
     public required string MaterialCode { get; init; }
@@ -144,7 +155,8 @@ public sealed record LotTraceNodeDto
     public required Guid LotId { get; init; }
     public Guid? ViaLotId { get; init; }
     public int Depth { get; init; }
-    public required string LotNumber { get; init; }
+    /// <summary>Null for a balance (D-031): show its location instead.</summary>
+    public string? LotNumber { get; init; }
     public bool IsBulk { get; init; }
     public string? LocationCode { get; init; }
     public required string MaterialCode { get; init; }
@@ -216,6 +228,9 @@ public sealed record InventoryLocationDto
     public required string EquipmentRole { get; init; }
     public string? ParentCode { get; init; }
     public bool IsActive { get; init; }
+
+    /// <summary>Lots here mix into one balance per material, like a silo (D-031).</summary>
+    public bool ComminglesLots { get; init; }
     public int LotCount { get; init; }
     public int MaterialCount { get; init; }
 }
@@ -287,9 +302,179 @@ public sealed record InventoryWarningDto(string Code, string Message);
 public sealed record LotTransactionResponse
 {
     public required Guid LotId { get; init; }
-    public required string LotNumber { get; init; }
+    /// <summary>Null for a balance (D-031): show its location instead.</summary>
+    public string? LotNumber { get; init; }
     public long Version { get; init; }
     public decimal Quantity { get; init; }
     public required string Status { get; init; }
     public IReadOnlyList<InventoryWarningDto> Warnings { get; init; } = [];
+}
+
+/// <summary>One job's remaining need of a component, in the order jobs are needed (D-029).</summary>
+public sealed record ShortageLineDto
+{
+    public required Guid JobId { get; init; }
+    public required string JobNumber { get; init; }
+    public required string JobStatus { get; init; }
+    public required string LineCode { get; init; }
+    public string? WorkOrderNumber { get; init; }
+
+    /// <summary>The job's published start, else its hold-until; null when it has neither.</summary>
+    public DateTimeOffset? NeededFrom { get; init; }
+
+    /// <summary>Planned less consumed, in the component's base unit.</summary>
+    public decimal Remaining { get; init; }
+
+    /// <summary>What this job and every earlier one need in total.</summary>
+    public decimal Cumulative { get; init; }
+
+    /// <summary>The part of this job's need that available stock doesn't cover.</summary>
+    public decimal Uncovered { get; init; }
+}
+
+/// <summary>A component's open demand against its available stock, quantities in its base unit.</summary>
+public sealed record MaterialShortageDto
+{
+    public required Guid MaterialId { get; init; }
+    public required string MaterialCode { get; init; }
+    public required string MaterialName { get; init; }
+    public required string BaseUomCode { get; init; }
+    public decimal Available { get; init; }
+
+    /// <summary>On hold or in quarantine: not counted, shown because releasing it could cover a shortfall.</summary>
+    public decimal Held { get; init; }
+    public decimal Demand { get; init; }
+    public decimal Shortfall { get; init; }
+    public Guid? FirstShortJobId { get; init; }
+    public string? FirstShortJobNumber { get; init; }
+    public DateTimeOffset? FirstShortAt { get; init; }
+    public IReadOnlyList<ShortageLineDto> Lines { get; init; } = [];
+}
+
+/// <summary>The shortage check for a site (D-029): short materials first.</summary>
+public sealed record ShortageReportDto
+{
+    public required Guid SiteId { get; init; }
+    public DateTimeOffset CalculatedAt { get; init; }
+    public IReadOnlyList<MaterialShortageDto> Materials { get; init; } = [];
+
+    /// <summary>Planned components left out because their unit doesn't convert to the component's base unit.</summary>
+    public IReadOnlyList<InventoryWarningDto> Problems { get; init; } = [];
+}
+
+/// <summary>One lot movement in the journal (D-029): the movement, and the lot it happened to.</summary>
+public sealed record JournalEntryDto
+{
+    public required LotEventDto Movement { get; init; }
+    public required Guid LotId { get; init; }
+    /// <summary>Null for a balance (D-031): show its location instead.</summary>
+    public string? LotNumber { get; init; }
+    public bool IsBulk { get; init; }
+    public string? LocationCode { get; init; }
+    public required Guid MaterialId { get; init; }
+    public required string MaterialCode { get; init; }
+}
+
+/// <summary>A page of the journal, newest first; pass the last entry's time and id back to continue.</summary>
+public sealed record JournalPageDto
+{
+    public IReadOnlyList<JournalEntryDto> Entries { get; init; } = [];
+    public bool HasMore { get; init; }
+}
+
+/// <summary>A stock count as listed (D-030).</summary>
+public sealed record StockCountSummaryDto
+{
+    public required Guid Id { get; init; }
+    public required string CountNumber { get; init; }
+    public required Guid LocationId { get; init; }
+    public required string LocationCode { get; init; }
+
+    /// <summary><c>open</c>, <c>posted</c> or <c>cancelled</c>.</summary>
+    public required string Status { get; init; }
+    public int LineCount { get; init; }
+    public int CountedLines { get; init; }
+    public string? Note { get; init; }
+    public required string CreatedBy { get; init; }
+    public DateTimeOffset CreatedAt { get; init; }
+    public DateTimeOffset? PostedAt { get; init; }
+    public string? PostedBy { get; init; }
+
+    /// <summary>Concurrency token; send it back to record, post or cancel.</summary>
+    public long Version { get; init; }
+}
+
+/// <summary>One lot in a count, with what it holds now.</summary>
+public sealed record StockCountLineDto
+{
+    public required Guid Id { get; init; }
+    public required Guid LotId { get; init; }
+    /// <summary>Null for a balance (D-031): show its location instead.</summary>
+    public string? LotNumber { get; init; }
+    public bool IsBulk { get; init; }
+    public required string MaterialCode { get; init; }
+    public required string MaterialName { get; init; }
+    public required string UomCode { get; init; }
+    public decimal ExpectedQty { get; init; }
+    public decimal? CountedQty { get; init; }
+    public DateTimeOffset? CountedAt { get; init; }
+    public string? CountedBy { get; init; }
+    public decimal CurrentQty { get; init; }
+    public required string CurrentStatus { get; init; }
+
+    /// <summary>The lot changed after it was counted: count it again before posting.</summary>
+    public bool ChangedSinceCounted { get; init; }
+}
+
+public sealed record StockCountDto
+{
+    public required StockCountSummaryDto Count { get; init; }
+    public IReadOnlyList<StockCountLineDto> Lines { get; init; } = [];
+}
+
+public sealed record PostStockCountResponse(long Version, int Adjusted);
+
+/// <summary>A reason as the reason-code screen edits it (D-030).</summary>
+public sealed record ReasonCodeAdminDto
+{
+    public required Guid Id { get; init; }
+    public Guid? SiteId { get; init; }
+    public string? SiteCode { get; init; }
+    public required string Kind { get; init; }
+    public required string Code { get; init; }
+    public required string Name { get; init; }
+    public bool RequiresComment { get; init; }
+    public int SortOrder { get; init; }
+    public bool IsActive { get; init; }
+
+    /// <summary>False for a branch of a reason tree, which only groups.</summary>
+    public bool IsSelectable { get; init; }
+    public long Version { get; init; }
+}
+
+/// <summary>A material's on-hand quantity at the end of a past day (D-030).</summary>
+public sealed record StockOnDateDto
+{
+    public required Guid MaterialId { get; init; }
+    public required string Code { get; init; }
+    public required string Name { get; init; }
+    public string? MaterialClassName { get; init; }
+    public required string UomCode { get; init; }
+    public decimal Quantity { get; init; }
+    public int LotCount { get; init; }
+}
+
+/// <summary>A material's on-hand stock by how long ago each lot was received or made.</summary>
+public sealed record AgingRowDto
+{
+    public required Guid MaterialId { get; init; }
+    public required string Code { get; init; }
+    public required string Name { get; init; }
+    public required string UomCode { get; init; }
+    public decimal UpTo30Days { get; init; }
+    public decimal UpTo90Days { get; init; }
+    public decimal UpTo180Days { get; init; }
+    public decimal Over180Days { get; init; }
+    public decimal Total { get; init; }
+    public DateTimeOffset? OldestAt { get; init; }
 }

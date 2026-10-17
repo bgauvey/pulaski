@@ -1,0 +1,69 @@
+@* A material by typing part of its code or name (D-030). A native datalist, so it filters as you
+   type on a tablet as well as a desktop, and needs no script. Text that matches no material leaves
+   the value empty. *@
+
+<input id="@Id" class="form-control" list="@ListId" placeholder="@Placeholder" aria-label="@AriaLabel" autocomplete="off"
+       value="@_text" @onchange="OnChangedAsync" />
+<datalist id="@ListId">
+    @foreach (var m in Materials)
+    {
+        <option value="@Label(m)"></option>
+    }
+</datalist>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<MaterialDto> Materials { get; set; } = [];
+
+    [Parameter]
+    public Guid? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> ValueChanged { get; set; }
+
+    [Parameter]
+    public string? Id { get; set; }
+
+    [Parameter]
+    public string Placeholder { get; set; } = "Type a material code or name";
+
+    [Parameter]
+    public string AriaLabel { get; set; } = "Material";
+
+    private string ListId { get; } = "materials-" + Guid.NewGuid().ToString("N")[..8];
+
+    private string _text = "";
+
+    public static string Label(MaterialDto m) => $"{m.Code} · {m.Name}";
+
+    protected override void OnParametersSet()
+    {
+        var selected = Materials.FirstOrDefault(m => m.Id == Value);
+        if (selected is not null)
+        {
+            _text = Label(selected);
+        }
+        else if (Value is null && Materials.Any(m => Label(m) == _text))
+        {
+            _text = "";
+        }
+    }
+
+    private async Task OnChangedAsync(ChangeEventArgs e)
+    {
+        _text = e.Value?.ToString()?.Trim() ?? "";
+
+        // The full label from the list, or just the code typed exactly.
+        var match = Materials.FirstOrDefault(m => Label(m) == _text)
+            ?? Materials.FirstOrDefault(m => string.Equals(m.Code, _text, StringComparison.OrdinalIgnoreCase));
+        if (match is not null)
+        {
+            _text = Label(match);
+        }
+
+        if (match?.Id != Value)
+        {
+            await ValueChanged.InvokeAsync(match?.Id);
+        }
+    }
+}

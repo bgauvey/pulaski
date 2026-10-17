@@ -29,13 +29,8 @@
                     case LotAction.Receive:
                         <div class="mb-3">
                             <label class="form-label" for="lot-material">Material</label>
-                            <select id="lot-material" class="form-select" value="@_materialId" @onchange="OnMaterialChanged">
-                                <option value="@Guid.Empty">Choose a material…</option>
-                                @foreach (var m in _materials)
-                                {
-                                    <option value="@m.Id">@m.Code · @m.Name</option>
-                                }
-                            </select>
+                            <MaterialPicker Id="lot-material" Materials="_materials" Value="@(_materialId == Guid.Empty ? null : _materialId)"
+                                            ValueChanged="id => SelectMaterial(id ?? Guid.Empty)" />
                         </div>
                         @LocationField(null)
                         @if (ReceivingMaterial is { } received)
@@ -160,6 +155,99 @@
                     case LotAction.Release:
                         <p>Lot @Lot!.LotNumber becomes available again, and can be consumed.</p>
                         break;
+
+                    case LotAction.Split:
+                        @QuantityField(true, $"Of {InventoryView.Qty(Lot!.Quantity)} {Lot.UomCode}; the rest stays in {Lot.LotNumber}.")
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label" for="lot-number">New lot number</label>
+                                <input id="lot-number" class="form-control" maxlength="100" placeholder="Blank: @Lot.LotNumber-1…" @bind="_lotNumber" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label" for="lot-split-to">Goes to</label>
+                                <select id="lot-split-to" class="form-select" @bind="_locationId">
+                                    <option value="@Guid.Empty">Where it is (@Lot.LocationCode)</option>
+                                    @foreach (var l in _locations.Where(l => l.Id != Lot.LocationId))
+                                    {
+                                        <option value="@l.Id">@l.Code · @l.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        break;
+
+                    case LotAction.Merge:
+                        <p class="small text-muted">
+                            Lots of @Lot!.MaterialCode at @Lot.LocationCode that are @Display.Label(Lot.Status).ToLowerInvariant() can be merged in.
+                            They go to zero; @Lot.LotNumber takes their stock and the earliest expiry.
+                        </p>
+                        @if (_lots.Count == 0)
+                        {
+                            <p class="text-muted">No other lot can be merged into this one. Move or release lots first.</p>
+                        }
+                        else
+                        {
+                            <fieldset class="mb-3">
+                                <legend class="form-label">Merge in</legend>
+                                @foreach (var l in _lots)
+                                {
+                                    <div class="form-check" @key="l.Id">
+                                        <input class="form-check-input" type="checkbox" id="merge-@l.Id" checked="@_mergeIds.Contains(l.Id)"
+                                               @onchange="e => ToggleMerge(l.Id, e.Value is true)" />
+                                        <label class="form-check-label" for="merge-@l.Id">
+                                            @l.LotNumber · @InventoryView.Qty(l.Quantity) @l.UomCode@(l.ExpiresAt is { } x ? $" · expires {Display.SiteTime(x, Sites.Site?.TimeZone)[..10]}" : "")
+                                        </label>
+                                    </div>
+                                }
+                            </fieldset>
+                        }
+                        break;
+
+                    case LotAction.Ship:
+                        @QuantityField(false, $"Leave blank to ship all {InventoryView.Qty(Lot!.Quantity)} {Lot.UomCode}.")
+                        <div class="mb-3">
+                            <label class="form-label" for="lot-reference">Delivery or shipment number</label>
+                            <input id="lot-reference" class="form-control" maxlength="100" @bind="_reference" @bind:event="oninput" />
+                        </div>
+                        break;
+
+                    case LotAction.Correct:
+                        <div class="mb-3">
+                            <label class="form-label" for="lot-number">Lot number</label>
+                            <input id="lot-number" class="form-control" maxlength="100" disabled="@Lot!.IsBulk" @bind="_lotNumber" />
+                            @if (Lot.IsBulk)
+                            {
+                                <div class="form-text">A balance is named by its location.</div>
+                            }
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-7">
+                                <label class="form-label" for="lot-supplier">Supplier lot</label>
+                                <input id="lot-supplier" class="form-control" maxlength="100" @bind="_supplierLot" />
+                            </div>
+                            <div class="col-5">
+                                <label class="form-label" for="lot-expires">Expires</label>
+                                <input id="lot-expires" type="date" class="form-control" @bind="_expires" />
+                            </div>
+                        </div>
+                        <p class="small text-muted">Say why in the comment; it is required.</p>
+                        break;
+
+                    case LotAction.Reverse:
+                        @if (Movement is { } undo)
+                        {
+                            <dl class="facts">
+                                <dt>Movement</dt>
+                                <dd>@InventoryView.EventLabel(undo.Kind)@(undo.QtyDelta is { } d ? $" {InventoryView.Delta(d)} {undo.UomCode}" : "")</dd>
+                                <dt>When</dt>
+                                <dd>@Display.SiteTime(undo.OccurredAt, Sites.Site?.TimeZone)</dd>
+                            </dl>
+                            <p class="small text-muted">
+                                The lot goes back to how it was before it@(undo.Kind == "received" && Lot!.Quantity == undo.QtyDelta && !Lot.IsBulk ? ": empty, so it is cancelled" : "").
+                            </p>
+                        }
+                        @ReasonField()
+                        break;
                 }
 
                 <div class="mb-3">
@@ -192,6 +280,10 @@
     [Parameter]
     public DeclarableJobDto? Job { get; set; }
 
+    /// <summary>The movement to reverse: the lot's latest.</summary>
+    [Parameter]
+    public LotEventDto? Movement { get; set; }
+
     [Parameter]
     public EventCallback<LotActionResult> OnDone { get; set; }
 
@@ -223,6 +315,8 @@
     private DateTime? _expires;
     private string? _comment;
     private string _holdStatus = "on_hold";
+    private string? _reference;
+    private readonly HashSet<Guid> _mergeIds = [];
     private bool _producedTracked = true;
 
     private Guid SiteId => Sites.SiteId ?? Lot?.SiteId ?? Guid.Empty;
@@ -249,6 +343,11 @@
         LotAction.Move => "Move",
         LotAction.Hold => _holdStatus == "quarantine" ? "Quarantine" : "Hold",
         LotAction.Release => "Release",
+        LotAction.Split => "Split",
+        LotAction.Merge => _mergeIds.Count == 0 ? "Merge" : $"Merge {_mergeIds.Count} {(_mergeIds.Count == 1 ? "lot" : "lots")}",
+        LotAction.Ship => "Ship",
+        LotAction.Correct => "Correct",
+        LotAction.Reverse => "Reverse",
         _ => "Save",
     };
 
@@ -261,6 +360,11 @@
         LotAction.WriteOff => _reasonId != Guid.Empty,
         LotAction.Move => _locationId != Guid.Empty && (Lot?.IsBulk != true || _quantity > 0),
         LotAction.Hold => _reasonId != Guid.Empty,
+        LotAction.Split => _quantity > 0 && _uomId != Guid.Empty,
+        LotAction.Merge => _mergeIds.Count > 0,
+        LotAction.Ship => !string.IsNullOrWhiteSpace(_reference),
+        LotAction.Correct => !string.IsNullOrWhiteSpace(_lotNumber) && !string.IsNullOrWhiteSpace(_comment),
+        LotAction.Reverse => Movement is not null && _reasonId != Guid.Empty,
         _ => true,
     };
 
@@ -282,7 +386,7 @@
         try
         {
             _uoms = [.. (await Api.ListUomsAsync()).Where(u => u.IsActive)];
-            if (action is LotAction.Receive or LotAction.Produce or LotAction.Move)
+            if (action is LotAction.Receive or LotAction.Produce or LotAction.Move or LotAction.Split)
             {
                 _locations = [.. (await Api.ListInventoryLocationsAsync(SiteId)).Where(l => l.IsActive)];
             }
@@ -292,7 +396,7 @@
                 _materials = await Api.ListMaterialsAsync();
             }
 
-            if (action is LotAction.WriteUp or LotAction.WriteOff or LotAction.Hold)
+            if (action is LotAction.WriteUp or LotAction.WriteOff or LotAction.Hold or LotAction.Reverse)
             {
                 _reasons = await Api.ListReasonCodesAsync(action == LotAction.Hold ? "hold" : "inventory_adjustment", SiteId);
             }
@@ -324,6 +428,18 @@
                     break;
                 case LotAction.Hold when Lot?.Status == "on_hold":
                     _holdStatus = "quarantine";
+                    break;
+                case LotAction.Split or LotAction.Ship when Lot is not null:
+                    _uomId = Lot.UomId;
+                    break;
+                case LotAction.Merge when Lot is not null:
+                    _lots = [.. (await Api.SearchLotsAsync(Lot.SiteId, materialId: Lot.MaterialId, locationId: Lot.LocationId, status: Lot.Status))
+                        .Where(l => l.Id != Lot.Id && !l.IsBulk && l.Quantity > 0)];
+                    break;
+                case LotAction.Correct when Lot is not null:
+                    _lotNumber = Lot.LotNumber;
+                    _supplierLot = Lot.SupplierLot;
+                    _expires = Lot.ExpiresAt is { } expires ? Display.ToSite(expires, Sites.Site?.TimeZone).Date : null;
                     break;
             }
         }
@@ -360,10 +476,9 @@
         _comment = null;
         _holdStatus = "on_hold";
         _producedTracked = true;
+        _reference = null;
+        _mergeIds.Clear();
     }
-
-    private void OnMaterialChanged(ChangeEventArgs e) =>
-        SelectMaterial(Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty);
 
     private void SelectMaterial(Guid id)
     {
@@ -449,6 +564,33 @@
                 LotAction.Release => Done(
                     await Api.ChangeLotStatusAsync(Lot!.Id, new ChangeLotStatusRequest { Version = Lot.Version, Status = "available", Comment = comment }),
                     "released"),
+                LotAction.Split => await SplitAsync(comment),
+                LotAction.Merge => Done(
+                    await Api.MergeLotsAsync(Lot!.Id, new MergeLotsRequest { Version = Lot.Version, SourceLotIds = [.. _mergeIds], Comment = comment }),
+                    $"took in {_mergeIds.Count} {(_mergeIds.Count == 1 ? "lot" : "lots")}"),
+                LotAction.Ship => Done(
+                    await Api.ShipLotAsync(Lot!.Id, new ShipLotRequest
+                    {
+                        Version = Lot.Version,
+                        Quantity = _quantity,
+                        UomId = _quantity is null ? null : _uomId,
+                        Reference = _reference!.Trim(),
+                        Comment = comment,
+                    }),
+                    $"{(_quantity is null ? "" : QtyText + " ")}shipped on {_reference!.Trim()}"),
+                LotAction.Correct => Done(
+                    await Api.CorrectLotAsync(Lot!.Id, new CorrectLotRequest
+                    {
+                        Version = Lot.Version,
+                        LotNumber = _lotNumber!.Trim(),
+                        SupplierLot = string.IsNullOrWhiteSpace(_supplierLot) ? null : _supplierLot.Trim(),
+                        ExpiresAt = Display.FromSiteLocal(_expires, Sites.Site?.TimeZone),
+                        Comment = comment!,
+                    }),
+                    "corrected"),
+                LotAction.Reverse => Done(
+                    await Api.ReverseMovementAsync(Lot!.Id, new ReverseMovementRequest { Version = Lot.Version, EventId = Movement!.Id, ReasonCodeId = _reasonId, Comment = comment }),
+                    $"had its latest movement ({InventoryView.EventLabel(Movement.Kind).ToLowerInvariant()}) reversed"),
                 _ => throw new InvalidOperationException(),
             };
             await OnDone.InvokeAsync(new LotActionResult(response, message));
@@ -506,6 +648,32 @@
             Comment = comment,
         });
         return (response, $"{QtyText} of {InventoryView.LotLabel(lot.LotNumber, lot.IsBulk, lot.LocationCode)} consumed by {job.JobNumber}");
+    }
+
+    private async Task<(LotTransactionResponse, string)> SplitAsync(string? comment)
+    {
+        var response = await Api.SplitLotAsync(Lot!.Id, new SplitLotRequest
+        {
+            Version = Lot.Version,
+            Quantity = _quantity!.Value,
+            UomId = _uomId,
+            NewLotNumber = string.IsNullOrWhiteSpace(_lotNumber) ? null : _lotNumber.Trim(),
+            ToLocationId = _locationId == Guid.Empty ? null : _locationId,
+            Comment = comment,
+        });
+        return (response, $"{QtyText} split off {Lot.LotNumber} into {response.LotNumber}.");
+    }
+
+    private void ToggleMerge(Guid id, bool on)
+    {
+        if (on)
+        {
+            _mergeIds.Add(id);
+        }
+        else
+        {
+            _mergeIds.Remove(id);
+        }
     }
 
     private (LotTransactionResponse, string) Done(LotTransactionResponse response, string what) =>

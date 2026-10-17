@@ -22,16 +22,24 @@
         @if (_lot?.Lot is { } lot)
         {
             var onHand = lot.Status is "available" or "on_hold" or "quarantine";
+            var usable = lot.Status == "available" && lot.Quantity > 0;
             <div class="inv-actions">
-                <button type="button" class="btn btn-primary" disabled="@(lot.Status != "available" || lot.Quantity == 0)" @onclick="() => _action = LotAction.Consume">Consume</button>
+                <button type="button" class="btn btn-primary" disabled="@(!usable)" @onclick="() => _action = LotAction.Consume">Consume</button>
                 <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Move">Move</button>
+                @if (!lot.IsBulk)
+                {
+                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || lot.Quantity == 0)" @onclick="() => _action = LotAction.Split">Split</button>
+                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Merge">Merge…</button>
+                }
+                <button type="button" class="btn btn-outline-secondary" disabled="@(!usable)" @onclick="() => _action = LotAction.Ship">Ship</button>
                 <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.WriteUp">Write up</button>
                 <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || lot.Quantity == 0)" @onclick="() => _action = LotAction.WriteOff">Write off</button>
                 @if (lot.Status is "on_hold" or "quarantine")
                 {
                     <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Release">Release</button>
                 }
-                <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || lot.Status == "quarantine")" @onclick="() => _action = LotAction.Hold">Hold…</button>
+                <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Hold">@(lot.Status is "on_hold" or "quarantine" ? "Change hold…" : "Hold…")</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Correct">Correct…</button>
             </div>
         }
     </Actions>
@@ -139,6 +147,7 @@
                         <th>Job</th>
                         <th>Reason</th>
                         <th>Who</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -159,7 +168,7 @@
                                 @(e.Kind == "moved" ? $"{e.FromLocationCode} → {e.ToLocationCode}" : e.ToLocationCode ?? e.FromLocationCode)
                                 @if (e.RelatedLotId is { } related)
                                 {
-                                    <div><a href="inventory/lots/@related">@InventoryView.LotLabel(e.RelatedLotNumber ?? "", e.RelatedLotNumber?.StartsWith('@') == true, null)</a></div>
+                                    <div><a href="inventory/lots/@related">@InventoryView.LotLabel(e.RelatedLotNumber, e.RelatedLotNumber is null, e.RelatedLotLocationCode)</a></div>
                                 }
                             </td>
                             <td class="small">
@@ -169,6 +178,10 @@
                                 }
                             </td>
                             <td class="small">
+                                @if (e.Reference is { } reference)
+                                {
+                                    <div>@reference</div>
+                                }
                                 @e.ReasonName
                                 @if (e.Comment is { } comment)
                                 {
@@ -176,6 +189,12 @@
                                 }
                             </td>
                             <td class="small text-muted">@e.ActorId</td>
+                            <td class="text-end">
+                                @if (CanReverse(detail, e))
+                                {
+                                    <button type="button" class="btn btn-sm btn-link p-0" title="Undo this movement" @onclick="() => Reverse(e)">Reverse</button>
+                                }
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -188,7 +207,7 @@ else if (_error is null)
     <p class="text-muted">Loading…</p>
 }
 
-<LotActionDrawer Action="_action" Lot="_lot?.Lot" OnDone="OnDoneAsync" OnClose="() => _action = null" />
+<LotActionDrawer Action="_action" Lot="_lot?.Lot" Movement="_movement" OnDone="OnDoneAsync" OnClose="() => _action = null" />
 
 @code {
     [Parameter]
@@ -200,6 +219,9 @@ else if (_error is null)
     private ApiException? _error;
     private LotActionResult? _result;
     private LotAction? _action;
+    private LotEventDto? _movement;
+
+    private static readonly HashSet<string> Reversible = ["received", "adjusted", "scrapped", "moved", "status_changed", "shipped"];
 
     private string Title => _lot?.Lot is { } l ? InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode) : "Lot";
 
@@ -222,6 +244,16 @@ else if (_error is null)
         {
             _error = ex;
         }
+    }
+
+    // Only the latest movement, once, and only one that touched this lot alone (D-030).
+    private static bool CanReverse(LotDto lot, LotEventDto e) =>
+        lot.History.Count > 0 && lot.History[0].Id == e.Id && Reversible.Contains(e.Kind) && !(e.Kind == "moved" && e.RelatedLotId is not null);
+
+    private void Reverse(LotEventDto e)
+    {
+        _movement = e;
+        _action = LotAction.Reverse;
     }
 
     private async Task TraceAsync(bool forward)

@@ -2,6 +2,7 @@
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 @inject TimeProvider Time
+@inject Downloads Downloads
 
 <PageTitle>Lots · Inventory · Pulaski</PageTitle>
 
@@ -16,13 +17,7 @@
         <input type="search" class="form-control" placeholder="Lot, supplier lot or material code" aria-label="Lot number" @bind="_search" />
         <Icon Name="search" Size="16" />
     </div>
-    <select class="form-select" aria-label="Material" @bind="_materialId">
-        <option value="">Any material</option>
-        @foreach (var m in _materials)
-        {
-            <option value="@m.Id">@m.Code · @m.Name</option>
-        }
-    </select>
+    <div class="inv-picker"><MaterialPicker Materials="_materials" @bind-Value="_materialId" Placeholder="Any material" /></div>
     <select class="form-select" aria-label="Location" @bind="_locationId">
         <option value="">Any location</option>
         @foreach (var l in _locations)
@@ -45,6 +40,7 @@
         <option value="90">Expiring within 90 days</option>
     </select>
     <button type="submit" class="btn btn-primary">Search</button>
+    <button type="button" class="btn btn-outline-secondary" disabled="@(_lots is not { Count: > 0 })" @onclick="ExportAsync">Export CSV</button>
 </form>
 
 @if (_lots is null)
@@ -63,7 +59,7 @@ else if (_lots.Count == 0)
 }
 else
 {
-    <p class="small text-muted">@_lots.Count @(_lots.Count == 1 ? "lot" : "lots")@(_lots.Count >= 500 ? " (the first 500; narrow the search)" : "")</p>
+    <p class="small text-muted">@_lots.Count @(_lots.Count == 1 ? "lot" : "lots")@(_hasMore ? " so far" : "")</p>
     <div class="table-panel">
         <table class="table align-middle">
             <thead>
@@ -95,9 +91,15 @@ else
             </tbody>
         </table>
     </div>
+    @if (_hasMore)
+    {
+        <button type="button" class="btn btn-outline-secondary mt-3" disabled="@_loading" @onclick="MoreAsync">Show more</button>
+    }
 }
 
 @code {
+    private const int Page = 200;
+
     [SupplyParameterFromQuery(Name = "materialId")]
     public Guid? MaterialQuery { get; set; }
 
@@ -107,7 +109,9 @@ else
     [SupplyParameterFromQuery(Name = "status")]
     public string? StatusQuery { get; set; }
 
-    private IReadOnlyList<LotSummaryDto>? _lots;
+    private List<LotSummaryDto>? _lots;
+    private bool _hasMore;
+    private bool _loading;
     private IReadOnlyList<MaterialDto> _materials = [];
     private IReadOnlyList<InventoryLocationDto> _locations = [];
     private ApiException? _error;
@@ -136,14 +140,61 @@ else
         await SearchAsync();
     }
 
-    private async Task SearchAsync()
+    private Task SearchAsync() => LoadAsync(0);
+
+    private Task MoreAsync() => LoadAsync(_lots?.Count ?? 0);
+
+    private async Task LoadAsync(int offset)
+    {
+        _error = null;
+        _loading = true;
+        try
+        {
+            var page = await Fetch(offset, Page);
+            _lots = offset == 0 ? [.. page] : [.. _lots ?? [], .. page];
+            _hasMore = page.Count == Page;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task<IReadOnlyList<LotSummaryDto>> Fetch(int offset, int limit)
+    {
+        var expiresBefore = _expiryDays is { } days ? Time.GetUtcNow().AddDays(days) : (DateTimeOffset?)null;
+        return Api.SearchLotsAsync(
+            Sites.SiteId, _search, _materialId, _locationId, string.IsNullOrEmpty(_status) ? null : _status, expiresBefore, offset, limit);
+    }
+
+    // Every matching lot, not only the pages shown, up to 10,000.
+    private async Task ExportAsync()
     {
         _error = null;
         try
         {
-            var expiresBefore = _expiryDays is { } days ? Time.GetUtcNow().AddDays(days) : (DateTimeOffset?)null;
-            _lots = await Api.SearchLotsAsync(
-                Sites.SiteId, _search, _materialId, _locationId, string.IsNullOrEmpty(_status) ? null : _status, expiresBefore);
+            List<LotSummaryDto> all = [];
+            IReadOnlyList<LotSummaryDto> page;
+            do
+            {
+                page = await Fetch(all.Count, 500);
+                all.AddRange(page);
+            }
+            while (page.Count == 500 && all.Count < 10_000);
+
+            var tz = Sites.Site?.TimeZone;
+            await Downloads.CsvAsync(
+                Csv.FileName("lots", Sites.Site?.Code, Time.GetUtcNow()),
+                Csv.Write(
+                    ["Lot", "Material", "Name", "Status", "Quantity", "Unit", "Location", "Supplier lot", "Expires", "Origin", "Made by", "Created", "Updated"],
+                    all.Select(l => (IReadOnlyList<object?>)[
+                        InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode), l.MaterialCode, l.MaterialName, l.Status, l.Quantity, l.UomCode,
+                        l.LocationCode, l.SupplierLot, l.ExpiresAt is { } x ? Display.SiteTime(x, tz) : null, l.Origin, l.ProducedByJobNumber,
+                        Display.SiteTime(l.CreatedAt, tz), Display.SiteTime(l.UpdatedAt, tz)])));
         }
         catch (ApiException ex)
         {

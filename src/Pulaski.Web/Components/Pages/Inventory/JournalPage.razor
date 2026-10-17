@@ -1,0 +1,256 @@
+@page "/inventory/journal"
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject TimeProvider Time
+@inject Downloads Downloads
+
+<PageTitle>Journal · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="Movement journal" SiteChanged="SearchAsync">
+    <Description>Every receipt, adjustment, move, hold, consumption and production in the site, newest first.</Description>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+
+<form class="inv-toolbar" role="search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+    <label class="small text-muted" for="j-from">From</label>
+    <input id="j-from" type="date" class="form-control" style="min-width:auto" @bind="_from" />
+    <label class="small text-muted" for="j-to">to</label>
+    <input id="j-to" type="date" class="form-control" style="min-width:auto" @bind="_to" />
+    <select class="form-select" aria-label="Movement" @bind="_kind">
+        <option value="">Every movement</option>
+        @foreach (var kind in Kinds)
+        {
+            <option value="@kind">@InventoryView.EventLabel(kind)</option>
+        }
+    </select>
+    <div class="inv-picker"><MaterialPicker Materials="_materials" @bind-Value="_materialId" Placeholder="Any material" /></div>
+    <select class="form-select" aria-label="Location" @bind="_locationId">
+        <option value="">Any location</option>
+        @foreach (var l in _locations)
+        {
+            <option value="@l.Id">@l.Code · @l.Name</option>
+        }
+    </select>
+    <input type="search" class="form-control" placeholder="Lot or supplier lot" aria-label="Lot number" @bind="_search" />
+    <input type="search" class="form-control" placeholder="Who" aria-label="Who" @bind="_actor" />
+    <button type="submit" class="btn btn-primary">Search</button>
+    <button type="button" class="btn btn-outline-secondary" disabled="@(_entries is not { Count: > 0 })" @onclick="ExportAsync">Export CSV</button>
+</form>
+
+@if (JobQuery is not null)
+{
+    <p class="small">Showing one job's movements only. <a href="inventory/journal">Show every job</a></p>
+}
+
+@if (_entries is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_entries.Count == 0)
+{
+    <div class="empty-panel">
+        <h2>No movements</h2>
+        <p class="text-muted mb-0">Nothing matches in these dates. Widen the dates or clear a filter.</p>
+    </div>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>What</th>
+                    <th>Lot</th>
+                    <th class="inv-num">Change</th>
+                    <th class="inv-num">After</th>
+                    <th>Where</th>
+                    <th>Job</th>
+                    <th>Reason</th>
+                    <th>Who</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var entry in _entries)
+                {
+                    var e = entry.Movement;
+                    <tr @key="e.Id">
+                        <td class="small text-nowrap">@Display.SiteTime(e.OccurredAt, Sites.Site?.TimeZone)</td>
+                        <td>
+                            @InventoryView.EventLabel(e.Kind)
+                            @if (e.ToStatus is { } to)
+                            {
+                                <div class="small text-muted">@Display.Label(e.FromStatus) → @Display.Label(to)</div>
+                            }
+                        </td>
+                        <td>
+                            <a class="fw-semibold" href="inventory/lots/@entry.LotId">@InventoryView.LotLabel(entry.LotNumber, entry.IsBulk, entry.LocationCode)</a>
+                            <div class="small"><a class="text-muted" href="inventory/materials/@entry.MaterialId">@entry.MaterialCode</a></div>
+                        </td>
+                        <td class="inv-num">@(e.QtyDelta is { } d ? InventoryView.Delta(d) : "")</td>
+                        <td class="inv-num">@(e.QtyAfter is { } a ? InventoryView.Qty(a) : "") <span class="small text-muted">@e.UomCode</span></td>
+                        <td class="small">@(e.Kind == "moved" ? $"{e.FromLocationCode} → {e.ToLocationCode}" : e.ToLocationCode ?? e.FromLocationCode)</td>
+                        <td class="small">
+                            @if (e.JobId is { } job)
+                            {
+                                <a href="inventory/jobs/@job">@e.JobNumber</a>
+                            }
+                        </td>
+                        <td class="small">
+                            @if (e.Reference is { } reference)
+                            {
+                                <div>@reference</div>
+                            }
+                            @e.ReasonName
+                            @if (e.Comment is { } comment)
+                            {
+                                <div class="text-muted">@comment</div>
+                            }
+                        </td>
+                        <td class="small text-muted">@e.ActorId</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="d-flex align-items-center gap-3 mt-3">
+        <span class="small text-muted">@_entries.Count @(_entries.Count == 1 ? "movement" : "movements")</span>
+        @if (_hasMore)
+        {
+            <button type="button" class="btn btn-outline-secondary" disabled="@_loading" @onclick="MoreAsync">Show older</button>
+        }
+    </div>
+}
+
+@code {
+    private static readonly string[] Kinds = ["received", "produced", "consumed", "adjusted", "scrapped", "moved", "status_changed"];
+
+    [SupplyParameterFromQuery(Name = "materialId")]
+    public Guid? MaterialQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "locationId")]
+    public Guid? LocationQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "jobId")]
+    public Guid? JobQuery { get; set; }
+
+    private List<JournalEntryDto>? _entries;
+    private IReadOnlyList<MaterialDto> _materials = [];
+    private IReadOnlyList<InventoryLocationDto> _locations = [];
+    private ApiException? _error;
+    private bool _hasMore;
+    private bool _loading;
+    private DateTime? _from;
+    private DateTime? _to;
+    private string _kind = "";
+    private Guid? _materialId;
+    private Guid? _locationId;
+    private string? _search;
+    private string? _actor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _materialId = MaterialQuery;
+        _locationId = LocationQuery;
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            var today = Display.ToSite(Time.GetUtcNow(), Sites.Site?.TimeZone).Date;
+            _to = today;
+            _from = today.AddDays(-6);
+            _materials = await Api.ListMaterialsAsync();
+            _locations = await Api.ListInventoryLocationsAsync(Sites.SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await SearchAsync();
+    }
+
+    private Task SearchAsync() => LoadAsync(after: null);
+
+    private Task<JournalPageDto> Fetch(LotEventDto? after)
+    {
+        var tz = Sites.Site?.TimeZone;
+        return Api.ListMovementsAsync(
+            Sites.SiteId!.Value,
+            Display.FromSiteLocal(_from?.Date, tz),
+            Display.FromSiteLocal(_to?.Date.AddDays(1), tz),
+            string.IsNullOrEmpty(_kind) ? null : _kind,
+            _materialId,
+            _locationId,
+            JobQuery,
+            _actor,
+            _search,
+            after);
+    }
+
+    // Every movement matching the filters, page after page, up to 10,000.
+    private async Task ExportAsync()
+    {
+        _error = null;
+        try
+        {
+            List<JournalEntryDto> all = [];
+            JournalPageDto page;
+            do
+            {
+                page = await Fetch(all.LastOrDefault()?.Movement);
+                all.AddRange(page.Entries);
+            }
+            while (page.HasMore && all.Count < 10_000);
+
+            var tz = Sites.Site?.TimeZone;
+            await Downloads.CsvAsync(
+                Csv.FileName("journal", Sites.Site?.Code, Time.GetUtcNow()),
+                Csv.Write(
+                    ["When", "What", "Lot", "Material", "Change", "After", "Unit", "From", "To", "Status from", "Status to", "Job", "Reference", "Reason", "Comment", "Who"],
+                    all.Select(entry =>
+                    {
+                        var e = entry.Movement;
+                        return (IReadOnlyList<object?>)[
+                            Display.SiteTime(e.OccurredAt, tz), InventoryView.EventLabel(e.Kind), InventoryView.LotLabel(entry.LotNumber, entry.IsBulk, entry.LocationCode), entry.MaterialCode, e.QtyDelta, e.QtyAfter, e.UomCode,
+                            e.FromLocationCode, e.ToLocationCode, e.FromStatus, e.ToStatus, e.JobNumber, e.Reference, e.ReasonName, e.Comment, e.ActorId];
+                    })));
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private Task MoreAsync() => LoadAsync(_entries?.LastOrDefault()?.Movement);
+
+    // The dates are whole days at the site: from the start of the first to the end of the last.
+    private async Task LoadAsync(LotEventDto? after)
+    {
+        if (Sites.SiteId is null)
+        {
+            _entries = [];
+            return;
+        }
+
+        _error = null;
+        _loading = true;
+        try
+        {
+            var page = await Fetch(after);
+            _entries = after is null ? [.. page.Entries] : [.. _entries ?? [], .. page.Entries];
+            _hasMore = page.HasMore;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

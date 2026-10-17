@@ -72,8 +72,8 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
           AND (@Pattern::text IS NULL OR l.lot_number ILIKE @Pattern OR l.supplier_lot ILIKE @Pattern OR m.code ILIKE @Pattern)
           AND (@ExpiresBefore::timestamptz IS NULL OR l.expires_at < @ExpiresBefore)
           AND (CASE WHEN @Status::text IS NULL THEN l.status IN {OnHand} AND l.quantity > 0 ELSE l.status = @Status END)
-        ORDER BY m.code, l.lot_number
-        LIMIT 500
+        ORDER BY m.code, l.lot_number, l.id
+        LIMIT @Limit OFFSET @Offset
         """;
 
     private const string MaterialLocationsSql = $"""
@@ -102,20 +102,50 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         WHERE l.id = @Id
         """;
 
-    private const string HistorySql = """
-        SELECT e.id, e.occurred_at, e.event_kind AS kind, e.qty_delta, e.qty_after, u.code AS uom_code,
-               fl.code AS from_location_code, tl.code AS to_location_code, e.from_status, e.to_status,
-               e.job_id, j.job_number, r.code AS reason_code, r.name AS reason_name, e.comment, e.actor_id,
-               e.related_lot_id, rl.lot_number AS related_lot_number
-        FROM ts.lot_event e
-        LEFT JOIN core.uom u ON u.id = e.uom_id
+    // One movement as both a lot's history and the journal show it.
+    private const string EventColumns = """
+        e.id, e.occurred_at, e.event_kind AS kind, e.qty_delta, e.qty_after, eu.code AS uom_code,
+        fl.code AS from_location_code, tl.code AS to_location_code, e.from_status, e.to_status,
+        e.job_id, ej.job_number, r.code AS reason_code, r.name AS reason_name, e.comment, e.actor_id,
+        e.related_lot_id, rl.lot_number AS related_lot_number, e.reference, e.reverses_event_id
+        """;
+
+    private const string EventJoins = """
+        LEFT JOIN core.uom eu ON eu.id = e.uom_id
         LEFT JOIN core.equipment fl ON fl.id = e.from_location_id
         LEFT JOIN core.equipment tl ON tl.id = e.to_location_id
-        LEFT JOIN core.job j ON j.id = e.job_id
+        LEFT JOIN core.job ej ON ej.id = e.job_id
         LEFT JOIN core.reason_code r ON r.id = e.reason_code_id
         LEFT JOIN core.lot rl ON rl.id = e.related_lot_id
+        """;
+
+    private const string HistorySql = $"""
+        SELECT {EventColumns}
+        FROM ts.lot_event e
+        {EventJoins}
         WHERE e.lot_id = @Id
         ORDER BY e.occurred_at DESC, e.id DESC
+        """;
+
+    // Newest first; the range bounds the partitions read, the cursor continues after the last row read.
+    private const string JournalSql = $"""
+        SELECT {EventColumns},
+               l.id AS lot_id, l.lot_number, l.is_bulk, l.material_id, m.code AS material_code
+        FROM ts.lot_event e
+        JOIN core.lot l ON l.id = e.lot_id
+        JOIN core.material m ON m.id = l.material_id
+        {EventJoins}
+        WHERE l.site_id = @SiteId
+          AND e.occurred_at >= @From AND e.occurred_at < @To
+          AND (@Kind::text IS NULL OR e.event_kind = @Kind)
+          AND (@MaterialId::uuid IS NULL OR l.material_id = @MaterialId)
+          AND (@LocationId::uuid IS NULL OR e.from_location_id = @LocationId OR e.to_location_id = @LocationId)
+          AND (@JobId::uuid IS NULL OR e.job_id = @JobId)
+          AND (@ActorPattern::text IS NULL OR e.actor_id ILIKE @ActorPattern)
+          AND (@Pattern::text IS NULL OR l.lot_number ILIKE @Pattern OR l.supplier_lot ILIKE @Pattern)
+          AND (@BeforeAt::timestamptz IS NULL OR (e.occurred_at, e.id) < (@BeforeAt::timestamptz, @BeforeId::uuid))
+        ORDER BY e.occurred_at DESC, e.id DESC
+        LIMIT @Take
         """;
 
     private const string LinkColumns = """
@@ -309,6 +339,121 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         SELECT coalesce(sum(qty_delta), 0) FROM ts.lot_event WHERE job_id = @Id AND event_kind = 'produced'
         """;
 
+    // One row per job, component and planned unit; consumption is the job's total of the component.
+    private const string ComponentDemandSql = $"""
+        SELECT j.id AS job_id, j.job_number, j.status AS job_status, eq.code AS line_code, wo.order_number AS work_order_number,
+               coalesce(j.planned_start, j.earliest_start) AS needed_from,
+               m.id AS material_id, m.code AS material_code, m.name AS material_name, m.base_uom_id, bu.code AS base_uom_code,
+               sum(jm.planned_qty) AS planned_qty, jm.uom_id, u.code AS uom_code,
+               coalesce(c.consumed, 0) AS consumed_qty
+        FROM core.job_material jm
+        JOIN core.job j ON j.id = jm.job_id
+        JOIN core.equipment eq ON eq.id = j.equipment_id
+        JOIN core.material m ON m.id = jm.material_id
+        JOIN core.uom bu ON bu.id = m.base_uom_id
+        JOIN core.uom u ON u.id = jm.uom_id
+        LEFT JOIN core.work_order wo ON wo.id = j.work_order_id
+        LEFT JOIN LATERAL (
+            SELECT sum(-e.qty_delta) AS consumed
+            FROM ts.lot_event e
+            JOIN core.lot l ON l.id = e.lot_id
+            WHERE e.job_id = j.id AND e.event_kind = 'consumed' AND l.material_id = jm.material_id) c ON true
+        WHERE jm.direction = 'consume' AND j.site_id = @SiteId AND {OpenJobs}
+          AND (@EquipmentId::uuid IS NULL OR j.equipment_id IN (
+                SELECT descendant_id FROM core.equipment_closure WHERE ancestor_id = @EquipmentId))
+          AND (@Before::timestamptz IS NULL OR coalesce(j.planned_start, j.earliest_start) < @Before)
+        GROUP BY j.id, j.job_number, j.status, eq.code, wo.order_number, m.id, m.code, m.name, m.base_uom_id, bu.code,
+                 jm.uom_id, u.code, c.consumed
+        """;
+
+    private const string AvailabilitySql = $"""
+        SELECT l.material_id,
+               coalesce(sum(l.quantity) FILTER (WHERE l.status = 'available'), 0) AS available,
+               coalesce(sum(l.quantity) FILTER (WHERE l.status <> 'available'), 0) AS held
+        FROM core.lot l
+        WHERE l.site_id = @SiteId AND l.material_id = ANY(@MaterialIds) AND l.status IN {OnHand} AND l.quantity > 0
+        GROUP BY l.material_id
+        """;
+
+    private const string CountSummaryColumns = """
+        c.id, c.count_number, c.location_equipment_id AS location_id, e.code AS location_code, c.status,
+        (SELECT count(*)::int FROM core.stock_count_line x WHERE x.stock_count_id = c.id) AS line_count,
+        (SELECT count(*)::int FROM core.stock_count_line x WHERE x.stock_count_id = c.id AND x.counted_qty IS NOT NULL) AS counted_lines,
+        c.note, c.created_by, c.created_at, c.posted_at, c.posted_by, c.xmin::text::bigint AS version
+        """;
+
+    private const string StockCountsSql = $"""
+        SELECT {CountSummaryColumns}
+        FROM core.stock_count c
+        JOIN core.equipment e ON e.id = c.location_equipment_id
+        WHERE c.site_id = @SiteId
+        ORDER BY c.created_at DESC
+        LIMIT 200
+        """;
+
+    private const string StockCountSql = $"""
+        SELECT {CountSummaryColumns}
+        FROM core.stock_count c
+        JOIN core.equipment e ON e.id = c.location_equipment_id
+        WHERE c.id = @Id
+        """;
+
+    private const string StockCountLinesSql = """
+        SELECT x.id, x.lot_id, l.lot_number, l.is_bulk, m.code AS material_code, m.name AS material_name, u.code AS uom_code,
+               x.expected_qty, x.counted_qty, x.counted_at, x.counted_by, l.quantity AS current_qty, l.status AS current_status,
+               (x.counted_at IS NOT NULL AND l.updated_at > x.counted_at) AS changed_since_counted
+        FROM core.stock_count_line x
+        JOIN core.lot l ON l.id = x.lot_id
+        JOIN core.material m ON m.id = l.material_id
+        JOIN core.uom u ON u.id = l.uom_id
+        WHERE x.stock_count_id = @Id
+        ORDER BY m.code, l.lot_number
+        """;
+
+    private const string AllReasonCodesSql = """
+        SELECT r.id, r.site_id, s.code AS site_code, r.reason_kind AS kind, r.code, r.name, r.requires_comment,
+               r.sort_order, r.is_active, r.is_selectable, r.xmin::text::bigint AS version
+        FROM core.reason_code r
+        LEFT JOIN core.equipment s ON s.id = r.site_id
+        WHERE @SiteId::uuid IS NULL OR r.site_id IS NULL OR r.site_id = @SiteId
+        ORDER BY r.reason_kind, r.sort_order, r.name
+        """;
+
+    // Each lot's quantity after its latest movement up to the time; lots at zero then don't count.
+    private const string StockOnDateSql = """
+        SELECT m.id AS material_id, m.code, m.name, c.name AS material_class_name, u.code AS uom_code,
+               sum(x.qty_after) AS quantity, count(*)::int AS lot_count
+        FROM (
+            SELECT DISTINCT ON (e.lot_id) e.lot_id, e.qty_after
+            FROM ts.lot_event e
+            JOIN core.lot l ON l.id = e.lot_id
+            WHERE l.site_id = @SiteId AND e.occurred_at <= @At AND e.qty_after IS NOT NULL
+            ORDER BY e.lot_id, e.occurred_at DESC, e.id DESC) x
+        JOIN core.lot l ON l.id = x.lot_id
+        JOIN core.material m ON m.id = l.material_id
+        JOIN core.uom u ON u.id = m.base_uom_id
+        LEFT JOIN core.material_class c ON c.id = m.material_class_id
+        WHERE x.qty_after > 0
+        GROUP BY m.id, m.code, m.name, c.name, u.code
+        ORDER BY c.name NULLS LAST, m.code
+        """;
+
+    // Balances aren't aged: a balance's creation is only its first receipt.
+    private const string AgingSql = $"""
+        SELECT m.id AS material_id, m.code, m.name, u.code AS uom_code,
+               coalesce(sum(l.quantity) FILTER (WHERE l.created_at > @Now - interval '30 days'), 0) AS up_to_30_days,
+               coalesce(sum(l.quantity) FILTER (WHERE l.created_at <= @Now - interval '30 days' AND l.created_at > @Now - interval '90 days'), 0) AS up_to_90_days,
+               coalesce(sum(l.quantity) FILTER (WHERE l.created_at <= @Now - interval '90 days' AND l.created_at > @Now - interval '180 days'), 0) AS up_to_180_days,
+               coalesce(sum(l.quantity) FILTER (WHERE l.created_at <= @Now - interval '180 days'), 0) AS over_180_days,
+               sum(l.quantity) AS total, min(l.created_at) AS oldest_at
+        FROM core.lot l
+        JOIN core.material m ON m.id = l.material_id
+        JOIN core.uom u ON u.id = m.base_uom_id
+        WHERE l.site_id = @SiteId AND l.status IN {OnHand} AND l.quantity > 0 AND NOT l.is_bulk
+        GROUP BY m.id, m.code, m.name, u.code
+        ORDER BY min(l.created_at), m.code
+        """;
+
     private const string ReasonCodesSql = """
         SELECT id, reason_kind AS kind, code, name, requires_comment
         FROM core.reason_code
@@ -454,6 +599,61 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         return rows.AsList();
     }
 
+    public async Task<IReadOnlyList<ComponentDemandRow>> ListComponentDemandAsync(
+        Guid siteId, Guid? equipmentId, DateTimeOffset? before, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<ComponentDemandRow>(new CommandDefinition(
+            ComponentDemandSql, new { SiteId = siteId, EquipmentId = equipmentId, Before = before }, cancellationToken: cancellationToken));
+        return rows.AsList();
+    }
+
+    public async Task<IReadOnlyList<MaterialAvailabilityRow>> ListAvailabilityAsync(
+        Guid siteId, IReadOnlyCollection<Guid> materialIds, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<MaterialAvailabilityRow>(new CommandDefinition(
+            AvailabilitySql, new { SiteId = siteId, MaterialIds = materialIds.ToArray() }, cancellationToken: cancellationToken));
+        return rows.AsList();
+    }
+
+    public async Task<JournalPageDto> ListMovementsAsync(JournalFilter filter, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+
+        // One more than a page, to know whether another follows.
+        var rows = (await connection.QueryAsync<LotEventDto, JournalLotRow, JournalEntryDto>(
+            new CommandDefinition(
+                JournalSql,
+                new
+                {
+                    filter.SiteId,
+                    filter.From,
+                    filter.To,
+                    filter.Kind,
+                    filter.MaterialId,
+                    filter.LocationId,
+                    filter.JobId,
+                    ActorPattern = Like(filter.Actor),
+                    Pattern = Like(filter.Search),
+                    filter.BeforeAt,
+                    filter.BeforeId,
+                    Take = filter.Limit + 1,
+                },
+                cancellationToken: cancellationToken),
+            (movement, lot) => new JournalEntryDto
+            {
+                Movement = movement,
+                LotId = lot.LotId,
+                LotNumber = lot.LotNumber,
+                IsBulk = lot.IsBulk,
+                MaterialId = lot.MaterialId,
+                MaterialCode = lot.MaterialCode,
+            },
+            splitOn: "lot_id")).AsList();
+        return new JournalPageDto { Entries = rows.Take(filter.Limit).ToList(), HasMore = rows.Count > filter.Limit };
+    }
+
     /// <summary>
     /// The planned components with what was consumed of each (on the first row of its material),
     /// then anything consumed that wasn't planned. Both lists come sorted by material code.
@@ -486,6 +686,47 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         return result;
     }
 
+    public async Task<IReadOnlyList<StockCountSummaryDto>> ListStockCountsAsync(Guid siteId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<StockCountSummaryDto>(new CommandDefinition(StockCountsSql, new { SiteId = siteId }, cancellationToken: cancellationToken));
+        return rows.AsList();
+    }
+
+    public async Task<StockCountDto?> GetStockCountAsync(Guid id, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var count = await connection.QuerySingleOrDefaultAsync<StockCountSummaryDto>(new CommandDefinition(StockCountSql, new { Id = id }, cancellationToken: cancellationToken));
+        if (count is null)
+        {
+            return null;
+        }
+
+        var lines = await connection.QueryAsync<StockCountLineDto>(new CommandDefinition(StockCountLinesSql, new { Id = id }, cancellationToken: cancellationToken));
+        return new StockCountDto { Count = count, Lines = lines.AsList() };
+    }
+
+    public async Task<IReadOnlyList<ReasonCodeAdminDto>> ListAllReasonCodesAsync(Guid? siteId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<ReasonCodeAdminDto>(new CommandDefinition(AllReasonCodesSql, new { SiteId = siteId }, cancellationToken: cancellationToken));
+        return rows.AsList();
+    }
+
+    public async Task<IReadOnlyList<StockOnDateDto>> StockOnDateAsync(Guid siteId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<StockOnDateDto>(new CommandDefinition(StockOnDateSql, new { SiteId = siteId, At = at }, cancellationToken: cancellationToken));
+        return rows.AsList();
+    }
+
+    public async Task<IReadOnlyList<AgingRowDto>> AgingAsync(Guid siteId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<AgingRowDto>(new CommandDefinition(AgingSql, new { SiteId = siteId, Now = now }, cancellationToken: cancellationToken));
+        return rows.AsList();
+    }
+
     private static object LotArgs(LotFilter filter) => new
     {
         filter.SiteId,
@@ -494,6 +735,8 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         filter.ExpiresBefore,
         Status = string.IsNullOrWhiteSpace(filter.Status) ? null : filter.Status,
         Pattern = Like(filter.Search),
+        filter.Offset,
+        filter.Limit,
     };
 
     /// <summary>A contains-pattern for ILIKE with the user's wildcards escaped; null for a blank search.</summary>
@@ -503,6 +746,15 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
             : "%" + search.Trim().Replace(@"\", @"\\", StringComparison.Ordinal)
                 .Replace("%", @"\%", StringComparison.Ordinal)
                 .Replace("_", @"\_", StringComparison.Ordinal) + "%";
+
+    private sealed class JournalLotRow
+    {
+        public Guid LotId { get; init; }
+        public string LotNumber { get; init; } = "";
+        public bool IsBulk { get; init; }
+        public Guid MaterialId { get; init; }
+        public string MaterialCode { get; init; } = "";
+    }
 
     private sealed class LotContextRow
     {

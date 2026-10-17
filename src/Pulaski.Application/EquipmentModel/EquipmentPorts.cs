@@ -25,6 +25,9 @@ public interface IEquipmentRepository
     /// <returns>The new row version.</returns>
     Task<long> UpdateAsync(Equipment equipment, DateTimeOffset at, CancellationToken cancellationToken);
 
+    /// <summary>True when lots (not balances) with stock sit at the location (D-031).</summary>
+    Task<bool> HoldsSeparateLotsAsync(Guid equipmentId, CancellationToken cancellationToken);
+
     /// <summary>True when <paramref name="descendantId"/> is <paramref name="ancestorId"/> or sits below it.</summary>
     Task<bool> IsInSubtreeAsync(Guid ancestorId, Guid descendantId, CancellationToken cancellationToken);
 }

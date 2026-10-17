@@ -81,6 +81,23 @@ public sealed class DatabaseFixture : IAsyncLifetime
         Services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
+    private readonly List<string> _scratch = [];
+
+    /// <summary>An empty extra database on the same server, dropped with the fixture.</summary>
+    public async Task<NpgsqlDataSource> CreateScratchDatabaseAsync()
+    {
+        var name = $"pulaski_scratch_{Guid.NewGuid():N}"[..24];
+        await using (var admin = new NpgsqlConnection(_adminConnection))
+        {
+            await admin.OpenAsync();
+            await using var create = new NpgsqlCommand($"CREATE DATABASE {name}", admin);
+            await create.ExecuteNonQueryAsync();
+        }
+
+        _scratch.Add(name);
+        return NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(_adminConnection) { Database = name }.ConnectionString);
+    }
+
     public async Task DisposeAsync()
     {
         await Services.DisposeAsync();
@@ -90,7 +107,10 @@ public sealed class DatabaseFixture : IAsyncLifetime
         await using var admin = new NpgsqlConnection(_adminConnection);
         await admin.OpenAsync();
         await using var drop = new NpgsqlCommand(
-            $"DROP DATABASE IF EXISTS {_databaseName} WITH (FORCE); DROP ROLE IF EXISTS {_appLogin}", admin);
+            string.Join("; ", _scratch.Select(d => $"DROP DATABASE IF EXISTS {d} WITH (FORCE)")
+                .Append($"DROP DATABASE IF EXISTS {_databaseName} WITH (FORCE)")
+                .Append($"DROP ROLE IF EXISTS {_appLogin}")),
+            admin);
         await drop.ExecuteNonQueryAsync();
     }
 
@@ -118,7 +138,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         await command.ExecuteNonQueryAsync();
     }
 
-    private static string FindDbDirectory()
+    internal static string FindDbDirectory()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {

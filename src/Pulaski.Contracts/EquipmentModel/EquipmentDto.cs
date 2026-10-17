@@ -18,6 +18,9 @@ public sealed record EquipmentDto
     /// <summary>Executes jobs, either planned to it directly or released to it from a group above it.</summary>
     public bool CanRunJob { get; init; }
     public bool HoldsInventory { get; init; }
+
+    /// <summary>Lots here mix into one balance per material, like a silo (D-031).</summary>
+    public bool ComminglesLots { get; init; }
     public string? TimeZone { get; init; }
     public bool IsActive { get; init; }
 

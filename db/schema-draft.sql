@@ -84,6 +84,7 @@ CREATE TABLE core.equipment (
     is_schedulable          boolean NOT NULL DEFAULT false,         -- a planning target: jobs can be planned to it (a line, or a department)
     can_run_job             boolean NOT NULL DEFAULT false,         -- executes jobs; a schedulable row without it is a group whose runners do (D-022)
     holds_inventory         boolean NOT NULL DEFAULT false,         -- lots can be located here
+    commingles_lots         boolean NOT NULL DEFAULT false,         -- lots here mix into one balance per material, like a silo (D-031)
     -- line state derivation (open question: constraint vs worst vs configured)
     state_derivation        text CHECK (state_derivation IN ('own_tags','constraint_machine','worst_child','rule')),
     constraint_equipment_id uuid REFERENCES core.equipment(id),
@@ -112,6 +113,7 @@ CREATE TABLE core.equipment (
     CONSTRAINT equipment_tz_ck   CHECK (level <> 'site' OR time_zone IS NOT NULL),
     CONSTRAINT equipment_root_ck CHECK ((level = 'enterprise') = (parent_id IS NULL)),
     CONSTRAINT equipment_derivation_ck CHECK (state_derivation <> 'constraint_machine' OR constraint_equipment_id IS NOT NULL),
+    CONSTRAINT equipment_commingles_ck CHECK (NOT commingles_lots OR holds_inventory),
     CONSTRAINT equipment_code_uq UNIQUE (site_id, code)
 );
 CREATE INDEX equipment_parent_ix ON core.equipment (parent_id);
@@ -813,15 +815,15 @@ CREATE UNIQUE INDEX changeover_rule_uq ON core.changeover_rule
 CREATE TABLE core.lot (
     id                      uuid PRIMARY KEY DEFAULT uuidv7(),
     site_id                 uuid NOT NULL REFERENCES core.equipment(id),
-    lot_number              text NOT NULL,
+    lot_number              text,                               -- null exactly for a balance (D-031)
     material_id             uuid NOT NULL REFERENCES core.material(id),
     status                  text NOT NULL CHECK (status IN (
                                 'planned','in_production','available','on_hold','quarantine',
-                                'consumed','scrapped','shipped')),
+                                'consumed','scrapped','shipped','cancelled')),   -- cancelled: its receipt was reversed (D-030)
     quantity                core.qty NOT NULL DEFAULT 0 CHECK (quantity >= 0),
     uom_id                  uuid NOT NULL REFERENCES core.uom(id),
     location_equipment_id   uuid REFERENCES core.equipment(id),
-    is_bulk                 boolean NOT NULL DEFAULT false,     -- the one balance of a material that isn't lot-tracked, at its location
+    is_bulk                 boolean NOT NULL DEFAULT false,     -- a balance: one per material and location, for a material that isn't lot-tracked or a location whose lots mix (D-031)
     produced_by_job_id      uuid REFERENCES core.job(id),       -- declared production (D-027); a run fills produced_by_run_id once execution exists
     produced_by_run_id      uuid REFERENCES core.job_run(id),
     origin                  text NOT NULL CHECK (origin IN ('produced','received','erp','split','merge')),
@@ -833,7 +835,8 @@ CREATE TABLE core.lot (
     created_at              timestamptz NOT NULL DEFAULT now(),
     updated_at              timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT lot_uq UNIQUE (site_id, material_id, lot_number),
-    CONSTRAINT lot_bulk_location_ck CHECK (NOT is_bulk OR location_equipment_id IS NOT NULL)
+    CONSTRAINT lot_bulk_location_ck CHECK (NOT is_bulk OR location_equipment_id IS NOT NULL),
+    CONSTRAINT lot_number_bulk_ck CHECK ((lot_number IS NULL) = is_bulk)
 );
 CREATE INDEX lot_location_ix ON core.lot (location_equipment_id) WHERE status IN ('available','on_hold','quarantine');
 CREATE INDEX lot_material_ix ON core.lot (material_id, site_id) WHERE status IN ('available','on_hold','quarantine');
@@ -912,6 +915,37 @@ LANGUAGE sql STABLE AS $$
     ) CYCLE lot_id SET is_cycle USING path
     SELECT walk.lot_id, walk.via_lot_id, walk.depth FROM walk WHERE NOT walk.is_cycle
 $$;
+
+-- A count of one location (D-030): a snapshot of its on-hand lots, the quantities counted, and
+-- once posted, a write-up or write-off for every difference.
+CREATE TABLE core.stock_count (
+    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
+    count_number            text NOT NULL,
+    location_equipment_id   uuid NOT NULL REFERENCES core.equipment(id),
+    status                  text NOT NULL DEFAULT 'open' CHECK (status IN ('open','posted','cancelled')),
+    note                    text CHECK (length(note) <= 1000),
+    created_by              text NOT NULL,
+    posted_at               timestamptz,
+    posted_by               text,
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    updated_at              timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT stock_count_number_uq UNIQUE (site_id, count_number),
+    CONSTRAINT stock_count_posted_ck CHECK ((status = 'posted') = (posted_at IS NOT NULL))
+);
+CREATE INDEX stock_count_site_ix ON core.stock_count (site_id, created_at);
+
+CREATE TABLE core.stock_count_line (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    stock_count_id      uuid NOT NULL REFERENCES core.stock_count(id),
+    lot_id              uuid NOT NULL REFERENCES core.lot(id),
+    expected_qty        core.qty NOT NULL,
+    counted_qty         core.qty CHECK (counted_qty >= 0),
+    counted_at          timestamptz,
+    counted_by          text,
+    CONSTRAINT stock_count_line_uq UNIQUE (stock_count_id, lot_id),
+    CONSTRAINT stock_count_line_counted_ck CHECK ((counted_qty IS NULL) = (counted_at IS NULL))
+);
 
 -- =====================================================================
 -- 10. LABOR
@@ -1153,7 +1187,7 @@ CREATE TABLE ts.lot_event (
     lot_id              uuid NOT NULL REFERENCES core.lot(id),
     event_kind          text NOT NULL CHECK (event_kind IN (
                             'created','received','moved','loaded','consumed','produced',
-                            'split','merged','status_changed','adjusted','scrapped','shipped')),
+                            'split','merged','status_changed','adjusted','scrapped','shipped','corrected','reversed')),
     qty_delta           core.qty,
     qty_after           core.qty,
     uom_id              uuid REFERENCES core.uom(id),
@@ -1166,12 +1200,16 @@ CREATE TABLE ts.lot_event (
     to_status           text,
     reason_code_id      uuid REFERENCES core.reason_code(id),
     comment             text CHECK (length(comment) <= 1000),
+    reference           text CHECK (length(reference) <= 100),  -- a shipment or count number (D-030)
+    reverses_event_id   uuid,                                   -- the movement a reversal undoes, with its time (no FK into history)
+    reverses_occurred_at timestamptz,
     actor_user_id       uuid,
     actor_id            text,                                   -- issuer|subject, as on evt.event, until sec.app_user exists
     PRIMARY KEY (id, occurred_at)
 ) PARTITION BY RANGE (occurred_at);
 CREATE INDEX ON ts.lot_event (lot_id, occurred_at);
-CREATE INDEX ON ts.lot_event (job_id) WHERE job_id IS NOT NULL;
+CREATE INDEX lot_event_job_id_idx ON ts.lot_event (job_id) WHERE job_id IS NOT NULL;
+CREATE INDEX lot_event_occurred_at_brin ON ts.lot_event USING brin (occurred_at);   -- the movement journal reads by time (D-029)
 
 -- One row per subgroup. Variables: values[] plus computed statistics.
 -- Attributes: inspected/defect counts. Limits in force are stamped on.
@@ -1366,8 +1404,63 @@ BEGIN
     END LOOP;
 END $$;
 
+-- Keeps every partitioned history table ready ahead of time (D-028).
+-- Creates the current month and the next p_months - 1 for every range-partitioned table in ts
+-- and evt, and returns how many partitions it created (0 when all were there). SECURITY
+-- DEFINER: it runs as the schema owner, because creating a partition needs ownership of its
+-- parent, which pulaski_app doesn't have. db/app-role.sql grants EXECUTE to pulaski_app only.
+CREATE FUNCTION ts.ensure_partitions(p_months integer)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+    v_parent regclass;
+    v_before integer;
+    v_after  integer;
+BEGIN
+    IF p_months IS NULL OR p_months < 1 OR p_months > 24 THEN
+        RAISE EXCEPTION 'ensure_partitions: months must be between 1 and 24, not %', p_months;
+    END IF;
+
+    SELECT count(*) INTO v_before FROM pg_class WHERE relispartition AND relkind = 'r';
+    FOR v_parent IN
+        SELECT pt.partrelid::regclass
+        FROM pg_partitioned_table pt
+        JOIN pg_class c ON c.oid = pt.partrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname IN ('ts', 'evt') AND pt.partstrat = 'r'
+        ORDER BY 1
+    LOOP
+        PERFORM ts.create_month_partitions(v_parent, current_date, p_months);
+    END LOOP;
+    SELECT count(*) INTO v_after FROM pg_class WHERE relispartition AND relkind = 'r';
+    RETURN v_after - v_before;
+END $$;
+
+REVOKE ALL ON FUNCTION ts.ensure_partitions(integer) FROM PUBLIC;
+
 -- =====================================================================
--- 16. SEED DATA
+-- 16. SCHEMA VERSION (D-028)
+--     Each db/migrations file brings an existing database up to this
+--     schema; a fresh load already has them all. db/migrate.sh records
+--     what it applies; the API refuses to start without the newest.
+-- =====================================================================
+
+CREATE TABLE public.schema_migration (
+    version     text PRIMARY KEY,                               -- the file name without .sql
+    applied_at  timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO public.schema_migration (version) VALUES
+    ('0001_inventory'),
+    ('0002_partition_maintenance'),
+    ('0003_lot_event_time_index'),
+    ('0004_inventory_completion'),
+    ('0005_indistinguishable_lots');
+
+-- =====================================================================
+-- 17. SEED DATA
 -- =====================================================================
 
 INSERT INTO core.packml_state (code, name, is_acting) VALUES

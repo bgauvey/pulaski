@@ -14,6 +14,7 @@
         }
     </Description>
     <Actions>
+        <a class="btn btn-outline-secondary" href="inventory/journal?materialId=@MaterialId">Movements</a>
         <a class="btn btn-outline-secondary" href="inventory/lots?materialId=@MaterialId&status=consumed">Used-up lots</a>
         <button type="button" class="btn btn-primary" @onclick="() => _action = LotAction.Receive" disabled="@(_detail is null)">Receive</button>
     </Actions>

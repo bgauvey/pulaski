@@ -22,7 +22,9 @@ public sealed record LotFilter(
     Guid? MaterialId = null,
     Guid? LocationId = null,
     string? Status = null,
-    DateTimeOffset? ExpiresBefore = null);
+    DateTimeOffset? ExpiresBefore = null,
+    int Offset = 0,
+    int Limit = 500);
 
 /// <summary>Read side for inventory (D-027): DTOs straight from SQL, no locks.</summary>
 public interface IInventoryReadStore
@@ -33,7 +35,7 @@ public interface IInventoryReadStore
     /// <summary>One material's stock, on-hand lots and balance per location; null when the material doesn't exist.</summary>
     Task<MaterialStockDetailDto?> GetMaterialStockAsync(Guid materialId, Guid? siteId, CancellationToken cancellationToken);
 
-    /// <summary>Lots matching the filter, at most 500, by material code then lot number.</summary>
+    /// <summary>Lots matching the filter, a page of <see cref="LotFilter.Limit"/> from <see cref="LotFilter.Offset"/>, by material code then lot number.</summary>
     Task<IReadOnlyList<LotSummaryDto>> SearchLotsAsync(LotFilter filter, CancellationToken cancellationToken);
 
     Task<LotDto?> GetLotAsync(Guid id, CancellationToken cancellationToken);
@@ -57,6 +59,84 @@ public interface IInventoryReadStore
 
     /// <summary>Active, selectable reasons of the kind, enterprise-wide or for the site.</summary>
     Task<IReadOnlyList<ReasonCodeDto>> ListReasonCodesAsync(string kind, Guid? siteId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The planned components of the site's open production jobs (D-029), one row per job,
+    /// component and planned unit, with what the job has consumed of the component. With
+    /// <paramref name="equipmentId"/>, only jobs on it or below it; with <paramref name="before"/>,
+    /// only jobs needed before then.
+    /// </summary>
+    Task<IReadOnlyList<ComponentDemandRow>> ListComponentDemandAsync(
+        Guid siteId, Guid? equipmentId, DateTimeOffset? before, CancellationToken cancellationToken);
+
+    /// <summary>Available and held stock of the materials in the site, in their base units.</summary>
+    Task<IReadOnlyList<MaterialAvailabilityRow>> ListAvailabilityAsync(
+        Guid siteId, IReadOnlyCollection<Guid> materialIds, CancellationToken cancellationToken);
+
+    /// <summary>A page of the site's lot movements, newest first (D-029).</summary>
+    Task<JournalPageDto> ListMovementsAsync(JournalFilter filter, CancellationToken cancellationToken);
+
+    /// <summary>The site's stock counts, newest first (D-030).</summary>
+    Task<IReadOnlyList<StockCountSummaryDto>> ListStockCountsAsync(Guid siteId, CancellationToken cancellationToken);
+
+    /// <summary>A count with its lines and what each lot holds now; null when it doesn't exist.</summary>
+    Task<StockCountDto?> GetStockCountAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Every reason, active or not, enterprise-wide and for the site (or every site when null).</summary>
+    Task<IReadOnlyList<ReasonCodeAdminDto>> ListAllReasonCodesAsync(Guid? siteId, CancellationToken cancellationToken);
+
+    /// <summary>Each material's on-hand quantity at <paramref name="at"/>, from each lot's latest movement before it.</summary>
+    Task<IReadOnlyList<StockOnDateDto>> StockOnDateAsync(Guid siteId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Each material's on-hand stock by the age of its lots at <paramref name="now"/>.</summary>
+    Task<IReadOnlyList<AgingRowDto>> AgingAsync(Guid siteId, DateTimeOffset now, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Filters for the movement journal. <see cref="From"/> and <see cref="To"/> bound the time;
+/// <see cref="BeforeAt"/> and <see cref="BeforeId"/>, the last entry already read, continue a page.
+/// </summary>
+public sealed record JournalFilter(
+    Guid SiteId,
+    DateTimeOffset From,
+    DateTimeOffset To,
+    string? Kind = null,
+    Guid? MaterialId = null,
+    Guid? LocationId = null,
+    Guid? JobId = null,
+    string? Actor = null,
+    string? Search = null,
+    DateTimeOffset? BeforeAt = null,
+    Guid? BeforeId = null,
+    int Limit = 200);
+
+/// <summary>A job's planned quantity of one component in one unit, and what it has consumed of it (base unit).</summary>
+public sealed record ComponentDemandRow
+{
+    public required Guid JobId { get; init; }
+    public required string JobNumber { get; init; }
+    public required string JobStatus { get; init; }
+    public required string LineCode { get; init; }
+    public string? WorkOrderNumber { get; init; }
+    public DateTimeOffset? NeededFrom { get; init; }
+    public required Guid MaterialId { get; init; }
+    public required string MaterialCode { get; init; }
+    public required string MaterialName { get; init; }
+    public required Guid BaseUomId { get; init; }
+    public required string BaseUomCode { get; init; }
+    public decimal PlannedQty { get; init; }
+    public required Guid UomId { get; init; }
+    public required string UomCode { get; init; }
+
+    /// <summary>Everything the job has consumed of the component, the same on each of its rows.</summary>
+    public decimal ConsumedQty { get; init; }
+}
+
+public sealed record MaterialAvailabilityRow
+{
+    public required Guid MaterialId { get; init; }
+    public decimal Available { get; init; }
+    public decimal Held { get; init; }
 }
 
 /// <summary>
@@ -75,9 +155,49 @@ public interface IInventoryRepository
     /// <returns>The new row version.</returns>
     Task<long> InsertLotAsync(Lot lot, DateTimeOffset at, CancellationToken cancellationToken);
 
-    /// <summary>Writes the status, quantity and location.</summary>
+    /// <summary>Writes the number, status, quantity, location, supplier lot and expiry.</summary>
     /// <returns>The new row version.</returns>
     Task<long> UpdateLotAsync(Lot lot, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>The lots, locked in id order (D-030), each with its version and when it last changed; missing ids are left out.</summary>
+    Task<IReadOnlyList<LockedLot>> LockLotsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
+    /// <summary>The lot's latest movement; the caller holds the lot's lock, so it stays the latest.</summary>
+    Task<LotEventRecord?> GetLatestEventAsync(Guid lotId, CancellationToken cancellationToken);
+
+    /// <summary>The on-hand lots with stock at a location, for a count's snapshot.</summary>
+    Task<IReadOnlyList<Lot>> ListOnHandLotsAtAsync(Guid locationId, CancellationToken cancellationToken);
+
+    Task<Versioned<StockCount>?> GetStockCountForUpdateAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>How many counts the site started on <paramref name="day"/>'s UTC date, for numbering.</summary>
+    Task<int> CountStockCountsOnAsync(Guid siteId, DateTimeOffset day, CancellationToken cancellationToken);
+
+    /// <returns>The new row version.</returns>
+    Task<long> InsertStockCountAsync(StockCount count, string createdBy, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Writes the status and note, and who posted it when it is posted.</summary>
+    /// <returns>The new row version.</returns>
+    Task<long> UpdateStockCountAsync(StockCount count, string actor, DateTimeOffset at, CancellationToken cancellationToken);
+
+    Task InsertStockCountLinesAsync(IReadOnlyList<StockCountLine> lines, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<StockCountLine>> GetStockCountLinesAsync(Guid countId, CancellationToken cancellationToken);
+
+    /// <summary>Writes a line's counted quantity, when and by whom.</summary>
+    Task UpdateStockCountLineAsync(StockCountLine line, CancellationToken cancellationToken);
+
+    Task<Versioned<ReasonCode>?> GetReasonCodeForUpdateAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <returns>The new row version.</returns>
+    Task<long> InsertReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken);
+
+    /// <summary>Writes the name, comment flag, order and active flag; the code and kind never change.</summary>
+    /// <returns>The new row version.</returns>
+    Task<long> UpdateReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken);
+
+    /// <summary>The site row read <c>FOR SHARE</c>: true when it exists and is a site.</summary>
+    Task<bool> IsSiteAsync(Guid id, CancellationToken cancellationToken);
 
     Task InsertEventAsync(LotEventRow row, DateTimeOffset at, CancellationToken cancellationToken);
 
@@ -115,9 +235,24 @@ public sealed record LotEventRow(
     Guid? JobId = null,
     Guid? ReasonCodeId = null,
     string? Comment = null,
-    Guid? RelatedLotId = null);
+    Guid? RelatedLotId = null,
+    string? Reference = null,
+    Guid? ReversesEventId = null,
+    DateTimeOffset? ReversesOccurredAt = null);
 
-public sealed record GenealogyEdge(Guid Id, Guid ParentLotId, Guid ChildLotId, Guid JobId);
+/// <summary>A parent-to-child lot edge: <c>declared</c> by a job, or from a <c>split</c> or <c>merge</c> (D-030, no job).</summary>
+public sealed record GenealogyEdge(Guid Id, Guid ParentLotId, Guid ChildLotId, Guid? JobId, string Basis = GenealogyEdge.Declared)
+{
+    public const string Declared = "declared";
+    public const string Split = "split";
+    public const string Merge = "merge";
+}
+
+/// <summary>A lot locked for a command, with its version and when it last changed.</summary>
+public sealed record LockedLot(Lot Lot, long Version, DateTimeOffset UpdatedAt);
+
+/// <summary>A movement as recorded, for reversing it.</summary>
+public sealed record LotEventRecord(Guid Id, DateTimeOffset OccurredAt, LotMovement Movement, Guid? RelatedLotId);
 
 public sealed record InventoryLocation
 {
@@ -125,6 +260,9 @@ public sealed record InventoryLocation
     public required string Code { get; init; }
     public Guid? SiteId { get; init; }
     public bool HoldsInventory { get; init; }
+
+    /// <summary>Lots here mix into one balance per material (D-031).</summary>
+    public bool ComminglesLots { get; init; }
     public bool IsActive { get; init; }
 }
 

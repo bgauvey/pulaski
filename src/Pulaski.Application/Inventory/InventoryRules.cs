@@ -13,6 +13,7 @@ internal static class InventoryRules
 {
     public const int MaxLotNumber = 100;
     public const int MaxComment = 1000;
+    public const int MaxReference = 100;
 
     private static readonly HashSet<string> ClosedJobStatuses = ["completed", "closed", "cancelled"];
 
@@ -23,7 +24,7 @@ internal static class InventoryRules
             ?? throw new NotFoundException($"Lot {id} not found.");
         if (expectedVersion is { } expected && current.Version != expected)
         {
-            throw new ConflictException($"Lot {current.Value.LotNumber} was changed by someone else. Reload and try again.");
+            throw new ConflictException($"{current.Value.Name} was changed by someone else. Reload and try again.");
         }
 
         return current.Value;
@@ -130,6 +131,10 @@ internal static class InventoryRules
 
     /// <summary>A trimmed comment, or null when blank.</summary>
     public static string? Text(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>A lot number given by a person, when one is given.</summary>
+    public static Validator RequireLotNumber(this Validator validator, string? number, string field) =>
+        validator.Require(number is null || number.Length <= MaxLotNumber, field, $"At most {MaxLotNumber} characters.");
 
     public static Validator RequireComment(this Validator validator, string? comment) =>
         validator.Require(comment is null || comment.Trim().Length <= MaxComment, "Comment", $"At most {MaxComment} characters.");

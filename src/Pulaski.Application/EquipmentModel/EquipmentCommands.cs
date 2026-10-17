@@ -17,7 +17,8 @@ public sealed record CreateEquipmentCommand(
     bool IsSchedulable,
     bool HoldsInventory,
     string? TimeZone,
-    bool? CanRunJob = null) : ICommand<CreatedResponse>;
+    bool? CanRunJob = null,
+    bool ComminglesLots = false) : ICommand<CreatedResponse>;
 
 public sealed record UpdateEquipmentCommand(
     Guid Id,
@@ -28,7 +29,8 @@ public sealed record UpdateEquipmentCommand(
     bool IsSchedulable,
     bool HoldsInventory,
     bool IsActive,
-    bool? CanRunJob = null) : ICommand<VersionResponse>;
+    bool? CanRunJob = null,
+    bool? ComminglesLots = null) : ICommand<VersionResponse>;
 
 internal sealed class CreateEquipmentHandler(
     IUnitOfWork unitOfWork,
@@ -84,7 +86,8 @@ internal sealed class CreateEquipmentHandler(
             command.IsSchedulable,
             command.HoldsInventory,
             timeZone,
-            command.CanRunJob ?? command.IsSchedulable);
+            command.CanRunJob ?? command.IsSchedulable,
+            command.ComminglesLots);
 
         var envelope = events.Create(EventTypes.EquipmentCreated, "equipment", created.Id, new { After = created });
         var version = await equipment.InsertAsync(created, envelope.OccurredAt, cancellationToken);
@@ -124,8 +127,16 @@ internal sealed class UpdateEquipmentHandler(
             IsSchedulable = command.IsSchedulable,
             CanRunJob = command.CanRunJob ?? current.Value.CanRunJob,
             HoldsInventory = command.HoldsInventory,
+            ComminglesLots = command.ComminglesLots ?? current.Value.ComminglesLots,
             IsActive = command.IsActive,
         };
+
+        // Turning mixing on where separate lots sit would leave them beside the balance (D-031).
+        Equipment.EnsureCanCommingle(updated.HoldsInventory, updated.ComminglesLots);
+        if (updated.ComminglesLots && !current.Value.ComminglesLots && await equipment.HoldsSeparateLotsAsync(updated.Id, cancellationToken))
+        {
+            throw new DomainRuleException($"{updated.Code} holds separate lots; merge them or move them elsewhere before their lots can be indistinguishable.");
+        }
 
         var envelope = events.Create(
             EventTypes.EquipmentUpdated, "equipment", updated.Id, new { Before = current.Value, After = updated });

@@ -273,10 +273,11 @@ public sealed class PulaskiApiClient(HttpClient http)
         GetAsync<JobMaterialsDto>($"api/jobs/{jobId}/materials", ct);
 
     public Task<IReadOnlyList<LotSummaryDto>> SearchLotsAsync(
-        Guid? siteId, string? search = null, Guid? materialId = null, Guid? locationId = null, string? status = null, DateTimeOffset? expiresBefore = null, CancellationToken ct = default) =>
+        Guid? siteId, string? search = null, Guid? materialId = null, Guid? locationId = null, string? status = null, DateTimeOffset? expiresBefore = null,
+        int offset = 0, int limit = 500, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<LotSummaryDto>>(
             Query("api/lots", ("siteId", siteId), ("search", search), ("materialId", materialId), ("locationId", locationId), ("status", status),
-                ("expiresBefore", expiresBefore?.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture))), ct);
+                ("expiresBefore", Iso(expiresBefore)), ("offset", offset == 0 ? null : offset), ("limit", limit == 500 ? null : limit)), ct);
 
     public Task<LotDto> GetLotAsync(Guid id, CancellationToken ct = default) =>
         GetAsync<LotDto>($"api/lots/{id}", ct);
@@ -307,6 +308,80 @@ public sealed class PulaskiApiClient(HttpClient http)
 
     public Task<IReadOnlyList<ReasonCodeDto>> ListReasonCodesAsync(string kind, Guid? siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<ReasonCodeDto>>(Query("api/reason-codes", ("kind", kind), ("siteId", siteId)), ct);
+
+    public Task<ShortageReportDto> GetShortagesAsync(Guid siteId, Guid? equipmentId = null, int? horizonDays = null, CancellationToken ct = default) =>
+        GetAsync<ShortageReportDto>(Query("api/inventory/shortages", ("siteId", siteId), ("equipmentId", equipmentId), ("horizonDays", horizonDays)), ct);
+
+    /// <summary>A page of the site's movements, newest first; pass the last entry to continue (D-029).</summary>
+    public Task<JournalPageDto> ListMovementsAsync(
+        Guid siteId,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        string? kind = null,
+        Guid? materialId = null,
+        Guid? locationId = null,
+        Guid? jobId = null,
+        string? actor = null,
+        string? search = null,
+        LotEventDto? after = null,
+        CancellationToken ct = default) =>
+        GetAsync<JournalPageDto>(
+            Query("api/inventory/movements", ("siteId", siteId), ("from", Iso(from)), ("to", Iso(to)), ("kind", kind), ("materialId", materialId),
+                ("locationId", locationId), ("jobId", jobId), ("actor", actor), ("search", search), ("beforeAt", Iso(after?.OccurredAt)), ("beforeId", after?.Id)),
+            ct);
+
+    // Lot operations, counts, reasons and reports (D-030)
+
+    public Task<LotTransactionResponse> SplitLotAsync(Guid id, SplitLotRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{id}/split", request, ct);
+
+    public Task<LotTransactionResponse> MergeLotsAsync(Guid targetId, MergeLotsRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{targetId}/merge", request, ct);
+
+    public Task<LotTransactionResponse> ShipLotAsync(Guid id, ShipLotRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{id}/ship", request, ct);
+
+    public Task<LotTransactionResponse> CorrectLotAsync(Guid id, CorrectLotRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{id}/correct", request, ct);
+
+    public Task<LotTransactionResponse> ReverseMovementAsync(Guid id, ReverseMovementRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{id}/reverse", request, ct);
+
+    public Task<IReadOnlyList<StockCountSummaryDto>> ListStockCountsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<StockCountSummaryDto>>($"api/inventory/counts?siteId={siteId}", ct);
+
+    public Task<StockCountDto> GetStockCountAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<StockCountDto>($"api/inventory/counts/{id}", ct);
+
+    public Task<CreatedResponse> StartStockCountAsync(StartStockCountRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/inventory/counts", request, ct);
+
+    public Task<VersionResponse> RecordCountsAsync(Guid id, RecordCountsRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/inventory/counts/{id}/lines", request, ct);
+
+    public Task<PostStockCountResponse> PostStockCountAsync(Guid id, PostStockCountRequest request, CancellationToken ct = default) =>
+        SendAsync<PostStockCountResponse>(HttpMethod.Post, $"api/inventory/counts/{id}/post", request, ct);
+
+    public Task<VersionResponse> CancelStockCountAsync(Guid id, CancelStockCountRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/counts/{id}/cancel", request, ct);
+
+    public Task<IReadOnlyList<ReasonCodeAdminDto>> ListAllReasonCodesAsync(Guid? siteId = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ReasonCodeAdminDto>>(Query("api/reason-codes/all", ("siteId", siteId)), ct);
+
+    public Task<CreatedResponse> CreateReasonCodeAsync(CreateReasonCodeRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/reason-codes", request, ct);
+
+    public Task<VersionResponse> UpdateReasonCodeAsync(Guid id, UpdateReasonCodeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/reason-codes/{id}", request, ct);
+
+    public Task<IReadOnlyList<StockOnDateDto>> StockOnDateAsync(Guid siteId, DateTimeOffset at, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<StockOnDateDto>>(Query("api/inventory/reports/stock-on-date", ("siteId", siteId), ("at", Iso(at))), ct);
+
+    public Task<IReadOnlyList<AgingRowDto>> AgingAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<AgingRowDto>>($"api/inventory/reports/aging?siteId={siteId}", ct);
+
+    private static string? Iso(DateTimeOffset? value) =>
+        value?.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>A path with the given query parameters, leaving out the null and blank ones.</summary>
     private static string Query(string path, params (string Name, object? Value)[] parameters)

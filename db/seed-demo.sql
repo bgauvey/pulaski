@@ -9,10 +9,9 @@
 -- uuidv7() is used here only because this is a manual script (D-006).
 -- =====================================================================
 
--- Partitions for the current month and the next two.
-SELECT ts.create_month_partitions('evt.event', current_date, 3);
-SELECT ts.create_month_partitions('ts.job_status_change', current_date, 3);
-SELECT ts.create_month_partitions('ts.lot_event', current_date, 3);
+-- Partitions for the current month and the next two, for every history table (D-028).
+-- The API keeps them ahead from then on.
+SELECT ts.ensure_partitions(3);
 
 INSERT INTO core.uom (code, name, dimension, to_base_factor) VALUES
     ('kg', 'Kilogram', 'mass',   1),

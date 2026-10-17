@@ -94,4 +94,16 @@ public static class EventTypes
     public const string LotStatusChanged = "pulaski.lot.status_changed.v1";
     public const string LotConsumed = "pulaski.lot.consumed.v1";
     public const string LotProduced = "pulaski.lot.produced.v1";
+    public const string LotSplit = "pulaski.lot.split.v1";
+    public const string LotMerged = "pulaski.lot.merged.v1";
+    public const string LotShipped = "pulaski.lot.shipped.v1";
+    public const string LotCorrected = "pulaski.lot.corrected.v1";
+    public const string LotReversed = "pulaski.lot.reversed.v1";
+    public const string LotCountAdjusted = "pulaski.lot.count_adjusted.v1";
+    public const string StockCountStarted = "pulaski.stock_count.started.v1";
+    public const string StockCountRecorded = "pulaski.stock_count.recorded.v1";
+    public const string StockCountPosted = "pulaski.stock_count.posted.v1";
+    public const string StockCountCancelled = "pulaski.stock_count.cancelled.v1";
+    public const string ReasonCodeCreated = "pulaski.reason_code.created.v1";
+    public const string ReasonCodeUpdated = "pulaski.reason_code.updated.v1";
 }

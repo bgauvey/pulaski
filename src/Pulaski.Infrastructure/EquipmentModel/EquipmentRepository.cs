@@ -11,7 +11,7 @@ internal sealed class EquipmentRepository(DbSession session) : IEquipmentReposit
 {
     private const string Columns = """
         id, parent_id, site_id, code, name, description, level, equipment_role,
-        tracks_state, is_schedulable, can_run_job, holds_inventory, time_zone, is_active, xmin::text::bigint AS version
+        tracks_state, is_schedulable, can_run_job, holds_inventory, commingles_lots, time_zone, is_active, xmin::text::bigint AS version
         """;
 
     private const string GetForShare = $"SELECT {Columns} FROM core.equipment WHERE id = @Id FOR SHARE";
@@ -20,10 +20,10 @@ internal sealed class EquipmentRepository(DbSession session) : IEquipmentReposit
 
     private const string Insert = """
         INSERT INTO core.equipment (id, parent_id, site_id, code, name, description, level, equipment_role,
-                                    tracks_state, is_schedulable, can_run_job, holds_inventory, time_zone, is_active,
+                                    tracks_state, is_schedulable, can_run_job, holds_inventory, commingles_lots, time_zone, is_active,
                                     created_at, updated_at)
         VALUES (@Id, @ParentId, @SiteId, @Code, @Name, @Description, @Level, @EquipmentRole,
-                @TracksState, @IsSchedulable, @CanRunJob, @HoldsInventory, @TimeZone, @IsActive,
+                @TracksState, @IsSchedulable, @CanRunJob, @HoldsInventory, @ComminglesLots, @TimeZone, @IsActive,
                 @At, @At)
         RETURNING xmin::text::bigint
         """;
@@ -46,10 +46,18 @@ internal sealed class EquipmentRepository(DbSession session) : IEquipmentReposit
             is_schedulable = @IsSchedulable,
             can_run_job = @CanRunJob,
             holds_inventory = @HoldsInventory,
+            commingles_lots = @ComminglesLots,
             is_active = @IsActive,
             updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
+        """;
+
+    private const string SeparateLots = """
+        SELECT EXISTS (
+            SELECT 1 FROM core.lot
+            WHERE location_equipment_id = @Id AND NOT is_bulk AND quantity > 0
+              AND status IN ('available','on_hold','quarantine'))
         """;
 
     private const string InSubtree = """
@@ -74,6 +82,9 @@ internal sealed class EquipmentRepository(DbSession session) : IEquipmentReposit
 
     public Task<long> UpdateAsync(Equipment equipment, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(Update, WithTime(equipment, at), cancellationToken);
+
+    public Task<bool> HoldsSeparateLotsAsync(Guid equipmentId, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(SeparateLots, new { Id = equipmentId }, cancellationToken);
 
     public Task<bool> IsInSubtreeAsync(Guid ancestorId, Guid descendantId, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(
@@ -101,6 +112,7 @@ internal sealed class EquipmentRepository(DbSession session) : IEquipmentReposit
         public bool IsSchedulable { get; init; }
         public bool CanRunJob { get; init; }
         public bool HoldsInventory { get; init; }
+        public bool ComminglesLots { get; init; }
         public string? TimeZone { get; init; }
         public bool IsActive { get; init; }
         public long Version { get; init; }
@@ -108,7 +120,7 @@ internal sealed class EquipmentRepository(DbSession session) : IEquipmentReposit
         public Versioned<Equipment> ToVersioned() => new(
             new Equipment(
                 Id, ParentId, SiteId, Code, Name, Description, Level, EquipmentRole,
-                TracksState, IsSchedulable, HoldsInventory, TimeZone, IsActive, CanRunJob),
+                TracksState, IsSchedulable, HoldsInventory, TimeZone, IsActive, CanRunJob, ComminglesLots),
             Version);
     }
 }

@@ -134,6 +134,119 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.All(lots, l => Assert.True(l.IsBulk));
     }
 
+    [Fact]
+    public async Task Shortages_and_the_journal_read_from_the_database()
+    {
+        var plant = await CreatePlantAsync();
+        var lot = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-S-" + _suffix, 1000m, plant.Kg));
+        await db.SendAsync(new ConsumeLotCommand(lot.LotId, plant.Job, 200m, plant.Kg));
+
+        // The job plans 1450 kg and has used 200; 800 kg is still available.
+        var report = await QueryAsync<GetShortagesQuery, ShortageReportDto>(new GetShortagesQuery(plant.Site));
+        var resin = Assert.Single(report.Materials);
+        Assert.Equal((plant.Resin, 800m, 1250m, 450m), (resin.MaterialId, resin.Available, resin.Demand, resin.Shortfall));
+        Assert.Equal((plant.JobNumber, 450m), (resin.FirstShortJobNumber, Assert.Single(resin.Lines).Uncovered));
+        Assert.Empty(report.Problems);
+
+        var elsewhere = await QueryAsync<GetShortagesQuery, ShortageReportDto>(new GetShortagesQuery(plant.Site, EquipmentId: plant.Stores));
+        Assert.Empty(elsewhere.Materials);
+
+        // The job has no start or hold, so a horizon leaves it out.
+        var soon = await QueryAsync<GetShortagesQuery, ShortageReportDto>(new GetShortagesQuery(plant.Site, HorizonDays: 3));
+        Assert.Empty(soon.Materials);
+
+        var page = await QueryAsync<ListMovementsQuery, JournalPageDto>(new ListMovementsQuery(plant.Site));
+        Assert.Equal([LotEventKind.Consumed, LotEventKind.Received], page.Entries.Select(e => e.Movement.Kind));
+        Assert.Equal((lot.LotId, plant.JobNumber, "test-user"), (page.Entries[0].LotId, page.Entries[0].Movement.JobNumber, page.Entries[0].Movement.ActorId));
+        Assert.False(page.HasMore);
+
+        var newest = page.Entries[0].Movement;
+        var next = await QueryAsync<ListMovementsQuery, JournalPageDto>(
+            new ListMovementsQuery(plant.Site, BeforeAt: newest.OccurredAt, BeforeId: newest.Id));
+        Assert.Equal(LotEventKind.Received, Assert.Single(next.Entries).Movement.Kind);
+
+        var received = await QueryAsync<ListMovementsQuery, JournalPageDto>(
+            new ListMovementsQuery(plant.Site, Kind: LotEventKind.Received, LocationId: plant.Stores, Search: "R-S-" + _suffix, Actor: "test"));
+        Assert.Single(received.Entries);
+        var other = await QueryAsync<ListMovementsQuery, JournalPageDto>(new ListMovementsQuery(plant.Site, JobId: Guid.CreateVersion7()));
+        Assert.Empty(other.Entries);
+    }
+
+    [Fact]
+    public async Task Lots_split_merge_ship_correct_and_reverse_in_the_database()
+    {
+        var plant = await CreatePlantAsync();
+        var count = await ReasonAsync("inventory_adjustment", "COUNT");
+        var lot = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-M-" + _suffix, 100m, plant.Kg, "SUP-1", DateTimeOffset.UtcNow.AddDays(60)));
+
+        var part = await db.SendAsync(new SplitLotCommand(lot.LotId, lot.Version, 30m, plant.Kg));
+        Assert.Equal(($"R-M-{_suffix}-1", 30m), (part.LotNumber, part.Quantity));
+        var parentOfPart = Assert.Single((await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(part.LotId))).Parents);
+        Assert.Equal((lot.LotId, "split"), (parentOfPart.LotId, parentOfPart.LinkBasis));
+
+        var merged = await db.SendAsync(new MergeLotsCommand(lot.LotId, await VersionAsync(lot.LotId), [part.LotId]));
+        Assert.Equal(100m, merged.Quantity);
+        Assert.Equal(LotStatus.Consumed, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(part.LotId))).Lot.Status);
+
+        var corrected = await db.SendAsync(new CorrectLotCommand(lot.LotId, merged.Version, "R-N-" + _suffix, "SUP-2", null, "Label misprint"));
+        var shipped = await db.SendAsync(new ShipLotCommand(lot.LotId, corrected.Version, 40m, plant.Kg, "DN-" + _suffix));
+        Assert.Equal(60m, shipped.Quantity);
+
+        var detail = await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId));
+        Assert.Equal(("R-N-" + _suffix, "SUP-2"), (detail.Lot.LotNumber, detail.Lot.SupplierLot));
+        Assert.Equal((LotEventKind.Shipped, "DN-" + _suffix), (detail.History[0].Kind, detail.History[0].Reference));
+
+        var reversed = await db.SendAsync(new ReverseMovementCommand(lot.LotId, shipped.Version, detail.History[0].Id, count, "Truck refused it"));
+        Assert.Equal((100m, LotStatus.Available), (reversed.Quantity, reversed.Status));
+        var after = await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId));
+        Assert.Equal((LotEventKind.Reversed, detail.History[0].Id), (after.History[0].Kind, after.History[0].ReversesEventId));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new ReverseMovementCommand(lot.LotId, reversed.Version, after.History[0].Id, count)));
+    }
+
+    [Fact]
+    public async Task A_count_and_the_reports_run_against_the_database()
+    {
+        var plant = await CreatePlantAsync();
+        var count = await ReasonAsync("inventory_adjustment", "COUNT");
+        var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-C1-" + _suffix, 100m, plant.Kg));
+        var b = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-C2-" + _suffix, 50m, plant.Kg));
+
+        var started = await db.SendAsync(new StartStockCountCommand(plant.Stores, "Month end"));
+        var counted = await QueryAsync<GetStockCountQuery, StockCountDto>(new GetStockCountQuery(started.Id));
+        Assert.Equal((2, 0, "open"), (counted.Count.LineCount, counted.Count.CountedLines, counted.Count.Status));
+        Assert.StartsWith("CNT-", counted.Count.CountNumber, StringComparison.Ordinal);
+
+        var lines = counted.Lines.ToDictionary(l => l.LotId);
+        var recorded = await db.SendAsync(new RecordCountsCommand(started.Id, started.Version,
+            [new(lines[a.LotId].Id, 95m), new(lines[b.LotId].Id, 50m)]));
+        var result = await db.SendAsync(new PostStockCountCommand(started.Id, recorded.Version, count));
+        Assert.Equal(1, result.Adjusted);
+        var lot = await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(a.LotId));
+        Assert.Equal((95m, LotEventKind.Scrapped, counted.Count.CountNumber), (lot.Lot.Quantity, lot.History[0].Kind, lot.History[0].Reference));
+        var listed = await QueryAsync<ListStockCountsQuery, IReadOnlyList<StockCountSummaryDto>>(new ListStockCountsQuery(plant.Site));
+        Assert.Equal(("posted", 2), (Assert.Single(listed).Status, listed[0].CountedLines));
+
+        var onDate = await QueryAsync<StockOnDateQuery, IReadOnlyList<StockOnDateDto>>(new StockOnDateQuery(plant.Site, DateTimeOffset.UtcNow));
+        Assert.Equal((145m, 2), (Assert.Single(onDate, r => r.MaterialId == plant.Resin).Quantity, onDate[0].LotCount));
+        var before = await QueryAsync<StockOnDateQuery, IReadOnlyList<StockOnDateDto>>(new StockOnDateQuery(plant.Site, DateTimeOffset.UtcNow.AddDays(-1)));
+        Assert.Empty(before);
+
+        var aging = await QueryAsync<AgingQuery, IReadOnlyList<AgingRowDto>>(new AgingQuery(plant.Site));
+        var resin = Assert.Single(aging, r => r.MaterialId == plant.Resin);
+        Assert.Equal((145m, 145m, 0m), (resin.UpTo30Days, resin.Total, resin.Over180Days));
+
+        var reasons = await QueryAsync<ListAllReasonCodesQuery, IReadOnlyList<ReasonCodeAdminDto>>(new ListAllReasonCodesQuery(plant.Site));
+        Assert.Contains(reasons, r => r.Code == "COUNT" && r.Kind == "inventory_adjustment" && r.IsActive);
+        var created = await db.SendAsync(new CreateReasonCodeCommand(plant.Site, "hold", "LAB-" + _suffix[..4].ToUpperInvariant(), "Waiting for the lab", false, 5));
+        await db.SendAsync(new UpdateReasonCodeCommand(created.Id, created.Version, "Waiting for lab results", true, 6, true));
+        var changed = Assert.Single(await QueryAsync<ListAllReasonCodesQuery, IReadOnlyList<ReasonCodeAdminDto>>(new ListAllReasonCodesQuery(plant.Site)), r => r.Id == created.Id);
+        Assert.Equal(("Waiting for lab results", true, plant.Site), (changed.Name, changed.RequiresComment, changed.SiteId!.Value));
+
+        var page = await QueryAsync<SearchLotsQuery, IReadOnlyList<LotSummaryDto>>(new SearchLotsQuery(new LotFilter(MaterialId: plant.Resin, Limit: 1)));
+        var next = await QueryAsync<SearchLotsQuery, IReadOnlyList<LotSummaryDto>>(new SearchLotsQuery(new LotFilter(MaterialId: plant.Resin, Offset: 1, Limit: 1)));
+        Assert.NotEqual(Assert.Single(page).Id, Assert.Single(next).Id);
+    }
+
     private async Task<TResult> QueryAsync<TQuery, TResult>(TQuery query)
         where TQuery : IQuery<TResult>
     {

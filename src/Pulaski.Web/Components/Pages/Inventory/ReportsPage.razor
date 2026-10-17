@@ -1,0 +1,181 @@
+@page "/inventory/reports"
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject Downloads Downloads
+@inject TimeProvider Time
+
+<PageTitle>Reports · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="Inventory reports" SiteChanged="LoadAgingAsync">
+    <Description>Stock as it was at the end of a past day, and how old the stock on hand is.</Description>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+
+<section class="inv-section" aria-labelledby="on-date-title">
+    <div class="inv-section-head">
+        <h2 id="on-date-title">Stock on a date</h2>
+        @if (_onDate is { Count: > 0 })
+        {
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ExportOnDateAsync">Export CSV</button>
+        }
+    </div>
+    <form class="inv-toolbar" @onsubmit="LoadOnDateAsync" @onsubmit:preventDefault>
+        <label class="small text-muted" for="on-date">At the end of</label>
+        <input id="on-date" type="date" class="form-control" style="min-width:auto" @bind="_date" />
+        <button type="submit" class="btn btn-primary" disabled="@(_date is null)">Show</button>
+    </form>
+    @if (_onDate is { } rows)
+    {
+        @if (rows.Count == 0)
+        {
+            <p class="text-muted">Nothing was on hand then.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Material</th><th>Class</th><th class="inv-num">On hand</th><th class="inv-num">Lots</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in rows)
+                        {
+                            <tr @key="r.MaterialId">
+                                <td><a class="fw-semibold" href="inventory/materials/@r.MaterialId">@r.Code</a> <span class="small text-muted">@r.Name</span></td>
+                                <td>@(r.MaterialClassName ?? "No class")</td>
+                                <td class="inv-num">@InventoryView.Qty(r.Quantity) <span class="small text-muted">@r.UomCode</span></td>
+                                <td class="inv-num">@r.LotCount</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="small text-muted mt-2">Quantities come from each lot's last movement up to then. Held stock is included: a lot's status at the time isn't reconstructed.</p>
+        }
+    }
+</section>
+
+<section class="inv-section" aria-labelledby="aging-title">
+    <div class="inv-section-head">
+        <h2 id="aging-title">Aging</h2>
+        @if (_aging is { Count: > 0 })
+        {
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ExportAgingAsync">Export CSV</button>
+        }
+    </div>
+    <p class="small text-muted">On-hand stock by how long ago each lot was received or made (a split lot counts from the split). Balances of materials that aren't lot-tracked aren't aged.</p>
+    @if (_aging is { } aging)
+    {
+        @if (aging.Count == 0)
+        {
+            <p class="text-muted">No lots on hand.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Material</th>
+                            <th class="inv-num">Up to 30 days</th>
+                            <th class="inv-num">31–90</th>
+                            <th class="inv-num">91–180</th>
+                            <th class="inv-num">Over 180</th>
+                            <th class="inv-num">Total</th>
+                            <th>Oldest</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in aging)
+                        {
+                            <tr @key="r.MaterialId">
+                                <td><a class="fw-semibold" href="inventory/materials/@r.MaterialId">@r.Code</a> <span class="small text-muted">@r.Name</span></td>
+                                <td class="inv-num">@Cell(r.UpTo30Days)</td>
+                                <td class="inv-num">@Cell(r.UpTo90Days)</td>
+                                <td class="inv-num @(r.UpTo180Days > 0 ? "inv-held" : "")">@Cell(r.UpTo180Days)</td>
+                                <td class="inv-num @(r.Over180Days > 0 ? "inv-held" : "")">@Cell(r.Over180Days)</td>
+                                <td class="inv-num">@InventoryView.Qty(r.Total) <span class="small text-muted">@r.UomCode</span></td>
+                                <td class="small">@Display.SiteTime(r.OldestAt, Sites.Site?.TimeZone)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</section>
+
+@code {
+    private IReadOnlyList<StockOnDateDto>? _onDate;
+    private IReadOnlyList<AgingRowDto>? _aging;
+    private ApiException? _error;
+    private DateTime? _date;
+
+    private static string Cell(decimal value) => value == 0 ? "—" : InventoryView.Qty(value);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _date = Display.ToSite(Time.GetUtcNow(), Sites.Site?.TimeZone).Date.AddDays(-1);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAgingAsync();
+    }
+
+    private async Task LoadAgingAsync()
+    {
+        _onDate = null;
+        if (Sites.SiteId is not { } siteId)
+        {
+            return;
+        }
+
+        try
+        {
+            _aging = await Api.AgingAsync(siteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    // The end of the chosen day at the site, or now when that is still to come.
+    private async Task LoadOnDateAsync()
+    {
+        if (Sites.SiteId is not { } siteId || _date is not { } date)
+        {
+            return;
+        }
+
+        _error = null;
+        try
+        {
+            var end = Display.FromSiteLocal(date.Date.AddDays(1), Sites.Site?.TimeZone)!.Value.AddTicks(-1);
+            var now = Time.GetUtcNow();
+            _onDate = await Api.StockOnDateAsync(siteId, end < now ? end : now);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private Task ExportOnDateAsync() =>
+        Downloads.CsvAsync(
+            Csv.FileName($"stock-{_date:yyyyMMdd}", Sites.Site?.Code, Time.GetUtcNow()),
+            Csv.Write(["Material", "Name", "Class", "On hand", "Unit", "Lots"],
+                _onDate!.Select(r => (IReadOnlyList<object?>)[r.Code, r.Name, r.MaterialClassName, r.Quantity, r.UomCode, r.LotCount]))).AsTask();
+
+    private Task ExportAgingAsync() =>
+        Downloads.CsvAsync(
+            Csv.FileName("aging", Sites.Site?.Code, Time.GetUtcNow()),
+            Csv.Write(["Material", "Name", "Up to 30 days", "31-90 days", "91-180 days", "Over 180 days", "Total", "Unit", "Oldest"],
+                _aging!.Select(r => (IReadOnlyList<object?>)[r.Code, r.Name, r.UpTo30Days, r.UpTo90Days, r.UpTo180Days, r.Over180Days, r.Total, r.UomCode,
+                    r.OldestAt is { } o ? Display.SiteTime(o, Sites.Site?.TimeZone) : null]))).AsTask();
+}

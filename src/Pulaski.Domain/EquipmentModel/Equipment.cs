@@ -15,7 +15,8 @@ public sealed record Equipment(
     bool HoldsInventory,
     string? TimeZone,
     bool IsActive,
-    bool CanRunJob = false)
+    bool CanRunJob = false,
+    bool ComminglesLots = false)
 {
     /// <summary>
     /// A planning target that runs nothing itself, such as a department: jobs planned to it are
@@ -40,7 +41,8 @@ public sealed record Equipment(
         bool isSchedulable,
         bool holdsInventory,
         string? timeZone,
-        bool canRunJob = false)
+        bool canRunJob = false,
+        bool comminglesLots = false)
     {
         if (!EquipmentTypes.IsValidLevelRole(level, equipmentRole))
         {
@@ -57,6 +59,8 @@ public sealed record Equipment(
             throw new DomainRuleException($"Level {level} cannot be placed under level {parent.Level}.");
         }
 
+        EnsureCanCommingle(holdsInventory, comminglesLots);
+
         var siteId = level switch
         {
             EquipmentTypes.Enterprise => (Guid?)null,
@@ -66,6 +70,16 @@ public sealed record Equipment(
 
         return new Equipment(
             id, parent?.Id, siteId, code, name, description, level, equipmentRole,
-            tracksState, isSchedulable, holdsInventory, timeZone, IsActive: true, canRunJob);
+            tracksState, isSchedulable, holdsInventory, timeZone, IsActive: true, canRunJob, comminglesLots);
+    }
+
+    /// <summary>Lots can only mix where lots are kept (D-031).</summary>
+    /// <exception cref="DomainRuleException">Indistinguishable lots without holding inventory.</exception>
+    public static void EnsureCanCommingle(bool holdsInventory, bool comminglesLots)
+    {
+        if (comminglesLots && !holdsInventory)
+        {
+            throw new DomainRuleException("Lots can only be indistinguishable where inventory is held; tick Holds inventory too.");
+        }
     }
 }

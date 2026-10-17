@@ -37,7 +37,8 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     private const string UpdateLot = """
         UPDATE core.lot
-        SET status = @Status, quantity = @Quantity, location_equipment_id = @LocationId, updated_at = @At
+        SET lot_number = @LotNumber, status = @Status, quantity = @Quantity, location_equipment_id = @LocationId,
+            supplier_lot = @SupplierLot, expires_at = @ExpiresAt, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -45,14 +46,16 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
     private const string InsertEvent = """
         INSERT INTO ts.lot_event (id, occurred_at, lot_id, event_kind, qty_delta, qty_after, uom_id,
                                   from_location_id, to_location_id, related_lot_id, job_id,
-                                  from_status, to_status, reason_code_id, comment, actor_id)
+                                  from_status, to_status, reason_code_id, comment, actor_id,
+                                  reference, reverses_event_id, reverses_occurred_at)
         VALUES (@Id, @At, @LotId, @Kind, @QtyDelta, @QtyAfter, @UomId,
                 @FromLocationId, @ToLocationId, @RelatedLotId, @JobId,
-                @FromStatus, @ToStatus, @ReasonCodeId, @Comment, @ActorId)
+                @FromStatus, @ToStatus, @ReasonCodeId, @Comment, @ActorId,
+                @Reference, @ReversesEventId, @ReversesOccurredAt)
         """;
 
     private const string GetLocation = """
-        SELECT id, code, site_id, holds_inventory, is_active FROM core.equipment WHERE id = @Id FOR SHARE
+        SELECT id, code, site_id, holds_inventory, commingles_lots, is_active FROM core.equipment WHERE id = @Id FOR SHARE
         """;
 
     private const string GetMaterial = """
@@ -73,7 +76,7 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     private const string InsertGenealogy = """
         INSERT INTO core.lot_genealogy (id, parent_lot_id, child_lot_id, link_basis, job_id, derived_at)
-        VALUES (@Id, @ParentLotId, @ChildLotId, 'declared', @JobId, @At)
+        VALUES (@Id, @ParentLotId, @ChildLotId, @Basis, @JobId, @At)
         ON CONFLICT (parent_lot_id, child_lot_id, link_basis) WHERE superseded_at IS NULL DO NOTHING
         """;
 
@@ -81,6 +84,85 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         SELECT id, site_id, reason_kind AS kind, code, name, is_selectable, requires_comment, is_active
         FROM core.reason_code WHERE id = @Id
         """;
+
+    private const string LockLots = $"""
+        SELECT {LotColumns}, updated_at FROM core.lot WHERE id = ANY(@Ids) ORDER BY id FOR UPDATE
+        """;
+
+    private const string LatestEvent = """
+        SELECT id, occurred_at, event_kind AS kind, qty_delta, qty_after, from_location_id, to_location_id,
+               from_status, to_status, related_lot_id
+        FROM ts.lot_event
+        WHERE lot_id = @LotId
+        ORDER BY occurred_at DESC, id DESC
+        LIMIT 1
+        """;
+
+    private const string OnHandAt = $"""
+        SELECT {LotColumns} FROM core.lot
+        WHERE location_equipment_id = @LocationId AND status IN ('available','on_hold','quarantine') AND quantity > 0
+        ORDER BY lot_number
+        """;
+
+    private const string CountColumns = """
+        id, site_id, count_number AS number, location_equipment_id AS location_id, status, note, xmin::text::bigint AS version
+        """;
+
+    private const string GetCountForUpdate = $"SELECT {CountColumns} FROM core.stock_count WHERE id = @Id FOR UPDATE";
+
+    private const string CountsOnDay = """
+        SELECT count(*)::int FROM core.stock_count
+        WHERE site_id = @SiteId AND created_at >= @From AND created_at < @Until
+        """;
+
+    private const string InsertCount = """
+        INSERT INTO core.stock_count (id, site_id, count_number, location_equipment_id, status, note, created_by, created_at, updated_at)
+        VALUES (@Id, @SiteId, @Number, @LocationId, @Status, @Note, @Actor, @At, @At)
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string UpdateCount = """
+        UPDATE core.stock_count
+        SET status = @Status, note = @Note, updated_at = @At,
+            posted_at = CASE WHEN @Status = 'posted' THEN @At END,
+            posted_by = CASE WHEN @Status = 'posted' THEN @Actor END
+        WHERE id = @Id
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string InsertCountLine = """
+        INSERT INTO core.stock_count_line (id, stock_count_id, lot_id, expected_qty)
+        VALUES (@Id, @CountId, @LotId, @ExpectedQty)
+        """;
+
+    private const string CountLines = """
+        SELECT id, stock_count_id AS count_id, lot_id, expected_qty, counted_qty, counted_at, counted_by
+        FROM core.stock_count_line
+        WHERE stock_count_id = @CountId
+        """;
+
+    private const string UpdateCountLine = """
+        UPDATE core.stock_count_line SET counted_qty = @CountedQty, counted_at = @CountedAt, counted_by = @CountedBy WHERE id = @Id
+        """;
+
+    private const string GetReasonCodeForUpdate = """
+        SELECT id, site_id, reason_kind AS kind, code, name, requires_comment, sort_order, is_active, xmin::text::bigint AS version
+        FROM core.reason_code WHERE id = @Id FOR UPDATE
+        """;
+
+    private const string InsertReasonCode = """
+        INSERT INTO core.reason_code (id, site_id, reason_kind, code, name, requires_comment, sort_order, is_active)
+        VALUES (@Id, @SiteId, @Kind, @Code, @Name, @RequiresComment, @SortOrder, @IsActive)
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string UpdateReasonCode = """
+        UPDATE core.reason_code SET name = @Name, requires_comment = @RequiresComment, sort_order = @SortOrder, is_active = @IsActive
+        WHERE id = @Id
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string IsSite = "SELECT EXISTS (SELECT 1 FROM core.equipment WHERE id = @Id AND level = 'site' FOR SHARE)";
 
     private const string PlansComponent = """
         SELECT EXISTS (SELECT 1 FROM core.job_material WHERE job_id = @JobId AND material_id = @MaterialId AND direction = 'consume')
@@ -121,7 +203,7 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     public Task<long> UpdateLotAsync(Lot lot, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(
-            UpdateLot, new { lot.Id, lot.Status, lot.Quantity, lot.LocationId, At = at }, cancellationToken);
+            UpdateLot, new { lot.Id, lot.LotNumber, lot.Status, lot.Quantity, lot.LocationId, lot.SupplierLot, lot.ExpiresAt, At = at }, cancellationToken);
 
     public Task InsertEventAsync(LotEventRow row, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteAsync(
@@ -144,6 +226,9 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
                 row.ReasonCodeId,
                 row.Comment,
                 row.ActorId,
+                row.Reference,
+                row.ReversesEventId,
+                row.ReversesOccurredAt,
             },
             cancellationToken);
 
@@ -167,12 +252,75 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         foreach (var edge in edges)
         {
             await session.ExecuteAsync(
-                InsertGenealogy, new { edge.Id, edge.ParentLotId, edge.ChildLotId, edge.JobId, At = at }, cancellationToken);
+                InsertGenealogy, new { edge.Id, edge.ParentLotId, edge.ChildLotId, edge.JobId, edge.Basis, At = at }, cancellationToken);
         }
     }
 
     public Task<InventoryReason?> GetReasonAsync(Guid id, CancellationToken cancellationToken) =>
         session.QuerySingleOrDefaultAsync<InventoryReason>(GetReason, new { Id = id }, cancellationToken);
+
+    public async Task<IReadOnlyList<LockedLot>> LockLotsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<LotRow>(LockLots, new { Ids = ids.ToArray() }, cancellationToken))
+            .Select(r => new LockedLot(r.ToVersioned().Value, r.Version, r.UpdatedAt))];
+
+    public async Task<LotEventRecord?> GetLatestEventAsync(Guid lotId, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<EventRow>(LatestEvent, new { LotId = lotId }, cancellationToken) is { } row
+            ? new LotEventRecord(
+                row.Id,
+                row.OccurredAt,
+                new LotMovement(row.Kind, row.QtyDelta, row.QtyAfter ?? 0m, row.FromLocationId, row.ToLocationId, row.FromStatus, row.ToStatus),
+                row.RelatedLotId)
+            : null;
+
+    public async Task<IReadOnlyList<Lot>> ListOnHandLotsAtAsync(Guid locationId, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<LotRow>(OnHandAt, new { LocationId = locationId }, cancellationToken)).Select(r => r.ToVersioned().Value)];
+
+    public async Task<Versioned<StockCount>?> GetStockCountForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<CountRow>(GetCountForUpdate, new { Id = id }, cancellationToken) is { } r
+            ? new(new StockCount(r.Id, r.SiteId, r.Number, r.LocationId, r.Status, r.Note), r.Version)
+            : null;
+
+    public Task<int> CountStockCountsOnAsync(Guid siteId, DateTimeOffset day, CancellationToken cancellationToken)
+    {
+        var from = new DateTimeOffset(day.UtcDateTime.Date, TimeSpan.Zero);
+        return session.ExecuteScalarAsync<int>(CountsOnDay, new { SiteId = siteId, From = from, Until = from.AddDays(1) }, cancellationToken);
+    }
+
+    public Task<long> InsertStockCountAsync(StockCount count, string createdBy, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(
+            InsertCount, new { count.Id, count.SiteId, count.Number, count.LocationId, count.Status, count.Note, Actor = createdBy, At = at }, cancellationToken);
+
+    public Task<long> UpdateStockCountAsync(StockCount count, string actor, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(UpdateCount, new { count.Id, count.Status, count.Note, Actor = actor, At = at }, cancellationToken);
+
+    public async Task InsertStockCountLinesAsync(IReadOnlyList<StockCountLine> lines, CancellationToken cancellationToken)
+    {
+        foreach (var line in lines)
+        {
+            await session.ExecuteAsync(InsertCountLine, new { line.Id, line.CountId, line.LotId, line.ExpectedQty }, cancellationToken);
+        }
+    }
+
+    public async Task<IReadOnlyList<StockCountLine>> GetStockCountLinesAsync(Guid countId, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<CountLineRow>(CountLines, new { CountId = countId }, cancellationToken))
+            .Select(r => new StockCountLine(r.Id, r.CountId, r.LotId, r.ExpectedQty, r.CountedQty, r.CountedAt, r.CountedBy))];
+
+    public Task UpdateStockCountLineAsync(StockCountLine line, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(UpdateCountLine, new { line.Id, line.CountedQty, line.CountedAt, line.CountedBy }, cancellationToken);
+
+    public async Task<Versioned<ReasonCode>?> GetReasonCodeForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<ReasonRow>(GetReasonCodeForUpdate, new { Id = id }, cancellationToken) is { } r
+            ? new(new ReasonCode(r.Id, r.SiteId, r.Kind, r.Code, r.Name, r.RequiresComment, r.SortOrder, r.IsActive), r.Version)
+            : null;
+
+    public Task<long> InsertReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(InsertReasonCode, reason, cancellationToken);
+
+    public Task<long> UpdateReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(UpdateReasonCode, reason, cancellationToken);
+
+    public Task<bool> IsSiteAsync(Guid id, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(IsSite, new { Id = id }, cancellationToken);
 
     public Task<bool> PlansComponentAsync(Guid jobId, Guid materialId, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(PlansComponent, new { JobId = jobId, MaterialId = materialId }, cancellationToken);
@@ -182,7 +330,7 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         public Guid Id { get; init; }
         public Guid SiteId { get; init; }
         public Guid MaterialId { get; init; }
-        public string LotNumber { get; init; } = "";
+        public string? LotNumber { get; init; }
         public string Status { get; init; } = "";
         public decimal Quantity { get; init; }
         public Guid UomId { get; init; }
@@ -193,9 +341,59 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         public DateTimeOffset? ExpiresAt { get; init; }
         public Guid? ProducedByJobId { get; init; }
         public long Version { get; init; }
+        public DateTimeOffset UpdatedAt { get; init; }
 
         public Versioned<Lot> ToVersioned() => new(
             new Lot(Id, SiteId, MaterialId, LotNumber, Status, Quantity, UomId, LocationId, IsBulk, Origin, SupplierLot, ExpiresAt, ProducedByJobId),
             Version);
+    }
+
+    private sealed class EventRow
+    {
+        public Guid Id { get; init; }
+        public DateTimeOffset OccurredAt { get; init; }
+        public string Kind { get; init; } = "";
+        public decimal? QtyDelta { get; init; }
+        public decimal? QtyAfter { get; init; }
+        public Guid? FromLocationId { get; init; }
+        public Guid? ToLocationId { get; init; }
+        public string? FromStatus { get; init; }
+        public string? ToStatus { get; init; }
+        public Guid? RelatedLotId { get; init; }
+    }
+
+    private sealed class CountRow
+    {
+        public Guid Id { get; init; }
+        public Guid SiteId { get; init; }
+        public string Number { get; init; } = "";
+        public Guid LocationId { get; init; }
+        public string Status { get; init; } = "";
+        public string? Note { get; init; }
+        public long Version { get; init; }
+    }
+
+    private sealed class CountLineRow
+    {
+        public Guid Id { get; init; }
+        public Guid CountId { get; init; }
+        public Guid LotId { get; init; }
+        public decimal ExpectedQty { get; init; }
+        public decimal? CountedQty { get; init; }
+        public DateTimeOffset? CountedAt { get; init; }
+        public string? CountedBy { get; init; }
+    }
+
+    private sealed class ReasonRow
+    {
+        public Guid Id { get; init; }
+        public Guid? SiteId { get; init; }
+        public string Kind { get; init; } = "";
+        public string Code { get; init; } = "";
+        public string Name { get; init; } = "";
+        public bool RequiresComment { get; init; }
+        public int SortOrder { get; init; }
+        public bool IsActive { get; init; }
+        public long Version { get; init; }
     }
 }

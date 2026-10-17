@@ -17,6 +17,8 @@ internal static class PostgresErrors
         ["process_version_released_uq"] = "Another version of this process was released at the same time. Reload and try again.",
         ["lot_uq"] = "That lot number is already used for this material in this site.",
         ["lot_bulk_uq"] = "Someone else started this material's balance at that location at the same moment. Try again.",
+        ["stock_count_number_uq"] = "Another count was started at the same moment. Try again.",
+        ["reason_code_uq"] = "That code is already used for this kind of reason.",
     };
 
     public static bool TryTranslate(PostgresException ex, out Exception translated)

@@ -22,7 +22,7 @@ public static class InventoryView
     public const string NoClass = "";
 
     /// <summary>Lot statuses, on hand first, for the lot search filter.</summary>
-    public static IReadOnlyList<string> Statuses { get; } = ["available", "on_hold", "quarantine", "consumed", "scrapped"];
+    public static IReadOnlyList<string> Statuses { get; } = ["available", "on_hold", "quarantine", "consumed", "scrapped", "shipped", "cancelled"];
 
     /// <summary>
     /// Materials grouped by class, classes by name with "No class" last, materials by code. The
@@ -83,9 +83,9 @@ public static class InventoryView
     /// <summary>A signed change: +5, −12.5.</summary>
     public static string Delta(decimal value) => (value > 0 ? "+" : value < 0 ? "−" : "") + Qty(Math.Abs(value));
 
-    /// <summary>How a lot is named on screen: its number, or its location's balance for a material that isn't lot-tracked.</summary>
-    public static string LotLabel(string lotNumber, bool isBulk, string? locationCode) =>
-        isBulk ? $"Balance at {locationCode ?? lotNumber.TrimStart('@')}" : lotNumber;
+    /// <summary>How a lot is named on screen: its number, or for a balance (which has none, D-031) its location.</summary>
+    public static string LotLabel(string? lotNumber, bool isBulk, string? locationCode) =>
+        isBulk || lotNumber is null ? (locationCode is null ? "Balance" : $"Balance at {locationCode}") : lotNumber;
 
     /// <summary>What a movement was, in words.</summary>
     public static string EventLabel(string kind) => kind switch
@@ -105,7 +105,7 @@ public static class InventoryView
     {
         "available" => "chip chip-strong",
         "on_hold" or "quarantine" => "chip chip-warning",
-        "consumed" or "scrapped" => "chip chip-muted",
+        "consumed" or "scrapped" or "shipped" or "cancelled" => "chip chip-muted",
         _ => "chip",
     };
 

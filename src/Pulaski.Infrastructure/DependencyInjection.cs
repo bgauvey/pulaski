@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.AddSingleton<IBomReadStore, BomQueries>();
         services.AddSingleton<IUnitReadStore, UnitQueries>();
         services.AddSingleton<IInventoryReadStore, InventoryQueries>();
+        services.AddSingleton<DatabaseMaintenance>();
 
         services.AddScoped<DbSession>();
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DbSession>());

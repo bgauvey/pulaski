@@ -1,0 +1,132 @@
+@page "/inventory/counts"
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject NavigationManager Navigation
+
+<PageTitle>Counts · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="Stock counts" SiteChanged="LoadAsync">
+    <Description>Count a location, then post the differences as write-ups and write-offs.</Description>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+
+<form class="inv-toolbar" @onsubmit="StartAsync" @onsubmit:preventDefault>
+    <select class="form-select" aria-label="Location to count" @bind="_locationId">
+        <option value="@Guid.Empty">Choose a location to count…</option>
+        @foreach (var l in _locations)
+        {
+            <option value="@l.Id">@l.Code · @l.Name (@l.LotCount @(l.LotCount == 1 ? "lot" : "lots"))</option>
+        }
+    </select>
+    <input class="form-control inv-grow" maxlength="1000" placeholder="Note (optional), e.g. month end" aria-label="Note" @bind="_note" />
+    <button type="submit" class="btn btn-primary" disabled="@(_saving || _locationId == Guid.Empty)">Start a count</button>
+</form>
+
+@if (_counts is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_counts.Count == 0)
+{
+    <div class="empty-panel">
+        <h2>No counts yet</h2>
+        <p class="text-muted mb-0">Starting a count takes a snapshot of every lot at the location. Count them, enter what you find, then post.</p>
+    </div>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Count</th>
+                    <th>Location</th>
+                    <th>Status</th>
+                    <th class="inv-num">Counted</th>
+                    <th>Started</th>
+                    <th>Posted</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in _counts)
+                {
+                    <tr @key="c.Id">
+                        <td>
+                            <a class="fw-semibold" href="inventory/counts/@c.Id">@c.CountNumber</a>
+                            @if (c.Note is { } note)
+                            {
+                                <div class="small text-muted">@note</div>
+                            }
+                        </td>
+                        <td>@c.LocationCode</td>
+                        <td><span class="@(c.Status == "open" ? "chip chip-strong" : "chip chip-muted")">@Display.Label(c.Status)</span></td>
+                        <td class="inv-num">@c.CountedLines of @c.LineCount</td>
+                        <td class="small">@Display.SiteTime(c.CreatedAt, Sites.Site?.TimeZone) <div class="text-muted">@c.CreatedBy</div></td>
+                        <td class="small">
+                            @if (c.PostedAt is { } posted)
+                            {
+                                @Display.SiteTime(posted, Sites.Site?.TimeZone) <div class="text-muted">@c.PostedBy</div>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<StockCountSummaryDto>? _counts;
+    private IReadOnlyList<InventoryLocationDto> _locations = [];
+    private ApiException? _error;
+    private Guid _locationId;
+    private string? _note;
+    private bool _saving;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            if (Sites.SiteId is { } siteId)
+            {
+                _locations = [.. (await Api.ListInventoryLocationsAsync(siteId)).Where(l => l.IsActive)];
+                _counts = await Api.ListStockCountsAsync(siteId);
+            }
+            else
+            {
+                _counts = [];
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task StartAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var created = await Api.StartStockCountAsync(new StartStockCountRequest { LocationId = _locationId, Note = _note });
+            Navigation.NavigateTo($"inventory/counts/{created.Id}");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

@@ -141,5 +141,14 @@
         save(key, value) {
             try { localStorage.setItem(key, value); } catch { /* keep it for this page only */ }
         },
+        // Hands the browser a text file to save, such as a CSV export.
+        download(fileName, text, mimeType) {
+            const url = URL.createObjectURL(new Blob([text], { type: mimeType }));
+            const link = Object.assign(document.createElement("a"), { href: url, download: fileName });
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        },
     };
 })();

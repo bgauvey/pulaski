@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Inventory;
+using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Inventory;
 
 namespace Pulaski.Api.Endpoints;
@@ -53,6 +54,31 @@ internal static class InventoryEndpoints
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ListDeclarableJobsQuery(siteId, search, materialId), ct)));
 
+        inventory.MapGet("/shortages", async Task<Ok<ShortageReportDto>> (
+            Guid siteId,
+            Guid? equipmentId,
+            int? horizonDays,
+            IQueryHandler<GetShortagesQuery, ShortageReportDto> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetShortagesQuery(siteId, equipmentId, horizonDays), ct)));
+
+        inventory.MapGet("/movements", async Task<Ok<JournalPageDto>> (
+            Guid siteId,
+            DateTimeOffset? from,
+            DateTimeOffset? to,
+            string? kind,
+            Guid? materialId,
+            Guid? locationId,
+            Guid? jobId,
+            string? actor,
+            string? search,
+            DateTimeOffset? beforeAt,
+            Guid? beforeId,
+            IQueryHandler<ListMovementsQuery, JournalPageDto> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new ListMovementsQuery(siteId, from, to, kind, materialId, locationId, jobId, actor, search, beforeAt, beforeId), ct)));
+
         var lots = routes.MapGroup("/lots").WithTags("Inventory");
 
         lots.MapGet("/", async Task<Ok<IReadOnlyList<LotSummaryDto>>> (
@@ -62,10 +88,12 @@ internal static class InventoryEndpoints
             Guid? locationId,
             string? status,
             DateTimeOffset? expiresBefore,
+            int? offset,
+            int? limit,
             IQueryHandler<SearchLotsQuery, IReadOnlyList<LotSummaryDto>> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new SearchLotsQuery(new LotFilter(siteId, search, materialId, locationId, status, expiresBefore)), ct)));
+                new SearchLotsQuery(new LotFilter(siteId, search, materialId, locationId, status, expiresBefore, offset ?? 0, limit ?? 500)), ct)));
 
         lots.MapGet("/{id:guid}", async Task<Ok<LotDto>> (
             Guid id,
@@ -132,6 +160,131 @@ internal static class InventoryEndpoints
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
                 new ConsumeLotCommand(id, request.JobId, request.Quantity, request.UomId, request.Comment), ct)));
+
+        lots.MapPost("/{id:guid}/split", async Task<Created<LotTransactionResponse>> (
+            Guid id,
+            SplitLotRequest request,
+            ICommandHandler<SplitLotCommand, LotTransactionResponse> handler,
+            CancellationToken ct) =>
+        {
+            var part = await handler.HandleAsync(
+                new SplitLotCommand(id, request.Version, request.Quantity, request.UomId, request.NewLotNumber, request.ToLocationId, request.Comment), ct);
+            return TypedResults.Created($"/api/lots/{part.LotId}", part);
+        });
+
+        lots.MapPost("/{id:guid}/merge", async Task<Ok<LotTransactionResponse>> (
+            Guid id,
+            MergeLotsRequest request,
+            ICommandHandler<MergeLotsCommand, LotTransactionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new MergeLotsCommand(id, request.Version, request.SourceLotIds, request.Comment), ct)));
+
+        lots.MapPost("/{id:guid}/ship", async Task<Ok<LotTransactionResponse>> (
+            Guid id,
+            ShipLotRequest request,
+            ICommandHandler<ShipLotCommand, LotTransactionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new ShipLotCommand(id, request.Version, request.Quantity, request.UomId, request.Reference, request.Comment), ct)));
+
+        lots.MapPost("/{id:guid}/correct", async Task<Ok<LotTransactionResponse>> (
+            Guid id,
+            CorrectLotRequest request,
+            ICommandHandler<CorrectLotCommand, LotTransactionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new CorrectLotCommand(id, request.Version, request.LotNumber, request.SupplierLot, request.ExpiresAt, request.Comment), ct)));
+
+        lots.MapPost("/{id:guid}/reverse", async Task<Ok<LotTransactionResponse>> (
+            Guid id,
+            ReverseMovementRequest request,
+            ICommandHandler<ReverseMovementCommand, LotTransactionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new ReverseMovementCommand(id, request.Version, request.EventId, request.ReasonCodeId, request.Comment), ct)));
+
+        var counts = inventory.MapGroup("/counts");
+
+        counts.MapGet("/", async Task<Ok<IReadOnlyList<StockCountSummaryDto>>> (
+            Guid siteId,
+            IQueryHandler<ListStockCountsQuery, IReadOnlyList<StockCountSummaryDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListStockCountsQuery(siteId), ct)));
+
+        counts.MapGet("/{id:guid}", async Task<Ok<StockCountDto>> (
+            Guid id,
+            IQueryHandler<GetStockCountQuery, StockCountDto> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetStockCountQuery(id), ct)));
+
+        counts.MapPost("/", async Task<Created<CreatedResponse>> (
+            StartStockCountRequest request,
+            ICommandHandler<StartStockCountCommand, CreatedResponse> handler,
+            CancellationToken ct) =>
+        {
+            var created = await handler.HandleAsync(new StartStockCountCommand(request.LocationId, request.Note), ct);
+            return TypedResults.Created($"/api/inventory/counts/{created.Id}", created);
+        });
+
+        counts.MapPut("/{id:guid}/lines", async Task<Ok<VersionResponse>> (
+            Guid id,
+            RecordCountsRequest request,
+            ICommandHandler<RecordCountsCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RecordCountsCommand(id, request.Version, request.Lines), ct)));
+
+        counts.MapPost("/{id:guid}/post", async Task<Ok<PostStockCountResponse>> (
+            Guid id,
+            PostStockCountRequest request,
+            ICommandHandler<PostStockCountCommand, PostStockCountResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new PostStockCountCommand(id, request.Version, request.ReasonCodeId, request.Comment), ct)));
+
+        counts.MapPost("/{id:guid}/cancel", async Task<Ok<VersionResponse>> (
+            Guid id,
+            CancelStockCountRequest request,
+            ICommandHandler<CancelStockCountCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CancelStockCountCommand(id, request.Version), ct)));
+
+        inventory.MapGet("/reports/stock-on-date", async Task<Ok<IReadOnlyList<StockOnDateDto>>> (
+            Guid siteId,
+            DateTimeOffset at,
+            IQueryHandler<StockOnDateQuery, IReadOnlyList<StockOnDateDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new StockOnDateQuery(siteId, at), ct)));
+
+        inventory.MapGet("/reports/aging", async Task<Ok<IReadOnlyList<AgingRowDto>>> (
+            Guid siteId,
+            IQueryHandler<AgingQuery, IReadOnlyList<AgingRowDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new AgingQuery(siteId), ct)));
+
+        var reasons = routes.MapGroup("/reason-codes").WithTags("Reference data");
+
+        reasons.MapGet("/all", async Task<Ok<IReadOnlyList<ReasonCodeAdminDto>>> (
+            Guid? siteId,
+            IQueryHandler<ListAllReasonCodesQuery, IReadOnlyList<ReasonCodeAdminDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListAllReasonCodesQuery(siteId), ct)));
+
+        reasons.MapPost("/", async Task<Created<CreatedResponse>> (
+            CreateReasonCodeRequest request,
+            ICommandHandler<CreateReasonCodeCommand, CreatedResponse> handler,
+            CancellationToken ct) =>
+        {
+            var created = await handler.HandleAsync(
+                new CreateReasonCodeCommand(request.SiteId, request.Kind, request.Code, request.Name, request.RequiresComment, request.SortOrder), ct);
+            return TypedResults.Created($"/api/reason-codes/{created.Id}", created);
+        });
+
+        reasons.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (
+            Guid id,
+            UpdateReasonCodeRequest request,
+            ICommandHandler<UpdateReasonCodeCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new UpdateReasonCodeCommand(id, request.Version, request.Name, request.RequiresComment, request.SortOrder, request.IsActive), ct)));
 
         routes.MapGet("/jobs/{id:guid}/materials", async Task<Ok<JobMaterialsDto>> (
             Guid id,

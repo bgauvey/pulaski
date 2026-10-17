@@ -42,8 +42,14 @@ internal sealed class GetMaterialStockHandler(IInventoryReadStore store) : IQuer
 
 internal sealed class SearchLotsHandler(IInventoryReadStore store) : IQueryHandler<SearchLotsQuery, IReadOnlyList<LotSummaryDto>>
 {
-    public Task<IReadOnlyList<LotSummaryDto>> HandleAsync(SearchLotsQuery query, CancellationToken cancellationToken) =>
-        store.SearchLotsAsync(query.Filter, cancellationToken);
+    public Task<IReadOnlyList<LotSummaryDto>> HandleAsync(SearchLotsQuery query, CancellationToken cancellationToken)
+    {
+        new Validator()
+            .Require(query.Filter.Offset >= 0, "Offset", "Can't be negative.")
+            .Require(query.Filter.Limit is > 0 and <= 500, "Limit", "Between 1 and 500.")
+            .ThrowIfInvalid();
+        return store.SearchLotsAsync(query.Filter, cancellationToken);
+    }
 }
 
 internal sealed class GetLotHandler(IInventoryReadStore store) : IQueryHandler<GetLotQuery, LotDto>

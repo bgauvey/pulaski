@@ -76,6 +76,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `core.lot` + one `ts.lot_event` row + one event. Consumption and production are declared against a job (lock
   the job, then lots) with job-level `declared` genealogy. Materials that aren't lot-tracked keep one bulk lot per
   location (`@<location code>`).
+- Inventory lookups (D-029) and completion (D-030, proposed): shortages are a pure calculator over open jobs' remaining
+  components; lots split, merge (lock lots in id order, in SQL), ship, correct and reverse only their latest movement;
+  counts snapshot a location and post differences. Job declarations, allocation and labels are deferred.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
@@ -83,6 +86,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 ## Database (`db/schema-draft.sql`)
 
 - `docs/database.md` documents every table and column. Update it in the same change as the schema.
+- Every schema change goes in `db/schema-draft.sql` **and** a new `db/migrations/NNNN_description.sql` (D-028):
+  re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`, `DO` blocks), no `BEGIN`/`COMMIT`. Add its name to the
+  `public.schema_migration` insert at the end of `schema-draft.sql` and set `DatabaseMaintenance.RequiredMigration`.
+- New partitioned tables need nothing else: the API keeps every range-partitioned `ts`/`evt` table three months
+  ahead through `ts.ensure_partitions`.
 
 - IDs are native `uuid` holding UUIDv7, generated in the app with `Guid.CreateVersion7()` behind
   `IIdGenerator` (injectable clock). `uuidv7()` is only a DB default backstop (D-006).
@@ -117,6 +125,7 @@ Treat these as working assumptions; confirm with Bill before building anything t
 ## Local dev
 
 - PostgreSQL 18 via Homebrew (`postgresql@18`); database `pulaski`.
+- Existing database after pulling schema changes: `db/migrate.sh pulaski` (the API won't start until it's current).
 - Load schema: `psql -d pulaski -v ON_ERROR_STOP=1 -f db/schema-draft.sql`, then
   `db/app-role.sql` (re-runnable), then `db/seed-demo.sql` (empty database only), then optionally
   `db/seed-materials.sql` (200 demo materials in 11 classes; re-runnable), then `db/seed-units.sql` (standard units
