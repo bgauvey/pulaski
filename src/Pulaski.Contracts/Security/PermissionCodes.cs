@@ -26,5 +26,6 @@ public static class PermissionCodes
     public const string Reasons = "reasons.manage";
     public const string Equipment = "equipment.manage";
     public const string SiteSettings = "site_settings.manage";
+    public const string Shifts = "shifts.manage";
     public const string Security = "security.manage";
 }

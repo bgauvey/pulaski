@@ -44,6 +44,8 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-034 | Capabilities, run standards and bulk import: capabilities are maintained per material and line over half-open periods that never overlap, and are ended rather than deleted. A new capability creates the line's run standard from its ideal rate; a changed ideal rate recalculates it while it is still based on the ideal rate, and never touches a modified rate. Materials load in bulk from a CSV file, checked first and saved all or nothing; the parser yields source-neutral rows, so later adapters feed the same importer | Proposed | 2026-10-17 |
 | D-035 | Job execution and production reporting: starting a job opens a run, pausing or completing ends it; one run at a time per line. A production job starts once its order is on the floor (starting firms a dispatched order) and its process links are met; Pulaski never starts a job itself. Good and scrap are reported into a run, live or after it ended until the order is closed, capped at the run's length × the capability's ideal rate × a per-site tolerance. Consumption needs a run; beyond the planned components it warns. The order's in-progress and completed statuses follow its jobs | Proposed | 2026-10-17 |
 | D-036 | Batches: a material may have a batch size, a rule (exact or near) and a tolerance, all Pulaski-owned. Orders and jobs of it are whole batches; production is reported batch by batch, each good batch its own lot. A partial batch is an exception, reported only as a run ends with a reason, one per run, in its own lot: accepted under the near rule, on hold for approval under the exact rule (finished goods by default) | Proposed | 2026-10-17 |
+| D-037 | Users, roles and permissions: permissions are constants in code; roles are data an administrator maintains, held at a site (only the administrator, fixed in code, holds everything everywhere); viewing is open to every signed-in user; local sign-in with an API token for now, an identity provider later | Proposed | 2026-10-17 |
+| D-038 | Shift schedules: each site's schedules repeat over a cycle of days; equipment inherits its parent's working time, follows a schedule of its own, or runs around the clock. Shift times are worked out from the schedule on read, never stored | Proposed | 2026-10-17 |
 
 ## Order hierarchy
 
@@ -179,7 +181,7 @@ A pure function in `Pulaski.Domain.Scheduling` takes one line's open jobs in seq
 
 1. The cursor starts at *now*. The running job is projected from its remaining quantity (planned minus good) at its run rate.
 2. Production time = remaining quantity ÷ the line/material run rate (D-016).
-3. Time accrues only inside staffed shift instances, minus calendar exceptions. Shift instances come from the nearest ancestor of the line that has any. If no instances exist, the line is treated as running 24/7 and the timeline says so. Past the last generated shift, the projection continues around the clock and flags the segments.
+3. Time accrues only inside shifts, minus calendar exceptions. The shifts come from the schedule the line follows: its own, or the nearest ancestor's (D-038, which replaced stored shift instances). If nothing sets one, the line is treated as running 24/7 and the timeline says so. Past the last worked-out shift, the projection continues around the clock and flags the segments.
 4. Changeover time between consecutive production jobs comes from the changeover matrix (below).
 5. Warnings never block: late against the work order due date, no run standard, unit-of-measure mismatch, a missing changeover in scheduler mode, no duration on a non-production job, and beyond the calendar.
 
@@ -625,13 +627,13 @@ Who may change what. Every signed-in user may **view** everything; **permissions
 | Supervisor | at a site | start, pause, complete and reopen jobs; report production and consumption; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches |
 | Operator | at a site | start, pause and complete jobs; report production and consumption; receive and move lots |
 | Quality | at a site | hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); approve or reject partial batches |
-| Manager | at a site | reopen jobs; cancel and close work orders; reason codes; the site's settings |
+| Manager | at a site | reopen jobs; cancel and close work orders; reason codes; shift schedules (D-038); the site's settings |
 | Auditor | at a site | correct inventory; stock counts. Doesn't plan or run jobs |
 | Process engineer | at a site | processes, BOMs and capabilities |
 
-Who owns the configuration: equipment, units → Administrator; materials (with classes, conversions, batching, shelf life and import) → Planner; processes, BOMs, capabilities → Process engineer; planning rates → Planner; reason codes and site settings → Manager; users → Administrator.
+Who owns the configuration: equipment, units → Administrator; shift schedules and which one equipment follows → Manager; materials (with classes, conversions, batching, shelf life and import) → Planner; processes, BOMs, capabilities → Process engineer; planning rates → Planner; reason codes and site settings → Manager; users → Administrator.
 
-**Permissions.** 21 codes, each in an area (Planning, Floor, Inventory, Configuration, Administration) for the screens. They are mirrored for the UI in `Pulaski.Contracts.Security.PermissionCodes`, and the API copies the catalog into `sec.permission` at every start, so a new permission can be given to roles at once: `schedule.plan`, `work_order.manage`, `work_order.close`, `rate.modify`, `job.execute`, `job.reopen`, `production.report`, `lot.receive`, `lot.move`, `lot.ship`, `lot.hold`, `inventory.correct`, `stock_count.manage`, `partial_batch.decide`, `materials.manage`, `processes.manage`, `units.manage`, `reasons.manage`, `equipment.manage`, `site_settings.manage`, `security.manage` (users, roles and what each role may do).
+**Permissions.** 22 codes, each in an area (Planning, Floor, Inventory, Configuration, Administration) for the screens. They are mirrored for the UI in `Pulaski.Contracts.Security.PermissionCodes`, and the API copies the catalog into `sec.permission` at every start, so a new permission can be given to roles at once: `schedule.plan`, `work_order.manage`, `work_order.close`, `rate.modify`, `job.execute`, `job.reopen`, `production.report`, `lot.receive`, `lot.move`, `lot.ship`, `lot.hold`, `inventory.correct`, `stock_count.manage`, `partial_batch.decide`, `materials.manage`, `processes.manage`, `units.manage`, `reasons.manage`, `equipment.manage`, `site_settings.manage`, `shifts.manage` (D-038), `security.manage` (users, roles and what each role may do).
 
 **Maintaining roles.**
 
@@ -660,6 +662,32 @@ Who owns the configuration: equipment, units → Administrator; materials (with 
 **Events:** `pulaski.user.signed_in.v1`, `…sign_in_failed.v1`, `…password_changed.v1`, `…password_reset.v1`, `…created.v1`, `…updated.v1`, `…role_assigned.v1`, `…role_ended.v1`, on the user. Event actors are the signed-in user (local users by user name).
 
 **Not yet:** a role held everywhere other than the administrator; signing in through an identity provider; reads filtered by site (everyone sees every site); correcting reported production or consumption (no command exists yet, so the Auditor's "correct production values" waits for it); site settings screens (the API is guarded).
+
+## Shift schedules (D-038, proposed)
+
+When each line works, for planning. Plants may run several schedules (a two-shift packing hall next to a continuous extrusion line), so each piece of equipment chooses its own or inherits its parent's.
+
+**A schedule** (`core.shift_schedule`) belongs to a site, so it uses the site's time zone. It has a code (upper case, fixed once created), a name, a cycle of 1 to 56 days (7 for a weekly schedule, 28 for a four-crew rotation) and the date the cycle starts (`cycle_start`). Its shifts are one `jsonb` document, saved whole like a process draft so editing never deletes rows: each shift has a code, a name, a start time ("HH:mm", site-local), a length (15 minutes to 24 hours) and the days of the cycle it runs on (0 is the first day). Shifts may run past midnight; they may not overlap, also across the end of the cycle. A shift belongs to the production day it starts on.
+
+**Equipment's working time** (`core.equipment.calendar_mode`, `shift_schedule_id`):
+
+| Mode | Means |
+| --- | --- |
+| `inherit` (default) | Its parent's working time. At the top of the tree with nothing set, around the clock |
+| `schedule` | A schedule of its own site, which must be active |
+| `around_the_clock` | No shifts, whatever its parent follows (a furnace that never stops) |
+
+A line's working time comes from the nearest equipment, the line itself first, that doesn't inherit. The enterprise sits above the sites and has no schedules; it can only inherit or run around the clock.
+
+**Worked out on read, not stored (amends D-014).** Shift times are computed from the schedule by a pure function (`ShiftSchedule.Expand` in `Pulaski.Domain.Shifts`), like the projected job times, for the planning window plus a month. So a change to a schedule, or to which one equipment follows, moves the projection at once, and nothing has to be generated ahead, regenerated or deleted. Clock times hold across daylight saving: a shift starts at its clock time; one that would start in the hour the clocks skip starts when they have gone forward; its length is elapsed time. `core.shift_instance` is no longer read by planning; it is kept for recording shifts as worked (reporting by shift, crews), which isn't built. The never-filled `core.shift_pattern` and `core.shift_definition` tables were replaced.
+
+**Rules.** A schedule equipment follows can't be switched off; give the equipment another first. A switched-off schedule can't be chosen. Schedules are switched off, not deleted. The timeline names where a line's time comes from ("2X8 · Two shifts, from PLT1") and no longer warns about a line set to run around the clock on purpose.
+
+**Who.** `shifts.manage` (D-037), held by the Manager role to start with: maintaining schedules (at their site) and choosing which one equipment follows (at its site). The latter is saved apart from the rest of the equipment (`PUT /api/equipment/{id}/calendar`), so a manager can set it without maintaining equipment.
+
+**API.** `GET /api/shift-schedules?siteId=`, `GET /api/shift-schedules/{id}`, `POST /api/shift-schedules`, `PUT /api/shift-schedules/{id}` (with its version), `POST /api/shift-schedules/preview` (works out a schedule, saved or not, for the next days; saves nothing), `PUT /api/equipment/{id}/calendar`. Events: `pulaski.shift_schedule.created.v1`, `pulaski.shift_schedule.updated.v1` (before and after), `pulaski.equipment.calendar_set.v1`.
+
+**Not yet:** crews and rotations of people; a one-off change to a single shift (an extra Saturday, a cancelled night) other than a calendar exception, which has no screen yet; reports, counts and OEE by shift; the Overview's strip by shift rather than a rolling 24 hours.
 
 ## Application architecture
 

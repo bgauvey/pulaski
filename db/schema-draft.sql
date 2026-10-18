@@ -423,24 +423,31 @@ CREATE TABLE core.equipment_capability (
 --    minus calendar exceptions and planned (non-production) jobs.
 -- =====================================================================
 
-CREATE TABLE core.shift_pattern (
+-- A site's shift schedule (D-038): shifts repeating every cycle_days from cycle_start (a site-local date).
+-- The shifts are one jsonb document, [{code, name, start "HH:mm", minutes, days [0..cycle_days-1]}], saved
+-- whole like a process draft, so editing never deletes rows. Shift times are worked out on read, not stored.
+CREATE TABLE core.shift_schedule (
     id          uuid PRIMARY KEY DEFAULT uuidv7(),
     site_id     uuid NOT NULL REFERENCES core.equipment(id),
-    code        text NOT NULL,
+    code        text NOT NULL,                                  -- fixed once created
     name        text NOT NULL,
-    cycle_days  integer NOT NULL CHECK (cycle_days > 0),        -- 7 for weekly, 28 for DuPont, etc.
-    CONSTRAINT shift_pattern_uq UNIQUE (site_id, code)
+    description text,
+    cycle_days  integer NOT NULL CHECK (cycle_days BETWEEN 1 AND 56),  -- 7 for weekly, 28 for a four-week rotation
+    cycle_start date NOT NULL,                                  -- the cycle's first day
+    shifts      jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(shifts) = 'array'),
+    is_active   boolean NOT NULL DEFAULT true,                  -- switched off rather than deleted
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT shift_schedule_uq UNIQUE (site_id, code)
 );
 
-CREATE TABLE core.shift_definition (
-    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
-    shift_pattern_id    uuid NOT NULL REFERENCES core.shift_pattern(id) ON DELETE CASCADE,
-    code                text NOT NULL,                          -- 'A', 'B', 'Nights'
-    day_offset          integer NOT NULL,                       -- day within cycle
-    start_time          time NOT NULL,                          -- site local time
-    duration            interval NOT NULL,
-    CONSTRAINT shift_definition_uq UNIQUE (shift_pattern_id, day_offset, code)
-);
+-- Which working time equipment follows (D-038): its parent's (inherit), its own schedule, or around the clock.
+ALTER TABLE core.equipment
+    ADD COLUMN calendar_mode text NOT NULL DEFAULT 'inherit'
+        CONSTRAINT equipment_calendar_mode_ck CHECK (calendar_mode IN ('inherit', 'schedule', 'around_the_clock')),
+    ADD COLUMN shift_schedule_id uuid REFERENCES core.shift_schedule(id),
+    ADD CONSTRAINT equipment_calendar_schedule_ck CHECK ((calendar_mode = 'schedule') = (shift_schedule_id IS NOT NULL));
+CREATE INDEX equipment_shift_schedule_ix ON core.equipment (shift_schedule_id) WHERE shift_schedule_id IS NOT NULL;
 
 CREATE TABLE core.crew (
     id          uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -450,12 +457,13 @@ CREATE TABLE core.crew (
     CONSTRAINT crew_uq UNIQUE (site_id, code)
 );
 
--- Materialized shift instances, generated ahead by a worker. Scope is the
--- nearest ancestor (site, area or work center) that has instances.
+-- Shifts as worked, for reporting by shift later (planned). Planning doesn't read them: it works shift times
+-- out from the schedule the equipment follows (D-038).
 CREATE TABLE core.shift_instance (
     id                      uuid PRIMARY KEY DEFAULT uuidv7(),
     scope_equipment_id      uuid NOT NULL REFERENCES core.equipment(id),
-    shift_definition_id     uuid REFERENCES core.shift_definition(id),
+    shift_schedule_id       uuid REFERENCES core.shift_schedule(id),
+    shift_code              text,
     crew_id                 uuid REFERENCES core.crew(id),
     production_date         date NOT NULL,                      -- the "shift day" for reporting
     starts_at               timestamptz NOT NULL,
@@ -1543,7 +1551,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0008_job_execution'),
     ('0009_batches'),
     ('0010_security'),
-    ('0011_editable_roles');
+    ('0011_editable_roles'),
+    ('0012_shift_schedules');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -1571,6 +1580,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('reasons.manage', 'Maintain reason codes'),
     ('equipment.manage', 'Maintain equipment: sites, lines, locations'),
     ('site_settings.manage', 'Set a site''s changeover mode and reporting tolerances'),
+    ('shifts.manage', 'Maintain shift schedules and choose which one equipment follows'),
     ('security.manage', 'Maintain users, roles and what each role may do')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
@@ -1582,7 +1592,7 @@ INSERT INTO sec.role (code, name, description, is_system) VALUES
     ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches. Doesn''t correct inventory.', true),
     ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots.', true),
     ('quality', 'Quality', 'Holds and releases lots, corrects inventory and decides on partial batches.', true),
-    ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, maintains reason codes and the site''s settings.', true),
+    ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, maintains reason codes, shift schedules and the site''s settings.', true),
     ('auditor', 'Auditor', 'Views everything and corrects inventory; counts stock. Doesn''t plan or run jobs.', true),
     ('process_engineer', 'Process engineer', 'Maintains processes, BOMs and capabilities.', true)
 ON CONFLICT (code) DO NOTHING;
@@ -1614,6 +1624,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('manager', 'work_order.close'),
     ('manager', 'reasons.manage'),
     ('manager', 'site_settings.manage'),
+    ('manager', 'shifts.manage'),
     ('auditor', 'inventory.correct'),
     ('auditor', 'stock_count.manage'),
     ('process_engineer', 'processes.manage')

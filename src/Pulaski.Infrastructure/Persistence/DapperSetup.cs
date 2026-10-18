@@ -24,6 +24,25 @@ public static class DapperSetup
         SqlMapper.RemoveTypeMap(typeof(DateTimeOffset));
         SqlMapper.RemoveTypeMap(typeof(DateTimeOffset?));
         SqlMapper.AddTypeHandler(new UtcDateTimeOffsetHandler());
+
+        // Dates (a shift schedule's cycle start, D-038): Npgsql reads and writes date as DateOnly; Dapper needs telling.
+        SqlMapper.AddTypeHandler(new DateOnlyHandler());
+    }
+
+    private sealed class DateOnlyHandler : SqlMapper.TypeHandler<DateOnly>
+    {
+        public override DateOnly Parse(object value) => value switch
+        {
+            DateOnly d => d,
+            DateTime dt => DateOnly.FromDateTime(dt),
+            _ => throw new DataException($"Cannot convert {value.GetType()} to DateOnly."),
+        };
+
+        public override void SetValue(IDbDataParameter parameter, DateOnly value)
+        {
+            parameter.DbType = DbType.Date;
+            parameter.Value = value;
+        }
     }
 
     private sealed class UtcDateTimeOffsetHandler : SqlMapper.TypeHandler<DateTimeOffset>

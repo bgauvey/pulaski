@@ -59,6 +59,9 @@ public static class EventTypes
 {
     public const string EquipmentCreated = "pulaski.equipment.created.v1";
     public const string EquipmentUpdated = "pulaski.equipment.updated.v1";
+    public const string EquipmentCalendarSet = "pulaski.equipment.calendar_set.v1";
+    public const string ShiftScheduleCreated = "pulaski.shift_schedule.created.v1";
+    public const string ShiftScheduleUpdated = "pulaski.shift_schedule.updated.v1";
     public const string WorkOrderCreated = "pulaski.work_order.created.v1";
     public const string WorkOrderStatusChanged = "pulaski.work_order.status_changed.v1";
     public const string JobCreated = "pulaski.job.created.v1";

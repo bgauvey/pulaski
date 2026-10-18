@@ -102,6 +102,7 @@ internal static class TimelineMapping
             ChangeoverMode = source.Line.ChangeoverMode,
             ProjectedAt = timeline.ProjectedAt,
             HasShiftCalendar = source.HasShiftCalendar,
+            CalendarName = source.CalendarName,
             Warnings = [.. timeline.Warnings.Select(ToDto)],
             Overlaps = [.. timeline.Overlaps.Select(o => new TimelineOverlapDto(
                 o.FirstJobId, o.FirstKind, o.SecondJobId, o.SecondKind, o.Start, o.End))],
@@ -203,6 +204,7 @@ internal static class TimelineMapping
             IsGroup = true,
             ProjectedAt = now,
             HasShiftCalendar = source.HasShiftCalendar,
+            CalendarName = source.CalendarName,
             Segments = [.. segments.OrderBy(s => s.Start).ThenBy(s => s.JobNumber, StringComparer.Ordinal)],
         };
     }

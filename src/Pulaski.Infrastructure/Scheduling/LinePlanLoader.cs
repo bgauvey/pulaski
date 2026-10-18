@@ -3,6 +3,9 @@ using Npgsql;
 using Pulaski.Application.Scheduling;
 using Pulaski.Application.Units;
 using Pulaski.Infrastructure.Units;
+using Pulaski.Application.Shifts;
+using Pulaski.Domain.Shifts;
+using Pulaski.Infrastructure.Shifts;
 
 namespace Pulaski.Infrastructure.Scheduling;
 
@@ -97,24 +100,17 @@ internal static class LinePlanLoader
         ORDER BY e.code
         """;
 
-    // Shifts come from the nearest ancestor (or the line itself) that has any instances.
-    private const string ShiftScope = """
-        SELECT c.ancestor_id
+    // The nearest equipment, the line first, that doesn't inherit its working time (D-038).
+    private const string CalendarSource = """
+        SELECT e.code AS source_code, e.calendar_mode AS mode, s.code, s.name, s.cycle_days, s.cycle_start, s.shifts::text AS shifts_json,
+               site.time_zone
         FROM core.equipment_closure c
-        WHERE c.descendant_id = @LineId
-          AND EXISTS (SELECT 1 FROM core.shift_instance si WHERE si.scope_equipment_id = c.ancestor_id)
+        JOIN core.equipment e ON e.id = c.ancestor_id
+        LEFT JOIN core.shift_schedule s ON s.id = e.shift_schedule_id
+        LEFT JOIN core.equipment site ON site.id = s.site_id
+        WHERE c.descendant_id = @LineId AND e.calendar_mode <> 'inherit'
         ORDER BY c.depth
         LIMIT 1
-        """;
-
-    private const string Shifts = """
-        SELECT starts_at, ends_at
-        FROM core.shift_instance
-        WHERE scope_equipment_id = @ScopeId
-          AND is_scheduled
-          AND ends_at > @From
-          AND starts_at < @To
-        ORDER BY starts_at
         """;
 
     // Exceptions apply from every ancestor, including the line itself.
@@ -151,10 +147,8 @@ internal static class LinePlanLoader
             return null;
         }
 
-        var scopeId = await connection.QuerySingleOrDefaultAsync<Guid?>(Command(ShiftScope, args));
-        var shifts = scopeId is { } scope
-            ? await ListAsync<WindowRow>(Shifts, new { ScopeId = scope, From = windowStart, To = windowEnd })
-            : [];
+        var calendar = await connection.QuerySingleOrDefaultAsync<CalendarRow>(Command(CalendarSource, args));
+        var (hasCalendar, shifts, calendarName) = Shifts(calendar, windowStart, windowEnd);
 
         var jobs = await ListAsync<PlanJobRow>(Jobs, args);
         var runners = line.IsGroup ? await ListAsync<RunnerRateRow>(Runners, args) : [];
@@ -174,10 +168,42 @@ internal static class LinePlanLoader
             Rates = await ListAsync<RunRateRow>(Rates, args),
             ChangeoverRules = await ListAsync<ChangeoverRuleRow>(ChangeoverRules, args),
             StandardChangeovers = await ListAsync<StandardChangeoverRow>(StandardChangeovers, args),
-            HasShiftCalendar = scopeId is not null,
+            HasShiftCalendar = hasCalendar,
             Shifts = shifts,
+            CalendarName = calendarName,
             Exceptions = await ListAsync<WindowRow>(Exceptions, args),
             Runners = runners,
         };
+    }
+
+    // Working time comes from the schedule, worked out for the window and a month past it, so work running past the
+    // horizon still lands in shifts. Chosen around-the-clock time is a calendar too: it isn't warned about.
+    private static (bool HasCalendar, IReadOnlyList<WindowRow> Shifts, string? Name) Shifts(CalendarRow? calendar, DateTimeOffset from, DateTimeOffset to)
+    {
+        switch (calendar)
+        {
+            case { Mode: CalendarModes.AroundTheClock }:
+                return (true, [new WindowRow { StartsAt = DateTimeOffset.MinValue, EndsAt = DateTimeOffset.MaxValue }], $"Around the clock, from {calendar.SourceCode}");
+            case { Mode: CalendarModes.Schedule, Code: { } code, TimeZone: { } timeZone }:
+                var schedule = ShiftMapping.ToDomain(code, calendar.Name ?? code, calendar.CycleDays, calendar.CycleStart, ShiftSql.Read(calendar.ShiftsJson ?? "[]"));
+                var windows = schedule.Expand(TimeZoneInfo.FindSystemTimeZoneById(timeZone), from, to.AddDays(31))
+                    .Select(o => new WindowRow { StartsAt = o.Start, EndsAt = o.End })
+                    .ToList();
+                return (true, windows, $"{code} · {calendar.Name}, from {calendar.SourceCode}");
+            default:
+                return (false, [], null);
+        }
+    }
+
+    private sealed class CalendarRow
+    {
+        public string SourceCode { get; init; } = "";
+        public string Mode { get; init; } = "";
+        public string? Code { get; init; }
+        public string? Name { get; init; }
+        public int CycleDays { get; init; }
+        public DateOnly CycleStart { get; init; }
+        public string? ShiftsJson { get; init; }
+        public string? TimeZone { get; init; }
     }
 }

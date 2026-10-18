@@ -10,6 +10,7 @@ using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
 using Pulaski.Application.Scheduling;
 using Pulaski.Application.Security;
+using Pulaski.Application.Shifts;
 using Pulaski.Application.Units;
 using Pulaski.Application.WorkOrders;
 
@@ -56,6 +57,8 @@ public sealed class InMemoryStores
 
     public InMemorySecurity Security { get; } = new();
 
+    public InMemoryShifts Shifts { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -86,6 +89,8 @@ public sealed class InMemoryStores
         services.RemoveAll<ISecurityRepository>();
         services.RemoveAll<ISiteLookup>();
         services.RemoveAll<IPasswordHasher>();
+        services.RemoveAll<IShiftReadStore>();
+        services.RemoveAll<IShiftRepository>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -114,6 +119,8 @@ public sealed class InMemoryStores
         services.AddSingleton<ISecurityRepository>(Security);
         services.AddSingleton<ISiteLookup>(Security);
         services.AddSingleton<IPasswordHasher>(new PlainPasswordHasher());
+        services.AddSingleton<IShiftReadStore>(Shifts);
+        services.AddSingleton<IShiftRepository>(Shifts);
         return services;
     }
 }

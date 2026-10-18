@@ -27,6 +27,12 @@ public sealed record EquipmentDto
     public string? TimeZone { get; init; }
     public bool IsActive { get; init; }
 
+    /// <summary>Which working time it follows (D-038): <c>inherit</c> (its parent's), <c>schedule</c> or <c>around_the_clock</c>.</summary>
+    public string CalendarMode { get; init; } = "inherit";
+
+    /// <summary>Its own shift schedule, when <see cref="CalendarMode"/> is <c>schedule</c>.</summary>
+    public Guid? ShiftScheduleId { get; init; }
+
     /// <summary>Distance from the enterprise root (0 = enterprise).</summary>
     public int Depth { get; init; }
 

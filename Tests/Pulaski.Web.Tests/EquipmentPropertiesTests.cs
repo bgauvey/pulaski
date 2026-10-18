@@ -88,12 +88,12 @@ public class EquipmentPropertiesTests
         Assert.Null(EquipmentProperties.ApplyChange(Line, new PropertyChange(key, "x")));
 
     [Fact]
-    public void Existing_equipment_only_edits_name_description_capabilities_and_active()
+    public void Existing_equipment_only_edits_name_description_capabilities_active_and_shifts()
     {
         var items = EquipmentProperties.ForExisting(Line, new EquipmentTree([Line]));
 
         var editable = items.Where(i => i.Editor != PropertyEditor.ReadOnly).Select(i => i.Key);
-        Assert.Equal(["name", "description", "tracksState", "isSchedulable", "canRunJob", "holdsInventory", "isActive"], editable);
+        Assert.Equal(["name", "description", "tracksState", "isSchedulable", "canRunJob", "holdsInventory", "isActive", "calendar"], editable);
     }
 
     [Fact]

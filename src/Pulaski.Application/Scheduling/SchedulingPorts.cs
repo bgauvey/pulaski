@@ -133,8 +133,11 @@ public sealed record LinePlanSource
     public IReadOnlyList<ChangeoverRuleRow> ChangeoverRules { get; init; } = [];
     public IReadOnlyList<StandardChangeoverRow> StandardChangeovers { get; init; } = [];
 
-    /// <summary>True when the line or an ancestor has shift instances at all.</summary>
+    /// <summary>True when the line follows a shift schedule, or was set to run around the clock, itself or through an ancestor (D-038).</summary>
     public bool HasShiftCalendar { get; init; }
+
+    /// <summary>What the line's working time comes from, e.g. "2X8 · Two shifts, from PLT1"; null with no calendar.</summary>
+    public string? CalendarName { get; init; }
 
     public IReadOnlyList<WindowRow> Shifts { get; init; } = [];
     public IReadOnlyList<WindowRow> Exceptions { get; init; } = [];

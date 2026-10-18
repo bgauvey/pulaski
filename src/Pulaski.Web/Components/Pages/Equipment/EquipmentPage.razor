@@ -66,7 +66,7 @@ else
         <div class="props-panel">
             <PropertyGrid Items="properties.Items" Title="@properties.Title" Subtitle="@properties.Subtitle"
                           EmptyText="Select equipment to see its properties."
-                          Disabled="@(_saving || !CanChange)" Revision="_revision" OnChange="OnPropertyChangeAsync"
+                          Disabled="_saving" Revision="_revision" OnChange="OnPropertyChangeAsync"
                           Banner="@(_propError is null ? null : ErrorBanner)"
                           Footer="@(_draft is not null && _selectedId == EquipmentTreeGrid.DraftId ? DraftFooter : null)" />
         </div>
@@ -76,6 +76,7 @@ else
 @code {
     private IReadOnlyList<EquipmentDto>? _equipment;
     private IReadOnlyList<EquipmentTypeDto>? _types;
+    private IReadOnlyList<ShiftScheduleDto> _schedules = [];
     private EquipmentTree _tree = new([]);
     private readonly HashSet<Guid> _expanded = [];
     private Guid? _selectedId;
@@ -105,6 +106,7 @@ else
         try
         {
             _types = await Api.ListEquipmentTypesAsync();
+            _schedules = await Api.ListShiftSchedulesAsync();
             await LoadAsync();
 
             // Open the top of the hierarchy down to the work centers, and select the root.
@@ -190,7 +192,7 @@ else
         }
 
         return SelectedExisting is { } e
-            ? (EquipmentProperties.ForExisting(e, _tree), e.Code, Display.Label(e.EquipmentRole))
+            ? (EquipmentProperties.ForExisting(e, _tree, _schedules, CanChange, User.Can(PermissionCodes.Shifts, e.SiteId)), e.Code, Display.Label(e.EquipmentRole))
             : ([], null, null);
     }
 
@@ -203,7 +205,13 @@ else
             return;
         }
 
-        if (SelectedExisting is not { } equipment || EquipmentProperties.ApplyChange(equipment, change) is not { } request)
+        if (SelectedExisting is not { } equipment)
+        {
+            return;
+        }
+
+        var request = EquipmentProperties.ApplyChange(equipment, change);
+        if (request is null && change.Key != EquipmentProperties.CalendarKey)
         {
             return;
         }
@@ -212,7 +220,16 @@ else
         _propError = null;
         try
         {
-            await Api.UpdateEquipmentAsync(equipment.Id, request);
+            if (request is not null)
+            {
+                await Api.UpdateEquipmentAsync(equipment.Id, request);
+            }
+            else
+            {
+                // Which shifts it follows is its own permission (D-038), saved apart from the rest of the equipment.
+                await Api.SetEquipmentCalendarAsync(equipment.Id, EquipmentProperties.CalendarChange(equipment, change.Value));
+            }
+
             await RefreshAsync(equipment.Id);
         }
         catch (ApiException ex)

@@ -24,6 +24,9 @@ public sealed record LineTimelineDto
     /// <summary>False when no shift calendar covers the line and times assume it runs around the clock.</summary>
     public bool HasShiftCalendar { get; init; }
 
+    /// <summary>Where the line's working time comes from, e.g. "2X8 · Two shifts, from PLT1" (D-038); null without one.</summary>
+    public string? CalendarName { get; init; }
+
     public IReadOnlyList<TimelineSegmentDto> Segments { get; init; } = [];
 
     /// <summary>Warnings about the line as a whole; each segment carries its own.</summary>

@@ -1,0 +1,511 @@
+@page "/shifts"
+@using System.Globalization
+@using Pulaski.Web.Services.Shifts
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+
+@* Shift schedules (D-038): each site's schedules, edited as a grid of shifts against the days of the cycle, with a
+   preview of the coming week. Equipment chooses one on Configure → Equipment, or inherits its parent's. *@
+<PageTitle>Shifts · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Shift schedules</h1>
+        <p class="text-muted mb-0">
+            When each site works. Planning places jobs only inside shifts. Equipment follows a schedule of its own or inherits its
+            parent's (choose on <a href="equipment">Equipment</a>); with none set anywhere above it, it runs around the clock.
+        </p>
+    </div>
+    <div class="inv-head-tools">
+        @if (Sites.Sites.Count > 1)
+        {
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+        @if (CanManage && _edit is null)
+        {
+            <button type="button" class="btn btn-primary" disabled="@(Sites.SiteId is null)" @onclick="StartNew">New schedule</button>
+        }
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Shifts" What="maintain shift schedules" SiteId="Sites.SiteId" />
+
+@if (_message is { } message)
+{
+    <div class="alert alert-success d-flex align-items-center gap-2" role="status">
+        <span>@message</span>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">Dismiss</button>
+    </div>
+}
+
+@if (_edit is { } edit)
+{
+    <form class="inv-facts mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+        <h2 class="h6">@(edit.IsNew ? "New shift schedule" : $"Change {edit.Code}")</h2>
+        <div class="row g-2">
+            <div class="col-sm-2">
+                <label class="form-label small" for="sch-code">Code</label>
+                @if (edit.IsNew)
+                {
+                    <input id="sch-code" class="form-control" maxlength="30" placeholder="e.g. 2X8" @bind="edit.Code" @bind:event="oninput" />
+                }
+                else
+                {
+                    <input id="sch-code" class="form-control" value="@edit.Code" disabled />
+                }
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label small" for="sch-name">Name</label>
+                <input id="sch-name" class="form-control" maxlength="100" placeholder="e.g. Two shifts, weekdays" @bind="edit.Name" @bind:event="oninput" />
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label small" for="sch-description">Notes (optional)</label>
+                <input id="sch-description" class="form-control" maxlength="500" @bind="edit.Description" />
+            </div>
+            <div class="col-sm-2">
+                <label class="form-label small" for="sch-cycle">Repeats every (days)</label>
+                <input id="sch-cycle" type="number" class="form-control" min="1" max="56" value="@edit.CycleDays" @onchange="e => SetCycleAsync(edit, e)" />
+            </div>
+            <div class="col-sm-2">
+                <label class="form-label small" for="sch-start">Cycle starts on</label>
+                <input id="sch-start" type="date" class="form-control" value="@edit.CycleStart.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)"
+                       @onchange="e => SetStartAsync(edit, e)" />
+            </div>
+            <div class="col-12 small text-muted">
+                Times are in the site's time zone@(_preview?.TimeZone is { Length: > 0 } zone ? $" ({zone})" : ""). A weekly schedule repeats every 7 days; a
+                rotation such as four crews on 12-hour shifts repeats every 28. A shift belongs to the day it starts on.
+            </div>
+        </div>
+
+        <div class="table-responsive mt-3">
+            <table class="table table-sm align-middle shift-grid mb-2">
+                <thead>
+                    <tr>
+                        <th style="width: 6rem">Shift</th>
+                        <th style="width: 10rem">Name</th>
+                        <th style="width: 7rem">Starts</th>
+                        <th style="width: 6rem">Hours</th>
+                        @for (var d = 0; d < edit.CycleDays; d++)
+                        {
+                            <th class="text-center shift-day">@ShiftView.DayLabel(d, edit.CycleDays, edit.CycleStart)</th>
+                        }
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in edit.Rows)
+                    {
+                        <tr @key="row">
+                            <td><input class="form-control form-control-sm" maxlength="10" aria-label="Shift code" @bind="row.Code" @bind:after="PreviewAsync" /></td>
+                            <td><input class="form-control form-control-sm" maxlength="50" aria-label="Shift name" @bind="row.Name" /></td>
+                            <td><input type="time" class="form-control form-control-sm" aria-label="Starts at" @bind="row.Start" @bind:after="PreviewAsync" /></td>
+                            <td><input type="number" class="form-control form-control-sm" min="0.25" max="24" step="0.25" aria-label="Length in hours" @bind="row.Hours" @bind:after="PreviewAsync" /></td>
+                            @for (var d = 0; d < edit.CycleDays; d++)
+                            {
+                                var day = d;
+                                <td class="text-center">
+                                    <input class="form-check-input" type="checkbox" checked="@row.Days.Contains(day)"
+                                           aria-label="@($"{row.Code} on {ShiftView.DayLabel(day, edit.CycleDays, edit.CycleStart)}")"
+                                           @onchange="e => ToggleDayAsync(row, day, e.Value is true)" />
+                                </td>
+                            }
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-link text-danger p-0" title="Remove shift" aria-label="Remove shift @row.Code"
+                                        @onclick="() => RemoveRowAsync(edit, row)">×</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary btn-with-icon" @onclick="() => AddRowAsync(edit)"><Icon Name="plus" Size="16" /> Add shift</button>
+
+        @if (!edit.IsNew)
+        {
+            <div class="form-check mt-3">
+                <input class="form-check-input" type="checkbox" id="sch-active" @bind="edit.IsActive" />
+                <label class="form-check-label small" for="sch-active">Active: equipment can follow it. One that equipment follows can't be switched off.</label>
+            </div>
+        }
+
+        <div class="shift-preview mt-3">
+            <h3 class="h6 mb-1">The next 7 days</h3>
+            @if (_preview is null)
+            {
+                <p class="small text-muted mb-0">Working it out…</p>
+            }
+            else if (_preview.Problems.Count > 0)
+            {
+                <ul class="small text-warning-strong mb-0">
+                    @foreach (var p in _preview.Problems)
+                    {
+                        <li>@p</li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <p class="small text-muted mb-1">@ShiftView.Hours(_preview.HoursPerCycle) hours every @edit.CycleDays @(edit.CycleDays == 1 ? "day" : "days").</p>
+                <ul class="list-unstyled small mb-0 shift-preview-days">
+                    @foreach (var day in _preview.Shifts.GroupBy(s => s.ProductionDate))
+                    {
+                        <li>
+                            <span class="fw-semibold">@day.Key.ToString("ddd d MMM", CultureInfo.InvariantCulture)</span>
+                            @string.Join(" · ", day.Select(s => $"{s.Code} {s.Start:HH\\:mm}–{s.End:HH\\:mm}"))
+                        </li>
+                    }
+                    @if (_preview.Shifts.Count == 0)
+                    {
+                        <li class="text-muted">No shifts in the next 7 days.</li>
+                    }
+                </ul>
+            }
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary" disabled="@(_saving || !CanSave(edit))">@(edit.IsNew ? "Create schedule" : "Save schedule")</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _edit = null">Cancel</button>
+        </div>
+    </form>
+}
+
+@if (_schedules is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_schedules.Count == 0)
+{
+    <div class="empty-panel">
+        <p class="text-muted mb-0">
+            No shift schedules at @(Sites.Site?.Code ?? "this site") yet, so its lines are planned around the clock.@(CanManage ? " Click New schedule to add one." : "")
+        </p>
+    </div>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Schedule</th>
+                    <th>Repeats</th>
+                    <th>Shifts</th>
+                    <th class="inv-num">Hours a cycle</th>
+                    <th>Followed by</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in _schedules)
+                {
+                    <tr @key="s.Id" class="@(s.IsActive ? "" : "text-muted")">
+                        <td>
+                            <div class="fw-semibold">@s.Code</div>
+                            <div class="small text-muted">@s.Name@(s.Description is { } d ? $" · {d}" : "")</div>
+                        </td>
+                        <td class="small">Every @s.CycleDays @(s.CycleDays == 1 ? "day" : "days") from @s.CycleStart.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture)</td>
+                        <td class="small">@ShiftView.Summary(s.Shifts)</td>
+                        <td class="inv-num">@ShiftView.Hours(s.HoursPerCycle)</td>
+                        <td class="small">@(s.UsedBy.Count == 0 ? "Nothing yet" : string.Join(", ", s.UsedBy))</td>
+                        <td class="small">@(s.IsActive ? "Active" : "Switched off")</td>
+                        <td class="text-end">
+                            @if (CanManage && _edit is null)
+                            {
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => StartEditAsync(s)">Change</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="small text-muted mt-2">"Followed by" lists equipment that has the schedule as its own; equipment below it inherits it unless it has its own.</p>
+}
+
+@code {
+    private IReadOnlyList<ShiftScheduleDto>? _schedules;
+    private ScheduleEdit? _edit;
+    private ShiftPreviewDto? _preview;
+    private ApiException? _error;
+    private string? _message;
+    private bool _saving;
+
+    private bool CanManage => User.Can(PermissionCodes.Shifts, Sites.SiteId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            _schedules = [];
+            return;
+        }
+
+        try
+        {
+            _schedules = await Api.ListShiftSchedulesAsync(site);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _edit = null;
+        _schedules = null;
+        await LoadAsync();
+    }
+
+    private static bool CanSave(ScheduleEdit edit) =>
+        !string.IsNullOrWhiteSpace(edit.Name) && (!edit.IsNew || !string.IsNullOrWhiteSpace(edit.Code)) && edit.Rows.Count > 0;
+
+    private async Task StartNew()
+    {
+        // A first schedule: one day shift on weekdays, the cycle starting this week's Monday.
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var monday = today.AddDays(-(((int)today.DayOfWeek + 6) % 7));
+        _edit = new ScheduleEdit
+        {
+            IsNew = true,
+            IsActive = true,
+            CycleDays = 7,
+            CycleStart = monday,
+            Rows = [new ShiftRow { Code = "A", Name = "Days", Start = new TimeOnly(6, 0), Hours = 8, Days = [0, 1, 2, 3, 4] }],
+        };
+        _message = null;
+        await PreviewAsync();
+    }
+
+    private async Task StartEditAsync(ShiftScheduleDto schedule)
+    {
+        _edit = new ScheduleEdit
+        {
+            Id = schedule.Id,
+            Code = schedule.Code,
+            Name = schedule.Name,
+            Description = schedule.Description,
+            CycleDays = schedule.CycleDays,
+            CycleStart = schedule.CycleStart,
+            IsActive = schedule.IsActive,
+            Version = schedule.Version,
+            Rows = [.. schedule.Shifts.Select(ShiftRow.From)],
+        };
+        _message = null;
+        await PreviewAsync();
+    }
+
+    private async Task SetCycleAsync(ScheduleEdit edit, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var days) && days is >= 1 and <= 56)
+        {
+            edit.CycleDays = days;
+            foreach (var row in edit.Rows)
+            {
+                row.Days.RemoveWhere(d => d >= days);
+            }
+        }
+
+        await PreviewAsync();
+    }
+
+    private async Task SetStartAsync(ScheduleEdit edit, ChangeEventArgs e)
+    {
+        if (DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var start))
+        {
+            edit.CycleStart = start;
+        }
+
+        await PreviewAsync();
+    }
+
+    private async Task ToggleDayAsync(ShiftRow row, int day, bool on)
+    {
+        if (on)
+        {
+            row.Days.Add(day);
+        }
+        else
+        {
+            row.Days.Remove(day);
+        }
+
+        await PreviewAsync();
+    }
+
+    private async Task AddRowAsync(ScheduleEdit edit)
+    {
+        // The next shift starts when the last one ends, on the same days.
+        var last = edit.Rows.LastOrDefault();
+        var code = ((char)('A' + edit.Rows.Count % 26)).ToString();
+        edit.Rows.Add(last is null
+            ? new ShiftRow { Code = code, Start = new TimeOnly(6, 0), Hours = 8, Days = [.. Enumerable.Range(0, Math.Min(5, edit.CycleDays))] }
+            : new ShiftRow { Code = code, Start = last.Start.AddMinutes((int)Math.Round(last.Hours * 60)), Hours = last.Hours, Days = [.. last.Days] });
+        await PreviewAsync();
+    }
+
+    private async Task RemoveRowAsync(ScheduleEdit edit, ShiftRow row)
+    {
+        edit.Rows.Remove(row);
+        await PreviewAsync();
+    }
+
+    private async Task PreviewAsync()
+    {
+        if (_edit is not { } edit || Sites.SiteId is not { } site)
+        {
+            return;
+        }
+
+        try
+        {
+            _preview = await Api.PreviewShiftScheduleAsync(new PreviewShiftScheduleRequest
+            {
+                SiteId = site,
+                CycleDays = edit.CycleDays,
+                CycleStart = edit.CycleStart,
+                Shifts = edit.ToShifts(),
+                Days = 7,
+            });
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        var edit = _edit!;
+        _saving = true;
+        _error = null;
+        try
+        {
+            if (edit.IsNew)
+            {
+                await Api.CreateShiftScheduleAsync(new CreateShiftScheduleRequest
+                {
+                    SiteId = Sites.SiteId!.Value,
+                    Code = edit.Code,
+                    Name = edit.Name,
+                    Description = edit.Description,
+                    CycleDays = edit.CycleDays,
+                    CycleStart = edit.CycleStart,
+                    Shifts = edit.ToShifts(),
+                });
+                _message = $"Created {edit.Code.Trim().ToUpperInvariant()}. Choose it for a site, area or line on Equipment.";
+            }
+            else
+            {
+                await Api.UpdateShiftScheduleAsync(edit.Id, new UpdateShiftScheduleRequest
+                {
+                    Version = edit.Version,
+                    Name = edit.Name,
+                    Description = edit.Description,
+                    CycleDays = edit.CycleDays,
+                    CycleStart = edit.CycleStart,
+                    Shifts = edit.ToShifts(),
+                    IsActive = edit.IsActive,
+                });
+                _message = $"Saved {edit.Code}. The schedule shows the new times straight away.";
+            }
+
+            _edit = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            if (ex.IsConflict)
+            {
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private sealed class ScheduleEdit
+    {
+        public bool IsNew { get; init; }
+
+        public Guid Id { get; init; }
+
+        public string Code { get; set; } = "";
+
+        public string Name { get; set; } = "";
+
+        public string? Description { get; set; }
+
+        public int CycleDays { get; set; } = 7;
+
+        public DateOnly CycleStart { get; set; }
+
+        public bool IsActive { get; set; }
+
+        public long Version { get; init; }
+
+        public List<ShiftRow> Rows { get; init; } = [];
+
+        public IReadOnlyList<ShiftDto> ToShifts() => [.. Rows.Select(r => r.ToDto())];
+    }
+
+    private sealed class ShiftRow
+    {
+        public string Code { get; set; } = "";
+
+        public string Name { get; set; } = "";
+
+        public TimeOnly Start { get; set; }
+
+        public decimal Hours { get; set; }
+
+        public HashSet<int> Days { get; init; } = [];
+
+        public static ShiftRow From(ShiftDto s) => new()
+        {
+            Code = s.Code,
+            Name = s.Name,
+            Start = TimeOnly.TryParseExact(s.Start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var t) ? t : new TimeOnly(6, 0),
+            Hours = Math.Round(s.Minutes / 60m, 2),
+            Days = [.. s.Days],
+        };
+
+        public ShiftDto ToDto() => new()
+        {
+            Code = Code,
+            Name = Name,
+            Start = Start.ToString("HH:mm", CultureInfo.InvariantCulture),
+            Minutes = (int)Math.Round(Hours * 60),
+            Days = [.. Days.Order()],
+        };
+    }
+}

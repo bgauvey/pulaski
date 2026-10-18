@@ -108,6 +108,7 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
             SiteOf.PartialBatch => "SELECT j.site_id FROM core.partial_batch p JOIN core.job j ON j.id = p.job_id WHERE p.id = @Id",
             SiteOf.RunStandard => "SELECT e.site_id FROM core.run_standard r JOIN core.equipment e ON e.id = r.equipment_id WHERE r.id = @Id",
             SiteOf.ReasonCode => "SELECT site_id FROM core.reason_code WHERE id = @Id",
+            SiteOf.ShiftSchedule => "SELECT site_id FROM core.shift_schedule WHERE id = @Id",
             _ => throw new ArgumentOutOfRangeException(nameof(kind)),
         };
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);

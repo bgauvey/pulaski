@@ -41,6 +41,9 @@ public sealed record PropertyItem
 
     public PropertyEditor Editor { get; init; } = PropertyEditor.ReadOnly;
 
+    /// <summary>Shown with its editor but switched off: the user may not change it (D-037).</summary>
+    public bool Locked { get; init; }
+
     public IReadOnlyList<PropertyChoice> Choices { get; init; } = [];
 
     public string? Placeholder { get; init; }

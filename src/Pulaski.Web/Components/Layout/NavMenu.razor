@@ -41,6 +41,9 @@
         <NavLink class="nav-item" href="reasons" title="Reason codes">
             <Icon Name="info" /><span class="nav-text">Reasons</span>
         </NavLink>
+        <NavLink class="nav-item" href="shifts" title="Shift schedules">
+            <Icon Name="clock" /><span class="nav-text">Shifts</span>
+        </NavLink>
         @if (User.Can(PermissionCodes.Security))
         {
             <NavLink class="nav-item" href="users" title="Users, roles and permissions">

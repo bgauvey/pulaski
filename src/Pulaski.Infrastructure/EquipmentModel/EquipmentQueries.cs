@@ -20,7 +20,8 @@ internal sealed class EquipmentQueries(NpgsqlDataSource dataSource) : IEquipment
             JOIN tree t ON c.parent_id = t.id
         )
         SELECT id, parent_id, site_id, code, name, description, level, equipment_role,
-               tracks_state, is_schedulable, can_run_job, holds_inventory, commingles_lots, single_material, time_zone, is_active, depth, version
+               tracks_state, is_schedulable, can_run_job, holds_inventory, commingles_lots, single_material, time_zone, is_active,
+               calendar_mode, shift_schedule_id, depth, version
         FROM tree
         WHERE @SiteId::uuid IS NULL OR site_id = @SiteId OR level = 'enterprise'
         ORDER BY path
@@ -29,6 +30,7 @@ internal sealed class EquipmentQueries(NpgsqlDataSource dataSource) : IEquipment
     private const string Get = """
         SELECT e.id, e.parent_id, e.site_id, e.code, e.name, e.description, e.level, e.equipment_role,
                e.tracks_state, e.is_schedulable, e.can_run_job, e.holds_inventory, e.commingles_lots, e.single_material, e.time_zone, e.is_active,
+               e.calendar_mode, e.shift_schedule_id,
                (SELECT max(c.depth) FROM core.equipment_closure c WHERE c.descendant_id = e.id) AS depth,
                e.xmin::text::bigint AS version
         FROM core.equipment e
