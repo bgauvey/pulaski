@@ -38,12 +38,14 @@ public sealed class CurrentUser
         ("schedule", PermissionCodes.ScheduleView),
         ("floor", PermissionCodes.FloorView),
         ("inventory", PermissionCodes.InventoryView),
+        ("labor", PermissionCodes.LaborView),
         ("equipment", PermissionCodes.EquipmentView),
         ("materials", PermissionCodes.MaterialsView),
         ("processes", PermissionCodes.ProcessesView),
         ("units", PermissionCodes.UnitsView),
         ("reasons", PermissionCodes.ReasonsView),
         ("shifts", PermissionCodes.ShiftsView),
+        ("people", PermissionCodes.People),
         ("users", PermissionCodes.Security),
     ];
 

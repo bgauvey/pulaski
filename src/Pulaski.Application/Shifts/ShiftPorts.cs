@@ -36,6 +36,9 @@ public interface IShiftRepository
 
     Task<bool> IsSiteAsync(Guid siteId, CancellationToken cancellationToken);
 
+    /// <summary>The codes of the site's active crews (D-040), for checking the crews shifts name.</summary>
+    Task<IReadOnlyList<string>> ListCrewCodesAsync(Guid siteId, CancellationToken cancellationToken);
+
     Task<long> InsertAsync(ShiftScheduleRecord schedule, DateTimeOffset at, CancellationToken cancellationToken);
 
     Task<long> UpdateAsync(ShiftScheduleRecord schedule, DateTimeOffset at, CancellationToken cancellationToken);
@@ -59,7 +62,8 @@ public static class ShiftMapping
         string.IsNullOrWhiteSpace(shift.Name) ? shift.Code.Trim() : shift.Name.Trim(),
         TimeOnly.TryParseExact(shift.Start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var start) ? start : TimeOnly.MinValue,
         TimeSpan.FromMinutes(shift.Minutes),
-        [.. shift.Days.Distinct().Order()]);
+        [.. shift.Days.Distinct().Order()],
+        string.IsNullOrWhiteSpace(shift.Crew) ? null : shift.Crew.Trim().ToUpperInvariant());
 
     /// <summary>The shifts as stored: trimmed, days sorted, each shift's name defaulting to its code.</summary>
     public static IReadOnlyList<ShiftDto> Normalize(IReadOnlyList<ShiftDto> shifts) =>
@@ -70,6 +74,7 @@ public static class ShiftMapping
             Start = s.Start.ToString("HH:mm", CultureInfo.InvariantCulture),
             Minutes = (int)s.Length.TotalMinutes,
             Days = s.Days,
+            Crew = s.Crew,
         })];
 
     public static bool HasValidStart(ShiftDto shift) =>

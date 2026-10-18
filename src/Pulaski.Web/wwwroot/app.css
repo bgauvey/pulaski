@@ -450,3 +450,27 @@ fieldset.view-only-scope {
 .shift-preview-days li + li {
     margin-top: 2px;
 }
+
+/* Labor (D-040): a card per line with who is on it. */
+.labor-lines {
+    display: grid;
+    gap: var(--space-3);
+    grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+}
+
+.labor-line {
+    padding: var(--space-3);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+.labor-people li + li {
+    margin-top: 2px;
+}
+
+.labor-pick {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: 2px var(--space-3);
+}

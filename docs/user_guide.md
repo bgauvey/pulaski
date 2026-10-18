@@ -1,8 +1,8 @@
 # Pulaski User Guide
 
-*Last updated: 2026-10-17 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-10-18 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
-This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#16-reference) tables give the exact rules.
+This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#17-reference) tables give the exact rules.
 
 ## Contents
 
@@ -21,10 +21,11 @@ This guide explains how to use Pulaski to set up your plant, plan production and
 13. [Materials](#13-materials)
 14. [Users, roles and signing in](#14-users-roles-and-signing-in)
 15. [Shift schedules](#15-shift-schedules)
-16. [Reference](#16-reference)
-17. [What Pulaski doesn't do yet](#17-what-pulaski-doesnt-do-yet)
-18. [Troubleshooting and questions](#18-troubleshooting-and-questions)
-19. [Glossary](#19-glossary)
+16. [Labor, people and crews](#16-labor-people-and-crews)
+17. [Reference](#17-reference)
+18. [What Pulaski doesn't do yet](#18-what-pulaski-doesnt-do-yet)
+19. [Troubleshooting and questions](#19-troubleshooting-and-questions)
+20. [Glossary](#20-glossary)
 
 ---
 
@@ -43,7 +44,7 @@ Today you can use Pulaski to:
 - publish the plan to the floor and freeze it;
 - keep **inventory**: receive material lots into stores, write stock up or off, move and hold lots, record what each job used and made, and trace any lot back to what it was made from or forward to what was made from it.
 
-Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#17-what-pulaski-doesnt-do-yet).
+Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#18-what-pulaski-doesnt-do-yet).
 
 ### Opening Pulaski
 
@@ -54,8 +55,8 @@ Pulaski asks you to **sign in** with the user name and password your administrat
 ### The screen
 
 - **Menu (left).** Two groups of pages:
-  - **Operate:** **Overview**, **Work orders**, **Schedule**: the pages you use day to day.
-  - **Configure:** **Equipment**, **Materials**, **Processes**, **BOMs**, **Units**, **Reasons**, **Shifts** (and **Users**, for administrators, with tabs for users, roles and permissions): the setup you do once and change now and then.
+  - **Operate:** **Overview**, **Work orders**, **Schedule**, **Floor**, **Inventory**, **Labor**: the pages you use day to day.
+  - **Configure:** **Equipment**, **Materials**, **Processes**, **BOMs**, **Units**, **Reasons**, **Shifts**, **People** (and **Users**, for administrators, with tabs for users, roles and permissions): the setup you do once and change now and then.
   - The ☰ button at the top left collapses the menu to icons, to make room on small screens.
 - **You (top right).** Your name and roles; the padlock changes your password, and the door signs you out.
 - **Theme (top right).** The sun/moon button switches between light and dark.
@@ -179,6 +180,7 @@ If you are starting from an empty Pulaski, work through this list in order. Each
 | 3a | Units, and conversions for materials you order or use in other units | [Units](#6-units-and-conversions) | So orders, BOMs and rates can use any unit that converts. |
 | 4 | Capabilities: which material runs on which line, and how fast | [The material's page](#where-it-can-run-capabilities-and-rates) | Without one, a line can't take a material's job. |
 | 5 | Shift schedules, and which one each site, area or line follows (optional) | [Shifts](#15-shift-schedules), then [Equipment](#4-equipment) | Without one, Pulaski assumes lines run around the clock and marks them **24/7**. |
+| 5a | Crews and people, if you record labor (optional) | [People](#16-labor-people-and-crews) | So supervisors can check crews onto lines, and shifts can name their crew. |
 | 6 | Processes: the routes, what they make, released | [Processes](#5-processes) | Every work order is made from a process. |
 | 7 | BOMs for the materials you make (optional, recommended) | [BOMs](#7-bills-of-materials-boms) | Without a BOM, an order plans no components. |
 | 8 | Work orders | [Schedule → New work order](#8-creating-a-work-order) | Now you can plan. |
@@ -360,7 +362,7 @@ Orders already made keep the version they were made from. If a draft already exi
 - Operations with no path of links between them run in parallel; links make them sequential. Links must flow one way; a loop is refused.
 - A released process with more than one operation must be connected.
 - Only lines and departments of the process's own site can be used; machines and other equipment that neither runs nor plans jobs are refused.
-- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#17-what-pulaski-doesnt-do-yet).
+- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#18-what-pulaski-doesnt-do-yet).
 
 ---
 
@@ -690,7 +692,7 @@ Pulaski lays work end to end on each line, so two jobs on a line only overlap wh
 
 ## 11. The Floor: running jobs and reporting production
 
-**Operate → Floor.** Where operators start, pause and complete jobs and report what they make. The schedule says what should run; the floor records what does.
+**Operate → Floor.** Where operators start, pause and complete jobs and report what they make. The schedule says what should run; the floor records what does. Each line shows how many people are on it, and someone set up to clock themselves on sees **Clock on** and **Clock off** on each line (see [Labor](#16-labor-people-and-crews)).
 
 ### Ideas to know first
 
@@ -1079,7 +1081,7 @@ A class's code can't change and a class is never deleted: switch it off instead.
 
 ### In detail
 
-- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#17-what-pulaski-doesnt-do-yet)).
+- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#18-what-pulaski-doesnt-do-yet)).
 - **Codes** are unique across all materials, whatever their origin; an import whose code is already used by another material is refused.
 - **Events.** Each change is recorded in the event log as `pulaski.material.created.v1`, `…updated.v1` or `…imported.v1` (and `pulaski.material_class.created.v1` / `…updated.v1`), with the material before and after.
 - **Concurrency.** As elsewhere, if someone else changed the material or class since you opened it, you'll see *"changed by someone else"*: reload and try again.
@@ -1115,10 +1117,10 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | --- | --- |
 | **Administrator** | Everything, at every site, including users and roles. |
 | **Planner** | The schedule (place, sequence, pin, assign and cancel jobs); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; materials. |
-| **Supervisor** | Start, pause, complete and reopen jobs; report production; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches. |
-| **Operator** | Start, pause and complete jobs; report production; receive and move lots. |
+| **Supervisor** | Start, pause, complete and reopen jobs; report production; record and approve labor; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches. |
+| **Operator** | Start, pause and complete jobs; report production; receive and move lots; clock themselves on and off. |
 | **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); approve or reject partial batches. |
-| **Manager** | Reopen jobs; cancel and close work orders; reason codes; shift schedules; the site's settings. |
+| **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; the site's settings. |
 | **Auditor** | Correct inventory; stock counts. Can't plan or run jobs. |
 | **Process engineer** | Processes, BOMs and which lines can run each material. |
 
@@ -1134,7 +1136,8 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 | --- | --- |
 | **Administrator**, **Auditor**, **Manager** | Every screen (Users only for Administrator). |
 | **Planner** | Overview, Work orders, Schedule, Floor, Inventory, Materials, Processes and BOMs. |
-| **Supervisor**, **Operator** | Overview, Work orders (to look at), Floor, Inventory. |
+| **Supervisor** | Overview, Work orders (to look at), Floor, Inventory, Labor. |
+| **Operator** | Overview, Work orders (to look at), Floor, Inventory. |
 | **Quality** | Overview, Floor, Inventory, Materials. |
 | **Process engineer** | Equipment, Materials, Processes and BOMs, Units. |
 
@@ -1205,7 +1208,7 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 2. Click **New schedule**. It starts as one day shift, 06:00 for 8 hours, Monday to Friday.
 3. Type a **Code** (such as `2X8`; it can't change later) and a **Name**.
 4. Set **Repeats every (days)** and **Cycle starts on**. For a weekly schedule leave 7 and a Monday.
-5. For each shift, set its **Shift** code, **Name**, **Starts** time and **Hours**, and tick the days it runs. **Add shift** adds one that starts when the last one ends, on the same days; **×** removes one.
+5. For each shift, set its **Shift** code, **Name**, **Starts** time, **Hours** and, if you record labor, the **Crew** that works it, and tick the days it runs. **Add shift** adds one that starts when the last one ends, on the same days; **×** removes one.
 6. Check **The next 7 days** below the grid: it lists the shifts as they will fall, and the hours per cycle. Problems, such as two shifts overlapping, show there instead.
 7. Click **Create schedule**.
 
@@ -1232,7 +1235,66 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 
 ---
 
-## 16. Reference
+## 16. Labor, people and crews
+
+Who worked on which line, for how long, and against the standard crew. Supervisors check their crew onto a line at the start of a shift, operators can clock themselves on, and at the end a supervisor approves the shift's labor. Pulaski doesn't do payroll or attendance: export the hours for that.
+
+### Ideas to know first
+
+- **People and crews.** Everyone whose time is recorded is a **person**, with an employee number and usually a **crew**. A person needn't sign in to Pulaski; link one to a Pulaski user to let them clock themselves on.
+- **The crew on shift.** Each shift in a [shift schedule](#15-shift-schedules) can name its crew, so Pulaski knows who should be on. A rotation is several shifts at the same time on different days, each with its crew.
+- **Kinds of time.** *Direct* is running the line, *setup* is getting a job ready (it names the job), *indirect* is time off production such as cleaning (it needs a reason), *training* is training.
+- **Jobs change, people don't re-clock.** Direct time on a line counts towards whatever ran on it while the person was there. Time on a line with nothing running is shown as *idle*.
+- **A share of their time.** Someone tending two lines is on each at 50%. A person's time adds up to at most 100%.
+- **Shifts and approval.** Time belongs to the shift running when it started (or starting within two hours). Once a shift has ended, a supervisor approves it: open time ends when the shift ended, and the shift is locked. After that, a change is a **correction** with a reason.
+
+### Set up people and crews
+
+1. Open **Configure → People**. With more than one site, choose the site at the top.
+2. On **Crews**, type a **Code** (such as `RED`; it can't change later) and a **Name**, and click **Add crew**.
+3. On **People**, fill in **Employee no.**, **Name**, the **Crew** and, if they will clock themselves on, the Pulaski **User name** they sign in as. Click **Add person**.
+4. In **Configure → Shifts**, set the **Crew** of each shift.
+
+### Check a crew onto a line
+
+1. Open **Operate → Labor**. **On now** shows each line with its shift, crew, the job running and who is on (with the standard crew, when there is one).
+2. Click **Check crew in** on the line. The crew on shift is ticked; people already on another line are listed but not ticked.
+3. Untick anyone who isn't there, tick anyone else, and click **Check … in**.
+4. To add one person for other time, click **Add someone**, choose who, the kind of time, the reason (for indirect) and their share, and click **Clock on**.
+5. Click **End** next to someone to end their time, or **Check everyone out** at the end of the shift.
+
+### Clock yourself on (operators)
+
+1. Open **Operate → Floor**.
+2. Click **Clock on** on the line you are working on. Pulaski refuses if you are already on another line with all your time: clock off there first.
+3. Click **Clock off** when you leave it.
+
+### Review and approve a shift
+
+1. Open **Operate → Labor → Shift review** and choose the **Day**. Each shift that has labor is a button; one with *approved* is locked.
+2. Check the people, times and hours. Click **Change** to fix a start, end or share, or **End** for someone still on.
+3. Once the shift has ended, add a note if you like and click **Approve shift**. Anyone still on is clocked off at the end of the shift.
+4. To fix an approved shift, click **Correct** (change the times or share) or **Remove**, say why, and click **Save**. The original row stays, struck through; the hours count the correction.
+
+### Labor reports
+
+1. Open **Operate → Labor → Reports**, choose **From** and **to** (production days, up to 93), and click **Show**.
+2. **By job** shows run hours, direct and setup hours, the standard (run hours × the line's standard crew size for the material) and **efficiency** (standard ÷ direct hours: under 100% took more people than the standard).
+3. **By person** shows each person's hours by kind, and how much of their direct time was idle. **By shift** shows each shift's hours and whether it is approved.
+4. **Export CSV** on each table saves it, for payroll or the ERP.
+
+### In detail
+
+- **Who:** seeing Labor needs permission to see labor; checking crews in and changing time needs permission to record labor; approving and correcting needs permission to approve labor; People needs permission to maintain people and crews. Clocking yourself on needs permission to clock yourself on, and being set up as a person.
+- **One line at a time per person**, and their open time at most 100% of their time in total.
+- **Times can't be ahead of now.** Setup needs a job (the job running on the line, when added from **On now**); indirect needs an indirect labor reason.
+- **Switching someone off** is refused while they are clocked on.
+- **Nothing runs on its own.** Time stays open until someone ends it, checks the line out, or approves the shift.
+- **Hours** are elapsed time × share; an open session counts until now.
+
+---
+
+## 17. Reference
 
 ### Work order statuses
 
@@ -1300,12 +1362,13 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 ---
 
-## 17. What Pulaski doesn't do yet
+## 18. What Pulaski doesn't do yet
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
 - **No screens yet for** calendar exceptions (holidays, shutdowns) or the changeover setting. Your administrator sets these up.
-- **Shifts are for planning only:** crews, a one-off change to a single shift (an extra Saturday), and reports, counts or OEE by shift aren't built yet.
+- **Shifts are for planning and labor only:** a one-off change to a single shift (an extra Saturday), and counts or OEE by shift aren't built yet.
+- **Labor:** no badges or shop-floor terminals, no qualifications, no breaks, and no import of people from HR or the ERP. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
 - **No adapters yet** for other external sources or for label printing: materials come from the screen, a CSV file, or the ERP one item at a time through the API. The CSV import doesn't take capabilities, doesn't create missing classes, and there is no template file to download (the panel shows the header line).
 - **Planning rates are calculated from the ideal rate only;** calculating them from run history isn't built yet.
 - **Production is reported by hand.** Counts from the machines, machine state, downtime, OEE, labor and quality aren't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
@@ -1329,7 +1392,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 
 ---
 
-## 18. Troubleshooting and questions
+## 19. Troubleshooting and questions
 
 **"You may not do this…" or a button I expected isn't there.**
 Your roles don't allow that change, or not at this site. The message names the permission; ask an administrator (see [What each role can change](#what-each-role-can-change)).
@@ -1396,7 +1459,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 
 ---
 
-## 19. Glossary
+## 20. Glossary
 
 | Term | Meaning |
 | --- | --- |
@@ -1407,6 +1470,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **BOM** | Bill of materials: what one material is made from, per a base quantity. |
 | **Capability** | A line's permission to run a material, with its ideal rate. |
 | **Changeover** | Time to switch a line from one product to another. |
+| **Crew** | A team of people who work the same shifts. A shift schedule names the crew on each shift. |
 | **Conversion** | How a quantity in one unit becomes another: standard for units of one kind, or set per material. |
 | **Count** | Checking what is really at a location, then posting the differences. |
 | **Department / group** | Equipment you can plan to that doesn't run jobs itself; its lines do. |
@@ -1437,6 +1501,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Permission** | One kind of change Pulaski lets people make, such as *Receive lots*. Roles hold permissions. |
 | **Role** | A set of permissions, such as Planner or Quality, that an administrator maintains and gives to users at a site (Administrator everywhere). See [Users, roles and signing in](#14-users-roles-and-signing-in). |
 | **Run** | One stretch of a job running on a line, from a start to a pause or completion. Production and consumption go into a run. |
+| **Labor session** | A stretch of time one person spent on a line: direct, setup, indirect or training. See [Labor](#16-labor-people-and-crews). |
 | **Shift schedule** | When a site works: shifts repeating over a cycle of days. Equipment follows one, inherits its parent's or runs around the clock. See [Shift schedules](#15-shift-schedules). |
 | **Run standard (planning rate)** | The rate Pulaski plans with for a material on a line: calculated from the ideal rate, or modified by a person. |
 | **Scrap factor** | Extra component quantity planned for losses. |

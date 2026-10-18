@@ -62,6 +62,15 @@ public static class EventTypes
     public const string EquipmentCalendarSet = "pulaski.equipment.calendar_set.v1";
     public const string ShiftScheduleCreated = "pulaski.shift_schedule.created.v1";
     public const string ShiftScheduleUpdated = "pulaski.shift_schedule.updated.v1";
+    public const string CrewCreated = "pulaski.crew.created.v1";
+    public const string CrewUpdated = "pulaski.crew.updated.v1";
+    public const string PersonCreated = "pulaski.person.created.v1";
+    public const string PersonUpdated = "pulaski.person.updated.v1";
+    public const string LaborStarted = "pulaski.labor.started.v1";
+    public const string LaborEnded = "pulaski.labor.ended.v1";
+    public const string LaborChanged = "pulaski.labor.changed.v1";
+    public const string LaborCorrected = "pulaski.labor.corrected.v1";
+    public const string LaborShiftApproved = "pulaski.labor.shift_approved.v1";
     public const string WorkOrderCreated = "pulaski.work_order.created.v1";
     public const string WorkOrderStatusChanged = "pulaski.work_order.status_changed.v1";
     public const string JobCreated = "pulaski.job.created.v1";

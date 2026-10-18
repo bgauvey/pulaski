@@ -47,6 +47,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-037 | Users, roles and permissions: permissions are constants in code; roles are data an administrator maintains, held at a site (only the administrator, fixed in code, holds everything everywhere); viewing is open to every signed-in user; local sign-in with an API token for now, an identity provider later | Proposed | 2026-10-17 |
 | D-038 | Shift schedules: each site's schedules repeat over a cycle of days; equipment inherits its parent's working time, follows a schedule of its own, or runs around the clock. Shift times are worked out from the schedule on read, never stored | Proposed | 2026-10-17 |
 | D-039 | Viewing: a user sees only the screens and sites their roles allow. Each screen has a view permission, which a change permission brings with it; the API checks it on every read and keeps lists to the caller's sites; the UI leaves out what can't be seen and answers "not found" | Proposed | 2026-10-17 |
+| D-040 | Labor: people (not necessarily users) and crews per site; a shift schedule's shifts name their crew. Supervisors check crews onto lines and operators clock themselves on; direct time is shared out to the runs on the line by overlap; a supervisor approves a shift's labor, which then locks, corrections being new sessions. Reports by job (against the standard crew), person and shift | Proposed | 2026-10-18 |
 
 ## Order hierarchy
 
@@ -634,7 +635,7 @@ Who may see and change what. **View permissions** decide which screens and data 
 
 Who owns the configuration: equipment, units → Administrator; shift schedules and which one equipment follows → Manager; materials (with classes, conversions, batching, shelf life and import) → Planner; processes, BOMs, capabilities → Process engineer; planning rates → Planner; reason codes and site settings → Manager; users → Administrator.
 
-**Permissions.** 33 codes (11 views, D-039, and 22 changes), each in an area (Planning, Floor, Inventory, Configuration, Administration) for the screens. They are mirrored for the UI in `Pulaski.Contracts.Security.PermissionCodes`, and the API copies the catalog into `sec.permission` at every start, so a new permission can be given to roles at once: `schedule.plan`, `work_order.manage`, `work_order.close`, `rate.modify`, `job.execute`, `job.reopen`, `production.report`, `lot.receive`, `lot.move`, `lot.ship`, `lot.hold`, `inventory.correct`, `stock_count.manage`, `partial_batch.decide`, `materials.manage`, `processes.manage`, `units.manage`, `reasons.manage`, `equipment.manage`, `site_settings.manage`, `shifts.manage` (D-038), `security.manage` (users, roles and what each role may do).
+**Permissions.** 38 codes (12 views, D-039, and 26 changes; D-040 added the labor ones), each in an area (Planning, Floor, Inventory, Configuration, Administration) for the screens. They are mirrored for the UI in `Pulaski.Contracts.Security.PermissionCodes`, and the API copies the catalog into `sec.permission` at every start, so a new permission can be given to roles at once: `schedule.plan`, `work_order.manage`, `work_order.close`, `rate.modify`, `job.execute`, `job.reopen`, `production.report`, `lot.receive`, `lot.move`, `lot.ship`, `lot.hold`, `inventory.correct`, `stock_count.manage`, `partial_batch.decide`, `materials.manage`, `processes.manage`, `units.manage`, `reasons.manage`, `equipment.manage`, `site_settings.manage`, `shifts.manage` (D-038), `security.manage` (users, roles and what each role may do).
 
 **Maintaining roles.**
 
@@ -721,6 +722,37 @@ Users, roles and permissions stay behind `security.manage`.
 **The UI.** Each page names the views that open it (`[RequiresView]`). The layout checks it once the user is known: a page the user may not see answers **Page not found** (so its feature isn't named), and someone whose roles allow no screen at all gets a page saying so, with a sign-out button. The start page is the Overview, or the first screen in the menu the user can see. The menu shows only the screens the user can see, and leaves out a group with none. Links to other screens (`ScreenLink`) show as plain text, or not at all for buttons, when the user can't open them; actions the user can't take (selecting work orders to move, an empty action menu) are left out.
 
 **Not yet:** the site chosen on a screen can be one where the user may see something else but not that screen; the API then refuses the data and the screen says so.
+
+## Labor (D-040, proposed)
+
+Labor for production: who worked where, on what, for how long, against the standard crew. Not time and attendance or payroll (charter: not an ERP); hours export as CSV for HR or the ERP.
+
+**People and crews** (`core.person`, `core.crew`). A person belongs to a site, has an employee number (unique per site), a name, an optional crew, and optionally the Pulaski user they sign in as, so they can clock themselves on; most operators needn't sign in. A crew has a code (upper case, fixed once created) and a name. Both are switched off, not deleted; someone clocked on can't be switched off. Maintained on Configure → People (`people.manage`).
+
+**Crews on shifts (amends D-038).** Each shift in a schedule may name the crew that works it, by code; a rotation is several shifts at the same time on different days of the cycle, each with its crew. So Pulaski knows which crew is on a line now. A schedule may only name active crews of its site.
+
+**Sessions** (`core.labor_session`): a person, a line (or other equipment), an optional job, a type, a start and an end (open while working), a share of the person's time (default 100%), and how it was recorded (`self`, `supervisor`, `crew`, `correction`).
+
+| Type | Means | Counts towards |
+| --- | --- | --- |
+| `direct` | Running the line | The runs on the line while it lasted, by overlap; a session naming a job only that job's runs. Time with nothing running is kept as idle |
+| `setup` | Getting a job ready | Its job (required), running or not |
+| `indirect` | Cleaning, meetings, waiting | No job; needs an `indirect_labor` reason |
+| `training` | Training | No job |
+
+Sharing out by overlap means nobody re-clocks when the job on a line changes. Rules: a person is on a line at most once at a time; their open sessions together are at most 100% (someone tending two machines is 50% on each); times can't be ahead of now; setup needs a job, indirect a reason. Starting locks the person, so two clock-ons serialize; a crew check-in locks its people in id order (in SQL).
+
+**Shifts and approval.** A session belongs to the shift running when it started, or the one starting within two hours (someone clocking on early), from the schedule the line follows (D-038); with none, to the site-local day. The shift is stored on the session (`production_date`, `shift_schedule_id`, `shift_code`). A supervisor approves a shift once it has ended (`core.labor_approval`, one per site, day and shift): open sessions in it end when the shift ended, and from then on its sessions are locked. A correction is a new session (`corrects_session_id`) that replaces one, or with `is_void` removes it, and needs a reason; the original stays for history and leaves the hours. Approving and correcting need `labor.approve`.
+
+**Recording.** A supervisor (`labor.record`) checks the crew onto a line in one action (the shift's crew is ticked, minus anyone already on another line), adds someone, ends time, checks everyone out, and fixes sessions until the shift is approved. An operator who is a person and has `labor.record_own` clocks themselves on and off from the Floor. There is no background service: an open session simply runs until someone ends it or the shift is approved.
+
+**Reports** (`labor.view`), for up to 93 production days: by job (run hours, direct and setup hours, standard hours = run hours × the capability's `standard_crew_size`, efficiency = standard ÷ direct), by person (direct, of which idle, setup, indirect, training) and by shift (sessions, hours, approval). Each exports as CSV.
+
+**Permissions** (D-037, D-039): `labor.view` (the Labor screen), `labor.record_own`, `labor.record`, `labor.approve`, `people.manage`. Starting roles: Operator clocks on; Supervisor sees, records and approves; Manager approves and maintains people; Auditor and Manager see everything.
+
+**Events:** `pulaski.crew.created.v1`, `…updated.v1`, `pulaski.person.created.v1`, `…updated.v1`, `pulaski.labor.started.v1`, `…ended.v1`, `…changed.v1`, `…corrected.v1`, `…shift_approved.v1`.
+
+**Not yet:** badges and terminals (`sec.badge`); qualifications; people from HR or the ERP; labor by shift on the Overview; a person working at another site than their own; editing a session's job or type on the review screen (only times and share); breaks.
 
 ## Application architecture
 

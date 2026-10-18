@@ -8,6 +8,9 @@ public sealed record ShiftDto
     public string Start { get; init; } = "06:00";
     public int Minutes { get; init; } = 480;
     public IReadOnlyList<int> Days { get; init; } = [];
+
+    /// <summary>The code of the crew that works it (D-040); null for none.</summary>
+    public string? Crew { get; init; }
 }
 
 /// <summary>A site's shift schedule and the equipment that follows it (D-038).</summary>
@@ -68,7 +71,7 @@ public sealed record PreviewShiftScheduleRequest
 }
 
 /// <summary>A shift on the calendar, with its times in the site's time zone.</summary>
-public sealed record ShiftOccurrenceDto(string Code, string Name, DateOnly ProductionDate, DateTimeOffset Start, DateTimeOffset End);
+public sealed record ShiftOccurrenceDto(string Code, string Name, DateOnly ProductionDate, DateTimeOffset Start, DateTimeOffset End, string? Crew = null);
 
 public sealed record ShiftPreviewDto
 {

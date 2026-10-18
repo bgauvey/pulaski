@@ -20,6 +20,23 @@ public sealed record SetEquipmentCalendarCommand(Guid EquipmentId, long Expected
 
 internal static class ShiftRules
 {
+    /// <summary>The crews the shifts name are active crews of the site (D-040).</summary>
+    public static async Task EnsureCrewsAsync(IShiftRepository shifts, Guid siteId, IReadOnlyList<ShiftDto> definition, CancellationToken cancellationToken)
+    {
+        var named = definition.Where(s => s.Crew is not null).Select(s => s.Crew!).Distinct().ToList();
+        if (named.Count == 0)
+        {
+            return;
+        }
+
+        var crews = await shifts.ListCrewCodesAsync(siteId, cancellationToken);
+        var unknown = named.Except(crews, StringComparer.Ordinal).ToList();
+        if (unknown.Count > 0)
+        {
+            throw new ValidationException(new Dictionary<string, string[]> { ["Shifts"] = [$"Not an active crew of the site: {string.Join(", ", unknown)}."] });
+        }
+    }
+
     /// <summary>Checks the fields and the shifts; throws a validation error naming what is wrong.</summary>
     public static (string Name, string? Description, IReadOnlyList<ShiftDto> Shifts) Validate(
         Validator validator, string code, string name, string? description, int cycleDays, DateOnly cycleStart, IReadOnlyList<ShiftDto> shifts)
@@ -68,6 +85,8 @@ internal sealed class CreateShiftScheduleHandler(
             throw new ConflictException($"The site already has a shift schedule {code}.");
         }
 
+        await ShiftRules.EnsureCrewsAsync(shifts, command.SiteId, definition, cancellationToken);
+
         var schedule = new ShiftScheduleRecord(ids.NewId(), command.SiteId, code, name, description, command.CycleDays, command.CycleStart, definition, IsActive: true);
         var envelope = events.Create(EventTypes.ShiftScheduleCreated, "shift_schedule", schedule.Id, new { After = schedule });
         var version = await shifts.InsertAsync(schedule, envelope.OccurredAt, cancellationToken);
@@ -94,6 +113,7 @@ internal sealed class UpdateShiftScheduleHandler(
 
         var (name, description, definition) = ShiftRules.Validate(
             new Validator(), current.Value.Code, command.Name, command.Description, command.CycleDays, command.CycleStart, command.Shifts);
+        await ShiftRules.EnsureCrewsAsync(shifts, current.Value.SiteId, definition, cancellationToken);
 
         // Equipment that follows a schedule needs it: switch the equipment to another first (it is never left without working time).
         if (current.Value.IsActive && !command.IsActive && await shifts.ListUsersAsync(current.Value.Id, cancellationToken) is { Count: > 0 } users)
@@ -129,7 +149,7 @@ internal sealed class UpdateShiftScheduleHandler(
         public static readonly ShiftComparer Instance = new();
 
         public bool Equals(ShiftDto? x, ShiftDto? y) =>
-            x is not null && y is not null && x.Code == y.Code && x.Name == y.Name && x.Start == y.Start && x.Minutes == y.Minutes && x.Days.SequenceEqual(y.Days);
+            x is not null && y is not null && x.Code == y.Code && x.Name == y.Name && x.Start == y.Start && x.Minutes == y.Minutes && x.Days.SequenceEqual(y.Days) && x.Crew == y.Crew;
 
         public int GetHashCode(ShiftDto obj) => HashCode.Combine(obj.Code, obj.Start, obj.Minutes);
     }

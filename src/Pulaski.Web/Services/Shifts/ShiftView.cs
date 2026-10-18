@@ -36,7 +36,7 @@ public static class ShiftView
 
     /// <summary>"A 06:00–14:00 · B 14:00–22:00".</summary>
     public static string Summary(IReadOnlyList<ShiftDto> shifts) =>
-        shifts.Count == 0 ? "No shifts" : string.Join(" · ", shifts.Select(s => $"{s.Code} {Times(s)}"));
+        shifts.Count == 0 ? "No shifts" : string.Join(" · ", shifts.Select(s => $"{s.Code} {Times(s)}{(s.Crew is { } crew ? $" ({crew})" : "")}"));
 
     public static string Hours(decimal hours) => hours.ToString("0.##", CultureInfo.InvariantCulture);
 

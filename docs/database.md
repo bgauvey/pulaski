@@ -404,18 +404,20 @@ Shifts that repeat every `cycle_days` from `cycle_start`, in the site's time zon
 | `description` | text | yes | Notes. |
 | `cycle_days` | integer | no | Length of the cycle, 1 to 56: 7 for weekly, 28 for a four-week rotation. |
 | `cycle_start` | date | no | The cycle's first day (site-local). |
-| `shifts` | jsonb | no | The shifts, saved whole: an array of `{code, name, start "HH:mm", minutes, days [0…cycle_days − 1]}`. They don't overlap, also across the end of the cycle; each belongs to the day it starts on. |
+| `shifts` | jsonb | no | The shifts, saved whole: an array of `{code, name, start "HH:mm", minutes, days [0…cycle_days − 1], crew}` (`crew`, D-040, is the code of an active crew of the site, or null). They don't overlap, also across the end of the cycle; each belongs to the day it starts on. |
 | `is_active` | boolean | no | False when switched off: it can't be chosen. One that equipment follows can't be switched off. |
 | `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
-### core.crew — crews · *Planned*
+### core.crew — crews · *In use (D-040)*
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
 | `site_id` | uuid → equipment | no | The site. |
-| `code` | text | no | Unique per site. |
+| `code` | text | no | Unique per site, upper case; fixed once created, because shift schedules name crews by code. |
 | `name` | text | no | Display name. |
+| `is_active` | boolean | no | False when switched off: shifts can't name it and people can't join it. |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
 ### core.shift_instance — shifts as worked · *Planned*
 
@@ -508,7 +510,7 @@ One row per user who signs in with a Pulaski password.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `code` | text | no | Primary key, defined in code: `schedule.plan`, `job.execute`, `inventory.correct`, … (33 in all: 11 views, D-039, and 22 changes, D-037). |
+| `code` | text | no | Primary key, defined in code: `schedule.plan`, `job.execute`, `inventory.correct`, … (38 in all: 12 views and 26 changes; D-037, D-039, D-040). |
 | `description` | text | no | What it allows; kept in step with the code at API start. |
 
 ### sec.role — named sets of permissions · *Built (D-037)*
@@ -578,18 +580,19 @@ A role granted to one user (or, later, to an identity-provider group) at a site.
 
 A person is not necessarily a user: many operators only badge in.
 
-### core.person — people on the floor · *Planned*
+### core.person — people on the floor · *In use (D-040)*
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `site_id` | uuid → equipment | no | Home site. |
+| `site_id` | uuid → equipment | no | Home site; their labor is recorded there. |
 | `employee_number` | text | no | Unique per site. |
 | `display_name` | text | no | Display name. |
-| `crew_id` | uuid → crew | yes | Their crew. |
-| `app_user_id` | uuid → app_user | yes | Their sign-in, if they have one. Unique. |
-| `origin` | text | no | `hr`, `erp` or `local`. |
-| `is_active` | boolean | no | False when they leave. |
+| `crew_id` | uuid → crew | yes | Their crew, an active crew of the site. |
+| `app_user_id` | uuid → app_user | yes | The Pulaski user they sign in as, so they can clock themselves on. Unique. |
+| `origin` | text | no | `local` (kept in Pulaski); `hr` and `erp` are for imports, not built. |
+| `is_active` | boolean | no | False when they leave; refused while they are clocked on. |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
 ### core.qualification — skills and certifications · *Planned*
 
@@ -885,26 +888,47 @@ Starting a count snapshots the location's on-hand lots into `core.stock_count_li
 
 ## 10. Labor
 
-### core.labor_session — time a person spent · *Planned*
+### core.labor_session — time a person spent · *In use (D-040)*
 
-Low volume and approved after the fact, so it is relational.
+Low volume and reviewed after the fact, so it is relational. Direct time on a line counts towards the runs on it while it lasted, by overlap (worked out on read); a session naming a job counts towards that job's runs. Sessions of an approved shift are locked: a correction is a new row.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `person_id` | uuid → person | no | Who. One open session per person and equipment. |
-| `equipment_id` | uuid → equipment | no | Where. |
-| `job_id` | uuid → job | yes | On which job. |
-| `run_id` | uuid → job_run | yes | On which run. |
-| `shift_instance_id` | uuid → shift_instance | yes | In which shift. |
+| `site_id` | uuid → equipment | no | The person's site. |
+| `person_id` | uuid → person | no | Who. One open session per person and equipment (`labor_one_open_per_person_equipment`). |
+| `equipment_id` | uuid → equipment | no | The line, or other equipment for indirect time. |
+| `job_id` | uuid → job | yes | Only when the time is for one job; required for setup (`labor_setup_ck`). |
 | `labor_type` | text | no | `direct`, `setup`, `indirect` or `training`. |
-| `indirect_reason_code_id` | uuid → reason_code | yes | Required for indirect labor. |
+| `reason_code_id` | uuid → reason_code | yes | Kind `indirect_labor`; required for indirect (`labor_indirect_ck`). |
 | `started_at` | timestamptz | no | Start. |
 | `ended_at` | timestamptz | yes | End; null while open. |
-| `allocation_pct` | numeric(5,2) | no | Share of the person's time, for someone tending several machines. 0–100, default 100. |
-| `source` | text | no | `badge`, `manual` or `auto_shift`. |
-| `approved_by_user_id` | uuid → app_user | yes | Who approved it. |
-| `approved_at` | timestamptz | yes | When approved. |
+| `allocation_pct` | numeric(5,2) | no | Share of the person's time, for someone tending several machines; a person's open sessions add up to at most 100. |
+| `production_date` | date | no | The day of the shift it belongs to, or the site-local day for equipment with no shifts. |
+| `shift_schedule_id` | uuid → shift_schedule | yes | The schedule of that shift; null for equipment with no shifts. |
+| `shift_code` | text | yes | The shift; set exactly when the schedule is (`labor_shift_ck`). |
+| `source` | text | no | `self` (clocked on), `supervisor`, `crew` (check-in) or `correction`. |
+| `corrects_session_id` | uuid → labor_session | yes | For a correction, the session it replaces; set exactly for corrections (`labor_correction_ck`). A session is corrected at most once (`labor_corrected_once`). |
+| `is_void` | boolean | no | A correction that removes the session it corrects. |
+| `note` | text | yes | Free text; required for corrections (by the application). |
+| `recorded_by` | text | no | Who recorded it (actor). |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
+
+### core.labor_approval — a shift's labor, approved · *In use (D-040)*
+
+One row per site, production day and shift (`labor_approval_uq`, nulls equal, so equipment with no shifts is approved by day). Its sessions are locked from then on.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The site. |
+| `production_date` | date | no | The shift's day. |
+| `shift_schedule_id` | uuid → shift_schedule | yes | The shift's schedule; null for a day. |
+| `shift_code` | text | yes | The shift; set exactly when the schedule is. |
+| `approved_by` | text | no | Who approved it (actor). |
+| `approved_by_user_id` | uuid → app_user | yes | Their user. |
+| `approved_at` | timestamptz | no | When. |
+| `note` | text | yes | Free text. |
 
 ## 11. Quality and SPC
 

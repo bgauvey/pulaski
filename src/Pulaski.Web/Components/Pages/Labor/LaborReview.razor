@@ -1,0 +1,325 @@
+@using System.Globalization
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+@inject TimeProvider Clock
+
+@* A shift's labor (D-040): fix times before approval, approve once the shift has ended, correct afterwards. *@
+<div class="inv-toolbar">
+    <label class="small text-muted" for="review-day">Day</label>
+    <input id="review-day" type="date" class="form-control w-auto" value="@_day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="OnDayChangedAsync" />
+    @foreach (var s in _shifts ?? [])
+    {
+        <button type="button" class="btn btn-sm @(Selected(s) ? "btn-secondary" : "btn-outline-secondary")" @key="(s.ShiftScheduleId, s.ShiftCode)" @onclick="() => OpenAsync(s)">
+            @(s.ShiftCode is null ? "Lines without shifts" : $"{s.ShiftCode} {s.ShiftName}") <span class="@(s.IsApproved ? "text-success" : "text-muted")">@(s.IsApproved ? "approved" : $"{s.Sessions}")</span>
+        </button>
+    }
+</div>
+
+<ProblemAlert Error="_error" />
+@if (_message is { } message)
+{
+    <div class="alert alert-success d-flex align-items-center gap-2" role="status">
+        <span>@message</span>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">Dismiss</button>
+    </div>
+}
+
+@if (_shifts is { Count: 0 })
+{
+    <div class="empty-panel"><p class="text-muted mb-0">No labor recorded on @_day.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture).</p></div>
+}
+else if (_shift is { } detail)
+{
+    var s = detail.Shift;
+    <div class="inv-facts mb-3">
+        <div class="d-flex flex-wrap gap-3 align-items-center">
+            <div>
+                <div class="fw-semibold">@(s.ShiftCode is null ? $"{s.ProductionDate:ddd d MMM}, lines without shifts" : $"Shift {s.ShiftCode} {s.ShiftName}, {s.ProductionDate:ddd d MMM}")</div>
+                <div class="small text-muted">
+                    @(s.Start is { } start ? $"{Time(start)}–{Time(s.End!.Value)}" : "The whole day")@(s.CrewCode is { } crew ? $" · crew {crew}" : "")
+                    · @Qty(s.Hours) hours · @s.Sessions @(s.Sessions == 1 ? "session" : "sessions")@(s.OpenSessions > 0 ? $", {s.OpenSessions} open" : "")
+                </div>
+            </div>
+            <div class="ms-auto">
+                @if (s.IsApproved)
+                {
+                    <span class="chip">Approved by @s.ApprovedBy, @Display.SiteTime(s.ApprovedAt, TimeZone)</span>
+                }
+                else if (CanApprove)
+                {
+                    <div class="d-flex gap-2 align-items-center">
+                        <input class="form-control form-control-sm" style="width: 16rem" maxlength="500" placeholder="Note (optional)" aria-label="Approval note" @bind="_approveNote" />
+                        <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || !HasEnded(s))" title="@(HasEnded(s) ? "Lock this shift's labor" : "The shift hasn't ended yet")"
+                                @onclick="ApproveAsync">Approve shift</button>
+                    </div>
+                }
+            </div>
+        </div>
+        @if (!s.IsApproved && s.OpenSessions > 0)
+        {
+            <div class="small text-muted mt-1">Approving ends the open sessions when the shift ended.</div>
+        }
+    </div>
+
+    <div class="table-panel">
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr><th>Person</th><th>Line</th><th>Time on</th><th>From</th><th>To</th><th class="inv-num">Share</th><th class="inv-num">Hours</th><th>Recorded</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var row in detail.Sessions)
+                {
+                    var faded = row.IsSuperseded || row.IsVoid;
+                    <tr @key="row.Id" class="@(faded ? "text-muted text-decoration-line-through" : "")">
+                        <td><span class="fw-semibold">@row.PersonName</span> <span class="small text-muted">@row.EmployeeNumber</span></td>
+                        <td>@row.EquipmentCode</td>
+                        <td class="small">@Display.Label(row.LaborType)@(row.JobNumber is { } j ? $" · {j}" : "")@(row.ReasonName is { } r ? $" · {r}" : "")</td>
+                        @if (_edit?.Id == row.Id)
+                        {
+                            <td><input type="datetime-local" class="form-control form-control-sm" aria-label="From" @bind="_edit.From" /></td>
+                            <td><input type="datetime-local" class="form-control form-control-sm" aria-label="To" @bind="_edit.To" /></td>
+                            <td class="inv-num"><input type="number" min="1" max="100" class="form-control form-control-sm text-end" style="width: 5rem" aria-label="Share" @bind="_edit.Share" /></td>
+                        }
+                        else
+                        {
+                            <td class="small">@Time(row.StartedAt)</td>
+                            <td class="small">@(row.EndedAt is { } e ? Time(e) : "open")</td>
+                            <td class="inv-num">@Qty(row.AllocationPct)%</td>
+                        }
+                        <td class="inv-num">@Qty(row.Hours)</td>
+                        <td class="small text-muted">@Source(row)@(row.Note is { } n ? $" · {n}" : "")</td>
+                        <td class="text-end text-nowrap">
+                            @if (_edit?.Id == row.Id)
+                            {
+                                @if (_edit.IsCorrection)
+                                {
+                                    <input class="form-control form-control-sm d-inline-block" style="width: 12rem" maxlength="500" placeholder="Why (required)" aria-label="Why" @bind="_edit.Note" />
+                                }
+                                <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || (_edit.IsCorrection && string.IsNullOrWhiteSpace(_edit.Note)))" @onclick="() => SaveAsync(row)">Save</button>
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => _edit = null">Cancel</button>
+                            }
+                            else if (!row.IsApproved && CanRecord && !faded)
+                            {
+                                <button type="button" class="btn btn-sm btn-link p-0" @onclick="() => StartEdit(row, false)">Change</button>
+                                @if (row.EndedAt is null)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link p-0 ms-2" disabled="@_busy" @onclick="() => EndAsync(row)">End</button>
+                                }
+                            }
+                            else if (row.IsApproved && CanApprove && !faded)
+                            {
+                                <button type="button" class="btn btn-sm btn-link p-0" @onclick="() => StartEdit(row, true)">Correct</button>
+                                <button type="button" class="btn btn-sm btn-link p-0 ms-2 text-danger" @onclick="() => StartVoid(row)">Remove</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="small text-muted mt-2">Struck-through rows were replaced or removed by a correction after approval; the hours count the correction.</p>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid SiteId { get; set; }
+
+    [Parameter]
+    public string? TimeZone { get; set; }
+
+    private DateOnly _day;
+    private IReadOnlyList<LaborShiftDto>? _shifts;
+    private ShiftLaborDto? _shift;
+    private RowEdit? _edit;
+    private string? _approveNote;
+    private ApiException? _error;
+    private string? _message;
+    private bool _busy;
+
+    private bool CanRecord => User.Can(PermissionCodes.LaborRecord, SiteId);
+
+    private bool CanApprove => User.Can(PermissionCodes.LaborApprove, SiteId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _day = DateOnly.FromDateTime(Display.ToSite(Clock.GetUtcNow(), TimeZone).DateTime);
+        await LoadShiftsAsync();
+    }
+
+    private bool Selected(LaborShiftDto s) => _shift is { } d && d.Shift.ShiftScheduleId == s.ShiftScheduleId && d.Shift.ShiftCode == s.ShiftCode && d.Shift.ProductionDate == s.ProductionDate;
+
+    private bool HasEnded(LaborShiftDto s) =>
+        (s.End ?? Display.FromSiteLocal(s.ProductionDate.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeZone)) <= Clock.GetUtcNow();
+
+    private string Time(DateTimeOffset at) => Display.ToSite(at, TimeZone).ToString("ddd HH:mm", CultureInfo.InvariantCulture);
+
+    private static string Qty(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static string Source(LaborSessionDto row) => row.Source switch
+    {
+        "self" => $"Clocked on by {row.RecordedBy}",
+        "crew" => $"Crew check-in by {row.RecordedBy}",
+        "correction" => row.IsVoid ? $"Removed by {row.RecordedBy}" : $"Correction by {row.RecordedBy}",
+        _ => $"By {row.RecordedBy}",
+    };
+
+    private async Task OnDayChangedAsync(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+        {
+            _day = day;
+            _shift = null;
+            await LoadShiftsAsync();
+        }
+    }
+
+    private async Task LoadShiftsAsync()
+    {
+        try
+        {
+            _shifts = await Api.ListLaborShiftsAsync(SiteId, _day);
+            if (_shift is null && _shifts.Count > 0)
+            {
+                await OpenAsync(_shifts[0]);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OpenAsync(LaborShiftDto s)
+    {
+        _edit = null;
+        try
+        {
+            _shift = await Api.GetShiftLaborAsync(SiteId, s.ProductionDate, s.ShiftScheduleId, s.ShiftCode);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        if (_shift is { } current)
+        {
+            await OpenAsync(current.Shift);
+        }
+
+        _shifts = await Api.ListLaborShiftsAsync(SiteId, _day);
+    }
+
+    private void StartEdit(LaborSessionDto row, bool correction) => _edit = new RowEdit
+    {
+        Id = row.Id,
+        IsCorrection = correction,
+        From = Display.ToSite(row.StartedAt, TimeZone).DateTime,
+        To = row.EndedAt is { } e ? Display.ToSite(e, TimeZone).DateTime : null,
+        Share = row.AllocationPct,
+    };
+
+    private void StartVoid(LaborSessionDto row) => _edit = new RowEdit
+    {
+        Id = row.Id,
+        IsCorrection = true,
+        IsVoid = true,
+        From = Display.ToSite(row.StartedAt, TimeZone).DateTime,
+        To = row.EndedAt is { } e ? Display.ToSite(e, TimeZone).DateTime : null,
+        Share = row.AllocationPct,
+    };
+
+    private Task SaveAsync(LaborSessionDto row) => RunAsync(async () =>
+    {
+        var edit = _edit!;
+        var from = Display.FromSiteLocal(edit.From, TimeZone) ?? row.StartedAt;
+        var to = Display.FromSiteLocal(edit.To, TimeZone);
+        if (edit.IsCorrection)
+        {
+            await Api.CorrectLaborSessionAsync(row.Id, new CorrectLaborSessionRequest
+            {
+                Void = edit.IsVoid,
+                EquipmentId = row.EquipmentId,
+                JobId = row.JobId,
+                LaborType = row.LaborType,
+                ReasonCodeId = row.ReasonCodeId,
+                StartedAt = from,
+                EndedAt = to ?? from,
+                AllocationPct = edit.Share,
+                Note = edit.Note ?? "",
+            });
+            _message = edit.IsVoid ? $"Removed {row.PersonName}'s time." : $"Corrected {row.PersonName}'s time.";
+        }
+        else
+        {
+            await Api.UpdateLaborSessionAsync(row.Id, new UpdateLaborSessionRequest
+            {
+                Version = row.Version,
+                EquipmentId = row.EquipmentId,
+                JobId = row.JobId,
+                LaborType = row.LaborType,
+                ReasonCodeId = row.ReasonCodeId,
+                StartedAt = from,
+                EndedAt = to,
+                AllocationPct = edit.Share,
+                Note = row.Note,
+            });
+        }
+
+        _edit = null;
+    });
+
+    private Task EndAsync(LaborSessionDto row) => RunAsync(() => Api.ClockOffAsync(row.Id, new ClockOffRequest { Version = row.Version }));
+
+    private Task ApproveAsync() => RunAsync(async () =>
+    {
+        var s = _shift!.Shift;
+        var result = await Api.ApproveShiftAsync(SiteId, new ApproveShiftRequest
+        {
+            ProductionDate = s.ProductionDate,
+            ShiftScheduleId = s.ShiftScheduleId,
+            ShiftCode = s.ShiftCode,
+            Note = _approveNote,
+        });
+        _message = string.Join(" ", ["Approved.", .. result.Notes]);
+        _approveNote = null;
+    });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+            await ReloadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class RowEdit
+    {
+        public Guid Id { get; init; }
+
+        public bool IsCorrection { get; init; }
+
+        public bool IsVoid { get; init; }
+
+        public DateTime? From { get; set; }
+
+        public DateTime? To { get; set; }
+
+        public decimal Share { get; set; } = 100;
+
+        public string? Note { get; set; }
+    }
+}

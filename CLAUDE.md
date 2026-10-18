@@ -118,6 +118,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `jsonb` document); equipment `calendar_mode` inherit / schedule / around_the_clock, nearest non-inherit ancestor wins.
   Shift times are computed on read (`ShiftSchedule.Expand`, site time zone, DST-aware), never stored; `shift_instance` is
   only for shifts as worked (planned). Permission `shifts.manage`; equipment's setting saves via `PUT /equipment/{id}/calendar`.
+- Labor (D-040, proposed): `core.person` (not necessarily a user; `app_user_id` to clock on oneself), `core.crew`; shifts name
+  their crew (`ShiftDto.Crew`). `core.labor_session` direct/setup/indirect/training with a share; direct time is shared
+  out to runs by overlap on read (`LaborRules.Attribute`); each session stores its shift (`EquipmentShifts.ShiftAt`).
+  `core.labor_approval` locks a shift; corrections are new sessions (`corrects_session_id`, `is_void`). Clock-on locks
+  the person; crew check-in locks people in id order in SQL. No background service.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

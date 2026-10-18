@@ -449,11 +449,15 @@ ALTER TABLE core.equipment
     ADD CONSTRAINT equipment_calendar_schedule_ck CHECK ((calendar_mode = 'schedule') = (shift_schedule_id IS NOT NULL));
 CREATE INDEX equipment_shift_schedule_ix ON core.equipment (shift_schedule_id) WHERE shift_schedule_id IS NOT NULL;
 
+-- A site's crews (D-040). A shift schedule's shifts name the crew that works them, by code.
 CREATE TABLE core.crew (
     id          uuid PRIMARY KEY DEFAULT uuidv7(),
     site_id     uuid NOT NULL REFERENCES core.equipment(id),
-    code        text NOT NULL,
+    code        text NOT NULL,                                  -- upper case; fixed once created
     name        text NOT NULL,
+    is_active   boolean NOT NULL DEFAULT true,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT crew_uq UNIQUE (site_id, code)
 );
 
@@ -620,6 +624,8 @@ CREATE TABLE core.person (
     app_user_id         uuid UNIQUE REFERENCES sec.app_user(id),
     origin              text NOT NULL DEFAULT 'local' CHECK (origin IN ('hr','erp','local')),
     is_active           boolean NOT NULL DEFAULT true,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT person_uq UNIQUE (site_id, employee_number)
 );
 
@@ -1035,27 +1041,57 @@ CREATE TABLE core.stock_count_line (
 --     allocation_pct splits a person tending several machines at once.
 -- =====================================================================
 
+-- Time a person spent (D-040). Direct time on a line counts towards the runs on it while it lasted, by overlap; a
+-- session naming a job counts towards that job. Each session belongs to the shift running when it started.
+-- Sessions of an approved shift are locked: a correction is a new session that replaces (or voids) one.
 CREATE TABLE core.labor_session (
-    id                          uuid PRIMARY KEY DEFAULT uuidv7(),
-    person_id                   uuid NOT NULL REFERENCES core.person(id),
-    equipment_id                uuid NOT NULL REFERENCES core.equipment(id),
-    job_id                      uuid REFERENCES core.job(id),
-    run_id                      uuid REFERENCES core.job_run(id),
-    shift_instance_id           uuid REFERENCES core.shift_instance(id),
-    labor_type                  text NOT NULL CHECK (labor_type IN ('direct','setup','indirect','training')),
-    indirect_reason_code_id     uuid REFERENCES core.reason_code(id),
-    started_at                  timestamptz NOT NULL,
-    ended_at                    timestamptz,
-    allocation_pct              numeric(5,2) NOT NULL DEFAULT 100 CHECK (allocation_pct > 0 AND allocation_pct <= 100),
-    source                      text NOT NULL CHECK (source IN ('badge','manual','auto_shift')),
-    approved_by_user_id         uuid REFERENCES sec.app_user(id),
-    approved_at                 timestamptz,
+    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
+    person_id               uuid NOT NULL REFERENCES core.person(id),
+    equipment_id            uuid NOT NULL REFERENCES core.equipment(id),   -- the line, or other equipment for indirect time
+    job_id                  uuid REFERENCES core.job(id),                  -- only when the time is for one job
+    labor_type              text NOT NULL CHECK (labor_type IN ('direct','setup','indirect','training')),
+    reason_code_id          uuid REFERENCES core.reason_code(id),          -- kind indirect_labor
+    started_at              timestamptz NOT NULL,
+    ended_at                timestamptz,
+    allocation_pct          numeric(5,2) NOT NULL DEFAULT 100 CHECK (allocation_pct > 0 AND allocation_pct <= 100),
+    production_date         date NOT NULL,                                 -- the shift's day, or the site-local day
+    shift_schedule_id       uuid REFERENCES core.shift_schedule(id),
+    shift_code              text,
+    source                  text NOT NULL CHECK (source IN ('self','supervisor','crew','correction')),
+    corrects_session_id     uuid REFERENCES core.labor_session(id),
+    is_void                 boolean NOT NULL DEFAULT false,                -- a correction that removes the session it corrects
+    note                    text,
+    recorded_by             text NOT NULL,
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    updated_at              timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT labor_span_ck CHECK (ended_at IS NULL OR ended_at >= started_at),
-    CONSTRAINT labor_indirect_ck CHECK (labor_type <> 'indirect' OR indirect_reason_code_id IS NOT NULL)
+    CONSTRAINT labor_indirect_ck CHECK (labor_type <> 'indirect' OR reason_code_id IS NOT NULL),
+    CONSTRAINT labor_setup_ck CHECK (labor_type <> 'setup' OR job_id IS NOT NULL),
+    CONSTRAINT labor_shift_ck CHECK ((shift_schedule_id IS NULL) = (shift_code IS NULL)),
+    CONSTRAINT labor_correction_ck CHECK ((source = 'correction') = (corrects_session_id IS NOT NULL)),
+    CONSTRAINT labor_void_ck CHECK (NOT is_void OR corrects_session_id IS NOT NULL)
 );
 CREATE INDEX labor_person_ix ON core.labor_session (person_id, started_at);
-CREATE INDEX labor_run_ix    ON core.labor_session (run_id);
+CREATE INDEX labor_shift_ix  ON core.labor_session (site_id, production_date, shift_code);
+CREATE INDEX labor_equipment_ix ON core.labor_session (equipment_id, started_at);
 CREATE UNIQUE INDEX labor_one_open_per_person_equipment ON core.labor_session (person_id, equipment_id) WHERE ended_at IS NULL;
+CREATE UNIQUE INDEX labor_corrected_once ON core.labor_session (corrects_session_id) WHERE corrects_session_id IS NOT NULL;
+
+-- A shift's labor, approved (D-040): its sessions are locked from then on. Lines with no shifts are approved by day.
+CREATE TABLE core.labor_approval (
+    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
+    production_date         date NOT NULL,
+    shift_schedule_id       uuid REFERENCES core.shift_schedule(id),
+    shift_code              text,
+    approved_by             text NOT NULL,
+    approved_by_user_id     uuid REFERENCES sec.app_user(id),
+    approved_at             timestamptz NOT NULL,
+    note                    text,
+    CONSTRAINT labor_approval_shift_ck CHECK ((shift_schedule_id IS NULL) = (shift_code IS NULL)),
+    CONSTRAINT labor_approval_uq UNIQUE NULLS NOT DISTINCT (site_id, production_date, shift_schedule_id, shift_code)
+);
 
 -- =====================================================================
 -- 11. QUALITY AND SPC (definitions and alert state)
@@ -1553,7 +1589,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0010_security'),
     ('0011_editable_roles'),
     ('0012_shift_schedules'),
-    ('0013_view_permissions');
+    ('0013_view_permissions'),
+    ('0014_labor');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -1572,6 +1609,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('units.view', 'See units and material conversions'),
     ('reasons.view', 'See reason codes'),
     ('shifts.view', 'See shift schedules'),
+    ('labor.view', 'See labor: who is on, shift review and labor reports'),
     ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
     ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
     ('work_order.close', 'Cancel and close work orders'),
@@ -1580,6 +1618,9 @@ INSERT INTO sec.permission (code, description) VALUES
     ('job.reopen', 'Reopen a completed job'),
     ('production.report', 'Report production and consumption into a job''s runs'),
     ('partial_batch.decide', 'Approve or reject partial batches (not one''s own)'),
+    ('labor.record_own', 'Clock yourself on and off lines and jobs'),
+    ('labor.record', 'Record labor for others and check crews onto lines'),
+    ('labor.approve', 'Approve a shift''s labor and correct approved labor'),
     ('lot.receive', 'Receive lots'),
     ('lot.move', 'Move lots between locations'),
     ('lot.ship', 'Ship lots'),
@@ -1593,6 +1634,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('equipment.manage', 'Maintain equipment: sites, lines, locations'),
     ('site_settings.manage', 'Set a site''s changeover mode and reporting tolerances'),
     ('shifts.manage', 'Maintain shift schedules and choose which one equipment follows'),
+    ('people.manage', 'Maintain people and crews'),
     ('security.manage', 'Maintain users, roles and what each role may do')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
@@ -1601,10 +1643,10 @@ ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 INSERT INTO sec.role (code, name, description, is_system) VALUES
     ('administrator', 'Administrator', 'Everything, everywhere, including users and roles.', true),
     ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes.', true),
-    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches. Doesn''t correct inventory.', true),
-    ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots.', true),
+    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor. Doesn''t correct inventory.', true),
+    ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off.', true),
     ('quality', 'Quality', 'Holds and releases lots, corrects inventory and decides on partial batches.', true),
-    ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, maintains reason codes, shift schedules and the site''s settings.', true),
+    ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people and the site''s settings.', true),
     ('auditor', 'Auditor', 'Views everything and corrects inventory; counts stock. Doesn''t plan or run jobs.', true),
     ('process_engineer', 'Process engineer', 'Maintains processes, BOMs and capabilities. Sees equipment, materials and units.', true)
 ON CONFLICT (code) DO NOTHING;
@@ -1636,6 +1678,9 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('supervisor', 'lot.hold'),
     ('supervisor', 'stock_count.manage'),
     ('supervisor', 'partial_batch.decide'),
+    ('supervisor', 'labor.view'),
+    ('supervisor', 'labor.record'),
+    ('supervisor', 'labor.approve'),
     ('operator', 'overview.view'),
     ('operator', 'floor.view'),
     ('operator', 'inventory.view'),
@@ -1644,6 +1689,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('operator', 'production.report'),
     ('operator', 'lot.receive'),
     ('operator', 'lot.move'),
+    ('operator', 'labor.record_own'),
     ('quality', 'overview.view'),
     ('quality', 'floor.view'),
     ('quality', 'inventory.view'),
@@ -1662,11 +1708,14 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('manager', 'units.view'),
     ('manager', 'reasons.view'),
     ('manager', 'shifts.view'),
+    ('manager', 'labor.view'),
     ('manager', 'job.reopen'),
     ('manager', 'work_order.close'),
     ('manager', 'reasons.manage'),
     ('manager', 'site_settings.manage'),
     ('manager', 'shifts.manage'),
+    ('manager', 'people.manage'),
+    ('manager', 'labor.approve'),
     ('auditor', 'overview.view'),
     ('auditor', 'work_orders.view'),
     ('auditor', 'schedule.view'),
@@ -1678,6 +1727,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('auditor', 'units.view'),
     ('auditor', 'reasons.view'),
     ('auditor', 'shifts.view'),
+    ('auditor', 'labor.view'),
     ('auditor', 'inventory.correct'),
     ('auditor', 'stock_count.manage'),
     ('process_engineer', 'equipment.view'),

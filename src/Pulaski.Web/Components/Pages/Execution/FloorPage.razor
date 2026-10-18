@@ -82,9 +82,31 @@ else
                     </div>
                     @if (!row.IsGroup)
                     {
-                        <span class="@(row.Running is null ? "chip" : "chip chip-strong chip-live")">@(row.Running is null ? "Idle" : "Running")</span>
+                        <div class="d-flex gap-1 align-items-center">
+                            @if (_labor.TryGetValue(row.LineId, out var onLine))
+                            {
+                                <span class="chip" title="@string.Join(", ", onLine.Sessions.Select(x => x.PersonName))">@onLine.Sessions.Count on</span>
+                            }
+                            <span class="@(row.Running is null ? "chip" : "chip chip-strong chip-live")">@(row.Running is null ? "Idle" : "Running")</span>
+                        </div>
                     }
                 </header>
+
+                @* Clocking on and off for whoever is set up as a person (D-040). *@
+                @if (!row.IsGroup && _me?.Person is not null && CanClock)
+                {
+                    var mine = _me.Sessions.FirstOrDefault(x => x.EquipmentId == row.LineId);
+                    <div class="d-flex justify-content-end mt-1">
+                        @if (mine is null)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => ClockOnAsync(row.LineId)">Clock on</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => ClockOffAsync(mine)">Clock off (since @Display.SiteTime(mine.StartedAt, Sites.Site?.TimeZone)[11..])</button>
+                        }
+                    </div>
+                }
 
                 @if (row.Running is { } r)
                 {
@@ -211,6 +233,43 @@ else
 
     private bool CanReport => User.Can(PermissionCodes.ProductionReport, Sites.SiteId);
 
+    private bool CanClock => User.Can(PermissionCodes.LaborRecordOwn, Sites.SiteId);
+
+    private Dictionary<Guid, LineLaborDto> _labor = [];
+    private MyLaborDto? _me;
+
+    private async Task ClockOnAsync(Guid lineId)
+    {
+        await RunLaborAsync(() => Api.ClockMeOnAsync(new ClockOnRequest { EquipmentId = lineId }));
+    }
+
+    private async Task ClockOffAsync(LaborSessionDto session)
+    {
+        await RunLaborAsync(() => Api.ClockMeOffAsync(session.Id, new ClockOffRequest { Version = session.Version }));
+    }
+
+    private async Task RunLaborAsync(Func<Task<LaborResponse>> action)
+    {
+        _busy = true;
+        ApiException? refused = null;
+        try
+        {
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            refused = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        // Reloading clears the last error; a refusal must still show.
+        await LoadAsync();
+        _error = refused ?? _error;
+    }
+
     private IReadOnlyList<LineBoardRowDto>? _board;
     private IReadOnlyList<PartialBatchDto> _pending = [];
     private IReadOnlyList<string> _notes = [];
@@ -245,6 +304,8 @@ else
             {
                 _board = await Api.GetLineBoardAsync(site);
                 _pending = await Api.ListPendingPartialBatchesAsync(site);
+                _labor = (await Api.ListLineLaborAsync(site)).ToDictionary(l => l.LineId);
+                _me = CanClock ? await Api.GetMyLaborAsync() : null;
             }
             else
             {

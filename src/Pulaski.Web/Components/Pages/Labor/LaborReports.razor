@@ -1,0 +1,198 @@
+@using System.Globalization
+@inject PulaskiApiClient Api
+@inject Downloads Downloads
+@inject TimeProvider Clock
+
+@* Labor between two days (D-040): by job against the standard crew, by person and by shift, each exportable as CSV. *@
+<div class="inv-toolbar">
+    <label class="small text-muted" for="rep-from">From</label>
+    <input id="rep-from" type="date" class="form-control w-auto" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="e => SetDay(e, true)" />
+    <label class="small text-muted" for="rep-to">to</label>
+    <input id="rep-to" type="date" class="form-control w-auto" value="@_to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="e => SetDay(e, false)" />
+    <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="LoadAsync">Show</button>
+    <span class="ms-auto small text-muted">Production days; at most @MaxDays days.</span>
+</div>
+
+<ProblemAlert Error="_error" />
+
+@if (_report is { } report)
+{
+    <section class="inv-section" aria-labelledby="rep-jobs">
+        <div class="inv-section-head">
+            <h2 id="rep-jobs">By job</h2>
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(report.Jobs.Count == 0)" @onclick="ExportJobsAsync">Export CSV</button>
+        </div>
+        @if (report.Jobs.Count == 0)
+        {
+            <p class="text-muted small">No labor on jobs.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Job</th><th>Material</th><th>Line</th><th class="inv-num">Run hours</th><th class="inv-num">Direct</th><th class="inv-num">Setup</th><th class="inv-num">Standard</th><th class="inv-num">Efficiency</th></tr></thead>
+                    <tbody>
+                        @foreach (var j in report.Jobs)
+                        {
+                            <tr @key="j.JobId">
+                                <td class="fw-semibold">@j.JobNumber</td>
+                                <td>@j.MaterialCode</td>
+                                <td>@j.LineCode</td>
+                                <td class="inv-num">@Qty(j.RunHours)</td>
+                                <td class="inv-num">@Qty(j.DirectHours)</td>
+                                <td class="inv-num">@Qty(j.SetupHours)</td>
+                                <td class="inv-num">@(j.StandardHours is { } std ? Qty(std) : "—")</td>
+                                <td class="inv-num @(j.EfficiencyPct is < 90 ? "text-warning-strong" : "")">@(j.EfficiencyPct is { } e ? $"{Qty(e)}%" : "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="small text-muted">Standard = run hours × the line's standard crew size for the material. Efficiency = standard ÷ direct hours: under 100% took more people than the standard.</p>
+        }
+    </section>
+
+    <section class="inv-section" aria-labelledby="rep-people">
+        <div class="inv-section-head">
+            <h2 id="rep-people">By person</h2>
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(report.People.Count == 0)" @onclick="ExportPeopleAsync">Export CSV</button>
+        </div>
+        @if (report.People.Count == 0)
+        {
+            <p class="text-muted small">No labor recorded.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Person</th><th>Employee no.</th><th class="inv-num">Direct</th><th class="inv-num">of which idle</th><th class="inv-num">Setup</th><th class="inv-num">Indirect</th><th class="inv-num">Training</th><th class="inv-num">Total</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in report.People)
+                        {
+                            <tr @key="p.PersonId">
+                                <td class="fw-semibold">@p.PersonName</td>
+                                <td>@p.EmployeeNumber</td>
+                                <td class="inv-num">@Qty(p.DirectHours)</td>
+                                <td class="inv-num text-muted">@Qty(p.IdleHours)</td>
+                                <td class="inv-num">@Qty(p.SetupHours)</td>
+                                <td class="inv-num">@Qty(p.IndirectHours)</td>
+                                <td class="inv-num">@Qty(p.TrainingHours)</td>
+                                <td class="inv-num fw-semibold">@Qty(p.TotalHours)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="small text-muted">Idle is direct time on a line while nothing ran on it.</p>
+        }
+    </section>
+
+    <section class="inv-section" aria-labelledby="rep-shifts">
+        <div class="inv-section-head">
+            <h2 id="rep-shifts">By shift</h2>
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(report.Shifts.Count == 0)" @onclick="ExportShiftsAsync">Export CSV</button>
+        </div>
+        @if (report.Shifts.Count > 0)
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Day</th><th>Shift</th><th>Crew</th><th class="inv-num">Sessions</th><th class="inv-num">Hours</th><th>Approved</th></tr></thead>
+                    <tbody>
+                        @foreach (var s in report.Shifts)
+                        {
+                            <tr @key="(s.ProductionDate, s.ShiftScheduleId, s.ShiftCode)">
+                                <td>@s.ProductionDate.ToString("ddd d MMM", CultureInfo.InvariantCulture)</td>
+                                <td>@(s.ShiftCode is null ? "No shift" : $"{s.ShiftCode} {s.ShiftName}")</td>
+                                <td>@s.CrewCode</td>
+                                <td class="inv-num">@s.Sessions</td>
+                                <td class="inv-num">@Qty(s.Hours)</td>
+                                <td class="small">@(s.IsApproved ? $"{s.ApprovedBy}, {Display.SiteTime(s.ApprovedAt, TimeZone)}" : "Not yet")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+else if (_error is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+
+@code {
+    private const int MaxDays = 93;
+
+    [Parameter, EditorRequired]
+    public Guid SiteId { get; set; }
+
+    [Parameter]
+    public string? SiteCode { get; set; }
+
+    [Parameter]
+    public string? TimeZone { get; set; }
+
+    private DateOnly _from;
+    private DateOnly _to;
+    private LaborReportDto? _report;
+    private ApiException? _error;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _to = DateOnly.FromDateTime(Display.ToSite(Clock.GetUtcNow(), TimeZone).DateTime);
+        _from = _to.AddDays(-6);
+        await LoadAsync();
+    }
+
+    private void SetDay(ChangeEventArgs e, bool from)
+    {
+        if (DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+        {
+            if (from)
+            {
+                _from = day;
+            }
+            else
+            {
+                _to = day;
+            }
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _report = await Api.GetLaborReportAsync(SiteId, _from, _to);
+            (_from, _to) = (_report.From, _report.To);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Qty(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private string File(string what) => Csv.FileName(what, SiteCode, Display.ToSite(Clock.GetUtcNow(), TimeZone));
+
+    private Task ExportJobsAsync() => Downloads.CsvAsync(File("labor-jobs"), Csv.Write(
+        ["Job", "Material", "Line", "Run hours", "Direct hours", "Setup hours", "Standard hours", "Efficiency %"],
+        _report!.Jobs.Select(j => (IReadOnlyList<object?>)[j.JobNumber, j.MaterialCode, j.LineCode, j.RunHours, j.DirectHours, j.SetupHours, j.StandardHours, j.EfficiencyPct]))).AsTask();
+
+    private Task ExportPeopleAsync() => Downloads.CsvAsync(File("labor-people"), Csv.Write(
+        ["Person", "Employee number", "Direct hours", "Idle hours", "Setup hours", "Indirect hours", "Training hours", "Total hours"],
+        _report!.People.Select(p => (IReadOnlyList<object?>)[p.PersonName, p.EmployeeNumber, p.DirectHours, p.IdleHours, p.SetupHours, p.IndirectHours, p.TrainingHours, p.TotalHours]))).AsTask();
+
+    private Task ExportShiftsAsync() => Downloads.CsvAsync(File("labor-shifts"), Csv.Write(
+        ["Day", "Schedule", "Shift", "Crew", "Sessions", "Hours", "Approved by", "Approved at"],
+        _report!.Shifts.Select(s => (IReadOnlyList<object?>)[s.ProductionDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), s.ScheduleCode, s.ShiftCode, s.CrewCode,
+            s.Sessions, s.Hours, s.ApprovedBy, s.ApprovedAt is { } at ? Display.SiteTime(at, TimeZone) : null]))).AsTask();
+}

@@ -126,6 +126,9 @@ public enum SiteOf
     RunStandard,
     ReasonCode,
     ShiftSchedule,
+    Crew,
+    Person,
+    LaborSession,
 }
 
 /// <summary>Finds the site something belongs to, so a role held at that site can be checked (D-037).</summary>

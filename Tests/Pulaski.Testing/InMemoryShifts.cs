@@ -86,6 +86,17 @@ public sealed class InMemoryShifts : IShiftReadStore, IShiftRepository
         }
     }
 
+    /// <summary>The crews each site has, for the crew check on shifts (D-040).</summary>
+    public Dictionary<Guid, List<string>> Crews { get; } = [];
+
+    public Task<IReadOnlyList<string>> ListCrewCodesAsync(Guid siteId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<string>>(Crews.TryGetValue(siteId, out var crews) ? [.. crews] : []);
+        }
+    }
+
     public Task<bool> IsSiteAsync(Guid siteId, CancellationToken cancellationToken)
     {
         lock (_lock)

@@ -1,0 +1,308 @@
+@using System.Globalization
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* Who is on each line now (D-040): the shift and crew from the schedule the line follows, the people clocked on, and
+   for a supervisor checking the crew in, adding someone and ending their time. *@
+<ProblemAlert Error="_error" />
+@if (_message is { } message)
+{
+    <div class="alert alert-success d-flex align-items-center gap-2" role="status">
+        <span>@message</span>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">Dismiss</button>
+    </div>
+}
+
+<div class="d-flex justify-content-end mb-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_busy" @onclick="LoadAsync" title="Refresh now"><Icon Name="refresh" Size="16" /> Refresh</button>
+</div>
+
+@if (_lines is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_lines.Count == 0)
+{
+    <div class="empty-panel"><p class="text-muted mb-0">No lines that run jobs at this site.</p></div>
+}
+else
+{
+    <div class="labor-lines">
+        @foreach (var line in _lines)
+        {
+            <section class="labor-line" @key="line.LineId" aria-labelledby="line-@line.LineId">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div>
+                        <h2 id="line-@line.LineId" class="h6 mb-0">@line.LineCode <span class="text-muted fw-normal">@line.LineName</span></h2>
+                        <div class="small text-muted">
+                            @if (line.Shift is { } shift)
+                            {
+                                <span>Shift @shift.ShiftCode @shift.ShiftName, @Time(shift.Start)–@Time(shift.End)@(shift.CrewCode is { } crew ? $" · crew {crew}{(shift.CrewName is { } n && n != crew ? $" ({n})" : "")}" : "")</span>
+                            }
+                            else
+                            {
+                                <span>No shift now</span>
+                            }
+                            @if (line.RunningJobNumber is { } job)
+                            {
+                                <span> · running @job</span>
+                            }
+                        </div>
+                    </div>
+                    <span class="chip @(Short(line) ? "chip-warning" : "")" title="@(line.StandardCrewSize is { } std ? $"The standard crew is {Qty(std)}" : "No standard crew size for the job running")">
+                        @line.Sessions.Count on@(line.StandardCrewSize is { } crewSize ? $" / {Qty(crewSize)}" : "")
+                    </span>
+                </div>
+
+                @if (line.Sessions.Count > 0)
+                {
+                    <ul class="list-unstyled small mt-2 mb-0 labor-people">
+                        @foreach (var s in line.Sessions)
+                        {
+                            <li @key="s.Id" class="d-flex align-items-center gap-2">
+                                <span class="fw-semibold">@s.PersonName</span>
+                                <span class="text-muted">@Display.Label(s.LaborType)@(s.ReasonName is { } r ? $" · {r}" : "")@(s.AllocationPct < 100 ? $" · {Qty(s.AllocationPct)}%" : "") · since @Time(s.StartedAt)</span>
+                                @if (CanRecord)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link p-0 ms-auto" disabled="@_busy" @onclick="() => EndAsync(s)">End</button>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="small text-muted mt-2 mb-0">Nobody on.</p>
+                }
+
+                @if (CanRecord)
+                {
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                        <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => OpenCheckIn(line)">Check crew in</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => OpenAdd(line)">Add someone</button>
+                        @if (line.Sessions.Count > 0)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => CheckOutAsync(line)">Check everyone out</button>
+                        }
+                    </div>
+                }
+
+                @if (_checkInFor == line.LineId)
+                {
+                    <div class="floor-inline mt-2">
+                        <div class="small mb-1">@(line.Shift?.CrewCode is { } crew ? $"Crew {crew} is on shift; tick who is here." : "Tick who is here.")</div>
+                        <div class="labor-pick">
+                            @foreach (var p in Candidates(line))
+                            {
+                                <div class="form-check" @key="p.Id">
+                                    <input class="form-check-input" type="checkbox" id="ci-@line.LineId-@p.Id" checked="@_ticked.Contains(p.Id)"
+                                           @onchange="e => Tick(p.Id, e.Value is true)" />
+                                    <label class="form-check-label small" for="ci-@line.LineId-@p.Id">@p.DisplayName <span class="text-muted">@p.EmployeeNumber@(p.CrewCode is { } c ? " · " + c : "")@(ElsewhereOn(p.Id, line) is { } other ? $" · on {other}" : "")</span></label>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-flex gap-2 mt-2">
+                            <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || _ticked.Count == 0)" @onclick="() => CheckInAsync(line)">Check @_ticked.Count in</button>
+                            <button type="button" class="btn btn-sm btn-link" @onclick="() => _checkInFor = null">Cancel</button>
+                        </div>
+                    </div>
+                }
+
+                @if (_addFor == line.LineId)
+                {
+                    <div class="floor-inline mt-2">
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label small" for="add-person-@line.LineId">Who</label>
+                                <select id="add-person-@line.LineId" class="form-select form-select-sm" @bind="_addPerson">
+                                    <option value="@Guid.Empty">Choose…</option>
+                                    @foreach (var p in (_people ?? []).Where(p => p.IsActive))
+                                    {
+                                        <option value="@p.Id">@p.DisplayName (@p.EmployeeNumber)</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label small" for="add-type-@line.LineId">Time on</label>
+                                <select id="add-type-@line.LineId" class="form-select form-select-sm" @bind="_addType">
+                                    <option value="direct">Direct</option>
+                                    @if (line.RunningJobNumber is not null)
+                                    {
+                                        <option value="setup">Setup (@line.RunningJobNumber)</option>
+                                    }
+                                    <option value="indirect">Indirect</option>
+                                    <option value="training">Training</option>
+                                </select>
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label small" for="add-share-@line.LineId">Share, %</label>
+                                <input id="add-share-@line.LineId" type="number" min="1" max="100" class="form-control form-control-sm" @bind="_addShare" />
+                            </div>
+                            @if (_addType == "indirect")
+                            {
+                                <div class="col-12">
+                                    <label class="form-label small" for="add-reason-@line.LineId">Reason</label>
+                                    <select id="add-reason-@line.LineId" class="form-select form-select-sm" @bind="_addReason">
+                                        <option value="@Guid.Empty">Choose a reason…</option>
+                                        @foreach (var r in _reasons)
+                                        {
+                                            <option value="@r.Id">@r.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-flex gap-2 mt-2">
+                            <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || _addPerson == Guid.Empty || (_addType == "indirect" && _addReason == Guid.Empty))"
+                                    @onclick="() => AddAsync(line)">Clock on</button>
+                            <button type="button" class="btn btn-sm btn-link" @onclick="() => _addFor = null">Cancel</button>
+                        </div>
+                    </div>
+                }
+            </section>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid SiteId { get; set; }
+
+    [Parameter]
+    public string? TimeZone { get; set; }
+
+    private IReadOnlyList<LineLaborDto>? _lines;
+    private IReadOnlyList<PersonDto>? _people;
+    private IReadOnlyList<ReasonCodeDto> _reasons = [];
+    private ApiException? _error;
+    private string? _message;
+    private bool _busy;
+    private Guid? _checkInFor;
+    private Guid? _addFor;
+    private readonly HashSet<Guid> _ticked = [];
+    private Guid _addPerson;
+    private string _addType = "direct";
+    private decimal _addShare = 100;
+    private Guid _addReason;
+
+    private bool CanRecord => User.Can(PermissionCodes.LaborRecord, SiteId);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _busy = true;
+        try
+        {
+            _lines = await Api.ListLineLaborAsync(SiteId);
+            if (CanRecord && _people is null)
+            {
+                _people = await Api.ListPeopleAsync(SiteId);
+                _reasons = await Api.ListReasonCodesAsync("indirect_labor", SiteId);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // "06:00" today, "Sat 06:00" on another day.
+    private string Time(DateTimeOffset at)
+    {
+        var local = Display.ToSite(at, TimeZone);
+        var today = Display.ToSite(DateTimeOffset.UtcNow, TimeZone).Date;
+        return local.ToString(local.Date == today ? "HH:mm" : "ddd HH:mm", CultureInfo.InvariantCulture);
+    }
+
+    private static string Qty(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static bool Short(LineLaborDto line) => line.StandardCrewSize is { } std && line.RunningJobNumber is not null && line.Sessions.Sum(s => s.AllocationPct / 100m) < std;
+
+    // The shift's crew first, ticked; then everyone else not on the line yet.
+    private IEnumerable<PersonDto> Candidates(LineLaborDto line) =>
+        (_people ?? []).Where(p => p.IsActive && line.Sessions.All(s => s.PersonId != p.Id))
+            .OrderBy(p => p.CrewCode == line.Shift?.CrewCode ? 0 : 1).ThenBy(p => p.DisplayName, StringComparer.Ordinal);
+
+    private void OpenCheckIn(LineLaborDto line)
+    {
+        (_checkInFor, _addFor) = (line.LineId, null);
+        _ticked.Clear();
+        if (line.Shift?.CrewCode is { } crew)
+        {
+            _ticked.UnionWith(Candidates(line).Where(p => p.CrewCode == crew && ElsewhereOn(p.Id, line) is null).Select(p => p.Id));
+        }
+    }
+
+    // The line someone is already on, if another: they'd need ending there first (or a share of their time).
+    private string? ElsewhereOn(Guid personId, LineLaborDto line) =>
+        (_lines ?? []).FirstOrDefault(l => l.LineId != line.LineId && l.Sessions.Any(s => s.PersonId == personId))?.LineCode;
+
+    private void OpenAdd(LineLaborDto line) => (_addFor, _checkInFor, _addPerson, _addType, _addShare, _addReason) = (line.LineId, null, Guid.Empty, "direct", 100, Guid.Empty);
+
+    private void Tick(Guid id, bool on)
+    {
+        if (on)
+        {
+            _ticked.Add(id);
+        }
+        else
+        {
+            _ticked.Remove(id);
+        }
+    }
+
+    private Task CheckInAsync(LineLaborDto line) => RunAsync(async () =>
+    {
+        var result = await Api.CheckInAsync(new CheckInRequest { EquipmentId = line.LineId, PersonIds = [.. _ticked] });
+        _message = string.Join(" ", result.Notes);
+        _checkInFor = null;
+    });
+
+    private Task CheckOutAsync(LineLaborDto line) => RunAsync(async () =>
+        _message = string.Join(" ", (await Api.CheckOutAsync(new CheckOutRequest { EquipmentId = line.LineId })).Notes));
+
+    private Task AddAsync(LineLaborDto line) => RunAsync(async () =>
+    {
+        // Setup is for the job running on the line, the one the form offers.
+        await Api.ClockOnAsync(new ClockOnRequest
+        {
+            PersonId = _addPerson,
+            EquipmentId = line.LineId,
+            JobId = _addType == "setup" ? line.RunningJobId : null,
+            LaborType = _addType,
+            ReasonCodeId = _addType == "indirect" ? _addReason : null,
+            AllocationPct = _addShare,
+        });
+        _addFor = null;
+    });
+
+    private Task EndAsync(LaborSessionDto session) => RunAsync(() => Api.ClockOffAsync(session.Id, new ClockOffRequest { Version = session.Version }));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        await LoadAsync();
+    }
+}

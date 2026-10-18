@@ -32,6 +32,8 @@ internal sealed class ShiftRepository(DbSession session) : IShiftRepository
         RETURNING xmin::text::bigint
         """;
 
+    private const string CrewCodes = "SELECT code FROM core.crew WHERE site_id = @SiteId AND is_active ORDER BY code";
+
     private const string Users = "SELECT code FROM core.equipment WHERE shift_schedule_id = @Id ORDER BY code";
 
     private const string GetCalendar = """
@@ -65,6 +67,9 @@ internal sealed class ShiftRepository(DbSession session) : IShiftRepository
 
     public Task<long> UpdateAsync(ShiftScheduleRecord schedule, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(Update, Args(schedule, at), cancellationToken);
+
+    public async Task<IReadOnlyList<string>> ListCrewCodesAsync(Guid siteId, CancellationToken cancellationToken) =>
+        [.. await session.QueryAsync<string>(CrewCodes, new { SiteId = siteId }, cancellationToken)];
 
     public async Task<IReadOnlyList<string>> ListUsersAsync(Guid scheduleId, CancellationToken cancellationToken) =>
         [.. await session.QueryAsync<string>(Users, new { Id = scheduleId }, cancellationToken)];

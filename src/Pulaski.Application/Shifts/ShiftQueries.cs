@@ -51,7 +51,7 @@ internal sealed class PreviewShiftScheduleHandler(IShiftReadStore store, TimePro
         {
             Shifts = [.. schedule.Expand(zone, start, end)
                 .Where(o => o.Start >= start)
-                .Select(o => new ShiftOccurrenceDto(o.Code, o.Name, o.ProductionDate, TimeZoneInfo.ConvertTime(o.Start, zone), TimeZoneInfo.ConvertTime(o.End, zone)))],
+                .Select(o => new ShiftOccurrenceDto(o.Code, o.Name, o.ProductionDate, TimeZoneInfo.ConvertTime(o.Start, zone), TimeZoneInfo.ConvertTime(o.End, zone), o.Crew))],
             HoursPerCycle = ShiftMapping.Hours(schedule.HoursPerCycle),
             TimeZone = timeZone,
         };
