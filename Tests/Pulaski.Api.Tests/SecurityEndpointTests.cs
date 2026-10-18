@@ -195,4 +195,35 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
         var permissions = await admin.GetFromJsonAsync<List<PermissionDto>>("/api/permissions");
         Assert.Equal(Permissions.Catalog.Count, permissions!.Count);
     }
+
+    [Fact]
+    public async Task Managers_maintain_shift_schedules_and_planners_only_see_them()
+    {
+        var site = Guid.CreateVersion7();
+        factory.Stores.Shifts.AddSite(site);
+        factory.Stores.Security.SetSite(SiteOf.Equipment, site, site);
+        var request = new Pulaski.Contracts.Shifts.CreateShiftScheduleRequest
+        {
+            SiteId = site,
+            Code = "2X8",
+            Name = "Two shifts",
+            CycleStart = new DateOnly(2026, 10, 12),
+            Shifts = [new Pulaski.Contracts.Shifts.ShiftDto { Code = "A", Start = "06:00", Minutes = 480, Days = [0, 1, 2, 3, 4] }],
+        };
+
+        var planner = await factory.CreateClientAsAsync(Roles.Planner, site);
+        Assert.Equal(HttpStatusCode.Forbidden, (await planner.PostAsJsonAsync("/api/shift-schedules", request)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await planner.GetAsync(new Uri($"/api/shift-schedules?siteId={site}", UriKind.Relative))).StatusCode);
+
+        var manager = await factory.CreateClientAsAsync(Roles.Manager, site);
+        Assert.Equal(HttpStatusCode.Created, (await manager.PostAsJsonAsync("/api/shift-schedules", request)).StatusCode);
+        var preview = await manager.PostAsJsonAsync("/api/shift-schedules/preview", new Pulaski.Contracts.Shifts.PreviewShiftScheduleRequest
+        {
+            SiteId = site,
+            CycleStart = request.CycleStart,
+            Shifts = request.Shifts,
+            From = new DateOnly(2026, 10, 19),
+        });
+        Assert.Equal(5, (await preview.Content.ReadFromJsonAsync<Pulaski.Contracts.Shifts.ShiftPreviewDto>())!.Shifts.Count);
+    }
 }

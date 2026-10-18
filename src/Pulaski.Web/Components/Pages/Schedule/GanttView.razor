@@ -94,7 +94,12 @@
                         }
                         @if (!line.Timeline.HasShiftCalendar)
                         {
-                            <span class="chip chip-muted" title="No shift calendar covers this line; times assume it runs around the clock.">24/7</span>
+                            <span class="chip chip-muted" title="No shift schedule covers this line; times assume it runs around the clock.">24/7</span>
+                        }
+                        else if (line.Timeline.CalendarName is { } calendar)
+                        {
+                            @* Where its working time comes from (D-038), such as "2X8 · Two shifts, from PLT1". *@
+                            <span class="chip chip-muted" title="Shifts: @calendar">@(calendar.StartsWith("Around the clock", StringComparison.Ordinal) ? "24/7" : calendar.Split(' ')[0])</span>
                         }
                         @{ var overlaps = Controller.Board.Overlaps.Count(o => o.Line.Id == line.Id); }
                         @if (overlaps > 0)

@@ -174,7 +174,7 @@
                 {
                     case PropertyEditor.Text:
                         <input @key="EditorKey(item)" id="@InputId(item)" class="pg-input" value="@item.Value"
-                               placeholder="@item.Placeholder" maxlength="@item.MaxLength" disabled="@Disabled"
+                               placeholder="@item.Placeholder" maxlength="@item.MaxLength" disabled="@(Disabled || item.Locked)"
                                autocomplete="off" spellcheck="false"
                                @onfocus="() => _selectedKey = item.Key"
                                @onkeydown="OnKeyDown"
@@ -182,7 +182,7 @@
                         break;
                     case PropertyEditor.Choice:
                         <select @key="EditorKey(item)" id="@InputId(item)" class="pg-input" value="@item.Value"
-                                disabled="@Disabled"
+                                disabled="@(Disabled || item.Locked)"
                                 @onfocus="() => _selectedKey = item.Key"
                                 @onchange="e => CommitAsync(item, e.Value as string)">
                             @foreach (var choice in item.Choices)
@@ -196,7 +196,7 @@
                                min="@item.Min?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                                max="@item.Max?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                                step="@(item.Step?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "any")"
-                               disabled="@Disabled"
+                               disabled="@(Disabled || item.Locked)"
                                @onfocus="() => _selectedKey = item.Key"
                                @onkeydown="OnKeyDown"
                                @onchange="e => CommitAsync(item, e.Value as string)" />
@@ -209,7 +209,7 @@
                 {
                     <span class="pg-suffix">@item.Suffix</span>
                 }
-                @if (item.Removable && !Disabled)
+                @if (item.Removable && !Disabled && !item.Locked)
                 {
                     <button type="button" class="pg-remove" aria-label="Remove @item.Name" title="Remove @item.Name"
                             @onclick="() => OnRemove.InvokeAsync(item.Key)" @onclick:stopPropagation>

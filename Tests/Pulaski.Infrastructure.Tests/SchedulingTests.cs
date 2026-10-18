@@ -42,8 +42,11 @@ public sealed class SchedulingTests(DatabaseFixture db)
                 INSERT INTO core.changeover_rule (site_id, from_material_id, to_material_id, duration)
                 VALUES (@site, @white, @black, interval '45 minutes');
 
-                INSERT INTO core.shift_instance (scope_equipment_id, production_date, starts_at, ends_at)
-                VALUES (@site, current_date, now() - interval '1 hour', now() + interval '30 days');
+                -- A schedule of one 24-hour shift a day, which the site follows (D-038): the line works without gaps.
+                INSERT INTO core.shift_schedule (id, site_id, code, name, cycle_days, cycle_start, shifts)
+                VALUES (@schedule, @site, @scheduleCode, 'All day', 1, current_date - 10,
+                        '[{"code":"D","name":"Day","start":"00:00","minutes":1440,"days":[0]}]');
+                UPDATE core.equipment SET calendar_mode = 'schedule', shift_schedule_id = @schedule WHERE id = @site;
 
                 INSERT INTO core.work_order (id, site_id, order_number, material_id, planned_qty, uom_id, due_at)
                 VALUES (@wo, @site, @woNumber, @black, 1000, @uom, now() + interval '1 hour');
@@ -70,6 +73,8 @@ public sealed class SchedulingTests(DatabaseFixture db)
                     maintenance,
                     wo = workOrder,
                     woNumber = "WO-" + Guid.NewGuid().ToString("N")[..8],
+                    schedule = Guid.CreateVersion7(),
+                    scheduleCode = "ALL-" + Guid.NewGuid().ToString("N")[..6],
                 });
         }
 

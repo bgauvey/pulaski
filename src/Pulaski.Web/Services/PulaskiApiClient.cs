@@ -11,6 +11,7 @@ using Pulaski.Contracts.Processes;
 using Pulaski.Contracts.ReferenceData;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Contracts.Security;
+using Pulaski.Contracts.Shifts;
 using Pulaski.Contracts.WorkOrders;
 using Pulaski.Web.Services.Security;
 
@@ -87,6 +88,23 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<VersionResponse> UpdateEquipmentAsync(Guid id, UpdateEquipmentRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{id}", request, ct);
+
+    // Shift schedules (D-038)
+
+    public Task<IReadOnlyList<ShiftScheduleDto>> ListShiftSchedulesAsync(Guid? siteId = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ShiftScheduleDto>>(siteId is null ? "api/shift-schedules" : $"api/shift-schedules?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> CreateShiftScheduleAsync(CreateShiftScheduleRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/shift-schedules", request, ct);
+
+    public Task<VersionResponse> UpdateShiftScheduleAsync(Guid id, UpdateShiftScheduleRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/shift-schedules/{id}", request, ct);
+
+    public Task<ShiftPreviewDto> PreviewShiftScheduleAsync(PreviewShiftScheduleRequest request, CancellationToken ct = default) =>
+        SendAsync<ShiftPreviewDto>(HttpMethod.Post, "api/shift-schedules/preview", request, ct);
+
+    public Task<VersionResponse> SetEquipmentCalendarAsync(Guid equipmentId, SetEquipmentCalendarRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{equipmentId}/calendar", request, ct);
 
     // Work orders
 

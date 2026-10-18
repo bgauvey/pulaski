@@ -27,7 +27,7 @@ This is the reference for every table and column in `db/schema-draft.sql` (Postg
 
 ```
 Equipment model            Material & capability          Calendar
- equipment ─┬─ closure       material_class                 shift_pattern ─ shift_definition
+ equipment ─┬─ closure       material_class                 shift_schedule (D-038)
             ├─ link ─ residence_time   material ─ uom_conversion   crew
             ├─ tag                     bom ─ bom_version ─ bom_item shift_instance
             ├─ stop_reason_map         equipment_capability (D-020) calendar_exception
@@ -103,6 +103,8 @@ One self-referencing table holds enterprise, sites, areas, work centers (lines),
 | `micro_stop_threshold` | interval | no | Stops shorter than this count as micro-stops. Default 2 minutes. |
 | `time_zone` | text | yes | IANA zone, required on sites. Shift times and reports use it. |
 | `is_active` | boolean | no | False when retired. |
+| `calendar_mode` | text | no | Which working time it follows for planning (D-038): `inherit` (default, its parent's; at the top with nothing set, around the clock), `schedule` (its own) or `around_the_clock`. |
+| `shift_schedule_id` | uuid → shift_schedule | yes | Its own schedule; set exactly when `calendar_mode` is `schedule` (`equipment_calendar_schedule_ck`). A schedule of its own site. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ### core.equipment_closure — ancestor/descendant pairs · *In use*
@@ -387,28 +389,24 @@ The list of which material can run on which equipment. A production job may only
 
 ## 4. Calendar
 
-Planned production time comes from staffed shift instances minus calendar exceptions. The scheduling projection only places work inside it.
+Planned production time comes from the shifts of the schedule each line follows (D-038), minus calendar exceptions. The scheduling projection only places work inside it.
 
-### core.shift_pattern — shift rotation · *Planned*
+### core.shift_schedule — a site's shift schedule · *In use (D-038)*
+
+Shifts that repeat every `cycle_days` from `cycle_start`, in the site's time zone. Shift times aren't stored: planning works them out from the schedule the line follows (its own, or the nearest ancestor's). Switched off, not deleted.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
 | `site_id` | uuid → equipment | no | The site. |
-| `code` | text | no | Unique per site. |
+| `code` | text | no | Unique per site, upper case; fixed once created. |
 | `name` | text | no | Display name. |
-| `cycle_days` | integer | no | Length of the rotation: 7 for weekly, 28 for DuPont. |
-
-### core.shift_definition — shifts within a pattern · *Planned*
-
-| Column | Type | Null | Description |
-| --- | --- | --- | --- |
-| `id` | uuid | no | Primary key. |
-| `shift_pattern_id` | uuid → shift_pattern | no | The pattern. |
-| `code` | text | no | Shift name: `A`, `B`, `Nights`. |
-| `day_offset` | integer | no | Day within the cycle. Unique with pattern and code. |
-| `start_time` | time | no | Start, in site local time. |
-| `duration` | interval | no | Length of the shift. |
+| `description` | text | yes | Notes. |
+| `cycle_days` | integer | no | Length of the cycle, 1 to 56: 7 for weekly, 28 for a four-week rotation. |
+| `cycle_start` | date | no | The cycle's first day (site-local). |
+| `shifts` | jsonb | no | The shifts, saved whole: an array of `{code, name, start "HH:mm", minutes, days [0…cycle_days − 1]}`. They don't overlap, also across the end of the cycle; each belongs to the day it starts on. |
+| `is_active` | boolean | no | False when switched off: it can't be chosen. One that equipment follows can't be switched off. |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
 ### core.crew — crews · *Planned*
 
@@ -419,15 +417,16 @@ Planned production time comes from staffed shift instances minus calendar except
 | `code` | text | no | Unique per site. |
 | `name` | text | no | Display name. |
 
-### core.shift_instance — actual shifts on the calendar · *In use (read)*
+### core.shift_instance — shifts as worked · *Planned*
 
-Shifts generated ahead of time by a worker. They apply to the nearest ancestor of a line that has any.
+For recording shifts as worked (reporting by shift, crews), which isn't built. Planning no longer reads it: it works shift times out from `core.shift_schedule` (D-038).
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
 | `scope_equipment_id` | uuid → equipment | no | Site, area or work center the shift covers. Shifts for one scope may not overlap. |
-| `shift_definition_id` | uuid → shift_definition | yes | The definition it came from, if generated. |
+| `shift_schedule_id` | uuid → shift_schedule | yes | The schedule it came from. |
+| `shift_code` | text | yes | The shift's code in that schedule. |
 | `crew_id` | uuid → crew | yes | The crew working it. |
 | `production_date` | date | no | The "shift day" used for reporting. |
 | `starts_at`, `ends_at` | timestamptz | no | The shift window; end after start. |

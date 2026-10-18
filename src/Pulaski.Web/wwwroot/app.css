@@ -432,3 +432,21 @@ fieldset.view-only-scope {
     letter-spacing: 0.04em;
     color: var(--text-muted);
 }
+
+/* Shift schedules (D-038): shifts down the side, the days of the cycle across. */
+.shift-grid .shift-day {
+    font-size: 12px;
+    white-space: nowrap;
+    min-width: 3rem;
+}
+
+.shift-preview {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+}
+
+.shift-preview-days li + li {
+    margin-top: 2px;
+}

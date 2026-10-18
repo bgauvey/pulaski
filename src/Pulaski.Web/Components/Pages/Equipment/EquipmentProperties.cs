@@ -1,4 +1,5 @@
 using Pulaski.Contracts.EquipmentModel;
+using Pulaski.Contracts.Shifts;
 using Pulaski.Web.Services;
 
 namespace Pulaski.Web.Components.Pages.Equipment;
@@ -59,6 +60,12 @@ public static class EquipmentProperties
     private const string Site = "Site";
     private const string Status = "Status";
     private const string Hierarchy = "Hierarchy";
+    private const string WorkingTime = "Working time";
+
+    public const string CalendarKey = "calendar";
+    private const string Inherit = "inherit";
+    private const string AroundTheClock = "around_the_clock";
+    private const string SchedulePrefix = "schedule:";
 
     private const string CodeHelp = "Business key, unique within the site. Fixed once the equipment is created.";
     private const string NameHelp = "Display name shown on screens and reports.";
@@ -81,7 +88,12 @@ public static class EquipmentProperties
 
     // ---- Existing equipment ----
 
-    public static IReadOnlyList<PropertyItem> ForExisting(EquipmentDto e, EquipmentTree tree)
+    /// <summary>
+    /// The rows for existing equipment. Rows the user may not change are shown locked: <paramref name="canEdit"/> for the
+    /// equipment itself, <paramref name="canSetShifts"/> for the shift schedule it follows (D-037, D-038).
+    /// </summary>
+    public static IReadOnlyList<PropertyItem> ForExisting(
+        EquipmentDto e, EquipmentTree tree, IReadOnlyList<ShiftScheduleDto>? schedules = null, bool canEdit = true, bool canSetShifts = true)
     {
         var parent = e.ParentId is { } parentId ? tree.Find(parentId) : null;
         var site = e.SiteId is { } siteId ? tree.Find(siteId) : null;
@@ -120,12 +132,89 @@ public static class EquipmentProperties
         items.Add(Bool("isActive", "Active", Status,
             "Inactive equipment stays in the hierarchy and its history, greyed out.", e.IsActive));
 
+        if (!canEdit)
+        {
+            items = [.. items.Select(i => i.Editor == PropertyEditor.ReadOnly ? i : i with { Locked = true })];
+        }
+
+        items.Add(CalendarItem(e, schedules ?? [], canSetShifts));
+        items.Add(new()
+        {
+            Key = "calendarInEffect",
+            Name = "Shifts in effect",
+            Category = WorkingTime,
+            Description = "The working time planning uses for this equipment and everything below it that inherits: its own setting, or the nearest one above it.",
+            Value = InEffect(e, tree, schedules ?? []),
+        });
+
         items.Add(new() { Key = "parent", Name = "Parent", Category = Hierarchy, Description = "The equipment this sits under.", Value = parent is null ? "None" : $"{parent.Code} · {parent.Name}" });
         items.Add(new() { Key = "site", Name = "Owning site", Category = Hierarchy, Description = "The site whose time zone and codes this equipment uses.", Value = site is null ? "None" : site.Code });
         items.Add(new() { Key = "children", Name = "Children", Category = Hierarchy, Description = "Equipment directly below this.", Value = tree.ChildrenOf(e.Id).Count.ToString(System.Globalization.CultureInfo.InvariantCulture) });
         items.Add(new() { Key = "id", Name = "Id", Category = Hierarchy, Description = "Pulaski's internal identifier, for API calls and support.", Value = e.Id.ToString() });
 
         return items;
+    }
+
+    /// <summary>The working-time request for an edit of the <see cref="CalendarKey"/> row.</summary>
+    public static SetEquipmentCalendarRequest CalendarChange(EquipmentDto e, string? value) =>
+        value is { } v && v.StartsWith(SchedulePrefix, StringComparison.Ordinal) && Guid.TryParse(v[SchedulePrefix.Length..], out var id)
+            ? new SetEquipmentCalendarRequest { Version = e.Version, Mode = "schedule", ShiftScheduleId = id }
+            : new SetEquipmentCalendarRequest { Version = e.Version, Mode = value == AroundTheClock ? AroundTheClock : Inherit };
+
+    /// <summary>
+    /// Where the working time of <paramref name="e"/> comes from (D-038): the nearest equipment, itself first, that
+    /// doesn't inherit; around the clock when nothing above sets one.
+    /// </summary>
+    public static string InEffect(EquipmentDto e, EquipmentTree tree, IReadOnlyList<ShiftScheduleDto> schedules)
+    {
+        for (var current = e; current is not null; current = current.ParentId is { } parentId ? tree.Find(parentId) : null)
+        {
+            var from = current.Id == e.Id ? "" : $", from {current.Code}";
+            switch (current.CalendarMode)
+            {
+                case AroundTheClock:
+                    return "Around the clock" + from;
+                case "schedule":
+                    var schedule = schedules.FirstOrDefault(s => s.Id == current.ShiftScheduleId);
+                    return (schedule is null ? "A shift schedule" : $"{schedule.Code} · {schedule.Name}") + from;
+            }
+        }
+
+        return "Around the clock: no shift schedule is set here or above";
+    }
+
+    private static PropertyItem CalendarItem(EquipmentDto e, IReadOnlyList<ShiftScheduleDto> schedules, bool canSetShifts)
+    {
+        var value = e.CalendarMode switch
+        {
+            "schedule" => SchedulePrefix + e.ShiftScheduleId,
+            AroundTheClock => AroundTheClock,
+            _ => Inherit,
+        };
+
+        // A site's schedules are for that site and what is below it; a switched-off one stays listed while it is chosen.
+        var own = e.SiteId is { } siteId
+            ? schedules.Where(s => s.SiteId == siteId && (s.IsActive || s.Id == e.ShiftScheduleId))
+            : [];
+        List<PropertyChoice> choices =
+        [
+            new(Inherit, e.ParentId is null ? "Inherit (nothing above: around the clock)" : "Inherit from parent"),
+            new(AroundTheClock, "Around the clock"),
+            .. own.Select(s => new PropertyChoice(SchedulePrefix + s.Id, $"{s.Code} · {s.Name}{(s.IsActive ? "" : " (switched off)")}")),
+        ];
+
+        return new()
+        {
+            Key = CalendarKey,
+            Name = "Shifts",
+            Category = WorkingTime,
+            Description = "When it works, for planning: inherit its parent's shifts, follow one of the site's shift schedules, or run around the clock. "
+                + "Schedules are kept on Configure → Shifts.",
+            Value = value,
+            Editor = PropertyEditor.Choice,
+            Choices = choices,
+            Locked = !canSetShifts,
+        };
     }
 
     /// <summary>The update to send for one edited property, or null if the key is not editable.</summary>

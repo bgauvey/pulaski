@@ -27,6 +27,7 @@ public static class Permissions
     public const string Reasons = "reasons.manage";
     public const string Equipment = "equipment.manage";
     public const string SiteSettings = "site_settings.manage";
+    public const string Shifts = "shifts.manage";
     public const string Security = "security.manage";
 
     /// <summary>Every permission, in the order screens list them, with its area and what it allows.</summary>
@@ -52,6 +53,7 @@ public static class Permissions
         new(Reasons, "Configuration", "Maintain reason codes"),
         new(Equipment, "Configuration", "Maintain equipment: sites, lines, locations"),
         new(SiteSettings, "Configuration", "Set a site's changeover mode and reporting tolerances"),
+        new(Shifts, "Configuration", "Maintain shift schedules and choose which one equipment follows"),
         new(Security, "Administration", "Maintain users, roles and what each role may do"),
     ];
 
@@ -103,8 +105,8 @@ public static class Roles
             [Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide],
             "Holds and releases lots, corrects inventory and decides on partial batches."),
         new(Manager, "Manager", false,
-            [Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings],
-            "Views everything; reopens jobs, closes work orders, maintains reason codes and the site's settings."),
+            [Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts],
+            "Views everything; reopens jobs, closes work orders, maintains reason codes, shift schedules and the site's settings."),
         new(Auditor, "Auditor", false,
             [Permissions.InventoryCorrect, Permissions.StockCount],
             "Views everything and corrects inventory; counts stock. Doesn't plan or run jobs."),

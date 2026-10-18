@@ -110,6 +110,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   code (all permissions, everywhere, unchangeable); `Roles.Defaults` seeds a new database. Every other role is held at a
   site; viewing is open to every signed-in user; every changing endpoint carries `.RequirePermission(permission, Site.…)`.
   Every user keeps a role; a held role can't be switched off.
+- Shift schedules (D-038, proposed): `core.shift_schedule` per site (cycle of 1–56 days from `cycle_start`, shifts as one
+  `jsonb` document); equipment `calendar_mode` inherit / schedule / around_the_clock, nearest non-inherit ancestor wins.
+  Shift times are computed on read (`ShiftSchedule.Expand`, site time zone, DST-aware), never stored; `shift_instance` is
+  only for shifts as worked (planned). Permission `shifts.manage`; equipment's setting saves via `PUT /equipment/{id}/calendar`.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

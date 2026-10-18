@@ -78,5 +78,6 @@ api.MapUnitEndpoints();
 api.MapInventoryEndpoints();
 api.MapMaterialEndpoints();
 api.MapExecutionEndpoints();
+api.MapShiftEndpoints();
 
 app.Run();
