@@ -49,6 +49,9 @@ public static class Permissions
     public const string People = "people.manage";
     public const string Security = "security.manage";
 
+    // Machine data (D-041): what a Pulaski Edge node's service user holds.
+    public const string EdgeIngest = "edge.ingest";
+
     /// <summary>Every permission, in the order screens list them, with its area and what it allows.</summary>
     public static IReadOnlyList<PermissionInfo> Catalog { get; } =
     [
@@ -85,11 +88,12 @@ public static class Permissions
         new(Processes, "Configuration", "Maintain processes, BOMs and capabilities"),
         new(Units, "Configuration", "Maintain units of measure"),
         new(Reasons, "Configuration", "Maintain reason codes"),
-        new(Equipment, "Configuration", "Maintain equipment: sites, lines, locations"),
+        new(Equipment, "Configuration", "Maintain equipment: sites, lines, locations, machine profiles, edge nodes and tags"),
         new(SiteSettings, "Configuration", "Set a site's changeover mode and reporting tolerances"),
         new(Shifts, "Configuration", "Maintain shift schedules and choose which one equipment follows"),
         new(People, "Configuration", "Maintain people and crews"),
         new(Security, "Administration", "Maintain users, roles and what each role may do"),
+        new(EdgeIngest, "Machine data", "Send machine data as a Pulaski Edge node: read its configuration and forward what it collects"),
     ];
 
     /// <summary>Every permission with what it allows, as <c>sec.permission</c> holds them.</summary>
@@ -156,6 +160,7 @@ public static class Roles
     public const string Manager = "manager";
     public const string Auditor = "auditor";
     public const string ProcessEngineer = "process_engineer";
+    public const string EdgeNode = "edge_node";
 
     public const int MaxCodeLength = 50;
 
@@ -192,6 +197,8 @@ public static class Roles
         new(ProcessEngineer, "Process engineer", false,
             [Permissions.EquipmentView, Permissions.MaterialsView, Permissions.ProcessesView, Permissions.UnitsView, Permissions.Processes],
             "Maintains processes, BOMs and capabilities. Sees equipment, materials and units."),
+        new(EdgeNode, "Edge node", false, [Permissions.EdgeIngest],
+            "For the service user a Pulaski Edge node signs in as: reads its configuration and forwards machine data. Sees no screens."),
     ];
 
     /// <summary>Only the administrator is held everywhere; every other role is held at a site.</summary>

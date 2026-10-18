@@ -62,6 +62,7 @@ public static class DependencyInjection
         services.AddSingleton<IShiftReadStore, ShiftQueries>();
         services.AddSingleton<ILaborReadStore, LaborQueries>();
         services.AddSingleton<IMachineDataReadStore, MachineDataQueries>();
+        services.AddSingleton<IEdgeReadStore, EdgeQueries>();
 
         services.AddScoped<DbSession>();
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DbSession>());
@@ -81,6 +82,7 @@ public static class DependencyInjection
         services.AddScoped<IShiftRepository, ShiftRepository>();
         services.AddScoped<ILaborRepository, LaborRepository>();
         services.AddScoped<IMachineDataRepository, MachineDataRepository>();
+        services.AddScoped<IEdgeRepository, EdgeRepository>();
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
 
         return services;

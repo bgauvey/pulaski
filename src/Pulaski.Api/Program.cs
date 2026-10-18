@@ -81,5 +81,6 @@ api.MapExecutionEndpoints();
 api.MapShiftEndpoints();
 api.MapLaborEndpoints();
 api.MapMachineDataEndpoints();
+api.MapEdgeEndpoints();
 
 app.Run();

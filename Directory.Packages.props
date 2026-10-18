@@ -16,5 +16,10 @@
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <!-- Pulaski Edge and its connectors (D-041). -->
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="MQTTnet" Version="4.3.7.1207" />
   </ItemGroup>
 </Project>

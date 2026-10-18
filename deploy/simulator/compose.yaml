@@ -1,0 +1,31 @@
+# Pulaski machine data demo (D-041): an MQTT broker and a PackML machine simulator publishing Sparkplug B.
+#
+#   docker compose -f deploy/simulator/compose.yaml up -d
+#
+# The simulator is the open-source PackML MQTT Simulator (libremfg, MIT). It publishes group "Plant1", edge node "Packing",
+# device "PACK-SIM" on the broker at localhost:1883. Start it running with a DCMD of Command/Reset then Command/Start
+# (tools/sim-command.sh), or bind its tags in Pulaski first and watch Live.
+name: pulaski-simulator
+
+services:
+  broker:
+    image: eclipse-mosquitto:2.0.20
+    ports:
+      - "${PULASKI_MQTT_PORT:-1883}:1883"   # PULASKI_MQTT_PORT=1884 if another broker has 1883
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  packml-sim:
+    image: ghcr.io/libremfg/packml-simulator:latest
+    depends_on:
+      - broker
+    environment:
+      CLIENT_TYPE: sparkplugb
+      SITE: Plant1
+      AREA: Packing
+      LINE: PACK-SIM
+      MQTT_URL: mqtt://broker
+      MQTT_PORT: "1883"
+      SPARKPLUG_GROUP_ID: Plant1
+      SPARKPLUG_EDGE_NODE: Packing
+      TICK: "1000"

@@ -199,6 +199,32 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> SetProfileReasonsAsync(Guid id, SetProfileReasonsRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/machine-profiles/{id}/reasons", request, ct);
 
+    // Edge nodes, connections and tags (D-041)
+
+    public Task<IReadOnlyList<EdgeNodeDto>> ListEdgeNodesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<EdgeNodeDto>>($"api/edge-nodes?siteId={siteId}", ct);
+
+    public Task<EdgeNodeDetailDto> GetEdgeNodeAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<EdgeNodeDetailDto>($"api/edge-nodes/{id}", ct);
+
+    public Task<CreatedResponse> CreateEdgeNodeAsync(CreateEdgeNodeRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/edge-nodes", request, ct);
+
+    public Task<VersionResponse> UpdateEdgeNodeAsync(Guid id, UpdateEdgeNodeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/edge-nodes/{id}", request, ct);
+
+    public Task<CreatedResponse> CreateEdgeConnectionAsync(Guid nodeId, CreateEdgeConnectionRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/edge-nodes/{nodeId}/connections", request, ct);
+
+    public Task<VersionResponse> UpdateEdgeConnectionAsync(Guid id, UpdateEdgeConnectionRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/edge-connections/{id}", request, ct);
+
+    public Task<CreatedResponse> CreateEquipmentTagAsync(CreateEquipmentTagRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/equipment-tags", request, ct);
+
+    public Task<VersionResponse> UpdateEquipmentTagAsync(Guid id, UpdateEquipmentTagRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment-tags/{id}", request, ct);
+
     /// <summary>Checks (<paramref name="dryRun"/>) or imports a machine's definitions from CSV into a profile, all or nothing (D-041).</summary>
     public async Task<ProfileImportResponse> ImportMachineProfileCsvAsync(Guid id, long version, string csv, bool dryRun, CancellationToken ct = default)
     {

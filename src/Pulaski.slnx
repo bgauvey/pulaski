@@ -2,14 +2,21 @@
   <Folder Name="/tests/">
     <Project Path="../Tests/Pulaski.Api.Tests/Pulaski.Api.Tests.csproj" />
     <Project Path="../Tests/Pulaski.Application.Tests/Pulaski.Application.Tests.csproj" />
+    <Project Path="../Tests/Pulaski.Edge.Tests/Pulaski.Edge.Tests.csproj" />
     <Project Path="../Tests/Pulaski.Infrastructure.Tests/Pulaski.Infrastructure.Tests.csproj" />
     <Project Path="../Tests/Pulaski.Testing/Pulaski.Testing.csproj" />
     <Project Path="../Tests/Pulaski.Web.Tests/Pulaski.Web.Tests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="../tools/Pulaski.SparkplugCommand/Pulaski.SparkplugCommand.csproj" />
+  </Folder>
   <Project Path="Pulaski.Api/Pulaski.Api.csproj" />
   <Project Path="Pulaski.Application/Pulaski.Application.csproj" />
+  <Project Path="Pulaski.Connectors.Sparkplug/Pulaski.Connectors.Sparkplug.csproj" />
+  <Project Path="Pulaski.Connectors/Pulaski.Connectors.csproj" />
   <Project Path="Pulaski.Contracts/Pulaski.Contracts.csproj" />
   <Project Path="Pulaski.Domain/Pulaski.Domain.csproj" />
+  <Project Path="Pulaski.Edge/Pulaski.Edge.csproj" />
   <Project Path="Pulaski.Infrastructure/Pulaski.Infrastructure.csproj" />
   <Project Path="Pulaski.Web/Pulaski.Web.csproj" />
 </Solution>

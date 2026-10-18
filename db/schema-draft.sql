@@ -157,7 +157,51 @@ CREATE TABLE core.residence_time (
     CONSTRAINT residence_time_uq UNIQUE NULLS NOT DISTINCT (equipment_link_id, material_id)
 );
 
--- Machine tag mapping (edge binding). One row per signal the edge reads.
+-- Pulaski Edge nodes (D-041): a worker on plant hardware that runs connectors, buffers what they read and forwards it.
+-- It signs in as a service user holding edge.ingest at the site. stream_id/last_sequence make forwarding idempotent:
+-- a batch at or below last_sequence of the same stream was already applied.
+CREATE TABLE core.edge_node (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    code                text NOT NULL,                          -- upper case, fixed once created
+    name                text NOT NULL,
+    description         text,
+    is_active           boolean NOT NULL DEFAULT true,
+    stream_id           uuid,                                   -- the edge's buffer; a new one restarts the sequence
+    last_sequence       bigint NOT NULL DEFAULT 0,
+    last_seen_at        timestamptz,
+    agent_version       text,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT edge_node_code_uq UNIQUE (site_id, code)
+);
+
+-- One data source an edge node reads, through one connector: an MQTT Sparkplug B broker today (D-041).
+-- Secrets (broker passwords) stay in the edge's own configuration, never here.
+CREATE TABLE core.edge_connection (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    edge_node_id        uuid NOT NULL REFERENCES core.edge_node(id),
+    code                text NOT NULL,
+    name                text NOT NULL,
+    protocol            text NOT NULL CHECK (protocol IN ('sparkplug_b')),
+    settings            jsonb NOT NULL DEFAULT '{}',            -- the connector's own settings, e.g. host, port, TLS, group
+    is_active           boolean NOT NULL DEFAULT true,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT edge_connection_code_uq UNIQUE (edge_node_id, code)
+);
+
+-- What a connection has seen (Sparkplug birth certificates), so tags can be bound by picking them. Upserted by the edge.
+CREATE TABLE core.edge_metric (
+    connection_id       uuid NOT NULL REFERENCES core.edge_connection(id),
+    address             text NOT NULL,                          -- Sparkplug: group/node[/device]:metric
+    data_type           text,
+    last_value          text,
+    last_seen_at        timestamptz NOT NULL,
+    PRIMARY KEY (connection_id, address)
+);
+
+-- Machine tag mapping (edge binding, D-041). One row per signal the edge reads for a piece of equipment.
 CREATE TABLE core.equipment_tag (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
@@ -165,20 +209,44 @@ CREATE TABLE core.equipment_tag (
                             'state','unit_mode','stop_reason','alarm','warning',
                             'processed_count','defective_count','consumed_count',
                             'machine_speed','process_value')),
-    source_protocol     text NOT NULL CHECK (source_protocol IN ('sparkplug_b','opc_ua','synthesized','manual')),
-    edge_node           text,                                   -- Sparkplug edge node / OPC UA endpoint name
-    source_address      text NOT NULL,                          -- Sparkplug metric path or OPC UA NodeId
-    data_type           text NOT NULL CHECK (data_type IN ('bool','int','float','string')),
+    connection_id       uuid NOT NULL REFERENCES core.edge_connection(id),
+    source_address      text NOT NULL,                          -- Sparkplug: group/node[/device]:metric
     uom_id              uuid REFERENCES core.uom(id),
     scale_factor        numeric(18,9) NOT NULL DEFAULT 1,
     scale_offset        numeric(18,9) NOT NULL DEFAULT 0,
-    counter_rollover    bigint,                                 -- counters only: wrap value
+    counter_rollover    bigint,                                 -- counters only: the value it wraps at
     deadband            numeric(18,9),                          -- process values only
     is_active           boolean NOT NULL DEFAULT true,
     created_at          timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT equipment_tag_source_uq UNIQUE NULLS NOT DISTINCT (source_protocol, edge_node, source_address)
+    updated_at          timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX equipment_tag_equipment_ix ON core.equipment_tag (equipment_id, tag_role);
+-- One active tag per role on a piece of equipment (process values aside), and one role per address.
+CREATE UNIQUE INDEX equipment_tag_role_uq ON core.equipment_tag (equipment_id, tag_role) WHERE is_active AND tag_role <> 'process_value';
+CREATE UNIQUE INDEX equipment_tag_source_uq ON core.equipment_tag (connection_id, source_address) WHERE is_active;
+
+-- Each machine's state as its signals last left it (D-041): current state, so relational. Written by ingest only.
+CREATE TABLE core.equipment_live_state (
+    equipment_id        uuid PRIMARY KEY REFERENCES core.equipment(id),
+    raw_state           integer,                                -- what the machine sent; packml_state is its meaning
+    packml_state        smallint NOT NULL REFERENCES core.packml_state(code),
+    unit_mode           smallint NOT NULL DEFAULT 1,
+    state_since         timestamptz NOT NULL,
+    stop_reason         integer,                                -- the latest first-out stop code
+    machine_speed       numeric(18,6),
+    signal_at           timestamptz NOT NULL,                   -- the newest signal applied
+    edge_node_id        uuid REFERENCES core.edge_node(id),
+    updated_at          timestamptz NOT NULL DEFAULT now()
+);
+
+-- The last raw value of each machine counter, so a new reading becomes a count (D-041).
+CREATE TABLE core.equipment_counter (
+    equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
+    count_kind          text NOT NULL CHECK (count_kind IN ('processed','defective','consumed')),
+    raw_counter         bigint NOT NULL,
+    read_at             timestamptz NOT NULL,
+    PRIMARY KEY (equipment_id, count_kind)
+);
 
 -- PackML unit modes. Default policy: only Production-mode time is planned time.
 CREATE TABLE core.unit_mode (
@@ -1267,6 +1335,8 @@ CREATE TABLE ts.equipment_state_change (
     run_id              uuid,
     source              text NOT NULL CHECK (source IN ('packtags','synthesized','manual','edge_gap')),
     edge_sequence       bigint,                                 -- store-and-forward ordering / dedup
+    raw_state           integer,                                -- what the machine sent (D-041); packml_state is its meaning
+    stop_reason         integer,                                -- the machine's first-out stop code when the state changed
     recorded_at         timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (id, occurred_at)
 ) PARTITION BY RANGE (occurred_at);
@@ -1647,7 +1717,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0012_shift_schedules'),
     ('0013_view_permissions'),
     ('0014_labor'),
-    ('0015_machine_profiles');
+    ('0015_machine_profiles'),
+    ('0016_edge');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -1688,11 +1759,12 @@ INSERT INTO sec.permission (code, description) VALUES
     ('processes.manage', 'Maintain processes, BOMs and capabilities'),
     ('units.manage', 'Maintain units of measure'),
     ('reasons.manage', 'Maintain reason codes'),
-    ('equipment.manage', 'Maintain equipment: sites, lines, locations'),
+    ('equipment.manage', 'Maintain equipment: sites, lines, locations, machine profiles, edge nodes and tags'),
     ('site_settings.manage', 'Set a site''s changeover mode and reporting tolerances'),
     ('shifts.manage', 'Maintain shift schedules and choose which one equipment follows'),
     ('people.manage', 'Maintain people and crews'),
-    ('security.manage', 'Maintain users, roles and what each role may do')
+    ('security.manage', 'Maintain users, roles and what each role may do'),
+    ('edge.ingest', 'Send machine data as a Pulaski Edge node: read its configuration and forward what it collects')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
 -- The roles a new database starts with (Roles.Defaults); after that they are the administrator's to change.
@@ -1705,7 +1777,8 @@ INSERT INTO sec.role (code, name, description, is_system) VALUES
     ('quality', 'Quality', 'Holds and releases lots, corrects inventory and decides on partial batches.', true),
     ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people and the site''s settings.', true),
     ('auditor', 'Auditor', 'Views everything and corrects inventory; counts stock. Doesn''t plan or run jobs.', true),
-    ('process_engineer', 'Process engineer', 'Maintains processes, BOMs and capabilities. Sees equipment, materials and units.', true)
+    ('process_engineer', 'Process engineer', 'Maintains processes, BOMs and capabilities. Sees equipment, materials and units.', true),
+    ('edge_node', 'Edge node', 'For the service user a Pulaski Edge node signs in as: reads its configuration and forwards machine data. Sees no screens.', true)
 ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO sec.role_permission (role_id, permission_code)
@@ -1791,7 +1864,8 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('process_engineer', 'materials.view'),
     ('process_engineer', 'processes.view'),
     ('process_engineer', 'units.view'),
-    ('process_engineer', 'processes.manage')
+    ('process_engineer', 'processes.manage'),
+    ('edge_node', 'edge.ingest')
 ) AS v(role_code, permission_code)
 JOIN sec.role r ON r.code = v.role_code
 ON CONFLICT (role_id, permission_code) DO NOTHING;

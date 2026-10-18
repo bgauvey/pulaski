@@ -46,7 +46,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Identity (D-037, proposed): local sign-in now (`pulaski-local`, PBKDF2 hashes in `sec.local_credential`, API-issued
   HMAC JWT from `Security:SigningKey`); OpenID Connect (Okta, Entra ID, AD FS, Keycloak) later as another bearer scheme.
   Users are keyed by issuer + subject. The UI keeps the token in a cookie session and sends it on every API call.
-- Machine data: MQTT Sparkplug B and OPC UA, built on the connector SDK.
+- Machine data: MQTT Sparkplug B and OPC UA, built on the connector SDK (`src/Pulaski.Connectors`: `IConnector`, samples;
+  `Pulaski.Connectors.Sparkplug`: hand-written protobuf codec, host logic in `SparkplugHost`, MQTTnet 4). `src/Pulaski.Edge` is the
+  worker: `TagBinder` (samples → signals on change), `EdgeBuffer` (SQLite store-and-forward), `ConnectorHost`, `Forwarder`.
 - Containers for the demo and Linux sites; Windows service option.
 
 ## Domain conventions
@@ -131,6 +133,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   overrides bump the equipment's. Reason classes runtime / downtime / planned (excluded); micro-stops < the equipment's threshold
   (default 5 min, `PUT /equipment/{id}/machine-data`) aren't availability loss; line state series = worst, parallel = best.
   Permissions: `equipment.view` / `equipment.manage`. OEE computed on read; telemetry stays out of `evt.event`.
+  Edge (as built): `core.edge_node` / `edge_connection` (settings jsonb, no secrets) / `edge_metric` (seen) / `equipment_tag`. The edge
+  forwards raw values; ingest (`IngestEdgeSignalsCommand`, locks node then equipment in id order) maps state through the profile,
+  latches stop codes (`LiveStateRules`), counts across rollover (`Counters.Delta`), writes `ts.equipment_state_change`,
+  `ts.production_count` (source `machine`, excluded from reports) and `core.equipment_live_state`; skips seq ≤ `last_sequence` of the
+  same `stream_id`. The edge's user holds role `edge_node` (`edge.ingest`).
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
@@ -183,7 +190,7 @@ Treat these as working assumptions; confirm with Bill before building anything t
   `db/seed-materials.sql` (200 demo materials in 11 classes; re-runnable), then `db/seed-units.sql` (standard units
   and demo material conversions, D-026; re-runnable), then `db/seed-reasons.sql` (starter adjustment, hold and
   utilization reasons, D-027, D-041; re-runnable).
-- Layout: production projects in `src/`, test projects in `Tests/` (shared in-memory fakes in
+- Layout: production projects in `src/`, dev tools in `tools/`, the simulator compose file in `deploy/simulator/`, test projects in `Tests/` (shared in-memory fakes in
   `Tests/Pulaski.Testing`); `.editorconfig`,
   `Directory.Build.props`, `Directory.Packages.props` (central package versions) and
   `nuget.config` sit at the repo root.
@@ -195,3 +202,6 @@ Treat these as working assumptions; confirm with Bill before building anything t
   `src/Pulaski.Api/appsettings.Development.json` (`Security:BootstrapAdmin`); change it at the first sign-in.
 - Run: `dotnet run --project src/Pulaski.Api` (http://localhost:5080, OpenAPI at
   `/openapi/v1.json`) and `dotnet run --project src/Pulaski.Web` (http://localhost:5090).
+- Machine data demo: `docker compose -f deploy/simulator/compose.yaml up -d` (broker + PackML simulator; `PULASKI_MQTT_PORT=1884`
+  if 1883 is taken), then `dotnet run --project src/Pulaski.Edge` with `Edge__EdgeNodeId`, `Edge__Username`, `Edge__Password`
+  (from Configure → Edge nodes → Setup). Send the simulator commands with `tools/Pulaski.SparkplugCommand`.

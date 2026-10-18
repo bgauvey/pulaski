@@ -144,25 +144,95 @@ How long material takes to travel a link, for time-window genealogy. Optionally 
 | `ref_residence` | interval | no | The residence time, at `ref_speed` when speed-scaled. |
 | `ref_speed` | numeric(18,6) | yes | Reference line speed; required and positive for `speed_scaled`. |
 
-### core.equipment_tag — machine signal bindings · *Planned*
+### core.edge_node — Pulaski Edge nodes · *In use (D-041)*
 
-One row per signal the edge node reads, and what it means.
+A worker on plant hardware that reads machines through its connections, buffers what it reads and forwards it. It signs in as a local user holding the Edge node role (`edge.ingest`) at the site. Maintained on Configure → Edge nodes (`equipment.manage`).
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key; the edge's `EdgeNodeId`. |
+| `site_id` | uuid → equipment | no | Its site. |
+| `code` | text | no | Upper case, unique per site (`edge_node_code_uq`), fixed once created. |
+| `name`, `description` | text | no / yes | Display name and notes. |
+| `is_active` | boolean | no | Off: Pulaski refuses its data and the edge stops collecting. |
+| `stream_id` | uuid | yes | The edge's buffer, as of its last batch. A new buffer is a new stream. |
+| `last_sequence` | bigint | no | The highest sequence number of `stream_id` applied; a batch at or below it is skipped, so sending again is harmless. |
+| `last_seen_at` | timestamptz | yes | When it last forwarded signals or reported what it sees. |
+| `agent_version` | text | yes | The version of Pulaski Edge it runs. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.edge_connection — what an edge node reads · *In use (D-041)*
+
+One data source, read through one connector. Secrets such as broker passwords live in the edge's own configuration, never here.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `equipment_id` | uuid → equipment | no | The equipment the signal belongs to. |
-| `tag_role` | text | no | `state`, `unit_mode`, `stop_reason`, `alarm`, `warning`, `processed_count`, `defective_count`, `consumed_count`, `machine_speed` or `process_value`. |
-| `source_protocol` | text | no | `sparkplug_b`, `opc_ua`, `synthesized` or `manual`. |
-| `edge_node` | text | yes | Sparkplug edge node, or OPC UA endpoint name. |
-| `source_address` | text | no | Sparkplug metric path or OPC UA NodeId. Unique with protocol and edge node. |
-| `data_type` | text | no | `bool`, `int`, `float` or `string`. |
-| `uom_id` | uuid → uom | yes | Unit of the value. |
-| `scale_factor`, `scale_offset` | numeric(18,9) | no | Engineering value = raw × factor + offset. Defaults 1 and 0. |
-| `counter_rollover` | bigint | yes | Counters only: the value at which the counter wraps. |
-| `deadband` | numeric(18,9) | yes | Process values only: ignore changes smaller than this. |
-| `is_active` | boolean | no | False when no longer read. |
-| `created_at` | timestamptz | no | Insert time. |
+| `edge_node_id` | uuid → edge_node | no | The node that reads it. |
+| `code` | text | no | Unique per node (`edge_connection_code_uq`); the key for its secrets in the edge's configuration. |
+| `name` | text | no | Display name. |
+| `protocol` | text | no | `sparkplug_b`. |
+| `settings` | jsonb | no | The connector's settings as text values: for Sparkplug B `host`, `port`, `tls`, `groupId`, `hostId`, `clientId`, `username`. |
+| `is_active` | boolean | no | Off: the edge stops reading it. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.edge_metric — addresses a connection has seen · *In use (D-041)*
+
+What the edge reported seeing (Sparkplug birth certificates and data), so tags can be bound by picking them. Upserted by the edge.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `connection_id` | uuid → edge_connection | no | Part of the primary key. |
+| `address` | text | no | `group/node[/device]:metric`. Part of the primary key. |
+| `data_type` | text | yes | As the source declared it, e.g. `Int32`. |
+| `last_value` | text | yes | The last value seen, as text. |
+| `last_seen_at` | timestamptz | no | When it was last seen. |
+
+### core.equipment_tag — machine signal bindings · *In use (D-041)*
+
+One signal an edge reads for a piece of equipment, and what it means. One active tag per role on a piece of equipment, process values aside (`equipment_tag_role_uq`), and one per address on a connection (`equipment_tag_source_uq`).
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key; the edge's signals name it. |
+| `equipment_id` | uuid → equipment | no | Equipment of the node's site that tracks state. |
+| `tag_role` | text | no | `state`, `unit_mode`, `stop_reason`, `processed_count`, `defective_count`, `consumed_count` or `machine_speed`; `alarm`, `warning` and `process_value` aren't recorded yet. |
+| `connection_id` | uuid → edge_connection | no | Where it is read. |
+| `source_address` | text | no | Sparkplug B: `group/node[/device]:metric`. |
+| `uom_id` | uuid → uom | yes | Unit of the value; not used yet. |
+| `scale_factor`, `scale_offset` | numeric(18,9) | no | Counts are multiplied by the factor; a speed is value × factor + offset. Defaults 1 and 0. |
+| `counter_rollover` | bigint | yes | Counters only: the value the counter wraps at. Without it a counter going back is taken as reset to zero. |
+| `deadband` | numeric(18,9) | yes | Process values only; not used yet. |
+| `is_active` | boolean | no | Off: its signals are skipped. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.equipment_live_state — each machine's current state · *In use (D-041)*
+
+As its signals last left it. Written by machine data ingest only.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `equipment_id` | uuid → equipment | no | Primary key. |
+| `raw_state` | integer | yes | The value the machine sent; null with no signal. |
+| `packml_state` | smallint → packml_state | no | Its meaning, through the equipment's machine profile. |
+| `unit_mode` | smallint | no | Unit mode; 1 (Production) until the machine reports one. |
+| `state_since` | timestamptz | no | When the state or mode last changed. |
+| `stop_reason` | integer | yes | The latched first-out stop code: kept when the machine reports 0, cleared when it runs (Execute) again. |
+| `machine_speed` | numeric(18,6) | yes | Latest speed, scaled. |
+| `signal_at` | timestamptz | no | The newest signal applied. |
+| `edge_node_id` | uuid → edge_node | yes | The node it last came from. |
+| `updated_at` | timestamptz | no | When it was written. |
+
+### core.equipment_counter — last counter readings · *In use (D-041)*
+
+The last raw reading of each machine counter, so the next reading becomes a count.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `equipment_id` | uuid → equipment | no | Part of the primary key. |
+| `count_kind` | text | no | `processed`, `defective` or `consumed`. Part of the primary key. |
+| `raw_counter` | bigint | no | The reading. |
+| `read_at` | timestamptz | no | When it was read. |
 
 ### core.unit_mode — PackML unit modes · *Planned (seeded)*
 
@@ -1077,7 +1147,7 @@ The alert's current state; the violation itself is history in `ts.spc_violation`
 
 All tables here are partitioned by their time column, with that column in the primary key. Columns named `run_id` hold a `core.job_run` id without an FK.
 
-### ts.equipment_state_change — PackML state transitions · *Planned*
+### ts.equipment_state_change — PackML state transitions · *In use (D-041)*
 
 Each row is a change of the (state, mode) pair and carries when the previous pair began, so every row closes one complete interval and the table stays insert-only.
 
@@ -1094,7 +1164,9 @@ Each row is a change of the (state, mode) pair and carries when the previous pai
 | `run_id` | uuid | yes | The run at the time. |
 | `source` | text | no | `packtags`, `synthesized`, `manual` or `edge_gap` (no signal). |
 | `edge_sequence` | bigint | yes | Edge sequence number, for store-and-forward ordering and deduplication. |
-| `recorded_at` | timestamptz | no | When Pulaski received it. |
+| `raw_state` | integer | yes | The value the machine sent; `packml_state` is its meaning. Null with no signal (D-041). |
+| `stop_reason` | integer | yes | The first-out stop code latched when the state changed (D-041). |
+| `recorded_at` | timestamptz | no | When Pulaski received it; later than `occurred_at` when the edge buffered through an outage. |
 
 ### ts.downtime — stop intervals · *Planned*
 
@@ -1145,7 +1217,7 @@ Deltas calculated at the edge, with rollover handled there; the raw counter is k
 | `raw_counter` | bigint | yes | The counter value read. |
 | `uom_id` | uuid → uom | yes | Unit. |
 | `scrap_reason_code_id` | uuid → reason_code | yes | Why, for defective counts. |
-| `source` | text | no | `machine`, `operator` or `correction`. |
+| `source` | text | no | `machine` (from an edge, D-041: not a production report, and changes no run's quantities yet), `operator` or `correction`. |
 | `corrects_id` | uuid | yes | For corrections: the row being offset. |
 | `job_id` | uuid | yes | The run's job. No FK, as for `run_id`. |
 | `recorded_at` | timestamptz | no | When it was entered. Later than the run's end for a late report. |

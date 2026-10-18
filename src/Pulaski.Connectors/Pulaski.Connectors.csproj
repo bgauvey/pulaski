@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The connector SDK (D-041): what every connector implements, whatever it reads. No Pulaski dependencies,
+       so connectors can be built and shipped on their own. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+</Project>

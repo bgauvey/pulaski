@@ -2,7 +2,7 @@
 
 *Last updated: 2026-10-18 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
-This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#18-reference) tables give the exact rules.
+This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#19-reference) tables give the exact rules.
 
 ## Contents
 
@@ -23,10 +23,11 @@ This guide explains how to use Pulaski to set up your plant, plan production and
 15. [Shift schedules](#15-shift-schedules)
 16. [Labor, people and crews](#16-labor-people-and-crews)
 17. [Machine profiles](#17-machine-profiles)
-18. [Reference](#18-reference)
-19. [What Pulaski doesn't do yet](#19-what-pulaski-doesnt-do-yet)
-20. [Troubleshooting and questions](#20-troubleshooting-and-questions)
-21. [Glossary](#21-glossary)
+18. [Edge nodes: collecting machine data](#18-edge-nodes-collecting-machine-data)
+19. [Reference](#19-reference)
+20. [What Pulaski doesn't do yet](#20-what-pulaski-doesnt-do-yet)
+21. [Troubleshooting and questions](#21-troubleshooting-and-questions)
+22. [Glossary](#22-glossary)
 
 ---
 
@@ -45,7 +46,7 @@ Today you can use Pulaski to:
 - publish the plan to the floor and freeze it;
 - keep **inventory**: receive material lots into stores, write stock up or off, move and hold lots, record what each job used and made, and trace any lot back to what it was made from or forward to what was made from it.
 
-Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#19-what-pulaski-doesnt-do-yet).
+Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#20-what-pulaski-doesnt-do-yet).
 
 ### Opening Pulaski
 
@@ -187,7 +188,8 @@ If you are starting from an empty Pulaski, work through this list in order. Each
 | 8 | Work orders | [Schedule → New work order](#8-creating-a-work-order) | Now you can plan. |
 | 9 | Inventory locations: stores, staging areas and feed points, with **Holds inventory** ticked | [Equipment](#4-equipment) | Lots have to be somewhere. |
 | 10 | Reason codes for write-ups, write-offs and holds, and utilization reasons for machine time | [Reasons](#reason-codes) (a starter set comes with `db/seed-reasons.sql`) | Every adjustment and hold needs a reason; machine profiles map stop codes to utilization reasons. |
-| 11 | Machine profiles, and which one each machine uses (when machine data comes) | [Machine profiles](#17-machine-profiles), then [Equipment](#4-equipment) | So the machine's state values and stop codes mean something in Pulaski. |
+| 11 | Machine profiles, and which one each machine uses | [Machine profiles](#17-machine-profiles), then [Equipment](#4-equipment) | So the machine's state values and stop codes mean something in Pulaski. |
+| 12 | Edge nodes, their connections, and tags binding machine signals to equipment (optional) | [Edge nodes](#18-edge-nodes-collecting-machine-data) | So Pulaski hears machine state and counts. |
 
 The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plant PLT1 with EXT-01, EXT-02 and PACK1, the stores RM-STORE and staging FG-STAGE, 200 materials, and the standard units with conversions for the demo materials), so you can start at step 6.
 
@@ -284,7 +286,7 @@ Equipment with **Tracks state** set shows a **Machine data** group:
    - *Best of its machines (parallel)*: for machines running side by side, so the line runs while any of them does.
    - *Its constraint machine*: the line's state is one machine's. A **Constraint machine** row appears; Pulaski first picks the first machine below that tracks state, and you can choose another.
 
-Each saves as soon as you change it. Nothing reads these settings until machine data is collected (see [What Pulaski doesn't do yet](#19-what-pulaski-doesnt-do-yet)).
+Each saves as soon as you change it. The profile is used as soon as its machine's data arrives through an [edge node](#18-edge-nodes-collecting-machine-data); the threshold and *State from* are used once downtime is recorded (see [What Pulaski doesn't do yet](#20-what-pulaski-doesnt-do-yet)).
 
 ### Deactivate equipment
 
@@ -379,7 +381,7 @@ Orders already made keep the version they were made from. If a draft already exi
 - Operations with no path of links between them run in parallel; links make them sequential. Links must flow one way; a loop is refused.
 - A released process with more than one operation must be connected.
 - Only lines and departments of the process's own site can be used; machines and other equipment that neither runs nor plans jobs are refused.
-- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#19-what-pulaski-doesnt-do-yet).
+- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#20-what-pulaski-doesnt-do-yet).
 
 ---
 
@@ -1099,7 +1101,7 @@ A class's code can't change and a class is never deleted: switch it off instead.
 
 ### In detail
 
-- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#19-what-pulaski-doesnt-do-yet)).
+- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#20-what-pulaski-doesnt-do-yet)).
 - **Codes** are unique across all materials, whatever their origin; an import whose code is already used by another material is refused.
 - **Events.** Each change is recorded in the event log as `pulaski.material.created.v1`, `…updated.v1` or `…imported.v1` (and `pulaski.material_class.created.v1` / `…updated.v1`), with the material before and after.
 - **Concurrency.** As elsewhere, if someone else changed the material or class since you opened it, you'll see *"changed by someone else"*: reload and try again.
@@ -1316,7 +1318,7 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 
 **Configure → Machine profiles.** A machine profile describes how one kind of machine reports itself: the values its state tag takes and the PackML state each one means, and its own stop, alarm and warning codes with the utilization reason each one counts as. Identical machines share a profile; machines from different vendors or of different models each get their own. You give each machine its profile on the [Equipment](#machine-data) screen.
 
-Pulaski doesn't collect machine data yet: profiles are set up now so the machines' signals mean something when it does.
+Machine data arrives through [edge nodes](#18-edge-nodes-collecting-machine-data): the profile turns what each machine sends into PackML states.
 
 ### Ideas to know first
 
@@ -1373,9 +1375,53 @@ If one machine's code means something else than on the others with the same prof
 - **Two people at once:** every change to a profile's lists counts as a change to the profile, so someone saving after another's change is asked to reload.
 - **Errors in a file** name the line: a value that isn't a whole number, an unknown kind, a missing or unknown PackML state, a PackML state on a code row (usually a missing column), a value that appears twice, a name too long, or a reason that isn't an active utilization reason of the site.
 
+## 18. Edge nodes: collecting machine data
+
+**Configure → Edge nodes.** A Pulaski Edge node is a small program on plant hardware, near the machines. It reads them through an MQTT broker they publish to in **Sparkplug B**, keeps what it reads in a buffer on its own disk, and forwards it to Pulaski. If the network or Pulaski goes down, it keeps reading and forwards everything once it can, so nothing is lost.
+
+### Ideas to know first
+
+- **Connections** are where an edge node reads from: today, an MQTT broker. Pulaski listens as a Sparkplug B host application.
+- **Tags** bind a signal to equipment: *this* metric is PACK1's state, *that* one its processed count. A Sparkplug B address reads `group/node/device:metric`, for example `Plant1/Packing/PACK-01:Status/StateCurrent`.
+- **What Pulaski does with them.** A state value goes through the equipment's [machine profile](#17-machine-profiles) to its PackML state, and every change of state is kept, with the value the machine sent. The machine's first-out stop code is kept until it runs again. Counter readings become counts, in the job running on the equipment. Losing the signal is recorded as *Undefined*.
+
+### Add an edge node
+
+1. Open **Configure → Edge nodes**. With more than one site, choose the site.
+2. Type a **Code** (such as `GW-PACK`; it can't change later) and a **Name**, and click **Add edge node**. Its page opens.
+3. On **Connections**, give the broker a **Code** and **Name**, its **Broker host** and **Port**, tick **TLS** if it uses it, and optionally the Sparkplug **Group id** (to hear only one group), a **Host id** (Pulaski then announces itself, so nodes know it is listening), a **Client id** and a **User name**. Click **Add connection**.
+4. On **Configure → Users**, add a user for the edge (such as `edge-gw-pack`) with the **Edge node** role at the site. Sign in as that user once and set its password, then sign out.
+5. On the node's **Setup** tab, copy the configuration into the edge's `appsettings.json` on the edge machine, fill in the user's password (and the broker's, if it has a user name), and start Pulaski Edge.
+
+### Bind tags
+
+1. Once the edge runs, open its **Seen** tab: every metric its brokers have announced, with its last value. Type in **Filter addresses** to find one.
+2. Click **Bind** next to a metric. Pulaski guesses the role from the name; choose the **Equipment** (only equipment of the site that tracks state is offered) and check the **Role**.
+3. For a count, set the **Scale** (how many units one count is) and, if the counter wraps, its **Rollover** value. Click **Bind tag**.
+4. To type an address instead, use the same form on the **Tags** tab. To change a tag, edit its address, scale, rollover or **Active** box and click **Save**.
+
+The edge reads its tags every minute, so new and changed ones take effect without restarting it.
+
+### Watch it work
+
+- The node's heading shows **Forwarding** while it is heard from, **Quiet** after 2 minutes without anything (offline, or nothing changed), and when it was last heard from and its version.
+- **Live** shows each bound machine's PackML state (and the value it sent, where different), since when, its unit mode, latched stop code and speed. Click **Refresh** to update.
+- **Tags** shows each tag's last value.
+
+### In detail
+
+- **Who:** seeing edge nodes needs permission to see equipment; adding and changing them, their connections and tags needs permission to maintain equipment at the site. The edge's own user needs only the **Edge node** role and sees no screens.
+- **Sending once.** The edge numbers everything it buffers and Pulaski applies each number once, so forwarding again after a failure changes nothing. A new buffer file starts a new numbering, which Pulaski recognises.
+- **What the edge forwards:** a tag's value when it changes, when it is lost, and the last value seen when the tag is newly bound; a speed at most every 5 seconds. A connection it hears from without a birth certificate is asked for one (a Sparkplug *rebirth*), as is every node its tags name when it connects, so an idle machine's state is known.
+- **Stop codes** are latched: a machine that clears its code once acknowledged keeps it in Pulaski until it runs (Execute) again.
+- **Counts** are taken across the rollover value; a counter going back without one is taken as reset to zero. Machine counts go into the run open on the equipment but don't change the job's reported quantities yet: production is still reported on the Floor.
+- **Switching a node off** stops Pulaski taking its data and the edge collecting. Switching a tag or connection off stops it being read.
+- **Without Pulaski**, the edge starts with the last configuration it kept.
+- **A demo machine.** `deploy/simulator/compose.yaml` runs an MQTT broker and an open-source PackML simulator that publishes Sparkplug B as group `Plant1`, node `Packing`, device `PACK-SIM`. `deploy/simulator/packml-simulator-profile.csv` is a machine profile for it (it numbers Idle and Clearing the other way round). Start the machine with `dotnet run --project tools/Pulaski.SparkplugCommand -- spBv1.0/Plant1/DCMD/Packing/PACK-SIM Command/Reset=true Command/Start=true`.
+
 ---
 
-## 18. Reference
+## 19. Reference
 
 ### Work order statuses
 
@@ -1443,7 +1489,7 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 ---
 
-## 19. What Pulaski doesn't do yet
+## 20. What Pulaski doesn't do yet
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
@@ -1452,7 +1498,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Labor:** no badges or shop-floor terminals, no qualifications, no breaks, and no import of people from HR or the ERP. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
 - **No adapters yet** for other external sources or for label printing: materials come from the screen, a CSV file, or the ERP one item at a time through the API. The CSV import doesn't take capabilities, doesn't create missing classes, and there is no template file to download (the panel shows the header line).
 - **Planning rates are calculated from the ideal rate only;** calculating them from run history isn't built yet.
-- **Machine data isn't collected yet.** Machine profiles, micro-stop thresholds and how a line's state comes from its machines can be set up, but no connector reads the machines yet, so nothing uses them. Binding a machine's tags, alarm and warning history, and coding stops come next.
+- **Machine data is collected but not yet used:** state changes, stop codes and counts arrive through edge nodes and show on the node's **Live** tab, but there is no downtime list, coding of stops, line state from its machines, live equipment screen or OEE yet. Machine counts don't replace production reports. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
 - **Production is reported by hand.** Counts from the machines, machine state, downtime, OEE, labor and quality aren't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
 - **Batches:** the batch size is per material, not per line (a 50 kg mixer next to a 200 kg one isn't modelled). A replacement job is always rounded up to whole batches; to make fewer, cancel it. Orders from the ERP aren't imported yet, so there is no rule yet for an ERP order that isn't whole batches. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **No screen for the reporting tolerances:** the rate and consumption tolerances (110% by default) are set per site through the API.
@@ -1474,7 +1520,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 
 ---
 
-## 20. Troubleshooting and questions
+## 21. Troubleshooting and questions
 
 **"You may not do this…" or a button I expected isn't there.**
 Your roles don't allow that change, or not at this site. The message names the permission; ask an administrator (see [What each role can change](#what-each-role-can-change)).
@@ -1541,7 +1587,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 
 ---
 
-## 21. Glossary
+## 22. Glossary
 
 | Term | Meaning |
 | --- | --- |
@@ -1558,6 +1604,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Department / group** | Equipment you can plan to that doesn't run jobs itself; its lines do. |
 | **Dispatch** | Publish an order to the floor, fixing its baseline. |
 | **Draft / released / obsolete** | Versions of a process or BOM: being edited / in use for new orders / replaced. |
+| **Edge node** | Pulaski Edge, running near the machines: reads them, buffers what it reads and forwards it to Pulaski. |
 | **Firm** | Freeze an order's plan; its jobs keep their start times. |
 | **Genealogy** | Which lots were made from which. |
 | **Hold / quarantine** | Statuses that keep a lot on hand but stop it being consumed until released. |
@@ -1597,6 +1644,8 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Split** | Divide part of a lot into a new lot. |
 | **Substitution** | Consuming a material a job had no planned component of. |
 | **Trace** | Following genealogy back to everything a lot was made from, or forward to everything made from it. |
+| **Sparkplug B** | A standard way for machines to publish their data over MQTT, with birth certificates naming each metric. |
+| **Tag** | A machine signal bound to equipment, with the role it plays (state, a count…). |
 | **Utilization reason** | What a machine's time counts as: *runtime*, *downtime* (against availability) or *planned* (left out of OEE). |
 | **Where used** | The BOMs and open jobs that use a material as a component. |
 | **Window** | The time span a department job must be run in. |

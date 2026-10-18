@@ -75,6 +75,7 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
         """;
 
     // One report writes a processed row and, with scrap, a defective row in the same transaction, so they share recorded_at.
+    // Machine counts (D-041) aren't reports.
     private const string Reports = """
         SELECT c.run_id, r.run_no, max(c.occurred_at) AS occurred_at, c.recorded_at,
                coalesce(sum(c.delta_qty) FILTER (WHERE c.count_kind = 'processed'), 0)
@@ -85,7 +86,7 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
         FROM ts.production_count c
         JOIN core.job_run r ON r.id = c.run_id
         LEFT JOIN core.reason_code rc ON rc.id = c.scrap_reason_code_id
-        WHERE c.job_id = @JobId
+        WHERE c.job_id = @JobId AND c.source <> 'machine'
         GROUP BY c.run_id, r.run_no, c.recorded_at
         ORDER BY c.recorded_at DESC
         """;

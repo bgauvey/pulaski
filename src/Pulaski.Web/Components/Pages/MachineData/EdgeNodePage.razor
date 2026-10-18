@@ -1,0 +1,551 @@
+@page "/edge-nodes/{NodeId:guid}"
+@attribute [RequiresView(PermissionCodes.EquipmentView)]
+@using Pulaski.Web.Services.MachineData
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+@inject IConfiguration Configuration
+
+@* One edge node (D-041): its connections, the tags binding what it reads to equipment, the addresses it has seen, what its
+   machines last reported, and how to set the edge itself up. *@
+<PageTitle>@(_detail?.Node.Code ?? "Edge node") · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <div class="small mb-1"><a href="edge-nodes">← Edge nodes</a></div>
+        <h1 class="mb-1">
+            @(_detail?.Node.Code ?? "Edge node")
+            @if (_detail?.Node is { } head)
+            {
+                @if (!head.IsActive)
+                {
+                    <span class="chip chip-muted ms-2 align-middle">Inactive</span>
+                }
+                else if (EdgeView.IsQuiet(head.LastSeenAt, DateTimeOffset.UtcNow))
+                {
+                    <span class="chip chip-warning ms-2 align-middle" title="Nothing forwarded for 2 minutes: the edge is offline, or nothing changed">Quiet</span>
+                }
+                else
+                {
+                    <span class="chip ms-2 align-middle">Forwarding</span>
+                }
+            }
+        </h1>
+        <p class="text-muted mb-0">
+            @_detail?.Node.Name
+            @if (_detail?.Node is { } n)
+            {
+                <span> · last heard from @EdgeView.LastHeard(n.LastSeenAt, DateTimeOffset.UtcNow, null)@(n.AgentVersion is null ? "" : $" · version {n.AgentVersion}")</span>
+            }
+        </p>
+    </div>
+    <div class="inv-head-tools">
+        <button type="button" class="btn btn-outline-secondary btn-with-icon" @onclick="LoadAsync"><Icon Name="refresh" Size="16" />Refresh</button>
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+
+@if (_detail is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    <ViewOnlyNote Permission="@PermissionCodes.Equipment" What="maintain edge nodes" SiteId="_detail.Node.SiteId" />
+
+    <fieldset class="view-only-scope" disabled="@(!CanManage)">
+        <form class="inv-toolbar" @onsubmit="SaveNodeAsync" @onsubmit:preventDefault>
+            <input class="form-control inv-grow" maxlength="100" aria-label="Name" placeholder="Name" @bind="_name" />
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="node-active" @bind="_active" />
+                <label class="form-check-label" for="node-active">Active</label>
+            </div>
+            <button type="submit" class="btn btn-outline-primary" disabled="@(_saving || (_name?.Trim() == _detail.Node.Name && _active == _detail.Node.IsActive))">Save</button>
+        </form>
+    </fieldset>
+
+    <nav class="inv-tabs" aria-label="Edge node">
+        @foreach (var (tab, label, count) in Tabs())
+        {
+            <button type="button" class="inv-tab btn btn-link @(_tab == tab ? "active" : "")" @onclick="() => _tab = tab">
+                @label @if (count is { } c) { <span class="small text-muted">@c</span> }
+            </button>
+        }
+    </nav>
+
+    <fieldset class="view-only-scope" disabled="@(!CanManage)">
+        @switch (_tab)
+        {
+            case "connections":
+                <p class="small text-muted">
+                    Where the edge reads from: an MQTT broker its machines publish to in Sparkplug B. Pulaski listens as a Sparkplug host application.
+                    The broker's password isn't kept here; it goes in the edge's own configuration (Setup).
+                </p>
+                @if (CanManage)
+                {
+                    <form class="inv-toolbar flex-wrap" @onsubmit="AddConnectionAsync" @onsubmit:preventDefault>
+                        <input class="form-control" style="width: 8rem" maxlength="20" placeholder="CODE" aria-label="Connection code" @bind="_connCode" @bind:event="oninput" />
+                        <input class="form-control" style="width: 12rem" maxlength="100" placeholder="Name, e.g. Line broker" aria-label="Connection name" @bind="_connName" @bind:event="oninput" />
+                        @foreach (var (key, label, placeholder) in EdgeView.SparkplugSettings)
+                        {
+                            @if (key == "tls")
+                            {
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="new-tls" checked="@(_connSettings.GetValueOrDefault("tls") == "true")"
+                                           @onchange="@(e => _connSettings["tls"] = (e.Value is true) ? "true" : "")" />
+                                    <label class="form-check-label" for="new-tls">TLS</label>
+                                </div>
+                            }
+                            else
+                            {
+                                <input class="form-control" style="width: 10rem" aria-label="@label" placeholder="@($"{label}{(placeholder.Length > 0 ? ": " + placeholder : "")}")"
+                                       value="@_connSettings.GetValueOrDefault(key)" @onchange="@(e => _connSettings[key] = e.Value?.ToString() ?? "")" />
+                            }
+                        }
+                        <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_connCode) || string.IsNullOrWhiteSpace(_connName))">Add connection</button>
+                    </form>
+                }
+
+                @if (_detail.Connections.Count == 0)
+                {
+                    <div class="empty-panel"><p class="text-muted mb-0">No connections yet. Add the broker your machines publish to.</p></div>
+                }
+                else
+                {
+                    <div class="table-panel">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Code</th><th>Name</th>
+                                    @foreach (var (_, label, _) in EdgeView.SparkplugSettings)
+                                    {
+                                        <th>@label</th>
+                                    }
+                                    <th>Active</th><th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in _detail.Connections)
+                                {
+                                    var edit = ConnectionEdit(c);
+                                    <tr @key="c.Id" class="@(c.IsActive ? "" : "text-muted")">
+                                        <td class="fw-semibold">@c.Code</td>
+                                        <td><input class="form-control form-control-sm" style="min-width: 10rem" maxlength="100" aria-label="Name of @c.Code" value="@edit.Name" @onchange="e => ChangeConnection(c, x => x with { Name = Text(e) })" /></td>
+                                        @foreach (var (key, label, _) in EdgeView.SparkplugSettings)
+                                        {
+                                            <td>
+                                                @if (key == "tls")
+                                                {
+                                                    <input class="form-check-input" type="checkbox" aria-label="TLS of @c.Code" checked="@(edit.Settings.GetValueOrDefault("tls") == "true")"
+                                                           @onchange="@(e => ChangeConnection(c, x => x with { Settings = With(x.Settings, key, (e.Value is true) ? "true" : "") }))" />
+                                                }
+                                                else
+                                                {
+                                                    <input class="form-control form-control-sm" style="min-width: 7rem" aria-label="@label of @c.Code" value="@edit.Settings.GetValueOrDefault(key)"
+                                                           @onchange="e => ChangeConnection(c, x => x with { Settings = With(x.Settings, key, Text(e)) })" />
+                                                }
+                                            </td>
+                                        }
+                                        <td><input class="form-check-input" type="checkbox" aria-label="@c.Code active" checked="@edit.IsActive" @onchange="e => ChangeConnection(c, x => x with { IsActive = e.Value is true })" /></td>
+                                        <td class="text-end">
+                                            @if (_connEdits.ContainsKey(c.Id))
+                                            {
+                                                <button type="button" class="btn btn-sm btn-primary" disabled="@_saving" @onclick="() => SaveConnectionAsync(c)">Save</button>
+                                                <button type="button" class="btn btn-sm btn-link" @onclick="() => _connEdits.Remove(c.Id)">Undo</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                break;
+
+            case "tags":
+                <p class="small text-muted">
+                    Which signal means what on which equipment. A Sparkplug B address is <code>group/node[/device]:metric</code>; the easiest way to bind
+                    one is from <strong>Seen</strong>. Counts are multiplied by the scale; a counter that wraps needs its rollover value.
+                </p>
+                @if (CanManage && _detail.Connections.Count > 0)
+                {
+                    @BindForm(null)
+                }
+
+                @if (_detail.Tags.Count == 0)
+                {
+                    <div class="empty-panel"><p class="text-muted mb-0">No tags yet.</p></div>
+                }
+                else
+                {
+                    <div class="table-panel">
+                        <table class="table align-middle">
+                            <thead><tr><th>Equipment</th><th>Role</th><th>Connection</th><th>Address</th><th>Scale</th><th>Rollover</th><th>Last value</th><th>Active</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var t in _detail.Tags)
+                                {
+                                    var edit = TagEdit(t);
+                                    <tr @key="t.Id" class="@(t.IsActive ? "" : "text-muted")">
+                                        <td class="fw-semibold">@t.EquipmentCode</td>
+                                        <td>@EdgeView.RoleLabel(t.Role)</td>
+                                        <td>@t.ConnectionCode</td>
+                                        <td><input class="form-control form-control-sm" style="min-width: 16rem" aria-label="Address of @t.EquipmentCode @t.Role" value="@edit.Address" @onchange="e => ChangeTag(t, x => x with { Address = Text(e) })" /></td>
+                                        <td><input class="form-control form-control-sm text-end" style="width: 6rem" aria-label="Scale of @t.EquipmentCode @t.Role" value="@EdgeView.Number(edit.ScaleFactor)" @onchange="e => ChangeTag(t, x => x with { ScaleFactor = Dec(e) ?? x.ScaleFactor })" /></td>
+                                        <td>
+                                            @if (EdgeView.IsCounter(t.Role))
+                                            {
+                                                <input class="form-control form-control-sm text-end" style="width: 8rem" aria-label="Rollover of @t.EquipmentCode @t.Role" placeholder="none" value="@edit.CounterRollover"
+                                                       @onchange="e => ChangeTag(t, x => x with { CounterRollover = long.TryParse(Text(e), out var r) ? r : null })" />
+                                            }
+                                        </td>
+                                        <td class="small">@t.LastValue @if (t.LastSeenAt is { } seen) { <span class="text-muted">· @EdgeView.LastHeard(seen, DateTimeOffset.UtcNow, null)</span> }</td>
+                                        <td><input class="form-check-input" type="checkbox" aria-label="@t.EquipmentCode @t.Role active" checked="@edit.IsActive" @onchange="e => ChangeTag(t, x => x with { IsActive = e.Value is true })" /></td>
+                                        <td class="text-end">
+                                            @if (_tagEdits.ContainsKey(t.Id))
+                                            {
+                                                <button type="button" class="btn btn-sm btn-primary" disabled="@_saving" @onclick="() => SaveTagAsync(t)">Save</button>
+                                                <button type="button" class="btn btn-sm btn-link" @onclick="() => _tagEdits.Remove(t.Id)">Undo</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                break;
+
+            case "seen":
+                <p class="small text-muted">
+                    Everything the edge's connections have announced (Sparkplug birth certificates) or sent, with its last value. Pick one to bind it to equipment.
+                    The edge reports what it sees every 30 seconds.
+                </p>
+                @if (_binding is { } address && CanManage)
+                {
+                    @BindForm(address)
+                }
+
+                @if (_detail.Metrics.Count == 0)
+                {
+                    <div class="empty-panel"><p class="text-muted mb-0">Nothing seen yet. Once the edge runs and a machine publishes, its metrics appear here.</p></div>
+                }
+                else
+                {
+                    <input type="search" class="form-control mb-2" style="max-width: 24rem" placeholder="Filter addresses" aria-label="Filter addresses" @bind="_filter" @bind:event="oninput" />
+                    <div class="table-panel">
+                        <table class="table table-sm align-middle">
+                            <thead><tr><th>Connection</th><th>Address</th><th>Type</th><th>Last value</th><th>Seen</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var m in _detail.Metrics.Where(m => string.IsNullOrWhiteSpace(_filter) || m.Address.Contains(_filter.Trim(), StringComparison.OrdinalIgnoreCase)))
+                                {
+                                    <tr @key="(m.ConnectionId, m.Address)">
+                                        <td>@ConnectionCode(m.ConnectionId)</td>
+                                        <td><code>@m.Address</code></td>
+                                        <td class="small">@m.DataType</td>
+                                        <td>@m.LastValue</td>
+                                        <td class="small text-muted">@EdgeView.LastHeard(m.LastSeenAt, DateTimeOffset.UtcNow, null)</td>
+                                        <td class="text-end">
+                                            @if (m.TagId is { } tagId)
+                                            {
+                                                var tag = _detail.Tags.FirstOrDefault(t => t.Id == tagId);
+                                                <span class="small text-muted">@tag?.EquipmentCode · @EdgeView.RoleLabel(tag?.Role ?? "")</span>
+                                            }
+                                            else if (CanManage)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => StartBind(m)">Bind</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                break;
+
+            case "live":
+                <p class="small text-muted">
+                    What each machine bound here last reported, as Pulaski applied it: its PackML state (and the value the machine sent), unit mode,
+                    latched stop code and speed. Downtime, coding and OEE come next.
+                </p>
+                @if (_detail.Live.Count == 0)
+                {
+                    <div class="empty-panel"><p class="text-muted mb-0">Nothing received yet.</p></div>
+                }
+                else
+                {
+                    <div class="table-panel">
+                        <table class="table align-middle">
+                            <thead><tr><th>Equipment</th><th>State</th><th>Since</th><th>Mode</th><th>Stop code</th><th>Speed</th><th>Last signal</th></tr></thead>
+                            <tbody>
+                                @foreach (var l in _detail.Live)
+                                {
+                                    <tr @key="l.EquipmentId">
+                                        <td class="fw-semibold">@l.EquipmentCode</td>
+                                        <td>
+                                            <span class="chip @(l.PackMlState == 6 ? "" : l.PackMlState == 0 ? "chip-muted" : "chip-warning")">@l.PackMlState · @l.PackMlName</span>
+                                            @if (l.RawState is { } raw && raw != l.PackMlState)
+                                            {
+                                                <span class="small text-muted ms-1">sent @raw</span>
+                                            }
+                                        </td>
+                                        <td class="small">@EdgeView.LastHeard(l.StateSince, DateTimeOffset.UtcNow, null)</td>
+                                        <td>@l.UnitMode</td>
+                                        <td>@(l.StopReason is { } code ? $"{code}{(l.StopReasonText is null ? "" : " · " + l.StopReasonText)}" : "")</td>
+                                        <td>@(l.MachineSpeed is { } s ? EdgeView.Reading(s) : "")</td>
+                                        <td class="small text-muted">@EdgeView.LastHeard(l.SignalAt, DateTimeOffset.UtcNow, null)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                break;
+
+            default:
+                <ol class="small">
+                    <li>On <strong>Configure → Users</strong>, add a user for this edge (such as <code>edge-@(_detail.Node.Code.ToLowerInvariant())</code>) and give it the
+                        <strong>Edge node</strong> role at this site. Sign in once as that user and set its password.</li>
+                    <li>Install Pulaski Edge on a machine that can reach both the broker and Pulaski, and put this in its <code>appsettings.json</code>,
+                        with the user's password (and each broker's, where it has a user name):</li>
+                </ol>
+                <pre class="inv-facts small" style="white-space: pre-wrap">@EdgeView.ConfigSnippet(_detail, ApiUrl)</pre>
+                <p class="small text-muted">
+                    Start it (<code>dotnet Pulaski.Edge.dll</code>, or as a service). It reads this page's connections and tags every minute, so changes here
+                    reach it without a restart. If Pulaski can't be reached it keeps collecting into its buffer and forwards everything once it can.
+                </p>
+                break;
+        }
+    </fieldset>
+}
+
+@code {
+    [Parameter]
+    public Guid NodeId { get; set; }
+
+    private EdgeNodeDetailDto? _detail;
+    private IReadOnlyList<EquipmentDto> _equipment = [];
+    private ApiException? _error;
+    private bool _saving;
+    private string _tab = "connections";
+    private string? _filter;
+
+    private string? _name;
+    private bool _active;
+
+    private string? _connCode;
+    private string? _connName;
+    private Dictionary<string, string> _connSettings = [];
+    private readonly Dictionary<Guid, EdgeConnectionDto> _connEdits = [];
+    private readonly Dictionary<Guid, EquipmentTagDto> _tagEdits = [];
+
+    private string? _binding;
+    private Guid? _bindConnection;
+    private string? _bindAddress;
+    private Guid? _bindEquipment;
+    private string _bindRole = "state";
+    private string? _bindScale;
+    private string? _bindRollover;
+
+    private bool CanManage => _detail is not null && User.Can(PermissionCodes.Equipment, _detail.Node.SiteId);
+
+    private Uri ApiUrl => Uri.TryCreate(Configuration["PulaskiApi:BaseUrl"], UriKind.Absolute, out var url) ? url : new Uri("http://localhost:5080/");
+
+    /// <summary>Equipment of the node's site that tracks state: what tags can be bound to.</summary>
+    private IEnumerable<EquipmentDto> Bindable => _equipment.Where(e => e.SiteId == _detail?.Node.SiteId && e.TracksState && e.IsActive);
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private IEnumerable<(string Tab, string Label, int? Count)> Tabs()
+    {
+        yield return ("connections", "Connections", _detail!.Connections.Count(c => c.IsActive));
+        yield return ("tags", "Tags", _detail.Tags.Count(t => t.IsActive));
+        yield return ("seen", "Seen", _detail.Metrics.Count);
+        yield return ("live", "Live", _detail.Live.Count);
+        yield return ("setup", "Setup", null);
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _detail = await Api.GetEdgeNodeAsync(NodeId);
+            if (_equipment.Count == 0)
+            {
+                _equipment = await Api.ListEquipmentAsync();
+            }
+
+            (_name, _active) = (_detail.Node.Name, _detail.Node.IsActive);
+            _connEdits.Clear();
+            _tagEdits.Clear();
+            _bindConnection ??= _detail.Connections.FirstOrDefault()?.Id;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private static string Text(ChangeEventArgs e) => e.Value?.ToString() ?? "";
+
+    private static decimal? Dec(ChangeEventArgs e) =>
+        decimal.TryParse(Text(e), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
+
+    private static IReadOnlyDictionary<string, string> With(IReadOnlyDictionary<string, string> settings, string key, string value)
+    {
+        var copy = settings.ToDictionary(s => s.Key, s => s.Value);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            copy.Remove(key);
+        }
+        else
+        {
+            copy[key] = value.Trim();
+        }
+
+        return copy;
+    }
+
+    private string ConnectionCode(Guid id) => _detail?.Connections.FirstOrDefault(c => c.Id == id)?.Code ?? "";
+
+    private EdgeConnectionDto ConnectionEdit(EdgeConnectionDto c) => _connEdits.GetValueOrDefault(c.Id) ?? c;
+
+    private EquipmentTagDto TagEdit(EquipmentTagDto t) => _tagEdits.GetValueOrDefault(t.Id) ?? t;
+
+    private void ChangeConnection(EdgeConnectionDto c, Func<EdgeConnectionDto, EdgeConnectionDto> apply) => _connEdits[c.Id] = apply(ConnectionEdit(c));
+
+    private void ChangeTag(EquipmentTagDto t, Func<EquipmentTagDto, EquipmentTagDto> apply) => _tagEdits[t.Id] = apply(TagEdit(t));
+
+    private void StartBind(EdgeMetricDto metric)
+    {
+        (_binding, _bindConnection, _bindAddress) = (metric.Address, metric.ConnectionId, metric.Address);
+        _bindRole = metric.Address.EndsWith("StateCurrent", StringComparison.OrdinalIgnoreCase) ? "state"
+            : metric.Address.Contains("UnitMode", StringComparison.OrdinalIgnoreCase) ? "unit_mode"
+            : metric.Address.Contains("StopReason", StringComparison.OrdinalIgnoreCase) ? "stop_reason"
+            : metric.Address.Contains("Defective", StringComparison.OrdinalIgnoreCase) ? "defective_count"
+            : metric.Address.Contains("Processed", StringComparison.OrdinalIgnoreCase) ? "processed_count"
+            : metric.Address.Contains("Speed", StringComparison.OrdinalIgnoreCase) ? "machine_speed"
+            : _bindRole;
+    }
+
+    // Binding a tag, from Seen (an address picked) or typed on Tags.
+    private RenderFragment BindForm(string? picked) =>
+        @<form class="inv-toolbar flex-wrap" @onsubmit="AddTagAsync" @onsubmit:preventDefault>
+            <select class="form-select w-auto" aria-label="Equipment to bind to" value="@(_bindEquipment?.ToString() ?? "")" @onchange="@(e => _bindEquipment = Guid.TryParse(Text(e), out var id) ? id : null)">
+                <option value="">Equipment…</option>
+                @foreach (var eq in Bindable)
+                {
+                    <option value="@eq.Id">@eq.Code · @eq.Name</option>
+                }
+            </select>
+            <select class="form-select w-auto" aria-label="Role" value="@_bindRole" @onchange="@(e => _bindRole = Text(e))">
+                @foreach (var (role, label) in EdgeView.Roles)
+                {
+                    <option value="@role">@label</option>
+                }
+            </select>
+            @if (picked is null)
+            {
+                <select class="form-select w-auto" aria-label="Connection" value="@(_bindConnection?.ToString() ?? "")" @onchange="@(e => _bindConnection = Guid.TryParse(Text(e), out var id) ? id : null)">
+                    @foreach (var c in _detail!.Connections.Where(c => c.IsActive))
+                    {
+                        <option value="@c.Id">@c.Code</option>
+                    }
+                </select>
+                <input class="form-control inv-grow" style="min-width: 16rem" aria-label="Address" placeholder="group/node/device:metric" value="@_bindAddress" @onchange="@(e => _bindAddress = Text(e))" />
+            }
+            else
+            {
+                <code class="align-self-center">@picked</code>
+            }
+            <input class="form-control text-end" style="width: 6rem" aria-label="Scale" placeholder="Scale 1" value="@_bindScale" @onchange="@(e => _bindScale = Text(e))" />
+            @if (EdgeView.IsCounter(_bindRole))
+            {
+                <input class="form-control text-end" style="width: 8rem" aria-label="Rollover" placeholder="Rollover" value="@_bindRollover" @onchange="@(e => _bindRollover = Text(e))" />
+            }
+            <button type="submit" class="btn btn-primary" disabled="@(_saving || _bindEquipment is null || _bindConnection is null || string.IsNullOrWhiteSpace(_bindAddress))">Bind tag</button>
+            @if (picked is not null)
+            {
+                <button type="button" class="btn btn-link" @onclick="@(() => _binding = null)">Cancel</button>
+            }
+        </form>;
+
+    private Task SaveNodeAsync() => RunAsync(() => Api.UpdateEdgeNodeAsync(NodeId, new UpdateEdgeNodeRequest
+    {
+        Version = _detail!.Node.Version,
+        Name = (_name ?? "").Trim(),
+        Description = _detail.Node.Description,
+        IsActive = _active,
+    }));
+
+    private Task AddConnectionAsync() => RunAsync(async () =>
+    {
+        await Api.CreateEdgeConnectionAsync(NodeId, new CreateEdgeConnectionRequest
+        {
+            Code = _connCode!,
+            Name = _connName!,
+            Settings = _connSettings.Where(s => !string.IsNullOrWhiteSpace(s.Value)).ToDictionary(s => s.Key, s => s.Value.Trim()),
+        });
+        (_connCode, _connName, _connSettings) = (null, null, []);
+    });
+
+    private Task SaveConnectionAsync(EdgeConnectionDto c)
+    {
+        var edit = ConnectionEdit(c);
+        return RunAsync(() => Api.UpdateEdgeConnectionAsync(c.Id, new UpdateEdgeConnectionRequest { Version = c.Version, Name = edit.Name, Settings = edit.Settings, IsActive = edit.IsActive }));
+    }
+
+    private Task AddTagAsync() => RunAsync(async () =>
+    {
+        await Api.CreateEquipmentTagAsync(new CreateEquipmentTagRequest
+        {
+            EquipmentId = _bindEquipment!.Value,
+            Role = _bindRole,
+            ConnectionId = _bindConnection!.Value,
+            Address = (_bindAddress ?? "").Trim(),
+            ScaleFactor = decimal.TryParse(_bindScale, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var scale) ? scale : 1,
+            CounterRollover = EdgeView.IsCounter(_bindRole) && long.TryParse(_bindRollover, out var rollover) ? rollover : null,
+        });
+        (_binding, _bindAddress, _bindScale, _bindRollover) = (null, null, null, null);
+    });
+
+    private Task SaveTagAsync(EquipmentTagDto t)
+    {
+        var edit = TagEdit(t);
+        return RunAsync(() => Api.UpdateEquipmentTagAsync(t.Id, new UpdateEquipmentTagRequest
+        {
+            Version = t.Version,
+            Address = edit.Address,
+            ScaleFactor = edit.ScaleFactor,
+            ScaleOffset = edit.ScaleOffset,
+            CounterRollover = edit.CounterRollover,
+            IsActive = edit.IsActive,
+        }));
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            if (ex.IsConflict)
+            {
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

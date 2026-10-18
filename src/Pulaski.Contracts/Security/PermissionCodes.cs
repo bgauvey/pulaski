@@ -48,4 +48,5 @@ public static class PermissionCodes
     public const string LaborApprove = "labor.approve";
     public const string People = "people.manage";
     public const string Security = "security.manage";
+    public const string EdgeIngest = "edge.ingest";
 }
