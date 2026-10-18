@@ -106,7 +106,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   until approved (release) or rejected (write off, good → scrap).
 - Roles and permissions (D-037, proposed): permissions are constants in `Pulaski.Domain.Security.Permissions` (catalog
   with areas; mirrored in `Contracts.Security.PermissionCodes`; synced into `sec.permission` at API start). Roles are data
-  (`sec.role`, `sec.role_permission.is_granted`), maintained on the Roles/Permissions screens; only `administrator` is in
+  (`sec.role`, `sec.role_permission.is_granted`), maintained on the Roles/Permissions tabs of Configure → Users; only `administrator` is in
   code (all permissions, everywhere, unchangeable); `Roles.Defaults` seeds a new database. Every other role is held at a
   site; viewing is open to every signed-in user; every changing endpoint carries `.RequirePermission(permission, Site.…)`.
   Every user keeps a role; a held role can't be switched off.

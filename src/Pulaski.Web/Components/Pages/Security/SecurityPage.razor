@@ -1,0 +1,45 @@
+@page "/users"
+@page "/users/roles"
+@page "/users/permissions"
+@implements IDisposable
+@inject NavigationManager Navigation
+
+@* Configure → Users (D-037): who signs in, the roles they hold, and what each role may change, as three tabs. *@
+<PageTitle>@Tab · Users and roles · Pulaski</PageTitle>
+
+<h1 class="mb-1">Users and roles</h1>
+
+<nav class="inv-tabs" aria-label="Users and roles">
+    <NavLink class="inv-tab" href="users" Match="NavLinkMatch.All">Users</NavLink>
+    <NavLink class="inv-tab" href="users/roles">Roles</NavLink>
+    <NavLink class="inv-tab" href="users/permissions">Permissions</NavLink>
+</nav>
+
+@switch (Tab)
+{
+    case "Roles":
+        <RolesPanel />
+        break;
+    case "Permissions":
+        <PermissionsPanel />
+        break;
+    default:
+        <UsersPanel />
+        break;
+}
+
+@code {
+    private string Tab => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/') switch
+    {
+        "users/roles" => "Roles",
+        "users/permissions" => "Permissions",
+        _ => "Users",
+    };
+
+    // The three tabs are routes of this one page, so moving between them only changes the address.
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
+}

@@ -614,7 +614,7 @@ Some materials are made a fixed amount at a time: a 50 kg mix, a 200 l tank. Pul
 Who may change what. Every signed-in user may **view** everything; **permissions** guard changes.
 
 - **Permissions are constants in code** (`Pulaski.Domain.Security.Permissions`), the only place that checks them. Adding one is a code change: a constant, its catalog entry (area and description), and the endpoint that requires it.
-- **Roles are data.** An administrator creates roles and chooses their permissions on the **Roles** and **Permissions** screens (`sec.role`, `sec.role_permission`). The only role the code knows is the **administrator**: it holds every permission everywhere, including ones added later, and can't be changed, so someone can always manage users.
+- **Roles are data.** An administrator creates roles and chooses their permissions on the **Roles** and **Permissions** tabs of Configure → Users (`sec.role`, `sec.role_permission`). The only role the code knows is the **administrator**: it holds every permission everywhere, including ones added later, and can't be changed, so someone can always manage users.
 
 **Roles.** Every role but the administrator is held **at a site**; a user may hold several, at several sites, and may do the union of them. A new database starts with these roles (`Roles.Defaults`), which the administrator may then change:
 

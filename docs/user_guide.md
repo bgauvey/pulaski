@@ -54,7 +54,7 @@ Pulaski asks you to **sign in** with the user name and password your administrat
 
 - **Menu (left).** Two groups of pages:
   - **Operate:** **Overview**, **Work orders**, **Schedule**: the pages you use day to day.
-  - **Configure:** **Equipment**, **Materials**, **Processes**, **BOMs**, **Units**, **Reasons** (and **Users**, **Roles** and **Permissions**, for administrators): the setup you do once and change now and then.
+  - **Configure:** **Equipment**, **Materials**, **Processes**, **BOMs**, **Units**, **Reasons** (and **Users**, for administrators, with tabs for users, roles and permissions): the setup you do once and change now and then.
   - The ☰ button at the top left collapses the menu to icons, to make room on small screens.
 - **You (top right).** Your name and roles; the padlock changes your password, and the door signs you out.
 - **Theme (top right).** The sun/moon button switches between light and dark.
@@ -1107,7 +1107,7 @@ A password needs at least 10 characters, with two of: lower case, upper case, di
 
 ### What each role can change
 
-A new Pulaski starts with these roles. Your administrator may have changed them or added others: **Configure → Roles** and **Configure → Permissions** show what each role may do today.
+A new Pulaski starts with these roles. Your administrator may have changed them or added others: the **Roles** and **Permissions** tabs of **Configure → Users** show what each role may do today.
 
 | Role | Can change |
 | --- | --- |
@@ -1126,31 +1126,31 @@ When you can't change something, Pulaski leaves out the button, or switches the 
 
 ### Add a user (administrators)
 
-1. Open **Configure → Users** and click **New user**.
+1. Open **Configure → Users** (the **Users** tab) and click **New user**.
 2. Fill in **User name** (letters, digits and `. - _ @`), **Name**, an optional **E-mail** and a **Temporary password**.
 3. Choose a **Role** and, for every role but Administrator, the **site** they hold it at.
 4. Click **Create user**, and tell them the user name and temporary password yourself: Pulaski sends nothing.
 
 ### Change a user's roles, details or password (administrators)
 
-1. On **Configure → Users**, click **Change** on the user's row.
+1. On **Configure → Users**, **Users** tab, click **Change** on the user's row.
 2. **Details:** change the name or e-mail, or untick **Can sign in** to switch them off; click **Save details**.
 3. **Roles:** choose a role (and site) under **Add a role…** and click **Add**; click **Take away** to end one.
 4. **Password:** type a **Temporary password** and click **Reset password**. They must change it when they next sign in; this also unlocks them.
 
 ### Add or change a role (administrators)
 
-1. Open **Configure → Roles**.
+1. Open **Configure → Users** and the **Roles** tab.
 2. Click **New role**, or **Change** on a role's row.
 3. For a new role, type a **Code** (lower-case letters, digits and `_`, such as `line_lead`; it can't change later) and a **Name**. Add what it's for if you like.
 4. Under **May change**, tick each permission the role should have. They are grouped by area: Planning, Floor, Inventory, Configuration, Administration.
-5. Click **Create role** or **Save role**. Then give the role to people on **Configure → Users**.
+5. Click **Create role** or **Save role**. Then give the role to people on the **Users** tab.
 
 To stop using a role, untick **Active** and save. A role someone holds can't be switched off: give them another role and take this one away first. **Administrator** has every permission and can't be changed.
 
 ### Give roles permissions, one at a time (administrators)
 
-1. Open **Configure → Permissions**. Each row is a permission, grouped by area; each column is a role.
+1. Open **Configure → Users** and the **Permissions** tab. Each row is a permission, grouped by area; each column is a role.
 2. Tick a box to give the role that permission; untick it to take it away. It is saved straight away and applies to everyone who holds the role.
 
 ### In detail

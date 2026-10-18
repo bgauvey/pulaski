@@ -1,14 +1,10 @@
-@page "/users"
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 @inject CurrentUser User
 
 @* Users and their roles (D-037). Every user holds at least one role; every role but the administrator is held at a site. *@
-<PageTitle>Users · Pulaski</PageTitle>
-
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Users</h1>
         <p class="text-muted mb-0">
             Who can sign in, and which roles they hold. Everyone who signs in can view every screen; roles decide the changes.
             Every user needs a role, and every role but Administrator is held at a site.
@@ -231,7 +227,7 @@ else
     </div>
 
     <p class="small text-muted">
-        What each role may change is on <a href="roles">Roles</a> and <a href="permissions">Permissions</a>.
+        What each role may change is on <a href="users/roles">Roles</a> and <a href="users/permissions">Permissions</a>.
     </p>
 }
 

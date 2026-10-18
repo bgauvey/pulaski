@@ -1,13 +1,9 @@
-@page "/permissions"
 @inject PulaskiApiClient Api
 @inject CurrentUser User
 
 @* Every permission the code checks, and which roles hold it (D-037). Ticking a box gives the role the permission
    straight away; Administrator holds them all and can't be changed. *@
-<PageTitle>Permissions · Pulaski</PageTitle>
-
 <div class="mb-3">
-    <h1 class="mb-1">Permissions</h1>
     <p class="text-muted mb-0">
         What Pulaski lets people change, and which roles may. Tick a box to give a role a permission, untick it to take it away: it applies to
         everyone who holds the role, straight away. Viewing needs no permission.
@@ -66,7 +62,7 @@ else
         </table>
     </div>
     <p class="small text-muted mt-2">
-        Switched-off roles aren't shown. To add a role or change its name, use <a href="roles">Roles</a>; to give roles to people, <a href="users">Users</a>.
+        Switched-off roles aren't shown. To add a role or change its name, use <a href="users/roles">Roles</a>; to give roles to people, <a href="users">Users</a>.
     </p>
 }
 

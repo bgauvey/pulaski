@@ -1,17 +1,13 @@
-@page "/roles"
 @inject PulaskiApiClient Api
 @inject CurrentUser User
 
 @* Roles an administrator maintains (D-037): a name, a description and the permissions it allows. Every role but
    Administrator is held at a site; Administrator holds everything and can't be changed. *@
-<PageTitle>Roles · Pulaski</PageTitle>
-
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Roles</h1>
         <p class="text-muted mb-0">
             A role is a set of permissions you give to users at a site. Change a role here, or tick permissions role by role on
-            <a href="permissions">Permissions</a>. A change applies to everyone who holds the role, straight away.
+            <a href="users/permissions">Permissions</a>. A change applies to everyone who holds the role, straight away.
         </p>
     </div>
     @if (CanManage)
@@ -220,7 +216,7 @@ else
             if (edit.IsNew)
             {
                 await Api.CreateRoleAsync(new CreateRoleRequest { Code = edit.Code, Name = edit.Name, Description = edit.Description, Permissions = [.. edit.Permissions] });
-                _message = $"Created {edit.Name.Trim()}. Give it to users on the Users screen.";
+                _message = $"Created {edit.Name.Trim()}. Give it to users on the Users tab.";
             }
             else
             {
