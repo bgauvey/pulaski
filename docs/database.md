@@ -508,7 +508,7 @@ One row per user who signs in with a Pulaski password.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `code` | text | no | Primary key, defined in code: `schedule.plan`, `job.execute`, `inventory.correct`, … (21 in all, D-037). |
+| `code` | text | no | Primary key, defined in code: `schedule.plan`, `job.execute`, `inventory.correct`, … (33 in all: 11 views, D-039, and 22 changes, D-037). |
 | `description` | text | no | What it allows; kept in step with the code at API start. |
 
 ### sec.role — named sets of permissions · *Built (D-037)*

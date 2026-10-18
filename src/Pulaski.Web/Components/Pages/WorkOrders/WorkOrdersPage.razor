@@ -1,4 +1,5 @@
 @page "/work-orders"
+@attribute [RequiresView(PermissionCodes.WorkOrdersView)]
 @using System.Globalization
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
@@ -41,7 +42,7 @@
 
 <div class="table-panel wo-panel">
     <div class="wo-toolbar">
-        <div class="wo-menu">
+        <div class="wo-menu" hidden="@(!CanMoveAny)">
             <button type="button" class="btn btn-outline-secondary btn-sm btn-with-icon" aria-haspopup="menu" aria-expanded="@(_actionsOpen ? "true" : "false")"
                     disabled="@(_selected.Count == 0 || _busy)" @onclick="() => _actionsOpen = !_actionsOpen">
                 Actions @(_selected.Count > 0 ? $"({_selected.Count})" : "") <Icon Name="chevron-down" Size="16" />
@@ -113,7 +114,7 @@
         </div>
     }
 
-    <div class="wo-select-links small">
+    <div class="wo-select-links small" hidden="@(!CanMoveAny)">
         <button type="button" class="link-button" @onclick="SelectAll">Select all</button>
         <span aria-hidden="true">|</span>
         <button type="button" class="link-button" @onclick="() => _selected.Clear()">Select none</button>
@@ -122,7 +123,7 @@
     <table class="table align-middle wo-table">
         <thead>
             <tr>
-                <th rowspan="2" class="wo-col-select">Select</th>
+                <th rowspan="2" class="wo-col-select">@(CanMoveAny ? "Select" : "")</th>
                 <th rowspan="2" class="wo-col-flag"><span class="visually-hidden">Flags</span></th>
                 <th rowspan="2">Order</th>
                 <th rowspan="2">Status</th>
@@ -131,7 +132,7 @@
                 <th rowspan="2">Schedule</th>
                 <th colspan="2" class="text-center wo-qty-head">Quantity</th>
                 <th rowspan="2">Unit</th>
-                <th rowspan="2" class="text-center">Actions</th>
+                <th rowspan="2" class="text-center">@(CanMoveAny || User.Can(PermissionCodes.ScheduleView) ? "Actions" : "")</th>
             </tr>
             <tr>
                 <th class="text-end">Planned</th>
@@ -155,8 +156,11 @@
                 var flags = Flags(p);
                 <tr class="@(_selected.Contains(wo.Id) ? "table-active" : "") @(_busyId == wo.Id ? "is-saving" : "")" @key="wo.Id">
                     <td class="wo-col-select">
-                        <input class="form-check-input" type="checkbox" aria-label="Select @wo.OrderNumber"
-                               checked="@_selected.Contains(wo.Id)" @onchange="e => ToggleSelected(wo.Id, e.Value is true)" />
+                        @if (CanMoveAny)
+                        {
+                            <input class="form-check-input" type="checkbox" aria-label="Select @wo.OrderNumber"
+                                   checked="@_selected.Contains(wo.Id)" @onchange="e => ToggleSelected(wo.Id, e.Value is true)" />
+                        }
                     </td>
                     <td class="wo-col-flag">
                         @if (flags.Count > 0)
@@ -166,7 +170,7 @@
                             </span>
                         }
                     </td>
-                    <td><a class="fw-semibold" href="schedule?workOrder=@wo.Id">@wo.OrderNumber</a></td>
+                    <td><ScreenLink Href="@($"schedule?workOrder={wo.Id}")" Permission="@PermissionCodes.ScheduleView" class="fw-semibold">@wo.OrderNumber</ScreenLink></td>
                     <td class="text-nowrap">
                         <span class="@Display.StatusChip(wo.Status)">@Display.Label(wo.Status)</span>
                         @if (wo.Priority > 0)
@@ -211,7 +215,7 @@
                     <td class="text-end">@Number(p.CompletedQty)</td>
                     <td>@wo.UomCode</td>
                     <td class="text-center">
-                        <div class="wo-menu">
+                        <div class="wo-menu" hidden="@(!HasRowActions(wo))">
                             <button type="button" class="wo-icon-button" aria-haspopup="menu" aria-expanded="@(_menuFor == wo.Id ? "true" : "false")"
                                     aria-label="Actions for @wo.OrderNumber" disabled="@(_busyId == wo.Id)"
                                     @onclick="() => _menuFor = _menuFor == wo.Id ? null : wo.Id">
@@ -230,7 +234,10 @@
                                             </button>
                                         </li>
                                     }
-                                    <li role="none"><a role="menuitem" class="wo-menu-item" href="schedule?workOrder=@wo.Id">Show on the schedule</a></li>
+                                    @if (User.Can(PermissionCodes.ScheduleView))
+                                    {
+                                        <li role="none"><a role="menuitem" class="wo-menu-item" href="schedule?workOrder=@wo.Id">Show on the schedule</a></li>
+                                    }
                                 </ul>
                             }
                         </div>
@@ -324,6 +331,11 @@
 
 @code {
     // Dispatching, un-dispatching and firming is managing an order; cancelling and closing it is its own permission (D-037).
+    // Whoever may change no work order sees no selection or actions to take (D-039).
+    private bool CanMoveAny => User.CanAny([PermissionCodes.WorkOrderManage, PermissionCodes.WorkOrderClose]);
+
+    private bool HasRowActions(WorkOrderDto order) => order.NextStatuses.Any(n => MayMove(order, n)) || User.Can(PermissionCodes.ScheduleView);
+
     private bool MayMove(WorkOrderDto order, string status) =>
         User.Can(status is "cancelled" or "closed" ? PermissionCodes.WorkOrderClose : PermissionCodes.WorkOrderManage, order.SiteId);
 

@@ -14,17 +14,21 @@ internal static class EquipmentEndpoints
     {
         var group = routes.MapGroup("/equipment").WithTags("Equipment");
 
+        // The tree is a lookup most screens need (D-039): each user sees the sites they may see anything at.
         group.MapGet("/", async Task<Ok<IReadOnlyList<EquipmentDto>>> (
             Guid? siteId,
+            HttpContext http,
             IQueryHandler<ListEquipmentQuery, IReadOnlyList<EquipmentDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListEquipmentQuery(siteId), ct)));
+            TypedResults.Ok((await handler.HandleAsync(new ListEquipmentQuery(siteId), ct)).At(await Visible.AnyViewSitesAsync(http), e => e.SiteId)))
+            .RequireAnyView();
 
         group.MapGet("/{id:guid}", async Task<Ok<EquipmentDto>> (
             Guid id,
             IQueryHandler<GetEquipmentQuery, EquipmentDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetEquipmentQuery(id), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetEquipmentQuery(id), ct)))
+            .RequireAny(Site.Of(Application.Security.SiteOf.Equipment), [.. Permissions.Views, .. Permissions.All.Keys]);
 
         group.MapPost("/", async Task<Created<CreatedResponse>> (
             CreateEquipmentRequest request,
@@ -76,7 +80,8 @@ internal static class EquipmentEndpoints
             IQueryHandler<ListEquipmentTypesQuery, IReadOnlyList<EquipmentTypeDto>> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ListEquipmentTypesQuery(), ct)))
-            .WithTags("Equipment");
+            .WithTags("Equipment")
+            .RequireAnyView();
 
         return routes;
     }

@@ -28,14 +28,16 @@ internal static class InventoryEndpoints
             IQueryHandler<ListStockQuery, IReadOnlyList<MaterialStockDto>> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new ListStockQuery(new StockFilter(siteId, search, materialClassId, locationId, inStockOnly ?? false)), ct)));
+                new ListStockQuery(new StockFilter(siteId, search, materialClassId, locationId, inStockOnly ?? false)), ct)))
+        .RequireAnyAtSite(Site.Query(), Permissions.InventoryView);
 
         inventory.MapGet("/materials/{id:guid}", async Task<Ok<MaterialStockDetailDto>> (
             Guid id,
             Guid? siteId,
             IQueryHandler<GetMaterialStockQuery, MaterialStockDetailDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetMaterialStockQuery(id, siteId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetMaterialStockQuery(id, siteId), ct)))
+        .RequireAnyAtSite(Site.Query(), Permissions.InventoryView);
 
         inventory.MapPut("/materials/{id:guid}/shelf-life", async Task<Ok<VersionResponse>> (
             Guid id,
@@ -49,13 +51,15 @@ internal static class InventoryEndpoints
             Guid id,
             IQueryHandler<WhereUsedQuery, WhereUsedDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new WhereUsedQuery(id), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new WhereUsedQuery(id), ct)))
+        .RequireAny(null, Permissions.InventoryView, Permissions.MaterialsView);
 
         inventory.MapGet("/locations", async Task<Ok<IReadOnlyList<InventoryLocationDto>>> (
             Guid? siteId,
             IQueryHandler<ListInventoryLocationsQuery, IReadOnlyList<InventoryLocationDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListInventoryLocationsQuery(siteId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new ListInventoryLocationsQuery(siteId), ct)))
+        .RequireAnyAtSite(Site.Query(), Permissions.InventoryView, Permissions.FloorView);
 
         inventory.MapGet("/jobs", async Task<Ok<IReadOnlyList<DeclarableJobDto>>> (
             Guid? siteId,
@@ -63,7 +67,8 @@ internal static class InventoryEndpoints
             Guid? materialId,
             IQueryHandler<ListDeclarableJobsQuery, IReadOnlyList<DeclarableJobDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListDeclarableJobsQuery(siteId, search, materialId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new ListDeclarableJobsQuery(siteId, search, materialId), ct)))
+        .RequireAnyAtSite(Site.Query(), Permissions.InventoryView);
 
         inventory.MapGet("/shortages", async Task<Ok<ShortageReportDto>> (
             Guid siteId,
@@ -71,7 +76,8 @@ internal static class InventoryEndpoints
             int? horizonDays,
             IQueryHandler<GetShortagesQuery, ShortageReportDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetShortagesQuery(siteId, equipmentId, horizonDays), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetShortagesQuery(siteId, equipmentId, horizonDays), ct)))
+        .RequireAnyAtSite(Site.Query(), Permissions.InventoryView);
 
         inventory.MapGet("/movements", async Task<Ok<JournalPageDto>> (
             Guid siteId,
@@ -88,7 +94,8 @@ internal static class InventoryEndpoints
             IQueryHandler<ListMovementsQuery, JournalPageDto> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new ListMovementsQuery(siteId, from, to, kind, materialId, locationId, jobId, actor, search, beforeAt, beforeId), ct)));
+                new ListMovementsQuery(siteId, from, to, kind, materialId, locationId, jobId, actor, search, beforeAt, beforeId), ct)))
+        .RequireAnyAtSite(Site.Query(), Permissions.InventoryView);
 
         var lots = routes.MapGroup("/lots").WithTags("Inventory");
 
@@ -104,13 +111,15 @@ internal static class InventoryEndpoints
             IQueryHandler<SearchLotsQuery, IReadOnlyList<LotSummaryDto>> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new SearchLotsQuery(new LotFilter(siteId, search, materialId, locationId, status, expiresBefore, offset ?? 0, limit ?? 500)), ct)));
+                new SearchLotsQuery(new LotFilter(siteId, search, materialId, locationId, status, expiresBefore, offset ?? 0, limit ?? 500)), ct)))
+        .RequireAnyAtSite(Site.Query(), Permissions.InventoryView);
 
         lots.MapGet("/{id:guid}", async Task<Ok<LotDto>> (
             Guid id,
             IQueryHandler<GetLotQuery, LotDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetLotQuery(id), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetLotQuery(id), ct)))
+        .RequireAny(Site.Of(SiteOf.Lot), Permissions.InventoryView);
 
         lots.MapGet("/{id:guid}/trace", async Task<Ok<IReadOnlyList<LotTraceNodeDto>>> (
             Guid id,
@@ -118,7 +127,8 @@ internal static class InventoryEndpoints
             IQueryHandler<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new TraceLotQuery(id, !string.Equals(direction, "backward", StringComparison.OrdinalIgnoreCase)), ct)));
+                new TraceLotQuery(id, !string.Equals(direction, "backward", StringComparison.OrdinalIgnoreCase)), ct)))
+        .RequireAny(Site.Of(SiteOf.Lot), Permissions.InventoryView);
 
         lots.MapPost("/", async Task<Created<LotTransactionResponse>> (
             ReceiveLotRequest request,
@@ -231,13 +241,15 @@ internal static class InventoryEndpoints
             Guid siteId,
             IQueryHandler<ListStockCountsQuery, IReadOnlyList<StockCountSummaryDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListStockCountsQuery(siteId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new ListStockCountsQuery(siteId), ct)))
+        .RequireAnyAtSite(Site.Query(), Permissions.InventoryView);
 
         counts.MapGet("/{id:guid}", async Task<Ok<StockCountDto>> (
             Guid id,
             IQueryHandler<GetStockCountQuery, StockCountDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetStockCountQuery(id), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetStockCountQuery(id), ct)))
+        .RequireAny(Site.Of(SiteOf.StockCount), Permissions.InventoryView);
 
         counts.MapPost("/", async Task<Created<CreatedResponse>> (
             StartStockCountRequest request,
@@ -278,21 +290,25 @@ internal static class InventoryEndpoints
             DateTimeOffset at,
             IQueryHandler<StockOnDateQuery, IReadOnlyList<StockOnDateDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new StockOnDateQuery(siteId, at), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new StockOnDateQuery(siteId, at), ct)))
+        .RequireAnyAtSite(Site.Query(), Permissions.InventoryView);
 
         inventory.MapGet("/reports/aging", async Task<Ok<IReadOnlyList<AgingRowDto>>> (
             Guid siteId,
             IQueryHandler<AgingQuery, IReadOnlyList<AgingRowDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new AgingQuery(siteId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new AgingQuery(siteId), ct)))
+        .RequireAnyAtSite(Site.Query(), Permissions.InventoryView);
 
         var reasons = routes.MapGroup("/reason-codes").WithTags("Reference data");
 
         reasons.MapGet("/all", async Task<Ok<IReadOnlyList<ReasonCodeAdminDto>>> (
             Guid? siteId,
+            HttpContext http,
             IQueryHandler<ListAllReasonCodesQuery, IReadOnlyList<ReasonCodeAdminDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListAllReasonCodesQuery(siteId), ct)));
+            TypedResults.Ok((await handler.HandleAsync(new ListAllReasonCodesQuery(siteId), ct)).At(await Visible.SitesAsync(http, Permissions.ReasonsView), r => r.SiteId)))
+        .RequireAny(null, Permissions.ReasonsView);
 
         reasons.MapPost("/", async Task<Created<CreatedResponse>> (
             CreateReasonCodeRequest request,
@@ -319,7 +335,8 @@ internal static class InventoryEndpoints
             IQueryHandler<GetJobMaterialsQuery, JobMaterialsDto> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new GetJobMaterialsQuery(id), ct)))
-            .WithTags("Inventory");
+            .WithTags("Inventory")
+        .RequireAny(Site.Of(SiteOf.Job), Permissions.InventoryView, Permissions.FloorView);
 
         routes.MapPost("/jobs/{id:guid}/produce", async Task<Created<LotTransactionResponse>> (
             Guid id,
@@ -341,7 +358,8 @@ internal static class InventoryEndpoints
             IQueryHandler<ListReasonCodesQuery, IReadOnlyList<ReasonCodeDto>> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ListReasonCodesQuery(kind, siteId), ct)))
-            .WithTags("Reference data");
+            .WithTags("Reference data")
+        .RequireAny(Site.Query(), [.. Permissions.Views, .. Permissions.All.Keys]);
 
         return routes;
     }

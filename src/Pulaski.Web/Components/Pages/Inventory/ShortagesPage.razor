@@ -1,4 +1,5 @@
 @page "/inventory/shortages"
+@attribute [RequiresView(PermissionCodes.InventoryView)]
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 
@@ -30,7 +31,7 @@
 
 @if (Sites.Sites.Count == 0 && _error is null)
 {
-    <p class="text-muted">Create a site under <a href="equipment">Equipment</a> first.</p>
+    <p class="text-muted">Create a site under <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink> first.</p>
 }
 else if (_report is null)
 {

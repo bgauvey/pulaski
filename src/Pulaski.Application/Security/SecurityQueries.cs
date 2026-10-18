@@ -66,5 +66,8 @@ internal sealed class ListRolesHandler(ISecurityReadStore store, TimeProvider ti
 internal sealed class ListPermissionsHandler : IQueryHandler<ListPermissionsQuery, IReadOnlyList<PermissionDto>>
 {
     public Task<IReadOnlyList<PermissionDto>> HandleAsync(ListPermissionsQuery query, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<PermissionDto>>([.. Permissions.Catalog.Select(p => new PermissionDto(p.Code, p.Area, p.Description))]);
+        Task.FromResult<IReadOnlyList<PermissionDto>>([.. Permissions.Catalog.Select(p => new PermissionDto(p.Code, p.Area, p.Description)
+        {
+            ComesWith = [.. Permissions.Implied.Where(i => i.Value.Contains(p.Code)).Select(i => i.Key)],
+        })]);
 }

@@ -1,54 +1,51 @@
-@* Grouped by how plants work. Groups gain links as their screens are built. *@
+@* Grouped by how plants work. Each link shows only to users who may see its screen, and a group with none
+   doesn't show at all, so nothing is advertised that the user can't open (D-039). *@
 @inject CurrentUser User
 
 <nav class="side-nav" aria-label="Main">
-    <div class="nav-group">
-        <div class="nav-group-label">Operate</div>
-        <NavLink class="nav-item" href="" Match="NavLinkMatch.All" title="Overview">
-            <Icon Name="overview" /><span class="nav-text">Overview</span>
-        </NavLink>
-        <NavLink class="nav-item" href="work-orders" title="Work orders">
-            <Icon Name="work-orders" /><span class="nav-text">Work orders</span>
-        </NavLink>
-        <NavLink class="nav-item" href="schedule" title="Schedule">
-            <Icon Name="schedule" /><span class="nav-text">Schedule</span>
-        </NavLink>
-        <NavLink class="nav-item" href="floor" title="Floor: run jobs and report production">
-            <Icon Name="labor" /><span class="nav-text">Floor</span>
-        </NavLink>
-        <NavLink class="nav-item" href="inventory" title="Inventory">
-            <Icon Name="lot" /><span class="nav-text">Inventory</span>
-        </NavLink>
-    </div>
-
-    <div class="nav-group">
-        <div class="nav-group-label">Configure</div>
-        <NavLink class="nav-item" href="equipment" title="Equipment">
-            <Icon Name="equipment" /><span class="nav-text">Equipment</span>
-        </NavLink>
-        <NavLink class="nav-item" href="materials" title="Materials and classes">
-            <Icon Name="categorized" /><span class="nav-text">Materials</span>
-        </NavLink>
-        <NavLink class="nav-item" href="processes" title="Processes">
-            <Icon Name="process" /><span class="nav-text">Processes</span>
-        </NavLink>
-        <NavLink class="nav-item" href="boms" title="Bills of materials">
-            <Icon Name="bom" /><span class="nav-text">BOMs</span>
-        </NavLink>
-        <NavLink class="nav-item" href="units" title="Units and conversions">
-            <Icon Name="units" /><span class="nav-text">Units</span>
-        </NavLink>
-        <NavLink class="nav-item" href="reasons" title="Reason codes">
-            <Icon Name="info" /><span class="nav-text">Reasons</span>
-        </NavLink>
-        <NavLink class="nav-item" href="shifts" title="Shift schedules">
-            <Icon Name="clock" /><span class="nav-text">Shifts</span>
-        </NavLink>
-        @if (User.Can(PermissionCodes.Security))
+    @foreach (var group in Groups)
+    {
+        var links = group.Links.Where(l => User.Can(l.Permission)).ToList();
+        @if (links.Count > 0)
         {
-            <NavLink class="nav-item" href="users" title="Users, roles and permissions">
-                <Icon Name="users" /><span class="nav-text">Users</span>
-            </NavLink>
+            <div class="nav-group">
+                <div class="nav-group-label">@group.Label</div>
+                @foreach (var link in links)
+                {
+                    <NavLink class="nav-item" href="@link.Href" Match="@(link.Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)" title="@link.Title">
+                        <Icon Name="@link.Icon" /><span class="nav-text">@link.Text</span>
+                    </NavLink>
+                }
+            </div>
         }
-    </div>
+    }
 </nav>
+
+@code {
+    private sealed record Link(string Href, string Icon, string Text, string Title, string Permission);
+
+    private sealed record Group(string Label, IReadOnlyList<Link> Links);
+
+    private static readonly IReadOnlyList<Group> Groups =
+    [
+        new("Operate",
+        [
+            new("", "overview", "Overview", "Overview", PermissionCodes.OverviewView),
+            new("work-orders", "work-orders", "Work orders", "Work orders", PermissionCodes.WorkOrdersView),
+            new("schedule", "schedule", "Schedule", "Schedule", PermissionCodes.ScheduleView),
+            new("floor", "labor", "Floor", "Floor: run jobs and report production", PermissionCodes.FloorView),
+            new("inventory", "lot", "Inventory", "Inventory", PermissionCodes.InventoryView),
+        ]),
+        new("Configure",
+        [
+            new("equipment", "equipment", "Equipment", "Equipment", PermissionCodes.EquipmentView),
+            new("materials", "categorized", "Materials", "Materials and classes", PermissionCodes.MaterialsView),
+            new("processes", "process", "Processes", "Processes", PermissionCodes.ProcessesView),
+            new("boms", "bom", "BOMs", "Bills of materials", PermissionCodes.ProcessesView),
+            new("units", "units", "Units", "Units and conversions", PermissionCodes.UnitsView),
+            new("reasons", "info", "Reasons", "Reason codes", PermissionCodes.ReasonsView),
+            new("shifts", "clock", "Shifts", "Shift schedules", PermissionCodes.ShiftsView),
+            new("users", "users", "Users", "Users, roles and permissions", PermissionCodes.Security),
+        ]),
+    ];
+}

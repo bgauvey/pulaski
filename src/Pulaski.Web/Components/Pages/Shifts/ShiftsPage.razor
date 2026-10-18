@@ -1,4 +1,5 @@
 @page "/shifts"
+@attribute [RequiresView(PermissionCodes.ShiftsView)]
 @using System.Globalization
 @using Pulaski.Web.Services.Shifts
 @inject PulaskiApiClient Api
@@ -14,7 +15,7 @@
         <h1 class="mb-1">Shift schedules</h1>
         <p class="text-muted mb-0">
             When each site works. Planning places jobs only inside shifts. Equipment follows a schedule of its own or inherits its
-            parent's (choose on <a href="equipment">Equipment</a>); with none set anywhere above it, it runs around the clock.
+            parent's (choose on <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink>); with none set anywhere above it, it runs around the clock.
         </p>
     </div>
     <div class="inv-head-tools">

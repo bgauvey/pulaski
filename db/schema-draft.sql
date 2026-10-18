@@ -1552,7 +1552,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0009_batches'),
     ('0010_security'),
     ('0011_editable_roles'),
-    ('0012_shift_schedules');
+    ('0012_shift_schedules'),
+    ('0013_view_permissions');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -1560,6 +1561,17 @@ INSERT INTO public.schema_migration (version) VALUES
 
 -- Permissions are constants in code (Pulaski.Domain.Security, D-037); the API also copies them in at start.
 INSERT INTO sec.permission (code, description) VALUES
+    ('overview.view', 'See the Overview'),
+    ('work_orders.view', 'See work orders and their progress'),
+    ('schedule.view', 'See the schedule'),
+    ('floor.view', 'See the floor and job pages: runs, reports and partial batches'),
+    ('inventory.view', 'See inventory: stock, lots, movements, counts, shortages and reports'),
+    ('equipment.view', 'See the equipment hierarchy and its settings'),
+    ('materials.view', 'See materials, their classes, capabilities and rates'),
+    ('processes.view', 'See processes and BOMs'),
+    ('units.view', 'See units and material conversions'),
+    ('reasons.view', 'See reason codes'),
+    ('shifts.view', 'See shift schedules'),
     ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
     ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
     ('work_order.close', 'Cancel and close work orders'),
@@ -1588,22 +1600,33 @@ ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 -- The administrator has no rows: the code gives it every permission.
 INSERT INTO sec.role (code, name, description, is_system) VALUES
     ('administrator', 'Administrator', 'Everything, everywhere, including users and roles.', true),
-    ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates and materials. Views the floor and inventory.', true),
+    ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes.', true),
     ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches. Doesn''t correct inventory.', true),
     ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots.', true),
     ('quality', 'Quality', 'Holds and releases lots, corrects inventory and decides on partial batches.', true),
     ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, maintains reason codes, shift schedules and the site''s settings.', true),
     ('auditor', 'Auditor', 'Views everything and corrects inventory; counts stock. Doesn''t plan or run jobs.', true),
-    ('process_engineer', 'Process engineer', 'Maintains processes, BOMs and capabilities.', true)
+    ('process_engineer', 'Process engineer', 'Maintains processes, BOMs and capabilities. Sees equipment, materials and units.', true)
 ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO sec.role_permission (role_id, permission_code)
 SELECT r.id, v.permission_code FROM (VALUES
+    ('planner', 'overview.view'),
+    ('planner', 'work_orders.view'),
+    ('planner', 'schedule.view'),
+    ('planner', 'floor.view'),
+    ('planner', 'inventory.view'),
+    ('planner', 'materials.view'),
+    ('planner', 'processes.view'),
     ('planner', 'schedule.plan'),
     ('planner', 'work_order.manage'),
     ('planner', 'work_order.close'),
     ('planner', 'rate.modify'),
     ('planner', 'materials.manage'),
+    ('supervisor', 'overview.view'),
+    ('supervisor', 'floor.view'),
+    ('supervisor', 'inventory.view'),
+    ('supervisor', 'work_orders.view'),
     ('supervisor', 'job.execute'),
     ('supervisor', 'job.reopen'),
     ('supervisor', 'production.report'),
@@ -1613,20 +1636,54 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('supervisor', 'lot.hold'),
     ('supervisor', 'stock_count.manage'),
     ('supervisor', 'partial_batch.decide'),
+    ('operator', 'overview.view'),
+    ('operator', 'floor.view'),
+    ('operator', 'inventory.view'),
+    ('operator', 'work_orders.view'),
     ('operator', 'job.execute'),
     ('operator', 'production.report'),
     ('operator', 'lot.receive'),
     ('operator', 'lot.move'),
+    ('quality', 'overview.view'),
+    ('quality', 'floor.view'),
+    ('quality', 'inventory.view'),
+    ('quality', 'materials.view'),
     ('quality', 'lot.hold'),
     ('quality', 'inventory.correct'),
     ('quality', 'partial_batch.decide'),
+    ('manager', 'overview.view'),
+    ('manager', 'work_orders.view'),
+    ('manager', 'schedule.view'),
+    ('manager', 'floor.view'),
+    ('manager', 'inventory.view'),
+    ('manager', 'equipment.view'),
+    ('manager', 'materials.view'),
+    ('manager', 'processes.view'),
+    ('manager', 'units.view'),
+    ('manager', 'reasons.view'),
+    ('manager', 'shifts.view'),
     ('manager', 'job.reopen'),
     ('manager', 'work_order.close'),
     ('manager', 'reasons.manage'),
     ('manager', 'site_settings.manage'),
     ('manager', 'shifts.manage'),
+    ('auditor', 'overview.view'),
+    ('auditor', 'work_orders.view'),
+    ('auditor', 'schedule.view'),
+    ('auditor', 'floor.view'),
+    ('auditor', 'inventory.view'),
+    ('auditor', 'equipment.view'),
+    ('auditor', 'materials.view'),
+    ('auditor', 'processes.view'),
+    ('auditor', 'units.view'),
+    ('auditor', 'reasons.view'),
+    ('auditor', 'shifts.view'),
     ('auditor', 'inventory.correct'),
     ('auditor', 'stock_count.manage'),
+    ('process_engineer', 'equipment.view'),
+    ('process_engineer', 'materials.view'),
+    ('process_engineer', 'processes.view'),
+    ('process_engineer', 'units.view'),
     ('process_engineer', 'processes.manage')
 ) AS v(role_code, permission_code)
 JOIN sec.role r ON r.code = v.role_code

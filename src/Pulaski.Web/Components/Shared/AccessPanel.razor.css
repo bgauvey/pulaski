@@ -1,0 +1,49 @@
+.access-panel {
+    max-width: 30rem;
+    margin: 8vh auto 0;
+    text-align: center;
+}
+
+.access-art {
+    width: 220px;
+    height: auto;
+}
+
+.access-art-card {
+    fill: var(--surface);
+    stroke: var(--border-strong);
+    stroke-width: 2;
+}
+
+.access-art-bar {
+    fill: var(--surface-2);
+}
+
+.access-art-dot {
+    fill: var(--border-strong);
+}
+
+.access-art-accent {
+    fill: var(--accent);
+}
+
+.access-art-line {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 5;
+    stroke-linecap: round;
+}
+
+.access-art-thick {
+    stroke-width: 8;
+}
+
+.access-art-hole {
+    fill: var(--accent-ink);
+}
+
+.access-art-hole-line {
+    stroke: var(--accent-ink);
+    stroke-width: 4;
+    stroke-linecap: round;
+}

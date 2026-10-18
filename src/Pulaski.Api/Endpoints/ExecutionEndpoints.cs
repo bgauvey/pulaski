@@ -17,7 +17,8 @@ internal static class ExecutionEndpoints
 
         jobs.MapGet("/{id:guid}/execution", async Task<Ok<JobExecutionDto>> (
             Guid id, IQueryHandler<GetJobExecutionQuery, JobExecutionDto> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetJobExecutionQuery(id), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetJobExecutionQuery(id), ct)))
+        .RequireAny(Site.Of(SiteOf.Job), Permissions.FloorView, Permissions.InventoryView);
 
         jobs.MapPost("/{id:guid}/start", async Task<Ok<ExecutionResponse>> (
             Guid id, StartJobRequest request, ICommandHandler<StartJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
@@ -72,15 +73,18 @@ internal static class ExecutionEndpoints
 
         sites.MapGet("/{siteId:guid}/board", async Task<Ok<IReadOnlyList<LineBoardRowDto>>> (
             Guid siteId, IQueryHandler<GetLineBoardQuery, IReadOnlyList<LineBoardRowDto>> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetLineBoardQuery(siteId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetLineBoardQuery(siteId), ct)))
+        .RequireAny(Site.Route(), Permissions.FloorView);
 
         sites.MapGet("/{siteId:guid}/partial-batches", async Task<Ok<IReadOnlyList<PartialBatchDto>>> (
             Guid siteId, IQueryHandler<ListPendingPartialBatchesQuery, IReadOnlyList<PartialBatchDto>> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListPendingPartialBatchesQuery(siteId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new ListPendingPartialBatchesQuery(siteId), ct)))
+        .RequireAny(Site.Route(), Permissions.FloorView);
 
         sites.MapGet("/{siteId:guid}/policy", async Task<Ok<ExecutionPolicyDto>> (
             Guid siteId, IQueryHandler<GetExecutionPolicyQuery, ExecutionPolicyDto> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetExecutionPolicyQuery(siteId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetExecutionPolicyQuery(siteId), ct)))
+        .RequireAny(Site.Route(), Permissions.FloorView, Permissions.SiteSettings);
 
         sites.MapPut("/{siteId:guid}/policy", async Task<Ok<ExecutionPolicyDto>> (
             Guid siteId, SetExecutionPolicyRequest request, ICommandHandler<SetExecutionPolicyCommand, ExecutionPolicyDto> handler, CancellationToken ct) =>

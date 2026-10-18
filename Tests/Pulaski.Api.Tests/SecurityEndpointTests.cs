@@ -175,11 +175,11 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
     }
 
     [Fact]
-    public async Task Administrators_maintain_roles_and_everyone_can_read_them()
+    public async Task Only_administrators_see_and_maintain_roles()
     {
         var planner = await factory.CreateClientAsAsync(Roles.Planner, Guid.CreateVersion7());
-        Assert.Equal(HttpStatusCode.OK, (await planner.GetAsync(new Uri("/api/roles", UriKind.Relative))).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await planner.GetAsync(new Uri("/api/permissions", UriKind.Relative))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await planner.GetAsync(new Uri("/api/roles", UriKind.Relative))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await planner.GetAsync(new Uri("/api/permissions", UriKind.Relative))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await planner.PostAsJsonAsync("/api/roles", new CreateRoleRequest { Code = "x_role", Name = "X" })).StatusCode);
 
         var admin = factory.CreateClient();
@@ -197,7 +197,7 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
     }
 
     [Fact]
-    public async Task Managers_maintain_shift_schedules_and_planners_only_see_them()
+    public async Task Managers_maintain_shift_schedules_and_planners_dont_see_them()
     {
         var site = Guid.CreateVersion7();
         factory.Stores.Shifts.AddSite(site);
@@ -213,7 +213,9 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
 
         var planner = await factory.CreateClientAsAsync(Roles.Planner, site);
         Assert.Equal(HttpStatusCode.Forbidden, (await planner.PostAsJsonAsync("/api/shift-schedules", request)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await planner.GetAsync(new Uri($"/api/shift-schedules?siteId={site}", UriKind.Relative))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await planner.GetAsync(new Uri($"/api/shift-schedules?siteId={site}", UriKind.Relative))).StatusCode);
+        var auditor = await factory.CreateClientAsAsync(Roles.Auditor, site);
+        Assert.Equal(HttpStatusCode.OK, (await auditor.GetAsync(new Uri($"/api/shift-schedules?siteId={site}", UriKind.Relative))).StatusCode);
 
         var manager = await factory.CreateClientAsAsync(Roles.Manager, site);
         Assert.Equal(HttpStatusCode.Created, (await manager.PostAsJsonAsync("/api/shift-schedules", request)).StatusCode);
@@ -225,5 +227,36 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
             From = new DateOnly(2026, 10, 19),
         });
         Assert.Equal(5, (await preview.Content.ReadFromJsonAsync<Pulaski.Contracts.Shifts.ShiftPreviewDto>())!.Shifts.Count);
+    }
+
+    [Fact]
+    public async Task Reads_need_the_view_at_the_site_and_lists_keep_to_the_callers_sites()
+    {
+        var here = Guid.CreateVersion7();
+        var there = Guid.CreateVersion7();
+        factory.Stores.Security.SetSite(SiteOf.Equipment, here, here);
+        factory.Stores.Security.SetSite(SiteOf.Equipment, there, there);
+        var hereOrder = factory.Stores.WorkOrders.Add("planned", version: 1, siteId: here);
+        var thereOrder = factory.Stores.WorkOrders.Add("planned", version: 1, siteId: there);
+
+        // An operator sees the floor and inventory, not the schedule or the configuration screens.
+        var op = await factory.CreateClientAsAsync(Roles.Operator, here);
+        Assert.Equal(HttpStatusCode.Forbidden, (await op.GetAsync(new Uri($"/api/execution/sites/{there}/board", UriKind.Relative))).StatusCode);
+        Assert.NotEqual(HttpStatusCode.Forbidden, (await op.GetAsync(new Uri($"/api/execution/sites/{here}/board", UriKind.Relative))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await op.GetAsync(new Uri("/api/reason-codes/all", UriKind.Relative))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await op.GetAsync(new Uri("/api/inventory/stock", UriKind.Relative))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await op.GetAsync(new Uri("/api/uoms", UriKind.Relative))).StatusCode);
+
+        // Work orders are listed only at the operator's own site.
+        var orders = await op.GetFromJsonAsync<List<Pulaski.Contracts.WorkOrders.WorkOrderDto>>("/api/work-orders");
+        Assert.Contains(orders!, o => o.Id == hereOrder.Id);
+        Assert.DoesNotContain(orders!, o => o.Id == thereOrder.Id);
+
+        // Someone whose roles allow no screen at all may sign in but sees nothing.
+        var nothing = Guid.CreateVersion7();
+        factory.Stores.Security.AddRole("nothing", "Nothing", []);
+        var blind = await factory.CreateClientAsAsync("nothing", nothing);
+        Assert.Equal(HttpStatusCode.Forbidden, (await blind.GetAsync(new Uri("/api/equipment", UriKind.Relative))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await blind.GetAsync(new Uri("/api/me", UriKind.Relative))).StatusCode);
     }
 }

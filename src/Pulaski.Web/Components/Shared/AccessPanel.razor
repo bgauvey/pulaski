@@ -1,0 +1,43 @@
+@* A full-page message with a picture, for a page that isn't there for this user (D-039): not found, or no screens at all. *@
+<section class="access-panel" aria-labelledby="access-title">
+    <svg class="access-art" viewBox="0 0 240 180" role="img" aria-label="@ArtLabel">
+        <rect x="30" y="24" width="180" height="132" rx="14" class="access-art-card" />
+        <rect x="30" y="24" width="180" height="26" rx="14" class="access-art-bar" />
+        <circle cx="48" cy="37" r="4" class="access-art-dot" />
+        <circle cx="62" cy="37" r="4" class="access-art-dot" />
+        <circle cx="76" cy="37" r="4" class="access-art-dot" />
+        @if (Kind == "locked")
+        {
+            <rect x="96" y="96" width="48" height="40" rx="7" class="access-art-accent" />
+            <path d="M104 96v-12a16 16 0 0 1 32 0v12" class="access-art-line" />
+            <circle cx="120" cy="113" r="5" class="access-art-hole" />
+            <path d="M120 118v8" class="access-art-hole-line" />
+        }
+        else
+        {
+            <circle cx="112" cy="102" r="24" class="access-art-line" />
+            <path d="M129 119l20 20" class="access-art-line access-art-thick" />
+            <path d="M104 94l16 16M120 94l-16 16" class="access-art-line" />
+        }
+    </svg>
+    <h1 id="access-title" class="h3 mt-3 mb-2">@Title</h1>
+    <p class="text-muted mb-3">@Message</p>
+    @ChildContent
+</section>
+
+@code {
+    /// <summary><c>locked</c> (no screens) or <c>missing</c> (not found).</summary>
+    [Parameter]
+    public string Kind { get; set; } = "missing";
+
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public string Message { get; set; } = "";
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private string ArtLabel => Kind == "locked" ? "A locked screen" : "A screen with nothing to show";
+}

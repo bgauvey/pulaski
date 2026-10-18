@@ -24,7 +24,8 @@ internal static class MaterialEndpoints
             Guid id,
             IQueryHandler<GetMaterialQuery, MaterialDetailDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetMaterialQuery(id), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetMaterialQuery(id), ct)))
+        .RequireAny(null, Permissions.MaterialsView);
 
         materials.MapPost("/", async Task<Created<CreatedResponse>> (
             CreateMaterialRequest request,

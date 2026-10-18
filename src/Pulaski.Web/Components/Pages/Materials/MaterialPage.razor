@@ -1,4 +1,5 @@
 @page "/materials/{MaterialId:guid}"
+@attribute [RequiresView(PermissionCodes.MaterialsView)]
 @using System.Globalization
 @inject PulaskiApiClient Api
 @inject CurrentUser User
@@ -22,8 +23,8 @@
         <p class="text-muted mb-0">@_detail?.Material.Name</p>
     </div>
     <div class="inv-head-tools">
-        <a class="btn btn-outline-secondary" href="units?material=@MaterialId">Conversions</a>
-        <a class="btn btn-outline-secondary" href="inventory/materials/@MaterialId">Stock</a>
+        <ScreenLink Href="@($"units?material={MaterialId}")" Permission="@PermissionCodes.UnitsView" Hide class="btn btn-outline-secondary">Conversions</ScreenLink>
+        <ScreenLink Href="@($"inventory/materials/{MaterialId}")" Permission="@PermissionCodes.InventoryView" Hide class="btn btn-outline-secondary">Stock</ScreenLink>
     </div>
 </div>
 
@@ -57,10 +58,10 @@
         <section aria-labelledby="use-title">
             <h2 id="use-title">What uses it</h2>
             <div class="inv-tiles">
-                <a class="inv-tile text-decoration-none" href="inventory/materials/@MaterialId">
+                <ScreenLink Href="@($"inventory/materials/{MaterialId}")" Permission="@PermissionCodes.InventoryView" class="inv-tile text-decoration-none">
                     <span class="metric @(u.LotsOnHand == 0 ? "is-zero" : "")">@InventoryView.Qty(u.QuantityOnHand)</span>
                     <span class="inv-tile-label">On hand, @m.BaseUomCode · @u.LotsOnHand @(u.LotsOnHand == 1 ? "lot" : "lots")</span>
-                </a>
+                </ScreenLink>
                 <div class="inv-tile"><span class="metric @(u.OpenWorkOrders == 0 ? "is-zero" : "")">@u.OpenWorkOrders</span><span class="inv-tile-label">Open work orders</span></div>
                 <div class="inv-tile"><span class="metric @(u.OpenJobs == 0 ? "is-zero" : "")">@u.OpenJobs</span><span class="inv-tile-label">Open jobs</span></div>
                 <div class="inv-tile"><span class="metric @(u.UsedInReleasedBoms == 0 ? "is-zero" : "")">@u.UsedInReleasedBoms</span><span class="inv-tile-label">Released BOMs using it</span></div>
@@ -99,7 +100,7 @@
                     @foreach (var p in _processes)
                     {
                         <li @key="p.Id">
-                            <a href="processes/@p.Id">@p.Code</a> · @p.Name
+                            <ScreenLink Href="@($"processes/{p.Id}")" Permission="@PermissionCodes.ProcessesView">@p.Code</ScreenLink> · @p.Name
                             @if (p.DefaultFor.Contains(m.Code))
                             {
                                 <span class="chip ms-1">default</span>
@@ -115,7 +116,7 @@
             <h3 class="h6">Its BOMs</h3>
             @if (_boms.Count == 0)
             {
-                <p class="text-muted small">No BOM. <a href="boms">Create one</a> to plan its components.</p>
+                <p class="text-muted small">No BOM. <ScreenLink Href="boms" Permission="@PermissionCodes.ProcessesView">Create one</ScreenLink> to plan its components.</p>
             }
             else
             {
@@ -123,7 +124,7 @@
                     @foreach (var b in _boms)
                     {
                         <li @key="b.Id">
-                            <a href="boms/@b.Id">BOM for @(b.ProcessCode ?? "any process")</a>
+                            <ScreenLink Href="@($"boms/{b.Id}")" Permission="@PermissionCodes.ProcessesView">BOM for @(b.ProcessCode ?? "any process")</ScreenLink>
                             <span class="small text-muted">· @(b.ReleasedVersion is { } r ? $"version {r} released, {b.ReleasedItems} components" : "not released")</span>
                         </li>
                     }
@@ -148,14 +149,14 @@
                 }
                 @if (used.Jobs.Count > 0)
                 {
-                    <div class="small mt-2">@used.Jobs.Count open @(used.Jobs.Count == 1 ? "job plans" : "jobs plan") to use it. <a href="inventory/materials/@MaterialId">See them</a></div>
+                    <div class="small mt-2">@used.Jobs.Count open @(used.Jobs.Count == 1 ? "job plans" : "jobs plan") to use it. <ScreenLink Href="@($"inventory/materials/{MaterialId}")" Permission="@PermissionCodes.InventoryView">See them</ScreenLink></div>
                 }
             }
 
             <h3 class="h6 mt-3">Its own conversions</h3>
             @if (_conversions.Count == 0)
             {
-                <p class="text-muted small">None: it converts only between standard units of its own kind. <a href="units?material=@MaterialId">Add one</a></p>
+                <p class="text-muted small">None: it converts only between standard units of its own kind. <ScreenLink Href="@($"units?material={MaterialId}")" Permission="@PermissionCodes.UnitsView">Add one</ScreenLink></p>
             }
             else
             {

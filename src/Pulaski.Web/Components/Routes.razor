@@ -1,6 +1,9 @@
 ﻿<Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+        @* The layout checks the page's [RequiresView] once it knows the user (D-039). *@
+        <CascadingValue Value="routeData">
+            <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+        </CascadingValue>
         <FocusOnNavigate RouteData="routeData" Selector="h1" />
     </Found>
 </Router>

@@ -48,7 +48,8 @@ internal static class SecurityEndpoints
         var roles = routes.MapGroup("/roles").WithTags("Security");
 
         roles.MapGet("/", async Task<Ok<IReadOnlyList<RoleDto>>> (IQueryHandler<ListRolesQuery, IReadOnlyList<RoleDto>> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListRolesQuery(), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new ListRolesQuery(), ct)))
+        .RequirePermission(Permissions.Security);
 
         roles.MapPost("/", async Task<Created<CreatedResponse>> (CreateRoleRequest request, ICommandHandler<CreateRoleCommand, CreatedResponse> handler, CancellationToken ct) =>
         {
@@ -68,7 +69,8 @@ internal static class SecurityEndpoints
 
         routes.MapGet("/permissions", async Task<Ok<IReadOnlyList<PermissionDto>>> (IQueryHandler<ListPermissionsQuery, IReadOnlyList<PermissionDto>> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ListPermissionsQuery(), ct)))
-            .WithTags("Security");
+            .WithTags("Security")
+        .RequirePermission(Permissions.Security);
 
         var users = routes.MapGroup("/users").WithTags("Security");
 

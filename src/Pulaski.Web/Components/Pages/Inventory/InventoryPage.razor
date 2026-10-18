@@ -1,4 +1,5 @@
 @page "/inventory"
+@attribute [RequiresView(PermissionCodes.InventoryView)]
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 @inject TimeProvider Time
@@ -69,7 +70,7 @@ else if (Sites.Sites.Count == 0)
 {
     <div class="empty-panel">
         <h2>No site yet</h2>
-        <p class="text-muted mb-0">Create a site under <a href="equipment">Equipment</a>, and mark the stores and staging areas in it as <strong>Holds inventory</strong>.</p>
+        <p class="text-muted mb-0">Create a site under <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink>, and mark the stores and staging areas in it as <strong>Holds inventory</strong>.</p>
     </div>
 }
 else

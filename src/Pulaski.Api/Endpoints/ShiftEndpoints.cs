@@ -17,16 +17,20 @@ internal static class ShiftEndpoints
         var schedules = routes.MapGroup("/shift-schedules").WithTags("Shifts");
 
         schedules.MapGet("/", async Task<Ok<IReadOnlyList<ShiftScheduleDto>>> (
-            Guid? siteId, IQueryHandler<ListShiftSchedulesQuery, IReadOnlyList<ShiftScheduleDto>> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListShiftSchedulesQuery(siteId), ct)));
+            Guid? siteId, HttpContext http, IQueryHandler<ListShiftSchedulesQuery, IReadOnlyList<ShiftScheduleDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok((await handler.HandleAsync(new ListShiftSchedulesQuery(siteId), ct))
+                .At(await Visible.SitesAsync(http, Permissions.ShiftsView, Permissions.EquipmentView), s => s.SiteId)))
+        .RequireAny(Site.Query(), Permissions.ShiftsView, Permissions.EquipmentView);
 
         schedules.MapGet("/{id:guid}", async Task<Ok<ShiftScheduleDto>> (Guid id, IQueryHandler<GetShiftScheduleQuery, ShiftScheduleDto> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetShiftScheduleQuery(id), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetShiftScheduleQuery(id), ct)))
+        .RequireAny(Site.Of(SiteOf.ShiftSchedule), Permissions.ShiftsView, Permissions.EquipmentView);
 
-        // Works out a schedule's shifts, saved or not; changes nothing, so it needs no permission.
+        // Works out a schedule's shifts, saved or not; changes nothing, so seeing shift schedules is enough.
         schedules.MapPost("/preview", async Task<Ok<ShiftPreviewDto>> (
             PreviewShiftScheduleRequest request, IQueryHandler<PreviewShiftScheduleQuery, ShiftPreviewDto> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new PreviewShiftScheduleQuery(request), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new PreviewShiftScheduleQuery(request), ct)))
+        .RequireAny(Site.FromBody<PreviewShiftScheduleRequest>(SiteOf.Equipment, r => r.SiteId), Permissions.ShiftsView);
 
         schedules.MapPost("/", async Task<Created<CreatedResponse>> (
             CreateShiftScheduleRequest request, ICommandHandler<CreateShiftScheduleCommand, CreatedResponse> handler, CancellationToken ct) =>

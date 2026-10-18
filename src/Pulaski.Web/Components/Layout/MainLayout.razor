@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @inject PulaskiApiClient Api
 @inject CurrentUser User
+@inject NavigationManager Navigation
 
 <div class="shell">
     <header class="app-header">
@@ -40,7 +41,7 @@
     </header>
 
     <aside class="app-sidebar">
-        @if (User.Me is not null)
+        @if (User.Me is not null && User.CanSeeAnything)
         {
             <NavMenu />
         }
@@ -48,18 +49,38 @@
 
     <main class="app-main">
         <article class="content">
-            @* What the user may do decides which actions the pages show (D-037), so it loads first. *@
-            @if (User.Me is not null)
+            @* What the user may see and do decides the pages and actions shown (D-037, D-039), so it loads first. *@
+            @if (User.Me is null)
             {
-                @Body
+                @if (_error is not null)
+                {
+                    <ProblemAlert Error="_error" />
+                }
+                else
+                {
+                    <p class="text-muted">Loading…</p>
+                }
             }
-            else if (_error is not null)
+            else if (!User.CanSeeAnything)
             {
-                <ProblemAlert Error="_error" />
+                <AccessPanel Kind="locked" Title="Nothing to see here yet"
+                             Message="Your roles don't let you see any screens in Pulaski yet. Ask an administrator to give you a role that does, then sign in again.">
+                    <form method="post" action="account/logout">
+                        <button type="submit" class="btn btn-outline-secondary">Sign out</button>
+                    </form>
+                </AccessPanel>
+            }
+            else if (!MaySeePage)
+            {
+                @* A page the user may not see answers like one that doesn't exist, so it isn't advertised. *@
+                <PageTitle>Not found · Pulaski</PageTitle>
+                <AccessPanel Title="Page not found" Message="There's nothing here, or nothing you can see. Check the address, or use the menu.">
+                    <a class="btn btn-primary" href="@(User.FirstScreen ?? "")">Go to the start</a>
+                </AccessPanel>
             }
             else
             {
-                <p class="text-muted">Loading…</p>
+                @Body
             }
         </article>
     </main>
@@ -82,11 +103,28 @@
 
     private ApiException? _error;
 
+    [CascadingParameter]
+    private RouteData? RouteData { get; set; }
+
+    private bool MaySeePage =>
+        RouteData?.PageType.GetCustomAttributes(typeof(RequiresViewAttribute), inherit: false).FirstOrDefault() is not RequiresViewAttribute required
+        || User.CanAny(required.AnyOf);
+
+    // The start page is the Overview; whoever can't see it starts at the first screen they can (D-039).
+    protected override void OnParametersSet()
+    {
+        if (User.Me is not null && !MaySeePage && RouteData?.PageType == typeof(Pages.Home) && User.FirstScreen is { Length: > 0 } first)
+        {
+            Navigation.NavigateTo(first, replace: true);
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         try
         {
             await User.EnsureAsync(Api);
+            OnParametersSet();
         }
         catch (ApiException ex)
         {

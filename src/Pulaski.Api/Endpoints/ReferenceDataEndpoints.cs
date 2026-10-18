@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.ReferenceData;
 using Pulaski.Contracts.ReferenceData;
@@ -13,20 +14,23 @@ internal static class ReferenceDataEndpoints
             IQueryHandler<ListUomsQuery, IReadOnlyList<UomDto>> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ListUomsQuery(), ct)))
-            .WithTags("Reference data");
+            .WithTags("Reference data")
+            .RequireAnyView();
 
         routes.MapGet("/materials", async Task<Ok<IReadOnlyList<MaterialDto>>> (
             bool? includeInactive,
             IQueryHandler<ListMaterialsQuery, IReadOnlyList<MaterialDto>> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ListMaterialsQuery(includeInactive ?? false), ct)))
-            .WithTags("Reference data");
+            .WithTags("Reference data")
+            .RequireAnyView();
 
         routes.MapGet("/material-classes", async Task<Ok<IReadOnlyList<MaterialClassDto>>> (
             IQueryHandler<ListMaterialClassesQuery, IReadOnlyList<MaterialClassDto>> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ListMaterialClassesQuery(), ct)))
-            .WithTags("Reference data");
+            .WithTags("Reference data")
+            .RequireAnyView();
 
         return routes;
     }

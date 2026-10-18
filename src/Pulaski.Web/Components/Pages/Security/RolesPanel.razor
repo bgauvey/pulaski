@@ -85,7 +85,9 @@ else
                         @foreach (var p in area)
                         {
                             <div class="form-check" @key="p.Code">
-                                <input class="form-check-input" type="checkbox" id="perm-@p.Code" checked="@edit.Permissions.Contains(p.Code)"
+                                @{ var comes = !edit.Permissions.Contains(p.Code) && p.ComesWith.Any(edit.Permissions.Contains); }
+                                <input class="form-check-input" type="checkbox" id="perm-@p.Code" checked="@(edit.Permissions.Contains(p.Code) || comes)"
+                                       disabled="@comes" title="@(comes ? "Comes with a permission to change it" : null)"
                                        @onchange="e => Toggle(edit, p.Code, e.Value is true)" />
                                 <label class="form-check-label small" for="perm-@p.Code">@p.Description</label>
                             </div>

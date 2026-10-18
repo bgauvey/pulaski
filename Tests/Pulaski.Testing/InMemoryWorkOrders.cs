@@ -12,10 +12,10 @@ public sealed class InMemoryWorkOrders : IWorkOrderRepository, IWorkOrderReadSto
     private readonly Dictionary<Guid, Versioned<WorkOrder>> _rows = [];
     private readonly Lock _lock = new();
 
-    public WorkOrder Add(string status, long version = 10)
+    public WorkOrder Add(string status, long version = 10, Guid? siteId = null)
     {
         var planned = WorkOrder.CreateLocal(
-            Guid.CreateVersion7(), Guid.CreateVersion7(), "WO-" + Guid.NewGuid().ToString("N")[..6],
+            Guid.CreateVersion7(), siteId ?? Guid.CreateVersion7(), "WO-" + Guid.NewGuid().ToString("N")[..6],
             Guid.CreateVersion7(), 100, Guid.CreateVersion7(), null, null, null, null, 0);
         var workOrder = planned with { Status = status };
         lock (_lock)

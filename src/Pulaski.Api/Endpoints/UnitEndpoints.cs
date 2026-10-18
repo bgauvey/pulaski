@@ -41,7 +41,8 @@ internal static class UnitEndpoints
             Guid? materialId,
             IQueryHandler<ConvertQuantityQuery, UnitConversionResultDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ConvertQuantityQuery(quantity, fromUomId, toUomId, materialId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new ConvertQuantityQuery(quantity, fromUomId, toUomId, materialId), ct)))
+        .RequireAnyView();
 
         var conversions = routes.MapGroup("/materials/{materialId:guid}/conversions").WithTags("Units");
 
@@ -49,7 +50,8 @@ internal static class UnitEndpoints
             Guid materialId,
             IQueryHandler<ListMaterialConversionsQuery, IReadOnlyList<MaterialConversionDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListMaterialConversionsQuery(materialId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new ListMaterialConversionsQuery(materialId), ct)))
+        .RequireAnyView();
 
         conversions.MapPut("/", async Task<Ok<MaterialConversionDto>> (
             Guid materialId,

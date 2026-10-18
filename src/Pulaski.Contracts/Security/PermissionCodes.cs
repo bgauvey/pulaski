@@ -6,6 +6,21 @@ namespace Pulaski.Contracts.Security;
 /// </summary>
 public static class PermissionCodes
 {
+    public const string OverviewView = "overview.view";
+    public const string WorkOrdersView = "work_orders.view";
+    public const string ScheduleView = "schedule.view";
+    public const string FloorView = "floor.view";
+    public const string InventoryView = "inventory.view";
+    public const string EquipmentView = "equipment.view";
+    public const string MaterialsView = "materials.view";
+    public const string ProcessesView = "processes.view";
+    public const string UnitsView = "units.view";
+    public const string ReasonsView = "reasons.view";
+    public const string ShiftsView = "shifts.view";
+
+    /// <summary>Every view permission (D-039).</summary>
+    public static IReadOnlyList<string> Views { get; } =
+        [OverviewView, WorkOrdersView, ScheduleView, FloorView, InventoryView, EquipmentView, MaterialsView, ProcessesView, UnitsView, ReasonsView, ShiftsView];
     public const string SchedulePlan = "schedule.plan";
     public const string WorkOrderManage = "work_order.manage";
     public const string WorkOrderClose = "work_order.close";

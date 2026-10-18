@@ -26,6 +26,15 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
         }
     }
 
+    /// <summary>Adds a role as an administrator would make it on the Roles screen.</summary>
+    public void AddRole(string code, string name, IReadOnlyList<string> permissions)
+    {
+        lock (_lock)
+        {
+            _roles[code] = new(new SecurityRole(Guid.CreateVersion7(), code, name, "", true, permissions), ++_next);
+        }
+    }
+
     public SecurityRole? Role(string code)
     {
         lock (_lock)

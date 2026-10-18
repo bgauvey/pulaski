@@ -1,4 +1,5 @@
 @page "/jobs/{JobId:guid}"
+@attribute [RequiresView(PermissionCodes.FloorView, PermissionCodes.InventoryView)]
 @using Pulaski.Web.Services.Execution
 @inject PulaskiApiClient Api
 @inject TimeProvider Clock
@@ -8,7 +9,7 @@
 
 <div class="inv-head">
     <div>
-        <div class="small mb-1"><a href="floor">← Floor</a></div>
+        <div class="small mb-1"><ScreenLink Href="floor" Permission="@PermissionCodes.FloorView">← Floor</ScreenLink></div>
         <h1 class="mb-1">
             @(_job?.JobNumber ?? "Job")
             @if (_job is { } h)
@@ -33,7 +34,7 @@
         <div class="inv-head-tools">
             @if (j.JobType == "production")
             {
-                <a class="btn btn-outline-secondary" href="inventory/jobs/@JobId">Materials and lots</a>
+                <ScreenLink Href="@($"inventory/jobs/{JobId}")" Permission="@PermissionCodes.InventoryView" Hide class="btn btn-outline-secondary">Materials and lots</ScreenLink>
             }
             @if (actions.CanStart && !j.IsOnGroup && May(PermissionCodes.JobExecute))
             {
@@ -77,7 +78,7 @@
     }
     @if (job.IsOnGroup)
     {
-        <p class="text-muted">Waiting on its department: start it from the <a href="floor">Floor</a>, choosing the line it runs on.</p>
+        <p class="text-muted">Waiting on its department: start it from the <ScreenLink Href="floor" Permission="@PermissionCodes.FloorView">Floor</ScreenLink>, choosing the line it runs on.</p>
     }
 
     <div class="inv-tiles">
@@ -117,7 +118,7 @@
                         {
                             <tr @key="p.Id">
                                 <td>@p.RunNo</td>
-                                <td><a href="inventory/lots/@p.LotId">@p.LotNumber</a></td>
+                                <td><ScreenLink Href="@($"inventory/lots/{p.LotId}")" Permission="@PermissionCodes.InventoryView">@p.LotNumber</ScreenLink></td>
                                 <td class="inv-num">@FloorView.Qty(p.Quantity) of @FloorView.Qty(p.BatchSize) @p.UomCode</td>
                                 <td><span class="@(p.Status == "pending" ? "chip chip-warning" : "chip")">@Display.Label(p.Status)</span></td>
                                 <td class="small">@Display.SiteTime(p.OccurredAt, job.SiteTimeZone)</td>

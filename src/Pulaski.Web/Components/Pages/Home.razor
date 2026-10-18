@@ -1,4 +1,5 @@
 @page "/"
+@attribute [RequiresView(PermissionCodes.OverviewView)]
 @* The plant overview (docs/admin-dashboard-brief.md). In five seconds it answers: which lines
    are running, which are not and why, and what needs a person. Everything Pulaski can't know
    yet (machine state, counts, OEE, quality, lots, labor) is a placeholder in its final place, so
@@ -133,7 +134,7 @@
     {
         <div class="ov-empty">
             <p class="mb-1 fw-semibold">No lines in @(Site?.Code ?? "this site") yet.</p>
-            <p class="mb-0 text-muted">Add a work center that can run jobs on <a href="equipment">Equipment</a>, and it appears here.</p>
+            <p class="mb-0 text-muted">Add a work center that can run jobs on <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink>, and it appears here.</p>
         </div>
     }
     else
@@ -161,7 +162,14 @@
                 var flags = Flags(timeline);
                 <div class="ov-row" role="row" @key="line.Id">
                     <span role="cell" class="ov-line">
-                        <a class="ov-line-code" href="schedule">@line.Code</a>
+                        @if (CanSchedule)
+                        {
+                            <a class="ov-line-code" href="schedule">@line.Code</a>
+                        }
+                        else
+                        {
+                            <span class="ov-line-code">@line.Code</span>
+                        }
                         <span class="ov-line-name">@line.Name</span>
                     </span>
 
@@ -179,7 +187,14 @@
                         else
                         {
                             <span class="ov-job-when">@NowOrNextLabel(job)</span>
-                            <a class="ov-job-number" href="@(job.WorkOrderId is { } wo ? $"schedule?workOrder={wo}" : "schedule")">@job.JobNumber</a>
+                            @if (CanSchedule)
+                            {
+                                <a class="ov-job-number" href="@(job.WorkOrderId is { } wo ? $"schedule?workOrder={wo}" : "schedule")">@job.JobNumber</a>
+                            }
+                            else
+                            {
+                                <span class="ov-job-number">@job.JobNumber</span>
+                            }
                             <span class="ov-job-material">@job.MaterialCode</span>
                             <span class="ov-progress">
                                 <span class="ov-meter"><span class="ov-meter-fill" style="width: @Pct(OverviewModel.Made(job) * 100)"></span></span>
@@ -199,9 +214,16 @@
                             }
                             @foreach (var bar in OverviewModel.Bars(segments, _window))
                             {
-                                <a class="ov-bar @BarClass(bar)" style="left: @Pct(bar.Left); width: @Pct(bar.Width)"
-                                   href="@(bar.Segment.WorkOrderId is { } wo ? $"schedule?workOrder={wo}" : "schedule")"
-                                   title="@BarTitle(bar)" aria-label="@BarTitle(bar)"></a>
+                                @if (CanSchedule)
+                                {
+                                    <a class="ov-bar @BarClass(bar)" style="left: @Pct(bar.Left); width: @Pct(bar.Width)"
+                                       href="@(bar.Segment.WorkOrderId is { } wo ? $"schedule?workOrder={wo}" : "schedule")"
+                                       title="@BarTitle(bar)" aria-label="@BarTitle(bar)"></a>
+                                }
+                                else
+                                {
+                                    <span class="ov-bar @BarClass(bar)" style="left: @Pct(bar.Left); width: @Pct(bar.Width)" title="@BarTitle(bar)"></span>
+                                }
                             }
                         </span>
                         <span class="ov-now" style="left: @Pct(_window.Percent(Now))" aria-hidden="true"></span>
@@ -237,10 +259,20 @@
             {
                 var count = _orders.Count(o => o.Status == status);
                 <li>
-                    <a class="ov-flow-step @(count == 0 ? "is-zero" : "")" href="work-orders?status=@status">
-                        <span class="ov-flow-count">@count</span>
-                        <span class="ov-flow-label">@Display.Label(status)</span>
-                    </a>
+                    @if (User.Can(PermissionCodes.WorkOrdersView))
+                    {
+                        <a class="ov-flow-step @(count == 0 ? "is-zero" : "")" href="work-orders?status=@status">
+                            <span class="ov-flow-count">@count</span>
+                            <span class="ov-flow-label">@Display.Label(status)</span>
+                        </a>
+                    }
+                    else
+                    {
+                        <span class="ov-flow-step @(count == 0 ? "is-zero" : "")">
+                            <span class="ov-flow-count">@count</span>
+                            <span class="ov-flow-label">@Display.Label(status)</span>
+                        </span>
+                    }
                 </li>
             }
         </ol>
@@ -257,7 +289,7 @@
         <h2 id="next-title" class="ov-h2">Starting next</h2>
         @if (StartingNext.Count == 0)
         {
-            <p class="text-muted">Nothing is planned to start. <a href="schedule">Open the schedule</a> to place work on a line.</p>
+            <p class="text-muted">Nothing is planned to start. <ScreenLink Href="schedule" Permission="@PermissionCodes.ScheduleView">Open the schedule</ScreenLink> to place work on a line.</p>
         }
         else
         {
@@ -268,7 +300,16 @@
                         <tr>
                             <td class="ov-next-time">@StartLabel(segment.Start)</td>
                             <td class="ov-next-line">@line.Code</td>
-                            <td><a href="@(segment.WorkOrderId is { } wo ? $"schedule?workOrder={wo}" : "schedule")">@segment.JobNumber</a></td>
+                            <td>
+                                @if (CanSchedule)
+                                {
+                                    <a href="@(segment.WorkOrderId is { } wo ? $"schedule?workOrder={wo}" : "schedule")">@segment.JobNumber</a>
+                                }
+                                else
+                                {
+                                    @segment.JobNumber
+                                }
+                            </td>
                             <td class="text-muted">@segment.MaterialCode</td>
                             <td class="ov-next-qty">@ScheduleFormat.Qty(segment.PlannedQty, segment.UomCode)</td>
                         </tr>
@@ -280,6 +321,9 @@
 </div>
 
 @code {
+    // Its lines and jobs link to the schedule for whoever may see it (D-039).
+    private bool CanSchedule => User.Can(PermissionCodes.ScheduleView);
+
     private static readonly TimeSpan RefreshEvery = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan StaleAfter = TimeSpan.FromSeconds(60);
     private static readonly string[] FlowStatuses = ["planned", "dispatched", "firmed", "in_progress", "completed"];
