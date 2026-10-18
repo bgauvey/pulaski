@@ -78,6 +78,7 @@ else
     private IReadOnlyList<EquipmentDto>? _equipment;
     private IReadOnlyList<EquipmentTypeDto>? _types;
     private IReadOnlyList<ShiftScheduleDto> _schedules = [];
+    private IReadOnlyList<MachineProfileDto> _profiles = [];
     private EquipmentTree _tree = new([]);
     private readonly HashSet<Guid> _expanded = [];
     private Guid? _selectedId;
@@ -124,6 +125,15 @@ else
     {
         _equipment = await Api.ListEquipmentAsync();
         RebuildTree();
+
+        // Each site keeps its own machine profiles (D-041).
+        var profiles = new List<MachineProfileDto>();
+        foreach (var site in _equipment.Where(e => e.Level == "site"))
+        {
+            profiles.AddRange(await Api.ListMachineProfilesAsync(site.Id));
+        }
+
+        _profiles = profiles;
     }
 
     private void RebuildTree()
@@ -193,7 +203,7 @@ else
         }
 
         return SelectedExisting is { } e
-            ? (EquipmentProperties.ForExisting(e, _tree, _schedules, CanChange, User.Can(PermissionCodes.Shifts, e.SiteId)), e.Code, Display.Label(e.EquipmentRole))
+            ? (EquipmentProperties.ForExisting(e, _tree, _schedules, CanChange, User.Can(PermissionCodes.Shifts, e.SiteId), _profiles), e.Code, Display.Label(e.EquipmentRole))
             : ([], null, null);
     }
 
@@ -212,7 +222,8 @@ else
         }
 
         var request = EquipmentProperties.ApplyChange(equipment, change);
-        if (request is null && change.Key != EquipmentProperties.CalendarKey)
+        var machineData = EquipmentProperties.MachineDataKeys.Contains(change.Key) ? EquipmentProperties.MachineDataChange(equipment, change, _tree) : null;
+        if (request is null && machineData is null && change.Key != EquipmentProperties.CalendarKey)
         {
             return;
         }
@@ -224,6 +235,11 @@ else
             if (request is not null)
             {
                 await Api.UpdateEquipmentAsync(equipment.Id, request);
+            }
+            else if (machineData is not null)
+            {
+                // Its machine data (D-041) is saved apart from the rest of the equipment.
+                await Api.SetEquipmentMachineDataAsync(equipment.Id, machineData);
             }
             else
             {

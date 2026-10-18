@@ -123,6 +123,14 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   out to runs by overlap on read (`LaborRules.Attribute`); each session stores its shift (`EquipmentShifts.ShiftAt`).
   `core.labor_approval` locks a shift; corrections are new sessions (`corrects_session_id`, `is_void`). Clock-on locks
   the person; crew check-in locks people in id order in SQL. No background service.
+- Machine data and OEE (D-041, proposed): connectors run in the separate `Pulaski.Edge` worker behind one interface that
+  emits samples (address, value, timestamp, quality); shared edge code binds them via `core.equipment_tag`, buffers in SQLite (edge may be another machine)
+  and forwards to the API (only the API writes the DB). Sparkplug B host first. Machine profiles (`core.machine_profile*`, per site,
+  one per kind of machine; `equipment_stop_reason_map` = per-machine overrides) map raw state values → PackML and stop codes →
+  `utilization` reasons (`MachineProfileCsv`; each kind in a file replaces its list). List changes bump the profile's version;
+  overrides bump the equipment's. Reason classes runtime / downtime / planned (excluded); micro-stops < the equipment's threshold
+  (default 5 min, `PUT /equipment/{id}/machine-data`) aren't availability loss; line state series = worst, parallel = best.
+  Permissions: `equipment.view` / `equipment.manage`. OEE computed on read; telemetry stays out of `evt.event`.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
@@ -173,8 +181,8 @@ Treat these as working assumptions; confirm with Bill before building anything t
 - Load schema: `psql -d pulaski -v ON_ERROR_STOP=1 -f db/schema-draft.sql`, then
   `db/app-role.sql` (re-runnable), then `db/seed-demo.sql` (empty database only), then optionally
   `db/seed-materials.sql` (200 demo materials in 11 classes; re-runnable), then `db/seed-units.sql` (standard units
-  and demo material conversions, D-026; re-runnable), then `db/seed-reasons.sql` (starter adjustment and hold
-  reasons, D-027; re-runnable).
+  and demo material conversions, D-026; re-runnable), then `db/seed-reasons.sql` (starter adjustment, hold and
+  utilization reasons, D-027, D-041; re-runnable).
 - Layout: production projects in `src/`, test projects in `Tests/` (shared in-memory fakes in
   `Tests/Pulaski.Testing`); `.editorconfig`,
   `Directory.Build.props`, `Directory.Packages.props` (central package versions) and

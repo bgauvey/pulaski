@@ -33,6 +33,18 @@ public sealed record EquipmentDto
     /// <summary>Its own shift schedule, when <see cref="CalendarMode"/> is <c>schedule</c>.</summary>
     public Guid? ShiftScheduleId { get; init; }
 
+    /// <summary>The machine profile its state and stop codes are read with (D-041).</summary>
+    public Guid? MachineProfileId { get; init; }
+
+    /// <summary>Where its state comes from (D-041): <c>own_tags</c>, <c>series</c>, <c>parallel</c> or <c>constraint_machine</c>.</summary>
+    public string StateDerivation { get; init; } = "own_tags";
+
+    /// <summary>The machine whose state is its own, with <c>constraint_machine</c>.</summary>
+    public Guid? ConstraintEquipmentId { get; init; }
+
+    /// <summary>Stops shorter than this many seconds are micro-stops (D-041).</summary>
+    public int MicroStopThresholdSeconds { get; init; } = 300;
+
     /// <summary>Distance from the enterprise root (0 = enterprise).</summary>
     public int Depth { get; init; }
 

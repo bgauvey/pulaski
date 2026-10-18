@@ -177,18 +177,19 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         """;
 
     private const string GetReasonCodeForUpdate = """
-        SELECT id, site_id, reason_kind AS kind, code, name, requires_comment, sort_order, is_active, xmin::text::bigint AS version
+        SELECT id, site_id, reason_kind AS kind, code, name, requires_comment, sort_order, is_active, utilization_class, xmin::text::bigint AS version
         FROM core.reason_code WHERE id = @Id FOR UPDATE
         """;
 
     private const string InsertReasonCode = """
-        INSERT INTO core.reason_code (id, site_id, reason_kind, code, name, requires_comment, sort_order, is_active)
-        VALUES (@Id, @SiteId, @Kind, @Code, @Name, @RequiresComment, @SortOrder, @IsActive)
+        INSERT INTO core.reason_code (id, site_id, reason_kind, code, name, requires_comment, sort_order, is_active, utilization_class)
+        VALUES (@Id, @SiteId, @Kind, @Code, @Name, @RequiresComment, @SortOrder, @IsActive, @UtilizationClass)
         RETURNING xmin::text::bigint
         """;
 
     private const string UpdateReasonCode = """
-        UPDATE core.reason_code SET name = @Name, requires_comment = @RequiresComment, sort_order = @SortOrder, is_active = @IsActive
+        UPDATE core.reason_code SET name = @Name, requires_comment = @RequiresComment, sort_order = @SortOrder, is_active = @IsActive,
+            utilization_class = @UtilizationClass
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -342,7 +343,7 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     public async Task<Versioned<ReasonCode>?> GetReasonCodeForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<ReasonRow>(GetReasonCodeForUpdate, new { Id = id }, cancellationToken) is { } r
-            ? new(new ReasonCode(r.Id, r.SiteId, r.Kind, r.Code, r.Name, r.RequiresComment, r.SortOrder, r.IsActive), r.Version)
+            ? new(new ReasonCode(r.Id, r.SiteId, r.Kind, r.Code, r.Name, r.RequiresComment, r.SortOrder, r.IsActive, r.UtilizationClass), r.Version)
             : null;
 
     public Task<long> InsertReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken) =>
@@ -461,6 +462,7 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         public bool RequiresComment { get; init; }
         public int SortOrder { get; init; }
         public bool IsActive { get; init; }
+        public string? UtilizationClass { get; init; }
         public long Version { get; init; }
     }
 }

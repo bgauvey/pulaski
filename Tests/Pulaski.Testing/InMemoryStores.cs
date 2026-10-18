@@ -6,6 +6,7 @@ using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Execution;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.Labor;
+using Pulaski.Application.MachineData;
 using Pulaski.Application.Materials;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
@@ -62,6 +63,8 @@ public sealed class InMemoryStores
 
     public InMemoryLabor Labor { get; } = new();
 
+    public InMemoryMachineData MachineData { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -96,6 +99,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IShiftRepository>();
         services.RemoveAll<ILaborReadStore>();
         services.RemoveAll<ILaborRepository>();
+        services.RemoveAll<IMachineDataReadStore>();
+        services.RemoveAll<IMachineDataRepository>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -128,6 +133,8 @@ public sealed class InMemoryStores
         services.AddSingleton<IShiftRepository>(Shifts);
         services.AddSingleton<ILaborReadStore>(Labor);
         services.AddSingleton<ILaborRepository>(Labor);
+        services.AddSingleton<IMachineDataReadStore>(MachineData);
+        services.AddSingleton<IMachineDataRepository>(MachineData);
         return services;
     }
 }

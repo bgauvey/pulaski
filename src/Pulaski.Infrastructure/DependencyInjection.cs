@@ -5,6 +5,7 @@ using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Execution;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.Labor;
+using Pulaski.Application.MachineData;
 using Pulaski.Application.Materials;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
@@ -19,6 +20,7 @@ using Pulaski.Infrastructure.Events;
 using Pulaski.Infrastructure.Execution;
 using Pulaski.Infrastructure.Inventory;
 using Pulaski.Infrastructure.Labor;
+using Pulaski.Infrastructure.MachineData;
 using Pulaski.Infrastructure.Materials;
 using Pulaski.Infrastructure.Persistence;
 using Pulaski.Infrastructure.Processes;
@@ -59,6 +61,7 @@ public static class DependencyInjection
         services.AddSingleton<IMaterialReadStore, MaterialQueries>();
         services.AddSingleton<IShiftReadStore, ShiftQueries>();
         services.AddSingleton<ILaborReadStore, LaborQueries>();
+        services.AddSingleton<IMachineDataReadStore, MachineDataQueries>();
 
         services.AddScoped<DbSession>();
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DbSession>());
@@ -77,6 +80,7 @@ public static class DependencyInjection
         services.AddScoped<ISecurityRepository, SecurityRepository>();
         services.AddScoped<IShiftRepository, ShiftRepository>();
         services.AddScoped<ILaborRepository, LaborRepository>();
+        services.AddScoped<IMachineDataRepository, MachineDataRepository>();
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
 
         return services;

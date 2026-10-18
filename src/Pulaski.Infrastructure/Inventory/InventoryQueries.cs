@@ -417,7 +417,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
 
     private const string AllReasonCodesSql = """
         SELECT r.id, r.site_id, s.code AS site_code, r.reason_kind AS kind, r.code, r.name, r.requires_comment,
-               r.sort_order, r.is_active, r.is_selectable, r.xmin::text::bigint AS version
+               r.sort_order, r.is_active, r.is_selectable, r.utilization_class, r.xmin::text::bigint AS version
         FROM core.reason_code r
         LEFT JOIN core.equipment s ON s.id = r.site_id
         WHERE @SiteId::uuid IS NULL OR r.site_id IS NULL OR r.site_id = @SiteId
@@ -460,7 +460,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         """;
 
     private const string ReasonCodesSql = """
-        SELECT id, reason_kind AS kind, code, name, requires_comment
+        SELECT id, reason_kind AS kind, code, name, requires_comment, utilization_class
         FROM core.reason_code
         WHERE is_active AND is_selectable AND reason_kind = @Kind
           AND (site_id IS NULL OR site_id = @SiteId)

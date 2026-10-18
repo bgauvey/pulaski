@@ -60,6 +60,14 @@ public static class EventTypes
     public const string EquipmentCreated = "pulaski.equipment.created.v1";
     public const string EquipmentUpdated = "pulaski.equipment.updated.v1";
     public const string EquipmentCalendarSet = "pulaski.equipment.calendar_set.v1";
+    public const string EquipmentMachineDataSet = "pulaski.equipment.machine_data_set.v1";
+    public const string EquipmentStopReasonOverrideSet = "pulaski.equipment.stop_reason_override_set.v1";
+    public const string MachineProfileCreated = "pulaski.machine_profile.created.v1";
+    public const string MachineProfileUpdated = "pulaski.machine_profile.updated.v1";
+    public const string MachineProfileStateSet = "pulaski.machine_profile.state_set.v1";
+    public const string MachineProfileCodeSet = "pulaski.machine_profile.code_set.v1";
+    public const string MachineProfileReasonsSet = "pulaski.machine_profile.reasons_set.v1";
+    public const string MachineProfileImported = "pulaski.machine_profile.imported.v1";
     public const string ShiftScheduleCreated = "pulaski.shift_schedule.created.v1";
     public const string ShiftScheduleUpdated = "pulaski.shift_schedule.updated.v1";
     public const string CrewCreated = "pulaski.crew.created.v1";

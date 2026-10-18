@@ -86,10 +86,10 @@ CREATE TABLE core.equipment (
     holds_inventory         boolean NOT NULL DEFAULT false,         -- lots can be located here
     commingles_lots         boolean NOT NULL DEFAULT false,         -- lots here mix into one balance per material, like a silo (D-031)
     single_material         boolean NOT NULL DEFAULT false,         -- takes one material at a time (D-032)
-    -- line state derivation (open question: constraint vs worst vs configured)
-    state_derivation        text CHECK (state_derivation IN ('own_tags','constraint_machine','worst_child','rule')),
+    -- machine data (D-041): where its state comes from, and how short a stop is a micro-stop
+    state_derivation        text NOT NULL DEFAULT 'own_tags' CHECK (state_derivation IN ('own_tags','series','parallel','constraint_machine')),
     constraint_equipment_id uuid REFERENCES core.equipment(id),
-    micro_stop_threshold    interval NOT NULL DEFAULT interval '2 minutes',
+    micro_stop_threshold    interval NOT NULL DEFAULT interval '5 minutes',
     time_zone               text,                                   -- IANA zone, required on sites
     is_active               boolean NOT NULL DEFAULT true,
     created_at              timestamptz NOT NULL DEFAULT now(),
@@ -113,7 +113,8 @@ CREATE TABLE core.equipment (
     CONSTRAINT equipment_site_ck CHECK (level = 'enterprise' OR site_id IS NOT NULL),
     CONSTRAINT equipment_tz_ck   CHECK (level <> 'site' OR time_zone IS NOT NULL),
     CONSTRAINT equipment_root_ck CHECK ((level = 'enterprise') = (parent_id IS NULL)),
-    CONSTRAINT equipment_derivation_ck CHECK (state_derivation <> 'constraint_machine' OR constraint_equipment_id IS NOT NULL),
+    CONSTRAINT equipment_derivation_ck CHECK ((state_derivation = 'constraint_machine') = (constraint_equipment_id IS NOT NULL)),
+    CONSTRAINT equipment_micro_stop_ck CHECK (micro_stop_threshold >= interval '0' AND micro_stop_threshold <= interval '1 hour'),
     CONSTRAINT equipment_commingles_ck CHECK (NOT commingles_lots OR holds_inventory),
     CONSTRAINT equipment_single_material_ck CHECK (NOT single_material OR holds_inventory),
     CONSTRAINT equipment_code_uq UNIQUE (site_id, code)
@@ -498,8 +499,9 @@ CREATE TABLE core.reason_code (
     site_id             uuid REFERENCES core.equipment(id),     -- null = enterprise-wide
     parent_id           uuid REFERENCES core.reason_code(id),
     reason_kind         text NOT NULL CHECK (reason_kind IN (
-                            'downtime','scrap','hold','inventory_adjustment',
+                            'utilization','scrap','hold','inventory_adjustment',
                             'indirect_labor','run_end','spc_cause','sample_exclusion')),
+    utilization_class   text CHECK (utilization_class IN ('runtime','downtime','planned')),  -- utilization reasons only (D-041)
     code                text NOT NULL,
     name                text NOT NULL,
     oee_impact          text NOT NULL DEFAULT 'none' CHECK (oee_impact IN ('availability','performance','quality','planned','none')),
@@ -507,14 +509,68 @@ CREATE TABLE core.reason_code (
     requires_comment    boolean NOT NULL DEFAULT false,
     sort_order          integer NOT NULL DEFAULT 0,
     is_active           boolean NOT NULL DEFAULT true,
-    CONSTRAINT reason_code_uq UNIQUE NULLS NOT DISTINCT (site_id, reason_kind, code)
+    CONSTRAINT reason_code_uq UNIQUE NULLS NOT DISTINCT (site_id, reason_kind, code),
+    CONSTRAINT reason_code_utilization_ck CHECK ((reason_kind = 'utilization') = (utilization_class IS NOT NULL))
 );
 
--- PackML Admin.StopReason (first-out) value -> Pulaski reason.
+-- Machine profiles (D-041): one kind of machine, as its controller reports it. Identical machines share a
+-- profile; equipment names its profile and may override single stop codes. Kept per site, like its reasons.
+CREATE TABLE core.machine_profile (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id         uuid NOT NULL REFERENCES core.equipment(id),
+    code            text NOT NULL,                              -- upper case, fixed once created
+    name            text NOT NULL,
+    vendor          text,
+    model           text,
+    description     text,
+    is_active       boolean NOT NULL DEFAULT true,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),         -- also bumped by every change to its lists, so its version guards them
+    CONSTRAINT machine_profile_code_uq UNIQUE (site_id, code)
+);
+
+-- The values the machine's state tag takes, each mapped to its PackML state. A new profile gets PackML's own
+-- numbers; a controller that numbers its states otherwise gets its own. Switched off, never deleted.
+CREATE TABLE core.machine_profile_state (
+    profile_id      uuid NOT NULL REFERENCES core.machine_profile(id),
+    raw_value       integer NOT NULL,
+    name            text NOT NULL,                              -- the controller's name for it
+    packml_state    smallint NOT NULL REFERENCES core.packml_state(code),
+    reason_code_id  uuid REFERENCES core.reason_code(id),       -- utilization reason while in it with no stop code, e.g. Suspended = starved
+    is_active       boolean NOT NULL DEFAULT true,
+    PRIMARY KEY (profile_id, raw_value)
+);
+
+-- The machine's own first-out stop, alarm and warning codes (PackML Admin.StopReason, Alarm, Warning ids),
+-- each mapped to a utilization reason. An unmapped code is kept and shows as uncoded.
+CREATE TABLE core.machine_profile_code (
+    profile_id      uuid NOT NULL REFERENCES core.machine_profile(id),
+    code_kind       text NOT NULL CHECK (code_kind IN ('stop_reason','alarm','warning')),
+    raw_value       integer NOT NULL,
+    message         text NOT NULL,
+    category        text,                                       -- the vendor's grouping, e.g. Mechanical
+    reason_code_id  uuid REFERENCES core.reason_code(id),
+    is_active       boolean NOT NULL DEFAULT true,
+    PRIMARY KEY (profile_id, code_kind, raw_value)
+);
+
+-- The utilization reasons operators may choose on the profile's machines, besides those its codes map to.
+CREATE TABLE core.machine_profile_reason (
+    profile_id      uuid NOT NULL REFERENCES core.machine_profile(id),
+    reason_code_id  uuid NOT NULL REFERENCES core.reason_code(id),
+    is_offered      boolean NOT NULL DEFAULT true,              -- unticked rather than deleted
+    PRIMARY KEY (profile_id, reason_code_id)
+);
+
+ALTER TABLE core.equipment ADD COLUMN machine_profile_id uuid REFERENCES core.machine_profile(id);
+CREATE INDEX equipment_machine_profile_ix ON core.equipment (machine_profile_id) WHERE machine_profile_id IS NOT NULL;
+
+-- One machine's own reason for a stop code where it differs from its profile (D-041).
 CREATE TABLE core.equipment_stop_reason_map (
     equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
     plc_reason_value    integer NOT NULL,
-    reason_code_id      uuid NOT NULL REFERENCES core.reason_code(id),
+    reason_code_id      uuid REFERENCES core.reason_code(id),   -- null: this machine leaves the code uncoded
+    is_active           boolean NOT NULL DEFAULT true,          -- off: the profile's reason applies again
     PRIMARY KEY (equipment_id, plc_reason_value)
 );
 
@@ -1590,7 +1646,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0011_editable_roles'),
     ('0012_shift_schedules'),
     ('0013_view_permissions'),
-    ('0014_labor');
+    ('0014_labor'),
+    ('0015_machine_profiles');
 
 -- =====================================================================
 -- 17. SEED DATA

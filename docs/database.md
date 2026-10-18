@@ -31,7 +31,8 @@ Equipment model            Material & capability          Calendar
             ├─ link ─ residence_time   material ─ uom_conversion   crew
             ├─ tag                     bom ─ bom_version ─ bom_item shift_instance
             ├─ stop_reason_map         equipment_capability (D-020) calendar_exception
-            └─ oee_state_category
+            ├─ oee_state_category
+            └─ machine_profile ─ _state, _code, _reason (D-041)
 
 Orders & scheduling                       Execution & inventory
  manufacturing_order                       job_run ─── ts.production_count, ts.downtime
@@ -98,9 +99,10 @@ One self-referencing table holds enterprise, sites, areas, work centers (lines),
 | `holds_inventory` | boolean | no | Lots can be located here (storage, feed point). |
 | `single_material` | boolean | no | Takes one material at a time (D-032): another material can arrive only when the quantity of the one there is zero. Needs `holds_inventory`. |
 | `commingles_lots` | boolean | no | Lots here mix and can't be told apart, like a silo or tank (D-031): every arrival joins one balance per material. Needs `holds_inventory`. |
-| `state_derivation` | text | yes | How a line's state is derived: `own_tags`, `constraint_machine`, `worst_child` or `rule`. Open question; not used yet. |
-| `constraint_equipment_id` | uuid → equipment | yes | The constraint machine, required when `state_derivation = 'constraint_machine'`. |
-| `micro_stop_threshold` | interval | no | Stops shorter than this count as micro-stops. Default 2 minutes. |
+| `state_derivation` | text | no | Where its state comes from (D-041): `own_tags` (default, its own state tag), `series` (the worst state of its machines), `parallel` (the best) or `constraint_machine`. Set on the Equipment screen; nothing reads it until machine data is collected. |
+| `constraint_equipment_id` | uuid → equipment | yes | The constraint machine: set exactly when `state_derivation = 'constraint_machine'` (`equipment_derivation_ck`), and equipment below this one that tracks state. |
+| `micro_stop_threshold` | interval | no | Stops shorter than this are micro-stops (D-041): logged, not queued for coding, not availability loss. 0 to 60 minutes (`equipment_micro_stop_ck`), default 5. |
+| `machine_profile_id` | uuid → machine_profile | yes | The machine profile its state and stop codes are read with (D-041). Only equipment that tracks state takes one, of its own site. |
 | `time_zone` | text | yes | IANA zone, required on sites. Shift times and reports use it. |
 | `is_active` | boolean | no | False when retired. |
 | `calendar_mode` | text | no | Which working time it follows for planning (D-038): `inherit` (default, its parent's; at the top with nothing set, around the clock), `schedule` (its own) or `around_the_clock`. |
@@ -448,14 +450,15 @@ For recording shifts as worked (reporting by shift, crews), which isn't built. P
 
 ### core.reason_code — reason trees · *In use*
 
-One tree per kind of reason. Branches group; leaves are selected. Inventory uses the `inventory_adjustment` and `hold` kinds (D-027); `db/seed-reasons.sql` loads a starter set, and the Reasons screen adds and changes them (D-030). A code and its kind never change once created; the name, `requires_comment`, `sort_order` and `is_active` can. The tree (`parent_id`) isn't edited yet.
+One tree per kind of reason. Branches group; leaves are selected. Inventory uses the `inventory_adjustment` and `hold` kinds (D-027); machine time uses `utilization` (D-041); `db/seed-reasons.sql` loads a starter set, and the Reasons screen adds and changes them (D-030). A code and its kind never change once created; the name, `requires_comment`, `sort_order`, `is_active` and a utilization reason's class can. The tree (`parent_id`) isn't edited yet.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
 | `site_id` | uuid → equipment | yes | Null for enterprise-wide codes. |
 | `parent_id` | uuid → reason_code | yes | Parent node in the tree. |
-| `reason_kind` | text | no | `downtime`, `scrap`, `hold`, `inventory_adjustment`, `indirect_labor`, `run_end`, `spc_cause` or `sample_exclusion`. |
+| `reason_kind` | text | no | `utilization`, `scrap`, `hold`, `inventory_adjustment`, `indirect_labor`, `run_end`, `spc_cause` or `sample_exclusion`. `utilization` replaced the planned `downtime` kind (0015). |
+| `utilization_class` | text | yes | For a utilization reason, and only for one (`reason_code_utilization_ck`): `runtime` (run time), `downtime` (availability loss) or `planned` (left out of planned time) (D-041). |
 | `code` | text | no | Unique per site and kind. |
 | `name` | text | no | Display name. |
 | `oee_impact` | text | no | Which OEE factor it lowers: `availability`, `performance`, `quality`, `planned` (excluded from OEE) or `none`. |
@@ -464,15 +467,68 @@ One tree per kind of reason. Branches group; leaves are selected. Inventory uses
 | `sort_order` | integer | no | Display order among siblings. |
 | `is_active` | boolean | no | False when retired. |
 
-### core.equipment_stop_reason_map — PLC stop reasons · *Planned*
+### core.machine_profile — one kind of machine · *In use (D-041)*
 
-Maps a machine's PackML `Admin.StopReason` (first-out) value to a Pulaski reason.
+How a kind of machine reports itself: its state values and its own stop, alarm and warning codes. Identical machines share one; a machine of another vendor or model gets its own. Kept per site, like the reasons it maps to. Maintained on Configure → Machine profiles (`equipment.manage`). Every change to its lists also updates the row, so its version (`xmin`) guards the lists too.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The site it belongs to. |
+| `code` | text | no | Upper case, unique per site (`machine_profile_code_uq`), fixed once created. |
+| `name` | text | no | Display name. |
+| `vendor`, `model` | text | yes | Who makes it and which model. |
+| `description` | text | yes | Notes. |
+| `is_active` | boolean | no | Switched off rather than deleted; not while active equipment uses it. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.machine_profile_state — a profile's state values · *In use (D-041)*
+
+The values the machine's state tag takes, each with the PackML state it means. A new profile gets PackML's own 18 numbers. Switched off, never deleted.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `profile_id` | uuid → machine_profile | no | Part of the primary key. |
+| `raw_value` | integer | no | The value the machine sends. Part of the primary key. |
+| `name` | text | no | The controller's name for it. |
+| `packml_state` | smallint → packml_state | no | The PackML state it means. |
+| `reason_code_id` | uuid → reason_code | yes | Utilization reason for time in this state when the machine gives no stop code, e.g. Suspended = starved. |
+| `is_active` | boolean | no | False when an import left it out or someone switched it off. |
+
+### core.machine_profile_code — a profile's stop, alarm and warning codes · *In use (D-041)*
+
+The machine's own codes (PackML `Admin.StopReason`, `Admin.Alarm`, `Admin.Warning` ids), each mapped to a utilization reason. An unmapped stop code shows as uncoded.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `profile_id` | uuid → machine_profile | no | Part of the primary key. |
+| `code_kind` | text | no | `stop_reason`, `alarm` or `warning`. Part of the primary key. |
+| `raw_value` | integer | no | The id the machine sends. Part of the primary key. |
+| `message` | text | no | The vendor's text for it. |
+| `category` | text | yes | The vendor's grouping, e.g. Mechanical. |
+| `reason_code_id` | uuid → reason_code | yes | The utilization reason it counts as. |
+| `is_active` | boolean | no | False when an import left it out or someone switched it off. |
+
+### core.machine_profile_reason — reasons offered on a profile's machines · *In use (D-041)*
+
+The utilization reasons operators may choose on the profile's machines, besides the ones its codes and states map to.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `profile_id` | uuid → machine_profile | no | Part of the primary key. |
+| `reason_code_id` | uuid → reason_code | no | Part of the primary key. |
+| `is_offered` | boolean | no | False once unticked (rows aren't deleted). |
+
+### core.equipment_stop_reason_map — one machine's own stop reasons · *In use (D-041)*
+
+Where one machine's stop code means something other than on the rest of its profile's machines. Changing it updates the equipment row, so the equipment's version guards it.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `equipment_id` | uuid → equipment | no | The machine. Part of the primary key. |
-| `plc_reason_value` | integer | no | The value the PLC reports. Part of the primary key. |
-| `reason_code_id` | uuid → reason_code | no | The Pulaski reason it means. |
+| `plc_reason_value` | integer | no | The stop code (a `stop_reason` of its profile). Part of the primary key. |
+| `reason_code_id` | uuid → reason_code | yes | Its reason on this machine; null leaves the code uncoded here. |
+| `is_active` | boolean | no | False removes the override: the profile's reason applies again. |
 
 ## 6. User control (`sec`)
 

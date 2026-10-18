@@ -337,4 +337,5 @@ public static class ReasonKinds
     public const string Hold = "hold";
     public const string Scrap = "scrap";
     public const string RunEnd = "run_end";
+    public const string Utilization = "utilization";
 }

@@ -1,0 +1,182 @@
+@using Pulaski.Web.Services.MachineData
+@inject PulaskiApiClient Api
+
+@* A machine's definitions from a CSV file (D-041): pick a file, check it, then import it all or nothing. *@
+<section class="inv-facts mb-3" aria-labelledby="profile-csv-title">
+    <h2 class="h6" id="profile-csv-title">Import definitions from a CSV file</h2>
+    <p class="small text-muted mb-2">
+        One row per state value or code. <code>kind</code> is <code>state</code>, <code>stop_reason</code>, <code>alarm</code> or <code>warning</code>;
+        <code>value</code> is the number the machine sends; <code>name</code> is the state's name or the code's message. A state row also needs
+        <code>packml_state</code> (0 to 17, or a name such as Execute). <code>category</code> is the vendor's grouping, and <code>reason</code> the code of
+        the utilization reason it counts as. Each kind in the file replaces that list: entries it leaves out are switched off, and kinds it doesn't
+        mention stay as they are. Nothing is saved until every row is valid.
+    </p>
+    <p class="small mb-2"><span class="text-muted">Columns:</span> <code>@string.Join(",", MachineProfileView.CsvColumns)</code></p>
+
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+        <InputFile OnChange="PickAsync" accept=".csv,text/csv,text/plain" class="form-control" style="max-width: 28rem" aria-label="CSV file" disabled="@_busy" />
+        <button type="button" class="btn btn-primary" disabled="@(_busy || _result is not { Errors: 0, Applied: false } || Changes(_result) == 0)" @onclick="ImportAsync">
+            Import
+        </button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="OnClose">Close</button>
+    </div>
+
+    <ProblemAlert Error="_error" />
+    @if (_readProblem is not null)
+    {
+        <div class="drawer-alert is-warning mt-3" role="alert"><Icon Name="alert" Size="18" /><span>@_readProblem</span></div>
+    }
+
+    @if (_busy)
+    {
+        <p class="text-muted small mt-3 mb-0">Checking @_fileName…</p>
+    }
+    else if (_result is { } r)
+    {
+        <div class="drawer-alert @(r.Errors > 0 ? "is-warning" : "") mt-3" role="status">
+            <Icon Name="@(r.Errors > 0 ? "alert" : "info")" Size="18" />
+            <span>
+                @if (r.FileProblems.Count > 0)
+                {
+                    @($"{_fileName} can't be imported: {string.Join(" ", r.FileProblems)}")
+                }
+                else if (r.Errors > 0)
+                {
+                    @($"{_fileName}: {r.Errors} row{(r.Errors == 1 ? "" : "s")} with errors, so nothing can be imported yet. Fix them and pick the file again.")
+                }
+                else if (r.Applied)
+                {
+                    @($"Imported {_fileName}: {Summary(r)}.")
+                }
+                else if (Changes(r) == 0)
+                {
+                    @($"{_fileName} matches the profile already; there is nothing to import.")
+                }
+                else
+                {
+                    @($"{_fileName} is ready: {Summary(r)}.")
+                }
+            </span>
+        </div>
+
+        @if (r.Rows.Count > 0)
+        {
+            <div class="table-panel mt-2" style="max-height: 24rem; overflow: auto">
+                <table class="table table-sm align-middle mb-0 import-table">
+                    <thead><tr><th class="inv-num">Line</th><th>Kind</th><th class="inv-num">Value</th><th>@(r.Applied ? "Done" : "Would")</th><th>Details</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in r.Rows.Where(x => r.Errors == 0 || x.Action == "error"))
+                        {
+                            <tr class="@(row.Action == "error" ? "is-error" : row.Action == "unchanged" ? "text-muted" : "")">
+                                <td class="inv-num">@(row.Line == 0 ? "" : row.Line)</td>
+                                <td>@MachineProfileView.KindLabel(row.Kind)</td>
+                                <td class="inv-num">@row.RawValue</td>
+                                <td>@ActionLabel(row.Action, r.Applied)</td>
+                                <td class="small">@row.Message</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</section>
+
+@code {
+    private const long MaxBytes = 5 * 1024 * 1024;
+
+    [Parameter, EditorRequired]
+    public Guid ProfileId { get; set; }
+
+    /// <summary>The profile's version as the page read it.</summary>
+    [Parameter, EditorRequired]
+    public long Version { get; set; }
+
+    [Parameter]
+    public EventCallback OnImported { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private string? _csv;
+    private string? _fileName;
+    private string? _readProblem;
+    private ProfileImportResponse? _result;
+    private ApiException? _error;
+    private bool _busy;
+
+    private static int Changes(ProfileImportResponse r) => r.Created + r.Updated + r.SwitchedOff;
+
+    private static string Summary(ProfileImportResponse r) =>
+        $"{r.Created} new, {r.Updated} changed, {r.SwitchedOff} switched off, {r.Unchanged} unchanged";
+
+    private async Task PickAsync(InputFileChangeEventArgs e)
+    {
+        (_result, _error, _readProblem, _csv, _fileName) = (null, null, null, null, e.File.Name);
+        if (e.File.Size > MaxBytes)
+        {
+            _readProblem = $"{e.File.Name} is larger than 5 MB; split it into smaller files.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(MaxBytes));
+            _csv = await reader.ReadToEndAsync();
+            _result = await Api.ImportMachineProfileCsvAsync(ProfileId, Version, _csv, dryRun: true);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        catch (IOException ex)
+        {
+            _readProblem = $"{e.File.Name} couldn't be read: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_csv is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            _result = await Api.ImportMachineProfileCsvAsync(ProfileId, Version, _csv, dryRun: false);
+            if (_result.Applied)
+            {
+                _csv = null;
+                await OnImported.InvokeAsync();
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string ActionLabel(string action, bool applied) => (action, applied) switch
+    {
+        ("create", false) => "Add",
+        ("create", true) => "Added",
+        ("update", false) => "Change",
+        ("update", true) => "Changed",
+        ("switch_off", false) => "Switch off",
+        ("switch_off", true) => "Switched off",
+        ("unchanged", _) => "Unchanged",
+        _ => "Error",
+    };
+}

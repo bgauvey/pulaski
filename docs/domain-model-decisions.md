@@ -754,6 +754,49 @@ Sharing out by overlap means nobody re-clocks when the job on a line changes. Ru
 
 **Not yet:** badges and terminals (`sec.badge`); qualifications; people from HR or the ERP; labor by shift on the Overview; a person working at another site than their own; editing a session's job or type on the review screen (only times and share); breaks.
 
+## Machine data, utilization and OEE (D-041, proposed)
+
+Live state, counts and stop reasons from the equipment, turned into utilization and OEE (charter v1 items 2, 3 and 6; the first vertical slice). Builds on D-005, which stays as decided.
+
+**Edge and connectors.** Connectors run in `Pulaski.Edge`, a separate worker service on plant hardware, never in the API. Every connector implements one small interface: connect, subscribe to a list of addresses, and emit *samples* (address, value, source timestamp, quality). A connector knows nothing about PackML or OEE. Above it, shared edge code turns samples into equipment signals through the tag bindings (`core.equipment_tag`): it maps state values, latches the stop reason when the state changes (some PLCs clear it once acknowledged), handles counter rollover, buffers in a local SQLite file and forwards to the API in order with an idempotency key, so a network drop loses nothing. The edge may run on its own machine: it talks to the API only over HTTPS, signing in as a service user with an edge permission, and only the API writes the database. It fetches its bindings from the API at start and when they change. OPC UA, CIP (EtherNet/IP) and others are later connectors on the same interface.
+
+**Sparkplug B first.** The first connector is MQTT Sparkplug B, acting as a Sparkplug host application: it subscribes to `spBv1.0/#`, learns metric names and aliases from NBIRTH/DBIRTH, asks for a rebirth on a sequence gap, and treats NDEATH/DDEATH as no signal (PackML 0 `Undefined`, D-005). A binding names group, edge node, device and metric. The demo uses an open-source PackML simulator in Sparkplug mode with an MQTT broker, in docker compose.
+
+**Machine profiles.** A profile describes one kind of machine: identical machines share it; machines of different vendors or models each have their own (three robotic packers from three vendors are three profiles). Equipment has at most one profile, and may override single codes. A profile holds:
+
+- **State values.** The state arrives as one value on one tag; the profile maps each raw value to its PackML state. The default is PackML's own numbers; a controller with another numbering (an ISA-88 phase, say) gets its own map. Both raw and mapped state are stored.
+- **Stop reasons.** The machine's first-out stop, alarm and warning codes (code, message, category), each mapped to a Pulaski utilization reason. Unmapped codes are kept and show as uncoded.
+
+Both lists import from CSV, all or nothing with a dry run (as D-034). Tag addresses are not in the CSV; they are bound per equipment.
+
+A profile belongs to a site, like the reasons it maps to; its code is fixed once created. A new profile starts with PackML's own 18 states. The file's columns are `kind` (`state`, `stop_reason`, `alarm`, `warning`), `value`, `name`, `packml_state` (state rows only, number or name), `category` and `reason` (a utilization reason code). Each kind in a file replaces that list: its entries are created or updated, active entries it leaves out are switched off, and kinds it doesn't mention are left alone. Nothing is deleted. Every change to a profile's lists moves the profile's version, so two people editing it get a conflict, not a silent overwrite. A profile used by active equipment can't be switched off.
+
+**Overrides.** A machine may give one of its profile's stop codes its own reason, or leave it uncoded (`core.equipment_stop_reason_map`); removing the override brings back the profile's reason. Overrides move the equipment's version.
+
+**Who.** Profiles, machine data and overrides are part of maintaining equipment: `equipment.view` to see them, `equipment.manage` at the site to change them. Utilization reasons are maintained with the other reasons (`reasons.manage`).
+
+**Utilization reasons.** Reason codes of kind `utilization` (replacing the planned `downtime` kind) in the site's reason tree, shared across equipment so they compare in reports; a profile narrows the list an operator sees on its machines to the reasons ticked on it plus those its codes and states map to. Each reason has a class (`utilization_class`), which may change, since OEE is worked out from it on read:
+
+| Class | Means | OEE |
+| --- | --- | --- |
+| `runtime` | Producing, or running slow | Run time; losses show in performance and quality |
+| `downtime` | Unplanned stop when the machine should run | Availability loss |
+| `planned` | Scheduled non-production: setup, teardown, changeover, cleaning, planned maintenance | Excluded from planned time |
+
+A stop's reason comes from its first-out code through the profile; with no code, from a default reason per PackML state on the profile (Suspended = starved or blocked). Operators confirm or override, and both values are kept (D-005).
+
+**Time base.** Planned production time is the time the equipment's shift calendar (D-038) says it works, minus `planned` reasons and non-Production unit modes. Time inside a shift when the machine is available but idle or not scheduled counts as availability loss; time outside the calendar is excluded.
+
+**Micro-stops.** A stop shorter than the equipment's micro-stop threshold is logged as a micro-stop: it isn't queued for coding and isn't availability loss. Its time stays run time, so the output it cost shows as lower performance. The threshold is a property of each equipment, default 5 minutes, changed on the equipment page: an extruder may use 2 minutes, a pack cell more.
+
+**Line state** (answers the open question). Each line sets how its state comes from its machines: `series` (sequential process, the worst machine state), `parallel` (parallel operations, the best), `constraint_machine`, or `own_tags`. From worst to best: no signal, stopped or faulted, held, waiting, ready or transitioning, producing.
+
+**OEE.** Availability × performance × quality by equipment, line, shift and product, computed on read from the raw history; performance uses the ideal rate of the run standard (D-034). Rollups (`ts.oee_rollup`) come later and key on production date, schedule and shift code like labor (D-038, D-040), not `shift_instance`.
+
+**Events.** State changes, counts and stops land in `ts` tables, not the audit log (telemetry boundary above). Operator coding, profile, binding and reason changes are events as usual: `pulaski.machine_profile.created.v1`, `…updated.v1`, `…state_set.v1`, `…code_set.v1`, `…reasons_set.v1`, `…imported.v1`, `pulaski.equipment.machine_data_set.v1`, `pulaski.equipment.stop_reason_override_set.v1`.
+
+**Not yet:** OPC UA and CIP connectors; alarm and warning history; process values; rules that synthesise a state from discrete signals; OEE rollups.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
@@ -805,7 +848,7 @@ These need an answer before the related area is built; tick each one as it moves
 
 **Machine state**
 
-- [ ] How is a line's state derived from its machines: constraint machine, worst state, or configured per line?
+- [x] How is a line's state derived from its machines: constraint machine, worst state, or configured per line? Configured per line: series = worst, parallel = best (D-041).
 - [ ] On target lines, are PackML-native PLCs common, or will synthesised states be the norm?
 
 **Storage**

@@ -19,11 +19,11 @@ public sealed record PostStockCountCommand(Guid CountId, long ExpectedVersion, G
 public sealed record CancelStockCountCommand(Guid CountId, long ExpectedVersion) : ICommand<VersionResponse>;
 
 /// <summary>A new reason, enterprise-wide or for one site (D-030).</summary>
-public sealed record CreateReasonCodeCommand(Guid? SiteId, string Kind, string Code, string Name, bool RequiresComment, int SortOrder)
+public sealed record CreateReasonCodeCommand(Guid? SiteId, string Kind, string Code, string Name, bool RequiresComment, int SortOrder, string? UtilizationClass = null)
     : ICommand<CreatedResponse>;
 
-/// <summary>Changes a reason's name, comment flag, order and active flag; the code and kind stay.</summary>
-public sealed record UpdateReasonCodeCommand(Guid Id, long ExpectedVersion, string Name, bool RequiresComment, int SortOrder, bool IsActive)
+/// <summary>Changes a reason's name, comment flag, order, active flag and utilization class (null keeps it); the code and kind stay.</summary>
+public sealed record UpdateReasonCodeCommand(Guid Id, long ExpectedVersion, string Name, bool RequiresComment, int SortOrder, bool IsActive, string? UtilizationClass = null)
     : ICommand<VersionResponse>;
 
 internal sealed class StartStockCountHandler(
@@ -197,6 +197,8 @@ internal sealed class CreateReasonCodeHandler(
             .Require(ReasonCode.IsValidCode(code), nameof(command.Code), "Letters, digits, '-', '_' or '.', up to 30.")
             .RequireText(name, nameof(command.Name), 100)
             .Require(command.SortOrder is >= 0 and <= 10_000, nameof(command.SortOrder), "Between 0 and 10000.")
+            .Require(!ReasonCode.Kinds.Contains(command.Kind) || ReasonCode.IsValidClass(command.Kind, command.UtilizationClass), nameof(command.UtilizationClass),
+                command.Kind == ReasonCode.Utilization ? "Runtime, downtime or planned." : "Only a utilization reason has a class.")
             .ThrowIfInvalid();
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -205,7 +207,7 @@ internal sealed class CreateReasonCodeHandler(
             throw new DomainRuleException($"Site {siteId} not found.");
         }
 
-        var reason = new ReasonCode(ids.NewId(), command.SiteId, command.Kind, code, name, command.RequiresComment, command.SortOrder, IsActive: true);
+        var reason = new ReasonCode(ids.NewId(), command.SiteId, command.Kind, code, name, command.RequiresComment, command.SortOrder, IsActive: true, command.UtilizationClass);
         var envelope = events.Create(EventTypes.ReasonCodeCreated, "reason_code", reason.Id, new { After = reason });
         var version = await inventory.InsertReasonCodeAsync(reason, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
@@ -237,7 +239,22 @@ internal sealed class UpdateReasonCodeHandler(
             throw new ConflictException($"Reason {current.Value.Code} was changed by someone else. Reload and try again.");
         }
 
-        var after = current.Value with { Name = name, RequiresComment = command.RequiresComment, SortOrder = command.SortOrder, IsActive = command.IsActive };
+        var after = current.Value with
+        {
+            Name = name,
+            RequiresComment = command.RequiresComment,
+            SortOrder = command.SortOrder,
+            IsActive = command.IsActive,
+            UtilizationClass = command.UtilizationClass ?? current.Value.UtilizationClass,
+        };
+        if (!ReasonCode.IsValidClass(after.Kind, after.UtilizationClass))
+        {
+            throw new ValidationException(new Dictionary<string, string[]>
+            {
+                [nameof(command.UtilizationClass)] = [after.Kind == ReasonCode.Utilization ? "Runtime, downtime or planned." : "Only a utilization reason has a class."],
+            });
+        }
+
         var envelope = events.Create(EventTypes.ReasonCodeUpdated, "reason_code", after.Id, new { Before = current.Value, After = after });
         var version = await inventory.UpdateReasonCodeAsync(after, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);

@@ -7,6 +7,7 @@ using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Labor;
+using Pulaski.Contracts.MachineData;
 using Pulaski.Contracts.Materials;
 using Pulaski.Contracts.Processes;
 using Pulaski.Contracts.ReferenceData;
@@ -168,6 +169,46 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<VersionResponse> SetEquipmentCalendarAsync(Guid equipmentId, SetEquipmentCalendarRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{equipmentId}/calendar", request, ct);
+
+    // Machine data (D-041)
+
+    public Task<VersionResponse> SetEquipmentMachineDataAsync(Guid equipmentId, SetEquipmentMachineDataRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{equipmentId}/machine-data", request, ct);
+
+    public Task<VersionResponse> SetStopReasonOverrideAsync(Guid equipmentId, int rawValue, SetStopReasonOverrideRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{equipmentId}/stop-reason-overrides/{rawValue}", request, ct);
+
+    public Task<IReadOnlyList<MachineProfileDto>> ListMachineProfilesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MachineProfileDto>>($"api/machine-profiles?siteId={siteId}", ct);
+
+    public Task<MachineProfileDetailDto> GetMachineProfileAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<MachineProfileDetailDto>($"api/machine-profiles/{id}", ct);
+
+    public Task<CreatedResponse> CreateMachineProfileAsync(CreateMachineProfileRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/machine-profiles", request, ct);
+
+    public Task<VersionResponse> UpdateMachineProfileAsync(Guid id, UpdateMachineProfileRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/machine-profiles/{id}", request, ct);
+
+    public Task<VersionResponse> SetProfileStateAsync(Guid id, int rawValue, SetProfileStateRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/machine-profiles/{id}/states/{rawValue}", request, ct);
+
+    public Task<VersionResponse> SetProfileCodeAsync(Guid id, string kind, int rawValue, SetProfileCodeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/machine-profiles/{id}/codes/{Uri.EscapeDataString(kind)}/{rawValue}", request, ct);
+
+    public Task<VersionResponse> SetProfileReasonsAsync(Guid id, SetProfileReasonsRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/machine-profiles/{id}/reasons", request, ct);
+
+    /// <summary>Checks (<paramref name="dryRun"/>) or imports a machine's definitions from CSV into a profile, all or nothing (D-041).</summary>
+    public async Task<ProfileImportResponse> ImportMachineProfileCsvAsync(Guid id, long version, string csv, bool dryRun, CancellationToken ct = default)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/machine-profiles/{id}/import/csv?version={version}&dryRun={(dryRun ? "true" : "false")}")
+        {
+            Content = new StringContent(csv, System.Text.Encoding.UTF8, "text/csv"),
+        };
+        using var response = await SendCoreAsync(request, ct);
+        return await ReadAsync<ProfileImportResponse>(response, ct);
+    }
 
     // Work orders
 
