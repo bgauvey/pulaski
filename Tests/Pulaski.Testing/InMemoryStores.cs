@@ -67,6 +67,8 @@ public sealed class InMemoryStores
 
     public InMemoryEdge Edge { get; } = new();
 
+    public InMemoryStops Stops { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -105,6 +107,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IMachineDataRepository>();
         services.RemoveAll<IEdgeReadStore>();
         services.RemoveAll<IEdgeRepository>();
+        services.RemoveAll<IStopReadStore>();
+        services.RemoveAll<IStopRepository>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -141,6 +145,8 @@ public sealed class InMemoryStores
         services.AddSingleton<IMachineDataRepository>(MachineData);
         services.AddSingleton<IEdgeReadStore>(Edge);
         services.AddSingleton<IEdgeRepository>(Edge);
+        services.AddSingleton<IStopReadStore>(Stops);
+        services.AddSingleton<IStopRepository>(Stops);
         return services;
     }
 }

@@ -138,6 +138,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   latches stop codes (`LiveStateRules`), counts across rollover (`Counters.Delta`), writes `ts.equipment_state_change`,
   `ts.production_count` (source `machine`, excluded from reports) and `core.equipment_live_state`; skips seq ≤ `last_sequence` of the
   same `stream_id`. The edge's user holds role `edge_node` (`edge.ingest`).
+  Stops: ingest opens/closes `ts.downtime` (`StopRules`: leave Execute → open, Execute → close, micro by threshold; reason from first
+  code, else first state on the way with one); `equipment_live_state.open_downtime_*` points at the open stop. Operators code
+  (`CodeDowntimeCommand`, `downtime.code`; offered reasons in `StopSql.CodingReasons`); Operate → Machines (`machines.view`) is the
+  board (`GetMachineStatusHandler` derives series/parallel/constraint lines via `LineStates`) and the stops to code.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

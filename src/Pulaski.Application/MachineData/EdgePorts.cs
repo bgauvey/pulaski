@@ -35,6 +35,9 @@ public sealed record StateChangeRow(Guid Id, Guid EquipmentId, Guid? RunId, long
 /// <summary>A machine count for <c>ts.production_count</c> (source <c>machine</c>).</summary>
 public sealed record MachineCountRow(Guid Id, DateTimeOffset OccurredAt, Guid EquipmentId, Guid? RunId, Guid? JobId, string CountKind, decimal Quantity, long RawCounter);
 
+/// <summary>What deciding a machine's stops needs (D-041): its micro-stop threshold, its profile's reasons, and its open stop.</summary>
+public sealed record StopContext(Guid EquipmentId, TimeSpan MicroStop, StopReasons Reasons, MachineStop? Open);
+
 /// <summary>Write side for edge nodes, their connections and tags, and machine data ingest (D-041).</summary>
 public interface IEdgeRepository
 {
@@ -79,7 +82,15 @@ public interface IEdgeRepository
 
     Task<IReadOnlyList<OpenRun>> GetOpenRunsAsync(IReadOnlyCollection<Guid> equipmentIds, CancellationToken cancellationToken);
 
-    Task UpsertLiveAsync(Guid equipmentId, MachineLive live, Guid edgeNodeId, DateTimeOffset at, CancellationToken cancellationToken);
+    /// <summary>Writes the machine's live state, pointing at its stop in progress (none while it runs).</summary>
+    Task UpsertLiveAsync(Guid equipmentId, MachineLive live, MachineStop? openStop, Guid edgeNodeId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    Task<IReadOnlyDictionary<Guid, StopContext>> GetStopContextsAsync(IReadOnlyCollection<Guid> equipmentIds, CancellationToken cancellationToken);
+
+    Task InsertStopsAsync(IReadOnlyList<MachineStop> stops, CancellationToken cancellationToken);
+
+    /// <summary>Writes the end, stop code, mapped reason and micro-stop flag of stops already recorded.</summary>
+    Task UpdateStopsAsync(IReadOnlyList<MachineStop> stops, CancellationToken cancellationToken);
 
     Task UpsertCounterAsync(Guid equipmentId, string countKind, long rawCounter, DateTimeOffset readAt, CancellationToken cancellationToken);
 

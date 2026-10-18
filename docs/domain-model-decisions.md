@@ -775,7 +775,7 @@ A profile belongs to a site, like the reasons it maps to; its code is fixed once
 
 **Who.** Profiles, machine data and overrides are part of maintaining equipment: `equipment.view` to see them, `equipment.manage` at the site to change them. Utilization reasons are maintained with the other reasons (`reasons.manage`).
 
-**Utilization reasons.** Reason codes of kind `utilization` (replacing the planned `downtime` kind) in the site's reason tree, shared across equipment so they compare in reports; a profile narrows the list an operator sees on its machines to the reasons ticked on it plus those its codes and states map to. Each reason has a class (`utilization_class`), which may change, since OEE is worked out from it on read:
+**Utilization reasons.** Reason codes of kind `utilization` (replacing the planned `downtime` kind) in the site's reason tree, shared across equipment so they compare in reports; a profile with reasons ticked on it narrows the list an operator sees on its machines to those plus the ones its codes and states map to; with none ticked, every utilization reason of the site is offered. Each reason has a class (`utilization_class`), which may change, since OEE is worked out from it on read:
 
 | Class | Means | OEE |
 | --- | --- | --- |
@@ -803,7 +803,13 @@ A stop's reason comes from its first-out code through the profile; with no code,
 
 **Sparkplug B host.** The connector asks a node for a rebirth (`Node Control/Rebirth`) when its data arrives before a birth, when its sequence numbers skip, and, for every node its bound addresses name, on connecting, so an idle machine's state is known without waiting for it to change. With a host id it publishes its STATE (online, and offline as its will).
 
-**Not yet:** OPC UA and CIP connectors; alarm and warning history; process values; rules that synthesise a state from discrete signals; OEE rollups; machine counts as production reports; running the edge as a Windows service or systemd unit (it runs as a console worker or container).
+**Stops (as built).** A stop (`ts.downtime`) is time a machine isn't executing: ingest opens one when it leaves Execute, or first reports another state, or loses its signal, and closes it when it executes again; the states on the way stay in the state history. It keeps the state and unit mode it stopped in, the run open then, and the first first-out code reported during it. Its mapped reason is that code's (the machine's override, else its profile's), else the reason of the first state on its way that has one. Closing it shorter than the machine's threshold makes it a micro-stop. The machine's live state points at its open stop.
+
+**Coding.** An operator with `downtime.code` gives a stop that isn't a micro-stop a reason: one offered for the machine (with reasons ticked on its profile, those and the ones its codes and states map to; with none ticked, every utilization reason of the site), with a comment where the reason needs one. Confirming the mapped reason is the same act. The operator's reason is kept beside the mapped one (D-005), and coding again replaces it; each coding is an event (`pulaski.downtime.coded.v1`) with the reason before and after and whether it confirmed. A stop to code is one without a reason, not a micro-stop, and either ended or already longer than the threshold.
+
+**Machines screen** (`machines.view`, Operate → Machines): a status board refreshed every 5 seconds, each piece of equipment that tracks state in its OEE category (the site's `core.oee_state_category`, else D-005's defaults); a line set to series or parallel takes the worst or best category of the equipment tracking state below it, a constraint-machine line its machine's state. And the stops to code. Starting roles: Operator and Supervisor see and code; Planner, Quality, Manager and Auditor see.
+
+**Not yet:** OPC UA and CIP connectors; alarm and warning history; process values; rules that synthesise a state from discrete signals; OEE and utilization reports, and their rollups; splitting, merging or entering stops by hand; machine counts as production reports; running the edge as a Windows service or systemd unit (it runs as a console worker or container).
 
 ## Application architecture
 

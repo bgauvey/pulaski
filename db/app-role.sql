@@ -36,6 +36,8 @@ GRANT SELECT, INSERT ON ts.job_status_change TO pulaski_app;
 GRANT SELECT, INSERT ON ts.lot_event TO pulaski_app;
 GRANT SELECT, INSERT ON ts.production_count TO pulaski_app;
 GRANT SELECT, INSERT ON ts.equipment_state_change TO pulaski_app;
+-- Stops are updated while open and when coded (D-041); still never deleted.
+GRANT SELECT, INSERT, UPDATE ON ts.downtime TO pulaski_app;
 
 -- Users, roles and local passwords (D-037). Roles are data an administrator maintains; the API copies the
 -- code's permission catalog into sec.permission at start.

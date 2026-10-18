@@ -99,12 +99,59 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
     private const string OpenRuns = "SELECT equipment_id, id AS run_id, job_id FROM core.job_run WHERE equipment_id = ANY(@Ids) AND ended_at IS NULL";
 
     private const string UpsertLive = """
-        INSERT INTO core.equipment_live_state (equipment_id, raw_state, packml_state, unit_mode, state_since, stop_reason, machine_speed, signal_at, edge_node_id, updated_at)
-        VALUES (@EquipmentId, @RawState, @PackMlState, @UnitMode, @StateSince, @StopReason, @MachineSpeed, @SignalAt, @EdgeNodeId, @At)
+        INSERT INTO core.equipment_live_state (equipment_id, raw_state, packml_state, unit_mode, state_since, stop_reason, machine_speed, signal_at, edge_node_id,
+                                               open_downtime_id, open_downtime_started_at, updated_at)
+        VALUES (@EquipmentId, @RawState, @PackMlState, @UnitMode, @StateSince, @StopReason, @MachineSpeed, @SignalAt, @EdgeNodeId, @StopId, @StopStartedAt, @At)
         ON CONFLICT (equipment_id) DO UPDATE
         SET raw_state = excluded.raw_state, packml_state = excluded.packml_state, unit_mode = excluded.unit_mode, state_since = excluded.state_since,
             stop_reason = excluded.stop_reason, machine_speed = excluded.machine_speed, signal_at = excluded.signal_at,
-            edge_node_id = excluded.edge_node_id, updated_at = excluded.updated_at
+            edge_node_id = excluded.edge_node_id, open_downtime_id = excluded.open_downtime_id,
+            open_downtime_started_at = excluded.open_downtime_started_at, updated_at = excluded.updated_at
+        """;
+
+    private const string StopSettings = """
+        SELECT e.id AS equipment_id, e.micro_stop_threshold, e.machine_profile_id
+        FROM core.equipment e WHERE e.id = ANY(@Ids)
+        """;
+
+    // A profile's codes with a reason, and this machine's active overrides (a null reason: left uncoded here).
+    private const string StopCodeReasons = """
+        SELECT e.id AS equipment_id, c.raw_value AS code, c.reason_code_id
+        FROM core.equipment e
+        JOIN core.machine_profile_code c ON c.profile_id = e.machine_profile_id AND c.code_kind = 'stop_reason' AND c.is_active AND c.reason_code_id IS NOT NULL
+        WHERE e.id = ANY(@Ids)
+          AND NOT EXISTS (SELECT 1 FROM core.equipment_stop_reason_map o WHERE o.equipment_id = e.id AND o.plc_reason_value = c.raw_value AND o.is_active)
+        UNION ALL
+        SELECT o.equipment_id, o.plc_reason_value, o.reason_code_id
+        FROM core.equipment_stop_reason_map o WHERE o.equipment_id = ANY(@Ids) AND o.is_active
+        """;
+
+    // Each state's reason; where two raw values mean one PackML state, the lowest value's reason.
+    private const string StateReasons = """
+        SELECT DISTINCT ON (e.id, s.packml_state) e.id AS equipment_id, s.packml_state::int AS packml_state, s.reason_code_id
+        FROM core.equipment e
+        JOIN core.machine_profile_state s ON s.profile_id = e.machine_profile_id AND s.is_active AND s.reason_code_id IS NOT NULL
+        WHERE e.id = ANY(@Ids)
+        ORDER BY e.id, s.packml_state, s.raw_value
+        """;
+
+    private const string OpenStopsSql = """
+        SELECT d.id, d.equipment_id, d.started_at, d.ended_at, d.run_id, d.packml_state::int AS packml_state, d.unit_mode::int AS unit_mode,
+               d.plc_stop_reason, d.mapped_reason_code_id, d.is_micro_stop
+        FROM core.equipment_live_state l
+        JOIN ts.downtime d ON d.id = l.open_downtime_id AND d.started_at = l.open_downtime_started_at
+        WHERE l.equipment_id = ANY(@Ids)
+        """;
+
+    private const string InsertStop = """
+        INSERT INTO ts.downtime (id, started_at, ended_at, equipment_id, run_id, packml_state, unit_mode, plc_stop_reason, mapped_reason_code_id, is_micro_stop)
+        VALUES (@Id, @StartedAt, @EndedAt, @EquipmentId, @RunId, @PackMlState, @UnitMode, @PlcStopReason, @MappedReasonCodeId, @IsMicroStop)
+        """;
+
+    private const string UpdateStop = """
+        UPDATE ts.downtime
+        SET ended_at = @EndedAt, plc_stop_reason = @PlcStopReason, mapped_reason_code_id = @MappedReasonCodeId, is_micro_stop = @IsMicroStop
+        WHERE id = @Id AND started_at = @StartedAt
         """;
 
     private const string UpsertCounter = """
@@ -205,9 +252,57 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
     public async Task<IReadOnlyList<OpenRun>> GetOpenRunsAsync(IReadOnlyCollection<Guid> equipmentIds, CancellationToken cancellationToken) =>
         [.. (await session.QueryAsync<RunRow>(OpenRuns, new { Ids = equipmentIds.ToArray() }, cancellationToken)).Select(r => new OpenRun(r.EquipmentId, r.RunId, r.JobId))];
 
-    public Task UpsertLiveAsync(Guid equipmentId, MachineLive live, Guid edgeNodeId, DateTimeOffset at, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyDictionary<Guid, StopContext>> GetStopContextsAsync(IReadOnlyCollection<Guid> equipmentIds, CancellationToken cancellationToken)
+    {
+        var args = new { Ids = equipmentIds.ToArray() };
+        var settings = await session.QueryAsync<StopSettingsRow>(StopSettings, args, cancellationToken);
+        var codes = (await session.QueryAsync<CodeReasonRow>(StopCodeReasons, args, cancellationToken)).ToLookup(r => r.EquipmentId);
+        var states = (await session.QueryAsync<StateReasonRow>(StateReasons, args, cancellationToken)).ToLookup(r => r.EquipmentId);
+        var open = (await session.QueryAsync<StopRow>(OpenStopsSql, args, cancellationToken)).ToDictionary(r => r.EquipmentId);
+        return settings.ToDictionary(s => s.EquipmentId, s => new StopContext(
+            s.EquipmentId,
+            s.MicroStopThreshold,
+            new StopReasons(
+                codes[s.EquipmentId].GroupBy(c => c.Code).ToDictionary(g => g.Key, g => g.First().ReasonCodeId),
+                states[s.EquipmentId].ToDictionary(r => r.PackmlState, r => r.ReasonCodeId)),
+            open.TryGetValue(s.EquipmentId, out var stop) ? stop.ToStop() : null));
+    }
+
+    public async Task InsertStopsAsync(IReadOnlyList<MachineStop> stops, CancellationToken cancellationToken)
+    {
+        foreach (var stop in stops)
+        {
+            await session.ExecuteAsync(InsertStop, StopArgs(stop), cancellationToken);
+        }
+    }
+
+    public async Task UpdateStopsAsync(IReadOnlyList<MachineStop> stops, CancellationToken cancellationToken)
+    {
+        foreach (var stop in stops)
+        {
+            await session.ExecuteAsync(UpdateStop, StopArgs(stop), cancellationToken);
+        }
+    }
+
+    private static object StopArgs(MachineStop s) => new
+    {
+        s.Id,
+        s.StartedAt,
+        s.EndedAt,
+        s.EquipmentId,
+        s.RunId,
+        PackMlState = (short)s.PackMlState,
+        UnitMode = (short)s.UnitMode,
+        s.PlcStopReason,
+        s.MappedReasonCodeId,
+        s.IsMicroStop,
+    };
+
+    public Task UpsertLiveAsync(Guid equipmentId, MachineLive live, MachineStop? openStop, Guid edgeNodeId, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteAsync(UpsertLive, new
         {
+            StopId = openStop?.Id,
+            StopStartedAt = openStop?.StartedAt,
             EquipmentId = equipmentId,
             live.RawState,
             PackMlState = (short)live.PackMlState,
@@ -350,6 +445,43 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         public Guid ProfileId { get; init; }
         public int RawValue { get; init; }
         public int PackmlState { get; init; }
+    }
+
+    private sealed class StopSettingsRow
+    {
+        public Guid EquipmentId { get; init; }
+        public TimeSpan MicroStopThreshold { get; init; }
+        public Guid? MachineProfileId { get; init; }
+    }
+
+    private sealed class CodeReasonRow
+    {
+        public Guid EquipmentId { get; init; }
+        public int Code { get; init; }
+        public Guid? ReasonCodeId { get; init; }
+    }
+
+    private sealed class StateReasonRow
+    {
+        public Guid EquipmentId { get; init; }
+        public int PackmlState { get; init; }
+        public Guid ReasonCodeId { get; init; }
+    }
+
+    private sealed class StopRow
+    {
+        public Guid Id { get; init; }
+        public Guid EquipmentId { get; init; }
+        public DateTimeOffset StartedAt { get; init; }
+        public DateTimeOffset? EndedAt { get; init; }
+        public Guid? RunId { get; init; }
+        public int PackmlState { get; init; }
+        public int UnitMode { get; init; }
+        public int? PlcStopReason { get; init; }
+        public Guid? MappedReasonCodeId { get; init; }
+        public bool IsMicroStop { get; init; }
+
+        public MachineStop ToStop() => new(Id, EquipmentId, StartedAt, EndedAt, RunId, PackmlState, UnitMode, PlcStopReason, MappedReasonCodeId, IsMicroStop);
     }
 
     private sealed class RunRow

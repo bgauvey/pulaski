@@ -1,0 +1,69 @@
+/* Machines screen (D-041): the live status board. Tiles take their colour from the design system's state tokens. */
+
+.machine-group {
+    margin-bottom: var(--space-5);
+}
+
+.machine-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: var(--space-3);
+}
+
+.machine-tile {
+    --tile-state: var(--state-nosignal);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 6px solid var(--tile-state);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-height: 132px;
+}
+
+.machine-tile.is-head {
+    border-width: 1px 1px 1px 8px;
+}
+
+.machine-tile.is-producing { --tile-state: var(--state-producing); }
+.machine-tile.is-waiting { --tile-state: var(--state-waiting); }
+.machine-tile.is-held { --tile-state: var(--state-held); }
+.machine-tile.is-stopped { --tile-state: var(--state-stopped); }
+.machine-tile.is-ready { --tile-state: var(--state-ready); }
+
+.machine-tile.is-nosignal {
+    background-image: repeating-linear-gradient(135deg, transparent 0 8px, color-mix(in srgb, var(--state-nosignal) 12%, transparent) 8px 16px);
+}
+
+.machine-tile-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-2);
+}
+
+.machine-tile-code {
+    font: var(--type-body-strong);
+}
+
+.machine-tile-state {
+    font: var(--type-section-title);
+    color: var(--tile-state);
+}
+
+:root[data-theme="dark"] .machine-tile.is-stopped { --tile-state: var(--danger); }
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .machine-tile.is-stopped { --tile-state: var(--danger); }
+}
+
+.machine-tile-line {
+    font: var(--type-caption);
+    color: var(--text-muted);
+}
+
+.machine-tile-stop {
+    font: var(--type-caption);
+}

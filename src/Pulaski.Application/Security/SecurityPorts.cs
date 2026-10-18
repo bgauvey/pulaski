@@ -133,6 +133,7 @@ public enum SiteOf
     EdgeNode,
     EdgeConnection,
     EquipmentTag,
+    Downtime,
 }
 
 /// <summary>Finds the site something belongs to, so a role held at that site can be checked (D-037).</summary>

@@ -19,7 +19,13 @@ public sealed class InMemoryEdge : IEdgeRepository, IEdgeReadStore
     private readonly Dictionary<Guid, MachineLive> _live = [];
     private readonly Dictionary<(Guid, string), long> _counters = [];
     private readonly Dictionary<(Guid, string), EdgeMetricReportDto> _metrics = [];
+    private readonly Dictionary<Guid, Guid?> _openStops = [];
+    private readonly Dictionary<Guid, TimeSpan> _microStops = [];
+    private readonly Dictionary<Guid, StopReasons> _stopReasons = [];
     private long _next = 1;
+
+    /// <summary>Every stop written, by id, as last written.</summary>
+    public Dictionary<Guid, MachineStop> Stops { get; } = [];
 
     public List<StateChangeRow> StateChanges { get; } = [];
 
@@ -162,8 +168,54 @@ public sealed class InMemoryEdge : IEdgeRepository, IEdgeReadStore
     public Task<IReadOnlyList<OpenRun>> GetOpenRunsAsync(IReadOnlyCollection<Guid> equipmentIds, CancellationToken cancellationToken) =>
         Locked<IReadOnlyList<OpenRun>>(() => [.. _runs.Values.Where(r => equipmentIds.Contains(r.EquipmentId))]);
 
-    public Task UpsertLiveAsync(Guid equipmentId, MachineLive live, Guid edgeNodeId, DateTimeOffset at, CancellationToken cancellationToken) =>
-        Locked(() => _live[equipmentId] = live);
+    public Task UpsertLiveAsync(Guid equipmentId, MachineLive live, MachineStop? openStop, Guid edgeNodeId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        Locked(() =>
+        {
+            _openStops[equipmentId] = openStop?.Id;
+            return _live[equipmentId] = live;
+        });
+
+    public Task<IReadOnlyDictionary<Guid, StopContext>> GetStopContextsAsync(IReadOnlyCollection<Guid> equipmentIds, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyDictionary<Guid, StopContext>>(() => equipmentIds.Where(_equipment.ContainsKey).ToDictionary(id => id, id => new StopContext(
+            id,
+            _microStops.GetValueOrDefault(id, MachineProfileRules.DefaultMicroStop),
+            _stopReasons.GetValueOrDefault(id, StopReasons.None),
+            _openStops.GetValueOrDefault(id) is { } stopId ? Stops[stopId] : null)));
+
+    public Task InsertStopsAsync(IReadOnlyList<MachineStop> stops, CancellationToken cancellationToken) => Locked(() =>
+    {
+        foreach (var stop in stops)
+        {
+            Stops.Add(stop.Id, stop);
+        }
+
+        return 0;
+    });
+
+    public Task UpdateStopsAsync(IReadOnlyList<MachineStop> stops, CancellationToken cancellationToken) => Locked(() =>
+    {
+        foreach (var stop in stops)
+        {
+            if (!Stops.ContainsKey(stop.Id))
+            {
+                throw new InvalidOperationException($"Stop {stop.Id} was updated before it was written.");
+            }
+
+            Stops[stop.Id] = stop;
+        }
+
+        return 0;
+    });
+
+    /// <summary>A machine's micro-stop threshold and its profile's reasons, for its stops.</summary>
+    public void SetStopRules(Guid equipmentId, TimeSpan microStop, StopReasons reasons)
+    {
+        lock (_lock)
+        {
+            _microStops[equipmentId] = microStop;
+            _stopReasons[equipmentId] = reasons;
+        }
+    }
 
     public Task UpsertCounterAsync(Guid equipmentId, string countKind, long rawCounter, DateTimeOffset readAt, CancellationToken cancellationToken) =>
         Locked(() => _counters[(equipmentId, countKind)] = rawCounter);

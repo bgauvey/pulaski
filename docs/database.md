@@ -221,6 +221,7 @@ As its signals last left it. Written by machine data ingest only.
 | `machine_speed` | numeric(18,6) | yes | Latest speed, scaled. |
 | `signal_at` | timestamptz | no | The newest signal applied. |
 | `edge_node_id` | uuid → edge_node | yes | The node it last came from. |
+| `open_downtime_id`, `open_downtime_started_at` | uuid, timestamptz | yes | Its stop in progress in `ts.downtime` (no foreign key into history); both null while it executes (`equipment_live_downtime_ck`). |
 | `updated_at` | timestamptz | no | When it was written. |
 
 ### core.equipment_counter — last counter readings · *In use (D-041)*
@@ -1168,26 +1169,28 @@ Each row is a change of the (state, mode) pair and carries when the previous pai
 | `stop_reason` | integer | yes | The first-out stop code latched when the state changed (D-041). |
 | `recorded_at` | timestamptz | no | When Pulaski received it; later than `occurred_at` when the edge buffered through an outage. |
 
-### ts.downtime — stop intervals · *Planned*
+### ts.downtime — machine stops · *In use (D-041)*
 
-Updated while open and when coded; each change is also an event.
+Time a machine isn't executing: opened by machine data ingest when it leaves Execute (or loses its signal), closed when it executes again, and coded by operators. Updated while open and when coded (the app may update this table, never delete); coding is also an event (`pulaski.downtime.coded.v1`). The machine's open stop is pointed at from `core.equipment_live_state`.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key with `started_at`. |
-| `started_at` | timestamptz | no | Start. Partition key. |
-| `ended_at` | timestamptz | yes | End; null while stopped. |
-| `equipment_id` | uuid → equipment | no | The equipment. |
-| `run_id` | uuid | yes | The run at the time. |
-| `packml_state` | smallint → packml_state | no | The stopped state. |
-| `plc_stop_reason` | integer | yes | First-out reason reported by the PLC. |
-| `mapped_reason_code_id` | uuid → reason_code | yes | The PLC reason mapped through `equipment_stop_reason_map`. |
-| `operator_reason_code_id` | uuid → reason_code | yes | The reason an operator chose. |
+| `started_at` | timestamptz | no | When it left Execute. Partition key. |
+| `ended_at` | timestamptz | yes | When it executed again; null while stopped. |
+| `equipment_id` | uuid → equipment | no | The machine. |
+| `run_id` | uuid | yes | The run open when it stopped. |
+| `packml_state` | smallint → packml_state | no | The state it stopped in. |
+| `unit_mode` | smallint | no | The unit mode it stopped in. |
+| `plc_stop_reason` | integer | yes | The first first-out stop code reported during the stop. |
+| `mapped_reason_code_id` | uuid → reason_code | yes | The reason that code maps to (the machine's override, else its profile), else the reason of the first state on its way that has one. |
+| `operator_reason_code_id` | uuid → reason_code | yes | The reason an operator chose: confirming the mapped one, or another. |
 | `effective_reason_code_id` | uuid | yes | Generated: the operator's reason if set, otherwise the mapped one. Both are kept. |
-| `is_micro_stop` | boolean | no | Shorter than the equipment's micro-stop threshold. |
-| `coded_by_user_id` | uuid | yes | Who coded it. |
+| `is_micro_stop` | boolean | no | Shorter than the machine's micro-stop threshold: not coded, not availability loss. Set when it closes. |
+| `coded_by` | text | yes | Who coded it, as on `evt.event` (issuer and subject, or the local user name). |
+| `coded_by_user_id` | uuid | yes | The Pulaski user who coded it. |
 | `coded_at` | timestamptz | yes | When. |
-| `comment` | text | yes | Free text. |
+| `comment` | text | yes | The operator's comment. |
 
 ### ts.equipment_alarm — alarms and warnings · *Planned*
 

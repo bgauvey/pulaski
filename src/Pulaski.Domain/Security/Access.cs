@@ -20,6 +20,7 @@ public static class Permissions
     public const string ReasonsView = "reasons.view";
     public const string ShiftsView = "shifts.view";
     public const string LaborView = "labor.view";
+    public const string MachinesView = "machines.view";
 
     // Changing (D-037).
     public const string SchedulePlan = "schedule.plan";
@@ -46,6 +47,7 @@ public static class Permissions
     public const string LaborRecordOwn = "labor.record_own";
     public const string LaborRecord = "labor.record";
     public const string LaborApprove = "labor.approve";
+    public const string DowntimeCode = "downtime.code";
     public const string People = "people.manage";
     public const string Security = "security.manage";
 
@@ -67,6 +69,7 @@ public static class Permissions
         new(ReasonsView, "Viewing", "See reason codes"),
         new(ShiftsView, "Viewing", "See shift schedules"),
         new(LaborView, "Viewing", "See labor: who is on, shift review and labor reports"),
+        new(MachinesView, "Viewing", "See machines: their live state and their stops"),
         new(SchedulePlan, "Planning", "Plan jobs: create, sequence, pin, assign to lines and cancel them"),
         new(WorkOrderManage, "Planning", "Create work orders, dispatch, un-dispatch and firm them"),
         new(WorkOrderClose, "Planning", "Cancel and close work orders"),
@@ -78,6 +81,7 @@ public static class Permissions
         new(LaborRecordOwn, "Labor", "Clock yourself on and off lines and jobs"),
         new(LaborRecord, "Labor", "Record labor for others and check crews onto lines"),
         new(LaborApprove, "Labor", "Approve a shift's labor and correct approved labor"),
+        new(DowntimeCode, "Floor", "Code machine stops: confirm or change their reason"),
         new(LotReceive, "Inventory", "Receive lots"),
         new(LotMove, "Inventory", "Move lots between locations"),
         new(LotShip, "Inventory", "Ship lots"),
@@ -136,6 +140,7 @@ public static class Permissions
         [LaborRecord] = [LaborView, FloorView],
         [LaborApprove] = [LaborView],
         [People] = [LaborView],
+        [DowntimeCode] = [MachinesView],
     };
 }
 
@@ -170,21 +175,22 @@ public static class Roles
         new(Administrator, "Administrator", IsGlobal: true, [.. Permissions.All.Keys], "Everything, everywhere, including users and roles."),
         new(Planner, "Planner", false,
             [Permissions.OverviewView, Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.FloorView, Permissions.InventoryView,
-             Permissions.MaterialsView, Permissions.ProcessesView,
+             Permissions.MaterialsView, Permissions.ProcessesView, Permissions.MachinesView,
              Permissions.SchedulePlan, Permissions.WorkOrderManage, Permissions.WorkOrderClose, Permissions.RateModify, Permissions.Materials],
             "Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes."),
         new(Supervisor, "Supervisor", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
              Permissions.JobExecute, Permissions.JobReopen, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove,
              Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide,
-             Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove],
-            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor. Doesn't correct inventory."),
+             Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode],
+            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor; codes machine stops. Doesn't correct inventory."),
         new(Operator, "Operator", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
-             Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove, Permissions.LaborRecordOwn],
-            "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off."),
+             Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove, Permissions.LaborRecordOwn,
+             Permissions.MachinesView, Permissions.DowntimeCode],
+            "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops."),
         new(Quality, "Quality", false,
-            [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView,
+            [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView, Permissions.MachinesView,
              Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide],
             "Holds and releases lots, corrects inventory and decides on partial batches."),
         new(Manager, "Manager", false,

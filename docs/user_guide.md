@@ -2,7 +2,7 @@
 
 *Last updated: 2026-10-18 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
-This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#19-reference) tables give the exact rules.
+This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#20-reference) tables give the exact rules.
 
 ## Contents
 
@@ -24,10 +24,11 @@ This guide explains how to use Pulaski to set up your plant, plan production and
 16. [Labor, people and crews](#16-labor-people-and-crews)
 17. [Machine profiles](#17-machine-profiles)
 18. [Edge nodes: collecting machine data](#18-edge-nodes-collecting-machine-data)
-19. [Reference](#19-reference)
-20. [What Pulaski doesn't do yet](#20-what-pulaski-doesnt-do-yet)
-21. [Troubleshooting and questions](#21-troubleshooting-and-questions)
-22. [Glossary](#22-glossary)
+19. [Machines: live status and stops](#19-machines-live-status-and-stops)
+20. [Reference](#20-reference)
+21. [What Pulaski doesn't do yet](#21-what-pulaski-doesnt-do-yet)
+22. [Troubleshooting and questions](#22-troubleshooting-and-questions)
+23. [Glossary](#23-glossary)
 
 ---
 
@@ -46,7 +47,7 @@ Today you can use Pulaski to:
 - publish the plan to the floor and freeze it;
 - keep **inventory**: receive material lots into stores, write stock up or off, move and hold lots, record what each job used and made, and trace any lot back to what it was made from or forward to what was made from it.
 
-Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#20-what-pulaski-doesnt-do-yet).
+Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#21-what-pulaski-doesnt-do-yet).
 
 ### Opening Pulaski
 
@@ -286,7 +287,7 @@ Equipment with **Tracks state** set shows a **Machine data** group:
    - *Best of its machines (parallel)*: for machines running side by side, so the line runs while any of them does.
    - *Its constraint machine*: the line's state is one machine's. A **Constraint machine** row appears; Pulaski first picks the first machine below that tracks state, and you can choose another.
 
-Each saves as soon as you change it. The profile is used as soon as its machine's data arrives through an [edge node](#18-edge-nodes-collecting-machine-data); the threshold and *State from* are used once downtime is recorded (see [What Pulaski doesn't do yet](#20-what-pulaski-doesnt-do-yet)).
+Each saves as soon as you change it. The profile reads the machine's data as it arrives through an [edge node](#18-edge-nodes-collecting-machine-data); the threshold decides which stops are micro-stops, and *State from* how a line shows on [Machines](#19-machines-live-status-and-stops).
 
 ### Deactivate equipment
 
@@ -381,7 +382,7 @@ Orders already made keep the version they were made from. If a draft already exi
 - Operations with no path of links between them run in parallel; links make them sequential. Links must flow one way; a loop is refused.
 - A released process with more than one operation must be connected.
 - Only lines and departments of the process's own site can be used; machines and other equipment that neither runs nor plans jobs are refused.
-- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#20-what-pulaski-doesnt-do-yet).
+- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#21-what-pulaski-doesnt-do-yet).
 
 ---
 
@@ -1101,7 +1102,7 @@ A class's code can't change and a class is never deleted: switch it off instead.
 
 ### In detail
 
-- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#20-what-pulaski-doesnt-do-yet)).
+- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#21-what-pulaski-doesnt-do-yet)).
 - **Codes** are unique across all materials, whatever their origin; an import whose code is already used by another material is refused.
 - **Events.** Each change is recorded in the event log as `pulaski.material.created.v1`, `…updated.v1` or `…imported.v1` (and `pulaski.material_class.created.v1` / `…updated.v1`), with the material before and after.
 - **Concurrency.** As elsewhere, if someone else changed the material or class since you opened it, you'll see *"changed by someone else"*: reload and try again.
@@ -1137,14 +1138,15 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | --- | --- |
 | **Administrator** | Everything, at every site, including users and roles. |
 | **Planner** | The schedule (place, sequence, pin, assign and cancel jobs); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; materials. |
-| **Supervisor** | Start, pause, complete and reopen jobs; report production; record and approve labor; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches. |
-| **Operator** | Start, pause and complete jobs; report production; receive and move lots; clock themselves on and off. |
+| **Supervisor** | Start, pause, complete and reopen jobs; report production; record and approve labor; code machine stops; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches. |
+| **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off. |
 | **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); approve or reject partial batches. |
 | **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; the site's settings. |
 | **Auditor** | Correct inventory; stock counts. Can't plan or run jobs. |
 | **Process engineer** | Processes, BOMs and which lines can run each material. |
+| **Edge node** | Nothing on screen: it is for the user a Pulaski Edge node signs in as, to read its configuration and forward machine data. |
 
-Equipment and units belong to the Administrator. Someone with two roles can do what either allows.
+Equipment (with machine profiles and edge nodes) and units belong to the Administrator. Someone with two roles can do what either allows.
 
 When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator.
 
@@ -1155,10 +1157,10 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 | Role | Sees |
 | --- | --- |
 | **Administrator**, **Auditor**, **Manager** | Every screen (Users only for Administrator). |
-| **Planner** | Overview, Work orders, Schedule, Floor, Inventory, Materials, Processes and BOMs. |
-| **Supervisor** | Overview, Work orders (to look at), Floor, Inventory, Labor. |
-| **Operator** | Overview, Work orders (to look at), Floor, Inventory. |
-| **Quality** | Overview, Floor, Inventory, Materials. |
+| **Planner** | Overview, Work orders, Schedule, Floor, Machines, Inventory, Materials, Processes and BOMs. |
+| **Supervisor** | Overview, Work orders (to look at), Floor, Machines, Inventory, Labor. |
+| **Operator** | Overview, Work orders (to look at), Floor, Machines, Inventory. |
+| **Quality** | Overview, Floor, Machines, Inventory, Materials. |
 | **Process engineer** | Equipment, Materials, Processes and BOMs, Units. |
 
 - **Start page.** After signing in you land on the Overview, or, if you can't see it, the first screen in the menu you can.
@@ -1355,7 +1357,7 @@ The file's first line names the columns, in any order and case:
 
 1. **States**: change a value's **Name**, **PackML state** or **Reason with no stop code** (what time in that state counts as when the machine gives no code, such as Suspended = *Starved*), or untick **Active**, then click **Save** on the row. To add a value, fill in the row above the table and click **Add state**.
 2. **Stop reasons**, **Alarms** and **Warnings**: change the **Message**, **Category** or **Reason**, or untick **Active**, and click **Save**. A stop code without a reason is marked **No reason**. Add a code with the row above the table.
-3. **Reasons offered**: tick the utilization reasons operators may choose when they code a stop on this profile's machines, and click **Save offered reasons**. Reasons its codes and states map to are always offered and marked *mapped*.
+3. **Reasons offered**: tick the utilization reasons operators may choose when they code a stop on this profile's machines, and click **Save offered reasons**. With none ticked, every utilization reason of the site is offered; once you tick some, operators see those and the ones its codes and states map to (marked *mapped*).
 4. The name, vendor, model and **Active** box at the top save with **Save**.
 
 ### One machine is different
@@ -1405,7 +1407,7 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 ### Watch it work
 
 - The node's heading shows **Forwarding** while it is heard from, **Quiet** after 2 minutes without anything (offline, or nothing changed), and when it was last heard from and its version.
-- **Live** shows each bound machine's PackML state (and the value it sent, where different), since when, its unit mode, latched stop code and speed. Click **Refresh** to update.
+- **Live** shows each bound machine's PackML state (and the value it sent, where different), since when, its unit mode, latched stop code and speed. Click **Refresh** to update. Its stops are on [Machines](#19-machines-live-status-and-stops).
 - **Tags** shows each tag's last value.
 
 ### In detail
@@ -1419,9 +1421,45 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 - **Without Pulaski**, the edge starts with the last configuration it kept.
 - **A demo machine.** `deploy/simulator/compose.yaml` runs an MQTT broker and an open-source PackML simulator that publishes Sparkplug B as group `Plant1`, node `Packing`, device `PACK-SIM`. `deploy/simulator/packml-simulator-profile.csv` is a machine profile for it (it numbers Idle and Clearing the other way round). Start the machine with `dotnet run --project tools/Pulaski.SparkplugCommand -- spBv1.0/Plant1/DCMD/Packing/PACK-SIM Command/Reset=true Command/Start=true`.
 
+## 19. Machines: live status and stops
+
+**Operate → Machines.** What every machine is doing now, as its [edge node](#18-edge-nodes-collecting-machine-data) reports it, and its stops to code.
+
+### Ideas to know first
+
+- **A stop** is time a machine isn't executing: it starts when the machine leaves Execute (or loses its signal) and ends when it executes again. The states it passes through on the way (Stopping, Stopped, Resetting…) are one stop.
+- **Its reason.** A stop takes the reason its first-out stop code maps to in the machine's [profile](#17-machine-profiles); with no code, the reason of the first state on its way that has one (Suspended = *Starved*, say). An operator confirms that reason or gives another, and both are kept.
+- **Micro-stops** are stops shorter than the machine's micro-stop threshold (5 minutes unless set otherwise on the Equipment screen). They are listed but not coded, and don't count against availability.
+
+### The status board
+
+1. Open **Operate → Machines**. With more than one site, choose the site.
+2. Each tile is a piece of equipment that tracks state, coloured by what it is doing: **Producing** (green), **Waiting** (starved or blocked), **Held**, **Stopped**, **Ready** (idle, starting, resetting…), and **No signal** or **Not reporting** (hatched).
+3. A tile shows the PackML state and for how long, the unit mode when it isn't Production, the stop in progress with its reason (or **uncoded**) and stop code, the job running with its good count so far, and the speed.
+4. A line sits first in its row, with the machines below it. A line set to take its state from its machines says so: **Worst of its machines** (series), **Best of its machines** (parallel) or **Its constraint machine**.
+5. **… stops to code** on a tile opens that machine's stops. **… quiet** means its edge node hasn't been heard from for 2 minutes.
+
+The board refreshes every 5 seconds.
+
+### Code stops
+
+1. Open the **Stops** tab. The heading shows how many are waiting. **Only stops to code** is ticked: stops with no reason, longer than the micro-stop threshold, including one still going on.
+2. Choose the **Equipment** and **Period** (8 hours, 24 hours or 7 days) to look at. Untick **Only stops to code** to see every stop, with its reason; tick **Show micro-stops** to see those too.
+3. Click **Code** on a stop. Choose the **Reason**, add a **Comment** if you like (some reasons need one), and click **Save**. Where the stop code mapped a reason, **Confirm …** accepts it in one click; until then the list shows it as *to confirm*.
+4. **Change** on a coded stop gives it another reason. The list shows who coded it, their comment, and the reason the code gave when the two differ.
+
+### In detail
+
+- **Who:** seeing Machines needs permission to see machines; coding stops needs permission to code machine stops (Operators and Supervisors have both).
+- **Which reasons are offered:** with reasons ticked on the machine's profile (**Reasons offered**), those and the ones its codes and states map to; with none ticked, or no profile, every utilization reason of the site.
+- **Stop code:** the first one the machine reports during the stop is the stop's, even if the machine reports another later. A machine's own override (on the profile's **Machines** tab) beats the profile.
+- **Unit mode:** a stop keeps the unit mode it began in; one in Maintenance or Manual is shown with that mode.
+- **Counts on the board** are the machine's processed less defective counts in the run open on it.
+- **Each coding is recorded** as an event, with the reason before and after and whether it confirmed the mapped one.
+
 ---
 
-## 19. Reference
+## 20. Reference
 
 ### Work order statuses
 
@@ -1489,7 +1527,7 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 ---
 
-## 20. What Pulaski doesn't do yet
+## 21. What Pulaski doesn't do yet
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
@@ -1498,7 +1536,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Labor:** no badges or shop-floor terminals, no qualifications, no breaks, and no import of people from HR or the ERP. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
 - **No adapters yet** for other external sources or for label printing: materials come from the screen, a CSV file, or the ERP one item at a time through the API. The CSV import doesn't take capabilities, doesn't create missing classes, and there is no template file to download (the panel shows the header line).
 - **Planning rates are calculated from the ideal rate only;** calculating them from run history isn't built yet.
-- **Machine data is collected but not yet used:** state changes, stop codes and counts arrive through edge nodes and show on the node's **Live** tab, but there is no downtime list, coding of stops, line state from its machines, live equipment screen or OEE yet. Machine counts don't replace production reports. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
+- **Machine data:** there is no OEE, utilization report or stop Pareto yet, and stops can't be split, merged or entered by hand. Machine counts don't replace production reports. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
 - **Production is reported by hand.** Counts from the machines, machine state, downtime, OEE, labor and quality aren't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
 - **Batches:** the batch size is per material, not per line (a 50 kg mixer next to a 200 kg one isn't modelled). A replacement job is always rounded up to whole batches; to make fewer, cancel it. Orders from the ERP aren't imported yet, so there is no rule yet for an ERP order that isn't whole batches. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **No screen for the reporting tolerances:** the rate and consumption tolerances (110% by default) are set per site through the API.
@@ -1520,7 +1558,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 
 ---
 
-## 21. Troubleshooting and questions
+## 22. Troubleshooting and questions
 
 **"You may not do this…" or a button I expected isn't there.**
 Your roles don't allow that change, or not at this site. The message names the permission; ask an administrator (see [What each role can change](#what-each-role-can-change)).
@@ -1587,7 +1625,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 
 ---
 
-## 22. Glossary
+## 23. Glossary
 
 | Term | Meaning |
 | --- | --- |
@@ -1642,6 +1680,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Shortage** | What open jobs still need of a component beyond the stock available. |
 | **Site** | A plant, with its own time zone. |
 | **Split** | Divide part of a lot into a new lot. |
+| **Stop** | Time a machine isn't executing, from leaving Execute until it executes again, with the reason it is coded with. |
 | **Substitution** | Consuming a material a job had no planned component of. |
 | **Trace** | Following genealogy back to everything a lot was made from, or forward to everything made from it. |
 | **Sparkplug B** | A standard way for machines to publish their data over MQTT, with birth certificates naming each metric. |

@@ -74,6 +74,27 @@ internal sealed class IngestEdgeSignalsHandler(IUnitOfWork unitOfWork, IEdgeRepo
         var counters = (await edge.GetCountersAsync(equipmentIds, cancellationToken)).ToDictionary(c => c.Key, c => (long?)c.Value);
         var maps = await edge.GetStateMapsAsync([.. tags.Values.Where(t => t.MachineProfileId is not null).Select(t => t.MachineProfileId!.Value).Distinct()], cancellationToken);
         var runs = (await edge.GetOpenRunsAsync(equipmentIds, cancellationToken)).ToDictionary(r => r.EquipmentId);
+        var stopContexts = await edge.GetStopContextsAsync(equipmentIds, cancellationToken);
+        var openStops = equipmentIds.ToDictionary(id => id, id => stopContexts.GetValueOrDefault(id)?.Open);
+        var touchedStops = new Dictionary<Guid, (MachineStop Stop, bool IsNew)>();
+        void Track(MachineStop? stop, bool isNew)
+        {
+            if (stop is not null)
+            {
+                touchedStops[stop.Id] = (stop, isNew || (touchedStops.TryGetValue(stop.Id, out var seen) && seen.IsNew));
+            }
+        }
+
+        void Stops(Guid equipment, StateChange change, Guid? runId)
+        {
+            var context = stopContexts.GetValueOrDefault(equipment);
+            var before = openStops[equipment];
+            var (open, closed) = StopRules.Apply(before, change, equipment, runId, context?.Reasons ?? StopReasons.None,
+                context?.MicroStop ?? MachineProfileRules.DefaultMicroStop, ids.NewId);
+            Track(closed, isNew: false);
+            Track(open is not null && open != before ? open : null, isNew: before is null);
+            openStops[equipment] = open;
+        }
 
         var changes = new List<StateChangeRow>();
         var counts = new List<MachineCountRow>();
@@ -103,6 +124,7 @@ internal sealed class IngestEdgeSignalsHandler(IUnitOfWork unitOfWork, IEdgeRepo
                     if (change is not null)
                     {
                         changes.Add(new StateChangeRow(ids.NewId(), equipment, run?.RunId, signal.Sequence, change));
+                        Stops(equipment, change, run?.RunId);
                     }
 
                     break;
@@ -113,12 +135,24 @@ internal sealed class IngestEdgeSignalsHandler(IUnitOfWork unitOfWork, IEdgeRepo
                     if (modeChange is not null)
                     {
                         changes.Add(new StateChangeRow(ids.NewId(), equipment, run?.RunId, signal.Sequence, modeChange));
+                        Stops(equipment, modeChange, run?.RunId);
                     }
 
                     break;
                 case TagRoles.StopReason when signal.Good && signal.Value is { } code:
-                    live[equipment] = LiveStateRules.ApplyStopReason(current, decimal.ToInt32(decimal.Truncate(code)), signal.OccurredAt);
+                    var stopCode = decimal.ToInt32(decimal.Truncate(code));
+                    live[equipment] = LiveStateRules.ApplyStopReason(current, stopCode, signal.OccurredAt);
                     changedLive.Add(equipment);
+                    if (openStops[equipment] is { } stopped)
+                    {
+                        var coded = StopRules.WithStopCode(stopped, stopCode, stopContexts.GetValueOrDefault(equipment)?.Reasons ?? StopReasons.None);
+                        if (coded != stopped)
+                        {
+                            openStops[equipment] = coded;
+                            Track(coded, isNew: false);
+                        }
+                    }
+
                     break;
                 case TagRoles.MachineSpeed when signal.Good && signal.Value is { } speed:
                     live[equipment] = LiveStateRules.ApplySpeed(current, speed * tag.ScaleFactor + tag.ScaleOffset, signal.OccurredAt);
@@ -141,9 +175,11 @@ internal sealed class IngestEdgeSignalsHandler(IUnitOfWork unitOfWork, IEdgeRepo
 
         await edge.InsertStateChangesAsync(changes, cancellationToken);
         await edge.InsertCountsAsync(counts, request.ActorId, cancellationToken);
+        await edge.InsertStopsAsync([.. touchedStops.Values.Where(t => t.IsNew).Select(t => t.Stop)], cancellationToken);
+        await edge.UpdateStopsAsync([.. touchedStops.Values.Where(t => !t.IsNew).Select(t => t.Stop)], cancellationToken);
         foreach (var equipment in changedLive)
         {
-            await edge.UpsertLiveAsync(equipment, live[equipment]!, node.Id, time.GetUtcNow(), cancellationToken);
+            await edge.UpsertLiveAsync(equipment, live[equipment]!, openStops[equipment], node.Id, time.GetUtcNow(), cancellationToken);
         }
 
         foreach (var ((equipment, kind), (value, at)) in changedCounters)

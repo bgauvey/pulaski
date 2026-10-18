@@ -236,7 +236,10 @@ CREATE TABLE core.equipment_live_state (
     machine_speed       numeric(18,6),
     signal_at           timestamptz NOT NULL,                   -- the newest signal applied
     edge_node_id        uuid REFERENCES core.edge_node(id),
-    updated_at          timestamptz NOT NULL DEFAULT now()
+    open_downtime_id    uuid,                                   -- the stop in progress: (id, started_at) into ts.downtime, no FK
+    open_downtime_started_at timestamptz,
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT equipment_live_downtime_ck CHECK ((open_downtime_id IS NULL) = (open_downtime_started_at IS NULL))
 );
 
 -- The last raw value of each machine counter, so a new reading becomes a count (D-041).
@@ -1360,6 +1363,8 @@ CREATE TABLE ts.downtime (
     coded_by_user_id            uuid,
     coded_at                    timestamptz,
     comment                     text,
+    unit_mode                   smallint NOT NULL DEFAULT 1,        -- the machine's unit mode when it stopped (D-041)
+    coded_by                    text,                               -- who coded it, as on evt.event
     PRIMARY KEY (id, started_at),
     CONSTRAINT downtime_span_ck CHECK (ended_at IS NULL OR ended_at >= started_at)
 ) PARTITION BY RANGE (started_at);
@@ -1718,7 +1723,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0013_view_permissions'),
     ('0014_labor'),
     ('0015_machine_profiles'),
-    ('0016_edge');
+    ('0016_edge'),
+    ('0017_stops');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -1738,6 +1744,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('reasons.view', 'See reason codes'),
     ('shifts.view', 'See shift schedules'),
     ('labor.view', 'See labor: who is on, shift review and labor reports'),
+    ('machines.view', 'See machines: their live state and their stops'),
     ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
     ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
     ('work_order.close', 'Cancel and close work orders'),
@@ -1749,6 +1756,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('labor.record_own', 'Clock yourself on and off lines and jobs'),
     ('labor.record', 'Record labor for others and check crews onto lines'),
     ('labor.approve', 'Approve a shift''s labor and correct approved labor'),
+    ('downtime.code', 'Code machine stops: confirm or change their reason'),
     ('lot.receive', 'Receive lots'),
     ('lot.move', 'Move lots between locations'),
     ('lot.ship', 'Ship lots'),
@@ -1772,8 +1780,8 @@ ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 INSERT INTO sec.role (code, name, description, is_system) VALUES
     ('administrator', 'Administrator', 'Everything, everywhere, including users and roles.', true),
     ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes.', true),
-    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor. Doesn''t correct inventory.', true),
-    ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off.', true),
+    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor; codes machine stops. Doesn''t correct inventory.', true),
+    ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops.', true),
     ('quality', 'Quality', 'Holds and releases lots, corrects inventory and decides on partial batches.', true),
     ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people and the site''s settings.', true),
     ('auditor', 'Auditor', 'Views everything and corrects inventory; counts stock. Doesn''t plan or run jobs.', true),
@@ -1790,6 +1798,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('planner', 'inventory.view'),
     ('planner', 'materials.view'),
     ('planner', 'processes.view'),
+    ('planner', 'machines.view'),
     ('planner', 'schedule.plan'),
     ('planner', 'work_order.manage'),
     ('planner', 'work_order.close'),
@@ -1811,6 +1820,8 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('supervisor', 'labor.view'),
     ('supervisor', 'labor.record'),
     ('supervisor', 'labor.approve'),
+    ('supervisor', 'machines.view'),
+    ('supervisor', 'downtime.code'),
     ('operator', 'overview.view'),
     ('operator', 'floor.view'),
     ('operator', 'inventory.view'),
@@ -1820,10 +1831,13 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('operator', 'lot.receive'),
     ('operator', 'lot.move'),
     ('operator', 'labor.record_own'),
+    ('operator', 'machines.view'),
+    ('operator', 'downtime.code'),
     ('quality', 'overview.view'),
     ('quality', 'floor.view'),
     ('quality', 'inventory.view'),
     ('quality', 'materials.view'),
+    ('quality', 'machines.view'),
     ('quality', 'lot.hold'),
     ('quality', 'inventory.correct'),
     ('quality', 'partial_batch.decide'),
@@ -1839,6 +1853,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('manager', 'reasons.view'),
     ('manager', 'shifts.view'),
     ('manager', 'labor.view'),
+    ('manager', 'machines.view'),
     ('manager', 'job.reopen'),
     ('manager', 'work_order.close'),
     ('manager', 'reasons.manage'),
@@ -1858,6 +1873,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('auditor', 'reasons.view'),
     ('auditor', 'shifts.view'),
     ('auditor', 'labor.view'),
+    ('auditor', 'machines.view'),
     ('auditor', 'inventory.correct'),
     ('auditor', 'stock_count.manage'),
     ('process_engineer', 'equipment.view'),
