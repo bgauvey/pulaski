@@ -830,7 +830,7 @@
 
         @if (_runs.Count == 0)
         {
-            <p class="small text-warning-strong mb-3">@SelectedJob.JobNumber hasn't run yet. Start it on the <a href="floor">Floor</a> first.</p>
+            <p class="small text-warning-strong mb-3">@SelectedJob.JobNumber hasn't run yet. Start it on the <ScreenLink Href="floor" Permission="@PermissionCodes.FloorView">Floor</ScreenLink> first.</p>
         }
         else
         {

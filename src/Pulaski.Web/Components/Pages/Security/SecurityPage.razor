@@ -1,6 +1,7 @@
 @page "/users"
 @page "/users/roles"
 @page "/users/permissions"
+@attribute [RequiresView(PermissionCodes.Security)]
 @implements IDisposable
 @inject NavigationManager Navigation
 

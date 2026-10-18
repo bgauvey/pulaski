@@ -1,4 +1,5 @@
 @page "/inventory/jobs"
+@attribute [RequiresView(PermissionCodes.InventoryView)]
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 
@@ -29,7 +30,7 @@ else if (_jobs.Count == 0)
 {
     <div class="empty-panel">
         <h2>No job has run yet</h2>
-        <p class="text-muted mb-0">Material is used and made while a job runs. Start a job on the <a href="floor">Floor</a> first; jobs come from work orders on the <a href="schedule">Schedule</a>.</p>
+        <p class="text-muted mb-0">Material is used and made while a job runs. Start a job on the <ScreenLink Href="floor" Permission="@PermissionCodes.FloorView">Floor</ScreenLink> first; jobs come from work orders on the <ScreenLink Href="schedule" Permission="@PermissionCodes.ScheduleView">Schedule</ScreenLink>.</p>
     </div>
 }
 else

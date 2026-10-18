@@ -1,5 +1,6 @@
 @* Planners create work orders from the Schedule page; access control comes later. *@
 @page "/schedule/work-orders/new"
+@attribute [RequiresView(PermissionCodes.WorkOrderManage)]
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
 @inject CurrentUser User
@@ -21,7 +22,7 @@
 }
 else if (_sites.Count == 0)
 {
-    <p class="text-muted">Create a site under <a href="equipment">Equipment</a> before adding work orders.</p>
+    <p class="text-muted">Create a site under <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink> before adding work orders.</p>
 }
 else
 {
@@ -104,7 +105,7 @@ else
                 </InputSelect>
                 @if (MaterialCode is not null)
                 {
-                    <div class="form-text">Any unit that converts to @MaterialCode's base unit. <a href="units?material=@_form.MaterialId">Its conversions</a></div>
+                    <div class="form-text">Any unit that converts to @MaterialCode's base unit. <ScreenLink Href="@($"units?material={_form.MaterialId}")" Permission="@PermissionCodes.UnitsView">Its conversions</ScreenLink></div>
                 }
             </div>
 
@@ -173,14 +174,14 @@ else
             {
                 <p class="small">
                     Components are planned from the
-                    <a href="boms/@bom.Id">BOM for @(bom.ProcessCode ?? "any process"), version @bom.ReleasedVersion</a>
+                    <ScreenLink Href="@($"boms/{bom.Id}")" Permission="@PermissionCodes.ProcessesView">BOM for @(bom.ProcessCode ?? "any process"), version @bom.ReleasedVersion</ScreenLink>
                     (@bom.ReleasedItems components), for each job that consumes them.
                 </p>
             }
             else
             {
                 <p class="small text-warning-strong">
-                    @MaterialCode has no released BOM, so this order plans no components. <a href="boms">Create one</a> to plan them.
+                    @MaterialCode has no released BOM, so this order plans no components. <ScreenLink Href="boms" Permission="@PermissionCodes.ProcessesView">Create one</ScreenLink> to plan them.
                 </p>
             }
         }

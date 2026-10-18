@@ -20,22 +20,27 @@ internal static class WorkOrderEndpoints
         group.MapGet("/", async Task<Ok<IReadOnlyList<WorkOrderDto>>> (
             Guid? siteId,
             string? status,
+            HttpContext http,
             IQueryHandler<ListWorkOrdersQuery, IReadOnlyList<WorkOrderDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListWorkOrdersQuery(siteId, status), ct)));
+            TypedResults.Ok((await handler.HandleAsync(new ListWorkOrdersQuery(siteId, status), ct)).At(await Visible.SitesAsync(http, Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.OverviewView), w => w.SiteId)))
+        .RequireAny(Site.Query(), Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.OverviewView);
 
         // Before "/{id}" so "progress" is never read as an id.
         group.MapGet("/progress", async Task<Ok<IReadOnlyList<WorkOrderProgressDto>>> (
             Guid? equipmentId,
+            HttpContext http,
             IQueryHandler<ListWorkOrderProgressQuery, IReadOnlyList<WorkOrderProgressDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListWorkOrderProgressQuery(equipmentId), ct)));
+            TypedResults.Ok((await handler.HandleAsync(new ListWorkOrderProgressQuery(equipmentId), ct)).At(await Visible.SitesAsync(http, Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.OverviewView), w => w.Order.SiteId)))
+        .RequireAny(Site.QueryOf(SiteOf.Equipment, "equipmentId"), Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.OverviewView);
 
         group.MapGet("/{id:guid}", async Task<Ok<WorkOrderDto>> (
             Guid id,
             IQueryHandler<GetWorkOrderQuery, WorkOrderDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetWorkOrderQuery(id), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetWorkOrderQuery(id), ct)))
+        .RequireAny(Site.Of(SiteOf.WorkOrder), Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.OverviewView);
 
         group.MapPost("/", async Task<Created<CreatedResponse>> (
             CreateWorkOrderRequest request,

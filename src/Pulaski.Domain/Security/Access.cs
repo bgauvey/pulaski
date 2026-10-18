@@ -1,12 +1,26 @@
 namespace Pulaski.Domain.Security;
 
 /// <summary>
-/// What a user may change (D-037). Permissions are constants in code, the only place that checks them; the API
-/// copies the catalog into <c>sec.permission</c> at start. Roles, in the database, bundle them. Every signed-in user
-/// with a role may view everything; permissions guard changes.
+/// What a user may see and change (D-037, D-039). Permissions are constants in code, the only place that checks them;
+/// the API copies the catalog into <c>sec.permission</c> at start. Roles, in the database, bundle them. View permissions
+/// decide which screens and data a user sees; change permissions what they may change, and bring the views they need.
 /// </summary>
 public static class Permissions
 {
+    // Viewing (D-039): which screens, and their data, a user may see at all.
+    public const string OverviewView = "overview.view";
+    public const string WorkOrdersView = "work_orders.view";
+    public const string ScheduleView = "schedule.view";
+    public const string FloorView = "floor.view";
+    public const string InventoryView = "inventory.view";
+    public const string EquipmentView = "equipment.view";
+    public const string MaterialsView = "materials.view";
+    public const string ProcessesView = "processes.view";
+    public const string UnitsView = "units.view";
+    public const string ReasonsView = "reasons.view";
+    public const string ShiftsView = "shifts.view";
+
+    // Changing (D-037).
     public const string SchedulePlan = "schedule.plan";
     public const string WorkOrderManage = "work_order.manage";
     public const string WorkOrderClose = "work_order.close";
@@ -33,6 +47,17 @@ public static class Permissions
     /// <summary>Every permission, in the order screens list them, with its area and what it allows.</summary>
     public static IReadOnlyList<PermissionInfo> Catalog { get; } =
     [
+        new(OverviewView, "Viewing", "See the Overview"),
+        new(WorkOrdersView, "Viewing", "See work orders and their progress"),
+        new(ScheduleView, "Viewing", "See the schedule"),
+        new(FloorView, "Viewing", "See the floor and job pages: runs, reports and partial batches"),
+        new(InventoryView, "Viewing", "See inventory: stock, lots, movements, counts, shortages and reports"),
+        new(EquipmentView, "Viewing", "See the equipment hierarchy and its settings"),
+        new(MaterialsView, "Viewing", "See materials, their classes, capabilities and rates"),
+        new(ProcessesView, "Viewing", "See processes and BOMs"),
+        new(UnitsView, "Viewing", "See units and material conversions"),
+        new(ReasonsView, "Viewing", "See reason codes"),
+        new(ShiftsView, "Viewing", "See shift schedules"),
         new(SchedulePlan, "Planning", "Plan jobs: create, sequence, pin, assign to lines and cancel them"),
         new(WorkOrderManage, "Planning", "Create work orders, dispatch, un-dispatch and firm them"),
         new(WorkOrderClose, "Planning", "Cancel and close work orders"),
@@ -61,6 +86,38 @@ public static class Permissions
     public static IReadOnlyDictionary<string, string> All { get; } = Catalog.ToDictionary(p => p.Code, p => p.Description, StringComparer.Ordinal);
 
     public static bool Exists(string code) => All.ContainsKey(code);
+
+    /// <summary>Every view permission (D-039).</summary>
+    public static IReadOnlyList<string> Views { get; } = [.. Catalog.Where(p => p.Area == "Viewing").Select(p => p.Code)];
+
+    /// <summary>
+    /// The views a change permission brings with it (D-039): whoever may change something may see where it is changed,
+    /// so a role needs no separate tick to see its own screens.
+    /// </summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<string>> Implied { get; } = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+    {
+        [SchedulePlan] = [ScheduleView, WorkOrdersView],
+        [WorkOrderManage] = [WorkOrdersView],
+        [WorkOrderClose] = [WorkOrdersView],
+        [RateModify] = [MaterialsView],
+        [JobExecute] = [FloorView],
+        [JobReopen] = [FloorView],
+        [ProductionReport] = [FloorView],
+        [PartialBatchDecide] = [FloorView],
+        [LotReceive] = [InventoryView],
+        [LotMove] = [InventoryView],
+        [LotShip] = [InventoryView],
+        [LotHold] = [InventoryView],
+        [InventoryCorrect] = [InventoryView],
+        [StockCount] = [InventoryView],
+        [Materials] = [MaterialsView],
+        // Capabilities are changed on the material page; which shifts equipment follows on the equipment page.
+        [Processes] = [ProcessesView, MaterialsView],
+        [Units] = [UnitsView],
+        [Reasons] = [ReasonsView],
+        [Equipment] = [EquipmentView],
+        [Shifts] = [ShiftsView, EquipmentView],
+    };
 }
 
 /// <summary>A permission the code checks, grouped by the part of Pulaski it belongs to.</summary>
@@ -92,27 +149,32 @@ public static class Roles
     [
         new(Administrator, "Administrator", IsGlobal: true, [.. Permissions.All.Keys], "Everything, everywhere, including users and roles."),
         new(Planner, "Planner", false,
-            [Permissions.SchedulePlan, Permissions.WorkOrderManage, Permissions.WorkOrderClose, Permissions.RateModify, Permissions.Materials],
-            "Plans and sequences jobs, manages work orders, planning rates and materials. Views the floor and inventory."),
+            [Permissions.OverviewView, Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.FloorView, Permissions.InventoryView,
+             Permissions.MaterialsView, Permissions.ProcessesView,
+             Permissions.SchedulePlan, Permissions.WorkOrderManage, Permissions.WorkOrderClose, Permissions.RateModify, Permissions.Materials],
+            "Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes."),
         new(Supervisor, "Supervisor", false,
-            [Permissions.JobExecute, Permissions.JobReopen, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove,
+            [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
+             Permissions.JobExecute, Permissions.JobReopen, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove,
              Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide],
             "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches. Doesn't correct inventory."),
         new(Operator, "Operator", false,
-            [Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove],
+            [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
+             Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove],
             "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots."),
         new(Quality, "Quality", false,
-            [Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide],
+            [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView,
+             Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide],
             "Holds and releases lots, corrects inventory and decides on partial batches."),
         new(Manager, "Manager", false,
-            [Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts],
+            [.. Permissions.Views, Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts],
             "Views everything; reopens jobs, closes work orders, maintains reason codes, shift schedules and the site's settings."),
         new(Auditor, "Auditor", false,
-            [Permissions.InventoryCorrect, Permissions.StockCount],
+            [.. Permissions.Views, Permissions.InventoryCorrect, Permissions.StockCount],
             "Views everything and corrects inventory; counts stock. Doesn't plan or run jobs."),
         new(ProcessEngineer, "Process engineer", false,
-            [Permissions.Processes],
-            "Maintains processes, BOMs and capabilities."),
+            [Permissions.EquipmentView, Permissions.MaterialsView, Permissions.ProcessesView, Permissions.UnitsView, Permissions.Processes],
+            "Maintains processes, BOMs and capabilities. Sees equipment, materials and units."),
     ];
 
     /// <summary>Only the administrator is held everywhere; every other role is held at a site.</summary>
@@ -132,7 +194,10 @@ public sealed record RoleGrant(Guid AssignmentId, string RoleCode, string RoleNa
 {
     public bool IsGlobal => Roles.IsGlobal(RoleCode);
 
-    public bool Allows(string permission) => IsGlobal || Permissions.Contains(permission);
+    /// <summary>The role holds the permission, or one that brings it with it (a change brings its views, D-039).</summary>
+    public bool Allows(string permission) =>
+        IsGlobal || Permissions.Contains(permission)
+        || Permissions.Any(p => Security.Permissions.Implied.TryGetValue(p, out var views) && views.Contains(permission));
 }
 
 /// <summary>
@@ -155,6 +220,24 @@ public sealed record UserAccess(Guid UserId, string Username, string DisplayName
         }
 
         return Grants.Any(g => g.Allows(permission) && (g.IsGlobal || siteId is null || g.SiteId == siteId));
+    }
+
+    /// <summary>Whether the user holds any of <paramref name="permissions"/> at <paramref name="siteId"/> (without a site, at any site).</summary>
+    public bool CanAny(IEnumerable<string> permissions, Guid? siteId) => permissions.Any(p => Can(p, siteId));
+
+    /// <summary>Whether the user may see any screen at all (D-039); without one Pulaski has nothing to show them.</summary>
+    public bool CanViewAnything => IsActive && (IsAdministrator || Grants.Any(g => Security.Permissions.Views.Any(g.Allows)) || Can(Security.Permissions.Security, null));
+
+    /// <summary>The sites where the user holds any of <paramref name="permissions"/>, or null for everywhere (D-039).</summary>
+    public IReadOnlyList<Guid>? SitesForAny(IEnumerable<string> permissions)
+    {
+        if (IsAdministrator)
+        {
+            return null;
+        }
+
+        var wanted = permissions.ToList();
+        return [.. Grants.Where(g => g.SiteId is not null && wanted.Any(g.Allows)).Select(g => g.SiteId!.Value).Distinct()];
     }
 
     /// <summary>The sites where the user holds the permission, or null for everywhere.</summary>

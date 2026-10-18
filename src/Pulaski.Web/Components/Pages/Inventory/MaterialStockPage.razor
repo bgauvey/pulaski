@@ -1,4 +1,5 @@
 @page "/inventory/materials/{MaterialId:guid}"
+@attribute [RequiresView(PermissionCodes.InventoryView)]
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 @inject TimeProvider Time
@@ -138,7 +139,7 @@
                     }
                     @foreach (var b in _boms)
                     {
-                        <a class="ms-1" href="boms/@b.Id">BOM for @(b.ProcessCode ?? "any process")</a>
+                        <ScreenLink Href="@($"boms/{b.Id}")" Permission="@PermissionCodes.ProcessesView" class="ms-1">BOM for @(b.ProcessCode ?? "any process")</ScreenLink>
                     }
                 </span>
             </div>
@@ -158,7 +159,7 @@
                                 {
                                     <tr @key="(b.VersionId, b.LineNo)" class="@(b.BomIsActive ? "" : "text-muted")">
                                         <td>
-                                            <a class="fw-semibold" href="boms/@b.BomId">@b.MaterialCode</a>
+                                            <ScreenLink Href="@($"boms/{b.BomId}")" Permission="@PermissionCodes.ProcessesView" class="fw-semibold">@b.MaterialCode</ScreenLink>
                                             <div class="small text-muted">@b.MaterialName · @(b.ProcessCode ?? "any process")</div>
                                         </td>
                                         <td><span class="@(b.VersionStatus == "released" ? "chip chip-strong" : "chip")">v@(b.VersionNumber) @b.VersionStatus</span></td>

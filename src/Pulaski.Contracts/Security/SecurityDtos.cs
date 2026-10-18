@@ -75,7 +75,11 @@ public sealed record RoleDto
 }
 
 /// <summary>A permission the code checks, for the Permissions and Roles screens.</summary>
-public sealed record PermissionDto(string Code, string Area, string Description);
+public sealed record PermissionDto(string Code, string Area, string Description)
+{
+    /// <summary>For a view: the change permissions that bring it with them (D-039).</summary>
+    public IReadOnlyList<string> ComesWith { get; init; } = [];
+}
 
 public sealed record CreateRoleRequest
 {

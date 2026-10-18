@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Security;
 using Pulaski.Application.Boms;
 using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
@@ -19,13 +20,15 @@ internal static class BomEndpoints
             Guid? materialId,
             IQueryHandler<ListBomsQuery, IReadOnlyList<BomSummaryDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListBomsQuery(materialId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new ListBomsQuery(materialId), ct)))
+        .RequireAnyView();
 
         group.MapGet("/{id:guid}", async Task<Ok<BomDto>> (
             Guid id,
             IQueryHandler<GetBomQuery, BomDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetBomQuery(id), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetBomQuery(id), ct)))
+        .RequireAny(null, Permissions.ProcessesView);
 
         group.MapPost("/", async Task<Created<CreatedResponse>> (
             CreateBomRequest request,
@@ -42,7 +45,8 @@ internal static class BomEndpoints
             Guid versionId,
             IQueryHandler<GetBomVersionQuery, BomVersionDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetBomVersionQuery(id, versionId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetBomVersionQuery(id, versionId), ct)))
+        .RequireAny(null, Permissions.ProcessesView);
 
         group.MapPut("/{id:guid}/versions/{versionId:guid}", async Task<Ok<SaveBomDraftResponse>> (
             Guid id,
@@ -77,7 +81,8 @@ internal static class BomEndpoints
             IQueryHandler<ListPlannedComponentsQuery, IReadOnlyList<PlannedComponentDto>> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ListPlannedComponentsQuery(id), ct)))
-            .WithTags("Work orders");
+            .WithTags("Work orders")
+            .RequireAny(Site.Of(SiteOf.WorkOrder), Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.OverviewView);
 
         return routes;
     }

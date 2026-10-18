@@ -46,4 +46,19 @@ public class SecurityViewTests
     [InlineData("/account/logout", "/")]
     public void Signing_in_returns_only_to_a_page_of_this_site(string? returnUrl, string expected) =>
         Assert.Equal(expected, AccountSession.SafeReturnUrl(returnUrl));
+
+    [Fact]
+    public void A_user_starts_at_the_first_screen_they_may_see_or_has_none()
+    {
+        var floor = User(new PermissionGrantDto(PermissionCodes.FloorView, [PlantA]), new PermissionGrantDto(PermissionCodes.JobExecute, [PlantA]));
+        Assert.True(floor.CanSeeAnything);
+        Assert.Equal("floor", floor.FirstScreen);
+        Assert.False(floor.CanAny([PermissionCodes.ScheduleView, PermissionCodes.OverviewView]));
+
+        var nothing = User(new PermissionGrantDto(PermissionCodes.SiteSettings, [PlantA]));
+        Assert.False(nothing.CanSeeAnything);
+        Assert.Null(nothing.FirstScreen);
+
+        Assert.Equal("users", User(new PermissionGrantDto(PermissionCodes.Security, null)).FirstScreen);
+    }
 }

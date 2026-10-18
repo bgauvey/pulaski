@@ -1,0 +1,30 @@
+@inject CurrentUser User
+
+@* A link to another screen, for users who may see that screen (D-039). Otherwise its words stay, unlinked, or with
+   Hide it doesn't show at all (buttons and menu items), so no screen is advertised the user can't open. *@
+@if (User.Can(Permission))
+{
+    <a href="@Href" @attributes="Attributes">@ChildContent</a>
+}
+else if (!Hide)
+{
+    <span @attributes="Attributes">@ChildContent</span>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Href { get; set; } = "";
+
+    /// <summary>The view the target screen needs.</summary>
+    [Parameter, EditorRequired]
+    public string Permission { get; set; } = "";
+
+    [Parameter]
+    public bool Hide { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? Attributes { get; set; }
+}

@@ -20,7 +20,8 @@ internal static class SchedulingEndpoints
             int? horizonDays,
             IQueryHandler<GetLineTimelineQuery, LineTimelineDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetLineTimelineQuery(lineId, horizonDays), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetLineTimelineQuery(lineId, horizonDays), ct)))
+        .RequireAny(Site.Of(SiteOf.Equipment, "lineId"), Permissions.ScheduleView, Permissions.OverviewView);
 
         // A read: where a new job for the order would run, without creating it.
         group.MapGet("/lines/{lineId:guid}/placement-preview", async Task<Ok<JobPlacementPreviewDto>> (
@@ -32,13 +33,15 @@ internal static class SchedulingEndpoints
             IQueryHandler<PreviewJobPlacementQuery, JobPlacementPreviewDto> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new PreviewJobPlacementQuery(lineId, workOrderId, plannedQty, beforeJobId, jobNumber), ct)));
+                new PreviewJobPlacementQuery(lineId, workOrderId, plannedQty, beforeJobId, jobNumber), ct)))
+        .RequireAny(Site.Of(SiteOf.Equipment, "lineId"), Permissions.SchedulePlan);
 
         group.MapGet("/lines/{lineId:guid}/run-standards", async Task<Ok<IReadOnlyList<RunStandardDto>>> (
             Guid lineId,
             IQueryHandler<ListRunStandardsQuery, IReadOnlyList<RunStandardDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListRunStandardsQuery(lineId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new ListRunStandardsQuery(lineId), ct)))
+        .RequireAny(Site.Of(SiteOf.Equipment, "lineId"), Permissions.ScheduleView, Permissions.MaterialsView);
 
         group.MapPost("/jobs", async Task<Created<CreatedResponse>> (
             CreateJobRequest request,
@@ -118,7 +121,8 @@ internal static class SchedulingEndpoints
             Guid siteId,
             IQueryHandler<GetSchedulingPolicyQuery, SchedulingPolicyDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetSchedulingPolicyQuery(siteId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetSchedulingPolicyQuery(siteId), ct)))
+        .RequireAny(Site.Route(), Permissions.ScheduleView, Permissions.SiteSettings);
 
         group.MapPut("/sites/{siteId:guid}/policy", async Task<Ok<VersionResponse>> (
             Guid siteId,

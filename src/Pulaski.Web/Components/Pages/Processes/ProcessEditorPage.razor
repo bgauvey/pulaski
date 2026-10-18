@@ -1,4 +1,5 @@
 @page "/processes/{Id:guid}"
+@attribute [RequiresView(PermissionCodes.ProcessesView)]
 @* The process editor (D-023). Operations sit on a canvas; drag a line or department from the left
    onto an operation (or onto empty canvas for a new one), drag an operation's header to move it,
    and drag from the handle on its right edge to the next operation to link them. Every change to

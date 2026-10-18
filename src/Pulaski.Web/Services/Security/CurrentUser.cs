@@ -24,6 +24,32 @@ public sealed class CurrentUser
         Me?.Permissions.FirstOrDefault(p => p.Code == permission) is { } grant
         && (grant.SiteIds is null || siteId is null || grant.SiteIds.Contains(siteId.Value));
 
+    /// <summary>Whether the user holds any of <paramref name="permissions"/>, at <paramref name="siteId"/> or (without one) at any site.</summary>
+    public bool CanAny(IEnumerable<string> permissions, Guid? siteId = null) => permissions.Any(p => Can(p, siteId));
+
+    /// <summary>Whether the user may see any screen at all (D-039). The API lists views a change brings with it too.</summary>
+    public bool CanSeeAnything => Me is not null && (CanAny(PermissionCodes.Views) || Can(PermissionCodes.Security));
+
+    /// <summary>The menu's screens in order, each with the view it needs (D-039).</summary>
+    public static IReadOnlyList<(string Href, string Permission)> Screens { get; } =
+    [
+        ("", PermissionCodes.OverviewView),
+        ("work-orders", PermissionCodes.WorkOrdersView),
+        ("schedule", PermissionCodes.ScheduleView),
+        ("floor", PermissionCodes.FloorView),
+        ("inventory", PermissionCodes.InventoryView),
+        ("equipment", PermissionCodes.EquipmentView),
+        ("materials", PermissionCodes.MaterialsView),
+        ("processes", PermissionCodes.ProcessesView),
+        ("units", PermissionCodes.UnitsView),
+        ("reasons", PermissionCodes.ReasonsView),
+        ("shifts", PermissionCodes.ShiftsView),
+        ("users", PermissionCodes.Security),
+    ];
+
+    /// <summary>The first screen in the menu the user may see; null when there is none.</summary>
+    public string? FirstScreen => Screens.FirstOrDefault(s => Can(s.Permission)) is { Permission: not null } first ? first.Href : null;
+
     /// <summary>The roles as one line, such as "Supervisor at PLANT1, Quality at PLANT2".</summary>
     public string RoleSummary => Me is null
         ? ""

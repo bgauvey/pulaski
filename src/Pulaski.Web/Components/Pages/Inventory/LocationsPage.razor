@@ -1,11 +1,12 @@
 @page "/inventory/locations"
+@attribute [RequiresView(PermissionCodes.InventoryView)]
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 
 <PageTitle>Locations · Inventory · Pulaski</PageTitle>
 
 <InventoryHeader Title="Locations" SiteChanged="LoadAsync">
-    <Description>Equipment that holds inventory: stores, staging areas and the feed points on a line. Mark more on the <a href="equipment">Equipment</a> page with <strong>Holds inventory</strong>.</Description>
+    <Description>Equipment that holds inventory: stores, staging areas and the feed points on a line. Mark more on the <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink> page with <strong>Holds inventory</strong>.</Description>
 </InventoryHeader>
 
 <ProblemAlert Error="_error" />

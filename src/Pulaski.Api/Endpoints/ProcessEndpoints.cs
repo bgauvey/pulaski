@@ -22,9 +22,11 @@ internal static class ProcessEndpoints
         group.MapGet("/", async Task<Ok<IReadOnlyList<ProcessSummaryDto>>> (
             Guid? siteId,
             Guid? materialId,
+            HttpContext http,
             IQueryHandler<ListProcessesQuery, IReadOnlyList<ProcessSummaryDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListProcessesQuery(siteId, materialId), ct)));
+            TypedResults.Ok((await handler.HandleAsync(new ListProcessesQuery(siteId, materialId), ct)).At(await Visible.AnyViewSitesAsync(http), p => p.SiteId)))
+        .RequireAnyView();
 
         // Whether an order for the material can be made from the process, as creating it would check (D-024).
         group.MapGet("/{id:guid}/order-check", async Task<Ok<ProcessOrderCheckDto>> (
@@ -32,7 +34,8 @@ internal static class ProcessEndpoints
             Guid materialId,
             IQueryHandler<CheckProcessForOrderQuery, ProcessOrderCheckDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new CheckProcessForOrderQuery(id, materialId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new CheckProcessForOrderQuery(id, materialId), ct)))
+        .RequireAny(Site.Of(SiteOf.Process), Permissions.WorkOrdersView, Permissions.ProcessesView);
 
         group.MapPut("/{id:guid}/scope", async Task<Ok<VersionResponse>> (
             Guid id,
@@ -47,7 +50,8 @@ internal static class ProcessEndpoints
             Guid id,
             IQueryHandler<GetProcessQuery, ProcessDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetProcessQuery(id), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetProcessQuery(id), ct)))
+        .RequireAny(Site.Of(SiteOf.Process), Permissions.ProcessesView, Permissions.WorkOrdersView);
 
         group.MapPost("/", async Task<Created<CreatedResponse>> (
             CreateProcessRequest request,
@@ -74,7 +78,8 @@ internal static class ProcessEndpoints
             Guid versionId,
             IQueryHandler<GetProcessVersionQuery, ProcessVersionDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetProcessVersionQuery(id, versionId), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new GetProcessVersionQuery(id, versionId), ct)))
+        .RequireAny(Site.Of(SiteOf.Process), Permissions.ProcessesView, Permissions.WorkOrdersView);
 
         group.MapPut("/{id:guid}/versions/{versionId:guid}", async Task<Ok<SaveProcessDraftResponse>> (
             Guid id,

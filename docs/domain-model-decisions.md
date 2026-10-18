@@ -46,6 +46,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-036 | Batches: a material may have a batch size, a rule (exact or near) and a tolerance, all Pulaski-owned. Orders and jobs of it are whole batches; production is reported batch by batch, each good batch its own lot. A partial batch is an exception, reported only as a run ends with a reason, one per run, in its own lot: accepted under the near rule, on hold for approval under the exact rule (finished goods by default) | Proposed | 2026-10-17 |
 | D-037 | Users, roles and permissions: permissions are constants in code; roles are data an administrator maintains, held at a site (only the administrator, fixed in code, holds everything everywhere); viewing is open to every signed-in user; local sign-in with an API token for now, an identity provider later | Proposed | 2026-10-17 |
 | D-038 | Shift schedules: each site's schedules repeat over a cycle of days; equipment inherits its parent's working time, follows a schedule of its own, or runs around the clock. Shift times are worked out from the schedule on read, never stored | Proposed | 2026-10-17 |
+| D-039 | Viewing: a user sees only the screens and sites their roles allow. Each screen has a view permission, which a change permission brings with it; the API checks it on every read and keeps lists to the caller's sites; the UI leaves out what can't be seen and answers "not found" | Proposed | 2026-10-17 |
 
 ## Order hierarchy
 
@@ -613,7 +614,7 @@ Some materials are made a fixed amount at a time: a 50 kg mix, a 200 l tank. Pul
 
 ## Users, roles and permissions (D-037, proposed)
 
-Who may change what. Every signed-in user may **view** everything; **permissions** guard changes.
+Who may see and change what. **View permissions** decide which screens and data a user sees (D-039, which replaced "every signed-in user may view everything"); **change permissions** guard changes.
 
 - **Permissions are constants in code** (`Pulaski.Domain.Security.Permissions`), the only place that checks them. Adding one is a code change: a constant, its catalog entry (area and description), and the endpoint that requires it.
 - **Roles are data.** An administrator creates roles and chooses their permissions on the **Roles** and **Permissions** tabs of Configure → Users (`sec.role`, `sec.role_permission`). The only role the code knows is the **administrator**: it holds every permission everywhere, including ones added later, and can't be changed, so someone can always manage users.
@@ -633,7 +634,7 @@ Who may change what. Every signed-in user may **view** everything; **permissions
 
 Who owns the configuration: equipment, units → Administrator; shift schedules and which one equipment follows → Manager; materials (with classes, conversions, batching, shelf life and import) → Planner; processes, BOMs, capabilities → Process engineer; planning rates → Planner; reason codes and site settings → Manager; users → Administrator.
 
-**Permissions.** 22 codes, each in an area (Planning, Floor, Inventory, Configuration, Administration) for the screens. They are mirrored for the UI in `Pulaski.Contracts.Security.PermissionCodes`, and the API copies the catalog into `sec.permission` at every start, so a new permission can be given to roles at once: `schedule.plan`, `work_order.manage`, `work_order.close`, `rate.modify`, `job.execute`, `job.reopen`, `production.report`, `lot.receive`, `lot.move`, `lot.ship`, `lot.hold`, `inventory.correct`, `stock_count.manage`, `partial_batch.decide`, `materials.manage`, `processes.manage`, `units.manage`, `reasons.manage`, `equipment.manage`, `site_settings.manage`, `shifts.manage` (D-038), `security.manage` (users, roles and what each role may do).
+**Permissions.** 33 codes (11 views, D-039, and 22 changes), each in an area (Planning, Floor, Inventory, Configuration, Administration) for the screens. They are mirrored for the UI in `Pulaski.Contracts.Security.PermissionCodes`, and the API copies the catalog into `sec.permission` at every start, so a new permission can be given to roles at once: `schedule.plan`, `work_order.manage`, `work_order.close`, `rate.modify`, `job.execute`, `job.reopen`, `production.report`, `lot.receive`, `lot.move`, `lot.ship`, `lot.hold`, `inventory.correct`, `stock_count.manage`, `partial_batch.decide`, `materials.manage`, `processes.manage`, `units.manage`, `reasons.manage`, `equipment.manage`, `site_settings.manage`, `shifts.manage` (D-038), `security.manage` (users, roles and what each role may do).
 
 **Maintaining roles.**
 
@@ -661,7 +662,7 @@ Who owns the configuration: equipment, units → Administrator; shift schedules 
 
 **Events:** `pulaski.user.signed_in.v1`, `…sign_in_failed.v1`, `…password_changed.v1`, `…password_reset.v1`, `…created.v1`, `…updated.v1`, `…role_assigned.v1`, `…role_ended.v1`, on the user. Event actors are the signed-in user (local users by user name).
 
-**Not yet:** a role held everywhere other than the administrator; signing in through an identity provider; reads filtered by site (everyone sees every site); correcting reported production or consumption (no command exists yet, so the Auditor's "correct production values" waits for it); site settings screens (the API is guarded).
+**Not yet:** a role held everywhere other than the administrator; signing in through an identity provider; correcting reported production or consumption (no command exists yet, so the Auditor's "correct production values" waits for it); site settings screens (the API is guarded).
 
 ## Shift schedules (D-038, proposed)
 
@@ -688,6 +689,38 @@ A line's working time comes from the nearest equipment, the line itself first, t
 **API.** `GET /api/shift-schedules?siteId=`, `GET /api/shift-schedules/{id}`, `POST /api/shift-schedules`, `PUT /api/shift-schedules/{id}` (with its version), `POST /api/shift-schedules/preview` (works out a schedule, saved or not, for the next days; saves nothing), `PUT /api/equipment/{id}/calendar`. Events: `pulaski.shift_schedule.created.v1`, `pulaski.shift_schedule.updated.v1` (before and after), `pulaski.equipment.calendar_set.v1`.
 
 **Not yet:** crews and rotations of people; a one-off change to a single shift (an extra Saturday, a cancelled night) other than a calendar exception, which has no screen yet; reports, counts and OEE by shift; the Overview's strip by shift rather than a rolling 24 hours.
+
+## Seeing only what you may (D-039, proposed)
+
+Amends D-037, where every signed-in user could view everything. A user now sees only the screens, and the sites, their roles allow, and Pulaski doesn't advertise the rest: no menu entry, link or button for it.
+
+**View permissions.** One per screen, in the *Viewing* area of the catalog, given to roles like any other:
+
+| Permission | Screen |
+| --- | --- |
+| `overview.view` | Overview |
+| `work_orders.view` | Work orders |
+| `schedule.view` | Schedule |
+| `floor.view` | Floor and job pages |
+| `inventory.view` | Inventory, all its pages |
+| `equipment.view` | Equipment |
+| `materials.view` | Materials (with classes, capabilities and rates) |
+| `processes.view` | Processes and BOMs |
+| `units.view` | Units |
+| `reasons.view` | Reasons |
+| `shifts.view` | Shifts |
+
+Users, roles and permissions stay behind `security.manage`.
+
+**A change brings its views** (`Permissions.Implied`): whoever may change something may see where it is changed. For example `schedule.plan` brings the schedule and work orders; `processes.manage` brings processes and materials (capabilities are edited on the material page); `shifts.manage` brings shifts and equipment (a line's shifts are chosen there). The Permissions and Roles tabs show such a view ticked and locked.
+
+**Starting roles.** Administrator, Auditor and Manager see everything. Planner: Overview, Work orders, Schedule, Floor, Inventory, Materials, Processes. Supervisor and Operator: Overview, Floor, Inventory, Work orders. Quality: Overview, Floor, Inventory, Materials. Process engineer: Equipment, Materials, Processes, Units. Migration 0013 adds these to the starting roles; other roles gain nothing, so an administrator decides what they see.
+
+**The API checks every read.** Each GET endpoint needs one of its views, at the site the request is about (`.RequireAny(site, …)`). A list for one site needs the view there; one without a site is a request for every site and needs the view everywhere (`.RequireAnyAtSite`). Lookups that many screens need (the equipment tree, units and conversions, materials, classes, reason codes, processes and BOM lists) need only some view (`.RequireAnyView()`). Lists that span sites keep to the caller's sites (`Visible.At`): the equipment tree, work orders and their progress, processes, shift schedules and reason codes. A refusal is 403 with the view in words.
+
+**The UI.** Each page names the views that open it (`[RequiresView]`). The layout checks it once the user is known: a page the user may not see answers **Page not found** (so its feature isn't named), and someone whose roles allow no screen at all gets a page saying so, with a sign-out button. The start page is the Overview, or the first screen in the menu the user can see. The menu shows only the screens the user can see, and leaves out a group with none. Links to other screens (`ScreenLink`) show as plain text, or not at all for buttons, when the user can't open them; actions the user can't take (selecting work orders to move, an empty action menu) are left out.
+
+**Not yet:** the site chosen on a screen can be one where the user may see something else but not that screen; the API then refuses the data and the screen says so.
 
 ## Application architecture
 

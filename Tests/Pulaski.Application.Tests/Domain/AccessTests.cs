@@ -121,4 +121,39 @@ public class AccessTests
     [InlineData("correcthorse42", "jo", true)]
     public void Passwords_need_ten_characters_of_two_kinds_without_the_user_name(string password, string username, bool ok) =>
         Assert.Equal(ok, PasswordRules.Problem(password, username) is null);
+
+    [Fact]
+    public void A_change_brings_the_views_it_needs_but_no_others()
+    {
+        var engineer = new UserAccess(Guid.CreateVersion7(), "u", "U", "u", true, [new RoleGrant(Guid.CreateVersion7(), "x", "X", SiteA, [Permissions.Processes])]);
+
+        Assert.True(engineer.Can(Permissions.ProcessesView, SiteA));
+        Assert.True(engineer.Can(Permissions.MaterialsView, SiteA));
+        Assert.False(engineer.Can(Permissions.InventoryView, SiteA));
+        Assert.False(engineer.Can(Permissions.ProcessesView, SiteB));
+        Assert.True(engineer.CanViewAnything);
+        Assert.Equal([SiteA], engineer.SitesForAny([Permissions.MaterialsView, Permissions.FloorView]));
+        Assert.All(Permissions.Implied.Values.SelectMany(v => v), v => Assert.Contains(v, Permissions.Views));
+    }
+
+    [Fact]
+    public void Someone_whose_roles_allow_no_screen_sees_nothing()
+    {
+        var none = new UserAccess(Guid.CreateVersion7(), "u", "U", "u", true, [new RoleGrant(Guid.CreateVersion7(), "x", "X", SiteA, [Permissions.SiteSettings])]);
+
+        Assert.False(none.CanViewAnything);
+        Assert.True(User(true, (Roles.Administrator, null)).CanViewAnything);
+    }
+
+    [Theory]
+    [InlineData(Roles.Auditor, Permissions.ShiftsView, true)]
+    [InlineData(Roles.Planner, Permissions.EquipmentView, false)]
+    [InlineData(Roles.Planner, Permissions.ProcessesView, true)]
+    [InlineData(Roles.Operator, Permissions.WorkOrdersView, true)]
+    [InlineData(Roles.Operator, Permissions.ScheduleView, false)]
+    [InlineData(Roles.Quality, Permissions.MaterialsView, true)]
+    [InlineData(Roles.ProcessEngineer, Permissions.UnitsView, true)]
+    [InlineData(Roles.ProcessEngineer, Permissions.FloorView, false)]
+    public void The_starting_roles_see_what_was_agreed(string role, string view, bool expected) =>
+        Assert.Equal(expected, User(true, (role, SiteA)).Can(view, SiteA));
 }

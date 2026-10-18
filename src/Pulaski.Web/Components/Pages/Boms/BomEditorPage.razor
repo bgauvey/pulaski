@@ -1,4 +1,5 @@
 @page "/boms/{Id:guid}"
+@attribute [RequiresView(PermissionCodes.ProcessesView)]
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
 @inject CurrentUser User
@@ -67,7 +68,7 @@ else
             </div>
         </div>
         <div class="small pb-2">
-            <a href="units?material=@_bom.MaterialId">Unit conversions for @_bom.MaterialCode</a>
+            <ScreenLink Href="@($"units?material={_bom.MaterialId}")" Permission="@PermissionCodes.UnitsView">Unit conversions for @_bom.MaterialCode</ScreenLink>
             <span class="text-muted">· orders may use any unit that converts to this one</span>
         </div>
     </div>

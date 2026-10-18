@@ -1,4 +1,5 @@
 @page "/floor"
+@attribute [RequiresView(PermissionCodes.FloorView)]
 @implements IDisposable
 @using Pulaski.Web.Services.Execution
 @inject PulaskiApiClient Api
@@ -64,7 +65,7 @@ else if (_board.Count == 0)
 {
     <div class="empty-panel">
         <h2>No lines</h2>
-        <p class="text-muted mb-0">Add lines that run jobs on the <a href="equipment">Equipment</a> page.</p>
+        <p class="text-muted mb-0">Add lines that run jobs on the <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink> page.</p>
     </div>
 }
 else

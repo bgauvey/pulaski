@@ -1,4 +1,5 @@
 @page "/schedule"
+@attribute [RequiresView(PermissionCodes.ScheduleView)]
 @implements IDisposable
 @inject PulaskiApiClient Api
 @inject TimeProvider Time
@@ -72,7 +73,7 @@ else if (_controller.Board.Lines.Count == 0)
 {
     <div class="empty-panel">
         <h2>No schedulable lines</h2>
-        <p class="text-muted mb-0">Mark a work center as schedulable on the <a href="equipment">Equipment</a> page to plan work on it.</p>
+        <p class="text-muted mb-0">Mark a work center as schedulable on the <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink> page to plan work on it.</p>
     </div>
 }
 else

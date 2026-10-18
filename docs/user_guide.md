@@ -49,7 +49,7 @@ Recording what actually happens on the machines (running jobs, counts, downtime)
 
 Open Pulaski in a web browser at the address your administrator gives you (on a developer's machine it is `http://localhost:5090`). Pulaski works best in a current version of Chrome, Edge, Firefox or Safari, on a desktop or a tablet in landscape.
 
-Pulaski asks you to **sign in** with the user name and password your administrator gave you; the first time, you choose your own password. Everyone who signs in can look at every screen; your **roles** decide what you can change. See [Users, roles and signing in](#14-users-roles-and-signing-in).
+Pulaski asks you to **sign in** with the user name and password your administrator gave you; the first time, you choose your own password. Your **roles** decide which screens you see and what you can change on them. See [Users, roles and signing in](#14-users-roles-and-signing-in).
 
 ### The screen
 
@@ -1088,7 +1088,7 @@ A class's code can't change and a class is never deleted: switch it off instead.
 
 ## 14. Users, roles and signing in
 
-Everyone signs in to Pulaski. Everyone who signs in can look at every screen; what you can **change** depends on your **roles**. A role is a set of **permissions**, such as *Receive lots* or *Plan jobs*. An administrator decides what each role may do and gives each user their roles, each at a **site** (only Administrator is everywhere).
+Everyone signs in to Pulaski. Your **roles** decide what you **see** and what you can **change**: you see only the screens, and only the sites, your roles allow, and the menu shows nothing else. A role is a set of **permissions**, such as *See inventory*, *Receive lots* or *Plan jobs*. An administrator decides what each role may do and gives each user their roles, each at a **site** (only Administrator is everywhere).
 
 ### Sign in
 
@@ -1126,6 +1126,23 @@ Equipment and units belong to the Administrator. Someone with two roles can do w
 
 When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator.
 
+### What each role can see
+
+You see a screen, and its entry in the menu, only if one of your roles lets you see it at your site. A permission to change something includes seeing it: someone who may start jobs sees the Floor. A new Pulaski starts with these:
+
+| Role | Sees |
+| --- | --- |
+| **Administrator**, **Auditor**, **Manager** | Every screen (Users only for Administrator). |
+| **Planner** | Overview, Work orders, Schedule, Floor, Inventory, Materials, Processes and BOMs. |
+| **Supervisor**, **Operator** | Overview, Work orders (to look at), Floor, Inventory. |
+| **Quality** | Overview, Floor, Inventory, Materials. |
+| **Process engineer** | Equipment, Materials, Processes and BOMs, Units. |
+
+- **Start page.** After signing in you land on the Overview, or, if you can't see it, the first screen in the menu you can.
+- **A screen you can't see** isn't in the menu, links to it show as plain text and buttons for it are left out. Typing its address shows **Page not found**.
+- **No screens at all.** Someone whose roles let them see nothing lands on **Nothing to see here yet**, with a button to sign out. Ask an administrator for a role.
+- **Sites.** A role held at one site shows that site's data only: other sites' work orders, lots, lines and schedules aren't listed.
+
 ### Add a user (administrators)
 
 1. Open **Configure → Users** (the **Users** tab) and click **New user**.
@@ -1157,6 +1174,7 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 
 ### In detail
 
+- **Viewing permissions** are listed first on the Permissions tab, under *Viewing*: one per screen (Overview, Work orders, Schedule, Floor, Inventory, Equipment, Materials, Processes and BOMs, Units, Reasons, Shifts). A view a role gets with a change permission shows ticked and locked, with what it comes with when you point at it.
 - **Permissions belong to Pulaski; roles belong to you.** The list of permissions is fixed by the version of Pulaski you run, and grows when new screens need one. Roles, their names and which permissions they hold are yours to change. Administrator always holds every permission, including new ones.
 - **Changes to a role apply at once** to everyone who holds it, on their next click.
 - **Every user needs a role.** A new user comes with one, and a user's last role can't be taken away: add another first, or switch them off.
@@ -1210,7 +1228,7 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 - **Daylight saving:** shifts keep their clock times. A shift that would start in the hour the clocks skip starts when they have gone forward; a shift's length is real time, so a night shift is an hour longer or shorter on the night the clocks change.
 - **Hours a cycle** is the working time in one cycle, the sum of each shift's length times the days it runs.
 - **Calendar exceptions** (holidays, shutdowns) still take time out of the shifts, but have no screen yet.
-- **Who:** maintaining schedules, and choosing which one equipment follows, needs permission to maintain shift schedules (the Manager role has it to start with). Everyone can look.
+- **Who:** maintaining schedules, and choosing which one equipment follows, needs permission to maintain shift schedules (the Manager role has it to start with). Seeing them needs permission to see shift schedules, or to see equipment.
 
 ---
 
@@ -1304,10 +1322,10 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **The Overview** shows no machine state, counts, OEE, downtime, quality, lots or labor yet: those parts are hatched placeholders until the data exists. Its line strip is a rolling 24 hours rather than the current shift.
 - **Notes** can only be written when the order is created.
 - **Signing in through your company's identity provider** (Okta, Entra ID, AD FS, Keycloak) isn't built yet: users have Pulaski passwords, and an administrator resets forgotten ones (Pulaski sends no e-mail).
-- **Everyone sees every site.** Roles limit what you can change, and where, but not what you can look at.
 - **Reported production and consumption can't be corrected** by anyone yet, so the Auditor role can't do that part of its job; write a lot off or up instead.
-- **The schedule shows its buttons to everyone;** someone who can't plan sees them, and a click explains that planning needs permission instead of changing anything. Switched-off buttons elsewhere can look like ordinary ones.
+- **The schedule shows its buttons to everyone who can see it;** someone who can see the schedule but not plan sees them, and a click explains that planning needs permission instead of changing anything. Switched-off buttons elsewhere can look like ordinary ones.
 - **Only Administrator is held everywhere;** every role you create is held at a site.
+- **The site picker** on a screen lists every site where you can see something, not only the sites where you can see that screen; choosing one where you can't gives a "may not see this at this site" message.
 
 ---
 
