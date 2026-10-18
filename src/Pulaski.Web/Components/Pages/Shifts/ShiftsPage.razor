@@ -93,6 +93,7 @@
                         <th style="width: 10rem">Name</th>
                         <th style="width: 7rem">Starts</th>
                         <th style="width: 6rem">Hours</th>
+                        <th style="width: 8rem">Crew</th>
                         @for (var d = 0; d < edit.CycleDays; d++)
                         {
                             <th class="text-center shift-day">@ShiftView.DayLabel(d, edit.CycleDays, edit.CycleStart)</th>
@@ -108,6 +109,15 @@
                             <td><input class="form-control form-control-sm" maxlength="50" aria-label="Shift name" @bind="row.Name" /></td>
                             <td><input type="time" class="form-control form-control-sm" aria-label="Starts at" @bind="row.Start" @bind:after="PreviewAsync" /></td>
                             <td><input type="number" class="form-control form-control-sm" min="0.25" max="24" step="0.25" aria-label="Length in hours" @bind="row.Hours" @bind:after="PreviewAsync" /></td>
+                            <td>
+                                <select class="form-select form-select-sm" aria-label="Crew working shift @row.Code" @bind="row.Crew">
+                                    <option value="">No crew</option>
+                                    @foreach (var c in _crews.Where(c => c.IsActive || c.Code == row.Crew))
+                                    {
+                                        <option value="@c.Code">@c.Code</option>
+                                    }
+                                </select>
+                            </td>
                             @for (var d = 0; d < edit.CycleDays; d++)
                             {
                                 var day = d;
@@ -159,7 +169,7 @@
                     {
                         <li>
                             <span class="fw-semibold">@day.Key.ToString("ddd d MMM", CultureInfo.InvariantCulture)</span>
-                            @string.Join(" · ", day.Select(s => $"{s.Code} {s.Start:HH\\:mm}–{s.End:HH\\:mm}"))
+                            @string.Join(" · ", day.Select(s => $"{s.Code} {s.Start:HH\\:mm}–{s.End:HH\\:mm}{(s.Crew is { } crew ? $" ({crew})" : "")}"))
                         </li>
                     }
                     @if (_preview.Shifts.Count == 0)
@@ -236,6 +246,7 @@ else
 
 @code {
     private IReadOnlyList<ShiftScheduleDto>? _schedules;
+    private IReadOnlyList<CrewDto> _crews = [];
     private ScheduleEdit? _edit;
     private ShiftPreviewDto? _preview;
     private ApiException? _error;
@@ -269,6 +280,16 @@ else
         try
         {
             _schedules = await Api.ListShiftSchedulesAsync(site);
+
+            // Crews name who works each shift (D-040); seeing them needs the labor or shift views, so leave them out otherwise.
+            try
+            {
+                _crews = await Api.ListCrewsAsync(site);
+            }
+            catch (ApiException)
+            {
+                _crews = [];
+            }
         }
         catch (ApiException ex)
         {
@@ -491,6 +512,8 @@ else
 
         public HashSet<int> Days { get; init; } = [];
 
+        public string? Crew { get; set; }
+
         public static ShiftRow From(ShiftDto s) => new()
         {
             Code = s.Code,
@@ -498,6 +521,7 @@ else
             Start = TimeOnly.TryParseExact(s.Start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var t) ? t : new TimeOnly(6, 0),
             Hours = Math.Round(s.Minutes / 60m, 2),
             Days = [.. s.Days],
+            Crew = s.Crew,
         };
 
         public ShiftDto ToDto() => new()
@@ -507,6 +531,7 @@ else
             Start = Start.ToString("HH:mm", CultureInfo.InvariantCulture),
             Minutes = (int)Math.Round(Hours * 60),
             Days = [.. Days.Order()],
+            Crew = string.IsNullOrEmpty(Crew) ? null : Crew,
         };
     }
 }

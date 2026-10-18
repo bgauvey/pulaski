@@ -6,6 +6,7 @@ using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Inventory;
+using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.Materials;
 using Pulaski.Contracts.Processes;
 using Pulaski.Contracts.ReferenceData;
@@ -88,6 +89,68 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<VersionResponse> UpdateEquipmentAsync(Guid id, UpdateEquipmentRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{id}", request, ct);
+
+    // Labor (D-040)
+
+    public Task<IReadOnlyList<CrewDto>> ListCrewsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<CrewDto>>($"api/crews?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> CreateCrewAsync(CreateCrewRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/crews", request, ct);
+
+    public Task<VersionResponse> UpdateCrewAsync(Guid id, UpdateCrewRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/crews/{id}", request, ct);
+
+    public Task<IReadOnlyList<PersonDto>> ListPeopleAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<PersonDto>>($"api/people?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> CreatePersonAsync(CreatePersonRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/people", request, ct);
+
+    public Task<VersionResponse> UpdatePersonAsync(Guid id, UpdatePersonRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/people/{id}", request, ct);
+
+    public Task<MyLaborDto> GetMyLaborAsync(CancellationToken ct = default) => GetAsync<MyLaborDto>("api/labor/me", ct);
+
+    public Task<LaborResponse> ClockMeOnAsync(ClockOnRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, "api/labor/me/sessions", request, ct);
+
+    public Task<LaborResponse> ClockMeOffAsync(Guid sessionId, ClockOffRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, $"api/labor/me/sessions/{sessionId}/end", request, ct);
+
+    public Task<LaborResponse> ClockOnAsync(ClockOnRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, "api/labor/sessions", request, ct);
+
+    public Task<LaborResponse> ClockOffAsync(Guid sessionId, ClockOffRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, $"api/labor/sessions/{sessionId}/end", request, ct);
+
+    public Task<LaborResponse> UpdateLaborSessionAsync(Guid sessionId, UpdateLaborSessionRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Put, $"api/labor/sessions/{sessionId}", request, ct);
+
+    public Task<LaborResponse> CorrectLaborSessionAsync(Guid sessionId, CorrectLaborSessionRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, $"api/labor/sessions/{sessionId}/correct", request, ct);
+
+    public Task<LaborResponse> CheckInAsync(CheckInRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, "api/labor/check-in", request, ct);
+
+    public Task<LaborResponse> CheckOutAsync(CheckOutRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, "api/labor/check-out", request, ct);
+
+    public Task<IReadOnlyList<LineLaborDto>> ListLineLaborAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<LineLaborDto>>($"api/labor/sites/{siteId}/lines", ct);
+
+    public Task<IReadOnlyList<LaborShiftDto>> ListLaborShiftsAsync(Guid siteId, DateOnly date, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<LaborShiftDto>>($"api/labor/sites/{siteId}/shifts?date={date:yyyy-MM-dd}", ct);
+
+    public Task<ShiftLaborDto> GetShiftLaborAsync(Guid siteId, DateOnly date, Guid? scheduleId, string? shiftCode, CancellationToken ct = default) =>
+        GetAsync<ShiftLaborDto>(
+            $"api/labor/sites/{siteId}/shift?date={date:yyyy-MM-dd}" + (scheduleId is { } s ? $"&scheduleId={s}&shiftCode={Uri.EscapeDataString(shiftCode ?? "")}" : ""), ct);
+
+    public Task<LaborResponse> ApproveShiftAsync(Guid siteId, ApproveShiftRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, $"api/labor/sites/{siteId}/approvals", request, ct);
+
+    public Task<LaborReportDto> GetLaborReportAsync(Guid siteId, DateOnly from, DateOnly to, CancellationToken ct = default) =>
+        GetAsync<LaborReportDto>($"api/labor/sites/{siteId}/report?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}", ct);
 
     // Shift schedules (D-038)
 

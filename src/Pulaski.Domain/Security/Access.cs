@@ -19,6 +19,7 @@ public static class Permissions
     public const string UnitsView = "units.view";
     public const string ReasonsView = "reasons.view";
     public const string ShiftsView = "shifts.view";
+    public const string LaborView = "labor.view";
 
     // Changing (D-037).
     public const string SchedulePlan = "schedule.plan";
@@ -42,6 +43,10 @@ public static class Permissions
     public const string Equipment = "equipment.manage";
     public const string SiteSettings = "site_settings.manage";
     public const string Shifts = "shifts.manage";
+    public const string LaborRecordOwn = "labor.record_own";
+    public const string LaborRecord = "labor.record";
+    public const string LaborApprove = "labor.approve";
+    public const string People = "people.manage";
     public const string Security = "security.manage";
 
     /// <summary>Every permission, in the order screens list them, with its area and what it allows.</summary>
@@ -58,6 +63,7 @@ public static class Permissions
         new(UnitsView, "Viewing", "See units and material conversions"),
         new(ReasonsView, "Viewing", "See reason codes"),
         new(ShiftsView, "Viewing", "See shift schedules"),
+        new(LaborView, "Viewing", "See labor: who is on, shift review and labor reports"),
         new(SchedulePlan, "Planning", "Plan jobs: create, sequence, pin, assign to lines and cancel them"),
         new(WorkOrderManage, "Planning", "Create work orders, dispatch, un-dispatch and firm them"),
         new(WorkOrderClose, "Planning", "Cancel and close work orders"),
@@ -66,6 +72,9 @@ public static class Permissions
         new(JobReopen, "Floor", "Reopen a completed job"),
         new(ProductionReport, "Floor", "Report production and consumption into a job's runs"),
         new(PartialBatchDecide, "Floor", "Approve or reject partial batches (not one's own)"),
+        new(LaborRecordOwn, "Labor", "Clock yourself on and off lines and jobs"),
+        new(LaborRecord, "Labor", "Record labor for others and check crews onto lines"),
+        new(LaborApprove, "Labor", "Approve a shift's labor and correct approved labor"),
         new(LotReceive, "Inventory", "Receive lots"),
         new(LotMove, "Inventory", "Move lots between locations"),
         new(LotShip, "Inventory", "Ship lots"),
@@ -79,6 +88,7 @@ public static class Permissions
         new(Equipment, "Configuration", "Maintain equipment: sites, lines, locations"),
         new(SiteSettings, "Configuration", "Set a site's changeover mode and reporting tolerances"),
         new(Shifts, "Configuration", "Maintain shift schedules and choose which one equipment follows"),
+        new(People, "Configuration", "Maintain people and crews"),
         new(Security, "Administration", "Maintain users, roles and what each role may do"),
     ];
 
@@ -117,6 +127,11 @@ public static class Permissions
         [Reasons] = [ReasonsView],
         [Equipment] = [EquipmentView],
         [Shifts] = [ShiftsView, EquipmentView],
+        // Clocking on is done from the floor; recording, approving and maintaining people from the Labor screens.
+        [LaborRecordOwn] = [FloorView],
+        [LaborRecord] = [LaborView, FloorView],
+        [LaborApprove] = [LaborView],
+        [People] = [LaborView],
     };
 }
 
@@ -156,19 +171,21 @@ public static class Roles
         new(Supervisor, "Supervisor", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
              Permissions.JobExecute, Permissions.JobReopen, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove,
-             Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide],
-            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches. Doesn't correct inventory."),
+             Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide,
+             Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove],
+            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor. Doesn't correct inventory."),
         new(Operator, "Operator", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
-             Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove],
-            "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots."),
+             Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove, Permissions.LaborRecordOwn],
+            "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off."),
         new(Quality, "Quality", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView,
              Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide],
             "Holds and releases lots, corrects inventory and decides on partial batches."),
         new(Manager, "Manager", false,
-            [.. Permissions.Views, Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts],
-            "Views everything; reopens jobs, closes work orders, maintains reason codes, shift schedules and the site's settings."),
+            [.. Permissions.Views, Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts,
+             Permissions.People, Permissions.LaborApprove],
+            "Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people and the site's settings."),
         new(Auditor, "Auditor", false,
             [.. Permissions.Views, Permissions.InventoryCorrect, Permissions.StockCount],
             "Views everything and corrects inventory; counts stock. Doesn't plan or run jobs."),

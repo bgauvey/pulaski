@@ -4,12 +4,13 @@ namespace Pulaski.Domain.Shifts;
 
 /// <summary>
 /// One shift of a schedule (D-038): it starts at <see cref="Start"/> in the site's time zone, lasts
-/// <see cref="Length"/>, and runs on the listed days of the cycle (0 is the cycle's first day).
+/// <see cref="Length"/>, and runs on the listed days of the cycle (0 is the cycle's first day). <see cref="Crew"/> is the
+/// code of the crew that works it (D-040); a rotation is several shifts at the same time on different days.
 /// </summary>
-public sealed record ShiftDefinition(string Code, string Name, TimeOnly Start, TimeSpan Length, IReadOnlyList<int> Days);
+public sealed record ShiftDefinition(string Code, string Name, TimeOnly Start, TimeSpan Length, IReadOnlyList<int> Days, string? Crew = null);
 
-/// <summary>A shift on the calendar: when it runs and the production day it counts towards (the day it starts on).</summary>
-public sealed record ShiftOccurrence(string Code, string Name, DateOnly ProductionDate, DateTimeOffset Start, DateTimeOffset End);
+/// <summary>A shift on the calendar: when it runs, the production day it counts towards (the day it starts on) and its crew.</summary>
+public sealed record ShiftOccurrence(string Code, string Name, DateOnly ProductionDate, DateTimeOffset Start, DateTimeOffset End, string? Crew = null);
 
 /// <summary>How equipment gets its working time (D-038).</summary>
 public static class CalendarModes
@@ -72,12 +73,22 @@ public sealed record ShiftSchedule(string Code, string Name, int CycleDays, Date
                 var end = start + shift.Length;
                 if (end > from && start < to)
                 {
-                    result.Add(new ShiftOccurrence(shift.Code, shift.Name, date, start, end));
+                    result.Add(new ShiftOccurrence(shift.Code, shift.Name, date, start, end, shift.Crew));
                 }
             }
         }
 
         return [.. result.OrderBy(o => o.Start)];
+    }
+
+    /// <summary>
+    /// The shift that work starting at <paramref name="at"/> belongs to (D-040): the one running then, or the one starting
+    /// within <paramref name="lead"/> (someone clocking on before the shift starts). Null between shifts.
+    /// </summary>
+    public ShiftOccurrence? ShiftAt(TimeZoneInfo zone, DateTimeOffset at, TimeSpan lead)
+    {
+        var near = Expand(zone, at, at + lead + TimeSpan.FromTicks(1));
+        return near.FirstOrDefault(o => o.Start <= at && o.End > at) ?? near.FirstOrDefault(o => o.Start > at && o.Start <= at + lead);
     }
 
     /// <returns>What is wrong with the schedule, in words; empty when it can be saved.</returns>

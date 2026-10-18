@@ -1,0 +1,297 @@
+@page "/people"
+@attribute [RequiresView(PermissionCodes.People, PermissionCodes.LaborView)]
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+
+@* People whose time is recorded and the crews they work in (D-040). A person needn't sign in: a supervisor checks them
+   onto a line. Linking one to a Pulaski user lets them clock themselves on. *@
+<PageTitle>People · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">People and crews</h1>
+        <p class="text-muted mb-0">
+            Everyone whose time is recorded, and the crews they work in. A shift schedule names the crew on each shift, so a supervisor can check the
+            whole crew onto a line at once. People don't need a Pulaski sign-in; link one to let them clock themselves on.
+        </p>
+    </div>
+    @if (Sites.Sites.Count > 1)
+    {
+        <div class="inv-head-tools">
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        </div>
+    }
+</div>
+
+<nav class="inv-tabs" aria-label="People and crews">
+    <button type="button" class="inv-tab btn btn-link @(_tab == "people" ? "active" : "")" @onclick="@(() => _tab = "people")">People <span class="small text-muted">@(_people?.Count(p => p.IsActive) ?? 0)</span></button>
+    <button type="button" class="inv-tab btn btn-link @(_tab == "crews" ? "active" : "")" @onclick="@(() => _tab = "crews")">Crews <span class="small text-muted">@(_crews?.Count(c => c.IsActive) ?? 0)</span></button>
+</nav>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.People" What="maintain people and crews" SiteId="Sites.SiteId" />
+
+@if (_people is null || _crews is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_tab == "people")
+{
+    @if (CanManage)
+    {
+        <form class="inv-toolbar" @onsubmit="AddPersonAsync" @onsubmit:preventDefault>
+            <input class="form-control" style="width: 9rem" maxlength="50" placeholder="Employee no." aria-label="Employee number" @bind="_newNumber" @bind:event="oninput" />
+            <input class="form-control inv-grow" maxlength="200" placeholder="Name" aria-label="Name" @bind="_newName" @bind:event="oninput" />
+            <select class="form-select w-auto" aria-label="Crew" @bind="_newCrewId">
+                <option value="">No crew</option>
+                @foreach (var c in _crews.Where(c => c.IsActive))
+                {
+                    <option value="@c.Id">@c.Code · @c.Name</option>
+                }
+            </select>
+            <input class="form-control" style="width: 11rem" maxlength="100" placeholder="User name (optional)" aria-label="Pulaski user name" @bind="_newUsername" />
+            <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_newNumber) || string.IsNullOrWhiteSpace(_newName))">Add person</button>
+        </form>
+    }
+
+    @if (_people.Count == 0)
+    {
+        <div class="empty-panel"><p class="text-muted mb-0">No people at @(Sites.Site?.Code ?? "this site") yet.</p></div>
+    }
+    else
+    {
+        <fieldset class="view-only-scope" disabled="@(!CanManage)">
+            <div class="table-panel">
+                <table class="table align-middle">
+                    <thead><tr><th>Employee no.</th><th>Name</th><th>Crew</th><th>Signs in as</th><th>Active</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _people)
+                        {
+                            var edit = PersonEdit(p);
+                            <tr @key="p.Id" class="@(p.IsActive ? "" : "text-muted")">
+                                <td class="fw-semibold">@p.EmployeeNumber</td>
+                                <td><input class="form-control form-control-sm" maxlength="200" aria-label="Name of @p.EmployeeNumber" value="@edit.DisplayName" @onchange="e => ChangePerson(p, x => x with { DisplayName = Text(e) })" /></td>
+                                <td>
+                                    <select class="form-select form-select-sm" aria-label="Crew of @p.DisplayName" value="@(edit.CrewId?.ToString() ?? "")"
+                                            @onchange="e => ChangePerson(p, x => x with { CrewId = Guid.TryParse(Text(e), out var id) ? id : null })">
+                                        <option value="">No crew</option>
+                                        @foreach (var c in _crews.Where(c => c.IsActive || c.Id == p.CrewId))
+                                        {
+                                            <option value="@c.Id">@c.Code · @c.Name</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td><input class="form-control form-control-sm" maxlength="100" placeholder="No sign-in" aria-label="User name of @p.DisplayName" value="@edit.Username" @onchange="e => ChangePerson(p, x => x with { Username = NullIfBlank(Text(e)) })" /></td>
+                                <td><input class="form-check-input" type="checkbox" aria-label="@p.DisplayName active" checked="@edit.IsActive" @onchange="e => ChangePerson(p, x => x with { IsActive = e.Value is true })" /></td>
+                                <td class="text-end">
+                                    @if (_personEdits.ContainsKey(p.Id))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-primary" disabled="@_saving" @onclick="() => SavePersonAsync(p)">Save</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _personEdits.Remove(p.Id)">Undo</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </fieldset>
+    }
+}
+else
+{
+    @if (CanManage)
+    {
+        <form class="inv-toolbar" @onsubmit="AddCrewAsync" @onsubmit:preventDefault>
+            <input class="form-control" style="width: 8rem" maxlength="20" placeholder="CODE" aria-label="Crew code" @bind="_crewCode" @bind:event="oninput" />
+            <input class="form-control inv-grow" maxlength="100" placeholder="Name, e.g. Red crew" aria-label="Crew name" @bind="_crewName" @bind:event="oninput" />
+            <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_crewCode) || string.IsNullOrWhiteSpace(_crewName))">Add crew</button>
+        </form>
+    }
+
+    @if (_crews.Count == 0)
+    {
+        <div class="empty-panel"><p class="text-muted mb-0">No crews yet. Add one, then name it on the shifts it works under Configure → Shifts.</p></div>
+    }
+    else
+    {
+        <fieldset class="view-only-scope" disabled="@(!CanManage)">
+            <div class="table-panel">
+                <table class="table align-middle">
+                    <thead><tr><th>Code</th><th>Name</th><th class="inv-num">People</th><th>Active</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _crews)
+                        {
+                            var edit = CrewEdit(c);
+                            <tr @key="c.Id" class="@(c.IsActive ? "" : "text-muted")">
+                                <td class="fw-semibold">@c.Code</td>
+                                <td><input class="form-control form-control-sm" maxlength="100" aria-label="Name of @c.Code" value="@edit.Name" @onchange="e => ChangeCrew(c, x => x with { Name = Text(e) })" /></td>
+                                <td class="inv-num">@c.Members</td>
+                                <td><input class="form-check-input" type="checkbox" aria-label="@c.Code active" checked="@edit.IsActive" @onchange="e => ChangeCrew(c, x => x with { IsActive = e.Value is true })" /></td>
+                                <td class="text-end">
+                                    @if (_crewEdits.ContainsKey(c.Id))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-primary" disabled="@_saving" @onclick="() => SaveCrewAsync(c)">Save</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _crewEdits.Remove(c.Id)">Undo</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </fieldset>
+    }
+}
+
+@code {
+    private string _tab = "people";
+    private IReadOnlyList<PersonDto>? _people;
+    private IReadOnlyList<CrewDto>? _crews;
+    private readonly Dictionary<Guid, PersonDto> _personEdits = [];
+    private readonly Dictionary<Guid, CrewDto> _crewEdits = [];
+    private ApiException? _error;
+    private bool _saving;
+    private string? _newNumber;
+    private string? _newName;
+    private Guid? _newCrewId;
+    private string? _newUsername;
+    private string? _crewCode;
+    private string? _crewName;
+
+    private bool CanManage => User.Can(PermissionCodes.People, Sites.SiteId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            (_people, _crews) = ([], []);
+            return;
+        }
+
+        try
+        {
+            _crews = await Api.ListCrewsAsync(site);
+            _people = await Api.ListPeopleAsync(site);
+            _personEdits.Clear();
+            _crewEdits.Clear();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private static string Text(ChangeEventArgs e) => e.Value?.ToString() ?? "";
+
+    private static string? NullIfBlank(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private PersonDto PersonEdit(PersonDto p) => _personEdits.GetValueOrDefault(p.Id) ?? p;
+
+    private CrewDto CrewEdit(CrewDto c) => _crewEdits.GetValueOrDefault(c.Id) ?? c;
+
+    private void ChangePerson(PersonDto p, Func<PersonDto, PersonDto> apply)
+    {
+        var changed = apply(PersonEdit(p));
+        if (changed == p)
+        {
+            _personEdits.Remove(p.Id);
+        }
+        else
+        {
+            _personEdits[p.Id] = changed;
+        }
+    }
+
+    private void ChangeCrew(CrewDto c, Func<CrewDto, CrewDto> apply)
+    {
+        var changed = apply(CrewEdit(c));
+        if (changed == c)
+        {
+            _crewEdits.Remove(c.Id);
+        }
+        else
+        {
+            _crewEdits[c.Id] = changed;
+        }
+    }
+
+    private Task AddPersonAsync() => RunAsync(async () =>
+    {
+        await Api.CreatePersonAsync(new CreatePersonRequest
+        {
+            SiteId = Sites.SiteId!.Value,
+            EmployeeNumber = _newNumber!,
+            DisplayName = _newName!,
+            CrewId = _newCrewId,
+            Username = NullIfBlank(_newUsername ?? ""),
+        });
+        (_newNumber, _newName, _newUsername) = (null, null, null);
+    });
+
+    private Task SavePersonAsync(PersonDto p) => RunAsync(() =>
+    {
+        var edit = PersonEdit(p);
+        return Api.UpdatePersonAsync(p.Id, new UpdatePersonRequest { Version = p.Version, DisplayName = edit.DisplayName, CrewId = edit.CrewId, Username = edit.Username, IsActive = edit.IsActive });
+    });
+
+    private Task AddCrewAsync() => RunAsync(async () =>
+    {
+        await Api.CreateCrewAsync(new CreateCrewRequest { SiteId = Sites.SiteId!.Value, Code = _crewCode!, Name = _crewName! });
+        (_crewCode, _crewName) = (null, null);
+    });
+
+    private Task SaveCrewAsync(CrewDto c) => RunAsync(() =>
+    {
+        var edit = CrewEdit(c);
+        return Api.UpdateCrewAsync(c.Id, new UpdateCrewRequest { Version = c.Version, Name = edit.Name, IsActive = edit.IsActive });
+    });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

@@ -17,10 +17,11 @@ public static class PermissionCodes
     public const string UnitsView = "units.view";
     public const string ReasonsView = "reasons.view";
     public const string ShiftsView = "shifts.view";
+    public const string LaborView = "labor.view";
 
     /// <summary>Every view permission (D-039).</summary>
     public static IReadOnlyList<string> Views { get; } =
-        [OverviewView, WorkOrdersView, ScheduleView, FloorView, InventoryView, EquipmentView, MaterialsView, ProcessesView, UnitsView, ReasonsView, ShiftsView];
+        [OverviewView, WorkOrdersView, ScheduleView, FloorView, InventoryView, EquipmentView, MaterialsView, ProcessesView, UnitsView, ReasonsView, ShiftsView, LaborView];
     public const string SchedulePlan = "schedule.plan";
     public const string WorkOrderManage = "work_order.manage";
     public const string WorkOrderClose = "work_order.close";
@@ -42,5 +43,9 @@ public static class PermissionCodes
     public const string Equipment = "equipment.manage";
     public const string SiteSettings = "site_settings.manage";
     public const string Shifts = "shifts.manage";
+    public const string LaborRecordOwn = "labor.record_own";
+    public const string LaborRecord = "labor.record";
+    public const string LaborApprove = "labor.approve";
+    public const string People = "people.manage";
     public const string Security = "security.manage";
 }

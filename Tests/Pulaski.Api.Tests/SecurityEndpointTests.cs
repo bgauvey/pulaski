@@ -259,4 +259,31 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
         Assert.Equal(HttpStatusCode.Forbidden, (await blind.GetAsync(new Uri("/api/equipment", UriKind.Relative))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await blind.GetAsync(new Uri("/api/me", UriKind.Relative))).StatusCode);
     }
+
+    [Fact]
+    public async Task Operators_clock_themselves_supervisors_record_for_others_and_planners_see_no_labor()
+    {
+        var site = Guid.CreateVersion7();
+        factory.Stores.Labor.AddSite(site);
+        var line = factory.Stores.Labor.AddLine(site, "EXT-01");
+        factory.Stores.Security.SetSite(SiteOf.Equipment, line, site);
+        factory.Stores.Security.SetSite(SiteOf.Equipment, site, site);
+        var someone = factory.Stores.Labor.AddPerson(site, "Pat");
+        var onLine = new Pulaski.Contracts.Labor.ClockOnRequest { PersonId = someone, EquipmentId = line };
+
+        var op = await factory.CreateClientAsAsync(Roles.Operator, site);
+        Assert.Equal(HttpStatusCode.Forbidden, (await op.PostAsJsonAsync("/api/labor/sessions", onLine)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await op.GetAsync(new Uri($"/api/labor/sites/{site}/report?from=2026-10-01&to=2026-10-07", UriKind.Relative))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await op.GetAsync(new Uri($"/api/labor/sites/{site}/lines", UriKind.Relative))).StatusCode);
+        // Not set up as a person, so they can't clock on yet, but they may try.
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await op.PostAsJsonAsync("/api/labor/me/sessions", new Pulaski.Contracts.Labor.ClockOnRequest { EquipmentId = line })).StatusCode);
+
+        var supervisor = await factory.CreateClientAsAsync(Roles.Supervisor, site);
+        Assert.Equal(HttpStatusCode.OK, (await supervisor.PostAsJsonAsync("/api/labor/sessions", onLine)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await supervisor.GetAsync(new Uri($"/api/labor/sites/{site}/report?from=2026-10-01&to=2026-10-07", UriKind.Relative))).StatusCode);
+
+        var planner = await factory.CreateClientAsAsync(Roles.Planner, site);
+        Assert.Equal(HttpStatusCode.Forbidden, (await planner.GetAsync(new Uri($"/api/people?siteId={site}", UriKind.Relative))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await planner.PostAsJsonAsync("/api/crews", new Pulaski.Contracts.Labor.CreateCrewRequest { SiteId = site, Code = "R", Name = "Red" })).StatusCode);
+    }
 }

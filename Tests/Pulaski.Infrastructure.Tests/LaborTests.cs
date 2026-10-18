@@ -1,0 +1,89 @@
+using Dapper;
+using Microsoft.Extensions.DependencyInjection;
+using Pulaski.Application.Abstractions;
+using Pulaski.Application.EquipmentModel;
+using Pulaski.Application.Errors;
+using Pulaski.Application.Labor;
+using Pulaski.Application.Shifts;
+using Pulaski.Contracts.Common;
+using Pulaski.Contracts.EquipmentModel;
+using Pulaski.Contracts.Labor;
+using Pulaski.Contracts.Shifts;
+using Pulaski.Domain;
+using Pulaski.Domain.Labor;
+using Pulaski.Domain.Shifts;
+
+namespace Pulaski.Infrastructure.Tests;
+
+/// <summary>Crews, people and labor end to end (D-040): real SQL, as the application login.</summary>
+[Collection(DatabaseTests.Name)]
+public sealed class LaborTests(DatabaseFixture db)
+{
+    private readonly string _s = Guid.NewGuid().ToString("N")[..6];
+
+    private async Task<TResult> QueryAsync<TQuery, TResult>(TQuery query)
+        where TQuery : IQuery<TResult>
+    {
+        await using var scope = db.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IQueryHandler<TQuery, TResult>>().HandleAsync(query, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task A_crew_on_shift_is_checked_in_its_time_is_approved_and_corrected()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "LENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "LS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse line = await db.SendAsync(new CreateEquipmentCommand(site.Id, "LL-" + _s, "Line", null, "work_center", "production_line", true, true, false, null));
+
+        CreatedResponse red = await db.SendAsync(new CreateCrewCommand(site.Id, "red", "Red crew"));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new CreateCrewCommand(site.Id, "RED", "Again")));
+        CreatedResponse ann = await db.SendAsync(new CreatePersonCommand(site.Id, "100-" + _s, "Ann", red.Id, null));
+        CreatedResponse bob = await db.SendAsync(new CreatePersonCommand(site.Id, "101-" + _s, "Bob", red.Id, null));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CreatePersonCommand(site.Id, "102-" + _s, "Cy", null, "no-such-user")));
+
+        // A day shift worked by RED, every day; the site follows it.
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        CreatedResponse schedule = await db.SendAsync(new CreateShiftScheduleCommand(site.Id, "DAY", "Days", null, 1, today.AddDays(-10),
+            [new ShiftDto { Code = "D", Name = "Day", Start = "00:00", Minutes = 1440, Days = [0], Crew = "RED" }]));
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new CreateShiftScheduleCommand(site.Id, "BAD", "Bad", null, 1, today,
+            [new ShiftDto { Code = "D", Start = "00:00", Minutes = 600, Days = [0], Crew = "NOPE" }])));
+        var siteVersion = (await QueryAsync<GetEquipmentQuery, EquipmentDto>(new GetEquipmentQuery(site.Id))).Version;
+        await db.SendAsync(new SetEquipmentCalendarCommand(site.Id, siteVersion, CalendarModes.Schedule, schedule.Id));
+
+        var crews = await QueryAsync<ListCrewsQuery, IReadOnlyList<CrewDto>>(new ListCrewsQuery(site.Id));
+        Assert.Equal(("RED", 2), (Assert.Single(crews).Code, crews[0].Members));
+
+        // Yesterday's shift: checked in at 01:00, one out at 05:00; the line shows today's shift and crew.
+        var yesterday = new DateTimeOffset(today.AddDays(-1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var checkIn = await db.SendAsync(new CheckInCommand(line.Id, [ann.Id, bob.Id], yesterday.AddHours(1)));
+        Assert.Equal("Checked 2 people in.", checkIn.Notes[0]);
+        var lines = await QueryAsync<ListLineLaborQuery, IReadOnlyList<LineLaborDto>>(new ListLineLaborQuery(site.Id));
+        var onLine = Assert.Single(lines);
+        Assert.Equal(("D", "RED", "Red crew", 2), (onLine.Shift!.ShiftCode, onLine.Shift.CrewCode, onLine.Shift.CrewName, onLine.Sessions.Count));
+        var bobs = onLine.Sessions.Single(s => s.PersonId == bob.Id);
+        await db.SendAsync(new ClockOffCommand(bobs.Id, bobs.Version, yesterday.AddHours(5), OwnOnly: false));
+
+        var key = new ShiftKey(site.Id, today.AddDays(-1), schedule.Id, "D");
+        var shifts = await QueryAsync<ListLaborShiftsQuery, IReadOnlyList<LaborShiftDto>>(new ListLaborShiftsQuery(site.Id, today.AddDays(-1)));
+        var shift = Assert.Single(shifts);
+        Assert.Equal(("D", "RED", 2, 1, false), (shift.ShiftCode, shift.CrewCode, shift.Sessions, shift.OpenSessions, shift.IsApproved));
+
+        // Approval ends Ann's open time when the shift ended (midnight) and locks the shift.
+        var approved = await db.SendAsync(new ApproveShiftCommand(key, "OK"));
+        Assert.Single(approved.Notes);
+        var review = await QueryAsync<GetShiftLaborQuery, ShiftLaborDto>(new GetShiftLaborQuery(key));
+        var anns = review.Sessions.Single(s => s.PersonId == ann.Id);
+        Assert.Equal((yesterday.AddDays(1), true, 23m), (anns.EndedAt, anns.IsApproved, anns.Hours));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new ApproveShiftCommand(key, null)));
+
+        // A correction replaces Bob's session; the report counts the correction.
+        await db.SendAsync(new CorrectLaborSessionCommand(bobs.Id, false, line.Id, null, LaborTypes.Direct, null, yesterday.AddHours(1), yesterday.AddHours(7), 100, "Stayed till 07:00"));
+        var report = await QueryAsync<GetLaborReportQuery, LaborReportDto>(new GetLaborReportQuery(site.Id, today.AddDays(-1), today.AddDays(-1)));
+        Assert.Equal(6m, report.People.Single(p => p.PersonId == bob.Id).TotalHours);
+        Assert.Equal(23m + 6m, Assert.Single(report.Shifts).Hours);
+
+        await using var connection = await db.AdminDataSource.OpenConnectionAsync();
+        Assert.Equal(3, await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM core.labor_session WHERE site_id = @Id", new { site.Id }));
+        Assert.Equal(1, await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM core.labor_approval WHERE site_id = @Id", new { site.Id }));
+    }
+}

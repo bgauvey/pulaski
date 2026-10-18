@@ -5,6 +5,7 @@ using Pulaski.Application.Boms;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Execution;
 using Pulaski.Application.Inventory;
+using Pulaski.Application.Labor;
 using Pulaski.Application.Materials;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
@@ -59,6 +60,8 @@ public sealed class InMemoryStores
 
     public InMemoryShifts Shifts { get; } = new();
 
+    public InMemoryLabor Labor { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -91,6 +94,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IPasswordHasher>();
         services.RemoveAll<IShiftReadStore>();
         services.RemoveAll<IShiftRepository>();
+        services.RemoveAll<ILaborReadStore>();
+        services.RemoveAll<ILaborRepository>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -121,6 +126,8 @@ public sealed class InMemoryStores
         services.AddSingleton<IPasswordHasher>(new PlainPasswordHasher());
         services.AddSingleton<IShiftReadStore>(Shifts);
         services.AddSingleton<IShiftRepository>(Shifts);
+        services.AddSingleton<ILaborReadStore>(Labor);
+        services.AddSingleton<ILaborRepository>(Labor);
         return services;
     }
 }
