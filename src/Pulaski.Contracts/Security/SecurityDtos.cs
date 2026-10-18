@@ -53,19 +53,53 @@ public sealed record ChangePasswordRequest
     public string NewPassword { get; init; } = "";
 }
 
-/// <summary>A role and what it may do.</summary>
+/// <summary>A role and what it may do (D-037). Roles live in the database; an administrator maintains them.</summary>
 public sealed record RoleDto
 {
+    public required Guid Id { get; init; }
     public required string Code { get; init; }
     public required string Name { get; init; }
-    public required string Description { get; init; }
+    public string Description { get; init; } = "";
 
-    /// <summary>Held everywhere (the administrator) rather than per site.</summary>
+    /// <summary>Held everywhere rather than per site: only the administrator.</summary>
     public bool IsGlobal { get; init; }
+
+    /// <summary>The administrator: holds every permission and can't be changed.</summary>
+    public bool IsLocked { get; init; }
+    public bool IsActive { get; init; } = true;
+    public IReadOnlyList<string> Permissions { get; init; } = [];
+
+    /// <summary>How many users hold the role now.</summary>
+    public int Holders { get; init; }
+    public long Version { get; init; }
+}
+
+/// <summary>A permission the code checks, for the Permissions and Roles screens.</summary>
+public sealed record PermissionDto(string Code, string Area, string Description);
+
+public sealed record CreateRoleRequest
+{
+    /// <summary>Lower-case letters, digits and _; fixed once created.</summary>
+    public string Code { get; init; } = "";
+    public string Name { get; init; } = "";
+    public string? Description { get; init; }
     public IReadOnlyList<string> Permissions { get; init; } = [];
 }
 
-public sealed record PermissionDto(string Code, string Description);
+public sealed record UpdateRoleRequest
+{
+    public long Version { get; init; }
+    public string Name { get; init; } = "";
+    public string? Description { get; init; }
+    public bool IsActive { get; init; } = true;
+    public IReadOnlyList<string> Permissions { get; init; } = [];
+}
+
+/// <summary>Gives a role one permission, or takes it away (the Permissions screen).</summary>
+public sealed record SetRolePermissionRequest
+{
+    public bool Granted { get; init; }
+}
 
 /// <summary>A user as the Users screen lists them.</summary>
 public sealed record UserDto

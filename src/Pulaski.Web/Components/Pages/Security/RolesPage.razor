@@ -1,0 +1,273 @@
+@page "/roles"
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* Roles an administrator maintains (D-037): a name, a description and the permissions it allows. Every role but
+   Administrator is held at a site; Administrator holds everything and can't be changed. *@
+<PageTitle>Roles · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Roles</h1>
+        <p class="text-muted mb-0">
+            A role is a set of permissions you give to users at a site. Change a role here, or tick permissions role by role on
+            <a href="permissions">Permissions</a>. A change applies to everyone who holds the role, straight away.
+        </p>
+    </div>
+    @if (CanManage)
+    {
+        <div class="inv-head-tools">
+            <button type="button" class="btn btn-primary" @onclick="StartNew">New role</button>
+        </div>
+    }
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Security" What="maintain roles" />
+
+@if (_message is { } message)
+{
+    <div class="alert alert-success d-flex align-items-center gap-2" role="status">
+        <span>@message</span>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">Dismiss</button>
+    </div>
+}
+
+@if (_roles is null || _permissions is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    @if (_edit is { } edit)
+    {
+        <form class="inv-facts mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+            <h2 class="h6">@(edit.IsNew ? "New role" : $"Change {edit.OriginalName}")</h2>
+            <div class="row g-2">
+                <div class="col-sm-3">
+                    <label class="form-label small" for="role-code">Code</label>
+                    @if (edit.IsNew)
+                    {
+                        <input id="role-code" class="form-control" maxlength="50" placeholder="e.g. line_lead" @bind="edit.Code" @bind:event="oninput" />
+                        <div class="form-text">Lower-case letters, digits and _. It can't change later.</div>
+                    }
+                    else
+                    {
+                        <input id="role-code" class="form-control" value="@edit.Code" disabled />
+                    }
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label small" for="role-name">Name</label>
+                    <input id="role-name" class="form-control" maxlength="100" placeholder="e.g. Line lead" @bind="edit.Name" @bind:event="oninput" />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label small" for="role-description">What it's for (optional)</label>
+                    <input id="role-description" class="form-control" maxlength="500" @bind="edit.Description" />
+                </div>
+                @if (!edit.IsNew)
+                {
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="role-active" @bind="edit.IsActive" />
+                            <label class="form-check-label small" for="role-active">
+                                Active: can be given to users. A role someone holds can't be switched off.
+                            </label>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <h3 class="h6 mt-3">May change</h3>
+            <div class="role-permissions">
+                @foreach (var area in _permissions.GroupBy(p => p.Area))
+                {
+                    <fieldset class="role-permission-area">
+                        <legend class="small fw-semibold">@area.Key</legend>
+                        @foreach (var p in area)
+                        {
+                            <div class="form-check" @key="p.Code">
+                                <input class="form-check-input" type="checkbox" id="perm-@p.Code" checked="@edit.Permissions.Contains(p.Code)"
+                                       @onchange="e => Toggle(edit, p.Code, e.Value is true)" />
+                                <label class="form-check-label small" for="perm-@p.Code">@p.Description</label>
+                            </div>
+                        }
+                    </fieldset>
+                }
+            </div>
+
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-primary" disabled="@(_saving || !CanSave(edit))">@(edit.IsNew ? "Create role" : "Save role")</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="() => _edit = null">Cancel</button>
+            </div>
+        </form>
+    }
+
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Role</th>
+                    <th>What it's for</th>
+                    <th class="inv-num">Permissions</th>
+                    <th class="inv-num">Users</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _roles)
+                {
+                    <tr @key="r.Id" class="@(r.IsActive ? "" : "text-muted")">
+                        <td>
+                            <div class="fw-semibold">@r.Name</div>
+                            <div class="small text-muted">@r.Code@(r.IsGlobal ? " · everywhere" : " · held at a site")</div>
+                        </td>
+                        <td class="small">@r.Description</td>
+                        <td class="inv-num">@(r.IsLocked ? "All" : r.Permissions.Count.ToString(System.Globalization.CultureInfo.InvariantCulture))</td>
+                        <td class="inv-num">@r.Holders</td>
+                        <td class="small">@(r.IsLocked ? "Fixed" : r.IsActive ? "Active" : "Switched off")</td>
+                        <td class="text-end">
+                            @if (CanManage && !r.IsLocked)
+                            {
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => StartEdit(r)">Change</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="small text-muted mt-2">Administrator holds every permission at every site and can't be changed, so someone can always manage users.</p>
+}
+
+@code {
+    private IReadOnlyList<RoleDto>? _roles;
+    private IReadOnlyList<PermissionDto>? _permissions;
+    private RoleEdit? _edit;
+    private ApiException? _error;
+    private string? _message;
+    private bool _saving;
+
+    private bool CanManage => User.Can(PermissionCodes.Security);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _permissions = await Api.ListPermissionsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _roles = await Api.ListRolesAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private static bool CanSave(RoleEdit edit) => !string.IsNullOrWhiteSpace(edit.Name) && (!edit.IsNew || !string.IsNullOrWhiteSpace(edit.Code));
+
+    private void StartNew() => (_edit, _message) = (new RoleEdit { IsNew = true, IsActive = true }, null);
+
+    private void StartEdit(RoleDto role)
+    {
+        _edit = new RoleEdit
+        {
+            Code = role.Code,
+            OriginalName = role.Name,
+            Name = role.Name,
+            Description = role.Description,
+            IsActive = role.IsActive,
+            Version = role.Version,
+            Permissions = [.. role.Permissions],
+        };
+        _message = null;
+    }
+
+    private static void Toggle(RoleEdit edit, string permission, bool on)
+    {
+        if (on)
+        {
+            edit.Permissions.Add(permission);
+        }
+        else
+        {
+            edit.Permissions.Remove(permission);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        var edit = _edit!;
+        _saving = true;
+        _error = null;
+        try
+        {
+            if (edit.IsNew)
+            {
+                await Api.CreateRoleAsync(new CreateRoleRequest { Code = edit.Code, Name = edit.Name, Description = edit.Description, Permissions = [.. edit.Permissions] });
+                _message = $"Created {edit.Name.Trim()}. Give it to users on the Users screen.";
+            }
+            else
+            {
+                await Api.UpdateRoleAsync(edit.Code, new UpdateRoleRequest
+                {
+                    Version = edit.Version,
+                    Name = edit.Name,
+                    Description = edit.Description,
+                    IsActive = edit.IsActive,
+                    Permissions = [.. edit.Permissions],
+                });
+                _message = $"Saved {edit.Name.Trim()}.";
+            }
+
+            _edit = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            if (ex.IsConflict)
+            {
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private sealed class RoleEdit
+    {
+        public bool IsNew { get; init; }
+
+        public string Code { get; set; } = "";
+
+        public string OriginalName { get; init; } = "";
+
+        public string Name { get; set; } = "";
+
+        public string? Description { get; set; }
+
+        public bool IsActive { get; set; }
+
+        public long Version { get; init; }
+
+        public HashSet<string> Permissions { get; init; } = [];
+    }
+}

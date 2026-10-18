@@ -5,7 +5,7 @@ using Pulaski.Domain.Security;
 
 namespace Pulaski.Testing;
 
-/// <summary>In-memory users, passwords and roles (D-037), and the sites things belong to.</summary>
+/// <summary>In-memory users, passwords and roles (D-037), and the sites things belong to. Starts with the default roles.</summary>
 public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, ISiteLookup
 {
     private readonly Lock _lock = new();
@@ -15,7 +15,24 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
     private readonly Dictionary<Guid, DateTimeOffset> _lastLogins = [];
     private readonly HashSet<Guid> _sites = [];
     private readonly Dictionary<(SiteOf Kind, Guid Id), Guid> _siteOf = [];
+    private readonly Dictionary<string, Versioned<SecurityRole>> _roles = [];
     private long _next = 1;
+
+    public InMemorySecurity()
+    {
+        foreach (var role in Roles.Defaults)
+        {
+            _roles[role.Code] = new(new SecurityRole(Guid.CreateVersion7(), role.Code, role.Name, role.Description, true, role.IsGlobal ? [] : role.Permissions), ++_next);
+        }
+    }
+
+    public SecurityRole? Role(string code)
+    {
+        lock (_lock)
+        {
+            return _roles.GetValueOrDefault(code)?.Value;
+        }
+    }
 
     /// <summary>Adds an active local user holding <paramref name="roleCode"/> (at <paramref name="siteId"/> unless global).</summary>
     public SecurityUser AddUser(string username, string password, string roleCode, Guid? siteId = null, bool mustChange = false, IPasswordHasher? hasher = null)
@@ -80,7 +97,8 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
             }
 
             var user = found.Value;
-            var grants = _assignments.Values.Where(a => a.UserId == user.Id && a.IsActiveAt(now)).Select(a => new RoleGrant(a.Id, a.RoleCode, a.SiteId)).ToList();
+            var grants = _assignments.Values.Where(a => a.UserId == user.Id && a.IsActiveAt(now)).Where(a => _roles[a.RoleCode].Value.IsActive)
+                .Select(a => new RoleGrant(a.Id, a.RoleCode, _roles[a.RoleCode].Value.Name, a.SiteId, _roles[a.RoleCode].Value.Permissions)).ToList();
             return Task.FromResult<UserAccess?>(new UserAccess(
                 user.Id, user.Username ?? user.Subject, user.DisplayName, Issuers.ActorId(user.Issuer, user.Subject), user.IsActive, grants,
                 _credentials.GetValueOrDefault(user.Id)?.MustChange == true));
@@ -102,6 +120,78 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
             return Task.FromResult(_users.TryGetValue(id, out var user) ? ToDto(user, now) : null);
         }
     }
+
+    public Task<IReadOnlyList<RoleDto>> ListRolesAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<RoleDto>>([.. _roles.Values.Select(r => new RoleDto
+            {
+                Id = r.Value.Id,
+                Code = r.Value.Code,
+                Name = r.Value.Name,
+                Description = r.Value.Description,
+                IsGlobal = r.Value.IsGlobal,
+                IsLocked = r.Value.IsGlobal,
+                IsActive = r.Value.IsActive,
+                Permissions = r.Value.IsGlobal ? [.. Permissions.All.Keys] : r.Value.Permissions,
+                Holders = _assignments.Values.Count(a => a.RoleCode == r.Value.Code && a.IsActiveAt(now)),
+                Version = r.Version,
+            })]);
+        }
+    }
+
+    public Task<Versioned<SecurityRole>?> FindRoleForUpdateAsync(string code, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_roles.GetValueOrDefault(code));
+        }
+    }
+
+    public Task<long> InsertRoleAsync(SecurityRole role, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var version = ++_next;
+            _roles[role.Code] = new(role, version);
+            return Task.FromResult(version);
+        }
+    }
+
+    // Keeps the stored permissions: they change one at a time through SetRolePermissionAsync, as in the database.
+    public Task<long> UpdateRoleAsync(SecurityRole role, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var version = ++_next;
+            _roles[role.Code] = new(role with { Permissions = _roles[role.Code].Value.Permissions }, version);
+            return Task.FromResult(version);
+        }
+    }
+
+    public Task SetRolePermissionAsync(Guid roleId, string permission, bool granted, DateTimeOffset at, Guid? by, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var role = _roles.Values.Single(r => r.Value.Id == roleId);
+            var permissions = granted ? role.Value.Permissions.Append(permission).Distinct() : role.Value.Permissions.Where(p => p != permission);
+            _roles[role.Value.Code] = role with { Value = role.Value with { Permissions = [.. permissions.Order(StringComparer.Ordinal)] } };
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<int> CountHoldersAsync(Guid roleId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var code = _roles.Values.Single(r => r.Value.Id == roleId).Value.Code;
+            return Task.FromResult(_assignments.Values.Count(a => a.RoleCode == code && a.IsActiveAt(at)));
+        }
+    }
+
+    public Task SyncPermissionsAsync(IReadOnlyList<PermissionInfo> catalog, CancellationToken cancellationToken) => Task.CompletedTask;
 
     public Task<IReadOnlyDictionary<Guid, string>> GetSiteCodesAsync(IReadOnlyCollection<Guid> siteIds, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyDictionary<Guid, string>>(siteIds.Distinct().ToDictionary(id => id, id => $"SITE-{id.ToString()[..4]}"));
@@ -244,7 +334,7 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
             {
                 AssignmentId = a.Id,
                 RoleCode = a.RoleCode,
-                RoleName = Roles.Find(a.RoleCode)?.Name ?? a.RoleCode,
+                RoleName = _roles[a.RoleCode].Value.Name,
                 SiteId = a.SiteId,
                 GrantedAt = a.ValidFrom,
             })],

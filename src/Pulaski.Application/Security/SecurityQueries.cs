@@ -14,6 +14,9 @@ public sealed record GetUserQuery(Guid Id) : IQuery<UserDto>;
 
 public sealed record ListRolesQuery : IQuery<IReadOnlyList<RoleDto>>;
 
+/// <summary>Every permission the code checks (D-037).</summary>
+public sealed record ListPermissionsQuery : IQuery<IReadOnlyList<PermissionDto>>;
+
 internal sealed class GetMeHandler(ISecurityReadStore store) : IQueryHandler<GetMeQuery, MeDto>
 {
     public async Task<MeDto> HandleAsync(GetMeQuery query, CancellationToken cancellationToken)
@@ -31,7 +34,7 @@ internal sealed class GetMeHandler(ISecurityReadStore store) : IQueryHandler<Get
             {
                 AssignmentId = g.AssignmentId,
                 RoleCode = g.RoleCode,
-                RoleName = Roles.Find(g.RoleCode)?.Name ?? g.RoleCode,
+                RoleName = g.RoleName,
                 SiteId = g.SiteId,
                 SiteCode = g.SiteId is { } s ? sites.GetValueOrDefault(s) : null,
             })],
@@ -54,15 +57,14 @@ internal sealed class GetUserHandler(ISecurityReadStore store, TimeProvider time
         await store.GetUserAsync(query.Id, timeProvider.GetUtcNow(), cancellationToken) ?? throw new NotFoundException($"User {query.Id} not found.");
 }
 
-internal sealed class ListRolesHandler : IQueryHandler<ListRolesQuery, IReadOnlyList<RoleDto>>
+internal sealed class ListRolesHandler(ISecurityReadStore store, TimeProvider timeProvider) : IQueryHandler<ListRolesQuery, IReadOnlyList<RoleDto>>
 {
     public Task<IReadOnlyList<RoleDto>> HandleAsync(ListRolesQuery query, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<RoleDto>>([.. Roles.All.Select(r => new RoleDto
-        {
-            Code = r.Code,
-            Name = r.Name,
-            Description = r.Description,
-            IsGlobal = r.IsGlobal,
-            Permissions = r.Permissions,
-        })]);
+        store.ListRolesAsync(timeProvider.GetUtcNow(), cancellationToken);
+}
+
+internal sealed class ListPermissionsHandler : IQueryHandler<ListPermissionsQuery, IReadOnlyList<PermissionDto>>
+{
+    public Task<IReadOnlyList<PermissionDto>> HandleAsync(ListPermissionsQuery query, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<PermissionDto>>([.. Permissions.Catalog.Select(p => new PermissionDto(p.Code, p.Area, p.Description))]);
 }

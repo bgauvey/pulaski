@@ -8,8 +8,11 @@ public class AccessTests
     private static readonly Guid SiteA = Guid.CreateVersion7();
     private static readonly Guid SiteB = Guid.CreateVersion7();
 
+    // The roles as a new database starts with them.
     private static UserAccess User(bool active = true, params (string Role, Guid? Site)[] grants) =>
-        new(Guid.CreateVersion7(), "u", "U", "u", active, [.. grants.Select(g => new RoleGrant(Guid.CreateVersion7(), g.Role, g.Site))]);
+        new(Guid.CreateVersion7(), "u", "U", "u", active, [.. grants.Select(g => Roles.Defaults.Single(r => r.Code == g.Role) is var role
+            ? new RoleGrant(Guid.CreateVersion7(), role.Code, role.Name, g.Site, role.IsGlobal ? [] : role.Permissions)
+            : null!)]);
 
     [Fact]
     public void A_site_role_allows_its_permissions_at_that_site_only()
@@ -66,10 +69,39 @@ public class AccessTests
         Assert.Equal(expected, User(true, (role, SiteA)).Can(permission, SiteA));
 
     [Fact]
-    public void Every_role_permission_exists_and_only_the_administrator_is_global()
+    public void Every_default_role_permission_exists_and_only_the_administrator_is_global()
     {
-        Assert.All(Roles.All.SelectMany(r => r.Permissions), p => Assert.True(Permissions.All.ContainsKey(p), p));
-        Assert.Equal([Roles.Administrator], Roles.All.Where(r => r.IsGlobal).Select(r => r.Code));
+        Assert.All(Roles.Defaults.SelectMany(r => r.Permissions), p => Assert.True(Permissions.Exists(p), p));
+        Assert.Equal([Roles.Administrator], Roles.Defaults.Where(r => r.IsGlobal).Select(r => r.Code));
+        Assert.All(Roles.Defaults, r => Assert.Equal(r.IsGlobal, Roles.IsGlobal(r.Code)));
+    }
+
+    [Fact]
+    public void A_role_allows_what_it_holds_now_and_the_administrator_everything()
+    {
+        var custom = new UserAccess(Guid.CreateVersion7(), "u", "U", "u", true, [new RoleGrant(Guid.CreateVersion7(), "line_lead", "Line lead", SiteA, [Permissions.LotHold])]);
+        Assert.True(custom.Can(Permissions.LotHold, SiteA));
+        Assert.False(custom.Can(Permissions.JobExecute, SiteA));
+
+        // The administrator's grant lists nothing: the code gives it everything, including permissions added later.
+        var admin = new UserAccess(Guid.CreateVersion7(), "a", "A", "a", true, [new RoleGrant(Guid.CreateVersion7(), Roles.Administrator, "Administrator", null, [])]);
+        Assert.True(admin.Can(Permissions.Security, SiteB));
+    }
+
+    [Theory]
+    [InlineData("line_lead", true)]
+    [InlineData("qa2", true)]
+    [InlineData("Line_lead", false)]
+    [InlineData("2nd_shift", false)]
+    [InlineData("line-lead", false)]
+    [InlineData("x", false)]
+    public void Role_codes_are_lower_case_words(string code, bool ok) => Assert.Equal(ok, Roles.CodeProblem(code) is null);
+
+    [Fact]
+    public void The_catalog_lists_each_permission_once_with_an_area()
+    {
+        Assert.Equal(Permissions.Catalog.Count, Permissions.Catalog.Select(p => p.Code).Distinct().Count());
+        Assert.All(Permissions.Catalog, p => Assert.False(string.IsNullOrWhiteSpace(p.Area)));
     }
 
     [Fact]

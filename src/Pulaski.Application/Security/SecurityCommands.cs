@@ -44,10 +44,15 @@ internal static class SecurityRules
         }
     }
 
-    /// <summary>The role exists, and is held everywhere (administrator) or at a site.</summary>
-    public static async Task<Role> EnsureRoleAsync(ISecurityRepository security, string roleCode, Guid? siteId, CancellationToken cancellationToken)
+    /// <summary>The role exists and is active, and is held everywhere (administrator) or at a site. Locks it, so it can't be switched off meanwhile.</summary>
+    public static async Task<SecurityRole> EnsureRoleAsync(ISecurityRepository security, string roleCode, Guid? siteId, CancellationToken cancellationToken)
     {
-        var role = Roles.Find(roleCode) ?? throw new DomainRuleException($"'{roleCode}' isn't a role.");
+        var role = (await security.FindRoleForUpdateAsync(roleCode, cancellationToken))?.Value ?? throw new DomainRuleException($"'{roleCode}' isn't a role.");
+        if (!role.IsActive)
+        {
+            throw new DomainRuleException($"{role.Name} is switched off; switch it on on the Roles screen first.");
+        }
+
         if (role.IsGlobal && siteId is not null)
         {
             throw new DomainRuleException($"{role.Name} is held everywhere, not at a site.");

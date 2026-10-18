@@ -173,4 +173,26 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
 
         Assert.Null(PasswordRules.Problem(admin.GetProperty("Password").GetString()!, admin.GetProperty("Username").GetString()!));
     }
+
+    [Fact]
+    public async Task Administrators_maintain_roles_and_everyone_can_read_them()
+    {
+        var planner = await factory.CreateClientAsAsync(Roles.Planner, Guid.CreateVersion7());
+        Assert.Equal(HttpStatusCode.OK, (await planner.GetAsync(new Uri("/api/roles", UriKind.Relative))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await planner.GetAsync(new Uri("/api/permissions", UriKind.Relative))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await planner.PostAsJsonAsync("/api/roles", new CreateRoleRequest { Code = "x_role", Name = "X" })).StatusCode);
+
+        var admin = factory.CreateClient();
+        var created = await admin.PostAsJsonAsync("/api/roles", new CreateRoleRequest { Code = "packer_lead", Name = "Packer lead", Permissions = [Permissions.LotMove] });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var toggled = await admin.PutAsJsonAsync($"/api/roles/packer_lead/permissions/{Permissions.LotShip}", new SetRolePermissionRequest { Granted = true });
+        Assert.Equal(HttpStatusCode.OK, toggled.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,
+            (await admin.PutAsJsonAsync($"/api/roles/administrator/permissions/{Permissions.LotShip}", new SetRolePermissionRequest { Granted = false })).StatusCode);
+
+        var roles = await admin.GetFromJsonAsync<List<RoleDto>>("/api/roles");
+        Assert.Equal([Permissions.LotMove, Permissions.LotShip], Assert.Single(roles!, r => r.Code == "packer_lead").Permissions);
+        var permissions = await admin.GetFromJsonAsync<List<PermissionDto>>("/api/permissions");
+        Assert.Equal(Permissions.Catalog.Count, permissions!.Count);
+    }
 }

@@ -104,9 +104,12 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   exact). Orders and jobs are whole batches; reports list batch weights, one lot per good batch. A partial batch only with a
   pause/complete reason (or into a run that ended with one), one per run (`core.partial_batch`); exact rule → lot on hold
   until approved (release) or rejected (write off, good → scrap).
-- Roles and permissions (D-037, proposed): code-defined in `Pulaski.Domain.Security` (mirrored in
-  `Contracts.Security.PermissionCodes`); every role but administrator is held at a site; viewing is open to every
-  signed-in user, and every changing endpoint carries `.RequirePermission(permission, Site.…)`. Every user keeps a role.
+- Roles and permissions (D-037, proposed): permissions are constants in `Pulaski.Domain.Security.Permissions` (catalog
+  with areas; mirrored in `Contracts.Security.PermissionCodes`; synced into `sec.permission` at API start). Roles are data
+  (`sec.role`, `sec.role_permission.is_granted`), maintained on the Roles/Permissions screens; only `administrator` is in
+  code (all permissions, everywhere, unchangeable); `Roles.Defaults` seeds a new database. Every other role is held at a
+  site; viewing is open to every signed-in user; every changing endpoint carries `.RequirePermission(permission, Site.…)`.
+  Every user keeps a role; a held role can't be switched off.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

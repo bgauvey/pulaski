@@ -475,7 +475,7 @@ Maps a machine's PackML `Admin.StopReason` (first-out) value to a Pulaski reason
 
 ## 6. User control (`sec`)
 
-Users, their passwords while Pulaski signs them in itself, and roles held at sites (D-037). The roles and permissions are defined in code (`Pulaski.Domain.Security`); these tables hold the same sets so reports and SQL can use them, and migration 0010 rewrites them from the code. An identity provider (OpenID Connect) comes later: users are already keyed by issuer and subject.
+Users, their passwords while Pulaski signs them in itself, and roles held at sites (D-037). Permissions are constants in code (`Pulaski.Domain.Security`), copied into `sec.permission` at every API start. Roles are data an administrator maintains (0011); a new database starts with the default set. Only `administrator` is fixed in code: it holds every permission and has no `role_permission` rows. An identity provider (OpenID Connect) comes later: users are already keyed by issuer and subject.
 
 ### sec.app_user — people who sign in · *Built (D-037)*
 
@@ -510,16 +510,20 @@ One row per user who signs in with a Pulaski password.
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `code` | text | no | Primary key, defined in code: `schedule.plan`, `job.execute`, `inventory.correct`, … (21 in all, D-037). |
-| `description` | text | no | What it allows. |
+| `description` | text | no | What it allows; kept in step with the code at API start. |
 
 ### sec.role — named sets of permissions · *Built (D-037)*
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `code` | text | no | Unique: `administrator`, `planner`, `supervisor`, `operator`, `quality`, `manager`, `auditor`, `process_engineer`. |
+| `code` | text | no | Unique, fixed once created; lower-case letters, digits and `_` (`role_code_ck`). Starts with `administrator`, `planner`, `supervisor`, `operator`, `quality`, `manager`, `auditor`, `process_engineer`. |
 | `name` | text | no | Display name. |
-| `is_system` | boolean | no | Shipped with Pulaski; its permissions are rewritten from the code. |
+| `is_system` | boolean | no | One of the starting roles; editable like any other except `administrator`. |
+| `description` | text | no | What the role is for; may be empty. |
+| `is_active` | boolean | no | False when switched off: it can't be given, and gives its holders nothing. A role someone holds can't be switched off. |
+| `created_at` | timestamptz | no | Insert time. |
+| `updated_at` | timestamptz | no | Last change, also to its permissions (which moves the role's version on). |
 
 ### sec.role_permission — permissions in a role · *Built (D-037)*
 
@@ -527,6 +531,9 @@ One row per user who signs in with a Pulaski password.
 | --- | --- | --- | --- |
 | `role_id` | uuid → role | no | The role. Part of the primary key. |
 | `permission_code` | text → permission | no | The permission. Part of the primary key. |
+| `is_granted` | boolean | no | False once the permission has been taken away: rows are kept, since the app role has no DELETE. |
+| `changed_at` | timestamptz | no | When it was last granted or taken away. |
+| `changed_by_user_id` | uuid → app_user | yes | Who did. |
 
 ### sec.role_assignment — who has which role, where · *Built (D-037)*
 
@@ -1226,7 +1233,7 @@ Every command appends its CloudEvents event here in the same transaction as the 
 
 ### sec.v_user_permission — effective permissions (view)
 
-Direct user grants expanded down the equipment tree: one row per user, permission and equipment the user may use it on. Group grants are resolved at sign-in from the token's group claims, so they are not in the view. Roles held everywhere (the administrator's, with no scope) aren't in it. The application checks permissions in code (D-037) and doesn't read the view; it is for reports.
+Direct user grants expanded down the equipment tree: one row per user, permission and equipment the user may use it on. Group grants are resolved at sign-in from the token's group claims, so they are not in the view. Only active roles and granted permissions count; roles held everywhere (the administrator's, with no scope) aren't in it. The application checks permissions in code (D-037) and doesn't read the view; it is for reports.
 
 | Column | Description |
 | --- | --- |

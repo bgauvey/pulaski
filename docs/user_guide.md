@@ -54,7 +54,7 @@ Pulaski asks you to **sign in** with the user name and password your administrat
 
 - **Menu (left).** Two groups of pages:
   - **Operate:** **Overview**, **Work orders**, **Schedule**: the pages you use day to day.
-  - **Configure:** **Equipment**, **Materials**, **Processes**, **BOMs**, **Units**, **Reasons** (and **Users**, for administrators): the setup you do once and change now and then.
+  - **Configure:** **Equipment**, **Materials**, **Processes**, **BOMs**, **Units**, **Reasons** (and **Users**, **Roles** and **Permissions**, for administrators): the setup you do once and change now and then.
   - The ☰ button at the top left collapses the menu to icons, to make room on small screens.
 - **You (top right).** Your name and roles; the padlock changes your password, and the door signs you out.
 - **Theme (top right).** The sun/moon button switches between light and dark.
@@ -1086,7 +1086,7 @@ A class's code can't change and a class is never deleted: switch it off instead.
 
 ## 14. Users, roles and signing in
 
-Everyone signs in to Pulaski. Everyone who signs in can look at every screen; what you can **change** depends on your **roles**. An administrator gives each user their roles, each at a **site** (only Administrator is everywhere).
+Everyone signs in to Pulaski. Everyone who signs in can look at every screen; what you can **change** depends on your **roles**. A role is a set of **permissions**, such as *Receive lots* or *Plan jobs*. An administrator decides what each role may do and gives each user their roles, each at a **site** (only Administrator is everywhere).
 
 ### Sign in
 
@@ -1107,6 +1107,8 @@ A password needs at least 10 characters, with two of: lower case, upper case, di
 
 ### What each role can change
 
+A new Pulaski starts with these roles. Your administrator may have changed them or added others: **Configure → Roles** and **Configure → Permissions** show what each role may do today.
+
 | Role | Can change |
 | --- | --- |
 | **Administrator** | Everything, at every site, including users and roles. |
@@ -1118,7 +1120,7 @@ A password needs at least 10 characters, with two of: lower case, upper case, di
 | **Auditor** | Correct inventory; stock counts. Can't plan or run jobs. |
 | **Process engineer** | Processes, BOMs and which lines can run each material. |
 
-Equipment and units belong to the Administrator. Someone with two roles can do what either allows. The **Users** screen shows this table too.
+Equipment and units belong to the Administrator. Someone with two roles can do what either allows.
 
 When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator.
 
@@ -1136,15 +1138,32 @@ When you can't change something, Pulaski leaves out the button, or switches the 
 3. **Roles:** choose a role (and site) under **Add a role…** and click **Add**; click **Take away** to end one.
 4. **Password:** type a **Temporary password** and click **Reset password**. They must change it when they next sign in; this also unlocks them.
 
+### Add or change a role (administrators)
+
+1. Open **Configure → Roles**.
+2. Click **New role**, or **Change** on a role's row.
+3. For a new role, type a **Code** (lower-case letters, digits and `_`, such as `line_lead`; it can't change later) and a **Name**. Add what it's for if you like.
+4. Under **May change**, tick each permission the role should have. They are grouped by area: Planning, Floor, Inventory, Configuration, Administration.
+5. Click **Create role** or **Save role**. Then give the role to people on **Configure → Users**.
+
+To stop using a role, untick **Active** and save. A role someone holds can't be switched off: give them another role and take this one away first. **Administrator** has every permission and can't be changed.
+
+### Give roles permissions, one at a time (administrators)
+
+1. Open **Configure → Permissions**. Each row is a permission, grouped by area; each column is a role.
+2. Tick a box to give the role that permission; untick it to take it away. It is saved straight away and applies to everyone who holds the role.
+
 ### In detail
 
+- **Permissions belong to Pulaski; roles belong to you.** The list of permissions is fixed by the version of Pulaski you run, and grows when new screens need one. Roles, their names and which permissions they hold are yours to change. Administrator always holds every permission, including new ones.
+- **Changes to a role apply at once** to everyone who holds it, on their next click.
 - **Every user needs a role.** A new user comes with one, and a user's last role can't be taken away: add another first, or switch them off.
 - **Someone stays administrator.** The last active administrator can't lose the role or be switched off, and nobody can switch themselves off.
 - **Roles are held at a site.** A Supervisor at PLT1 can start jobs at PLT1 only. Something that belongs to no site, such as a reason for every site or an enterprise-wide process, needs the permission at any site.
 - **Partial batches:** whoever reported a partial batch can't approve or reject it; the job page says *You reported it: someone else decides*.
 - **History** names who did what by user name, such as *oli.operator* on a lot's history.
 - **Changes apply at once.** Switching someone off or taking a role away takes effect on their next click, without waiting for their session to end.
-- **Ended, not deleted.** Taking a role away ends it; Pulaski keeps who held which role when.
+- **Ended, not deleted.** Taking a role away from someone ends it, and a role or permission is switched off rather than deleted; Pulaski keeps who held which role when, and who changed a role.
 - **The first administrator** is created when Pulaski starts with no users, from the `Security:BootstrapAdmin` settings, with a temporary password to change at the first sign-in.
 - **For integrators:** the API takes a bearer token from `POST /api/auth/sign-in`; every other call needs one, and a call without the permission is refused with 403 and the permission in words.
 
@@ -1242,7 +1261,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Everyone sees every site.** Roles limit what you can change, and where, but not what you can look at.
 - **Reported production and consumption can't be corrected** by anyone yet, so the Auditor role can't do that part of its job; write a lot off or up instead.
 - **The schedule shows its buttons to everyone;** someone who can't plan sees them, and a click explains that planning needs permission instead of changing anything. Switched-off buttons elsewhere can look like ordinary ones.
-- **Roles are fixed:** what each role may do can't be changed per plant yet.
+- **Only Administrator is held everywhere;** every role you create is held at a site.
 
 ---
 
@@ -1351,7 +1370,8 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Rate check** | A run can't hold more than its length × the line's ideal rate × the site's tolerance. |
 | **Ready** | A job that can start: its order is on the floor and its process links are met. |
 | **Reverse** | Undo a lot's latest movement. |
-| **Role** | A set of things a user may change, such as Planner or Quality, held at a site (Administrator everywhere). See [Users, roles and signing in](#14-users-roles-and-signing-in). |
+| **Permission** | One kind of change Pulaski lets people make, such as *Receive lots*. Roles hold permissions. |
+| **Role** | A set of permissions, such as Planner or Quality, that an administrator maintains and gives to users at a site (Administrator everywhere). See [Users, roles and signing in](#14-users-roles-and-signing-in). |
 | **Run** | One stretch of a job running on a line, from a start to a pause or completion. Production and consumption go into a run. |
 | **Run standard (planning rate)** | The rate Pulaski plans with for a material on a line: calculated from the ideal rate, or modified by a person. |
 | **Scrap factor** | Extra component quantity planned for losses. |

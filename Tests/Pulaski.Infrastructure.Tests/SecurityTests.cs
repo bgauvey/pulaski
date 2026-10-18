@@ -33,12 +33,12 @@ public sealed class SecurityTests(DatabaseFixture db)
     }
 
     [Fact]
-    public async Task The_database_holds_the_roles_and_permissions_the_code_defines()
+    public async Task A_new_database_starts_with_the_default_roles_and_every_permission()
     {
         await using var connection = await db.AdminDataSource.OpenConnectionAsync();
         var grants = (await connection.QueryAsync<(string Role, string Permission)>(
-            "SELECT r.code, rp.permission_code FROM sec.role r JOIN sec.role_permission rp ON rp.role_id = r.id WHERE r.is_system")).ToHashSet();
-        var expected = Roles.All.SelectMany(r => r.Permissions.Select(p => (r.Code, p))).ToHashSet();
+            "SELECT r.code, rp.permission_code FROM sec.role r JOIN sec.role_permission rp ON rp.role_id = r.id AND rp.is_granted WHERE r.is_system")).ToHashSet();
+        var expected = Roles.Defaults.Where(r => !r.IsGlobal).SelectMany(r => r.Permissions.Select(p => (r.Code, p))).ToHashSet();
         Assert.Equal(expected, grants);
         Assert.Equal(Permissions.All.Count, await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM sec.permission"));
     }
@@ -105,5 +105,58 @@ public sealed class SecurityTests(DatabaseFixture db)
         Assert.True(hasher.Verify("Correct-horse-1", a));
         Assert.False(hasher.Verify("Correct-horse-2", a));
         Assert.False(hasher.Verify("Correct-horse-1", "garbage"));
+    }
+
+    [Fact]
+    public async Task A_role_made_on_screen_gives_its_holders_what_it_allows_and_keeps_taken_permissions_as_rows()
+    {
+        var site = await SiteAsync();
+        var code = "lead_" + _s;
+        await db.SendAsync(new CreateRoleCommand(code, "Lead " + _s, "Test role", [Permissions.LotHold]));
+        CreatedResponse user = await db.SendAsync(new CreateUserCommand("lead." + _s, "Lead", null, "Temporary-pass-1", code, site));
+
+        await using var scope = db.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<ISecurityReadStore>();
+        async Task<UserAccess> AccessAsync() => (await store.GetAccessAsync(Issuers.Local, "lead." + _s, DateTimeOffset.UtcNow, CancellationToken.None))!;
+        Assert.True((await AccessAsync()).Can(Permissions.LotHold, site));
+        Assert.Equal("Lead " + _s, Assert.Single((await AccessAsync()).Grants).RoleName);
+
+        await db.SendAsync(new SetRolePermissionCommand(code, Permissions.LotShip, true));
+        await db.SendAsync(new SetRolePermissionCommand(code, Permissions.LotHold, false));
+        var access = await AccessAsync();
+        Assert.True(access.Can(Permissions.LotShip, site));
+        Assert.False(access.Can(Permissions.LotHold, site));
+
+        var role = Assert.Single(await QueryAsync<ListRolesQuery, IReadOnlyList<RoleDto>>(new ListRolesQuery()), r => r.Code == code);
+        Assert.Equal([Permissions.LotShip], role.Permissions);
+        Assert.Equal(1, role.Holders);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new UpdateRoleCommand(code, role.Version, role.Name, null, false, [])));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new UpdateRoleCommand(code, role.Version - 1, "Old", null, true, [])));
+        Assert.Equal(2, await (await db.AdminDataSource.OpenConnectionAsync()).ExecuteScalarAsync<int>(
+            "SELECT count(*) FROM sec.role_permission rp JOIN sec.role r ON r.id = rp.role_id WHERE r.code = @Code", new { Code = code }));
+
+        var admin = Assert.Single(await QueryAsync<ListRolesQuery, IReadOnlyList<RoleDto>>(new ListRolesQuery()), r => r.Code == Roles.Administrator);
+        Assert.Equal((true, Permissions.All.Count), (admin.IsLocked, admin.Permissions.Count));
+        Assert.NotEqual(Guid.Empty, user.Id);
+    }
+
+    [Fact]
+    public async Task The_permission_catalog_syncs_into_the_database()
+    {
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE sec.permission SET description = 'old words' WHERE code = @Code", new { Code = Permissions.LotShip });
+        }
+
+        await using var scope = db.Services.CreateAsyncScope();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await using (var transaction = await unitOfWork.BeginAsync(CancellationToken.None))
+        {
+            await scope.ServiceProvider.GetRequiredService<ISecurityRepository>().SyncPermissionsAsync(Permissions.Catalog, CancellationToken.None);
+            await transaction.CommitAsync(CancellationToken.None);
+        }
+
+        await using var check = await db.AdminDataSource.OpenConnectionAsync();
+        Assert.Equal(Permissions.All[Permissions.LotShip], await check.ExecuteScalarAsync<string>("SELECT description FROM sec.permission WHERE code = @Code", new { Code = Permissions.LotShip }));
     }
 }

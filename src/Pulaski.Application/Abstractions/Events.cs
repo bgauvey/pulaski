@@ -128,6 +128,9 @@ public static class EventTypes
     public const string UserUpdated = "pulaski.user.updated.v1";
     public const string RoleAssigned = "pulaski.user.role_assigned.v1";
     public const string RoleEnded = "pulaski.user.role_ended.v1";
+    public const string RoleCreated = "pulaski.role.created.v1";
+    public const string RoleUpdated = "pulaski.role.updated.v1";
+    public const string RolePermissionChanged = "pulaski.role.permission_changed.v1";
     public const string PartialBatchReported = "pulaski.partial_batch.reported.v1";
     public const string PartialBatchApproved = "pulaski.partial_batch.approved.v1";
     public const string PartialBatchRejected = "pulaski.partial_batch.rejected.v1";

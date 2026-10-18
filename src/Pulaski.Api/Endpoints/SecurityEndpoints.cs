@@ -44,8 +44,30 @@ internal static class SecurityEndpoints
             TypedResults.Ok(await handler.HandleAsync(new GetMeQuery(await CallerAccess.RequireAsync(http, allowPasswordChange: true)), ct)))
             .WithTags("Security");
 
-        routes.MapGet("/roles", async Task<Ok<IReadOnlyList<RoleDto>>> (IQueryHandler<ListRolesQuery, IReadOnlyList<RoleDto>> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListRolesQuery(), ct)))
+        // Roles are data an administrator maintains; permissions are the code's (D-037).
+        var roles = routes.MapGroup("/roles").WithTags("Security");
+
+        roles.MapGet("/", async Task<Ok<IReadOnlyList<RoleDto>>> (IQueryHandler<ListRolesQuery, IReadOnlyList<RoleDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListRolesQuery(), ct)));
+
+        roles.MapPost("/", async Task<Created<CreatedResponse>> (CreateRoleRequest request, ICommandHandler<CreateRoleCommand, CreatedResponse> handler, CancellationToken ct) =>
+        {
+            var created = await handler.HandleAsync(new CreateRoleCommand(request.Code, request.Name, request.Description, request.Permissions), ct);
+            return TypedResults.Created($"/api/roles/{request.Code.Trim().ToLowerInvariant()}", created);
+        }).RequirePermission(Permissions.Security);
+
+        roles.MapPut("/{code}", async Task<Ok<VersionResponse>> (string code, UpdateRoleRequest request, ICommandHandler<UpdateRoleCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new UpdateRoleCommand(code, request.Version, request.Name, request.Description, request.IsActive, request.Permissions), ct)))
+            .RequirePermission(Permissions.Security);
+
+        roles.MapPut("/{code}/permissions/{permission}", async Task<Ok<VersionResponse>> (
+            string code, string permission, SetRolePermissionRequest request, ICommandHandler<SetRolePermissionCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetRolePermissionCommand(code, permission, request.Granted), ct)))
+            .RequirePermission(Permissions.Security);
+
+        routes.MapGet("/permissions", async Task<Ok<IReadOnlyList<PermissionDto>>> (IQueryHandler<ListPermissionsQuery, IReadOnlyList<PermissionDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListPermissionsQuery(), ct)))
             .WithTags("Security");
 
         var users = routes.MapGroup("/users").WithTags("Security");

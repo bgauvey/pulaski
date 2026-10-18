@@ -405,3 +405,30 @@ fieldset.view-only-scope {
     padding: 0;
     border: 0;
 }
+
+/* Roles and permissions (D-037). */
+.role-permissions {
+    display: grid;
+    gap: var(--space-3);
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+}
+
+.role-permission-area {
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.permission-matrix .permission-role {
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.permission-matrix .permission-area > th {
+    background: var(--surface-2);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}

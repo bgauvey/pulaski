@@ -544,16 +544,27 @@ CREATE TABLE sec.permission (
     description text NOT NULL
 );
 
+-- Roles are data (D-037): an administrator creates them and chooses their permissions. Only 'administrator'
+-- is fixed in code: it holds every permission everywhere. Switched off rather than deleted.
 CREATE TABLE sec.role (
     id          uuid PRIMARY KEY DEFAULT uuidv7(),
-    code        text NOT NULL UNIQUE,                           -- 'operator', 'supervisor', 'quality_tech'
+    code        text NOT NULL UNIQUE                            -- 'operator', 'supervisor', 'quality'; fixed once created
+                CONSTRAINT role_code_ck CHECK (code ~ '^[a-z][a-z0-9_]{1,49}$'),
     name        text NOT NULL,
-    is_system   boolean NOT NULL DEFAULT false
+    is_system   boolean NOT NULL DEFAULT false,                 -- shipped with Pulaski (a starting role)
+    description text NOT NULL DEFAULT '',
+    is_active   boolean NOT NULL DEFAULT true,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now()
 );
 
+-- A permission taken away keeps its row with is_granted = false: the app role has no DELETE (D-037).
 CREATE TABLE sec.role_permission (
-    role_id         uuid NOT NULL REFERENCES sec.role(id) ON DELETE CASCADE,
-    permission_code text NOT NULL REFERENCES sec.permission(code),
+    role_id             uuid NOT NULL REFERENCES sec.role(id) ON DELETE CASCADE,
+    permission_code     text NOT NULL REFERENCES sec.permission(code),
+    is_granted          boolean NOT NULL DEFAULT true,
+    changed_at          timestamptz NOT NULL DEFAULT now(),
+    changed_by_user_id  uuid REFERENCES sec.app_user(id),
     PRIMARY KEY (role_id, permission_code)
 );
 
@@ -1441,7 +1452,8 @@ SELECT ra.app_user_id,
        rp.permission_code,
        c.descendant_id AS equipment_id
 FROM sec.role_assignment ra
-JOIN sec.role_permission rp ON rp.role_id = ra.role_id
+JOIN sec.role r ON r.id = ra.role_id AND r.is_active
+JOIN sec.role_permission rp ON rp.role_id = ra.role_id AND rp.is_granted
 JOIN core.equipment_closure c ON c.ancestor_id = ra.scope_equipment_id
 WHERE ra.app_user_id IS NOT NULL
   AND ra.valid_from <= now()
@@ -1530,13 +1542,14 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0007_materials_management'),
     ('0008_job_execution'),
     ('0009_batches'),
-    ('0010_security');
+    ('0010_security'),
+    ('0011_editable_roles');
 
 -- =====================================================================
 -- 17. SEED DATA
 -- =====================================================================
 
--- Roles and permissions are defined in code (Pulaski.Domain.Security, D-037); these rows list them.
+-- Permissions are constants in code (Pulaski.Domain.Security, D-037); the API also copies them in at start.
 INSERT INTO sec.permission (code, description) VALUES
     ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
     ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
@@ -1545,58 +1558,37 @@ INSERT INTO sec.permission (code, description) VALUES
     ('job.execute', 'Start, pause, resume and complete jobs'),
     ('job.reopen', 'Reopen a completed job'),
     ('production.report', 'Report production and consumption into a job''s runs'),
+    ('partial_batch.decide', 'Approve or reject partial batches (not one''s own)'),
     ('lot.receive', 'Receive lots'),
     ('lot.move', 'Move lots between locations'),
     ('lot.ship', 'Ship lots'),
     ('lot.hold', 'Put lots on hold or in quarantine and release them'),
     ('inventory.correct', 'Correct inventory: write up, write off, correct, reverse, split and merge lots'),
     ('stock_count.manage', 'Start, enter, post and cancel stock counts'),
-    ('partial_batch.decide', 'Approve or reject partial batches (not one''s own)'),
     ('materials.manage', 'Maintain materials, classes, conversions, batching and shelf life; import materials'),
     ('processes.manage', 'Maintain processes, BOMs and capabilities'),
     ('units.manage', 'Maintain units of measure'),
     ('reasons.manage', 'Maintain reason codes'),
     ('equipment.manage', 'Maintain equipment: sites, lines, locations'),
     ('site_settings.manage', 'Set a site''s changeover mode and reporting tolerances'),
-    ('security.manage', 'Maintain users and their roles')
+    ('security.manage', 'Maintain users, roles and what each role may do')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
-INSERT INTO sec.role (code, name, is_system) VALUES
-    ('administrator', 'Administrator', true),
-    ('planner', 'Planner', true),
-    ('supervisor', 'Supervisor', true),
-    ('operator', 'Operator', true),
-    ('quality', 'Quality', true),
-    ('manager', 'Manager', true),
-    ('auditor', 'Auditor', true),
-    ('process_engineer', 'Process engineer', true)
-ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, is_system = true;
+-- The roles a new database starts with (Roles.Defaults); after that they are the administrator's to change.
+-- The administrator has no rows: the code gives it every permission.
+INSERT INTO sec.role (code, name, description, is_system) VALUES
+    ('administrator', 'Administrator', 'Everything, everywhere, including users and roles.', true),
+    ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates and materials. Views the floor and inventory.', true),
+    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches. Doesn''t correct inventory.', true),
+    ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots.', true),
+    ('quality', 'Quality', 'Holds and releases lots, corrects inventory and decides on partial batches.', true),
+    ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, maintains reason codes and the site''s settings.', true),
+    ('auditor', 'Auditor', 'Views everything and corrects inventory; counts stock. Doesn''t plan or run jobs.', true),
+    ('process_engineer', 'Process engineer', 'Maintains processes, BOMs and capabilities.', true)
+ON CONFLICT (code) DO NOTHING;
 
--- Each system role holds exactly the permissions the code gives it (Pulaski.Domain.Security.Roles).
-DELETE FROM sec.role_permission rp USING sec.role r WHERE r.id = rp.role_id AND r.is_system;
 INSERT INTO sec.role_permission (role_id, permission_code)
 SELECT r.id, v.permission_code FROM (VALUES
-    ('administrator', 'schedule.plan'),
-    ('administrator', 'work_order.manage'),
-    ('administrator', 'work_order.close'),
-    ('administrator', 'rate.modify'),
-    ('administrator', 'job.execute'),
-    ('administrator', 'job.reopen'),
-    ('administrator', 'production.report'),
-    ('administrator', 'lot.receive'),
-    ('administrator', 'lot.move'),
-    ('administrator', 'lot.ship'),
-    ('administrator', 'lot.hold'),
-    ('administrator', 'inventory.correct'),
-    ('administrator', 'stock_count.manage'),
-    ('administrator', 'partial_batch.decide'),
-    ('administrator', 'materials.manage'),
-    ('administrator', 'processes.manage'),
-    ('administrator', 'units.manage'),
-    ('administrator', 'reasons.manage'),
-    ('administrator', 'equipment.manage'),
-    ('administrator', 'site_settings.manage'),
-    ('administrator', 'security.manage'),
     ('planner', 'schedule.plan'),
     ('planner', 'work_order.manage'),
     ('planner', 'work_order.close'),
@@ -1626,7 +1618,8 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('auditor', 'stock_count.manage'),
     ('process_engineer', 'processes.manage')
 ) AS v(role_code, permission_code)
-JOIN sec.role r ON r.code = v.role_code;
+JOIN sec.role r ON r.code = v.role_code
+ON CONFLICT (role_id, permission_code) DO NOTHING;
 
 INSERT INTO core.packml_state (code, name, is_acting) VALUES
     (0,  'Undefined',     false),

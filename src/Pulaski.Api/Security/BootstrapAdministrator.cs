@@ -7,8 +7,9 @@ using Pulaski.Domain.Security;
 namespace Pulaski.Api.Security;
 
 /// <summary>
-/// The first administrator (D-037): when the database has no users at all, creates one from the
-/// <c>Security:BootstrapAdmin</c> settings with a temporary password, to be changed at the first sign-in.
+/// At API start (D-037): copies the code's permission catalog into <c>sec.permission</c>, so a role can be given a
+/// permission added since the last migration; and when the database has no users at all, creates the first
+/// administrator from the <c>Security:BootstrapAdmin</c> settings with a temporary password, to be changed at the first sign-in.
 /// </summary>
 internal sealed partial class BootstrapAdministrator(IServiceScopeFactory scopes, IOptions<SecurityOptions> options, ILogger<BootstrapAdministrator> logger)
     : IHostedService
@@ -20,7 +21,10 @@ internal sealed partial class BootstrapAdministrator(IServiceScopeFactory scopes
         int users;
         await using (var transaction = await unitOfWork.BeginAsync(cancellationToken))
         {
-            users = await scope.ServiceProvider.GetRequiredService<ISecurityRepository>().CountUsersAsync(cancellationToken);
+            var security = scope.ServiceProvider.GetRequiredService<ISecurityRepository>();
+            await security.SyncPermissionsAsync(Permissions.Catalog, cancellationToken);
+            users = await security.CountUsersAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
 
         if (users > 0)

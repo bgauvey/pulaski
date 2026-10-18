@@ -17,13 +17,14 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
         """;
 
     private const string Grants = """
-        SELECT a.id AS assignment_id, a.app_user_id AS user_id, r.code AS role_code, a.scope_equipment_id AS site_id, a.valid_from AS granted_at,
-               s.code AS site_code
+        SELECT a.id AS assignment_id, a.app_user_id AS user_id, r.code AS role_code, r.name AS role_name, a.scope_equipment_id AS site_id,
+               a.valid_from AS granted_at, s.code AS site_code,
+               array(SELECT rp.permission_code FROM sec.role_permission rp WHERE rp.role_id = r.id AND rp.is_granted ORDER BY rp.permission_code) AS permissions
         FROM sec.role_assignment a
-        JOIN sec.role r ON r.id = a.role_id
+        JOIN sec.role r ON r.id = a.role_id AND r.is_active
         LEFT JOIN core.equipment s ON s.id = a.scope_equipment_id
         WHERE a.app_user_id = ANY(@Ids) AND a.valid_from <= @At AND (a.valid_to IS NULL OR a.valid_to > @At)
-        ORDER BY r.code, s.code
+        ORDER BY r.name, s.code
         """;
 
     private const string Users = """
@@ -32,6 +33,16 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
                u.xmin::text::bigint AS version
         FROM sec.app_user u
         LEFT JOIN sec.local_credential c ON c.app_user_id = u.id
+        """;
+
+    // The administrator's permissions come from the code (D-037), so its row lists none.
+    private const string RoleList = """
+        SELECT r.id, r.code, r.name, r.description, r.is_active, r.xmin::text::bigint AS version,
+               array(SELECT rp.permission_code FROM sec.role_permission rp WHERE rp.role_id = r.id AND rp.is_granted ORDER BY rp.permission_code) AS permissions,
+               (SELECT count(*)::int FROM sec.role_assignment a
+                WHERE a.role_id = r.id AND a.valid_from <= @At AND (a.valid_to IS NULL OR a.valid_to > @At)) AS holders
+        FROM sec.role r
+        ORDER BY r.code = 'administrator' DESC, r.is_active DESC, r.name
         """;
 
     private const string SiteCodes = "SELECT id, code FROM core.equipment WHERE id = ANY(@Ids)";
@@ -48,7 +59,7 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
         var grants = await connection.QueryAsync<GrantRow>(new CommandDefinition(Grants, new { Ids = new[] { user.Id }, At = now }, cancellationToken: cancellationToken));
         return new UserAccess(
             user.Id, user.Username ?? user.Subject, user.DisplayName, Issuers.ActorId(issuer, subject), user.IsActive,
-            [.. grants.Select(g => new RoleGrant(g.AssignmentId, g.RoleCode, g.SiteId))], user.MustChange);
+            [.. grants.Select(g => new RoleGrant(g.AssignmentId, g.RoleCode, g.RoleName, g.SiteId, g.Permissions))], user.MustChange);
     }
 
     public async Task<IReadOnlyList<UserDto>> ListUsersAsync(DateTimeOffset now, CancellationToken cancellationToken) =>
@@ -56,6 +67,25 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
 
     public async Task<UserDto?> GetUserAsync(Guid id, DateTimeOffset now, CancellationToken cancellationToken) =>
         await UsersAsync($"{Users} WHERE u.id = @Id", new { At = now, Id = id }, now, cancellationToken) is [var user, ..] ? user : null;
+
+    public async Task<IReadOnlyList<RoleDto>> ListRolesAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<RoleRow>(new CommandDefinition(RoleList, new { At = now }, cancellationToken: cancellationToken));
+        return [.. rows.Select(r => new RoleDto
+        {
+            Id = r.Id,
+            Code = r.Code,
+            Name = r.Name,
+            Description = r.Description,
+            IsGlobal = Roles.IsGlobal(r.Code),
+            IsLocked = Roles.IsGlobal(r.Code),
+            IsActive = r.IsActive,
+            Permissions = Roles.IsGlobal(r.Code) ? [.. Permissions.All.Keys] : r.Permissions,
+            Holders = r.Holders,
+            Version = r.Version,
+        })];
+    }
 
     public async Task<IReadOnlyDictionary<Guid, string>> GetSiteCodesAsync(IReadOnlyCollection<Guid> siteIds, CancellationToken cancellationToken)
     {
@@ -101,7 +131,7 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
             {
                 AssignmentId = g.AssignmentId,
                 RoleCode = g.RoleCode,
-                RoleName = Roles.Find(g.RoleCode)?.Name ?? g.RoleCode,
+                RoleName = g.RoleName,
                 SiteId = g.SiteId,
                 SiteCode = g.SiteCode,
                 GrantedAt = g.GrantedAt,
@@ -124,8 +154,22 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
         public Guid AssignmentId { get; init; }
         public Guid UserId { get; init; }
         public string RoleCode { get; init; } = "";
+        public string RoleName { get; init; } = "";
         public Guid? SiteId { get; init; }
         public string? SiteCode { get; init; }
+        public string[] Permissions { get; init; } = [];
         public DateTimeOffset GrantedAt { get; init; }
+    }
+
+    private sealed class RoleRow
+    {
+        public Guid Id { get; init; }
+        public string Code { get; init; } = "";
+        public string Name { get; init; } = "";
+        public string Description { get; init; } = "";
+        public bool IsActive { get; init; }
+        public long Version { get; init; }
+        public string[] Permissions { get; init; } = [];
+        public int Holders { get; init; }
     }
 }

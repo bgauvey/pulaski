@@ -10,7 +10,7 @@
     <div>
         <h1 class="mb-1">Users</h1>
         <p class="text-muted mb-0">
-            Who can sign in, and what their roles let them change. Everyone who signs in can view every screen; roles decide the changes.
+            Who can sign in, and which roles they hold. Everyone who signs in can view every screen; roles decide the changes.
             Every user needs a role, and every role but Administrator is held at a site.
         </p>
     </div>
@@ -58,7 +58,7 @@
                 <label class="form-label small" for="new-role">Role</label>
                 <select id="new-role" class="form-select" @bind="_new.RoleCode">
                     <option value="">Choose a role…</option>
-                    @foreach (var r in _roles)
+                    @foreach (var r in _roles.Where(r => r.IsActive))
                     {
                         <option value="@r.Code">@r.Name</option>
                     }
@@ -189,7 +189,7 @@ else
                                         <form class="d-flex flex-wrap gap-1" @onsubmit="() => AssignAsync(u)" @onsubmit:preventDefault>
                                             <select class="form-select form-select-sm w-auto" aria-label="Role to add" @bind="edit.RoleCode">
                                                 <option value="">Add a role…</option>
-                                                @foreach (var r in _roles)
+                                                @foreach (var r in _roles.Where(r => r.IsActive))
                                                 {
                                                     <option value="@r.Code">@r.Name</option>
                                                 }
@@ -230,33 +230,9 @@ else
         </table>
     </div>
 
-    <section aria-labelledby="roles-title">
-        <h2 id="roles-title" class="h5">What each role may change</h2>
-        <div class="table-panel">
-            <table class="table table-sm align-middle">
-                <thead><tr><th>Role</th><th>What it's for</th><th>May</th></tr></thead>
-                <tbody>
-                    @foreach (var r in _roles)
-                    {
-                        <tr @key="r.Code">
-                            <td class="fw-semibold text-nowrap">@r.Name@(r.IsGlobal ? " (everywhere)" : "")</td>
-                            <td class="small">@r.Description</td>
-                            <td class="small">
-                                @if (r.IsGlobal)
-                                {
-                                    <span>Everything</span>
-                                }
-                                else
-                                {
-                                    @string.Join("; ", r.Permissions.Select(p => _permissionText.GetValueOrDefault(p, p)))
-                                }
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </section>
+    <p class="small text-muted">
+        What each role may change is on <a href="roles">Roles</a> and <a href="permissions">Permissions</a>.
+    </p>
 }
 
 @code {
@@ -269,32 +245,6 @@ else
     private Guid? _open;
     private UserEdit? _edit;
     private NewUser _new = new();
-
-    // In words, for the roles table (the permissions sec.permission lists).
-    private static readonly Dictionary<string, string> _permissionText = new()
-    {
-        [PermissionCodes.SchedulePlan] = "plan jobs",
-        [PermissionCodes.WorkOrderManage] = "create, dispatch and firm work orders",
-        [PermissionCodes.WorkOrderClose] = "cancel and close work orders",
-        [PermissionCodes.RateModify] = "set planning rates",
-        [PermissionCodes.JobExecute] = "start, pause and complete jobs",
-        [PermissionCodes.JobReopen] = "reopen jobs",
-        [PermissionCodes.ProductionReport] = "report production and consumption",
-        [PermissionCodes.LotReceive] = "receive lots",
-        [PermissionCodes.LotMove] = "move lots",
-        [PermissionCodes.LotShip] = "ship lots",
-        [PermissionCodes.LotHold] = "hold and release lots",
-        [PermissionCodes.InventoryCorrect] = "correct inventory (write up/off, correct, reverse, split, merge)",
-        [PermissionCodes.StockCount] = "count stock",
-        [PermissionCodes.PartialBatchDecide] = "approve or reject others' partial batches",
-        [PermissionCodes.Materials] = "maintain materials",
-        [PermissionCodes.Processes] = "maintain processes, BOMs and capabilities",
-        [PermissionCodes.Units] = "maintain units",
-        [PermissionCodes.Reasons] = "maintain reason codes",
-        [PermissionCodes.Equipment] = "maintain equipment",
-        [PermissionCodes.SiteSettings] = "change site settings",
-        [PermissionCodes.Security] = "maintain users",
-    };
 
     private bool CanManage => User.Can(PermissionCodes.Security);
 

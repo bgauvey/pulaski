@@ -611,9 +611,12 @@ Some materials are made a fixed amount at a time: a 50 kg mix, a 200 l tank. Pul
 
 ## Users, roles and permissions (D-037, proposed)
 
-Who may change what. Every signed-in user may **view** everything; **permissions** guard changes. Roles are bundles of permissions, defined in code (`Pulaski.Domain.Security`), not configured.
+Who may change what. Every signed-in user may **view** everything; **permissions** guard changes.
 
-**Roles.** Every role but the administrator is held **at a site**; a user may hold several, at several sites, and may do the union of them.
+- **Permissions are constants in code** (`Pulaski.Domain.Security.Permissions`), the only place that checks them. Adding one is a code change: a constant, its catalog entry (area and description), and the endpoint that requires it.
+- **Roles are data.** An administrator creates roles and chooses their permissions on the **Roles** and **Permissions** screens (`sec.role`, `sec.role_permission`). The only role the code knows is the **administrator**: it holds every permission everywhere, including ones added later, and can't be changed, so someone can always manage users.
+
+**Roles.** Every role but the administrator is held **at a site**; a user may hold several, at several sites, and may do the union of them. A new database starts with these roles (`Roles.Defaults`), which the administrator may then change:
 
 | Role | Held | May change |
 | --- | --- | --- |
@@ -628,7 +631,14 @@ Who may change what. Every signed-in user may **view** everything; **permissions
 
 Who owns the configuration: equipment, units → Administrator; materials (with classes, conversions, batching, shelf life and import) → Planner; processes, BOMs, capabilities → Process engineer; planning rates → Planner; reason codes and site settings → Manager; users → Administrator.
 
-**Permissions.** 21 codes (`Permissions`, mirrored for the UI in `Pulaski.Contracts.Security.PermissionCodes`; `sec.permission` lists them for reports): `schedule.plan`, `work_order.manage`, `work_order.close`, `rate.modify`, `job.execute`, `job.reopen`, `production.report`, `lot.receive`, `lot.move`, `lot.ship`, `lot.hold`, `inventory.correct`, `stock_count.manage`, `partial_batch.decide`, `materials.manage`, `processes.manage`, `units.manage`, `reasons.manage`, `equipment.manage`, `site_settings.manage`, `security.manage`. `sec.role` and `sec.role_permission` hold the same sets; migration 0010 rewrites them from the code, and a test checks they match.
+**Permissions.** 21 codes, each in an area (Planning, Floor, Inventory, Configuration, Administration) for the screens. They are mirrored for the UI in `Pulaski.Contracts.Security.PermissionCodes`, and the API copies the catalog into `sec.permission` at every start, so a new permission can be given to roles at once: `schedule.plan`, `work_order.manage`, `work_order.close`, `rate.modify`, `job.execute`, `job.reopen`, `production.report`, `lot.receive`, `lot.move`, `lot.ship`, `lot.hold`, `inventory.correct`, `stock_count.manage`, `partial_batch.decide`, `materials.manage`, `processes.manage`, `units.manage`, `reasons.manage`, `equipment.manage`, `site_settings.manage`, `security.manage` (users, roles and what each role may do).
+
+**Maintaining roles.**
+
+- A role has a code (lower-case letters, digits and `_`, fixed once created), a name, a description and its permissions. `POST /api/roles` creates one; `PUT /api/roles/{code}` changes its name, description, active flag and all its permissions at once (with its version); `PUT /api/roles/{code}/permissions/{permission}` grants or takes away one (the Permissions screen; doing what is already so changes nothing). Each change moves the role's version on.
+- A change applies at once to everyone who holds the role: what a user may do is read with their roles on every request.
+- **Switched off, not deleted.** A role someone holds can't be switched off (every user keeps a role); a switched-off role can't be given. A permission taken away keeps its `sec.role_permission` row with `is_granted = false`, since the app role has no DELETE; the events say who changed what.
+- Events: `pulaski.role.created.v1`, `pulaski.role.updated.v1` (before and after), `pulaski.role.permission_changed.v1`.
 
 **Where it is checked.** In the API, on every changing endpoint (`.RequirePermission(permission, site)`): the site is found from what the request is about (the job, lot, count, process, partial batch, capability, run standard or work order, or the location or line in the body) by `ISiteLookup`. Something that belongs to no site, such as an enterprise-wide process or reason, needs the permission at any site. A refusal is 403 with the permission in words. The UI hides or switches off what the user may not do, but the API decides.
 
@@ -649,7 +659,7 @@ Who owns the configuration: equipment, units → Administrator; materials (with 
 
 **Events:** `pulaski.user.signed_in.v1`, `…sign_in_failed.v1`, `…password_changed.v1`, `…password_reset.v1`, `…created.v1`, `…updated.v1`, `…role_assigned.v1`, `…role_ended.v1`, on the user. Event actors are the signed-in user (local users by user name).
 
-**Not yet:** signing in through an identity provider; reads filtered by site (everyone sees every site); correcting reported production or consumption (no command exists yet, so the Auditor's "correct production values" waits for it); site settings screens (the API is guarded); a role's permissions changed per deployment.
+**Not yet:** a role held everywhere other than the administrator; signing in through an identity provider; reads filtered by site (everyone sees every site); correcting reported production or consumption (no command exists yet, so the Auditor's "correct production values" waits for it); site settings screens (the API is guarded).
 
 ## Application architecture
 

@@ -40,6 +40,19 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<IReadOnlyList<RoleDto>> ListRolesAsync(CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<RoleDto>>("api/roles", ct);
 
+    public Task<IReadOnlyList<PermissionDto>> ListPermissionsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<PermissionDto>>("api/permissions", ct);
+
+    public Task<CreatedResponse> CreateRoleAsync(CreateRoleRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/roles", request, ct);
+
+    public Task<VersionResponse> UpdateRoleAsync(string code, UpdateRoleRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/roles/{Uri.EscapeDataString(code)}", request, ct);
+
+    public Task<VersionResponse> SetRolePermissionAsync(string code, string permission, bool granted, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(
+            HttpMethod.Put, $"api/roles/{Uri.EscapeDataString(code)}/permissions/{Uri.EscapeDataString(permission)}", new SetRolePermissionRequest { Granted = granted }, ct);
+
     public Task<IReadOnlyList<UserDto>> ListUsersAsync(CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<UserDto>>("api/users", ct);
 

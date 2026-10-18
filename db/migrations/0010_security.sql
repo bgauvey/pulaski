@@ -53,10 +53,9 @@ INSERT INTO sec.role (code, name, is_system) VALUES
     ('manager', 'Manager', true),
     ('auditor', 'Auditor', true),
     ('process_engineer', 'Process engineer', true)
-ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, is_system = true;
+ON CONFLICT (code) DO NOTHING;
 
--- Each system role holds exactly the permissions the code gives it (Pulaski.Domain.Security.Roles).
-DELETE FROM sec.role_permission rp USING sec.role r WHERE r.id = rp.role_id AND r.is_system;
+-- The starting roles' permissions, where missing; 0011 makes roles editable, so nothing here overwrites them.
 INSERT INTO sec.role_permission (role_id, permission_code)
 SELECT r.id, v.permission_code FROM (VALUES
     ('administrator', 'schedule.plan'),
@@ -109,7 +108,8 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('auditor', 'stock_count.manage'),
     ('process_engineer', 'processes.manage')
 ) AS v(role_code, permission_code)
-JOIN sec.role r ON r.code = v.role_code;
+JOIN sec.role r ON r.code = v.role_code
+ON CONFLICT (role_id, permission_code) DO NOTHING;
 
 DO $$
 BEGIN

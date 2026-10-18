@@ -29,6 +29,12 @@ public sealed record RoleAssignment(Guid Id, Guid UserId, string RoleCode, Guid?
     public bool IsActiveAt(DateTimeOffset at) => ValidFrom <= at && (ValidTo is null || ValidTo > at);
 }
 
+/// <summary>A role as the commands see it (D-037): what it allows, held at a site unless it is the administrator.</summary>
+public sealed record SecurityRole(Guid Id, string Code, string Name, string Description, bool IsActive, IReadOnlyList<string> Permissions)
+{
+    public bool IsGlobal => Roles.IsGlobal(Code);
+}
+
 /// <summary>Hashes and checks passwords; the hash carries its own salt and work factor.</summary>
 public interface IPasswordHasher
 {
@@ -46,6 +52,9 @@ public interface ISecurityReadStore
     Task<IReadOnlyList<UserDto>> ListUsersAsync(DateTimeOffset now, CancellationToken cancellationToken);
 
     Task<UserDto?> GetUserAsync(Guid id, DateTimeOffset now, CancellationToken cancellationToken);
+
+    /// <summary>Every role, with how many users hold it at <paramref name="now"/>.</summary>
+    Task<IReadOnlyList<RoleDto>> ListRolesAsync(DateTimeOffset now, CancellationToken cancellationToken);
 
     /// <summary>The codes of the sites the user's roles are held at, for showing them.</summary>
     Task<IReadOnlyDictionary<Guid, string>> GetSiteCodesAsync(IReadOnlyCollection<Guid> siteIds, CancellationToken cancellationToken);
@@ -81,6 +90,23 @@ public interface ISecurityRepository
     Task<int> CountOtherAdministratorsAsync(Guid exceptUserId, DateTimeOffset at, CancellationToken cancellationToken);
 
     Task<bool> IsSiteAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>The role and its granted permissions, locked.</summary>
+    Task<Versioned<SecurityRole>?> FindRoleForUpdateAsync(string code, CancellationToken cancellationToken);
+
+    Task<long> InsertRoleAsync(SecurityRole role, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Saves the name, description and active flag; every change to a role, its permissions too, gives it a new version.</summary>
+    Task<long> UpdateRoleAsync(SecurityRole role, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Grants or takes away one permission. Rows are kept, flagged, since the app role has no DELETE.</summary>
+    Task SetRolePermissionAsync(Guid roleId, string permission, bool granted, DateTimeOffset at, Guid? by, CancellationToken cancellationToken);
+
+    /// <summary>How many active assignments of the role there are now.</summary>
+    Task<int> CountHoldersAsync(Guid roleId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Copies the code's permission catalog into <c>sec.permission</c>, so roles can name every permission.</summary>
+    Task SyncPermissionsAsync(IReadOnlyList<PermissionInfo> catalog, CancellationToken cancellationToken);
 
     Task<int> CountUsersAsync(CancellationToken cancellationToken);
 }
