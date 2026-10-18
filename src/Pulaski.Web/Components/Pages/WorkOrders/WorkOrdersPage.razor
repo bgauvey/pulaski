@@ -4,6 +4,7 @@
 @inject NavigationManager Navigation
 @inject EquipmentSelection Selection
 @inject TimeProvider Time
+@inject CurrentUser User
 
 <PageTitle>Work orders · Pulaski</PageTitle>
 
@@ -51,7 +52,7 @@
                 <ul class="wo-menu-list" role="menu">
                     @foreach (var (status, label) in BulkActions)
                     {
-                        var eligible = SelectedOrders.Count(o => o.Order.NextStatuses.Contains(status));
+                        var eligible = SelectedOrders.Count(o => o.Order.NextStatuses.Contains(status) && MayMove(o.Order, status));
                         <li role="none">
                             <button type="button" role="menuitem" class="wo-menu-item @(status == "cancelled" ? "is-danger" : "")" disabled="@(eligible == 0)"
                                     @onclick="() => StartBulk(status)">
@@ -220,7 +221,7 @@
                             {
                                 <div class="wo-menu-backdrop" @onclick="() => _menuFor = null"></div>
                                 <ul class="wo-menu-list is-right" role="menu">
-                                    @foreach (var next in wo.NextStatuses)
+                                    @foreach (var next in wo.NextStatuses.Where(n => MayMove(wo, n)))
                                     {
                                         <li role="none">
                                             <button type="button" role="menuitem" class="wo-menu-item @(next == "cancelled" ? "is-danger" : "")"
@@ -322,6 +323,10 @@
 </div>
 
 @code {
+    // Dispatching, un-dispatching and firming is managing an order; cancelling and closing it is its own permission (D-037).
+    private bool MayMove(WorkOrderDto order, string status) =>
+        User.Can(status is "cancelled" or "closed" ? PermissionCodes.WorkOrderClose : PermissionCodes.WorkOrderManage, order.SiteId);
+
     private static readonly (string Status, string Label)[] BulkActions =
     [
         ("dispatched", "Dispatch"),
@@ -555,7 +560,7 @@
         _pendingBulk = null;
         _busy = true;
         var orders = SelectedOrders.ToList();
-        var eligible = orders.Where(o => o.Order.NextStatuses.Contains(status)).ToList();
+        var eligible = orders.Where(o => o.Order.NextStatuses.Contains(status) && MayMove(o.Order, status)).ToList();
         var failures = new List<string>();
         foreach (var order in eligible)
         {

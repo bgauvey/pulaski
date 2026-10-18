@@ -1,0 +1,37 @@
+.account-shell {
+    display: grid;
+    place-items: center;
+    min-height: 100vh;
+    padding: var(--space-4);
+    background: var(--bg);
+}
+
+.account-card {
+    width: 100%;
+    max-width: 24rem;
+    padding: var(--space-6);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 600;
+    font-size: 19px;
+    color: var(--text);
+}
+
+.brand-mark circle {
+    fill: var(--accent);
+}
+
+.brand-mark path {
+    fill: none;
+    stroke: var(--accent-ink);
+    stroke-width: 2.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}

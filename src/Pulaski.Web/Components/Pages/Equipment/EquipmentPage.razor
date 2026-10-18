@@ -1,11 +1,13 @@
 @page "/equipment"
 @inject PulaskiApiClient Api
+@inject CurrentUser User
 
 <PageTitle>Equipment · Pulaski</PageTitle>
 
 <h1>Equipment</h1>
 
 <ProblemAlert Error="_loadError" />
+<ViewOnlyNote Permission="@PermissionCodes.Equipment" What="maintain equipment" />
 
 @if (_equipment is null || _types is null)
 {
@@ -22,9 +24,12 @@ else
     <div class="equipment-workspace">
         <section class="tree-panel" aria-label="Equipment hierarchy">
             <div class="tree-toolbar" role="toolbar" aria-label="Equipment">
-                <button type="button" class="btn btn-primary btn-sm btn-with-icon" disabled="@(!CanAdd)" @onclick="AddChild">
-                    <Icon Name="plus" Size="16" />@(_equipment.Count == 0 ? "Add enterprise" : "Add child")
-                </button>
+                @if (CanChange)
+                {
+                    <button type="button" class="btn btn-primary btn-sm btn-with-icon" disabled="@(!CanAdd)" @onclick="AddChild">
+                        <Icon Name="plus" Size="16" />@(_equipment.Count == 0 ? "Add enterprise" : "Add child")
+                    </button>
+                }
                 <button type="button" class="btn btn-outline-secondary btn-sm btn-square" title="Expand all" aria-label="Expand all"
                         disabled="@(IsFiltering)" @onclick="ExpandAll">
                     <Icon Name="expand-all" Size="16" />
@@ -61,7 +66,7 @@ else
         <div class="props-panel">
             <PropertyGrid Items="properties.Items" Title="@properties.Title" Subtitle="@properties.Subtitle"
                           EmptyText="Select equipment to see its properties."
-                          Disabled="_saving" Revision="_revision" OnChange="OnPropertyChangeAsync"
+                          Disabled="@(_saving || !CanChange)" Revision="_revision" OnChange="OnPropertyChangeAsync"
                           Banner="@(_propError is null ? null : ErrorBanner)"
                           Footer="@(_draft is not null && _selectedId == EquipmentTreeGrid.DraftId ? DraftFooter : null)" />
         </div>
@@ -81,6 +86,8 @@ else
     private ApiException? _propError;
     private bool _saving;
     private int _revision;
+
+    private bool CanChange => User.Can(PermissionCodes.Equipment);
 
     private bool IsFiltering => !string.IsNullOrWhiteSpace(_filter);
 

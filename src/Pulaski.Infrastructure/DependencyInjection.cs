@@ -8,6 +8,7 @@ using Pulaski.Application.Materials;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
 using Pulaski.Application.Scheduling;
+using Pulaski.Application.Security;
 using Pulaski.Application.Units;
 using Pulaski.Application.WorkOrders;
 using Pulaski.Infrastructure.Boms;
@@ -20,6 +21,7 @@ using Pulaski.Infrastructure.Persistence;
 using Pulaski.Infrastructure.Processes;
 using Pulaski.Infrastructure.ReferenceData;
 using Pulaski.Infrastructure.Scheduling;
+using Pulaski.Infrastructure.Security;
 using Pulaski.Infrastructure.Units;
 using Pulaski.Infrastructure.WorkOrders;
 
@@ -45,6 +47,9 @@ public static class DependencyInjection
         services.AddSingleton<IBomReadStore, BomQueries>();
         services.AddSingleton<IUnitReadStore, UnitQueries>();
         services.AddSingleton<IExecutionReadStore, ExecutionQueries>();
+        services.AddSingleton<SecurityQueries>();
+        services.AddSingleton<ISecurityReadStore>(sp => sp.GetRequiredService<SecurityQueries>());
+        services.AddSingleton<ISiteLookup>(sp => sp.GetRequiredService<SecurityQueries>());
         services.AddSingleton<IInventoryReadStore, InventoryQueries>();
         services.AddSingleton<DatabaseMaintenance>();
         services.AddSingleton<IMaterialReadStore, MaterialQueries>();
@@ -63,6 +68,8 @@ public static class DependencyInjection
         services.AddScoped<IMaterialAdminRepository, MaterialAdminRepository>();
         services.AddScoped<ICapabilityRepository, CapabilityRepository>();
         services.AddScoped<IExecutionRepository, ExecutionRepository>();
+        services.AddScoped<ISecurityRepository, SecurityRepository>();
+        services.AddSingleton<IPasswordHasher, PasswordHasher>();
 
         return services;
     }

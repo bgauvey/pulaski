@@ -1,6 +1,7 @@
 @page "/reasons"
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
+@inject CurrentUser User
 
 <PageTitle>Reasons · Pulaski</PageTitle>
 
@@ -13,6 +14,7 @@
 </div>
 
 <ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Reasons" What="maintain reason codes" />
 
 <nav class="inv-tabs" aria-label="Kind">
     @foreach (var kind in Kinds)
@@ -23,6 +25,8 @@
     }
 </nav>
 
+@if (CanEdit)
+{
 <form class="inv-toolbar" @onsubmit="CreateAsync" @onsubmit:preventDefault>
     <input class="form-control" style="min-width: 8rem; width: 10rem" maxlength="30" placeholder="CODE" aria-label="Code" @bind="_newCode" />
     <input class="form-control inv-grow" maxlength="100" placeholder="Name, e.g. Damaged in handling" aria-label="Name" @bind="_newName" />
@@ -39,6 +43,7 @@
     </div>
     <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_newCode) || string.IsNullOrWhiteSpace(_newName))">Add @Display.Label(_kind).ToLowerInvariant() reason</button>
 </form>
+}
 
 @if (_reasons is null)
 {
@@ -56,6 +61,7 @@ else
     }
     else
     {
+        <fieldset class="view-only-scope" disabled="@(!CanEdit)">
         <div class="table-panel">
             <table class="table align-middle">
                 <thead>
@@ -92,6 +98,7 @@ else
                 </tbody>
             </table>
         </div>
+        </fieldset>
     }
 }
 
@@ -107,6 +114,9 @@ else
     private Guid? _newSiteId;
     private bool _newRequiresComment;
     private bool _saving;
+
+    // A reason for every site is enterprise-wide, so holding the permission at any site is enough (D-037).
+    private bool CanEdit => User.Can(PermissionCodes.Reasons);
 
     protected override async Task OnInitializedAsync()
     {

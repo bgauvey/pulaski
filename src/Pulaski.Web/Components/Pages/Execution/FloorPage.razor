@@ -4,6 +4,7 @@
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 @inject TimeProvider Clock
+@inject CurrentUser User
 
 <PageTitle>Floor · Pulaski</PageTitle>
 
@@ -27,6 +28,7 @@
 </div>
 
 <ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.JobExecute" What="start, pause and complete jobs" SiteId="Sites.SiteId" />
 @if (_notes.Count > 0)
 {
     <div class="drawer-alert mb-3" role="status">
@@ -114,13 +116,16 @@ else
                             </div>
                         }
                         <div class="d-flex flex-wrap gap-2 mt-2">
-                            @if (r.JobType == "production")
+                            @if (r.JobType == "production" && CanReport)
                             {
                                 <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => OpenReportAsync(r.JobId)">Report</button>
                             }
-                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => Stop(r.JobId, complete: false)">Pause</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy"
-                                    @onclick="() => CompleteOrStopAsync(r)">Complete</button>
+                            @if (CanRun)
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => Stop(r.JobId, complete: false)">Pause</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy"
+                                        @onclick="() => CompleteOrStopAsync(r)">Complete</button>
+                            }
                         </div>
 
                         @if (_stopFor == r.JobId)
@@ -158,7 +163,10 @@ else
                                             <div class="small text-muted">@job.Waiting@(job.ReadyAt is { } at ? $" Ready at {Display.SiteTime(at, Sites.Site?.TimeZone)}." : "")</div>
                                         }
                                     </div>
-                                    @if (row.IsGroup)
+                                    @if (!CanRun)
+                                    {
+                                    }
+                                    else if (row.IsGroup)
                                     {
                                         <div class="d-flex gap-1">
                                             <select class="form-select form-select-sm" aria-label="Line for @job.JobNumber" @bind="_groupLine">
@@ -197,6 +205,11 @@ else
 }
 
 @code {
+    // What the user may do at the site shown (D-037); the board itself is open to everyone.
+    private bool CanRun => User.Can(PermissionCodes.JobExecute, Sites.SiteId);
+
+    private bool CanReport => User.Can(PermissionCodes.ProductionReport, Sites.SiteId);
+
     private IReadOnlyList<LineBoardRowDto>? _board;
     private IReadOnlyList<PartialBatchDto> _pending = [];
     private IReadOnlyList<string> _notes = [];

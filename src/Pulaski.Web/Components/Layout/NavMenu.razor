@@ -1,4 +1,5 @@
 @* Grouped by how plants work. Groups gain links as their screens are built. *@
+@inject CurrentUser User
 
 <nav class="side-nav" aria-label="Main">
     <div class="nav-group">
@@ -40,5 +41,11 @@
         <NavLink class="nav-item" href="reasons" title="Reason codes">
             <Icon Name="info" /><span class="nav-text">Reasons</span>
         </NavLink>
+        @if (User.Can(PermissionCodes.Security))
+        {
+            <NavLink class="nav-item" href="users" title="Users, roles and permissions">
+                <Icon Name="users" /><span class="nav-text">Users</span>
+            </NavLink>
+        }
     </div>
 </nav>

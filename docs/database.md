@@ -475,58 +475,81 @@ Maps a machine's PackML `Admin.StopReason` (first-out) value to a Pulaski reason
 
 ## 6. User control (`sec`)
 
-Sign-in is OpenID Connect; Pulaski stores only the issuer and subject, plus its own authorization model.
+Users, their passwords while Pulaski signs them in itself, and roles held at sites (D-037). Permissions are constants in code (`Pulaski.Domain.Security`), copied into `sec.permission` at every API start. Roles are data an administrator maintains (0011); a new database starts with the default set. Only `administrator` is fixed in code: it holds every permission and has no `role_permission` rows. An identity provider (OpenID Connect) comes later: users are already keyed by issuer and subject.
 
-### sec.app_user — people who sign in · *Planned*
+### sec.app_user — people who sign in · *Built (D-037)*
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `idp_issuer` | text | no | The identity provider's issuer. |
-| `idp_subject` | text | no | The `sub` claim; unique with the issuer. |
+| `idp_issuer` | text | no | Who vouches for the user: `pulaski-local` for a Pulaski password, or an identity provider's issuer. |
+| `idp_subject` | text | no | The user under that issuer: the lower-case user name for a local user, the `sub` claim otherwise. Unique with the issuer. |
+| `username` | text | yes | A local user's user name, unique ignoring case (`app_user_username_uq`). |
 | `display_name` | text | no | Display name. |
-| `email` | text | yes | Email, if the provider gives one. |
-| `is_active` | boolean | no | False when access is withdrawn. |
+| `email` | text | yes | Email, optional. |
+| `is_active` | boolean | no | False when the user is switched off: they can't sign in or call the API. |
 | `last_login_at` | timestamptz | yes | Last successful sign-in. |
 | `created_at` | timestamptz | no | Insert time. |
+| `updated_at` | timestamptz | no | Last change to the user. |
 
-### sec.permission — what the code can check · *Planned*
+### sec.local_credential — a local user's password · *Built (D-037)*
+
+One row per user who signs in with a Pulaski password.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `code` | text | no | Primary key, defined in code: `job.dispatch`, `lot.hold`, `spc.limits.approve`. |
-| `description` | text | no | What it allows. |
+| `app_user_id` | uuid → app_user | no | Primary key: the user. |
+| `password_hash` | text | no | `pbkdf2-sha256$iterations$salt$hash` (210,000 iterations, 16-byte salt, base64). The password itself is never stored. |
+| `must_change` | boolean | no | True for a temporary password (new user, or reset): only changing it is allowed until it is. |
+| `failed_attempts` | integer | no | Wrong passwords in a row; five lock the user. |
+| `locked_until` | timestamptz | yes | Sign-in refused until this time. |
+| `changed_at` | timestamptz | no | Last change to the row. |
 
-### sec.role — named sets of permissions · *Planned*
+### sec.permission — what the code can check · *Built (D-037)*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `code` | text | no | Primary key, defined in code: `schedule.plan`, `job.execute`, `inventory.correct`, … (21 in all, D-037). |
+| `description` | text | no | What it allows; kept in step with the code at API start. |
+
+### sec.role — named sets of permissions · *Built (D-037)*
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `code` | text | no | Unique: `operator`, `supervisor`, `quality_tech`. |
+| `code` | text | no | Unique, fixed once created; lower-case letters, digits and `_` (`role_code_ck`). Starts with `administrator`, `planner`, `supervisor`, `operator`, `quality`, `manager`, `auditor`, `process_engineer`. |
 | `name` | text | no | Display name. |
-| `is_system` | boolean | no | Shipped with Pulaski; not editable. |
+| `is_system` | boolean | no | One of the starting roles; editable like any other except `administrator`. |
+| `description` | text | no | What the role is for; may be empty. |
+| `is_active` | boolean | no | False when switched off: it can't be given, and gives its holders nothing. A role someone holds can't be switched off. |
+| `created_at` | timestamptz | no | Insert time. |
+| `updated_at` | timestamptz | no | Last change, also to its permissions (which moves the role's version on). |
 
-### sec.role_permission — permissions in a role · *Planned*
+### sec.role_permission — permissions in a role · *Built (D-037)*
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `role_id` | uuid → role | no | The role. Part of the primary key. |
 | `permission_code` | text → permission | no | The permission. Part of the primary key. |
+| `is_granted` | boolean | no | False once the permission has been taken away: rows are kept, since the app role has no DELETE. |
+| `changed_at` | timestamptz | no | When it was last granted or taken away. |
+| `changed_by_user_id` | uuid → app_user | yes | Who did. |
 
-### sec.role_assignment — who has which role, where · *Planned*
+### sec.role_assignment — who has which role, where · *Built (D-037)*
 
-A role granted to one user or to an identity-provider group, scoped to an equipment subtree. The enterprise row means everywhere.
+A role granted to one user (or, later, to an identity-provider group) at a site. Assignments are ended, never deleted.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
 | `role_id` | uuid → role | no | The role granted. |
 | `app_user_id` | uuid → app_user | yes | The user, or… |
-| `idp_group` | text | yes | …the group claim value. Exactly one of the two is set. |
-| `scope_equipment_id` | uuid → equipment | no | Applies to this equipment and everything below it. |
+| `idp_group` | text | yes | …a group claim value (reserved for identity providers). Exactly one of the two is set. |
+| `scope_equipment_id` | uuid → equipment | yes | The site the role is held at; null for a role held everywhere (the administrator). |
 | `valid_from` | timestamptz | no | Start of the grant. |
-| `valid_to` | timestamptz | yes | End of the grant; null means open-ended. |
-| `granted_by_user_id` | uuid → app_user | yes | Who granted it. |
+| `valid_to` | timestamptz | yes | When the role was taken away; null while it holds. |
+| `granted_by_user_id` | uuid → app_user | yes | Who granted it; null for the first administrator. |
+| `ended_by_user_id` | uuid → app_user | yes | Who took it away. |
 
 ### sec.terminal — shop-floor devices · *Planned*
 
@@ -1210,7 +1233,7 @@ Every command appends its CloudEvents event here in the same transaction as the 
 
 ### sec.v_user_permission — effective permissions (view)
 
-Direct user grants expanded down the equipment tree: one row per user, permission and equipment the user may use it on. Group grants are resolved at sign-in from the token's group claims, so they are not in the view.
+Direct user grants expanded down the equipment tree: one row per user, permission and equipment the user may use it on. Group grants are resolved at sign-in from the token's group claims, so they are not in the view. Only active roles and granted permissions count; roles held everywhere (the administrator's, with no scope) aren't in it. The application checks permissions in code (D-037) and doesn't read the view; it is for reports.
 
 | Column | Description |
 | --- | --- |

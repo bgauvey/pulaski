@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Units;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.ReferenceData;
+using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
 
@@ -20,14 +22,16 @@ internal static class UnitEndpoints
         {
             var created = await handler.HandleAsync(new CreateUnitCommand(request.Code, request.Name, request.Dimension, request.ToBaseFactor), ct);
             return TypedResults.Created($"/api/uoms/{created.Id}", created);
-        });
+        })
+        .RequirePermission(Permissions.Units);
 
         uoms.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (
             Guid id,
             UpdateUomRequest request,
             ICommandHandler<UpdateUnitCommand, VersionResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new UpdateUnitCommand(id, request.Version, request.Name, request.IsActive), ct)));
+            TypedResults.Ok(await handler.HandleAsync(new UpdateUnitCommand(id, request.Version, request.Name, request.IsActive), ct)))
+        .RequirePermission(Permissions.Units);
 
         // With materialId, the material's own conversions apply as well as the standard factors.
         uoms.MapGet("/convert", async Task<Ok<UnitConversionResultDto>> (
@@ -53,7 +57,8 @@ internal static class UnitEndpoints
             ICommandHandler<SetMaterialConversionCommand, MaterialConversionDto> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new SetMaterialConversionCommand(materialId, request.FromUomId, request.ToUomId, request.Factor), ct)));
+                new SetMaterialConversionCommand(materialId, request.FromUomId, request.ToUomId, request.Factor), ct)))
+        .RequirePermission(Permissions.Materials);
 
         // Switches the conversion off; Pulaski never deletes rows.
         conversions.MapDelete("/", async Task<NoContent> (
@@ -65,7 +70,8 @@ internal static class UnitEndpoints
         {
             await handler.HandleAsync(new RemoveMaterialConversionCommand(materialId, fromUomId, toUomId), ct);
             return TypedResults.NoContent();
-        });
+        })
+        .RequirePermission(Permissions.Materials);
 
         return routes;
     }

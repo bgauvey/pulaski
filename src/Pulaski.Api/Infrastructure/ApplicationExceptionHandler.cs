@@ -20,6 +20,8 @@ internal sealed class ApplicationExceptionHandler(IProblemDetailsService problem
                 Title = ex.Message,
             },
             NotFoundException ex => Problem(StatusCodes.Status404NotFound, "Not found", ex.Message),
+            UnauthorizedException ex => Problem(StatusCodes.Status401Unauthorized, "Not signed in", ex.Message),
+            ForbiddenException ex => Problem(StatusCodes.Status403Forbidden, "Not allowed", ex.Message),
             ConflictException ex => Problem(StatusCodes.Status409Conflict, "Conflict", ex.Message),
             DomainRuleException ex => Problem(StatusCodes.Status422UnprocessableEntity, "Rule violated", ex.Message),
             _ => null,

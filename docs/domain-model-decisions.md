@@ -607,7 +607,59 @@ Some materials are made a fixed amount at a time: a 50 kg mix, a 200 l tank. Pul
 - **Locks.** Approve and reject lock the job, the partial batch, its run, then its lot, the reporting order (D-027), so they serialize with reports.
 - **Events:** `pulaski.material.batching_set.v1`, `pulaski.partial_batch.reported.v1`, `…approved.v1`, `…rejected.v1`, with the lot's own movements.
 
-**Not yet:** a batch size per line (a 50 kg mixer next to a 200 kg one), a rule for ERP orders that aren't whole batches (orders aren't imported yet), choosing to round a replacement down, and permissions for who may approve (D-036 records whoever is signed in once sign-in exists).
+**Not yet:** a batch size per line (a 50 kg mixer next to a 200 kg one), a rule for ERP orders that aren't whole batches (orders aren't imported yet), choosing to round a replacement down, and permissions for who may approve (settled by D-037: Supervisor or Quality, never whoever reported it).
+
+## Users, roles and permissions (D-037, proposed)
+
+Who may change what. Every signed-in user may **view** everything; **permissions** guard changes.
+
+- **Permissions are constants in code** (`Pulaski.Domain.Security.Permissions`), the only place that checks them. Adding one is a code change: a constant, its catalog entry (area and description), and the endpoint that requires it.
+- **Roles are data.** An administrator creates roles and chooses their permissions on the **Roles** and **Permissions** tabs of Configure → Users (`sec.role`, `sec.role_permission`). The only role the code knows is the **administrator**: it holds every permission everywhere, including ones added later, and can't be changed, so someone can always manage users.
+
+**Roles.** Every role but the administrator is held **at a site**; a user may hold several, at several sites, and may do the union of them. A new database starts with these roles (`Roles.Defaults`), which the administrator may then change:
+
+| Role | Held | May change |
+| --- | --- | --- |
+| Administrator | everywhere | everything, including users and roles |
+| Planner | at a site | plan jobs; create, dispatch, un-dispatch and firm work orders; cancel and close them; planning rates; materials |
+| Supervisor | at a site | start, pause, complete and reopen jobs; report production and consumption; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches |
+| Operator | at a site | start, pause and complete jobs; report production and consumption; receive and move lots |
+| Quality | at a site | hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); approve or reject partial batches |
+| Manager | at a site | reopen jobs; cancel and close work orders; reason codes; the site's settings |
+| Auditor | at a site | correct inventory; stock counts. Doesn't plan or run jobs |
+| Process engineer | at a site | processes, BOMs and capabilities |
+
+Who owns the configuration: equipment, units → Administrator; materials (with classes, conversions, batching, shelf life and import) → Planner; processes, BOMs, capabilities → Process engineer; planning rates → Planner; reason codes and site settings → Manager; users → Administrator.
+
+**Permissions.** 21 codes, each in an area (Planning, Floor, Inventory, Configuration, Administration) for the screens. They are mirrored for the UI in `Pulaski.Contracts.Security.PermissionCodes`, and the API copies the catalog into `sec.permission` at every start, so a new permission can be given to roles at once: `schedule.plan`, `work_order.manage`, `work_order.close`, `rate.modify`, `job.execute`, `job.reopen`, `production.report`, `lot.receive`, `lot.move`, `lot.ship`, `lot.hold`, `inventory.correct`, `stock_count.manage`, `partial_batch.decide`, `materials.manage`, `processes.manage`, `units.manage`, `reasons.manage`, `equipment.manage`, `site_settings.manage`, `security.manage` (users, roles and what each role may do).
+
+**Maintaining roles.**
+
+- A role has a code (lower-case letters, digits and `_`, fixed once created), a name, a description and its permissions. `POST /api/roles` creates one; `PUT /api/roles/{code}` changes its name, description, active flag and all its permissions at once (with its version); `PUT /api/roles/{code}/permissions/{permission}` grants or takes away one (the Permissions screen; doing what is already so changes nothing). Each change moves the role's version on.
+- A change applies at once to everyone who holds the role: what a user may do is read with their roles on every request.
+- **Switched off, not deleted.** A role someone holds can't be switched off (every user keeps a role); a switched-off role can't be given. A permission taken away keeps its `sec.role_permission` row with `is_granted = false`, since the app role has no DELETE; the events say who changed what.
+- Events: `pulaski.role.created.v1`, `pulaski.role.updated.v1` (before and after), `pulaski.role.permission_changed.v1`.
+
+**Where it is checked.** In the API, on every changing endpoint (`.RequirePermission(permission, site)`): the site is found from what the request is about (the job, lot, count, process, partial batch, capability, run standard or work order, or the location or line in the body) by `ISiteLookup`. Something that belongs to no site, such as an enterprise-wide process or reason, needs the permission at any site. A refusal is 403 with the permission in words. The UI hides or switches off what the user may not do, but the API decides.
+
+**Rules.**
+
+- **Every user belongs to a role.** A user is created with one; their last active role can't be taken away (switch them off instead); signing in without a role is refused.
+- **Someone stays administrator.** The last active administrator can't lose the role or be switched off, and no one can switch themselves off.
+- **Not your own partial batch.** Whoever reported a partial batch can't approve or reject it (`PartialBatchLocks.EnsureNotOwn`, 403).
+- **Ended, not deleted.** Role assignments get `valid_to` and `ended_by_user_id`, so history keeps who could do what.
+
+**Identity.** Pulaski signs users in itself for now, with an identity provider to follow:
+
+- **Local users** (issuer `pulaski-local`, subject = lower-case user name). Passwords are PBKDF2-SHA256 with 210,000 iterations and a random salt, stored as `pbkdf2-sha256$iterations$salt$hash` in `sec.local_credential`. At least 10 characters, not containing the user name, with two of lower case, upper case, digits and symbols. Five wrong passwords in a row lock the user for 15 minutes. An administrator sets a temporary password, which must be changed before anything else (the API answers 403 to everything but changing it and `/api/me`).
+- **Tokens.** `POST /api/auth/sign-in` returns a bearer token (HMAC-SHA256 JWT, issuer `pulaski-local`, audience `pulaski`, 12 hours) signed with `Security:SigningKey` (at least 32 characters; the API won't start without it). What the user may do is read from the database on every request, so switching a user off or taking a role away applies at once.
+- **The UI** keeps the token in an HTTP-only session cookie that ends with it. Signing in and changing a password are plain (not interactive) pages, because they set the cookie. When the API stops accepting the token, the UI signs the user out and asks them to sign in again.
+- **The first administrator** is created at API start when there are no users at all, from `Security:BootstrapAdmin` (user name and a temporary password).
+- **Identity providers** (Okta, Entra ID, AD FS, Keycloak; the charter's OpenID Connect) come later as another JWT bearer scheme in the API. `sec.app_user` already keys users by `(idp_issuer, idp_subject)`, and roles stay in Pulaski; `idp_group` on `sec.role_assignment` is reserved for mapping a provider's groups to roles.
+
+**Events:** `pulaski.user.signed_in.v1`, `…sign_in_failed.v1`, `…password_changed.v1`, `…password_reset.v1`, `…created.v1`, `…updated.v1`, `…role_assigned.v1`, `…role_ended.v1`, on the user. Event actors are the signed-in user (local users by user name).
+
+**Not yet:** a role held everywhere other than the administrator; signing in through an identity provider; reads filtered by site (everyone sees every site); correcting reported production or consumption (no command exists yet, so the Auditor's "correct production values" waits for it); site settings screens (the API is guarded).
 
 ## Application architecture
 
@@ -641,7 +693,7 @@ Pulaski.Web (Blazor)  --HTTP/JSON-->  Pulaski.Api  -->  Application (CQRS)  --> 
 
 - Reads and writes are separate interfaces: queries take no locks and no transaction, so the query side can later move to read models or a replica without touching commands.
 - Errors use RFC 9457 problem responses: 400 validation, 404 not found, 409 version conflict or duplicate key, 422 business rule.
-- Until OIDC sign-in is wired up, the actor recorded on events is `anonymous`.
+- Events record the signed-in user as their actor (D-037): a local user by user name, anyone else as `issuer|subject`. Only signing in itself runs as `anonymous`.
 
 ## Open questions
 

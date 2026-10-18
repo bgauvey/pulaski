@@ -1,5 +1,6 @@
 @page "/materials/classes"
 @inject PulaskiApiClient Api
+@inject CurrentUser User
 
 <PageTitle>Material classes · Pulaski</PageTitle>
 
@@ -13,12 +14,16 @@
 
 <MaterialsTabs />
 <ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Materials" What="maintain materials" />
 
+@if (User.Can(PermissionCodes.Materials))
+{
 <form class="inv-toolbar" @onsubmit="CreateAsync" @onsubmit:preventDefault>
     <input class="form-control" style="min-width: 8rem; width: 10rem" maxlength="30" placeholder="CODE" aria-label="Code" @bind="_code" @bind:event="oninput" />
     <input class="form-control inv-grow" maxlength="100" placeholder="Name, e.g. Extruded profiles" aria-label="Name" @bind="_name" @bind:event="oninput" />
     <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))">Add class</button>
 </form>
+}
 
 @if (_classes is null)
 {

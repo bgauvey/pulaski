@@ -1,0 +1,399 @@
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+
+@* Users and their roles (D-037). Every user holds at least one role; every role but the administrator is held at a site. *@
+<div class="inv-head">
+    <div>
+        <p class="text-muted mb-0">
+            Who can sign in, and which roles they hold. Everyone who signs in can view every screen; roles decide the changes.
+            Every user needs a role, and every role but Administrator is held at a site.
+        </p>
+    </div>
+    @if (CanManage)
+    {
+        <div class="inv-head-tools">
+            <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New user</button>
+        </div>
+    }
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Security" What="maintain users and their roles" />
+
+@if (_message is { } message)
+{
+    <div class="alert alert-success d-flex align-items-center gap-2" role="status">
+        <span>@message</span>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">Dismiss</button>
+    </div>
+}
+
+@if (_adding && CanManage)
+{
+    <form class="inv-facts mb-3" @onsubmit="CreateAsync" @onsubmit:preventDefault>
+        <h2 class="h6">New user</h2>
+        <div class="row g-2">
+            <div class="col-sm-3">
+                <label class="form-label small" for="new-username">User name</label>
+                <input id="new-username" class="form-control" maxlength="100" autocomplete="off" placeholder="e.g. j.smith" @bind="_new.Username" @bind:event="oninput" />
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label small" for="new-name">Name</label>
+                <input id="new-name" class="form-control" maxlength="200" placeholder="e.g. Jo Smith" @bind="_new.DisplayName" @bind:event="oninput" />
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label small" for="new-email">E-mail (optional)</label>
+                <input id="new-email" type="email" class="form-control" maxlength="254" @bind="_new.Email" />
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label small" for="new-password">Temporary password</label>
+                <input id="new-password" class="form-control" autocomplete="off" @bind="_new.TemporaryPassword" @bind:event="oninput" />
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label small" for="new-role">Role</label>
+                <select id="new-role" class="form-select" @bind="_new.RoleCode">
+                    <option value="">Choose a role…</option>
+                    @foreach (var r in _roles.Where(r => r.IsActive))
+                    {
+                        <option value="@r.Code">@r.Name</option>
+                    }
+                </select>
+            </div>
+            @if (!IsGlobal(_new.RoleCode))
+            {
+                <div class="col-sm-3">
+                    <label class="form-label small" for="new-site">At site</label>
+                    <select id="new-site" class="form-select" @bind="_new.SiteId">
+                        <option value="">Choose a site…</option>
+                        @foreach (var s in Sites.Sites)
+                        {
+                            <option value="@s.Id">@s.Code · @s.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+            <div class="col-12 small text-muted">
+                They sign in with the temporary password and must choose their own straight away. At least 10 characters, with two of: lower case,
+                upper case, digits, symbols; not the user name. Tell them the password yourself: Pulaski doesn't send it.
+            </div>
+        </div>
+        <div class="d-flex gap-2 mt-2">
+            <button type="submit" class="btn btn-primary" disabled="@(_saving || !CanCreate)">Create user</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _adding = false">Cancel</button>
+        </div>
+    </form>
+}
+
+@if (_users is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    <div class="table-panel mb-4">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Roles</th>
+                    <th>Signs in</th>
+                    <th>Last sign-in</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in _users)
+                {
+                    <tr @key="u.Id" class="@(u.IsActive ? "" : "text-muted")">
+                        <td>
+                            <div class="fw-semibold">@u.DisplayName</div>
+                            <div class="small text-muted">@u.Username@(u.Email is { } e ? $" · {e}" : "")</div>
+                        </td>
+                        <td>
+                            @foreach (var r in u.Roles)
+                            {
+                                <span class="chip me-1">@(r.SiteCode is null ? r.RoleName : $"{r.RoleName} · {r.SiteCode}")</span>
+                            }
+                        </td>
+                        <td class="small">@(u.Issuer == "pulaski-local" ? "Pulaski password" : u.Issuer)</td>
+                        <td class="small">@(u.LastLoginAt is { } at ? at.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "Never")</td>
+                        <td class="small">
+                            @if (!u.IsActive)
+                            {
+                                <span class="chip">Switched off</span>
+                            }
+                            else if (u.IsLocked)
+                            {
+                                <span class="chip chip-warning">Locked</span>
+                            }
+                            else if (u.MustChangePassword)
+                            {
+                                <span class="chip">Temporary password</span>
+                            }
+                            else
+                            {
+                                <span>Active</span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            @if (CanManage)
+                            {
+                                <button type="button" class="btn btn-sm btn-link" aria-expanded="@(_open == u.Id ? "true" : "false")" @onclick="() => Open(u)">
+                                    @(_open == u.Id ? "Close" : "Change")
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                    @if (_open == u.Id && _edit is { } edit)
+                    {
+                        <tr @key="(u.Id, true)">
+                            <td colspan="6" class="bg-body-tertiary">
+                                <div class="row g-4 p-2">
+                                    <form class="col-lg-4" @onsubmit="() => SaveAsync(u)" @onsubmit:preventDefault>
+                                        <h3 class="h6">Details</h3>
+                                        <label class="form-label small" for="edit-name-@u.Id">Name</label>
+                                        <input id="edit-name-@u.Id" class="form-control form-control-sm mb-2" maxlength="200" @bind="edit.DisplayName" />
+                                        <label class="form-label small" for="edit-email-@u.Id">E-mail</label>
+                                        <input id="edit-email-@u.Id" type="email" class="form-control form-control-sm mb-2" maxlength="254" @bind="edit.Email" />
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="edit-active-@u.Id" @bind="edit.IsActive" disabled="@(u.Id == User.Me?.Id)" />
+                                            <label class="form-check-label small" for="edit-active-@u.Id">
+                                                Can sign in@(u.Id == User.Me?.Id ? " (you can't switch yourself off)" : "")
+                                            </label>
+                                        </div>
+                                        <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save details</button>
+                                    </form>
+
+                                    <div class="col-lg-4">
+                                        <h3 class="h6">Roles</h3>
+                                        <ul class="list-unstyled small mb-2">
+                                            @foreach (var r in u.Roles)
+                                            {
+                                                <li class="d-flex align-items-center gap-2 mb-1" @key="r.AssignmentId">
+                                                    <span>@r.RoleName@(r.SiteCode is null ? " (everywhere)" : $" at {r.SiteCode}")</span>
+                                                    <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-auto" disabled="@(_saving || u.Roles.Count == 1)"
+                                                            title="@(u.Roles.Count == 1 ? "Every user needs a role: add another first" : "Take this role away")"
+                                                            @onclick="() => EndRoleAsync(u, r)">Take away</button>
+                                                </li>
+                                            }
+                                        </ul>
+                                        <form class="d-flex flex-wrap gap-1" @onsubmit="() => AssignAsync(u)" @onsubmit:preventDefault>
+                                            <select class="form-select form-select-sm w-auto" aria-label="Role to add" @bind="edit.RoleCode">
+                                                <option value="">Add a role…</option>
+                                                @foreach (var r in _roles.Where(r => r.IsActive))
+                                                {
+                                                    <option value="@r.Code">@r.Name</option>
+                                                }
+                                            </select>
+                                            @if (!IsGlobal(edit.RoleCode))
+                                            {
+                                                <select class="form-select form-select-sm w-auto" aria-label="At site" @bind="edit.SiteId">
+                                                    <option value="">At site…</option>
+                                                    @foreach (var s in Sites.Sites)
+                                                    {
+                                                        <option value="@s.Id">@s.Code</option>
+                                                    }
+                                                </select>
+                                            }
+                                            <button type="submit" class="btn btn-sm btn-outline-primary"
+                                                    disabled="@(_saving || edit.RoleCode == "" || (!IsGlobal(edit.RoleCode) && edit.SiteId is null))">Add</button>
+                                        </form>
+                                    </div>
+
+                                    @if (u.Issuer == "pulaski-local")
+                                    {
+                                        <form class="col-lg-4" @onsubmit="() => ResetAsync(u)" @onsubmit:preventDefault>
+                                            <h3 class="h6">Password</h3>
+                                            <p class="small text-muted mb-2">
+                                                Give them a new temporary password, which they must change when they sign in. It also unlocks them.
+                                            </p>
+                                            <label class="form-label small" for="reset-@u.Id">Temporary password</label>
+                                            <input id="reset-@u.Id" class="form-control form-control-sm mb-2" autocomplete="off" @bind="edit.TemporaryPassword" @bind:event="oninput" />
+                                            <button type="submit" class="btn btn-sm btn-outline-primary" disabled="@(_saving || string.IsNullOrEmpty(edit.TemporaryPassword))">Reset password</button>
+                                        </form>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <p class="small text-muted">
+        What each role may change is on <a href="users/roles">Roles</a> and <a href="users/permissions">Permissions</a>.
+    </p>
+}
+
+@code {
+    private IReadOnlyList<UserDto>? _users;
+    private IReadOnlyList<RoleDto> _roles = [];
+    private ApiException? _error;
+    private string? _message;
+    private bool _adding;
+    private bool _saving;
+    private Guid? _open;
+    private UserEdit? _edit;
+    private NewUser _new = new();
+
+    private bool CanManage => User.Can(PermissionCodes.Security);
+
+    private bool CanCreate =>
+        !string.IsNullOrWhiteSpace(_new.Username) && !string.IsNullOrWhiteSpace(_new.DisplayName) && !string.IsNullOrEmpty(_new.TemporaryPassword)
+        && _new.RoleCode != "" && (IsGlobal(_new.RoleCode) || _new.SiteId is not null);
+
+    private bool IsGlobal(string roleCode) => _roles.FirstOrDefault(r => r.Code == roleCode)?.IsGlobal == true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _roles = await Api.ListRolesAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (!CanManage)
+        {
+            // Only administrators list users; everyone else sees what the roles are.
+            _users = [];
+            return;
+        }
+
+        try
+        {
+            _users = await Api.ListUsersAsync();
+            if (_open is { } open && _users.FirstOrDefault(u => u.Id == open) is { } user)
+            {
+                _edit = _edit is null ? UserEdit.From(user) : _edit with { Version = user.Version };
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private void Open(UserDto user)
+    {
+        (_open, _edit) = _open == user.Id ? ((Guid?)null, (UserEdit?)null) : (user.Id, UserEdit.From(user));
+        _message = null;
+    }
+
+    private Task CreateAsync() => RunAsync(async () =>
+    {
+        await Api.CreateUserAsync(new CreateUserRequest
+        {
+            Username = _new.Username.Trim(),
+            DisplayName = _new.DisplayName.Trim(),
+            Email = string.IsNullOrWhiteSpace(_new.Email) ? null : _new.Email.Trim(),
+            TemporaryPassword = _new.TemporaryPassword,
+            RoleCode = _new.RoleCode,
+            SiteId = IsGlobal(_new.RoleCode) ? null : _new.SiteId,
+        });
+        _message = $"{_new.DisplayName.Trim()} can now sign in as {_new.Username.Trim().ToLowerInvariant()} with the temporary password.";
+        _new = new();
+        _adding = false;
+    });
+
+    private Task SaveAsync(UserDto user) => RunAsync(async () =>
+    {
+        await Api.UpdateUserAsync(user.Id, new UpdateUserRequest
+        {
+            Version = _edit!.Version,
+            DisplayName = _edit.DisplayName,
+            Email = string.IsNullOrWhiteSpace(_edit.Email) ? null : _edit.Email,
+            IsActive = _edit.IsActive,
+        });
+        _message = $"Saved {_edit.DisplayName}.";
+    });
+
+    private Task AssignAsync(UserDto user) => RunAsync(async () =>
+    {
+        var global = IsGlobal(_edit!.RoleCode);
+        await Api.AssignRoleAsync(user.Id, new AssignRoleRequest { RoleCode = _edit.RoleCode, SiteId = global ? null : _edit.SiteId });
+        _message = $"{user.DisplayName} now holds {_roles.First(r => r.Code == _edit.RoleCode).Name}.";
+        _edit = _edit with { RoleCode = "", SiteId = null };
+    });
+
+    private Task EndRoleAsync(UserDto user, RoleGrantDto role) => RunAsync(async () =>
+    {
+        await Api.EndRoleAsync(role.AssignmentId);
+        _message = $"{user.DisplayName} no longer holds {role.RoleName}{(role.SiteCode is null ? "" : $" at {role.SiteCode}")}.";
+    });
+
+    private Task ResetAsync(UserDto user) => RunAsync(async () =>
+    {
+        await Api.ResetPasswordAsync(user.Id, new ResetPasswordRequest { TemporaryPassword = _edit!.TemporaryPassword });
+        _message = $"{user.DisplayName} has a new temporary password, to change when they sign in.";
+        _edit = _edit with { TemporaryPassword = "" };
+    });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _saving = true;
+        _error = null;
+        _message = null;
+        try
+        {
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            await LoadAsync();
+            _saving = false;
+        }
+    }
+
+    private sealed class NewUser
+    {
+        public string Username { get; set; } = "";
+
+        public string DisplayName { get; set; } = "";
+
+        public string? Email { get; set; }
+
+        public string TemporaryPassword { get; set; } = "";
+
+        public string RoleCode { get; set; } = "";
+
+        public Guid? SiteId { get; set; }
+    }
+
+    private sealed record UserEdit
+    {
+        public long Version { get; init; }
+
+        public string DisplayName { get; set; } = "";
+
+        public string? Email { get; set; }
+
+        public bool IsActive { get; set; }
+
+        public string RoleCode { get; set; } = "";
+
+        public Guid? SiteId { get; set; }
+
+        public string TemporaryPassword { get; set; } = "";
+
+        public static UserEdit From(UserDto user) => new() { Version = user.Version, DisplayName = user.DisplayName, Email = user.Email, IsActive = user.IsActive };
+    }
+}

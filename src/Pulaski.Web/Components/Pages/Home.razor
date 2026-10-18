@@ -7,6 +7,7 @@
 @using System.Globalization
 @using Pulaski.Web.Services.Scheduling
 @inject PulaskiApiClient Api
+@inject CurrentUser User
 @inject TimeProvider Time
 
 <PageTitle>Overview · Pulaski</PageTitle>
@@ -245,7 +246,10 @@
         </ol>
         <p class="ov-foot">
             @_orders.Count(o => o.Status == "closed") closed and @_orders.Count(o => o.Status == "cancelled") cancelled.
-            <a href="schedule/work-orders/new">New work order</a>
+            @if (User.Can(PermissionCodes.WorkOrderManage))
+            {
+                <a href="schedule/work-orders/new">New work order</a>
+            }
         </p>
     </section>
 

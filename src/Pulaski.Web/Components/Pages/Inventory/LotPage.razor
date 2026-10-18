@@ -2,6 +2,7 @@
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 @inject TimeProvider Time
+@inject CurrentUser User
 
 <PageTitle>@(Title) · Inventory · Pulaski</PageTitle>
 
@@ -25,22 +26,52 @@
             var expired = lot.ExpiresAt is { } ends && ends <= Time.GetUtcNow();
             var usable = lot.Status == "available" && lot.Quantity > 0 && !expired;
             <div class="inv-actions">
-                <button type="button" class="btn btn-primary" disabled="@(!usable)" @onclick="() => _action = LotAction.Consume">Consume</button>
-                <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Move">Move</button>
+                @if (May(LotAction.Consume))
+                {
+                    <button type="button" class="btn btn-primary" disabled="@(!usable)" @onclick="() => _action = LotAction.Consume">Consume</button>
+                }
+                @if (May(LotAction.Move))
+                {
+                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Move">Move</button>
+                }
                 @if (!lot.IsBulk)
                 {
-                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || lot.Quantity == 0)" @onclick="() => _action = LotAction.Split">Split</button>
-                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || expired)" @onclick="() => _action = LotAction.Merge">Merge…</button>
+                    @if (May(LotAction.Split))
+                    {
+                        <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || lot.Quantity == 0)" @onclick="() => _action = LotAction.Split">Split</button>
+                    }
+                    @if (May(LotAction.Merge))
+                    {
+                        <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || expired)" @onclick="() => _action = LotAction.Merge">Merge…</button>
+                    }
                 }
-                <button type="button" class="btn btn-outline-secondary" disabled="@(!usable)" @onclick="() => _action = LotAction.Ship">Ship</button>
-                <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.WriteUp">Write up</button>
-                <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || lot.Quantity == 0)" @onclick="() => _action = LotAction.WriteOff">Write off</button>
+                @if (May(LotAction.Ship))
+                {
+                    <button type="button" class="btn btn-outline-secondary" disabled="@(!usable)" @onclick="() => _action = LotAction.Ship">Ship</button>
+                }
+                @if (May(LotAction.WriteUp))
+                {
+                    <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.WriteUp">Write up</button>
+                }
+                @if (May(LotAction.WriteOff))
+                {
+                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || lot.Quantity == 0)" @onclick="() => _action = LotAction.WriteOff">Write off</button>
+                }
                 @if (lot.Status is "on_hold" or "quarantine")
                 {
-                    <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Release">Release</button>
+                    @if (May(LotAction.Release))
+                    {
+                        <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Release">Release</button>
+                    }
                 }
-                <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Hold">@(lot.Status is "on_hold" or "quarantine" ? "Change hold…" : "Hold…")</button>
-                <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Correct">Correct…</button>
+                @if (May(LotAction.Hold))
+                {
+                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Hold">@(lot.Status is "on_hold" or "quarantine" ? "Change hold…" : "Hold…")</button>
+                }
+                @if (May(LotAction.Correct))
+                {
+                    <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Correct">Correct…</button>
+                }
             </div>
         }
     </Actions>
@@ -205,7 +236,7 @@
                             </td>
                             <td class="small text-muted">@e.ActorId</td>
                             <td class="text-end">
-                                @if (CanReverse(detail, e))
+                                @if (CanReverse(detail, e) && May(LotAction.Reverse))
                                 {
                                     <button type="button" class="btn btn-sm btn-link p-0" title="Undo this movement" @onclick="() => Reverse(e)">Reverse</button>
                                 }
@@ -262,6 +293,9 @@ else if (_error is null)
     }
 
     // Only the latest movement, once, and only one that touched this lot alone (D-030).
+    // The site the inventory screens show; lots belong to it (D-027, D-037).
+    private bool May(LotAction action) => User.Can(LotActions.Permission(action), Sites.SiteId);
+
     private static bool CanReverse(LotDto lot, LotEventDto e) =>
         lot.History.Count > 0 && lot.History[0].Id == e.Id && Reversible.Contains(e.Kind) && !(e.Kind == "moved" && e.RelatedLotId is not null);
 

@@ -384,3 +384,51 @@ a.card {
         grid-template-columns: minmax(0, 1fr);
     }
 }
+
+/* A screen the user may view but not change (D-037). */
+.view-only-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    color: var(--text-muted);
+}
+
+/* A fieldset that only switches a block of controls off. */
+fieldset.view-only-scope {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+/* Roles and permissions (D-037). */
+.role-permissions {
+    display: grid;
+    gap: var(--space-3);
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+}
+
+.role-permission-area {
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.permission-matrix .permission-role {
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.permission-matrix .permission-area > th {
+    background: var(--surface-2);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}

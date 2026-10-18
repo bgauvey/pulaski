@@ -1,6 +1,7 @@
 @using System.Globalization
 @inject PulaskiApiClient Api
 @inject TimeProvider Clock
+@inject CurrentUser User
 
 @* Which lines can run the material, and how fast (D-020, D-034). *@
 <section class="inv-section" aria-labelledby="cap-title">
@@ -14,11 +15,14 @@
                     <label class="form-check-label small" for="cap-ended">Show ended (@_ended)</label>
                 </div>
             }
-            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(_busy || !Material.IsActive)"
-                    title="@(Material.IsActive ? "Add a line that can run " + Material.Code : Material.Code + " is inactive")"
-                    @onclick="StartAdd">
-                Add line
-            </button>
+            @if (CanCapabilities)
+            {
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(_busy || !Material.IsActive)"
+                        title="@(Material.IsActive ? "Add a line that can run " + Material.Code : Material.Code + " is inactive")"
+                        @onclick="StartAdd">
+                    Add line
+                </button>
+            }
         </div>
     </div>
 
@@ -165,12 +169,15 @@
                             <td class="small">@Day(c.EffectiveFrom, c.SiteTimeZone)</td>
                             <td class="small">@(c.EffectiveTo is { } to ? Day(to, c.SiteTimeZone) : "—")</td>
                             <td class="text-end text-nowrap">
-                                <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => StartEdit(c)">Change</button>
-                                @if (c.RunStandardId is not null)
+                                @if (CanCapabilities)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => StartEdit(c)">Change</button>
+                                }
+                                @if (c.RunStandardId is not null && User.Can(PermissionCodes.RateModify))
                                 {
                                     <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => StartRate(c)">Rate</button>
                                 }
-                                @if (c.IsInEffect)
+                                @if (c.IsInEffect && CanCapabilities)
                                 {
                                     <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => EndAsync(c)">End now</button>
                                 }
@@ -184,6 +191,9 @@
 </section>
 
 @code {
+    // Which lines can run a material belongs to process engineering; the planning rate to planners (D-037).
+    private bool CanCapabilities => User.Can(PermissionCodes.Processes);
+
     [Parameter, EditorRequired]
     public MaterialDto Material { get; set; } = default!;
 

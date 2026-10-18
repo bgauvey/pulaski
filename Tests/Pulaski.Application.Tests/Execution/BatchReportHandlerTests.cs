@@ -1,4 +1,5 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Errors;
 using Pulaski.Application.Execution;
 using Pulaski.Application.Inventory;
 using Pulaski.Contracts.Execution;
@@ -15,6 +16,9 @@ namespace Pulaski.Application.Tests.Execution;
 public class BatchReportHandlerTests
 {
     private readonly HandlerFixture _f = new();
+
+    // Someone other than the reporter decides on a partial batch (D-037).
+    private IEventFactory Decider => new EventFactory(_f.Ids, _f.Time, new FixedRequestContext("quality-user"));
     private readonly Guid _site = Guid.CreateVersion7();
     private readonly Guid _kg;
     private readonly InventoryLocation _staging;
@@ -99,15 +103,31 @@ public class BatchReportHandlerTests
         var partial = Assert.Single(Execution.PartialBatches);
         Assert.Equal((PartialBatchStatus.Pending, LotStatus.OnHold), (partial.Status, Inventory.Find(partial.LotId)!.Value.Status));
 
-        var reject = new RejectPartialBatchHandler(_f.Stores.UnitOfWork, Inventory, Execution, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
+        var reject = new RejectPartialBatchHandler(_f.Stores.UnitOfWork, Inventory, Execution, _f.Stores.Units, _f.Stores.Events, Decider, _f.Ids, _f.Time);
         await reject.HandleAsync(new RejectPartialBatchCommand(partial.Id, _scrap.Id, "Short fill"), CancellationToken.None);
 
         Assert.Equal(LotStatus.Scrapped, Inventory.Find(partial.LotId)!.Value.Status);
         Assert.Equal((50m, 30m), (Execution.FindRun(run.Id)!.GoodQty, Execution.FindRun(run.Id)!.ScrapQty));
         Assert.Contains(Execution.Counts, c => c.CountKind == CountKind.Defective && c.DeltaQty == 30m && c.ScrapReasonCodeId == _scrap.Id);
         await Assert.ThrowsAsync<DomainRuleException>(() =>
+            new ApprovePartialBatchHandler(_f.Stores.UnitOfWork, Inventory, Execution, _f.Stores.Events, Decider, _f.Ids, _f.Time)
+                .HandleAsync(new ApprovePartialBatchCommand(partial.Id), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Whoever_reported_a_partial_cant_decide_on_it()
+    {
+        var (job, run, _) = Running(BatchRule.Exact);
+        await Report(job, [], partial: 30m, run: run.Id, onStop: true);
+        var partial = Assert.Single(Execution.PartialBatches);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
             new ApprovePartialBatchHandler(_f.Stores.UnitOfWork, Inventory, Execution, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
                 .HandleAsync(new ApprovePartialBatchCommand(partial.Id), CancellationToken.None));
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            new RejectPartialBatchHandler(_f.Stores.UnitOfWork, Inventory, Execution, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
+                .HandleAsync(new RejectPartialBatchCommand(partial.Id, _scrap.Id, null), CancellationToken.None));
+        Assert.Equal(PartialBatchStatus.Pending, Execution.PartialBatches[0].Status);
     }
 
     [Fact]
@@ -122,7 +142,7 @@ public class BatchReportHandlerTests
         await Report(job, [], partial: 30m, run: run.Id);
         var partial = Assert.Single(Execution.PartialBatches);
 
-        await new ApprovePartialBatchHandler(_f.Stores.UnitOfWork, Inventory, Execution, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
+        await new ApprovePartialBatchHandler(_f.Stores.UnitOfWork, Inventory, Execution, _f.Stores.Events, Decider, _f.Ids, _f.Time)
             .HandleAsync(new ApprovePartialBatchCommand(partial.Id, "Customer accepts"), CancellationToken.None);
 
         Assert.Equal(PartialBatchStatus.Approved, Execution.PartialBatches[0].Status);

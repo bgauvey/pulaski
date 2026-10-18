@@ -2,6 +2,7 @@
 @using Pulaski.Web.Services.Execution
 @inject PulaskiApiClient Api
 @inject TimeProvider Clock
+@inject CurrentUser User
 
 <PageTitle>@(_job?.JobNumber ?? "Job") · Pulaski</PageTitle>
 
@@ -34,24 +35,24 @@
             {
                 <a class="btn btn-outline-secondary" href="inventory/jobs/@JobId">Materials and lots</a>
             }
-            @if (actions.CanStart && !j.IsOnGroup)
+            @if (actions.CanStart && !j.IsOnGroup && May(PermissionCodes.JobExecute))
             {
                 <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="StartAsync">@(j.Status == "paused" ? "Resume" : "Start")</button>
             }
-            @if (actions.CanPause)
+            @if (actions.CanPause && May(PermissionCodes.JobExecute))
             {
                 <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="() => _stop = StopMode.Pause">Pause</button>
             }
-            @if (actions.CanComplete)
+            @if (actions.CanComplete && May(PermissionCodes.JobExecute))
             {
                 <button type="button" class="btn btn-outline-secondary" disabled="@_busy"
                         @onclick="CompleteOrStopAsync">Complete</button>
             }
-            @if (actions.CanReopen)
+            @if (actions.CanReopen && May(PermissionCodes.JobReopen))
             {
                 <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="ReopenAsync">Reopen</button>
             }
-            @if (actions.CanReport && !_reporting)
+            @if (actions.CanReport && !_reporting && May(PermissionCodes.ProductionReport))
             {
                 <button type="button" class="btn btn-primary" @onclick="() => _reporting = true">Report production</button>
             }
@@ -122,7 +123,11 @@
                                 <td class="small">@Display.SiteTime(p.OccurredAt, job.SiteTimeZone)</td>
                                 <td class="small">@(p.DecidedAt is { } decided ? $"{Display.SiteTime(decided, job.SiteTimeZone)} by {p.DecidedBy}{(p.DecisionComment is { } c ? ": " + c : "")}" : "")</td>
                                 <td class="text-end text-nowrap">
-                                    @if (p.Status == "pending")
+                                    @if (p.Status == "pending" && p.ReportedBy == User.Me?.ActorId)
+                                    {
+                                        <span class="small text-muted" title="Whoever reports a partial batch doesn't decide on it">You reported it: someone else decides</span>
+                                    }
+                                    else if (p.Status == "pending" && May(PermissionCodes.PartialBatchDecide))
                                     {
                                         <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => ApproveAsync(p)">Approve</button>
                                         <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => _rejecting = p.Id">Reject</button>
@@ -242,6 +247,9 @@ else if (_error is null)
 }
 
 @code {
+    // At the job's site (D-037). Viewing the job is open to everyone.
+    private bool May(string permission) => _job is { } job && User.Can(permission, job.SiteId);
+
     [Parameter]
     public Guid JobId { get; set; }
 

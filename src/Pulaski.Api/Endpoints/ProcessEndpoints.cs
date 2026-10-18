@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Security;
 using Pulaski.Application.Processes;
 using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Processes;
 using Pulaski.Contracts.WorkOrders;
+using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
 
@@ -37,7 +40,8 @@ internal static class ProcessEndpoints
             ICommandHandler<SetProcessScopeCommand, VersionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new SetProcessScopeCommand(id, request.Version, request.AllMaterials, request.MaterialClassIds, request.MaterialIds), ct)));
+                new SetProcessScopeCommand(id, request.Version, request.AllMaterials, request.MaterialClassIds, request.MaterialIds), ct)))
+        .RequirePermission(Permissions.Processes, Site.Of(SiteOf.Process));
 
         group.MapGet("/{id:guid}", async Task<Ok<ProcessDto>> (
             Guid id,
@@ -53,7 +57,8 @@ internal static class ProcessEndpoints
             var created = await handler.HandleAsync(
                 new CreateProcessCommand(request.SiteId, request.Code, request.Name, request.Description), ct);
             return TypedResults.Created($"/api/processes/{created.Id}", created);
-        });
+        })
+        .RequirePermission(Permissions.Processes, Site.FromBody<CreateProcessRequest>(SiteOf.Equipment, r => r.SiteId));
 
         group.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (
             Guid id,
@@ -61,7 +66,8 @@ internal static class ProcessEndpoints
             ICommandHandler<UpdateProcessCommand, VersionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new UpdateProcessCommand(id, request.Version, request.Name, request.Description, request.IsActive), ct)));
+                new UpdateProcessCommand(id, request.Version, request.Name, request.Description, request.IsActive), ct)))
+        .RequirePermission(Permissions.Processes, Site.Of(SiteOf.Process));
 
         group.MapGet("/{id:guid}/versions/{versionId:guid}", async Task<Ok<ProcessVersionDto>> (
             Guid id,
@@ -77,7 +83,8 @@ internal static class ProcessEndpoints
             ICommandHandler<SaveProcessDraftCommand, SaveProcessDraftResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new SaveProcessDraftCommand(id, versionId, request.Version, request.Definition), ct)));
+                new SaveProcessDraftCommand(id, versionId, request.Version, request.Definition), ct)))
+        .RequirePermission(Permissions.Processes, Site.Of(SiteOf.Process));
 
         group.MapPost("/{id:guid}/versions/{versionId:guid}/release", async Task<Ok<ReleaseProcessVersionResponse>> (
             Guid id,
@@ -86,7 +93,8 @@ internal static class ProcessEndpoints
             ICommandHandler<ReleaseProcessVersionCommand, ReleaseProcessVersionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new ReleaseProcessVersionCommand(id, versionId, request.Version, request.Note), ct)));
+                new ReleaseProcessVersionCommand(id, versionId, request.Version, request.Note), ct)))
+        .RequirePermission(Permissions.Processes, Site.Of(SiteOf.Process));
 
         group.MapPost("/{id:guid}/drafts", async Task<Created<CreatedResponse>> (
             Guid id,
@@ -95,7 +103,8 @@ internal static class ProcessEndpoints
         {
             var created = await handler.HandleAsync(new StartProcessDraftCommand(id), ct);
             return TypedResults.Created($"/api/processes/{id}/versions/{created.Id}", created);
-        });
+        })
+        .RequirePermission(Permissions.Processes, Site.Of(SiteOf.Process));
 
         routes.MapPut("/materials/{id:guid}/default-process", async Task<Ok<VersionResponse>> (
             Guid id,
@@ -103,6 +112,7 @@ internal static class ProcessEndpoints
             ICommandHandler<SetDefaultProcessCommand, VersionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new SetDefaultProcessCommand(id, request.ProcessId), ct)))
+        .RequirePermission(Permissions.Processes)
             .WithTags("Processes");
 
         return routes;

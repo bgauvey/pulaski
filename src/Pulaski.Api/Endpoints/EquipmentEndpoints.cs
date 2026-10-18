@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
+using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
 
@@ -45,7 +47,8 @@ internal static class EquipmentEndpoints
                 request.SingleMaterial);
             var created = await handler.HandleAsync(command, ct);
             return TypedResults.Created($"/api/equipment/{created.Id}", created);
-        });
+        })
+        .RequirePermission(Permissions.Equipment);
 
         group.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (
             Guid id,
@@ -66,7 +69,8 @@ internal static class EquipmentEndpoints
                 request.ComminglesLots,
                 request.SingleMaterial);
             return TypedResults.Ok(await handler.HandleAsync(command, ct));
-        });
+        })
+        .RequirePermission(Permissions.Equipment);
 
         routes.MapGet("/equipment-types", async Task<Ok<IReadOnlyList<EquipmentTypeDto>>> (
             IQueryHandler<ListEquipmentTypesQuery, IReadOnlyList<EquipmentTypeDto>> handler,

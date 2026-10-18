@@ -1,4 +1,6 @@
 @inherits LayoutComponentBase
+@inject PulaskiApiClient Api
+@inject CurrentUser User
 
 <div class="shell">
     <header class="app-header">
@@ -16,6 +18,20 @@
         </a>
         <span class="chip">Pre-alpha</span>
         <div class="header-end">
+            @if (User.Me is { } me)
+            {
+                <span class="header-user" title="@User.RoleSummary">
+                    <Icon Name="user" Size="18" />
+                    <span class="header-user-text">
+                        <span class="header-user-name">@me.DisplayName</span>
+                        <span class="header-user-roles">@User.RoleSummary</span>
+                    </span>
+                </span>
+                <a class="icon-button" href="account/password" title="Change your password" aria-label="Change your password"><Icon Name="lock" /></a>
+                <form method="post" action="account/logout" class="m-0">
+                    <button type="submit" class="icon-button" title="Sign out" aria-label="Sign out"><Icon Name="sign-out" /></button>
+                </form>
+            }
             <button type="button" class="icon-button" aria-label="Switch light or dark theme" onclick="pulaski.toggleTheme()">
                 <span class="when-light"><Icon Name="moon" /></span>
                 <span class="when-dark"><Icon Name="sun" /></span>
@@ -24,12 +40,27 @@
     </header>
 
     <aside class="app-sidebar">
-        <NavMenu />
+        @if (User.Me is not null)
+        {
+            <NavMenu />
+        }
     </aside>
 
     <main class="app-main">
         <article class="content">
-            @Body
+            @* What the user may do decides which actions the pages show (D-037), so it loads first. *@
+            @if (User.Me is not null)
+            {
+                @Body
+            }
+            else if (_error is not null)
+            {
+                <ProblemAlert Error="_error" />
+            }
+            else
+            {
+                <p class="text-muted">Loading…</p>
+            }
         </article>
     </main>
 
@@ -48,4 +79,18 @@
 @code {
     private static readonly string Version =
         typeof(MainLayout).Assembly.GetName().Version?.ToString(3) ?? "dev";
+
+    private ApiException? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await User.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
 }

@@ -108,9 +108,29 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
     /// <summary>While true the page holds back its refresh, so the board doesn't change under the pointer.</summary>
     public bool IsDragging => DraggingItem is not null || DraggingWorkOrder is not null;
 
-    public void StartDrag(BoardItem item) => (DraggingItem, DraggingWorkOrder) = (item, null);
+    /// <summary>
+    /// The user may look at the schedule but not plan (D-037): nothing drags, and an edit says why instead of
+    /// going to the API.
+    /// </summary>
+    public bool ReadOnly { get; set; }
 
-    public void StartDrag(WorkOrderDto workOrder) => (DraggingItem, DraggingWorkOrder) = (null, workOrder);
+    public const string ReadOnlyMessage = "You can view the schedule, but planning needs permission to plan jobs.";
+
+    public void StartDrag(BoardItem item)
+    {
+        if (!ReadOnly)
+        {
+            (DraggingItem, DraggingWorkOrder) = (item, null);
+        }
+    }
+
+    public void StartDrag(WorkOrderDto workOrder)
+    {
+        if (!ReadOnly)
+        {
+            (DraggingItem, DraggingWorkOrder) = (null, workOrder);
+        }
+    }
 
     public void EndDrag() => (DraggingItem, DraggingWorkOrder) = (null, null);
 
@@ -369,6 +389,12 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
     /// <summary>Sends one edit, then re-reads the board whatever happened: after a conflict the planner needs the current state.</summary>
     private async Task RunAsync(string key, string success, Func<Task> send)
     {
+        if (ReadOnly)
+        {
+            Toast("warning", ReadOnlyMessage);
+            return;
+        }
+
         _saving.Add(key);
         try
         {

@@ -1,6 +1,7 @@
 @page "/materials"
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
+@inject CurrentUser User
 
 <PageTitle>Materials · Pulaski</PageTitle>
 
@@ -12,13 +13,17 @@
         </p>
     </div>
     <div class="inv-head-tools">
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => _importing = !_importing">Import CSV</button>
-        <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New material</button>
+        @if (User.Can(PermissionCodes.Materials))
+        {
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _importing = !_importing">Import CSV</button>
+            <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New material</button>
+        }
     </div>
 </div>
 
 <MaterialsTabs />
 <ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Materials" What="maintain materials" />
 
 @if (_importing)
 {

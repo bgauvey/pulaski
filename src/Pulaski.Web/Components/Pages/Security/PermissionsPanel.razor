@@ -1,0 +1,117 @@
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* Every permission the code checks, and which roles hold it (D-037). Ticking a box gives the role the permission
+   straight away; Administrator holds them all and can't be changed. *@
+<div class="mb-3">
+    <p class="text-muted mb-0">
+        What Pulaski lets people change, and which roles may. Tick a box to give a role a permission, untick it to take it away: it applies to
+        everyone who holds the role, straight away. Viewing needs no permission.
+    </p>
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Security" What="change what each role may do" />
+
+@if (_roles is null || _permissions is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    var roles = _roles.Where(r => r.IsActive).ToList();
+    <div class="table-panel permission-matrix">
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">Permission</th>
+                    @foreach (var r in roles)
+                    {
+                        <th scope="col" class="text-center permission-role" title="@r.Description">@r.Name</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var area in _permissions.GroupBy(p => p.Area))
+                {
+                    <tr class="permission-area"><th scope="rowgroup" colspan="@(roles.Count + 1)">@area.Key</th></tr>
+                    @foreach (var p in area)
+                    {
+                        <tr @key="p.Code">
+                            <th scope="row" class="fw-normal">
+                                <div>@p.Description</div>
+                                <div class="small text-muted">@p.Code</div>
+                            </th>
+                            @foreach (var r in roles)
+                            {
+                                var held = r.Permissions.Contains(p.Code);
+                                <td class="text-center" @key="(p.Code, r.Code)">
+                                    <input class="form-check-input" type="checkbox" checked="@held"
+                                           disabled="@(r.IsLocked || !CanManage || _saving.Contains((r.Code, p.Code)))"
+                                           aria-label="@r.Name may @p.Description.ToLowerInvariant()"
+                                           @onchange="e => SetAsync(r, p, e.Value is true)" />
+                                </td>
+                            }
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="small text-muted mt-2">
+        Switched-off roles aren't shown. To add a role or change its name, use <a href="users/roles">Roles</a>; to give roles to people, <a href="users">Users</a>.
+    </p>
+}
+
+@code {
+    private IReadOnlyList<RoleDto>? _roles;
+    private IReadOnlyList<PermissionDto>? _permissions;
+    private readonly HashSet<(string Role, string Permission)> _saving = [];
+    private ApiException? _error;
+
+    private bool CanManage => User.Can(PermissionCodes.Security);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _permissions = await Api.ListPermissionsAsync();
+            _roles = await Api.ListRolesAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task SetAsync(RoleDto role, PermissionDto permission, bool granted)
+    {
+        _saving.Add((role.Code, permission.Code));
+        _error = null;
+        try
+        {
+            await Api.SetRolePermissionAsync(role.Code, permission.Code, granted);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            // Whatever happened, show the roles as they are now.
+            try
+            {
+                _roles = await Api.ListRolesAsync();
+            }
+            catch (ApiException ex)
+            {
+                _error ??= ex;
+            }
+
+            _saving.Remove((role.Code, permission.Code));
+        }
+    }
+}
