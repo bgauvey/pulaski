@@ -206,6 +206,7 @@ Treat these as working assumptions; confirm with Bill before building anything t
   `src/Pulaski.Api/appsettings.Development.json` (`Security:BootstrapAdmin`); change it at the first sign-in.
 - Run: `dotnet run --project src/Pulaski.Api` (http://localhost:5080, OpenAPI at
   `/openapi/v1.json`) and `dotnet run --project src/Pulaski.Web` (http://localhost:5090).
-- Machine data demo: `docker compose -f deploy/simulator/compose.yaml up -d` (broker + PackML simulator; `PULASKI_MQTT_PORT=1884`
-  if 1883 is taken), then `dotnet run --project src/Pulaski.Edge` with `Edge__EdgeNodeId`, `Edge__Username`, `Edge__Password`
-  (from Configure → Edge nodes → Setup). Send the simulator commands with `tools/Pulaski.SparkplugCommand`.
+- Machine data demo: `docker compose -f deploy/simulator/compose.yaml up -d` (broker + PackML simulators for EXT-01-EXT,
+  EXT-01-SAW and PACK1; `PULASKI_MQTT_PORT=1884` if 1883 is taken), then `dotnet run --project src/Pulaski.Edge` with
+  `Edge__EdgeNodeId`, `Edge__Username`, `Edge__Password` (from Configure → Edge nodes → Setup). Send the simulator
+  commands with `tools/Pulaski.SparkplugCommand`.

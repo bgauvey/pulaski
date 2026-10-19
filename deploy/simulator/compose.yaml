@@ -1,10 +1,10 @@
-# Pulaski machine data demo (D-041): an MQTT broker and a PackML machine simulator publishing Sparkplug B.
+# Pulaski machine data demo (D-041): an MQTT broker and three PackML simulators publishing Sparkplug B.
 #
 #   docker compose -f deploy/simulator/compose.yaml up -d
 #
-# The simulator is the open-source PackML MQTT Simulator (libremfg, MIT). It publishes group "Plant1", edge node "Packing",
-# device "PACK-SIM" on the broker at localhost:1883. Start it running with a DCMD of Command/Reset then Command/Start
-# (tools/sim-command.sh), or bind its tags in Pulaski first and watch Live.
+# The simulators publish to group "Plant1" on the broker at localhost:${PULASKI_MQTT_PORT:-1883}. Bind their
+# Sparkplug B addresses to EXT-01-EXT, EXT-01-SAW and PACK1 in Pulaski. The image is amd64; Docker Desktop
+# emulates it on arm64 hosts.
 name: pulaski-simulator
 
 services:
@@ -15,17 +15,50 @@ services:
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
-  packml-sim:
-    image: ghcr.io/libremfg/packml-simulator:latest
+  extruder:
+    image: spruiktec/packml-simulator:latest
+    platform: linux/amd64
     depends_on:
       - broker
     environment:
       CLIENT_TYPE: sparkplugb
-      SITE: Plant1
-      AREA: Packing
-      LINE: PACK-SIM
+      SITE: PLT1
+      AREA: EXT
+      LINE: EXT-01-EXT
       MQTT_URL: mqtt://broker
       MQTT_PORT: "1883"
       SPARKPLUG_GROUP_ID: Plant1
-      SPARKPLUG_EDGE_NODE: Packing
+      SPARKPLUG_EDGE_NODE: Extruder
+      TICK: "1000"
+
+  saw:
+    image: spruiktec/packml-simulator:latest
+    platform: linux/amd64
+    depends_on:
+      - broker
+    environment:
+      CLIENT_TYPE: sparkplugb
+      SITE: PLT1
+      AREA: EXT
+      LINE: EXT-01-SAW
+      MQTT_URL: mqtt://broker
+      MQTT_PORT: "1883"
+      SPARKPLUG_GROUP_ID: Plant1
+      SPARKPLUG_EDGE_NODE: Saw
+      TICK: "1000"
+
+  packer:
+    image: spruiktec/packml-simulator:latest
+    platform: linux/amd64
+    depends_on:
+      - broker
+    environment:
+      CLIENT_TYPE: sparkplugb
+      SITE: PLT1
+      AREA: PKG
+      LINE: PACK1
+      MQTT_URL: mqtt://broker
+      MQTT_PORT: "1883"
+      SPARKPLUG_GROUP_ID: Plant1
+      SPARKPLUG_EDGE_NODE: Packer
       TICK: "1000"
