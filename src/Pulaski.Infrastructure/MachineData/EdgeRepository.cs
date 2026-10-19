@@ -40,6 +40,16 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         FROM core.edge_connection WHERE id = @Id FOR UPDATE
         """;
 
+    private const string GetConnectionSnapshot = """
+        SELECT id, edge_node_id, code, name, protocol, settings::text AS settings_json, is_active
+        FROM core.edge_connection WHERE id = @Id
+        """;
+
+    private const string ListConnectionsForUpdate = """
+        SELECT id, edge_node_id, code, name, protocol, settings::text AS settings_json, is_active, xmin::text::bigint AS version
+        FROM core.edge_connection WHERE edge_node_id = @EdgeNodeId ORDER BY id FOR UPDATE
+        """;
+
     private const string InsertConnection = """
         INSERT INTO core.edge_connection (id, edge_node_id, code, name, protocol, settings, is_active, created_at, updated_at)
         VALUES (@Id, @EdgeNodeId, @Code, @Name, @Protocol, @Settings::jsonb, @IsActive, @At, @At)
@@ -60,6 +70,17 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         SELECT id, equipment_id, tag_role AS role, connection_id, source_address AS address, scale_factor, scale_offset, counter_rollover, is_active,
                xmin::text::bigint AS version
         FROM core.equipment_tag WHERE id = @Id FOR UPDATE
+        """;
+
+    private const string GetTagSnapshot = """
+        SELECT id, equipment_id, tag_role AS role, connection_id, source_address AS address, scale_factor, scale_offset, counter_rollover, is_active
+        FROM core.equipment_tag WHERE id = @Id
+        """;
+
+    private const string ListTagsForUpdate = """
+        SELECT id, equipment_id, tag_role AS role, connection_id, source_address AS address, scale_factor, scale_offset, counter_rollover, is_active,
+               xmin::text::bigint AS version
+        FROM core.equipment_tag WHERE connection_id = ANY(@ConnectionIds) ORDER BY id FOR UPDATE
         """;
 
     private const string InsertTag = """
@@ -205,6 +226,16 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
             ? new(new EdgeConnectionRecord(r.Id, r.EdgeNodeId, r.Code, r.Name, r.Protocol, EdgeSql.ReadSettings(r.SettingsJson), r.IsActive), r.Version)
             : null;
 
+    public async Task<EdgeConnectionRecord?> GetConnectionAsync(Guid id, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<ConnectionSnapshotRow>(GetConnectionSnapshot, new { Id = id }, cancellationToken) is { } r
+            ? new EdgeConnectionRecord(r.Id, r.EdgeNodeId, r.Code, r.Name, r.Protocol, EdgeSql.ReadSettings(r.SettingsJson), r.IsActive)
+            : null;
+
+    public async Task<IReadOnlyList<Versioned<EdgeConnectionRecord>>> ListConnectionsForUpdateAsync(Guid edgeNodeId, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<ConnectionRow>(ListConnectionsForUpdate, new { EdgeNodeId = edgeNodeId }, cancellationToken))
+            .Select(r => new Versioned<EdgeConnectionRecord>(
+                new EdgeConnectionRecord(r.Id, r.EdgeNodeId, r.Code, r.Name, r.Protocol, EdgeSql.ReadSettings(r.SettingsJson), r.IsActive), r.Version))];
+
     public Task<long> InsertConnectionAsync(EdgeConnectionRecord c, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(InsertConnection,
             new { c.Id, c.EdgeNodeId, c.Code, c.Name, c.Protocol, Settings = JsonSerializer.Serialize(c.Settings), c.IsActive, At = at }, cancellationToken);
@@ -221,6 +252,17 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         await session.QuerySingleOrDefaultAsync<TagRow>(GetTag, new { Id = id }, cancellationToken) is { } r
             ? new(new EquipmentTagRecord(r.Id, r.EquipmentId, r.Role, r.ConnectionId, r.Address, r.ScaleFactor, r.ScaleOffset, r.CounterRollover, r.IsActive), r.Version)
             : null;
+
+    public async Task<EquipmentTagRecord?> GetTagAsync(Guid id, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<TagSnapshotRow>(GetTagSnapshot, new { Id = id }, cancellationToken) is { } r
+            ? new EquipmentTagRecord(r.Id, r.EquipmentId, r.Role, r.ConnectionId, r.Address, r.ScaleFactor, r.ScaleOffset, r.CounterRollover, r.IsActive)
+            : null;
+
+    public async Task<IReadOnlyList<Versioned<EquipmentTagRecord>>> ListTagsForUpdateAsync(
+        IReadOnlyCollection<Guid> connectionIds, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<TagRow>(ListTagsForUpdate, new { ConnectionIds = connectionIds.ToArray() }, cancellationToken))
+            .Select(r => new Versioned<EquipmentTagRecord>(
+                new EquipmentTagRecord(r.Id, r.EquipmentId, r.Role, r.ConnectionId, r.Address, r.ScaleFactor, r.ScaleOffset, r.CounterRollover, r.IsActive), r.Version))];
 
     public Task<long> InsertTagAsync(EquipmentTagRecord t, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(InsertTag,
@@ -388,6 +430,17 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         public long Version { get; init; }
     }
 
+    private sealed class ConnectionSnapshotRow
+    {
+        public Guid Id { get; init; }
+        public Guid EdgeNodeId { get; init; }
+        public string Code { get; init; } = "";
+        public string Name { get; init; } = "";
+        public string Protocol { get; init; } = "";
+        public string SettingsJson { get; init; } = "{}";
+        public bool IsActive { get; init; }
+    }
+
     private sealed class EquipmentRow
     {
         public Guid Id { get; init; }
@@ -408,6 +461,19 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         public long? CounterRollover { get; init; }
         public bool IsActive { get; init; }
         public long Version { get; init; }
+    }
+
+    private sealed class TagSnapshotRow
+    {
+        public Guid Id { get; init; }
+        public Guid EquipmentId { get; init; }
+        public string Role { get; init; } = "";
+        public Guid ConnectionId { get; init; }
+        public string Address { get; init; } = "";
+        public decimal ScaleFactor { get; init; }
+        public decimal ScaleOffset { get; init; }
+        public long? CounterRollover { get; init; }
+        public bool IsActive { get; init; }
     }
 
     private sealed class IngestTagRow

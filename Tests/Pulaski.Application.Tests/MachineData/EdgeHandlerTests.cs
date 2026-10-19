@@ -68,6 +68,65 @@ public class EdgeHandlerTests
     }
 
     [Fact]
+    public async Task Deleting_a_node_deactivates_its_connections_and_tags_and_is_idempotent()
+    {
+        var (node, connection) = await NodeAsync();
+        var state = await TagAsync(connection, TagRoles.State, "Plant1/Packing/PACK-01:State");
+        var count = await TagAsync(connection, TagRoles.ProcessedCount, "Plant1/Packing/PACK-01:Count");
+
+        await new DeleteEdgeNodeHandler(_f.Stores.UnitOfWork, Edge, _f.Stores.Events, _f.Events)
+            .HandleAsync(new DeleteEdgeNodeCommand(node), Ct);
+
+        Assert.False(Edge.Node(node).Value.IsActive);
+        Assert.False(Edge.Connection(connection).Value.IsActive);
+        Assert.False(Edge.Tag(state.Id).Value.IsActive);
+        Assert.False(Edge.Tag(count.Id).Value.IsActive);
+        Assert.Equal(EventTypes.EdgeNodeDeleted, _f.Stores.Events.Appended[^1].Type);
+        Assert.Equal(2, _f.Stores.Events.Appended.Count(e => e.Type == EventTypes.EquipmentTagDeleted));
+        Assert.Single(_f.Stores.Events.Appended, e => e.Type == EventTypes.EdgeConnectionDeleted);
+
+        var eventCount = _f.Stores.Events.Appended.Count;
+        await new DeleteEdgeNodeHandler(_f.Stores.UnitOfWork, Edge, _f.Stores.Events, _f.Events)
+            .HandleAsync(new DeleteEdgeNodeCommand(node), Ct);
+        Assert.Equal(eventCount, _f.Stores.Events.Appended.Count);
+    }
+
+    [Fact]
+    public async Task Deleting_a_tag_leaves_its_node_connection_and_other_tags_active()
+    {
+        var (node, connection) = await NodeAsync();
+        var state = await TagAsync(connection, TagRoles.State, "Plant1/Packing/PACK-01:State");
+        var stop = await TagAsync(connection, TagRoles.StopReason, "Plant1/Packing/PACK-01:Stop");
+
+        await new DeleteEquipmentTagHandler(_f.Stores.UnitOfWork, Edge, _f.Stores.Events, _f.Events)
+            .HandleAsync(new DeleteEquipmentTagCommand(state.Id), Ct);
+
+        Assert.False(Edge.Tag(state.Id).Value.IsActive);
+        Assert.True(Edge.Tag(stop.Id).Value.IsActive);
+        Assert.True(Edge.Connection(connection).Value.IsActive);
+        Assert.True(Edge.Node(node).Value.IsActive);
+        Assert.Equal(EventTypes.EquipmentTagDeleted, _f.Stores.Events.Appended[^1].Type);
+
+        var eventCount = _f.Stores.Events.Appended.Count;
+        await new DeleteEquipmentTagHandler(_f.Stores.UnitOfWork, Edge, _f.Stores.Events, _f.Events)
+            .HandleAsync(new DeleteEquipmentTagCommand(state.Id), Ct);
+        Assert.Equal(eventCount, _f.Stores.Events.Appended.Count);
+    }
+
+    [Fact]
+    public async Task Deleting_a_missing_node_or_tag_returns_not_found()
+    {
+        var missingId = Guid.CreateVersion7();
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            new DeleteEdgeNodeHandler(_f.Stores.UnitOfWork, Edge, _f.Stores.Events, _f.Events)
+                .HandleAsync(new DeleteEdgeNodeCommand(missingId), Ct));
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            new DeleteEquipmentTagHandler(_f.Stores.UnitOfWork, Edge, _f.Stores.Events, _f.Events)
+                .HandleAsync(new DeleteEquipmentTagCommand(missingId), Ct));
+    }
+
+    [Fact]
     public async Task A_tag_binds_a_Sparkplug_address_to_equipment_of_the_site_that_tracks_state()
     {
         var (_, connection) = await NodeAsync();

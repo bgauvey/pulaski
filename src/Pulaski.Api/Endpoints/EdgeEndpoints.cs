@@ -38,6 +38,14 @@ internal static class EdgeEndpoints
             TypedResults.Ok(await handler.HandleAsync(new UpdateEdgeNodeCommand(id, request.Version, request.Name, request.Description, request.IsActive), ct)))
         .RequirePermission(Permissions.Equipment, Site.Of(SiteOf.EdgeNode));
 
+        nodes.MapDelete("/{id:guid}", async Task<NoContent> (
+            Guid id, ICommandHandler<DeleteEdgeNodeCommand, bool> handler, CancellationToken ct) =>
+        {
+            await handler.HandleAsync(new DeleteEdgeNodeCommand(id), ct);
+            return TypedResults.NoContent();
+        })
+        .RequirePermission(Permissions.Equipment, Site.Of(SiteOf.EdgeNode));
+
         nodes.MapPost("/{id:guid}/connections", async Task<Created<CreatedResponse>> (
             Guid id, CreateEdgeConnectionRequest request, ICommandHandler<CreateEdgeConnectionCommand, CreatedResponse> handler, CancellationToken ct) =>
         {
@@ -66,6 +74,15 @@ internal static class EdgeEndpoints
             Guid id, UpdateEquipmentTagRequest request, ICommandHandler<UpdateEquipmentTagCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new UpdateEquipmentTagCommand(
                 id, request.Version, request.Address, request.ScaleFactor, request.ScaleOffset, request.CounterRollover, request.IsActive), ct)))
+        .WithTags("Machine data")
+        .RequirePermission(Permissions.Equipment, Site.Of(SiteOf.EquipmentTag));
+
+        routes.MapDelete("/equipment-tags/{id:guid}", async Task<NoContent> (
+            Guid id, ICommandHandler<DeleteEquipmentTagCommand, bool> handler, CancellationToken ct) =>
+        {
+            await handler.HandleAsync(new DeleteEquipmentTagCommand(id), ct);
+            return TypedResults.NoContent();
+        })
         .WithTags("Machine data")
         .RequirePermission(Permissions.Equipment, Site.Of(SiteOf.EquipmentTag));
 

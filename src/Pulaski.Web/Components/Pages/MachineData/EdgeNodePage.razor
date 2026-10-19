@@ -4,6 +4,8 @@
 @inject PulaskiApiClient Api
 @inject CurrentUser User
 @inject IConfiguration Configuration
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 @* One edge node (D-041): its connections, the tags binding what it reads to equipment, the addresses it has seen, what its
    machines last reported, and how to set the edge itself up. *@
@@ -39,6 +41,10 @@
         </p>
     </div>
     <div class="inv-head-tools">
+        @if (CanManage && _detail is not null)
+        {
+            <button type="button" class="btn btn-outline-danger" disabled="@_saving" @onclick="DeleteNodeAsync">Delete</button>
+        }
         <button type="button" class="btn btn-outline-secondary btn-with-icon" @onclick="LoadAsync"><Icon Name="refresh" Size="16" />Refresh</button>
     </div>
 </div>
@@ -208,6 +214,10 @@ else
                                             {
                                                 <button type="button" class="btn btn-sm btn-primary" disabled="@_saving" @onclick="() => SaveTagAsync(t)">Save</button>
                                                 <button type="button" class="btn btn-sm btn-link" @onclick="() => _tagEdits.Remove(t.Id)">Undo</button>
+                                            }
+                                            @if (CanManage)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-outline-danger ms-1" disabled="@_saving" @onclick="() => DeleteTagAsync(t)">Delete</button>
                                             }
                                         </td>
                                     </tr>
@@ -524,6 +534,42 @@ else
             CounterRollover = edit.CounterRollover,
             IsActive = edit.IsActive,
         }));
+    }
+
+    private async Task DeleteNodeAsync()
+    {
+        if (_detail is null || !await JS.InvokeAsync<bool>("confirm",
+                $"Delete edge node {_detail.Node.Code}? This will deactivate the node and all its connections and tags. Historical data will be kept."))
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        try
+        {
+            await Api.DeleteEdgeNodeAsync(NodeId);
+            Navigation.NavigateTo("edge-nodes");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteTagAsync(EquipmentTagDto tag)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm",
+                $"Delete the {EdgeView.RoleLabel(tag.Role)} tag for {tag.EquipmentCode}? Historical data will be kept."))
+        {
+            return;
+        }
+
+        await RunAsync(() => Api.DeleteEquipmentTagAsync(tag.Id));
     }
 
     private async Task RunAsync(Func<Task> action)

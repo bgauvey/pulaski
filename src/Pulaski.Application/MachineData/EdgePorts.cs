@@ -55,6 +55,10 @@ public interface IEdgeRepository
 
     Task<Versioned<EdgeConnectionRecord>?> GetConnectionForUpdateAsync(Guid id, CancellationToken cancellationToken);
 
+    Task<EdgeConnectionRecord?> GetConnectionAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<Versioned<EdgeConnectionRecord>>> ListConnectionsForUpdateAsync(Guid edgeNodeId, CancellationToken cancellationToken);
+
     Task<long> InsertConnectionAsync(EdgeConnectionRecord connection, DateTimeOffset at, CancellationToken cancellationToken);
 
     Task<long> UpdateConnectionAsync(EdgeConnectionRecord connection, DateTimeOffset at, CancellationToken cancellationToken);
@@ -62,6 +66,10 @@ public interface IEdgeRepository
     Task<TagEquipment?> GetTagEquipmentAsync(Guid equipmentId, CancellationToken cancellationToken);
 
     Task<Versioned<EquipmentTagRecord>?> GetTagForUpdateAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<EquipmentTagRecord?> GetTagAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<Versioned<EquipmentTagRecord>>> ListTagsForUpdateAsync(IReadOnlyCollection<Guid> connectionIds, CancellationToken cancellationToken);
 
     Task<long> InsertTagAsync(EquipmentTagRecord tag, DateTimeOffset at, CancellationToken cancellationToken);
 

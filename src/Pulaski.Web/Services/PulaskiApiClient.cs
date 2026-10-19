@@ -229,6 +229,9 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> UpdateEdgeNodeAsync(Guid id, UpdateEdgeNodeRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/edge-nodes/{id}", request, ct);
 
+    public Task DeleteEdgeNodeAsync(Guid id, CancellationToken ct = default) =>
+        DeleteAsync($"api/edge-nodes/{id}", ct);
+
     public Task<CreatedResponse> CreateEdgeConnectionAsync(Guid nodeId, CreateEdgeConnectionRequest request, CancellationToken ct = default) =>
         SendAsync<CreatedResponse>(HttpMethod.Post, $"api/edge-nodes/{nodeId}/connections", request, ct);
 
@@ -240,6 +243,9 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<VersionResponse> UpdateEquipmentTagAsync(Guid id, UpdateEquipmentTagRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment-tags/{id}", request, ct);
+
+    public Task DeleteEquipmentTagAsync(Guid id, CancellationToken ct = default) =>
+        DeleteAsync($"api/equipment-tags/{id}", ct);
 
     /// <summary>Checks (<paramref name="dryRun"/>) or imports a machine's definitions from CSV into a profile, all or nothing (D-041).</summary>
     public async Task<ProfileImportResponse> ImportMachineProfileCsvAsync(Guid id, long version, string csv, bool dryRun, CancellationToken ct = default)
@@ -728,6 +734,15 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         var request = new HttpRequestMessage(method, uri) { Content = JsonContent.Create(body) };
         using var response = await SendCoreAsync(request, ct);
         return await ReadAsync<T>(response, ct);
+    }
+
+    private async Task DeleteAsync(string uri, CancellationToken ct)
+    {
+        using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Delete, uri), ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await ApiException.FromResponseAsync(response, ct);
+        }
     }
 
     private async Task<HttpResponseMessage> SendCoreAsync(HttpRequestMessage request, CancellationToken ct, bool signedIn = true)

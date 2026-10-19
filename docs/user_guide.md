@@ -1394,13 +1394,14 @@ If one machine's code means something else than on the others with the same prof
 3. On **Connections**, give the broker a **Code** and **Name**, its **Broker host** and **Port**, tick **TLS** if it uses it, and optionally the Sparkplug **Group id** (to hear only one group), a **Host id** (Pulaski then announces itself, so nodes know it is listening), a **Client id** and a **User name**. Click **Add connection**.
 4. On **Configure → Users**, add a user for the edge (such as `edge-gw-pack`) with the **Edge node** role at the site. Sign in as that user once and set its password, then sign out.
 5. On the node's **Setup** tab, copy the configuration into the edge's `appsettings.json` on the edge machine, fill in the user's password (and the broker's, if it has a user name), and start Pulaski Edge.
+6. To remove a node from use, click **Delete** on its row or page and confirm. Its connections and tags are switched off with it.
 
 ### Bind tags
 
 1. Once the edge runs, open its **Seen** tab: every metric its brokers have announced, with its last value. Type in **Filter addresses** to find one.
 2. Click **Bind** next to a metric. Pulaski guesses the role from the name; choose the **Equipment** (only equipment of the site that tracks state is offered) and check the **Role**.
 3. For a count, set the **Scale** (how many units one count is) and, if the counter wraps, its **Rollover** value. Click **Bind tag**.
-4. To type an address instead, use the same form on the **Tags** tab. To change a tag, edit its address, scale, rollover or **Active** box and click **Save**.
+4. To type an address instead, use the same form on the **Tags** tab. To change a tag, edit its address, scale, rollover or **Active** box and click **Save**. To remove a tag from use, click **Delete** on its row and confirm.
 
 The edge reads its tags every minute, so new and changed ones take effect without restarting it.
 
@@ -1418,6 +1419,7 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 - **Stop codes** are latched: a machine that clears its code once acknowledged keeps it in Pulaski until it runs (Execute) again.
 - **Counts** are taken across the rollover value; a counter going back without one is taken as reset to zero. Machine counts go into the run open on the equipment but don't change the job's reported quantities yet: production is still reported on the Floor.
 - **Switching a node off** stops Pulaski taking its data and the edge collecting. Switching a tag or connection off stops it being read.
+- **Delete is a recorded switch-off, not a physical erase.** Deleting a node deactivates it and all its connections and tags; deleting a tag deactivates that tag only. Pulaski retains these records and all machine history. Reactivating a node later does not reactivate its connections or tags; switch those back on individually if needed.
 - **Without Pulaski**, the edge starts with the last configuration it kept.
 - **The demo simulators.** `docker compose -f deploy/simulator/compose.yaml up -d` starts a local-only MQTT broker and three PackML simulators: group `Plant1`, nodes `Extruder`, `Saw` and `Packer`, and devices `EXT-01-EXT`, `EXT-01-SAW` and `PACK1`. The Spruiktec simulators publish standard PackML state numbers; `deploy/simulator/packml-simulator-profile.csv` is an example profile with the matching state values. The broker is anonymous and has no TLS: keep it on your development machine.
 - **Connect the edge.** Add a Sparkplug B connection on the edge node with broker host `localhost`, port `1883` (or the value of `PULASKI_MQTT_PORT` if 1883 is occupied), and group id `Plant1`. If Pulaski Edge runs in the same Docker Compose network as the broker, use host `broker` and port `1883` instead. Bind the three simulator addresses from the Seen tab, for example `Plant1/Extruder/EXT-01-EXT:Status/StateCurrent`, `Plant1/Saw/EXT-01-SAW:Status/StateCurrent` and `Plant1/Packer/PACK1:Status/StateCurrent`. Useful companion metrics include `Status/UnitModeCurrent`, `Status/CurMachSpeed`, and the `Admin/Prod*Count/0/AccCount` counters.

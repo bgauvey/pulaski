@@ -4,6 +4,7 @@
 @inject SiteSelection Sites
 @inject CurrentUser User
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @using Pulaski.Web.Services.MachineData
 
 @* Pulaski Edge nodes (D-041): workers on plant hardware that read the machines through their connections and forward what they
@@ -59,7 +60,7 @@ else
 {
     <div class="table-panel">
         <table class="table align-middle">
-            <thead><tr><th>Code</th><th>Name</th><th class="inv-num">Connections</th><th class="inv-num">Tags</th><th>Last heard from</th><th>Version</th><th>Active</th></tr></thead>
+            <thead><tr><th>Code</th><th>Name</th><th class="inv-num">Connections</th><th class="inv-num">Tags</th><th>Last heard from</th><th>Version</th><th>Active</th>@if (CanManage) { <th></th> }</tr></thead>
             <tbody>
                 @foreach (var n in _nodes)
                 {
@@ -71,6 +72,12 @@ else
                         <td>@EdgeView.LastHeard(n.LastSeenAt, DateTimeOffset.UtcNow, Sites.Site?.TimeZone)</td>
                         <td>@n.AgentVersion</td>
                         <td>@(n.IsActive ? "Yes" : "No")</td>
+                        @if (CanManage)
+                        {
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-danger" disabled="@_saving" @onclick="() => DeleteNodeAsync(n)">Delete</button>
+                            </td>
+                        }
                     </tr>
                 }
             </tbody>
@@ -133,6 +140,31 @@ else
         {
             var created = await Api.CreateEdgeNodeAsync(new CreateEdgeNodeRequest { SiteId = Sites.SiteId!.Value, Code = _code!, Name = _name! });
             Navigation.NavigateTo($"edge-nodes/{created.Id}");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteNodeAsync(EdgeNodeDto node)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm",
+                $"Delete edge node {node.Code}? This will deactivate the node and all its connections and tags. Historical data will be kept."))
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        try
+        {
+            await Api.DeleteEdgeNodeAsync(node.Id);
+            await LoadAsync();
         }
         catch (ApiException ex)
         {

@@ -81,6 +81,22 @@ public sealed class InMemoryEdge : IEdgeRepository, IEdgeReadStore
         }
     }
 
+    public Versioned<EdgeConnectionRecord> Connection(Guid id)
+    {
+        lock (_lock)
+        {
+            return _connections[id];
+        }
+    }
+
+    public Versioned<EquipmentTagRecord> Tag(Guid id)
+    {
+        lock (_lock)
+        {
+            return _tags[id];
+        }
+    }
+
     public MachineLive? Live(Guid equipmentId)
     {
         lock (_lock)
@@ -121,6 +137,13 @@ public sealed class InMemoryEdge : IEdgeRepository, IEdgeReadStore
 
     public Task<Versioned<EdgeConnectionRecord>?> GetConnectionForUpdateAsync(Guid id, CancellationToken cancellationToken) => Locked(() => _connections.GetValueOrDefault(id));
 
+    public Task<EdgeConnectionRecord?> GetConnectionAsync(Guid id, CancellationToken cancellationToken) =>
+        Locked(() => _connections.TryGetValue(id, out var c) ? c.Value : null);
+
+    public Task<IReadOnlyList<Versioned<EdgeConnectionRecord>>> ListConnectionsForUpdateAsync(Guid edgeNodeId, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<Versioned<EdgeConnectionRecord>>>(() =>
+            [.. _connections.Values.Where(c => c.Value.EdgeNodeId == edgeNodeId)]);
+
     public Task<long> InsertConnectionAsync(EdgeConnectionRecord connection, DateTimeOffset at, CancellationToken cancellationToken) =>
         UpdateConnectionAsync(connection, at, cancellationToken);
 
@@ -135,6 +158,14 @@ public sealed class InMemoryEdge : IEdgeRepository, IEdgeReadStore
         Locked(() => _equipment.TryGetValue(equipmentId, out var e) ? e.Equipment : null);
 
     public Task<Versioned<EquipmentTagRecord>?> GetTagForUpdateAsync(Guid id, CancellationToken cancellationToken) => Locked(() => _tags.GetValueOrDefault(id));
+
+    public Task<EquipmentTagRecord?> GetTagAsync(Guid id, CancellationToken cancellationToken) =>
+        Locked(() => _tags.TryGetValue(id, out var t) ? t.Value : null);
+
+    public Task<IReadOnlyList<Versioned<EquipmentTagRecord>>> ListTagsForUpdateAsync(
+        IReadOnlyCollection<Guid> connectionIds, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<Versioned<EquipmentTagRecord>>>(() =>
+            [.. _tags.Values.Where(t => connectionIds.Contains(t.Value.ConnectionId))]);
 
     public Task<long> InsertTagAsync(EquipmentTagRecord tag, DateTimeOffset at, CancellationToken cancellationToken) => UpdateTagAsync(tag, at, cancellationToken);
 

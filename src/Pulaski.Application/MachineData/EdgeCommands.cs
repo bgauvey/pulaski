@@ -11,6 +11,7 @@ namespace Pulaski.Application.MachineData;
 public sealed record CreateEdgeNodeCommand(Guid SiteId, string Code, string Name, string? Description) : ICommand<CreatedResponse>;
 
 public sealed record UpdateEdgeNodeCommand(Guid Id, long ExpectedVersion, string Name, string? Description, bool IsActive) : ICommand<VersionResponse>;
+public sealed record DeleteEdgeNodeCommand(Guid Id) : ICommand<bool>;
 
 public sealed record CreateEdgeConnectionCommand(Guid EdgeNodeId, string Code, string Name, string Protocol, IReadOnlyDictionary<string, string> Settings)
     : ICommand<CreatedResponse>;
@@ -26,6 +27,7 @@ public sealed record CreateEquipmentTagCommand(
 public sealed record UpdateEquipmentTagCommand(
     Guid Id, long ExpectedVersion, string Address, decimal ScaleFactor, decimal ScaleOffset, long? CounterRollover, bool IsActive)
     : ICommand<VersionResponse>;
+public sealed record DeleteEquipmentTagCommand(Guid Id) : ICommand<bool>;
 
 /// <summary>Connector protocols, their settings and their addresses (D-041).</summary>
 public static partial class EdgeProtocols
@@ -110,6 +112,71 @@ internal static class EdgeRules
         }
 
         return current.Value;
+    }
+}
+
+internal sealed class DeleteEdgeNodeHandler(IUnitOfWork unitOfWork, IEdgeRepository edge, IEventLog eventLog, IEventFactory events)
+    : ICommandHandler<DeleteEdgeNodeCommand, bool>
+{
+    public async Task<bool> HandleAsync(DeleteEdgeNodeCommand command, CancellationToken cancellationToken)
+    {
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var node = await EdgeRules.LockNodeAsync(edge, command.Id, null, cancellationToken);
+        var connections = await edge.ListConnectionsForUpdateAsync(node.Id, cancellationToken);
+        var tags = await edge.ListTagsForUpdateAsync(connections.Select(c => c.Value.Id).ToArray(), cancellationToken);
+
+        foreach (var current in tags.Where(t => t.Value.IsActive))
+        {
+            var updated = current.Value with { IsActive = false };
+            var envelope = events.Create(EventTypes.EquipmentTagDeleted, "equipment", updated.EquipmentId, new { Before = current.Value, After = updated });
+            await edge.UpdateTagAsync(updated, envelope.OccurredAt, cancellationToken);
+            await eventLog.AppendAsync(envelope, cancellationToken);
+        }
+
+        foreach (var current in connections.Where(c => c.Value.IsActive))
+        {
+            var updated = current.Value with { IsActive = false };
+            var envelope = events.Create(EventTypes.EdgeConnectionDeleted, "edge_node", node.Id, new { Before = current.Value, After = updated });
+            await edge.UpdateConnectionAsync(updated, envelope.OccurredAt, cancellationToken);
+            await eventLog.AppendAsync(envelope, cancellationToken);
+        }
+
+        if (node.IsActive)
+        {
+            var updated = node with { IsActive = false };
+            var envelope = events.Create(EventTypes.EdgeNodeDeleted, "edge_node", node.Id, new { Before = node, After = updated });
+            await edge.UpdateNodeAsync(updated, envelope.OccurredAt, cancellationToken);
+            await eventLog.AppendAsync(envelope, cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
+}
+
+internal sealed class DeleteEquipmentTagHandler(IUnitOfWork unitOfWork, IEdgeRepository edge, IEventLog eventLog, IEventFactory events)
+    : ICommandHandler<DeleteEquipmentTagCommand, bool>
+{
+    public async Task<bool> HandleAsync(DeleteEquipmentTagCommand command, CancellationToken cancellationToken)
+    {
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var snapshot = await edge.GetTagAsync(command.Id, cancellationToken) ?? throw new NotFoundException($"Tag {command.Id} not found.");
+        var connectionSnapshot = await edge.GetConnectionAsync(snapshot.ConnectionId, cancellationToken)
+            ?? throw new NotFoundException($"Connection {snapshot.ConnectionId} not found.");
+        await EdgeRules.LockNodeAsync(edge, connectionSnapshot.EdgeNodeId, null, cancellationToken);
+        _ = await edge.GetConnectionForUpdateAsync(snapshot.ConnectionId, cancellationToken)
+            ?? throw new NotFoundException($"Connection {snapshot.ConnectionId} not found.");
+        var current = await edge.GetTagForUpdateAsync(command.Id, cancellationToken) ?? throw new NotFoundException($"Tag {command.Id} not found.");
+        if (current.Value.IsActive)
+        {
+            var updated = current.Value with { IsActive = false };
+            var envelope = events.Create(EventTypes.EquipmentTagDeleted, "equipment", updated.EquipmentId, new { Before = current.Value, After = updated });
+            await edge.UpdateTagAsync(updated, envelope.OccurredAt, cancellationToken);
+            await eventLog.AppendAsync(envelope, cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 }
 
@@ -216,6 +283,8 @@ internal sealed class UpdateEdgeConnectionHandler(IUnitOfWork unitOfWork, IEdgeR
         new Validator().RequireText(name, "Name", 100).ThrowIfInvalid();
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var snapshot = await edge.GetConnectionAsync(command.Id, cancellationToken) ?? throw new NotFoundException($"Connection {command.Id} not found.");
+        await EdgeRules.LockNodeAsync(edge, snapshot.EdgeNodeId, null, cancellationToken);
         var current = await edge.GetConnectionForUpdateAsync(command.Id, cancellationToken) ?? throw new NotFoundException($"Connection {command.Id} not found.");
         if (current.Version != command.ExpectedVersion)
         {
@@ -251,9 +320,11 @@ internal sealed class CreateEquipmentTagHandler(IUnitOfWork unitOfWork, IEdgeRep
         EdgeRules.EnsureTagNumbers(command.ScaleFactor, command.CounterRollover);
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
-        var connection = (await edge.GetConnectionForUpdateAsync(command.ConnectionId, cancellationToken))?.Value
+        var connectionSnapshot = await edge.GetConnectionAsync(command.ConnectionId, cancellationToken)
             ?? throw new NotFoundException($"Connection {command.ConnectionId} not found.");
-        var node = await EdgeRules.LockNodeAsync(edge, connection.EdgeNodeId, null, cancellationToken);
+        var node = await EdgeRules.LockNodeAsync(edge, connectionSnapshot.EdgeNodeId, null, cancellationToken);
+        var connection = (await edge.GetConnectionForUpdateAsync(connectionSnapshot.Id, cancellationToken))?.Value
+            ?? throw new NotFoundException($"Connection {command.ConnectionId} not found.");
         if (!EdgeProtocols.IsValidAddress(connection.Protocol, address))
         {
             throw new ValidationException(new Dictionary<string, string[]> { ["Address"] = ["A Sparkplug B address is group/node[/device]:metric."] });
@@ -283,14 +354,19 @@ internal sealed class UpdateEquipmentTagHandler(IUnitOfWork unitOfWork, IEdgeRep
         EdgeRules.EnsureTagNumbers(command.ScaleFactor, command.CounterRollover);
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var snapshot = await edge.GetTagAsync(command.Id, cancellationToken) ?? throw new NotFoundException($"Tag {command.Id} not found.");
+        var connectionSnapshot = await edge.GetConnectionAsync(snapshot.ConnectionId, cancellationToken)
+            ?? throw new NotFoundException($"Connection {snapshot.ConnectionId} not found.");
+        await EdgeRules.LockNodeAsync(edge, connectionSnapshot.EdgeNodeId, null, cancellationToken);
+        _ = await edge.GetConnectionForUpdateAsync(snapshot.ConnectionId, cancellationToken)
+            ?? throw new NotFoundException($"Connection {snapshot.ConnectionId} not found.");
         var current = await edge.GetTagForUpdateAsync(command.Id, cancellationToken) ?? throw new NotFoundException($"Tag {command.Id} not found.");
         if (current.Version != command.ExpectedVersion)
         {
             throw new ConflictException("The tag was changed by someone else. Reload and try again.");
         }
 
-        var connection = (await edge.GetConnectionForUpdateAsync(current.Value.ConnectionId, cancellationToken))!.Value;
-        if (!EdgeProtocols.IsValidAddress(connection.Protocol, address))
+        if (!EdgeProtocols.IsValidAddress(connectionSnapshot.Protocol, address))
         {
             throw new ValidationException(new Dictionary<string, string[]> { ["Address"] = ["A Sparkplug B address is group/node[/device]:metric."] });
         }

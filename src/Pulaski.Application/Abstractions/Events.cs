@@ -70,10 +70,13 @@ public static class EventTypes
     public const string MachineProfileImported = "pulaski.machine_profile.imported.v1";
     public const string EdgeNodeCreated = "pulaski.edge_node.created.v1";
     public const string EdgeNodeUpdated = "pulaski.edge_node.updated.v1";
+    public const string EdgeNodeDeleted = "pulaski.edge_node.deleted.v1";
     public const string EdgeConnectionCreated = "pulaski.edge_node.connection_created.v1";
     public const string EdgeConnectionUpdated = "pulaski.edge_node.connection_updated.v1";
+    public const string EdgeConnectionDeleted = "pulaski.edge_node.connection_deleted.v1";
     public const string EquipmentTagCreated = "pulaski.equipment.tag_created.v1";
     public const string EquipmentTagUpdated = "pulaski.equipment.tag_updated.v1";
+    public const string EquipmentTagDeleted = "pulaski.equipment.tag_deleted.v1";
     public const string DowntimeCoded = "pulaski.downtime.coded.v1";
     public const string ShiftScheduleCreated = "pulaski.shift_schedule.created.v1";
     public const string ShiftScheduleUpdated = "pulaski.shift_schedule.updated.v1";

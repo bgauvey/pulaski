@@ -82,4 +82,36 @@ public sealed class EdgeTests(DatabaseFixture db)
         Assert.Equal("1", detail.Tags.Single(t => t.Id == state.Id).LastValue);
         Assert.Single(await QueryAsync<ListEdgeNodesQuery, IReadOnlyList<EdgeNodeDto>>(new ListEdgeNodesQuery(site.Id)));
     }
+
+    [Fact]
+    public async Task Deleting_an_edge_node_deactivates_its_connections_and_tags()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "DE-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "DS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse line = await db.SendAsync(new CreateEquipmentCommand(site.Id, "DL-" + _s, "Line", null, "work_center", "production_line", true, true, false, null));
+        CreatedResponse node = await db.SendAsync(new CreateEdgeNodeCommand(site.Id, "DG-" + _s, "Gateway", null));
+        CreatedResponse connection = await db.SendAsync(new CreateEdgeConnectionCommand(node.Id, "DB-" + _s, "Broker", EdgeProtocols.SparkplugB,
+            new Dictionary<string, string> { ["host"] = "localhost" }));
+        CreatedResponse tag = await db.SendAsync(new CreateEquipmentTagCommand(
+            line.Id, TagRoles.State, connection.Id, $"Plant1/Area/DL-{_s}:Status/StateCurrent", 1, 0, null));
+
+        await db.SendAsync(new DeleteEdgeNodeCommand(node.Id));
+
+        await using var connectionDb = await db.AdminDataSource.OpenConnectionAsync();
+        var active = await connectionDb.QuerySingleAsync<(bool Node, bool Connection, bool Tag)>(
+            """
+            SELECT n.is_active AS Node, c.is_active AS Connection, t.is_active AS Tag
+            FROM core.edge_node n
+            JOIN core.edge_connection c ON c.edge_node_id = n.id
+            JOIN core.equipment_tag t ON t.connection_id = c.id
+            WHERE n.id = @NodeId AND c.id = @ConnectionId AND t.id = @TagId
+            """,
+            new { NodeId = node.Id, ConnectionId = connection.Id, TagId = tag.Id });
+        Assert.Equal((false, false, false), active);
+
+        var config = await QueryAsync<GetEdgeConfigQuery, EdgeConfigDto>(new GetEdgeConfigQuery(node.Id));
+        Assert.False(config.IsActive);
+        Assert.Empty(config.Connections);
+        Assert.Empty(config.Tags);
+    }
 }
