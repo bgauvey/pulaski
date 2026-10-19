@@ -96,6 +96,14 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         RETURNING xmin::text::bigint
         """;
 
+    private const string DetachTagQualitySources = """
+        UPDATE core.quality_characteristic SET equipment_tag_id = NULL
+        WHERE equipment_tag_id = @TagId
+        RETURNING id
+        """;
+
+    private const string DeleteTag = "DELETE FROM core.equipment_tag WHERE id = @TagId";
+
     private const string IngestTags = """
         SELECT t.id AS tag_id, t.equipment_id, t.tag_role AS role, t.scale_factor, t.scale_offset, t.counter_rollover, e.machine_profile_id
         FROM core.equipment_tag t
@@ -270,6 +278,12 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
 
     public Task<long> UpdateTagAsync(EquipmentTagRecord t, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(UpdateTag, new { t.Id, t.Address, t.ScaleFactor, t.ScaleOffset, t.CounterRollover, t.IsActive, At = at }, cancellationToken);
+
+    public Task<IReadOnlyList<Guid>> DetachTagQualitySourcesAsync(Guid tagId, CancellationToken cancellationToken) =>
+        session.QueryAsync<Guid>(DetachTagQualitySources, new { TagId = tagId }, cancellationToken);
+
+    public Task<int> DeleteTagAsync(Guid tagId, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(DeleteTag, new { TagId = tagId }, cancellationToken);
 
     public async Task<IReadOnlyList<IngestTag>> ListIngestTagsAsync(Guid edgeNodeId, IReadOnlyCollection<Guid> tagIds, CancellationToken cancellationToken) =>
         [.. (await session.QueryAsync<IngestTagRow>(IngestTags, new { NodeId = edgeNodeId, Ids = tagIds.ToArray() }, cancellationToken))

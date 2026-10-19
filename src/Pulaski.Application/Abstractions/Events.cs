@@ -76,6 +76,7 @@ public static class EventTypes
     public const string EdgeConnectionDeleted = "pulaski.edge_node.connection_deleted.v1";
     public const string EquipmentTagCreated = "pulaski.equipment.tag_created.v1";
     public const string EquipmentTagUpdated = "pulaski.equipment.tag_updated.v1";
+    public const string EquipmentTagDeactivated = "pulaski.equipment.tag_deactivated.v1";
     public const string EquipmentTagDeleted = "pulaski.equipment.tag_deleted.v1";
     public const string DowntimeCoded = "pulaski.downtime.coded.v1";
     public const string ShiftScheduleCreated = "pulaski.shift_schedule.created.v1";

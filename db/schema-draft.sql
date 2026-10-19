@@ -348,7 +348,7 @@ CREATE TABLE core.process (
 );
 
 -- What a process can make, beyond makes_all_materials: whole material classes and single
--- materials. A row taken out of the scope is switched off, not deleted (the app never deletes).
+-- materials. A row taken out of the scope is switched off, not deleted.
 CREATE TABLE core.process_material_class (
     process_id          uuid NOT NULL REFERENCES core.process(id),
     material_class_id   uuid NOT NULL REFERENCES core.material_class(id),
@@ -697,7 +697,7 @@ CREATE TABLE sec.role (
     updated_at  timestamptz NOT NULL DEFAULT now()
 );
 
--- A permission taken away keeps its row with is_granted = false: the app role has no DELETE (D-037).
+-- A permission taken away keeps its row with is_granted = false: the app role has no DELETE on security tables (D-037).
 CREATE TABLE sec.role_permission (
     role_id             uuid NOT NULL REFERENCES sec.role(id) ON DELETE CASCADE,
     permission_code     text NOT NULL REFERENCES sec.permission(code),
@@ -1724,7 +1724,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0014_labor'),
     ('0015_machine_profiles'),
     ('0016_edge'),
-    ('0017_stops');
+    ('0017_stops'),
+    ('0018_tag_deletion');
 
 -- =====================================================================
 -- 17. SEED DATA

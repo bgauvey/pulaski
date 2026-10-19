@@ -114,4 +114,59 @@ public sealed class EdgeTests(DatabaseFixture db)
         Assert.Empty(config.Connections);
         Assert.Empty(config.Tags);
     }
+
+    [Fact]
+    public async Task Deleting_tags_removes_the_rows_and_detaches_quality_sources()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "TE-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "TS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse line = await db.SendAsync(new CreateEquipmentCommand(site.Id, "TL-" + _s, "Line", null, "work_center", "production_line", true, true, false, null));
+        CreatedResponse node = await db.SendAsync(new CreateEdgeNodeCommand(site.Id, "TG-" + _s, "Gateway", null));
+        CreatedResponse connection = await db.SendAsync(new CreateEdgeConnectionCommand(node.Id, "TB-" + _s, "Broker", EdgeProtocols.SparkplugB,
+            new Dictionary<string, string> { ["host"] = "localhost" }));
+        CreatedResponse tag = await db.SendAsync(new CreateEquipmentTagCommand(
+            line.Id, TagRoles.State, connection.Id, $"Plant1/Area/TL-{_s}:Status/StateCurrent", 1, 0, null));
+        CreatedResponse inactiveTag = await db.SendAsync(new CreateEquipmentTagCommand(
+            line.Id, TagRoles.UnitMode, connection.Id, $"Plant1/Area/TL-{_s}:Status/UnitModeCurrent", 1, 0, null));
+        await db.SendAsync(new UpdateEquipmentTagCommand(
+            inactiveTag.Id, inactiveTag.Version, $"Plant1/Area/TL-{_s}:Status/UnitModeCurrent", 1, 0, null, IsActive: false));
+        var characteristicId = Guid.CreateVersion7();
+
+        await using (var setup = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await setup.ExecuteAsync(
+                """
+                INSERT INTO core.quality_characteristic
+                    (id, site_id, code, name, equipment_id, equipment_tag_id, data_kind, chart_type)
+                VALUES
+                    (@Id, @SiteId, @Code, 'Line speed', @EquipmentId, @TagId, 'variable', 'i_mr')
+                """,
+                new { Id = characteristicId, SiteId = site.Id, Code = "QC-" + _s, EquipmentId = line.Id, TagId = tag.Id });
+        }
+
+        await db.SendAsync(new DeleteEquipmentTagCommand(tag.Id));
+        await db.SendAsync(new DeleteEquipmentTagCommand(inactiveTag.Id));
+
+        await using var connectionDb = await db.AdminDataSource.OpenConnectionAsync();
+        var state = await connectionDb.QuerySingleAsync<(bool Node, bool Connection, bool ActiveTag, bool InactiveTag, Guid? QualityTag)>(
+            """
+            SELECT n.is_active AS Node,
+                   c.is_active AS Connection,
+                   EXISTS (SELECT 1 FROM core.equipment_tag WHERE id = @TagId) AS ActiveTag,
+                   EXISTS (SELECT 1 FROM core.equipment_tag WHERE id = @InactiveTagId) AS InactiveTag,
+                   q.equipment_tag_id AS QualityTag
+            FROM core.edge_node n
+            JOIN core.edge_connection c ON c.edge_node_id = n.id AND c.id = @ConnectionId
+            JOIN core.quality_characteristic q ON q.id = @CharacteristicId
+            WHERE n.id = @NodeId
+            """,
+            new { NodeId = node.Id, ConnectionId = connection.Id, TagId = tag.Id, InactiveTagId = inactiveTag.Id, CharacteristicId = characteristicId });
+        Assert.Equal((true, true, false, false, null), state);
+
+        var detail = await QueryAsync<GetEdgeNodeQuery, EdgeNodeDetailDto>(new GetEdgeNodeQuery(node.Id));
+        Assert.Empty(detail.Tags);
+        var config = await QueryAsync<GetEdgeConfigQuery, EdgeConfigDto>(new GetEdgeConfigQuery(node.Id));
+        Assert.Empty(config.Tags);
+        Assert.Single(config.Connections);
+    }
 }

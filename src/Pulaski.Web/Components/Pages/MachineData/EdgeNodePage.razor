@@ -50,6 +50,10 @@
 </div>
 
 <ProblemAlert Error="_error" />
+@if (_notice is not null)
+{
+    <div class="alert alert-success" role="status">@_notice</div>
+}
 
 @if (_detail is null)
 {
@@ -339,6 +343,7 @@ else
     private EdgeNodeDetailDto? _detail;
     private IReadOnlyList<EquipmentDto> _equipment = [];
     private ApiException? _error;
+    private string? _notice;
     private bool _saving;
     private string _tab = "connections";
     private string? _filter;
@@ -564,21 +569,25 @@ else
     private async Task DeleteTagAsync(EquipmentTagDto tag)
     {
         if (!await JS.InvokeAsync<bool>("confirm",
-                $"Delete the {EdgeView.RoleLabel(tag.Role)} tag for {tag.EquipmentCode}? Historical data will be kept."))
+                $"Permanently delete the {EdgeView.RoleLabel(tag.Role)} tag for {tag.EquipmentCode}? Machine history will be kept, and any quality-characteristic source binding will be cleared."))
         {
             return;
         }
 
-        await RunAsync(() => Api.DeleteEquipmentTagAsync(tag.Id));
+        await RunAsync(
+            () => Api.DeleteEquipmentTagAsync(tag.Id),
+            $"{EdgeView.RoleLabel(tag.Role)} tag for {tag.EquipmentCode} was permanently deleted. Machine history is retained.");
     }
 
-    private async Task RunAsync(Func<Task> action)
+    private async Task RunAsync(Func<Task> action, string? successNotice = null)
     {
         _saving = true;
         _error = null;
+        _notice = null;
         try
         {
             await action();
+            _notice = successNotice;
             await LoadAsync();
         }
         catch (ApiException ex)

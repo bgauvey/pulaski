@@ -1,6 +1,6 @@
 -- 0011 · Editable roles (D-037): roles move from code to data. An administrator creates roles and chooses their
 -- permissions; only 'administrator' stays fixed in code. A permission taken away keeps its row, flagged, since
--- the app role has no DELETE. Re-runnable; no BEGIN/COMMIT (db/migrate.sh runs it in one transaction).
+-- the app role has no DELETE on security tables. Re-runnable; no BEGIN/COMMIT (db/migrate.sh runs it in one transaction).
 
 ALTER TABLE sec.role
     ADD COLUMN IF NOT EXISTS description text NOT NULL DEFAULT '',

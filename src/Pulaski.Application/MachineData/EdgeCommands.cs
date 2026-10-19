@@ -128,7 +128,7 @@ internal sealed class DeleteEdgeNodeHandler(IUnitOfWork unitOfWork, IEdgeReposit
         foreach (var current in tags.Where(t => t.Value.IsActive))
         {
             var updated = current.Value with { IsActive = false };
-            var envelope = events.Create(EventTypes.EquipmentTagDeleted, "equipment", updated.EquipmentId, new { Before = current.Value, After = updated });
+            var envelope = events.Create(EventTypes.EquipmentTagDeactivated, "equipment", updated.EquipmentId, new { Before = current.Value, After = updated });
             await edge.UpdateTagAsync(updated, envelope.OccurredAt, cancellationToken);
             await eventLog.AppendAsync(envelope, cancellationToken);
         }
@@ -167,14 +167,15 @@ internal sealed class DeleteEquipmentTagHandler(IUnitOfWork unitOfWork, IEdgeRep
         _ = await edge.GetConnectionForUpdateAsync(snapshot.ConnectionId, cancellationToken)
             ?? throw new NotFoundException($"Connection {snapshot.ConnectionId} not found.");
         var current = await edge.GetTagForUpdateAsync(command.Id, cancellationToken) ?? throw new NotFoundException($"Tag {command.Id} not found.");
-        if (current.Value.IsActive)
+        var detachedQualitySources = await edge.DetachTagQualitySourcesAsync(command.Id, cancellationToken);
+        var envelope = events.Create(EventTypes.EquipmentTagDeleted, "equipment", current.Value.EquipmentId,
+            new { Before = current.Value, DetachedQualityCharacteristicIds = detachedQualitySources });
+        if (await edge.DeleteTagAsync(command.Id, cancellationToken) != 1)
         {
-            var updated = current.Value with { IsActive = false };
-            var envelope = events.Create(EventTypes.EquipmentTagDeleted, "equipment", updated.EquipmentId, new { Before = current.Value, After = updated });
-            await edge.UpdateTagAsync(updated, envelope.OccurredAt, cancellationToken);
-            await eventLog.AppendAsync(envelope, cancellationToken);
+            throw new InvalidOperationException($"Tag {command.Id} was not deleted.");
         }
 
+        await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return true;
     }

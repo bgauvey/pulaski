@@ -97,6 +97,14 @@ public sealed class InMemoryEdge : IEdgeRepository, IEdgeReadStore
         }
     }
 
+    public bool HasTag(Guid id)
+    {
+        lock (_lock)
+        {
+            return _tags.ContainsKey(id);
+        }
+    }
+
     public MachineLive? Live(Guid equipmentId)
     {
         lock (_lock)
@@ -175,6 +183,12 @@ public sealed class InMemoryEdge : IEdgeRepository, IEdgeReadStore
         _tags[tag.Id] = new(tag, version);
         return version;
     });
+
+    public Task<IReadOnlyList<Guid>> DetachTagQualitySourcesAsync(Guid tagId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Guid>>([]);
+
+    public Task<int> DeleteTagAsync(Guid tagId, CancellationToken cancellationToken) =>
+        Locked(() => _tags.Remove(tagId) ? 1 : 0);
 
     public Task<IReadOnlyList<IngestTag>> ListIngestTagsAsync(Guid edgeNodeId, IReadOnlyCollection<Guid> tagIds, CancellationToken cancellationToken) =>
         Locked<IReadOnlyList<IngestTag>>(() =>

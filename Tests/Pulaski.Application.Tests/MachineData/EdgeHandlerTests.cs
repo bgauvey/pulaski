@@ -82,7 +82,7 @@ public class EdgeHandlerTests
         Assert.False(Edge.Tag(state.Id).Value.IsActive);
         Assert.False(Edge.Tag(count.Id).Value.IsActive);
         Assert.Equal(EventTypes.EdgeNodeDeleted, _f.Stores.Events.Appended[^1].Type);
-        Assert.Equal(2, _f.Stores.Events.Appended.Count(e => e.Type == EventTypes.EquipmentTagDeleted));
+        Assert.Equal(2, _f.Stores.Events.Appended.Count(e => e.Type == EventTypes.EquipmentTagDeactivated));
         Assert.Single(_f.Stores.Events.Appended, e => e.Type == EventTypes.EdgeConnectionDeleted);
 
         var eventCount = _f.Stores.Events.Appended.Count;
@@ -92,25 +92,30 @@ public class EdgeHandlerTests
     }
 
     [Fact]
-    public async Task Deleting_a_tag_leaves_its_node_connection_and_other_tags_active()
+    public async Task Deleting_a_tag_physically_removes_it_whether_active_or_inactive()
     {
         var (node, connection) = await NodeAsync();
         var state = await TagAsync(connection, TagRoles.State, "Plant1/Packing/PACK-01:State");
         var stop = await TagAsync(connection, TagRoles.StopReason, "Plant1/Packing/PACK-01:Stop");
+        await Edge.UpdateTagAsync(Edge.Tag(stop.Id).Value with { IsActive = false }, T0, Ct);
 
         await new DeleteEquipmentTagHandler(_f.Stores.UnitOfWork, Edge, _f.Stores.Events, _f.Events)
             .HandleAsync(new DeleteEquipmentTagCommand(state.Id), Ct);
 
-        Assert.False(Edge.Tag(state.Id).Value.IsActive);
-        Assert.True(Edge.Tag(stop.Id).Value.IsActive);
+        Assert.False(Edge.HasTag(state.Id));
+        Assert.True(Edge.HasTag(stop.Id));
         Assert.True(Edge.Connection(connection).Value.IsActive);
         Assert.True(Edge.Node(node).Value.IsActive);
         Assert.Equal(EventTypes.EquipmentTagDeleted, _f.Stores.Events.Appended[^1].Type);
 
-        var eventCount = _f.Stores.Events.Appended.Count;
         await new DeleteEquipmentTagHandler(_f.Stores.UnitOfWork, Edge, _f.Stores.Events, _f.Events)
-            .HandleAsync(new DeleteEquipmentTagCommand(state.Id), Ct);
-        Assert.Equal(eventCount, _f.Stores.Events.Appended.Count);
+            .HandleAsync(new DeleteEquipmentTagCommand(stop.Id), Ct);
+        Assert.False(Edge.HasTag(stop.Id));
+        Assert.Equal(2, _f.Stores.Events.Appended.Count(e => e.Type == EventTypes.EquipmentTagDeleted));
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            new DeleteEquipmentTagHandler(_f.Stores.UnitOfWork, Edge, _f.Stores.Events, _f.Events)
+                .HandleAsync(new DeleteEquipmentTagCommand(state.Id), Ct));
     }
 
     [Fact]

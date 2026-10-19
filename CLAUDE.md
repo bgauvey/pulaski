@@ -37,7 +37,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   - Don't use `CALL` from the app. Procedures are for set-based maintenance jobs only. Npgsql's
     `CommandType.StoredProcedure` sends `CALL`, so never use it for functions either.
   - Domain rules live in C# (`Pulaski.Domain`), not PL/pgSQL. The app role (`pulaski_app`,
-    `db/app-role.sql`) has SELECT/INSERT/UPDATE on `core`, SELECT/INSERT only on `evt.event`, no DELETE.
+    `db/app-role.sql`) has SELECT/INSERT/UPDATE on `core`, plus DELETE only on `core.equipment_tag`;
+    it has SELECT/INSERT only on `evt.event`.
 - Optimistic concurrency via `xmin` (`xmin::text::bigint AS version`): the handler reads the row
   `FOR UPDATE`, compares the caller's version (409 on mismatch) and writes; no row_version columns.
 - API is CQRS (D-013): commands and queries in `Pulaski.Application` with hand-written handlers

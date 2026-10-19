@@ -1,6 +1,6 @@
 # Pulaski — Database Reference
 
-Oct 13, 2026 · Bill Gauvey
+Oct 18, 2026 · Bill Gauvey
 
 This is the reference for every table and column in `db/schema-draft.sql` (PostgreSQL 18). It explains what each table is for and what each column means. The SQL file stays the source of truth for exact types and constraints; when the two disagree, fix this document. Decisions referenced as D-nnn are in [domain-model-decisions.md](domain-model-decisions.md).
 
@@ -21,7 +21,7 @@ This is the reference for every table and column in `db/schema-draft.sql` (Postg
 | Partitioned tables | Range-partitioned by a time column, monthly by default (`ts.create_month_partitions`). The primary key always includes that column. There is no default partition: a missing partition makes inserts fail, so the API keeps three months ahead through `ts.ensure_partitions` (D-028). |
 | Migrations (D-028) | `schema-draft.sql` is the complete schema for a new database; each change also ships as a re-runnable `db/migrations/NNNN_*.sql`, applied by `db/migrate.sh` and recorded in `public.schema_migration`. |
 | Foreign keys into history | None. A row pointing at a partitioned table stores the id (and its time) without an FK, so old partitions can be dropped. |
-| Deletes | The application role (`pulaski_app`, `db/app-role.sql`) has no `DELETE` anywhere. Master data is deactivated (`is_active`), and corrections are new rows or events. |
+| Deletes | The application role (`pulaski_app`, `db/app-role.sql`) has `DELETE` only on `core.equipment_tag`; other master data is deactivated. Events and time-partitioned history are never deleted. |
 
 ## Map
 
@@ -190,7 +190,7 @@ What the edge reported seeing (Sparkplug birth certificates and data), so tags c
 
 ### core.equipment_tag — machine signal bindings · *In use (D-041)*
 
-One signal an edge reads for a piece of equipment, and what it means. One active tag per role on a piece of equipment, process values aside (`equipment_tag_role_uq`), and one per address on a connection (`equipment_tag_source_uq`).
+One signal an edge reads for a piece of equipment, and what it means. One active tag per role on a piece of equipment, process values aside (`equipment_tag_role_uq`), and one per address on a connection (`equipment_tag_source_uq`). A tag may be physically deleted by equipment maintainers; any quality-characteristic source binding is cleared first. The deletion event and time-series history remain.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -659,7 +659,7 @@ One row per user who signs in with a Pulaski password.
 | --- | --- | --- | --- |
 | `role_id` | uuid → role | no | The role. Part of the primary key. |
 | `permission_code` | text → permission | no | The permission. Part of the primary key. |
-| `is_granted` | boolean | no | False once the permission has been taken away: rows are kept, since the app role has no DELETE. |
+| `is_granted` | boolean | no | False once the permission has been taken away: rows are kept; the app role has no DELETE on this table. |
 | `changed_at` | timestamptz | no | When it was last granted or taken away. |
 | `changed_by_user_id` | uuid → app_user | yes | Who did. |
 
@@ -1068,7 +1068,7 @@ One row per site, production day and shift (`labor_approval_uq`, nulls equal, so
 | `code` | text | no | Unique per site. |
 | `name` | text | no | Display name. |
 | `equipment_id` | uuid → equipment | no | Where it is measured. |
-| `equipment_tag_id` | uuid → equipment_tag | yes | Set when sampled automatically from process data. |
+| `equipment_tag_id` | uuid → equipment_tag | yes | Set when sampled automatically from process data; cleared if its tag is physically deleted. |
 | `data_kind` | text | no | `variable` (measured) or `attribute` (counted). |
 | `chart_type` | text | no | `xbar_r`, `xbar_s`, `i_mr` (variables) or `p`, `np`, `c`, `u` (attributes). |
 | `subgroup_size` | smallint | no | Measurements per subgroup; 1 for `i_mr`. |
@@ -1233,7 +1233,7 @@ No surrogate id and no FKs, because size and insert cost matter at this volume. 
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `equipment_tag_id` | uuid | no | The tag (no FK). Primary key with `occurred_at`. |
+| `equipment_tag_id` | uuid | no | The source tag id (no FK); historical samples remain if its tag is deleted. Primary key with `occurred_at`. |
 | `occurred_at` | timestamptz | no | Sample time. Partition key. |
 | `value_num` | double precision | yes | Numeric value. |
 | `value_text` | text | yes | Text value. |

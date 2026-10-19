@@ -7,11 +7,10 @@
 --   CREATE ROLE pulaski_api LOGIN PASSWORD '...';
 --   GRANT pulaski_app TO pulaski_api;
 --
--- The application reads with parameterized SELECTs and writes with
--- parameterized INSERT/UPDATE inside one transaction per command. It
--- never deletes: corrections are new events, and retired master data is
--- deactivated. evt.event is INSERT and SELECT only (D-004), backed by the
--- append-only trigger in schema-draft.sql.
+-- The application reads with parameterized SELECTs and writes inside one
+-- transaction per command. DELETE is limited to core.equipment_tag; other
+-- retired master data is deactivated. evt.event is INSERT and SELECT only
+-- (D-004), backed by the append-only trigger in schema-draft.sql.
 --
 -- Grant ts and sec tables here as the features that use them are built.
 -- =====================================================================
@@ -26,6 +25,7 @@ END $$;
 GRANT USAGE ON SCHEMA core, evt, ts TO pulaski_app;
 
 GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA core TO pulaski_app;
+GRANT DELETE ON core.equipment_tag TO pulaski_app;
 
 GRANT SELECT, INSERT ON evt.event TO pulaski_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON evt.event FROM pulaski_app;

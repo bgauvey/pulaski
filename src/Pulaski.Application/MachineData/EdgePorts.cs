@@ -75,6 +75,10 @@ public interface IEdgeRepository
 
     Task<long> UpdateTagAsync(EquipmentTagRecord tag, DateTimeOffset at, CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<Guid>> DetachTagQualitySourcesAsync(Guid tagId, CancellationToken cancellationToken);
+
+    Task<int> DeleteTagAsync(Guid tagId, CancellationToken cancellationToken);
+
     /// <summary>The node's active tags among <paramref name="tagIds"/>, read through its active connections.</summary>
     Task<IReadOnlyList<IngestTag>> ListIngestTagsAsync(Guid edgeNodeId, IReadOnlyCollection<Guid> tagIds, CancellationToken cancellationToken);
 
