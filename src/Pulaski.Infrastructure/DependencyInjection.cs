@@ -64,6 +64,7 @@ public static class DependencyInjection
         services.AddSingleton<IMachineDataReadStore, MachineDataQueries>();
         services.AddSingleton<IEdgeReadStore, EdgeQueries>();
         services.AddSingleton<IStopReadStore, StopQueries>();
+        services.AddSingleton<IOeeReadStore, OeeQueries>();
 
         services.AddScoped<DbSession>();
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DbSession>());

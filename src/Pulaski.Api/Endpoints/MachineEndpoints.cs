@@ -9,7 +9,7 @@ using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
 
-/// <summary>Machines (D-041): their live status, their stops, and coding stops.</summary>
+/// <summary>Machines (D-041): their live status, their stops, coding stops, and utilization and OEE reports (D-043).</summary>
 internal static class MachineEndpoints
 {
     public static IEndpointRouteBuilder MapMachineEndpoints(this IEndpointRouteBuilder routes)
@@ -26,6 +26,12 @@ internal static class MachineEndpoints
             Guid siteId, DateTimeOffset from, DateTimeOffset to, Guid? equipmentId, bool? uncodedOnly, bool? includeMicroStops,
             IQueryHandler<ListStopsQuery, IReadOnlyList<DowntimeDto>> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ListStopsQuery(new StopFilter(siteId, equipmentId, from, to, uncodedOnly ?? false, includeMicroStops ?? false)), ct)))
+        .RequireAny(Site.Query(), Permissions.MachinesView);
+
+        // Utilization and OEE between two production days (D-043), for equipment and everything below it, or the whole site.
+        machines.MapGet("/oee", async Task<Ok<OeeReportDto>> (
+            Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId, IQueryHandler<GetOeeReportQuery, OeeReportDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetOeeReportQuery(siteId, from, to, equipmentId), ct)))
         .RequireAny(Site.Query(), Permissions.MachinesView);
 
         machines.MapPost("/stops/{id:guid}/code", async Task<Ok<DowntimeCodedResponse>> (
