@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-10-18 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-10-19 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#17-reference) tables give the exact rules.
 
@@ -583,7 +583,7 @@ Everything is checked before anything is created, and all problems are listed to
 | ⓘ | Opens the details (below). |
 | Schedule | Projected start and finish. |
 | Quantity | Planned and made so far. |
-| Actions | The row's menu (below). |
+| Select | Select one or more orders to use the shared Actions menu. |
 
 ### Details
 
@@ -591,8 +591,16 @@ Click ⓘ to open a row. You see the due date, the published baseline, how much 
 
 ### Act on orders
 
-- **One order:** open the row's **Actions** menu (the ⌄ button) and choose **Dispatch**, **Un-dispatch**, **Firm**, **Cancel** and so on (only what the order can do next is shown), or **Show on the schedule**.
-- **Several orders:** tick **Select** on each (or **Select all**), open **Actions** at the top of the list and pick an action. Each choice shows how many of the selected orders it applies to (*3 of 5*); the others are skipped. **Cancel…** asks you to confirm.
+- **One order:** select its checkbox, then use the shared **Actions** menu above the list. It shows the permitted status changes, **Print shop order**, and **Show on the schedule** when available.
+- **Several orders:** select their checkboxes, or use **Select visible** to select the filtered rows. The same **Actions** menu shows bulk status changes with the number eligible (*3 of 5*); other selected orders are skipped. **Cancel…** asks you to confirm. **Clear selection** removes the current selection.
+
+### Print a shop order
+
+1. Find the work order and open its row's **Actions** menu.
+2. Choose **Print shop order**. Pulaski downloads one PDF with a traveler sheet for each job.
+3. Print the PDF for the floor. Check the schedule and the approved product specification before running.
+
+**In detail.** Each sheet identifies the work order, job and process operation; shows the material, planned quantity, line or waiting department, scheduled time, run rate, work-order due date, status and priority, special instructions, operation description and that job's planned BOM components; and carries a Code 128 barcode containing `order-number|OP-number` (for example, `WO-1001|OP-10`). A currently projected schedule is labelled **Projected schedule**; jobs without a live projection show their published baseline. Orders without jobs get a summary page with the specification warning. Pulaski does not yet maintain released product specifications, so every sheet explicitly says to verify the approved specification elsewhere; it does not print or imply spec limits.
 
 ---
 
@@ -1384,6 +1392,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Process links don't drive the schedule yet:** a Pack job can be projected to start before the Extrude job it follows. On the floor the link is enforced: the Pack job can't start until the link is met.
 - **The Overview** shows no machine state, counts, OEE, downtime, quality, lots or labor yet: those parts are hatched placeholders until the data exists. Its line strip is a rolling 24 hours rather than the current shift.
 - **Notes** can only be written when the order is created.
+- **Released product specifications** are not maintained in Pulaski yet. Shop-order sheets flag this gap and require operators to verify the approved specification elsewhere.
 - **Signing in through your company's identity provider** (Okta, Entra ID, AD FS, Keycloak) isn't built yet: users have Pulaski passwords, and an administrator resets forgotten ones (Pulaski sends no e-mail).
 - **Reported production and consumption can't be corrected** by anyone yet, so the Auditor role can't do that part of its job; write a lot off or up instead.
 - **The schedule shows its buttons to everyone who can see it;** someone who can see the schedule but not plan sees them, and a click explains that planning needs permission instead of changing anything. Switched-off buttons elsewhere can look like ordinary ones.

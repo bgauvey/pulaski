@@ -12,6 +12,9 @@ public interface IWorkOrderReadStore
 
     Task<WorkOrderDto?> GetAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>Jobs and the site time zone needed to print a work order's traveler sheets.</summary>
+    Task<ShopOrderJobsRow?> GetShopOrderJobsAsync(Guid workOrderId, CancellationToken cancellationToken);
+
     /// <summary>
     /// The equipment at and below <paramref name="equipmentId"/> (all equipment when null), each
     /// marked when it holds jobs (a line, or a group that plans for lines). Empty when the
@@ -35,6 +38,35 @@ public sealed record WorkOrderFactsRow
     public required Guid WorkOrderId { get; init; }
     public decimal CompletedQty { get; init; }
     public int OpenJobs { get; init; }
+}
+
+public sealed record ShopOrderJobsRow
+{
+    public required string SiteTimeZone { get; init; }
+    public IReadOnlyList<ShopOrderJobRow> Jobs { get; init; } = [];
+}
+
+public sealed record ShopOrderJobRow
+{
+    public required Guid JobId { get; init; }
+    public required string JobNumber { get; init; }
+    public required string JobType { get; init; }
+    public required string Status { get; init; }
+    public required Guid EquipmentId { get; init; }
+    public required string EquipmentCode { get; init; }
+    public bool IsGroup { get; init; }
+    public decimal? PlannedQty { get; init; }
+    public string? UomCode { get; init; }
+    public Guid? MaterialId { get; init; }
+    public Guid? UomId { get; init; }
+    public int? OperationNumber { get; init; }
+    public string? OperationName { get; init; }
+    public string? OperationDescription { get; init; }
+    public DateTimeOffset? BaselineStart { get; init; }
+    public DateTimeOffset? BaselineEnd { get; init; }
+    public decimal? RatePerHour { get; init; }
+    public string? RateUomCode { get; init; }
+    public string? RateSource { get; init; }
 }
 
 /// <summary>Write side: runs inside the current <see cref="IUnitOfWork"/>.</summary>

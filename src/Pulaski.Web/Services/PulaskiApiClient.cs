@@ -180,6 +180,20 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         GetAsync<IReadOnlyList<WorkOrderProgressDto>>(
             equipmentId is null ? "api/work-orders/progress" : $"api/work-orders/progress?equipmentId={equipmentId}", ct);
 
+    public async Task<(string FileName, byte[] Content)> GetShopOrderPdfAsync(Guid id, CancellationToken ct = default)
+    {
+        using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Get, $"api/work-orders/{id}/shop-order.pdf"), ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await ApiException.FromResponseAsync(response, ct);
+        }
+
+        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar
+            ?? response.Content.Headers.ContentDisposition?.FileName
+            ?? "shop-order.pdf";
+        return (fileName.Trim('"'), await response.Content.ReadAsByteArrayAsync(ct));
+    }
+
     public Task<CreatedResponse> CreateWorkOrderAsync(CreateWorkOrderRequest request, CancellationToken ct = default) =>
         SendAsync<CreatedResponse>(HttpMethod.Post, "api/work-orders", request, ct);
 

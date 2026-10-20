@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Pulaski.Api.Security;
+using Pulaski.Api.WorkOrders;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Security;
 using Pulaski.Application.Scheduling;
@@ -34,6 +35,22 @@ internal static class WorkOrderEndpoints
             CancellationToken ct) =>
             TypedResults.Ok((await handler.HandleAsync(new ListWorkOrderProgressQuery(equipmentId), ct)).At(await Visible.SitesAsync(http, Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.OverviewView), w => w.Order.SiteId)))
         .RequireAny(Site.QueryOf(SiteOf.Equipment, "equipmentId"), Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.OverviewView);
+
+        group.MapGet("/{id:guid}/shop-order.pdf", async Task<FileContentHttpResult> (
+            Guid id,
+            IQueryHandler<GetShopOrderQuery, ShopOrderDto> handler,
+            ShopOrderPdfRenderer renderer,
+            CancellationToken ct) =>
+        {
+            var shopOrder = await handler.HandleAsync(new GetShopOrderQuery(id), ct);
+            var content = renderer.Render(shopOrder);
+            var orderNumber = new string(shopOrder.Order.OrderNumber
+                .Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '-')
+                .ToArray());
+            return TypedResults.File(content, "application/pdf", $"shop-order-{orderNumber}.pdf");
+        })
+        .WithName("DownloadShopOrderPdf")
+        .RequireAny(Site.Of(SiteOf.WorkOrder), Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.OverviewView);
 
         group.MapGet("/{id:guid}", async Task<Ok<WorkOrderDto>> (
             Guid id,
