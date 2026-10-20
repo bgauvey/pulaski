@@ -93,7 +93,7 @@
 
 .ov-att.is-placeholder,
 .ov-meter.is-ghost,
-.ov-oee-bars span,
+.ov-oee-bars > span.is-empty,
 .ov-nosignal,
 .ov-swatch.is-nosignal,
 .ov-swatch.is-changeover,
@@ -615,7 +615,11 @@ a.ov-att:hover {
 
 .ov-oee-value {
     font: 600 18px/22px var(--font-sans);
-    color: var(--border-strong);
+    color: var(--text);
+}
+
+.ov-oee-value.is-empty {
+    color: var(--text-faint);
 }
 
 .ov-oee-bars {
@@ -623,12 +627,19 @@ a.ov-att:hover {
     gap: 3px;
 }
 
-    .ov-oee-bars span {
+    .ov-oee-bars > span {
         display: block;
         height: 4px;
         border-radius: var(--radius-full);
         background-color: var(--surface-2);
         box-shadow: inset 0 0 0 1px var(--border);
+    }
+
+    .ov-oee-bars > span > i {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--accent);
     }
 
 .ov-flags {

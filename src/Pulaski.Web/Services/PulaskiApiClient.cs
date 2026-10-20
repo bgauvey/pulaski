@@ -199,7 +199,7 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> SetProfileReasonsAsync(Guid id, SetProfileReasonsRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/machine-profiles/{id}/reasons", request, ct);
 
-    // Machines: status and stops (D-041)
+    // Machines: status, stops and OEE (D-041, D-043)
 
     public Task<IReadOnlyList<MachineStatusDto>> GetMachineStatusAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<MachineStatusDto>>($"api/machines/status?siteId={siteId}", ct);
@@ -208,6 +208,11 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         GetAsync<IReadOnlyList<DowntimeDto>>(Query("api/machines/stops", ("siteId", siteId), ("from", from.ToString("O", System.Globalization.CultureInfo.InvariantCulture)),
             ("to", to.ToString("O", System.Globalization.CultureInfo.InvariantCulture)), ("equipmentId", equipmentId),
             ("uncodedOnly", uncodedOnly), ("includeMicroStops", includeMicroStops)), ct);
+
+    public Task<OeeReportDto> GetOeeReportAsync(Guid siteId, DateOnly from, DateOnly to, CancellationToken ct = default) =>
+        GetAsync<OeeReportDto>(Query("api/machines/oee", ("siteId", siteId),
+            ("from", from.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),
+            ("to", to.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture))), ct);
 
     public Task<DowntimeCodedResponse> CodeStopAsync(Guid id, CodeDowntimeRequest request, CancellationToken ct = default) =>
         SendAsync<DowntimeCodedResponse>(HttpMethod.Post, $"api/machines/stops/{id}/code", request, ct);

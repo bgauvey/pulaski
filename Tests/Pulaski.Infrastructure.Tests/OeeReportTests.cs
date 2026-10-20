@@ -90,7 +90,7 @@ public sealed class OeeReportTests(DatabaseFixture db)
         var product = Assert.Single(report.Products);
         Assert.Equal((250m, 20m, 1), (product.GoodQty, product.ScrapQty, product.Runs));
         var lineFigures = report.Equipment[0].Figures;
-        Assert.Equal(0.17m, lineFigures.DownHours - lineFigures.UncodedHours);
+        Assert.Equal(0.17m, jammed.Hours);
         Assert.Equal(92.6m, lineFigures.QualityPct);
         // 20 of the run's 30 minutes were run time (10 jammed): 270 at 600/h is 27 earned minutes of 20 → 135%.
         Assert.Equal(135m, lineFigures.PerformancePct);

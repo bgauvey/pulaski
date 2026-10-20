@@ -1,3 +1,4 @@
+using Pulaski.Contracts.MachineData;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Web.Services;
 
@@ -63,4 +64,59 @@ public class OverviewModelTests
         Assert.Equal(0.25d, OverviewModel.Made(Segment(0, 1, planned: 1000m, remaining: 750m)));
         Assert.Equal(0d, OverviewModel.Made(Segment(0, 1, planned: 0m, remaining: 0m)));
     }
+
+    [Fact]
+    public void Current_shift_oee_combines_line_components_instead_of_averaging_percentages()
+    {
+        var firstLine = Shift(Guid.CreateVersion7(), "L1", Now.AddHours(-4), Now.AddHours(4), true, new OeeFiguresDto
+        {
+            PlannedHoursForOee = 8m,
+            RunHoursForAvailability = 4m,
+            RatedRunHoursForPerformance = 4m,
+            IdealHours = 2m,
+            GoodIdealHours = 1m,
+        });
+        var secondLine = Shift(Guid.CreateVersion7(), "L2", Now.AddHours(-2), Now.AddHours(2), true, new OeeFiguresDto
+        {
+            PlannedHoursForOee = 2m,
+            RunHoursForAvailability = 2m,
+            RatedRunHoursForPerformance = 2m,
+            IdealHours = 2m,
+            GoodIdealHours = 2m,
+        });
+        var machine = Shift(Guid.CreateVersion7(), "M1", Now.AddHours(-1), Now.AddHours(1), false, new OeeFiguresDto
+        {
+            PlannedHoursForOee = 1m,
+            RunHoursForAvailability = 0m,
+            RatedRunHoursForPerformance = 1m,
+            IdealHours = 1m,
+            GoodIdealHours = 0m,
+        });
+
+        var oee = OverviewModel.CurrentShiftOee([firstLine, secondLine, machine], Now);
+
+        Assert.Equal(new OverviewOee(60m, 66.7m, 75m, 30m), oee);
+        Assert.Same(secondLine, OverviewModel.CurrentShift([firstLine, secondLine], secondLine.EquipmentId, Now));
+    }
+
+    [Fact]
+    public void Current_shift_lookup_excludes_a_shift_at_its_end_and_summary_without_a_current_line_is_empty()
+    {
+        var ended = Shift(Guid.CreateVersion7(), "L1", Now.AddHours(-2), Now, true, new OeeFiguresDto());
+
+        Assert.Null(OverviewModel.CurrentShift([ended], ended.EquipmentId, Now));
+        Assert.Null(OverviewModel.CurrentShiftOee([ended], Now));
+    }
+
+    private static OeeShiftRowDto Shift(
+        Guid equipmentId, string code, DateTimeOffset start, DateTimeOffset end, bool canRunJob, OeeFiguresDto figures) =>
+        new()
+        {
+            EquipmentId = equipmentId,
+            EquipmentCode = code,
+            Start = start,
+            End = end,
+            CanRunJob = canRunJob,
+            Figures = figures,
+        };
 }

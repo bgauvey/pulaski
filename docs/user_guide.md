@@ -214,14 +214,14 @@ The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plan
 | ERP changes to accept | Orders the ERP changed after dispatch | Needs an ERP connection |
 | Labor to approve | Labor sessions from the last shift to approve | Needs labor tracking |
 
-**This shift** will show OEE (with availability, performance and quality against target), good output against plan, scrap and downtime with its biggest reason. All four need machine data.
+**This shift** shows OEE and its availability, performance and quality components from the current shift's machine and production reports. Site OEE combines the active production lines from their underlying time and ideal-output components; it does not average line percentages. When there is no rated production to calculate OEE, it shows a dash. Good output against plan, scrap and downtime are not shown here yet.
 
 **Lines** has one row per line:
 
 - **State:** the machine state. Until the line is connected it says **No signal**.
 - **Now or next:** the job the schedule has on the line now, or the next one and when it starts, with how much of it is made.
 - **The strip** covers six hours back to eighteen hours ahead, with a black line at *now*. The top lane will show what the line actually did (hatched while there's no signal); the bottom lane shows the planned jobs: outlined for planned, solid for dispatched or firmed, hatched for changeovers. Hover over a job to see it; click it to open its order on the Schedule. If nothing is planned in the window, the lane says when the next work starts.
-- **OEE** for the line, once there's machine data.
+- **OEE** for the line's current shift, with small bars for availability, performance and quality. The value comes from the machine/OEE report and refreshes with the Overview. A dash means there is no rated production data for that shift.
 - **Flags** at the end: a red mark if work overlaps on the line, an amber clock if a job has a schedule warning (hover for the messages).
 
 At the bottom, **Work orders** counts orders at each stage, Planned → Dispatched → Firmed → In progress → Completed (click one to list them), and **Starting next** lists the next six jobs to start across the plant.
@@ -1552,7 +1552,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Inventory movements aren't sent to the ERP yet:** they are recorded as events, but the connection that delivers them isn't built.
 - **Shortages use published times, not the live schedule,** and don't count incoming deliveries.
 - **Process links don't drive the schedule yet:** a Pack job can be projected to start before the Extrude job it follows. On the floor the link is enforced: the Pack job can't start until the link is met.
-- **The Overview** shows no machine state, counts, OEE, downtime, quality, lots or labor yet: those parts are hatched placeholders until the data exists. Its line strip is a rolling 24 hours rather than the current shift.
+- **The Overview** still shows no live machine state, reported counts, good output, scrap, downtime, quality, lots or labor. OEE is available for the current shift from the machine/OEE report; its timeline strip remains a rolling 24 hours rather than the current shift.
 - **Notes** can only be written when the order is created.
 - **Signing in through your company's identity provider** (Okta, Entra ID, AD FS, Keycloak) isn't built yet: users have Pulaski passwords, and an administrator resets forgotten ones (Pulaski sends no e-mail).
 - **Reported production and consumption can't be corrected** by anyone yet, so the Auditor role can't do that part of its job; write a lot off or up instead.

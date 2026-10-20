@@ -335,6 +335,11 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IUnitReadStore un
         PerformancePct = Pct(t.Performance),
         QualityPct = Pct(t.Quality),
         OeePct = Pct(t.Oee),
+        PlannedHoursForOee = OeeTally.Hours(t.Planned),
+        RunHoursForAvailability = OeeTally.Hours(t.Run),
+        RatedRunHoursForPerformance = OeeTally.Hours(t.RunWithRate),
+        IdealHours = t.EarnedHours,
+        GoodIdealHours = t.EarnedGoodHours,
     };
 
     private static decimal Hours(TimeSpan span) => Math.Round(OeeTally.Hours(span), 2);

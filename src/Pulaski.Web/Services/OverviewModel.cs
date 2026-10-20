@@ -1,3 +1,4 @@
+using Pulaski.Contracts.MachineData;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Web.Services.Scheduling;
 
@@ -47,9 +48,44 @@ public sealed record OverviewBar(TimelineSegmentDto Segment, double Left, double
     public bool IsChangeover => Segment.Kind != "job" || Segment.JobType == "changeover";
 }
 
+public sealed record OverviewOee(decimal? AvailabilityPct, decimal? PerformancePct, decimal? QualityPct, decimal? OeePct);
+
 /// <summary>What one line row on the Overview shows from the schedule's projection.</summary>
 public static class OverviewModel
 {
+    public static OeeShiftRowDto? CurrentShift(IEnumerable<OeeShiftRowDto> shifts, Guid equipmentId, DateTimeOffset now) =>
+        shifts.FirstOrDefault(s => s.EquipmentId == equipmentId && s.Start <= now && now < s.End);
+
+    public static OverviewOee? CurrentShiftOee(IEnumerable<OeeShiftRowDto> shifts, DateTimeOffset now)
+    {
+        var figures = shifts
+            .Where(s => s.CanRunJob && s.Start <= now && now < s.End)
+            .Select(s => s.Figures)
+            .ToList();
+        if (figures.Count == 0)
+        {
+            return null;
+        }
+
+        var plannedHours = figures.Sum(f => f.PlannedHoursForOee);
+        var runHours = figures.Sum(f => f.RunHoursForAvailability);
+        var ratedRunHours = figures.Sum(f => f.RatedRunHoursForPerformance);
+        var idealHours = figures.Sum(f => f.IdealHours);
+        var goodIdealHours = figures.Sum(f => f.GoodIdealHours);
+        decimal? Ratio(decimal numerator, decimal denominator) => denominator > 0 ? numerator / denominator : null;
+
+        var availabilityRatio = Ratio(runHours, plannedHours);
+        var performanceRatio = Ratio(idealHours, ratedRunHours);
+        var qualityRatio = Ratio(goodIdealHours, idealHours);
+        decimal? availability = availabilityRatio is { } a ? Math.Round(a * 100m, 1) : null;
+        decimal? performance = performanceRatio is { } p ? Math.Round(p * 100m, 1) : null;
+        decimal? quality = qualityRatio is { } q ? Math.Round(q * 100m, 1) : null;
+        var oee = availabilityRatio is { } ar && performanceRatio is { } pr && qualityRatio is { } qr
+            ? Math.Round(ar * pr * qr * 100m, 1)
+            : (decimal?)null;
+        return new OverviewOee(availability, performance, quality, oee);
+    }
+
     /// <summary>The job the plan has on the line now, or else the next one to start; null when nothing is planned.</summary>
     public static TimelineSegmentDto? NowOrNext(IEnumerable<TimelineSegmentDto> segments, DateTimeOffset now)
     {

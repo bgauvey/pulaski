@@ -32,7 +32,7 @@ internal static class MachineEndpoints
         machines.MapGet("/oee", async Task<Ok<OeeReportDto>> (
             Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId, IQueryHandler<GetOeeReportQuery, OeeReportDto> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new GetOeeReportQuery(siteId, from, to, equipmentId), ct)))
-        .RequireAny(Site.Query(), Permissions.MachinesView);
+        .RequireAny(Site.Query(), Permissions.MachinesView, Permissions.OverviewView);
 
         machines.MapPost("/stops/{id:guid}/code", async Task<Ok<DowntimeCodedResponse>> (
             Guid id, CodeDowntimeRequest request, ICommandHandler<CodeDowntimeCommand, DowntimeCodedResponse> handler, CancellationToken ct) =>

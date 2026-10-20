@@ -58,6 +58,13 @@ public sealed record OeeFiguresDto
     public decimal? PerformancePct { get; init; }
     public decimal? QualityPct { get; init; }
     public decimal? OeePct { get; init; }
+
+    /// <summary>Unrounded components used to aggregate OEE across equipment without averaging percentages.</summary>
+    public decimal PlannedHoursForOee { get; init; }
+    public decimal RunHoursForAvailability { get; init; }
+    public decimal RatedRunHoursForPerformance { get; init; }
+    public decimal IdealHours { get; init; }
+    public decimal GoodIdealHours { get; init; }
 }
 
 public sealed record OeeEquipmentRowDto
