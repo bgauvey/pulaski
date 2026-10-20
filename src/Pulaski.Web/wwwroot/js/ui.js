@@ -150,5 +150,13 @@
             link.remove();
             setTimeout(() => URL.revokeObjectURL(url), 1000);
         },
+        downloadBytes(fileName, bytes, mimeType) {
+            const url = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+            const link = Object.assign(document.createElement("a"), { href: url, download: fileName });
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        },
     };
 })();

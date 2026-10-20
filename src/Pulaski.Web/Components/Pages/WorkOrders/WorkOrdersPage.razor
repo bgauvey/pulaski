@@ -2,6 +2,7 @@
 @attribute [RequiresView(PermissionCodes.WorkOrdersView)]
 @using System.Globalization
 @inject PulaskiApiClient Api
+@inject Downloads Downloads
 @inject NavigationManager Navigation
 @inject EquipmentSelection Selection
 @inject TimeProvider Time
@@ -42,29 +43,6 @@
 
 <div class="table-panel wo-panel">
     <div class="wo-toolbar">
-        <div class="wo-menu" hidden="@(!CanMoveAny)">
-            <button type="button" class="btn btn-outline-secondary btn-sm btn-with-icon" aria-haspopup="menu" aria-expanded="@(_actionsOpen ? "true" : "false")"
-                    disabled="@(_selected.Count == 0 || _busy)" @onclick="() => _actionsOpen = !_actionsOpen">
-                Actions @(_selected.Count > 0 ? $"({_selected.Count})" : "") <Icon Name="chevron-down" Size="16" />
-            </button>
-            @if (_actionsOpen)
-            {
-                <div class="wo-menu-backdrop" @onclick="() => _actionsOpen = false"></div>
-                <ul class="wo-menu-list" role="menu">
-                    @foreach (var (status, label) in BulkActions)
-                    {
-                        var eligible = SelectedOrders.Count(o => o.Order.NextStatuses.Contains(status) && MayMove(o.Order, status));
-                        <li role="none">
-                            <button type="button" role="menuitem" class="wo-menu-item @(status == "cancelled" ? "is-danger" : "")" disabled="@(eligible == 0)"
-                                    @onclick="() => StartBulk(status)">
-                                @label <span class="text-muted">@eligible of @_selected.Count</span>
-                            </button>
-                        </li>
-                    }
-                </ul>
-            }
-        </div>
-
         <label class="wo-toolbar-label" for="wo-find-by">Find by</label>
         <select id="wo-find-by" class="form-select form-select-sm w-auto" @bind="_findBy">
             <option value="order">Order</option>
@@ -99,9 +77,10 @@
 
     @if (_pendingBulk is { } pending)
     {
+        var cancelCount = SelectedOrders.Count(o => o.Order.NextStatuses.Contains(pending) && MayMove(o.Order, pending));
         <div class="wo-confirm" role="alert">
-            <span>Cancel @SelectedOrders.Count(o => o.Order.NextStatuses.Contains(pending)) work orders? Their open jobs must be cancelled first.</span>
-            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => RunBulkAsync(pending)">Cancel orders</button>
+            <span>@(cancelCount == 1 ? "Cancel this work order?" : $"Cancel {cancelCount} work orders?") Their open jobs must be cancelled first.</span>
+            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => RunBulkAsync(pending)">Confirm cancellation</button>
             <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _pendingBulk = null">Keep them</button>
         </div>
     }
@@ -114,16 +93,84 @@
         </div>
     }
 
-    <div class="wo-select-links small" hidden="@(!CanMoveAny)">
-        <button type="button" class="link-button" @onclick="SelectAll">Select all</button>
-        <span aria-hidden="true">|</span>
-        <button type="button" class="link-button" @onclick="() => _selected.Clear()">Select none</button>
+    <div class="wo-select-links small" hidden="@(!CanSelectAny)">
+        @if (_selected.Count > 0)
+        {
+            <strong>@_selected.Count selected</strong>
+            <div class="wo-menu">
+                <button type="button" class="btn btn-outline-secondary btn-sm btn-with-icon" aria-haspopup="menu"
+                        aria-expanded="@(_actionsOpen ? "true" : "false")"
+                        disabled="@(_busy || _printingId is not null)" @onclick="() => _actionsOpen = !_actionsOpen">
+                    @(_printingId is null ? "Actions" : "Preparing PDF…")
+                    @if (_printingId is null)
+                    {
+                        <Icon Name="chevron-down" Size="16" />
+                    }
+                </button>
+                @if (_actionsOpen)
+                {
+                    var selectedOrders = SelectedOrders.ToList();
+                    <div class="wo-menu-backdrop" @onclick="() => _actionsOpen = false"></div>
+                    <ul class="wo-menu-list" role="menu">
+                        @if (selectedOrders.Count == 1)
+                        {
+                            var selected = selectedOrders[0];
+                            @if (CanPrint(selected.Order))
+                            {
+                                <li role="none">
+                                    <button type="button" role="menuitem" class="wo-menu-item"
+                                            disabled="@(_printingId is not null)"
+                                            @onclick="() => PrintShopOrderAsync(selected.Order)">
+                                        @(_printingId == selected.Order.Id ? "Preparing PDF…" : "Print shop order")
+                                    </button>
+                                </li>
+                            }
+                            @foreach (var next in selected.Order.NextStatuses.Where(n => MayMove(selected.Order, n)))
+                            {
+                                <li role="none">
+                                    <button type="button" role="menuitem" class="wo-menu-item @(next == "cancelled" ? "is-danger" : "")"
+                                            disabled="@(_busyId == selected.Order.Id)"
+                                            @onclick="() => StartSelectedStatus(next)">
+                                        @Display.StatusAction(selected.Order.Status, next)
+                                    </button>
+                                </li>
+                            }
+                            @if (User.Can(PermissionCodes.ScheduleView, selected.Order.SiteId))
+                            {
+                                <li role="none"><a role="menuitem" class="wo-menu-item" href="schedule?workOrder=@selected.Order.Id">Show on the schedule</a></li>
+                            }
+                        }
+                        else
+                        {
+                            @foreach (var (status, label) in BulkActions)
+                            {
+                                var eligible = selectedOrders.Count(o => o.Order.NextStatuses.Contains(status) && MayMove(o.Order, status));
+                                <li role="none">
+                                    <button type="button" role="menuitem" class="wo-menu-item @(status == "cancelled" ? "is-danger" : "")"
+                                            disabled="@(eligible == 0)" @onclick="() => StartSelectedStatus(status)">
+                                        @label <span class="text-muted">@eligible of @selectedOrders.Count</span>
+                                    </button>
+                                </li>
+                            }
+                            <li role="none"><span class="wo-menu-note">Print and schedule actions are available for one selected order.</span></li>
+                        }
+                    </ul>
+                }
+            </div>
+        }
+        <button type="button" class="link-button" disabled="@(_pendingBulk is not null || !SelectableRows.Any())" @onclick="SelectAll">
+            Select visible (@SelectableRows.Count())
+        </button>
+        @if (_selected.Count > 0)
+        {
+            <button type="button" class="link-button" disabled="@(_pendingBulk is not null)" @onclick="ClearSelection">Clear selection</button>
+        }
     </div>
 
     <table class="table align-middle wo-table">
         <thead>
             <tr>
-                <th rowspan="2" class="wo-col-select">@(CanMoveAny ? "Select" : "")</th>
+                <th rowspan="2" class="wo-col-select">@(CanSelectAny ? "Select" : "")</th>
                 <th rowspan="2" class="wo-col-flag"><span class="visually-hidden">Flags</span></th>
                 <th rowspan="2">Order</th>
                 <th rowspan="2">Status</th>
@@ -132,7 +179,6 @@
                 <th rowspan="2">Schedule</th>
                 <th colspan="2" class="text-center wo-qty-head">Quantity</th>
                 <th rowspan="2">Unit</th>
-                <th rowspan="2" class="text-center">@(CanMoveAny || User.Can(PermissionCodes.ScheduleView) ? "Actions" : "")</th>
             </tr>
             <tr>
                 <th class="text-end">Planned</th>
@@ -142,11 +188,11 @@
         <tbody>
             @if (_progress is null)
             {
-                <tr><td colspan="11" class="text-muted">@(_error is null ? "Loading…" : "")</td></tr>
+                <tr><td colspan="10" class="text-muted">@(_error is null ? "Loading…" : "")</td></tr>
             }
             else if (!Rows.Any())
             {
-                <tr><td colspan="11" class="text-muted">No work orders match.</td></tr>
+                <tr><td colspan="10" class="text-muted">No work orders match.</td></tr>
             }
             @foreach (var p in Rows)
             {
@@ -156,10 +202,11 @@
                 var flags = Flags(p);
                 <tr class="@(_selected.Contains(wo.Id) ? "table-active" : "") @(_busyId == wo.Id ? "is-saving" : "")" @key="wo.Id">
                     <td class="wo-col-select">
-                        @if (CanMoveAny)
+                        @if (CanSelect(wo))
                         {
                             <input class="form-check-input" type="checkbox" aria-label="Select @wo.OrderNumber"
-                                   checked="@_selected.Contains(wo.Id)" @onchange="e => ToggleSelected(wo.Id, e.Value is true)" />
+                                   checked="@_selected.Contains(wo.Id)" disabled="@(_pendingBulk is not null)"
+                                   @onchange="e => ToggleSelected(wo.Id, e.Value is true)" />
                         }
                     </td>
                     <td class="wo-col-flag">
@@ -214,39 +261,11 @@
                     <td class="text-end">@Number(wo.PlannedQty)</td>
                     <td class="text-end">@Number(p.CompletedQty)</td>
                     <td>@wo.UomCode</td>
-                    <td class="text-center">
-                        <div class="wo-menu" hidden="@(!HasRowActions(wo))">
-                            <button type="button" class="wo-icon-button" aria-haspopup="menu" aria-expanded="@(_menuFor == wo.Id ? "true" : "false")"
-                                    aria-label="Actions for @wo.OrderNumber" disabled="@(_busyId == wo.Id)"
-                                    @onclick="() => _menuFor = _menuFor == wo.Id ? null : wo.Id">
-                                <Icon Name="more" Size="22" />
-                            </button>
-                            @if (_menuFor == wo.Id)
-                            {
-                                <div class="wo-menu-backdrop" @onclick="() => _menuFor = null"></div>
-                                <ul class="wo-menu-list is-right" role="menu">
-                                    @foreach (var next in wo.NextStatuses.Where(n => MayMove(wo, n)))
-                                    {
-                                        <li role="none">
-                                            <button type="button" role="menuitem" class="wo-menu-item @(next == "cancelled" ? "is-danger" : "")"
-                                                    @onclick="() => ChangeStatusAsync(p, next)">
-                                                @Display.StatusAction(wo.Status, next)
-                                            </button>
-                                        </li>
-                                    }
-                                    @if (User.Can(PermissionCodes.ScheduleView))
-                                    {
-                                        <li role="none"><a role="menuitem" class="wo-menu-item" href="schedule?workOrder=@wo.Id">Show on the schedule</a></li>
-                                    }
-                                </ul>
-                            }
-                        </div>
-                    </td>
                 </tr>
                 @if (expanded)
                 {
                     <tr class="wo-details" @key="(wo.Id, true)">
-                        <td colspan="11">
+                        <td colspan="10">
                             <div class="wo-details-grid">
                                 <dl class="facts mb-0">
                                     <dt>Due</dt>
@@ -331,10 +350,21 @@
 
 @code {
     // Dispatching, un-dispatching and firming is managing an order; cancelling and closing it is its own permission (D-037).
-    // Whoever may change no work order sees no selection or actions to take (D-039).
-    private bool CanMoveAny => User.CanAny([PermissionCodes.WorkOrderManage, PermissionCodes.WorkOrderClose]);
+    private bool CanSelectAny => User.CanAny([
+        PermissionCodes.WorkOrderManage,
+        PermissionCodes.WorkOrderClose,
+        PermissionCodes.WorkOrdersView,
+        PermissionCodes.ScheduleView,
+        PermissionCodes.OverviewView,
+    ]);
 
-    private bool HasRowActions(WorkOrderDto order) => order.NextStatuses.Any(n => MayMove(order, n)) || User.Can(PermissionCodes.ScheduleView);
+    private bool CanSelect(WorkOrderDto order) =>
+        order.NextStatuses.Any(n => MayMove(order, n))
+        || User.Can(PermissionCodes.ScheduleView, order.SiteId)
+        || CanPrint(order);
+
+    private bool CanPrint(WorkOrderDto order) =>
+        User.CanAny([PermissionCodes.WorkOrdersView, PermissionCodes.ScheduleView, PermissionCodes.OverviewView], order.SiteId);
 
     private bool MayMove(WorkOrderDto order, string status) =>
         User.Can(status is "cancelled" or "closed" ? PermissionCodes.WorkOrderClose : PermissionCodes.WorkOrderManage, order.SiteId);
@@ -373,13 +403,13 @@
     private readonly HashSet<Guid> _selected = [];
     private readonly HashSet<Guid> _expanded = [];
     private readonly Dictionary<Guid, IReadOnlyList<PlannedComponentDto>> _components = [];
-    private Guid? _menuFor;
     private bool _actionsOpen;
     private string? _pendingBulk;
     private bool _busy;
     private Guid? _busyId;
     private string? _result;
     private bool _resultFailed;
+    private Guid? _printingId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -480,6 +510,8 @@
 
     private IEnumerable<WorkOrderProgressDto> SelectedOrders => (_progress ?? []).Where(p => _selected.Contains(p.Order.Id));
 
+    private IEnumerable<WorkOrderProgressDto> SelectableRows => Rows.Where(p => CanSelect(p.Order));
+
     private static bool Contains(string? text, string term) => text?.Contains(term, StringComparison.OrdinalIgnoreCase) == true;
 
     private string? ZoneOf(Guid siteId) => _siteZones.GetValueOrDefault(siteId);
@@ -541,6 +573,7 @@
 
     private void ToggleSelected(Guid id, bool selected)
     {
+        _actionsOpen = false;
         if (selected)
         {
             _selected.Add(id);
@@ -551,16 +584,32 @@
         }
     }
 
-    private void SelectAll() => _selected.UnionWith(Rows.Select(p => p.Order.Id));
+    private void SelectAll()
+    {
+        _actionsOpen = false;
+        _selected.UnionWith(SelectableRows.Select(p => p.Order.Id));
+    }
 
-    /// <summary>Cancelling asks once more; the other bulk actions run straight away.</summary>
-    private Task StartBulk(string status)
+    private void ClearSelection()
+    {
+        _actionsOpen = false;
+        _selected.Clear();
+    }
+
+    /// <summary>Cancelling asks once more; other actions run for one or many selected orders.</summary>
+    private Task StartSelectedStatus(string status)
     {
         _actionsOpen = false;
         if (status == "cancelled")
         {
             _pendingBulk = status;
             return Task.CompletedTask;
+        }
+
+        var selected = SelectedOrders.ToList();
+        if (selected.Count == 1)
+        {
+            return ChangeStatusAsync(selected[0], status);
         }
 
         return RunBulkAsync(status);
@@ -599,7 +648,7 @@
 
     private async Task ChangeStatusAsync(WorkOrderProgressDto progress, string status)
     {
-        _menuFor = null;
+        _actionsOpen = false;
         _busyId = progress.Order.Id;
         try
         {
@@ -619,5 +668,28 @@
 
         // Reload either way: after a conflict the user needs the current row and version.
         await LoadAsync();
+    }
+
+    private async Task PrintShopOrderAsync(WorkOrderDto order)
+    {
+        _actionsOpen = false;
+        _printingId = order.Id;
+        _result = null;
+        try
+        {
+            var file = await Api.GetShopOrderPdfAsync(order.Id);
+            await Downloads.PdfAsync(file.FileName, file.Content);
+            _result = $"Shop order {order.OrderNumber} downloaded.";
+            _resultFailed = false;
+        }
+        catch (ApiException ex)
+        {
+            _result = ex.Detail ?? ex.Title;
+            _resultFailed = true;
+        }
+        finally
+        {
+            _printingId = null;
+        }
     }
 }

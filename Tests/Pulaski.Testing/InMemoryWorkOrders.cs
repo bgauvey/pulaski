@@ -90,6 +90,11 @@ public sealed class InMemoryWorkOrders : IWorkOrderRepository, IWorkOrderReadSto
     public Task<WorkOrderDto?> GetAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(Find(id) is { } row ? ToDto(row) : null);
 
+    public Func<Guid, ShopOrderJobsRow?> ShopOrderJobs { get; set; } = _ => null;
+
+    public Task<ShopOrderJobsRow?> GetShopOrderJobsAsync(Guid workOrderId, CancellationToken cancellationToken) =>
+        Task.FromResult(ShopOrderJobs(workOrderId));
+
     private static WorkOrderDto ToDto(Versioned<WorkOrder> row)
     {
         var w = row.Value;

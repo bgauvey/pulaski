@@ -39,6 +39,29 @@ internal sealed class WorkOrderQueries(NpgsqlDataSource dataSource) : IWorkOrder
         WHERE w.id = @Id
         """;
 
+    private const string ShopOrderSite = """
+        SELECT time_zone
+        FROM core.equipment
+        WHERE id = (SELECT site_id FROM core.work_order WHERE id = @WorkOrderId)
+        """;
+
+    private const string ShopOrderJobs = """
+        SELECT j.id AS job_id, j.job_number, j.job_type, j.status, j.equipment_id, e.code AS equipment_code,
+               e.is_schedulable AND NOT e.can_run_job AS is_group,
+               j.planned_qty, job_u.code AS uom_code, j.material_id, j.uom_id,
+               o.operation_number, o.name AS operation_name, o.description AS operation_description,
+               j.planned_start AS baseline_start, j.planned_end AS baseline_end,
+               rs.effective_rate_per_hour AS rate_per_hour, rate_u.code AS rate_uom_code, rs.rate_source
+        FROM core.job j
+        JOIN core.equipment e ON e.id = j.equipment_id
+        LEFT JOIN core.uom job_u ON job_u.id = j.uom_id
+        LEFT JOIN core.process_operation o ON o.id = j.process_operation_id
+        LEFT JOIN core.run_standard rs ON rs.equipment_id = j.equipment_id AND rs.material_id = j.material_id
+        LEFT JOIN core.uom rate_u ON rate_u.id = rs.uom_id
+        WHERE j.work_order_id = @WorkOrderId AND j.status <> 'cancelled'
+        ORDER BY o.operation_number NULLS FIRST, j.job_number
+        """;
+
     // The subtree, self included; equipment that holds jobs is an active line or a group above lines (D-022).
     private const string Scope = """
         SELECT e.id, e.site_id, (e.is_schedulable OR e.can_run_job) AND e.is_active AS holds_jobs
@@ -91,5 +114,25 @@ internal sealed class WorkOrderQueries(NpgsqlDataSource dataSource) : IWorkOrder
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         return await connection.QuerySingleOrDefaultAsync<WorkOrderDto>(
             new CommandDefinition(Get, new { Id = id }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<ShopOrderJobsRow?> GetShopOrderJobsAsync(Guid workOrderId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var parameters = new { WorkOrderId = workOrderId };
+        var siteTimeZone = await connection.QuerySingleOrDefaultAsync<string>(
+            new CommandDefinition(ShopOrderSite, parameters, cancellationToken: cancellationToken));
+        if (siteTimeZone is null)
+        {
+            return null;
+        }
+
+        var jobs = await connection.QueryAsync<ShopOrderJobRow>(
+            new CommandDefinition(ShopOrderJobs, parameters, cancellationToken: cancellationToken));
+        return new ShopOrderJobsRow
+        {
+            SiteTimeZone = siteTimeZone,
+            Jobs = jobs.AsList(),
+        };
     }
 }
