@@ -104,6 +104,15 @@ else
                         }
                         else
                         {
+                            @* A break is taken from all of one's lines at once (D-047). *@
+                            @if (_me.OpenBreak is { } onBreak)
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-secondary me-2" disabled="@_busy" @onclick="() => EndMyBreakAsync(onBreak)">End break (since @Display.SiteTime(onBreak.StartedAt, Sites.Site?.TimeZone)[11..])</button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-secondary me-2" disabled="@_busy" @onclick="StartMyBreakAsync">Start break</button>
+                            }
                             <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => ClockOffAsync(mine)">Clock off (since @Display.SiteTime(mine.StartedAt, Sites.Site?.TimeZone)[11..])</button>
                         }
                     </div>
@@ -249,13 +258,18 @@ else
         await RunLaborAsync(() => Api.ClockMeOffAsync(session.Id, new ClockOffRequest { Version = session.Version }));
     }
 
+    private Task StartMyBreakAsync() => RunLaborAsync(() => Api.StartMyBreakAsync(new StartBreakRequest()));
+
+    private Task EndMyBreakAsync(BreakDto onBreak) => RunLaborAsync(() => Api.EndMyBreakAsync(onBreak.Id, new EndBreakRequest { Version = onBreak.Version }));
+
     private async Task RunLaborAsync(Func<Task<LaborResponse>> action)
     {
         _busy = true;
         ApiException? refused = null;
+        IReadOnlyList<string> notes = [];
         try
         {
-            await action();
+            notes = (await action()).Notes;
         }
         catch (ApiException ex)
         {
@@ -266,9 +280,13 @@ else
             _busy = false;
         }
 
-        // Reloading clears the last error; a refusal must still show.
+        // Reloading clears the last error; a refusal must still show, and so must a qualification warning (D-048).
         await LoadAsync();
         _error = refused ?? _error;
+        if (notes.Count > 0)
+        {
+            _notes = [.. notes];
+        }
     }
 
     private IReadOnlyList<LineBoardRowDto>? _board;

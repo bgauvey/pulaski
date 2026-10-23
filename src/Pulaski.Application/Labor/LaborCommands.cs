@@ -79,8 +79,12 @@ internal static class LaborWriter
         return key;
     }
 
-    /// <summary>Starts a session for a person, after the share-of-time and one-per-line checks (the person is locked).</summary>
-    public static async Task<(SessionRecord Session, long Version)> StartAsync(
+    /// <summary>
+    /// Starts a session for a person, after the share-of-time and one-per-line checks (the person is locked). The warning,
+    /// when there is one, says which qualifications the line requires that they don't hold that day (D-048): Pulaski warns,
+    /// never refuses.
+    /// </summary>
+    public static async Task<(SessionRecord Session, long Version, string? Warning)> StartAsync(
         ILaborRepository labor, PersonRecord person, LaborInput input, string source, string actor, DateTimeOffset now, Guid id, CancellationToken cancellationToken)
     {
         if (!person.IsActive)
@@ -105,7 +109,23 @@ internal static class LaborWriter
         var session = new SessionRecord(id, person.SiteId, person.Id, input.EquipmentId, input.JobId, input.LaborType,
             input.LaborType == LaborTypes.Indirect ? input.ReasonCodeId : null, start, null, input.AllocationPct,
             key.ProductionDate, key.ShiftScheduleId, key.ShiftCode, source, null, false, Clean(input.Note), actor);
-        return (session, await labor.InsertSessionAsync(session, now, cancellationToken));
+        var version = await labor.InsertSessionAsync(session, now, cancellationToken);
+        return (session, version, await QualificationWarningAsync(labor, person, equipment, start, cancellationToken));
+    }
+
+    /// <summary>What the person lacks for the equipment on the day the session starts (D-048); null when nothing is missing.</summary>
+    public static async Task<string?> QualificationWarningAsync(
+        ILaborRepository labor, PersonRecord person, EquipmentShifts equipment, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var required = await labor.ListRequiredQualificationsAsync(equipment.EquipmentId, cancellationToken);
+        if (required.Count == 0)
+        {
+            return null;
+        }
+
+        var day = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(at, equipment.Zone).DateTime);
+        var missing = QualificationRules.Missing(required, await labor.ListGrantsOfPersonAsync(person.Id, cancellationToken), day, at);
+        return missing.Count == 0 ? null : QualificationRules.Describe(person.DisplayName, equipment.Code, missing);
     }
 
     public static string? Clean(string? note) => string.IsNullOrWhiteSpace(note) ? null : note.Trim()[..Math.Min(note.Trim().Length, 500)];
@@ -131,10 +151,10 @@ internal sealed class ClockOnHandler(
               ?? throw new DomainRuleException("You aren't set up as a person whose time is recorded; ask a supervisor.");
 
         var source = command.PersonId is null ? LaborSources.Self : LaborSources.Supervisor;
-        var (session, version) = await LaborWriter.StartAsync(labor, person, command.Input, source, request.ActorId, timeProvider.GetUtcNow(), ids.NewId(), cancellationToken);
+        var (session, version, warning) = await LaborWriter.StartAsync(labor, person, command.Input, source, request.ActorId, timeProvider.GetUtcNow(), ids.NewId(), cancellationToken);
         await eventLog.AppendAsync(events.Create(EventTypes.LaborStarted, "labor_session", session.Id, new { After = session }), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new LaborResponse(session.Id, version, []);
+        return new LaborResponse(session.Id, version, warning is null ? [] : [warning]);
     }
 }
 
@@ -169,10 +189,15 @@ internal sealed class CheckInHandler(
                 continue;
             }
 
-            var (session, _) = await LaborWriter.StartAsync(
+            var (session, _, warning) = await LaborWriter.StartAsync(
                 labor, person, new LaborInput(command.EquipmentId, null, LaborTypes.Direct, null, 100, command.StartedAt, null),
                 LaborSources.Crew, request.ActorId, now, ids.NewId(), cancellationToken);
             await eventLog.AppendAsync(events.Create(EventTypes.LaborStarted, "labor_session", session.Id, new { After = session }), cancellationToken);
+            if (warning is not null)
+            {
+                notes.Add(warning);
+            }
+
             started++;
         }
 
@@ -219,6 +244,7 @@ internal sealed class ClockOffHandler(
         var ended = current.Value with { EndedAt = end };
         var version = await labor.UpdateSessionAsync(ended, now, cancellationToken);
         await eventLog.AppendAsync(events.Create(EventTypes.LaborEnded, "labor_session", ended.Id, new { ended.EndedAt }), cancellationToken);
+        await BreakWriter.EndIfOffAsync(labor, eventLog, events, ended.PersonId, end, now, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new LaborResponse(ended.Id, version, []);
     }
@@ -243,6 +269,7 @@ internal sealed class CheckOutHandler(IUnitOfWork unitOfWork, ILaborRepository l
             var ended = session.Value with { EndedAt = end < session.Value.StartedAt ? session.Value.StartedAt : end };
             await labor.UpdateSessionAsync(ended, now, cancellationToken);
             await eventLog.AppendAsync(events.Create(EventTypes.LaborEnded, "labor_session", ended.Id, new { ended.EndedAt }), cancellationToken);
+            await BreakWriter.EndIfOffAsync(labor, eventLog, events, ended.PersonId, ended.EndedAt!.Value, now, cancellationToken);
         }
 
         await transaction.CommitAsync(cancellationToken);
@@ -409,6 +436,14 @@ internal sealed class ApproveShiftHandler(
             await labor.UpdateSessionAsync(ended, now, cancellationToken);
             await eventLog.AppendAsync(events.Create(EventTypes.LaborEnded, "labor_session", ended.Id, new { ended.EndedAt }), cancellationToken);
             closed++;
+        }
+
+        // Breaks of the shift still open end with it too (D-047).
+        foreach (var open in (await labor.ListShiftBreaksForUpdateAsync(key, cancellationToken)).Where(b => b.EndedAt is null))
+        {
+            var ended = open with { EndedAt = end > open.StartedAt ? end : open.StartedAt.AddSeconds(1) };
+            await labor.UpdateBreakAsync(ended, now, cancellationToken);
+            await eventLog.AppendAsync(events.Create(EventTypes.LaborBreakEnded, "labor_break", ended.Id, new { ended.EndedAt }), cancellationToken);
         }
 
         var approvalId = ids.NewId();

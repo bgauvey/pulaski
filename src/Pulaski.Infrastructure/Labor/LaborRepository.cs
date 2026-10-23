@@ -1,5 +1,6 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Labor;
+using Pulaski.Domain.Labor;
 using Pulaski.Domain.Shifts;
 using Pulaski.Infrastructure.Persistence;
 using Pulaski.Infrastructure.Shifts;
@@ -104,7 +105,105 @@ internal sealed class LaborRepository(DbSession session) : ILaborRepository
         VALUES (@Id, @SiteId, @Date, @ScheduleId, @Code, @ApprovedBy, @UserId, @At, @Note)
         """;
 
+    private const string GetBreak = $"SELECT {LaborSql.BreakColumns} FROM core.labor_break b WHERE b.id = @Id FOR UPDATE";
+
+    private const string OpenBreak = $"SELECT {LaborSql.BreakColumns} FROM core.labor_break b WHERE b.person_id = @PersonId AND b.ended_at IS NULL FOR UPDATE";
+
+    private const string BreaksOfPerson = $"""
+        SELECT {LaborSql.BreakColumns} FROM core.labor_break b
+        WHERE b.person_id = @PersonId AND b.started_at < @To AND (b.ended_at IS NULL OR b.ended_at > @From) AND {LaborSql.BreakCounts}
+        ORDER BY b.started_at
+        """;
+
+    private const string SessionsAt = $"""
+        SELECT {LaborSql.SessionColumns} FROM core.labor_session s
+        WHERE s.person_id = @PersonId AND s.started_at <= @At AND (s.ended_at IS NULL OR s.ended_at > @At)
+          AND NOT s.is_void AND NOT EXISTS (SELECT 1 FROM core.labor_session c WHERE c.corrects_session_id = s.id)
+        ORDER BY s.started_at, s.id
+        """;
+
+    private const string ShiftBreaks = $"""
+        SELECT {LaborSql.BreakColumns} FROM core.labor_break b
+        WHERE b.site_id = @SiteId AND b.production_date = @Date
+          AND b.shift_schedule_id IS NOT DISTINCT FROM @ScheduleId::uuid AND b.shift_code IS NOT DISTINCT FROM @Code::text
+        ORDER BY b.id
+        FOR UPDATE
+        """;
+
+    private const string IsBreakCorrected = "SELECT EXISTS (SELECT 1 FROM core.labor_break WHERE corrects_break_id = @Id)";
+
+    private const string InsertBreak = """
+        INSERT INTO core.labor_break (id, site_id, person_id, started_at, ended_at, is_paid, production_date, shift_schedule_id, shift_code,
+                                      source, corrects_break_id, is_void, note, recorded_by, created_at, updated_at)
+        VALUES (@Id, @SiteId, @PersonId, @StartedAt, @EndedAt, @IsPaid, @ProductionDate, @ShiftScheduleId, @ShiftCode,
+                @Source, @CorrectsBreakId, @IsVoid, @Note, @RecordedBy, @At, @At)
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string UpdateBreak = """
+        UPDATE core.labor_break
+        SET started_at = @StartedAt, ended_at = @EndedAt, is_paid = @IsPaid, production_date = @ProductionDate,
+            shift_schedule_id = @ShiftScheduleId, shift_code = @ShiftCode, note = @Note, updated_at = @At
+        WHERE id = @Id
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string RequiredOn = $"{LaborSql.Requirements} WHERE c.descendant_id = @Id ORDER BY q.code";
+
+    private const string GrantsOfPerson = $"SELECT {LaborSql.GrantColumns} FROM core.person_qualification g WHERE g.person_id = @Id";
+
     public Task<bool> IsSiteAsync(Guid siteId, CancellationToken cancellationToken) => session.ExecuteScalarAsync<bool>(IsSite, new { Id = siteId }, cancellationToken);
+
+    public async Task<Versioned<BreakRecord>?> GetBreakForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<LaborSql.BreakDbRow>(GetBreak, new { Id = id }, cancellationToken) is { } r ? new(r.ToRecord(), r.Version) : null;
+
+    public async Task<Versioned<BreakRecord>?> GetOpenBreakForUpdateAsync(Guid personId, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<LaborSql.BreakDbRow>(OpenBreak, new { PersonId = personId }, cancellationToken) is { } r ? new(r.ToRecord(), r.Version) : null;
+
+    public async Task<IReadOnlyList<BreakRecord>> ListBreaksOfPersonAsync(Guid personId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<LaborSql.BreakDbRow>(BreaksOfPerson, new { PersonId = personId, From = windowStart, To = windowEnd }, cancellationToken)).Select(r => r.ToRecord())];
+
+    public async Task<IReadOnlyList<SessionRecord>> ListSessionsOfPersonAtAsync(Guid personId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<LaborSql.SessionDbRow>(SessionsAt, new { PersonId = personId, At = at }, cancellationToken)).Select(r => r.ToRecord())];
+
+    public async Task<IReadOnlyList<BreakRecord>> ListShiftBreaksForUpdateAsync(ShiftKey shift, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<LaborSql.BreakDbRow>(ShiftBreaks, KeyArgs(shift), cancellationToken)).Select(r => r.ToRecord())];
+
+    public Task<bool> IsBreakCorrectedAsync(Guid breakId, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(IsBreakCorrected, new { Id = breakId }, cancellationToken);
+
+    public Task<long> InsertBreakAsync(BreakRecord record, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(InsertBreak, BreakArgs(record, at), cancellationToken);
+
+    public Task<long> UpdateBreakAsync(BreakRecord record, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(UpdateBreak, BreakArgs(record, at), cancellationToken);
+
+    public async Task<IReadOnlyList<RequiredQualification>> ListRequiredQualificationsAsync(Guid equipmentId, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<LaborSql.RequirementDbRow>(RequiredOn, new { Id = equipmentId }, cancellationToken))
+            .Select(r => new RequiredQualification(r.QualificationId, r.Code, r.Name))];
+
+    public async Task<IReadOnlyList<QualificationGrant>> ListGrantsOfPersonAsync(Guid personId, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<LaborSql.GrantDbRow>(GrantsOfPerson, new { Id = personId }, cancellationToken))
+            .Select(r => new QualificationGrant(r.QualificationId, r.ValidFrom, r.ExpiresOn, r.RevokedAt))];
+
+    private static object BreakArgs(BreakRecord b, DateTimeOffset at) => new
+    {
+        b.Id,
+        b.SiteId,
+        b.PersonId,
+        b.StartedAt,
+        b.EndedAt,
+        b.IsPaid,
+        b.ProductionDate,
+        b.ShiftScheduleId,
+        b.ShiftCode,
+        b.Source,
+        b.CorrectsBreakId,
+        b.IsVoid,
+        b.Note,
+        b.RecordedBy,
+        At = at,
+    };
 
     public async Task<Versioned<CrewRecord>?> GetCrewForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<CrewRow>(GetCrew, new { Id = id }, cancellationToken) is { } r

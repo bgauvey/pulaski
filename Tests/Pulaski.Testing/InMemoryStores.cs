@@ -108,6 +108,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IRunHistoryReadStore>();
         services.RemoveAll<ILaborReadStore>();
         services.RemoveAll<ILaborRepository>();
+        services.RemoveAll<IQualificationRepository>();
+        services.RemoveAll<IQualificationReadStore>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -144,6 +146,8 @@ public sealed class InMemoryStores
         services.AddSingleton<IRunHistoryReadStore>(RunHistory);
         services.AddSingleton<ILaborReadStore>(Labor);
         services.AddSingleton<ILaborRepository>(Labor);
+        services.AddSingleton<IQualificationRepository>(Labor);
+        services.AddSingleton<IQualificationReadStore>(Labor);
         return services;
     }
 }

@@ -61,6 +61,7 @@ public static class DependencyInjection
         services.AddSingleton<ICalendarExceptionReadStore, CalendarExceptionQueries>();
         services.AddSingleton<IProductionReportReadStore, ProductionReportQueries>();
         services.AddSingleton<IRunHistoryReadStore, RunHistoryQueries>();
+        services.AddSingleton<IQualificationReadStore, QualificationQueries>();
         services.AddSingleton<ILaborReadStore, LaborQueries>();
 
         services.AddScoped<DbSession>();
@@ -80,6 +81,7 @@ public static class DependencyInjection
         services.AddScoped<ISecurityRepository, SecurityRepository>();
         services.AddScoped<IShiftRepository, ShiftRepository>();
         services.AddScoped<ICalendarExceptionRepository, CalendarExceptionRepository>();
+        services.AddScoped<IQualificationRepository, QualificationRepository>();
         services.AddScoped<ILaborRepository, LaborRepository>();
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
 

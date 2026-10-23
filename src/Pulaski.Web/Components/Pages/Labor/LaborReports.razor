@@ -65,7 +65,7 @@
         {
             <div class="table-panel">
                 <table class="table table-sm align-middle">
-                    <thead><tr><th>Person</th><th>Employee no.</th><th class="inv-num">Direct</th><th class="inv-num">of which idle</th><th class="inv-num">Setup</th><th class="inv-num">Indirect</th><th class="inv-num">Training</th><th class="inv-num">Total</th></tr></thead>
+                    <thead><tr><th>Person</th><th>Employee no.</th><th class="inv-num">Direct</th><th class="inv-num">of which idle</th><th class="inv-num">Setup</th><th class="inv-num">Indirect</th><th class="inv-num">Training</th><th class="inv-num">Total worked</th><th class="inv-num">Paid breaks</th><th class="inv-num">Unpaid breaks</th></tr></thead>
                     <tbody>
                         @foreach (var p in report.People)
                         {
@@ -78,12 +78,14 @@
                                 <td class="inv-num">@Qty(p.IndirectHours)</td>
                                 <td class="inv-num">@Qty(p.TrainingHours)</td>
                                 <td class="inv-num fw-semibold">@Qty(p.TotalHours)</td>
+                                <td class="inv-num">@Qty(p.PaidBreakHours)</td>
+                                <td class="inv-num text-muted">@Qty(p.UnpaidBreakHours)</td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
-            <p class="small text-muted">Idle is direct time on a line while nothing ran on it.</p>
+            <p class="small text-muted">Idle is direct time on a line while nothing ran on it. Every kind of time is worked time: breaks are left out of it and shown on their own, paid and unpaid.</p>
         }
     </section>
 
@@ -96,7 +98,7 @@
         {
             <div class="table-panel">
                 <table class="table table-sm align-middle">
-                    <thead><tr><th>Day</th><th>Shift</th><th>Crew</th><th class="inv-num">Sessions</th><th class="inv-num">Hours</th><th>Approved</th></tr></thead>
+                    <thead><tr><th>Day</th><th>Shift</th><th>Crew</th><th class="inv-num">Sessions</th><th class="inv-num">Hours worked</th><th class="inv-num">Breaks</th><th>Approved</th></tr></thead>
                     <tbody>
                         @foreach (var s in report.Shifts)
                         {
@@ -106,6 +108,7 @@
                                 <td>@s.CrewCode</td>
                                 <td class="inv-num">@s.Sessions</td>
                                 <td class="inv-num">@Qty(s.Hours)</td>
+                                <td class="inv-num">@Qty(s.PaidBreakHours + s.UnpaidBreakHours)</td>
                                 <td class="small">@(s.IsApproved ? $"{s.ApprovedBy}, {Display.SiteTime(s.ApprovedAt, TimeZone)}" : "Not yet")</td>
                             </tr>
                         }
@@ -188,11 +191,12 @@ else if (_error is null)
         _report!.Jobs.Select(j => (IReadOnlyList<object?>)[j.JobNumber, j.MaterialCode, j.LineCode, j.RunHours, j.DirectHours, j.SetupHours, j.StandardHours, j.EfficiencyPct]))).AsTask();
 
     private Task ExportPeopleAsync() => Downloads.CsvAsync(File("labor-people"), Csv.Write(
-        ["Person", "Employee number", "Direct hours", "Idle hours", "Setup hours", "Indirect hours", "Training hours", "Total hours"],
-        _report!.People.Select(p => (IReadOnlyList<object?>)[p.PersonName, p.EmployeeNumber, p.DirectHours, p.IdleHours, p.SetupHours, p.IndirectHours, p.TrainingHours, p.TotalHours]))).AsTask();
+        ["Person", "Employee number", "Direct hours", "Idle hours", "Setup hours", "Indirect hours", "Training hours", "Total worked hours", "Paid break hours", "Unpaid break hours"],
+        _report!.People.Select(p => (IReadOnlyList<object?>)[p.PersonName, p.EmployeeNumber, p.DirectHours, p.IdleHours, p.SetupHours, p.IndirectHours, p.TrainingHours, p.TotalHours,
+            p.PaidBreakHours, p.UnpaidBreakHours]))).AsTask();
 
     private Task ExportShiftsAsync() => Downloads.CsvAsync(File("labor-shifts"), Csv.Write(
-        ["Day", "Schedule", "Shift", "Crew", "Sessions", "Hours", "Approved by", "Approved at"],
+        ["Day", "Schedule", "Shift", "Crew", "Sessions", "Worked hours", "Paid break hours", "Unpaid break hours", "Approved by", "Approved at"],
         _report!.Shifts.Select(s => (IReadOnlyList<object?>)[s.ProductionDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), s.ScheduleCode, s.ShiftCode, s.CrewCode,
-            s.Sessions, s.Hours, s.ApprovedBy, s.ApprovedAt is { } at ? Display.SiteTime(at, TimeZone) : null]))).AsTask();
+            s.Sessions, s.Hours, s.PaidBreakHours, s.UnpaidBreakHours, s.ApprovedBy, s.ApprovedAt is { } at ? Display.SiteTime(at, TimeZone) : null]))).AsTask();
 }

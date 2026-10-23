@@ -1,0 +1,416 @@
+@using System.Globalization
+@inject PulaskiApiClient Api
+@inject TimeProvider Clock
+
+@* A site's qualifications (D-048): what they are and how long a grant lasts, who holds them for which days, and where
+   they are required (set on Equipment). Grants are revoked, never deleted; a renewal is a new grant. *@
+<ProblemAlert Error="_error" />
+@if (_message is { } message)
+{
+    <div class="alert alert-success d-flex align-items-center gap-2" role="status">
+        <span>@message</span>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">Dismiss</button>
+    </div>
+}
+
+@if (_qualifications is null || _grants is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    <section class="inv-section" aria-labelledby="quals-heading">
+        <div class="inv-section-head"><h2 id="quals-heading" class="h6 mb-0">Qualifications</h2></div>
+        @if (CanManage)
+        {
+            <form class="inv-toolbar" @onsubmit="SaveQualificationAsync" @onsubmit:preventDefault>
+                @if (_qual.Id is null)
+                {
+                    <input class="form-control" style="width: 8rem" maxlength="20" placeholder="CODE" aria-label="Qualification code" @bind="_qual.Code" @bind:event="oninput" />
+                }
+                else
+                {
+                    <span class="fw-semibold align-self-center">@_qual.Code</span>
+                }
+                <input class="form-control inv-grow" maxlength="100" placeholder="Name, e.g. Forklift" aria-label="Qualification name" @bind="_qual.Name" @bind:event="oninput" />
+                <input class="form-control" style="width: 14rem" maxlength="500" placeholder="Description (optional)" aria-label="Description" @bind="_qual.Description" />
+                <input type="number" class="form-control" style="width: 9rem" min="1" max="120" placeholder="Months valid" aria-label="Months a grant is valid (empty: no expiry)" @bind="_qual.ValidityMonths" />
+                @if (_qual.Id is not null)
+                {
+                    <div class="form-check align-self-center">
+                        <input class="form-check-input" type="checkbox" id="qual-active" @bind="_qual.IsActive" />
+                        <label class="form-check-label small" for="qual-active">Active</label>
+                    </div>
+                }
+                <button type="submit" class="btn btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_qual.Name) || (_qual.Id is null && string.IsNullOrWhiteSpace(_qual.Code)))">
+                    @(_qual.Id is null ? "Add qualification" : "Save")
+                </button>
+                @if (_qual.Id is not null)
+                {
+                    <button type="button" class="btn btn-link" @onclick="() => _qual = new()">Cancel</button>
+                }
+            </form>
+        }
+
+        @if (_qualifications.Count == 0)
+        {
+            <div class="empty-panel"><p class="text-muted mb-0">No qualifications at this site yet.@(CanManage ? " Add one above, then require it on a line on Equipment." : "")</p></div>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table align-middle">
+                    <thead><tr><th>Code</th><th>Name</th><th>A grant lasts</th><th class="inv-num">Hold it</th><th class="inv-num">Expiring in 30 days</th><th>Required on</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var q in _qualifications)
+                        {
+                            <tr @key="q.Id" class="@(q.IsActive ? "" : "text-muted")">
+                                <td class="fw-semibold">@q.Code</td>
+                                <td>@q.Name<div class="small text-muted">@q.Description</div></td>
+                                <td class="small">@QualificationView.Validity(q.ValidityMonths)</td>
+                                <td class="inv-num">@q.Holders</td>
+                                <td class="inv-num @(q.ExpiringSoon > 0 ? "text-warning-strong" : "")">@q.ExpiringSoon</td>
+                                <td class="small">@(q.RequiredOn.Count == 0 ? "Nothing yet" : string.Join(", ", q.RequiredOn))@(q.IsActive ? "" : " · switched off")</td>
+                                <td class="text-end text-nowrap">
+                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => Filter(q.Id)">Holders</button>
+                                    @if (CanManage)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => EditQualification(q)">Change</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="inv-section" aria-labelledby="grants-heading">
+        <div class="inv-section-head">
+            <h2 id="grants-heading" class="h6 mb-0">Who holds what</h2>
+            <div class="d-flex gap-2 align-items-center">
+                <select class="form-select form-select-sm w-auto" aria-label="Qualification" value="@(_filter?.ToString() ?? "")" @onchange="e => Filter(Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
+                    <option value="">Every qualification</option>
+                    @foreach (var q in _qualifications)
+                    {
+                        <option value="@q.Id">@q.Code · @q.Name</option>
+                    }
+                </select>
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="grants-soon" checked="@_soonOnly" @onchange="e => _soonOnly = e.Value is true" />
+                    <label class="form-check-label small" for="grants-soon">Expiring in 30 days</label>
+                </div>
+            </div>
+        </div>
+
+        @if (CanManage && _qualifications.Any(q => q.IsActive))
+        {
+            <form class="inv-toolbar" @onsubmit="GrantAsync" @onsubmit:preventDefault>
+                <select class="form-select w-auto" aria-label="Person" @bind="_grant.PersonId">
+                    <option value="@Guid.Empty">Who…</option>
+                    @foreach (var p in People.Where(p => p.IsActive))
+                    {
+                        <option value="@p.Id">@p.DisplayName (@p.EmployeeNumber)</option>
+                    }
+                </select>
+                <select class="form-select w-auto" aria-label="Qualification to grant" @bind="_grant.QualificationId" @bind:after="SuggestExpiry">
+                    <option value="@Guid.Empty">Qualification…</option>
+                    @foreach (var q in _qualifications.Where(q => q.IsActive))
+                    {
+                        <option value="@q.Id">@q.Code · @q.Name</option>
+                    }
+                </select>
+                <label class="small text-muted align-self-center" for="grant-from">Valid from</label>
+                <input id="grant-from" type="date" class="form-control w-auto" @bind="_grant.ValidFrom" @bind:after="SuggestExpiry" />
+                <label class="small text-muted align-self-center" for="grant-to">until</label>
+                <input id="grant-to" type="date" class="form-control w-auto" title="The last valid day; empty for no expiry" @bind="_grant.ExpiresOn" />
+                <input class="form-control inv-grow" maxlength="500" placeholder="Note, e.g. certificate number" aria-label="Note" @bind="_grant.Note" />
+                <button type="submit" class="btn btn-primary" disabled="@(_busy || _grant.PersonId == Guid.Empty || _grant.QualificationId == Guid.Empty)">Grant</button>
+            </form>
+        }
+
+        @{
+            var shown = _grants.Where(g => (_filter is null || g.QualificationId == _filter) && (!_soonOnly || (g.Status == "valid" && QualificationView.Countdown(g, Today) is not null))).ToList();
+        }
+        @if (shown.Count == 0)
+        {
+            <p class="small text-muted">@(_soonOnly ? "Nothing expires in the next 30 days." : "Nobody holds it yet.")</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Person</th><th>Qualification</th><th>Valid</th><th>State</th><th>Note</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var g in shown)
+                        {
+                            <tr @key="g.Id" class="@(g.Status == "valid" ? "" : "text-muted")">
+                                <td><span class="fw-semibold">@g.PersonName</span> <span class="small text-muted">@g.EmployeeNumber</span></td>
+                                <td>@g.QualificationCode <span class="small text-muted">@g.QualificationName</span></td>
+                                @if (_editGrant?.Id == g.Id)
+                                {
+                                    <td>
+                                        <div class="d-flex gap-1">
+                                            <input type="date" class="form-control form-control-sm" aria-label="Valid from" @bind="_editGrant.ValidFrom" />
+                                            <input type="date" class="form-control form-control-sm" aria-label="Last valid day" @bind="_editGrant.ExpiresOn" />
+                                        </div>
+                                    </td>
+                                }
+                                else
+                                {
+                                    <td class="small">@QualificationView.Days(g)</td>
+                                }
+                                <td class="small">
+                                    <span class="@QualificationView.StatusChip(g.Status)">@QualificationView.StatusLabel(g.Status)</span>
+                                    @if (QualificationView.Countdown(g, Today) is { } countdown)
+                                    {
+                                        <span class="text-muted"> @countdown</span>
+                                    }
+                                </td>
+                                <td class="small text-muted">
+                                    @if (_editGrant?.Id == g.Id)
+                                    {
+                                        <input class="form-control form-control-sm" maxlength="500" aria-label="@(_editGrant.Revoking ? "Why it is revoked" : "Note")"
+                                               placeholder="@(_editGrant.Revoking ? "Why (required)" : "Note")" @bind="_editGrant.Note" />
+                                    }
+                                    else
+                                    {
+                                        @(g.RevokedAt is not null ? $"Revoked by {g.RevokedBy}: {g.RevokeReason}" : g.Note)
+                                    }
+                                </td>
+                                <td class="text-end text-nowrap">
+                                    @if (_editGrant?.Id == g.Id)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || (_editGrant.Revoking && string.IsNullOrWhiteSpace(_editGrant.Note)))"
+                                                @onclick="() => SaveGrantAsync(g)">@(_editGrant.Revoking ? "Revoke" : "Save")</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _editGrant = null">Cancel</button>
+                                    }
+                                    else if (CanManage && g.RevokedAt is null)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link p-0" @onclick="() => Renew(g)">Renew</button>
+                                        <button type="button" class="btn btn-sm btn-link p-0 ms-2" @onclick="() => EditGrant(g, false)">Change</button>
+                                        <button type="button" class="btn btn-sm btn-link p-0 ms-2 text-danger" @onclick="() => EditGrant(g, true)">Revoke</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <p class="small text-muted mt-2">
+            A grant is valid from its first day to its last, both included, in the site's time zone. A renewal is a new grant: the old one stays in the list.
+            Someone put on a line that requires a qualification they don't hold is still put on, with a warning.
+        </p>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid SiteId { get; set; }
+
+    [Parameter] public IReadOnlyList<PersonDto> People { get; set; } = [];
+
+    [Parameter] public bool CanManage { get; set; }
+
+    /// <summary>The site's time zone: grants are whole site-local days.</summary>
+    [Parameter] public string? TimeZone { get; set; }
+
+    private IReadOnlyList<QualificationDto>? _qualifications;
+    private IReadOnlyList<QualificationGrantDto>? _grants;
+    private QualificationForm _qual = new();
+    private GrantForm _grant = new();
+    private GrantEdit? _editGrant;
+    private Guid? _filter;
+    private bool _soonOnly;
+    private ApiException? _error;
+    private string? _message;
+    private bool _busy;
+
+    private DateOnly Today => DateOnly.FromDateTime(Display.ToSite(Clock.GetUtcNow(), TimeZone).DateTime);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _grant.ValidFrom = Today;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _qualifications = await Api.ListQualificationsAsync(SiteId);
+            _grants = await Api.ListQualificationGrantsAsync(SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private void Filter(Guid? id) => (_filter, _soonOnly) = (id, false);
+
+    private void EditQualification(QualificationDto q) => _qual = new QualificationForm
+    {
+        Id = q.Id,
+        Version = q.Version,
+        Code = q.Code,
+        Name = q.Name,
+        Description = q.Description,
+        ValidityMonths = q.ValidityMonths,
+        IsActive = q.IsActive,
+    };
+
+    private void SuggestExpiry()
+    {
+        var q = _qualifications?.FirstOrDefault(x => x.Id == _grant.QualificationId);
+        _grant.ExpiresOn = q is null ? null : QualificationView.DefaultExpiry(_grant.ValidFrom, q.ValidityMonths);
+    }
+
+    // A renewal starts the day after the current grant ends (or today, if that has passed).
+    private void Renew(QualificationGrantDto g)
+    {
+        var from = g.ExpiresOn is { } e && e >= Today ? e.AddDays(1) : Today;
+        _grant = new GrantForm { PersonId = g.PersonId, QualificationId = g.QualificationId, ValidFrom = from };
+        SuggestExpiry();
+        _message = $"Renewing {g.QualificationCode} for {g.PersonName}: check the days and click Grant.";
+    }
+
+    private void EditGrant(QualificationGrantDto g, bool revoke) => _editGrant = new GrantEdit
+    {
+        Id = g.Id,
+        Version = g.Version,
+        ValidFrom = g.ValidFrom,
+        ExpiresOn = g.ExpiresOn,
+        Note = revoke ? null : g.Note,
+        Revoking = revoke,
+    };
+
+    private Task SaveQualificationAsync() => RunAsync(async () =>
+    {
+        if (_qual.Id is { } id)
+        {
+            await Api.UpdateQualificationAsync(id, new UpdateQualificationRequest
+            {
+                Version = _qual.Version,
+                Name = _qual.Name,
+                Description = _qual.Description,
+                ValidityMonths = _qual.ValidityMonths,
+                IsActive = _qual.IsActive,
+            });
+            _message = $"Saved {_qual.Code}.";
+        }
+        else
+        {
+            await Api.CreateQualificationAsync(new CreateQualificationRequest
+            {
+                SiteId = SiteId,
+                Code = _qual.Code,
+                Name = _qual.Name,
+                Description = _qual.Description,
+                ValidityMonths = _qual.ValidityMonths,
+            });
+            _message = $"Added {_qual.Code.Trim().ToUpperInvariant()}. Require it on a site, area or line on Equipment.";
+        }
+
+        _qual = new();
+    });
+
+    private Task GrantAsync() => RunAsync(async () =>
+    {
+        await Api.GrantQualificationAsync(new GrantQualificationRequest
+        {
+            PersonId = _grant.PersonId,
+            QualificationId = _grant.QualificationId,
+            ValidFrom = _grant.ValidFrom,
+            ExpiresOn = _grant.ExpiresOn,
+            Note = _grant.Note,
+        });
+        _message = "Granted.";
+        _grant = new GrantForm { ValidFrom = Today };
+    });
+
+    private Task SaveGrantAsync(QualificationGrantDto g) => RunAsync(async () =>
+    {
+        var edit = _editGrant!;
+        if (edit.Revoking)
+        {
+            await Api.RevokeQualificationGrantAsync(g.Id, new RevokeQualificationGrantRequest { Version = edit.Version, Reason = edit.Note ?? "" });
+            _message = $"Revoked {g.QualificationCode} for {g.PersonName}.";
+        }
+        else
+        {
+            await Api.UpdateQualificationGrantAsync(g.Id, new UpdateQualificationGrantRequest { Version = edit.Version, ValidFrom = edit.ValidFrom, ExpiresOn = edit.ExpiresOn, Note = edit.Note });
+        }
+
+        _editGrant = null;
+    });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            _message = null;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class QualificationForm
+    {
+        public Guid? Id { get; init; }
+
+        public long Version { get; init; }
+
+        public string Code { get; set; } = "";
+
+        public string Name { get; set; } = "";
+
+        public string? Description { get; set; }
+
+        public int? ValidityMonths { get; set; }
+
+        public bool IsActive { get; set; } = true;
+    }
+
+    private sealed class GrantForm
+    {
+        public Guid PersonId { get; set; }
+
+        public Guid QualificationId { get; set; }
+
+        public DateOnly ValidFrom { get; set; }
+
+        public DateOnly? ExpiresOn { get; set; }
+
+        public string? Note { get; set; }
+    }
+
+    private sealed class GrantEdit
+    {
+        public Guid Id { get; init; }
+
+        public long Version { get; init; }
+
+        public DateOnly ValidFrom { get; set; }
+
+        public DateOnly? ExpiresOn { get; set; }
+
+        public string? Note { get; set; }
+
+        public bool Revoking { get; init; }
+    }
+}

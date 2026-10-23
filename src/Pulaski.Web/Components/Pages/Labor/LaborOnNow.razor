@@ -62,12 +62,32 @@ else
                     <ul class="list-unstyled small mt-2 mb-0 labor-people">
                         @foreach (var s in line.Sessions)
                         {
-                            <li @key="s.Id" class="d-flex align-items-center gap-2">
+                            var onBreak = line.Breaks.FirstOrDefault(b => b.PersonId == s.PersonId);
+                            <li @key="s.Id" class="d-flex flex-wrap align-items-center gap-2">
                                 <span class="fw-semibold">@s.PersonName</span>
                                 <span class="text-muted">@Display.Label(s.LaborType)@(s.ReasonName is { } r ? $" · {r}" : "")@(s.AllocationPct < 100 ? $" · {Qty(s.AllocationPct)}%" : "") · since @Time(s.StartedAt)</span>
+                                @if (s.MissingQualifications.Count > 0)
+                                {
+                                    <span class="chip chip-warning" title="@($"Missing what {line.LineCode} requires: {string.Join("; ", s.MissingQualifications)}")">Not qualified</span>
+                                }
+                                @if (onBreak is not null)
+                                {
+                                    <span class="chip">On @(onBreak.IsPaid ? "paid " : "")break since @Time(onBreak.StartedAt)</span>
+                                }
                                 @if (CanRecord)
                                 {
-                                    <button type="button" class="btn btn-sm btn-link p-0 ms-auto" disabled="@_busy" @onclick="() => EndAsync(s)">End</button>
+                                    <span class="ms-auto d-flex gap-2">
+                                        @if (onBreak is not null)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-link p-0" disabled="@_busy" @onclick="() => EndBreakAsync(onBreak)">End break</button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn btn-sm btn-link p-0" disabled="@_busy" title="Start an unpaid break now" @onclick="() => BreakAsync(s, false)">Break</button>
+                                            <button type="button" class="btn btn-sm btn-link p-0" disabled="@_busy" title="Start a paid break now" @onclick="() => BreakAsync(s, true)">Paid break</button>
+                                        }
+                                        <button type="button" class="btn btn-sm btn-link p-0" disabled="@_busy" @onclick="() => EndAsync(s)">End</button>
+                                    </span>
                                 }
                             </li>
                         }
@@ -272,7 +292,7 @@ else
     private Task AddAsync(LineLaborDto line) => RunAsync(async () =>
     {
         // Setup is for the job running on the line, the one the form offers.
-        await Api.ClockOnAsync(new ClockOnRequest
+        var result = await Api.ClockOnAsync(new ClockOnRequest
         {
             PersonId = _addPerson,
             EquipmentId = line.LineId,
@@ -281,8 +301,14 @@ else
             ReasonCodeId = _addType == "indirect" ? _addReason : null,
             AllocationPct = _addShare,
         });
+        _message = result.Notes.Count > 0 ? string.Join(" ", result.Notes) : null;
         _addFor = null;
     });
+
+    // A break takes the person off all their lines at once (D-047); it ends by itself when they leave their last line.
+    private Task BreakAsync(LaborSessionDto session, bool paid) => RunAsync(() => Api.StartBreakAsync(new StartBreakRequest { PersonId = session.PersonId, IsPaid = paid }));
+
+    private Task EndBreakAsync(BreakDto onBreak) => RunAsync(() => Api.EndBreakAsync(onBreak.Id, new EndBreakRequest { Version = onBreak.Version }));
 
     private Task EndAsync(LaborSessionDto session) => RunAsync(() => Api.ClockOffAsync(session.Id, new ClockOffRequest { Version = session.Version }));
 

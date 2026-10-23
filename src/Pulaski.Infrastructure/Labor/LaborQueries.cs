@@ -3,6 +3,7 @@ using Npgsql;
 using Pulaski.Application.Labor;
 using Pulaski.Application.Shifts;
 using Pulaski.Contracts.Labor;
+using Pulaski.Domain.Labor;
 using Pulaski.Domain.Shifts;
 using Pulaski.Infrastructure.Shifts;
 
@@ -172,6 +173,46 @@ internal sealed class LaborQueries(NpgsqlDataSource dataSource) : ILaborReadStor
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         return [.. (await connection.QueryAsync<ScheduleRow>(new CommandDefinition(Schedules, new { SiteId = siteId }, cancellationToken: cancellationToken)))
             .Select(r => (r.Id, r.Code, ShiftMapping.ToDomain(r.Code, r.Name, r.CycleDays, r.CycleStart, ShiftSql.Read(r.ShiftsJson), ShiftSql.ReadOverrides(r.OverridesJson))))];
+    }
+
+    private const string Breaks = $"""
+        SELECT {LaborSql.BreakRowColumns}
+        FROM core.labor_break b
+        JOIN core.person p ON p.id = b.person_id
+        WHERE b.site_id = @SiteId AND (@PersonId::uuid IS NULL OR b.person_id = @PersonId)
+          AND b.started_at < @To AND (b.ended_at IS NULL OR b.ended_at > @From)
+        ORDER BY b.started_at
+        """;
+
+    private const string LineRequirements = $"""
+        {LaborSql.Requirements}
+        JOIN core.equipment line ON line.id = c.descendant_id AND line.can_run_job AND line.site_id = @SiteId
+        """;
+
+    private const string SiteGrants = $"""
+        SELECT {LaborSql.GrantColumns} FROM core.person_qualification g JOIN core.person p ON p.id = g.person_id WHERE p.site_id = @SiteId
+        """;
+
+    public async Task<IReadOnlyList<BreakRow>> ListBreaksAsync(Guid siteId, Guid? personId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. (await connection.QueryAsync<LaborSql.BreakViewRow>(new CommandDefinition(
+                Breaks, new { SiteId = siteId, PersonId = personId, From = windowStart, To = windowEnd }, cancellationToken: cancellationToken)))
+            .Select(r => r.ToRow())];
+    }
+
+    public async Task<IReadOnlyList<LineRequirement>> ListLineRequirementsAsync(Guid siteId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. (await connection.QueryAsync<LaborSql.RequirementDbRow>(new CommandDefinition(LineRequirements, new { SiteId = siteId }, cancellationToken: cancellationToken)))
+            .Select(r => new LineRequirement(r.EquipmentId, new RequiredQualification(r.QualificationId, r.Code, r.Name)))];
+    }
+
+    public async Task<IReadOnlyList<PersonGrant>> ListSiteGrantsAsync(Guid siteId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. (await connection.QueryAsync<LaborSql.GrantDbRow>(new CommandDefinition(SiteGrants, new { SiteId = siteId }, cancellationToken: cancellationToken)))
+            .Select(r => new PersonGrant(r.PersonId, new QualificationGrant(r.QualificationId, r.ValidFrom, r.ExpiresOn, r.RevokedAt)))];
     }
 
     public async Task<IReadOnlyDictionary<string, string>> CrewNamesAsync(Guid siteId, CancellationToken cancellationToken)

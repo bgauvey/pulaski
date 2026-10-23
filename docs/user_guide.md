@@ -277,6 +277,7 @@ Set **Active** to *false*. Inactive equipment stays in the tree and in history, 
 
 ### In detail
 
+- **Required qualifications:** under the properties, a site, area or line lists the qualifications working on it requires, its own and those from above it (*from …*). **Require** adds one; **×** stops requiring it. They apply to everything below. Pulaski warns when someone without one is put on a line, but doesn't stop them. See [Qualifications](#qualifications).
 - The levels, top to bottom: enterprise, site, area, work center, work unit, equipment module, control module. A child always sits below its parent's level.
 - Roles allowed at each level: work center: production line, process cell, production unit, storage zone; work unit: work cell, unit, machine, storage unit; equipment module: machine, feed point, module; control module: module.
 - Codes are unique within a site.
@@ -1319,6 +1320,8 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 - **Jobs change, people don't re-clock.** Direct time on a line counts towards whatever ran on it while the person was there. Time on a line with nothing running is shown as *idle*.
 - **A share of their time.** Someone tending two lines is on each at 50%. A person's time adds up to at most 100%.
 - **Shifts and approval.** Time belongs to the shift running when it started (or starting within two hours). Once a shift has ended, a supervisor approves it: open time ends when the shift ended, and the shift is locked. After that, a change is a **correction** with a reason.
+- **Breaks** are recorded on their own, paid or unpaid. A break's time comes out of the hours of every line the person is on, and is shown apart in the reports; the time they were clocked on stays as it was.
+- **Qualifications** are the skills and certificates a line needs, such as a forklift licence. Each person holds them for a set of days. Someone checked onto a line without a qualification it needs is still checked on, and Pulaski warns.
 
 ### Set up people and crews
 
@@ -1338,8 +1341,24 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 ### Clock yourself on (operators)
 
 1. Open **Operate → Floor**.
-2. Click **Clock on** on the line you are working on. Pulaski refuses if you are already on another line with all your time: clock off there first.
-3. Click **Clock off** when you leave it.
+2. Click **Clock on** on the line you are working on. Pulaski refuses if you are already on another line with all your time: clock off there first. If the line needs a qualification you don't hold, a note says so.
+3. Click **Start break** when you go on a break, and **End break** when you are back. One break covers all the lines you are on.
+4. Click **Clock off** when you leave it. A break you are still on ends with it.
+
+### Breaks (supervisors)
+
+1. On **Operate → Labor → On now**, click **Break** (unpaid) or **Paid break** next to someone. They show *On break since …*.
+2. Click **End break** when they are back. Leaving their last line ends a break too.
+3. To record a break afterwards, open **Shift review**, choose the shift, and under **Breaks** choose **Who**, **From**, **To** and **Paid**, then click **Add break**.
+4. To fix one, click **Change** on its row. After the shift is approved, click **Correct** or **Remove** and say why.
+
+### Qualifications
+
+1. Open **Configure → People → Qualifications**. Type a **Code** (such as `FORK`; it can't change later), a **Name** and, if a grant should expire, **Months valid**. Click **Add qualification**.
+2. On **Configure → Equipment**, select a site, area or line and, under **Required qualifications**, choose the qualification and click **Require**. It applies to everything below that equipment too.
+3. Back on **Qualifications**, under **Who holds what**, choose the person and the qualification. **Valid from** is today and **until** is filled in from the months valid; change them if you need to. Click **Grant**.
+4. To extend one, click **Renew**: it starts the day after the current grant ends. **Change** fixes a grant's days; **Revoke** ends it, with a reason.
+5. Tick **Expiring in 30 days** to see who needs renewing soon, or click **Holders** on a qualification to see who holds it.
 
 ### Review and approve a shift
 
@@ -1352,7 +1371,7 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 
 1. Open **Operate → Labor → Reports**, choose **From** and **to** (production days, up to 93), and click **Show**.
 2. **By job** shows run hours, direct and setup hours, the standard (run hours × the line's standard crew size for the material) and **efficiency** (standard ÷ direct hours: under 100% took more people than the standard).
-3. **By person** shows each person's hours by kind, and how much of their direct time was idle. **By shift** shows each shift's hours and whether it is approved.
+3. **By person** shows each person's worked hours by kind, how much of their direct time was idle, and their **paid** and **unpaid breaks**. **By shift** shows each shift's worked hours, its breaks and whether it is approved.
 4. **Export CSV** on each table saves it, for payroll or the ERP.
 
 ### In detail
@@ -1362,7 +1381,10 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 - **Times can't be ahead of now.** Setup needs a job (the job running on the line, when added from **On now**); indirect needs an indirect labor reason.
 - **Switching someone off** is refused while they are clocked on.
 - **Nothing runs on its own.** Time stays open until someone ends it, checks the line out, or approves the shift.
-- **Hours** are elapsed time × share; an open session counts until now.
+- **Hours** are worked time: elapsed time outside the person's breaks × share; an open session counts until now. Someone on two lines at 50% who takes a 30-minute break loses 15 minutes on each, and has 30 minutes of break.
+- **Breaks:** a break must start while the person is on a line, belongs to that line's shift, lasts at most 4 hours and can't overlap another of theirs. Paid and unpaid breaks both come out of worked hours; paid ones are reported for payroll to add back. Breaks lock with their shift's approval, like time on a line.
+- **Qualifications** belong to a site. A grant is valid from its first day to its last, both included, in the site's time zone; a renewal is a new grant, and the old one stays in the list. A revoked grant no longer counts from the moment it is revoked. Switching a qualification off stops it being granted or required. The Labor screen marks someone on a line without what it requires **Not qualified**; point at it to see what is missing and why.
+- **Who:** qualifications and grants need permission to maintain people and crews; requiring them on equipment needs permission to maintain equipment. Recording breaks for others needs permission to record labor; taking your own, permission to clock yourself on.
 
 ---
 
@@ -1483,7 +1505,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 
 - **No screen yet for the changeover rules** (how long each material change takes): they are set up in the database.
 - **By shift:** production counts and labor are reported by shift; OEE by shift isn't, because machine state and downtime aren't recorded yet.
-- **Labor:** no badges or shop-floor terminals, no qualifications, no breaks, and no import of people from HR or the ERP. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
+- **Labor:** no badges or shop-floor terminals, and no import of people from HR or the ERP. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
 - **No adapters yet** for other external sources or for label printing: materials come from the screen, a CSV file, or the ERP one item at a time through the API. The CSV import doesn't take capabilities, doesn't create missing classes, and there is no template file to download (the panel shows the header line).
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded (stops inside a run aren't known yet, since downtime isn't recorded).
 - **Production is reported by hand.** Counts from the machines, machine state, downtime, OEE, labor and quality aren't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.

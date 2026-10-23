@@ -1,0 +1,123 @@
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* What working on the selected equipment requires (D-048): its own requirements, which apply to everything below it, and
+   those it inherits from above. Someone put on a line without them is still put on, with a warning. *@
+<section class="equipment-quals mt-3" aria-labelledby="quals-@Equipment.Id">
+    <h2 class="h6 mb-1" id="quals-@Equipment.Id">Required qualifications</h2>
+    <ProblemAlert Error="_error" />
+    @if (_requirements is null)
+    {
+        @if (_error is null)
+        {
+            <p class="small text-muted mb-0">Loading…</p>
+        }
+    }
+    else
+    {
+        @if (_requirements.Own.Count == 0 && _requirements.Inherited.Count == 0)
+        {
+            <p class="small text-muted mb-2">None. Anyone can be put on @Equipment.Code.</p>
+        }
+        <ul class="list-unstyled small mb-2">
+            @foreach (var q in _requirements.Own)
+            {
+                <li @key="q.QualificationId" class="d-flex align-items-center gap-2">
+                    <span class="chip">@q.Code</span> @q.Name
+                    @if (CanChange)
+                    {
+                        <button type="button" class="btn btn-sm btn-link p-0 ms-auto text-danger" disabled="@_busy" title="No longer require it here"
+                                aria-label="Stop requiring @q.Code" @onclick="() => SetAsync(q.QualificationId, false)">×</button>
+                    }
+                </li>
+            }
+            @foreach (var q in _requirements.Inherited)
+            {
+                <li @key="(q.QualificationId, q.FromEquipmentId)" class="d-flex align-items-center gap-2 text-muted">
+                    <span class="chip chip-muted">@q.Code</span> @q.Name · from @q.FromEquipmentCode
+                </li>
+            }
+        </ul>
+        @if (CanChange && Offered.Count > 0)
+        {
+            <div class="d-flex gap-2">
+                <select class="form-select form-select-sm" aria-label="Qualification to require" @bind="_adding">
+                    <option value="@Guid.Empty">Require a qualification…</option>
+                    @foreach (var q in Offered)
+                    {
+                        <option value="@q.Id">@q.Code · @q.Name</option>
+                    }
+                </select>
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(_busy || _adding == Guid.Empty)" @onclick="() => SetAsync(_adding, true)">Require</button>
+            </div>
+        }
+        else if (CanChange && _qualifications.Count == 0)
+        {
+            <p class="small text-muted mb-0">The site has no qualifications yet; add them on <ScreenLink Href="people" Permission="@PermissionCodes.People">People</ScreenLink>.</p>
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public EquipmentDto Equipment { get; set; } = default!;
+
+    private EquipmentQualificationsDto? _requirements;
+    private IReadOnlyList<QualificationDto> _qualifications = [];
+    private Guid _adding;
+    private ApiException? _error;
+    private bool _busy;
+
+    private bool CanChange => User.Can(PermissionCodes.Equipment, Equipment.SiteId);
+
+    // Active qualifications of the site not already required here.
+    private IReadOnlyList<QualificationDto> Offered =>
+        [.. _qualifications.Where(q => q.IsActive && _requirements?.Own.All(o => o.QualificationId != q.Id) != false)];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_requirements?.EquipmentId == Equipment.Id)
+        {
+            return;
+        }
+
+        _requirements = null;
+        _error = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _requirements = await Api.GetEquipmentQualificationsAsync(Equipment.Id);
+            if (CanChange && Equipment.SiteId is { } site)
+            {
+                _qualifications = await Api.ListQualificationsAsync(site);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task SetAsync(Guid qualificationId, bool required)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.SetEquipmentQualificationAsync(Equipment.Id, new SetEquipmentQualificationRequest { QualificationId = qualificationId, IsRequired = required });
+            _adding = Guid.Empty;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

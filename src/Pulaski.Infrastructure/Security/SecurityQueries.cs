@@ -112,6 +112,9 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
             SiteOf.Crew => "SELECT site_id FROM core.crew WHERE id = @Id",
             SiteOf.Person => "SELECT site_id FROM core.person WHERE id = @Id",
             SiteOf.LaborSession => "SELECT site_id FROM core.labor_session WHERE id = @Id",
+            SiteOf.LaborBreak => "SELECT site_id FROM core.labor_break WHERE id = @Id",
+            SiteOf.Qualification => "SELECT site_id FROM core.qualification WHERE id = @Id",
+            SiteOf.QualificationGrant => "SELECT p.site_id FROM core.person_qualification g JOIN core.person p ON p.id = g.person_id WHERE g.id = @Id",
             SiteOf.CalendarException => "SELECT e.site_id FROM core.calendar_exception x JOIN core.equipment e ON e.id = x.scope_equipment_id WHERE x.id = @Id",
             _ => throw new ArgumentOutOfRangeException(nameof(kind)),
         };
