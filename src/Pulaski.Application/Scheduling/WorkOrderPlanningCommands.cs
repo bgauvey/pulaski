@@ -59,7 +59,7 @@ internal sealed class DispatchWorkOrderHandler(
         {
             var source = await scheduling.GetLinePlanAsync(
                 line.Id, now, now.AddDays(GetLineTimelineHandler.DefaultHorizonDays), cancellationToken);
-            var timeline = TimelineProjector.Project(TimelineMapping.ToPlan(source!, now));
+            var timeline = TimelineMapping.Project(source!, now);
             foreach (var segment in timeline.Segments.Where(s => s.Kind == SegmentKind.Job))
             {
                 segments[segment.JobId] = segment;

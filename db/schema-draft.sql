@@ -426,6 +426,8 @@ CREATE TABLE core.equipment_capability (
 -- A site's shift schedule (D-038): shifts repeating every cycle_days from cycle_start (a site-local date).
 -- The shifts are one jsonb document, [{code, name, start "HH:mm", minutes, days [0..cycle_days-1]}], saved
 -- whole like a process draft, so editing never deletes rows. Shift times are worked out on read, not stored.
+-- overrides change single dates (D-042): [{date, code, isWorking, name, start, minutes, crew, note}], one per date and code,
+-- replacing that day's shift of the code, adding one, or (isWorking false) taking it off.
 CREATE TABLE core.shift_schedule (
     id          uuid PRIMARY KEY DEFAULT uuidv7(),
     site_id     uuid NOT NULL REFERENCES core.equipment(id),
@@ -435,6 +437,7 @@ CREATE TABLE core.shift_schedule (
     cycle_days  integer NOT NULL CHECK (cycle_days BETWEEN 1 AND 56),  -- 7 for weekly, 28 for a four-week rotation
     cycle_start date NOT NULL,                                  -- the cycle's first day
     shifts      jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(shifts) = 'array'),
+    overrides   jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(overrides) = 'array'),
     is_active   boolean NOT NULL DEFAULT true,                  -- switched off rather than deleted
     created_at  timestamptz NOT NULL DEFAULT now(),
     updated_at  timestamptz NOT NULL DEFAULT now(),
@@ -478,6 +481,8 @@ CREATE TABLE core.shift_instance (
         scope_equipment_id WITH =, tstzrange(starts_at, ends_at) WITH &&)
 );
 
+-- Time taken out of the calendar of a site, area or line and everything below it (D-043), whatever schedule it follows.
+-- Maintained on Configure -> Site settings; removed ones are switched off, never deleted.
 CREATE TABLE core.calendar_exception (
     id                      uuid PRIMARY KEY DEFAULT uuidv7(),
     scope_equipment_id      uuid NOT NULL REFERENCES core.equipment(id),
@@ -485,6 +490,9 @@ CREATE TABLE core.calendar_exception (
     starts_at               timestamptz NOT NULL,
     ends_at                 timestamptz NOT NULL,
     note                    text,
+    is_active               boolean NOT NULL DEFAULT true,          -- false once removed: it takes no time out
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    updated_at              timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT calendar_exception_span_ck CHECK (ends_at > starts_at)
 );
 CREATE INDEX calendar_exception_scope_ix ON core.calendar_exception (scope_equipment_id, starts_at);
@@ -1590,7 +1598,9 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0011_editable_roles'),
     ('0012_shift_schedules'),
     ('0013_view_permissions'),
-    ('0014_labor');
+    ('0014_labor'),
+    ('0015_shift_overrides'),
+    ('0016_site_settings');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -1610,6 +1620,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('reasons.view', 'See reason codes'),
     ('shifts.view', 'See shift schedules'),
     ('labor.view', 'See labor: who is on, shift review and labor reports'),
+    ('site_settings.view', 'See a site''s settings: changeover mode, reporting tolerances and calendar exceptions'),
     ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
     ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
     ('work_order.close', 'Cancel and close work orders'),
@@ -1632,7 +1643,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('units.manage', 'Maintain units of measure'),
     ('reasons.manage', 'Maintain reason codes'),
     ('equipment.manage', 'Maintain equipment: sites, lines, locations'),
-    ('site_settings.manage', 'Set a site''s changeover mode and reporting tolerances'),
+    ('site_settings.manage', 'Set a site''s changeover mode, reporting tolerances and calendar exceptions'),
     ('shifts.manage', 'Maintain shift schedules and choose which one equipment follows'),
     ('people.manage', 'Maintain people and crews'),
     ('security.manage', 'Maintain users, roles and what each role may do')
@@ -1660,6 +1671,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('planner', 'inventory.view'),
     ('planner', 'materials.view'),
     ('planner', 'processes.view'),
+    ('planner', 'site_settings.view'),
     ('planner', 'schedule.plan'),
     ('planner', 'work_order.manage'),
     ('planner', 'work_order.close'),
@@ -1667,6 +1679,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('planner', 'materials.manage'),
     ('supervisor', 'overview.view'),
     ('supervisor', 'floor.view'),
+    ('supervisor', 'site_settings.view'),
     ('supervisor', 'inventory.view'),
     ('supervisor', 'work_orders.view'),
     ('supervisor', 'job.execute'),
@@ -1709,6 +1722,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('manager', 'reasons.view'),
     ('manager', 'shifts.view'),
     ('manager', 'labor.view'),
+    ('manager', 'site_settings.view'),
     ('manager', 'job.reopen'),
     ('manager', 'work_order.close'),
     ('manager', 'reasons.manage'),
@@ -1728,6 +1742,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('auditor', 'reasons.view'),
     ('auditor', 'shifts.view'),
     ('auditor', 'labor.view'),
+    ('auditor', 'site_settings.view'),
     ('auditor', 'inventory.correct'),
     ('auditor', 'stock_count.manage'),
     ('process_engineer', 'equipment.view'),

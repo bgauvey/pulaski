@@ -20,6 +20,7 @@ public static class Permissions
     public const string ReasonsView = "reasons.view";
     public const string ShiftsView = "shifts.view";
     public const string LaborView = "labor.view";
+    public const string SiteSettingsView = "site_settings.view";
 
     // Changing (D-037).
     public const string SchedulePlan = "schedule.plan";
@@ -64,6 +65,7 @@ public static class Permissions
         new(ReasonsView, "Viewing", "See reason codes"),
         new(ShiftsView, "Viewing", "See shift schedules"),
         new(LaborView, "Viewing", "See labor: who is on, shift review and labor reports"),
+        new(SiteSettingsView, "Viewing", "See a site's settings: changeover mode, reporting tolerances and calendar exceptions"),
         new(SchedulePlan, "Planning", "Plan jobs: create, sequence, pin, assign to lines and cancel them"),
         new(WorkOrderManage, "Planning", "Create work orders, dispatch, un-dispatch and firm them"),
         new(WorkOrderClose, "Planning", "Cancel and close work orders"),
@@ -86,7 +88,7 @@ public static class Permissions
         new(Units, "Configuration", "Maintain units of measure"),
         new(Reasons, "Configuration", "Maintain reason codes"),
         new(Equipment, "Configuration", "Maintain equipment: sites, lines, locations"),
-        new(SiteSettings, "Configuration", "Set a site's changeover mode and reporting tolerances"),
+        new(SiteSettings, "Configuration", "Set a site's changeover mode, reporting tolerances and calendar exceptions"),
         new(Shifts, "Configuration", "Maintain shift schedules and choose which one equipment follows"),
         new(People, "Configuration", "Maintain people and crews"),
         new(Security, "Administration", "Maintain users, roles and what each role may do"),
@@ -127,6 +129,7 @@ public static class Permissions
         [Reasons] = [ReasonsView],
         [Equipment] = [EquipmentView],
         [Shifts] = [ShiftsView, EquipmentView],
+        [SiteSettings] = [SiteSettingsView],
         // Clocking on is done from the floor; recording, approving and maintaining people from the Labor screens.
         [LaborRecordOwn] = [FloorView],
         [LaborRecord] = [LaborView, FloorView],
@@ -165,11 +168,11 @@ public static class Roles
         new(Administrator, "Administrator", IsGlobal: true, [.. Permissions.All.Keys], "Everything, everywhere, including users and roles."),
         new(Planner, "Planner", false,
             [Permissions.OverviewView, Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.FloorView, Permissions.InventoryView,
-             Permissions.MaterialsView, Permissions.ProcessesView,
+             Permissions.MaterialsView, Permissions.ProcessesView, Permissions.SiteSettingsView,
              Permissions.SchedulePlan, Permissions.WorkOrderManage, Permissions.WorkOrderClose, Permissions.RateModify, Permissions.Materials],
             "Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes."),
         new(Supervisor, "Supervisor", false,
-            [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
+            [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView, Permissions.SiteSettingsView,
              Permissions.JobExecute, Permissions.JobReopen, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove,
              Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide,
              Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove],

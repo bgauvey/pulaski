@@ -1,0 +1,259 @@
+@using System.Globalization
+@using Pulaski.Web.Services.Shifts
+@inject PulaskiApiClient Api
+
+@* One-off changes to a schedule (D-042): a shift at other times or off on one date, or an extra shift, without changing
+   the repeating cycle. Each saves straight away; planning, labor and reports by shift follow on their next read. *@
+<section class="inv-facts mb-3" aria-label="One-off changes to @Schedule.Code">
+    <div class="d-flex align-items-center gap-2 mb-2">
+        <h2 class="h6 mb-0">One-off changes to @Schedule.Code</h2>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="OnClose">Close</button>
+    </div>
+    <p class="small text-muted">
+        Change a single day without changing the repeating cycle: an extra Saturday, a shift that starts late, or a shift that doesn't run.
+        Times are in the site's time zone; a shift belongs to the day it starts on.
+    </p>
+
+    <ProblemAlert Error="_error" />
+
+    @{
+        var shown = ShiftOverrideView.Upcoming(Schedule.Overrides, Today, _showEarlier);
+    }
+    @if (shown.Count == 0)
+    {
+        <p class="small text-muted">@(_showEarlier ? "No one-off changes." : "No one-off changes from today on.")</p>
+    }
+    else
+    {
+        <table class="table table-sm align-middle mb-2">
+            <thead>
+                <tr>
+                    <th>Day</th>
+                    <th>Shift</th>
+                    <th>Change</th>
+                    <th>Crew</th>
+                    <th>Note</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var o in shown)
+                {
+                    <tr @key="(o.Date, o.Code)" class="@(o.Date < Today ? "text-muted" : "")">
+                        <td class="small">@o.Date.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture)</td>
+                        <td class="small">@o.Code@(o.Name != o.Code ? $" · {o.Name}" : "")</td>
+                        <td class="small">@ShiftOverrideView.Describe(o, Schedule)</td>
+                        <td class="small">@(o.Crew ?? "")</td>
+                        <td class="small">@(o.Note ?? "")</td>
+                        <td class="text-end text-nowrap">
+                            @if (CanManage)
+                            {
+                                <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => Edit(o)">Change</button>
+                                <button type="button" class="btn btn-sm btn-link text-danger" disabled="@_saving" @onclick="() => RemoveAsync(o)">Remove</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    <button type="button" class="btn btn-sm btn-link p-0 mb-3" @onclick="() => _showEarlier = !_showEarlier">
+        @(_showEarlier ? "Show from today on" : "Show earlier changes too")
+    </button>
+
+    @if (CanManage)
+    {
+        <form class="row g-2 align-items-end" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+            <div class="col-sm-2">
+                <label class="form-label small" for="ovr-date">Day</label>
+                <input id="ovr-date" type="date" class="form-control form-control-sm" value="@_form.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)"
+                       @onchange="OnDateChanged" />
+            </div>
+            <div class="col-sm-2">
+                <label class="form-label small" for="ovr-code">Shift</label>
+                <input id="ovr-code" class="form-control form-control-sm" maxlength="10" list="ovr-codes" @bind="_form.Code" @bind:after="FillFromCycle" />
+                <datalist id="ovr-codes">
+                    @foreach (var s in Schedule.Shifts)
+                    {
+                        <option value="@s.Code">@s.Name</option>
+                    }
+                </datalist>
+            </div>
+            <div class="col-sm-2">
+                <label class="form-label small" for="ovr-working">That day it</label>
+                <select id="ovr-working" class="form-select form-select-sm" @bind="_form.IsWorking">
+                    <option value="true">Runs</option>
+                    <option value="false">Doesn't run</option>
+                </select>
+            </div>
+            @if (_form.IsWorking)
+            {
+                <div class="col-sm-1">
+                    <label class="form-label small" for="ovr-start">Starts</label>
+                    <input id="ovr-start" type="time" class="form-control form-control-sm" @bind="_form.Start" />
+                </div>
+                <div class="col-sm-1">
+                    <label class="form-label small" for="ovr-hours">Hours</label>
+                    <input id="ovr-hours" type="number" class="form-control form-control-sm" min="0.25" max="24" step="0.25" @bind="_form.Hours" />
+                </div>
+                <div class="col-sm-1">
+                    <label class="form-label small" for="ovr-crew">Crew</label>
+                    <select id="ovr-crew" class="form-select form-select-sm" @bind="_form.Crew">
+                        <option value="">None</option>
+                        @foreach (var c in Crews.Where(c => c.IsActive || c.Code == _form.Crew))
+                        {
+                            <option value="@c.Code">@c.Code</option>
+                        }
+                    </select>
+                </div>
+            }
+            <div class="col">
+                <label class="form-label small" for="ovr-note">Note (optional)</label>
+                <input id="ovr-note" class="form-control form-control-sm" maxlength="500" placeholder="e.g. Overtime for the Acme order" @bind="_form.Note" />
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_form.Code))">Save change</button>
+            </div>
+            <div class="col-12 small text-muted">@ShiftOverrideView.Hint(Schedule, _form.Date, _form.Code)</div>
+        </form>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public ShiftScheduleDto Schedule { get; set; } = default!;
+
+    [Parameter] public IReadOnlyList<CrewDto> Crews { get; set; } = [];
+
+    [Parameter] public bool CanManage { get; set; }
+
+    /// <summary>The schedule changed; the page reloads it.</summary>
+    [Parameter] public EventCallback<string> OnChanged { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private readonly OverrideForm _form = new();
+    private ApiException? _error;
+    private bool _saving;
+    private bool _showEarlier;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    protected override void OnInitialized()
+    {
+        _form.Date = Today;
+        _form.Code = Schedule.Shifts.FirstOrDefault()?.Code ?? "";
+        FillFromCycle();
+    }
+
+    private void OnDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            _form.Date = date;
+            FillFromCycle();
+        }
+    }
+
+    // Start from what the shift would be that day: its one-off change, or the cycle's shift of that code.
+    private void FillFromCycle()
+    {
+        var existing = Schedule.Overrides.FirstOrDefault(o => o.Date == _form.Date && string.Equals(o.Code, _form.Code.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            Edit(existing);
+            return;
+        }
+
+        if (Schedule.Shifts.FirstOrDefault(s => string.Equals(s.Code, _form.Code.Trim(), StringComparison.OrdinalIgnoreCase)) is { } shift)
+        {
+            _form.Start = TimeOnly.TryParseExact(shift.Start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var t) ? t : new TimeOnly(6, 0);
+            _form.Hours = Math.Round(shift.Minutes / 60m, 2);
+            _form.Crew = shift.Crew ?? "";
+        }
+    }
+
+    private void Edit(ShiftOverrideDto o)
+    {
+        _form.Date = o.Date;
+        _form.Code = o.Code;
+        _form.IsWorking = o.IsWorking;
+        _form.Start = TimeOnly.TryParseExact(o.Start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var t) ? t : new TimeOnly(6, 0);
+        _form.Hours = Math.Round(o.Minutes / 60m, 2);
+        _form.Crew = o.Crew ?? "";
+        _form.Note = o.Note;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await Api.SetShiftOverrideAsync(Schedule.Id, new SetShiftOverrideRequest
+            {
+                Version = Schedule.Version,
+                Date = _form.Date,
+                Code = _form.Code,
+                IsWorking = _form.IsWorking,
+                Start = _form.IsWorking ? _form.Start.ToString("HH:mm", CultureInfo.InvariantCulture) : null,
+                Minutes = _form.IsWorking ? (int)Math.Round(_form.Hours * 60) : null,
+                Crew = _form.IsWorking && !string.IsNullOrEmpty(_form.Crew) ? _form.Crew : null,
+                Note = _form.Note,
+            });
+            _form.Note = null;
+            await OnChanged.InvokeAsync($"Saved the change to {_form.Code.Trim()} on {_form.Date.ToString("ddd d MMM", CultureInfo.InvariantCulture)}.");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            if (ex.IsConflict)
+            {
+                await OnChanged.InvokeAsync(null);
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task RemoveAsync(ShiftOverrideDto o)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await Api.RemoveShiftOverrideAsync(Schedule.Id, o.Date, o.Code, Schedule.Version);
+            await OnChanged.InvokeAsync($"Removed the change to {o.Code} on {o.Date.ToString("ddd d MMM", CultureInfo.InvariantCulture)}; the cycle applies that day again.");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            if (ex.IsConflict)
+            {
+                await OnChanged.InvokeAsync(null);
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private sealed class OverrideForm
+    {
+        public DateOnly Date { get; set; }
+
+        public string Code { get; set; } = "";
+
+        public bool IsWorking { get; set; } = true;
+
+        public TimeOnly Start { get; set; } = new(6, 0);
+
+        public decimal Hours { get; set; } = 8;
+
+        public string Crew { get; set; } = "";
+
+        public string? Note { get; set; }
+    }
+}

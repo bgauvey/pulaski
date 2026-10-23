@@ -139,7 +139,7 @@ public class AccessTests
     [Fact]
     public void Someone_whose_roles_allow_no_screen_sees_nothing()
     {
-        var none = new UserAccess(Guid.CreateVersion7(), "u", "U", "u", true, [new RoleGrant(Guid.CreateVersion7(), "x", "X", SiteA, [Permissions.SiteSettings])]);
+        var none = new UserAccess(Guid.CreateVersion7(), "u", "U", "u", true, [new RoleGrant(Guid.CreateVersion7(), "x", "X", SiteA, [])]);
 
         Assert.False(none.CanViewAnything);
         Assert.True(User(true, (Roles.Administrator, null)).CanViewAnything);

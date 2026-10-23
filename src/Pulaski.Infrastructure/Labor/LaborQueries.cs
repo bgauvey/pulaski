@@ -92,7 +92,7 @@ internal sealed class LaborQueries(NpgsqlDataSource dataSource) : ILaborReadStor
         WHERE site_id = @SiteId AND production_date BETWEEN @First AND @Last
         """;
 
-    private const string Schedules = "SELECT id, code, name, cycle_days, cycle_start, shifts::text AS shifts_json FROM core.shift_schedule WHERE site_id = @SiteId";
+    private const string Schedules = "SELECT id, code, name, cycle_days, cycle_start, shifts::text AS shifts_json, overrides::text AS overrides_json FROM core.shift_schedule WHERE site_id = @SiteId";
 
     private const string CrewNames = "SELECT code, name FROM core.crew WHERE site_id = @SiteId";
 
@@ -171,7 +171,7 @@ internal sealed class LaborQueries(NpgsqlDataSource dataSource) : ILaborReadStor
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         return [.. (await connection.QueryAsync<ScheduleRow>(new CommandDefinition(Schedules, new { SiteId = siteId }, cancellationToken: cancellationToken)))
-            .Select(r => (r.Id, r.Code, ShiftMapping.ToDomain(r.Code, r.Name, r.CycleDays, r.CycleStart, ShiftSql.Read(r.ShiftsJson))))];
+            .Select(r => (r.Id, r.Code, ShiftMapping.ToDomain(r.Code, r.Name, r.CycleDays, r.CycleStart, ShiftSql.Read(r.ShiftsJson), ShiftSql.ReadOverrides(r.OverridesJson))))];
     }
 
     public async Task<IReadOnlyDictionary<string, string>> CrewNamesAsync(Guid siteId, CancellationToken cancellationToken)
@@ -222,5 +222,6 @@ internal sealed class LaborQueries(NpgsqlDataSource dataSource) : ILaborReadStor
         public int CycleDays { get; init; }
         public DateOnly CycleStart { get; init; }
         public string ShiftsJson { get; init; } = "[]";
+        public string OverridesJson { get; init; } = "[]";
     }
 }

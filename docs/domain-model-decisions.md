@@ -49,6 +49,11 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-039 | Viewing: a user sees only the screens and sites their roles allow. Each screen has a view permission, which a change permission brings with it; the API checks it on every read and keeps lists to the caller's sites; the UI leaves out what can't be seen and answers "not found" | Proposed | 2026-10-17 |
 | D-040 | Labor: people (not necessarily users) and crews per site; a shift schedule's shifts name their crew. Supervisors check crews onto lines and operators clock themselves on; direct time is shared out to the runs on the line by overlap; a supervisor approves a shift's labor, which then locks, corrections being new sessions. Reports by job (against the standard crew), person and shift | Proposed | 2026-10-18 |
 | D-041 | Shop orders are downloadable PDFs with one traveler sheet per job. Each sheet shows the order, operation, projected schedule (or published baseline when no live projection is available), effective run rate, order note, operation description and planned BOM components. A Code 128 barcode encodes `order-number|OP-number`; missing operation numbers use `OP-NA`. Since released product specifications are not maintained in the application, the sheet must say so and direct operators to verify the approved specification | Decided | 2026-10-19 |
+| D-042 | Shift overrides: a schedule's shift can be changed for one production day (other times or crew, not running) and an extra shift added, without changing the cycle. Overrides are kept with the schedule, applied wherever shifts are worked out, and locked once that shift's labor is approved | Proposed | 2026-10-23 |
+| D-043 | Site settings screen: changeover mode, reporting tolerances and calendar exceptions are maintained on one screen per site, seen with a new view permission (`site_settings.view`) and changed with `site_settings.manage`. Calendar exceptions are switched off rather than deleted; the reporting tolerances gain a version | Proposed | 2026-10-23 |
+| D-044 | Production by shift: each production count belongs to the shift running on its line when it occurred, from the line's schedule with its overrides, and to that shift's production day; counts outside shifts belong to the site-local day. Worked out on read; every count lands in one row, so the report reconciles to the runs | Proposed | 2026-10-23 |
+| D-045 | Planning rates from run history: worked out on request, not by a worker, as good output ÷ run time over a line's ended runs of the material in a window, with short, empty, unconvertible and unusual (Tukey-fence) runs left out and a minimum of runs and hours. A planner reviews it and accepts it as the calculated rate; it is checked again on accept; a modified rate stays in force | Proposed | 2026-10-23 |
+| D-046 | Process links drive the projection: a job of an order made from a process waits for the jobs it follows (after start: the first to start; after end: the last to end; plus the lag), using their projected or actual times. Linked lines are projected together until the times settle; a firmed job keeps its time and warns `link_not_met`, circular waits warn `link_cycle`. Nothing is reordered or moved | Proposed | 2026-10-23 |
 
 ## Order hierarchy
 
@@ -255,7 +260,7 @@ Only work orders are planned and dispatched. A job is a piece of a work order on
 
 1. Foundation: decisions, schema, the domain projector, and a read-only timeline API. *(built)*
 2. Commands: create and sequence jobs, lock, cancel and replace, run-standard modify and clear, the scheduling policy, and the work order dispatch (publish), un-dispatch and firm. *(built)*
-3. Calculated rates from run history (a worker), with drift against the modified standard.
+3. Calculated rates from run history, with drift against the modified standard. *(built on request rather than by a worker, D-045)*
 4. Blazor scheduling board (D-021). *(first pass built)*
 
 **Scheduling board (D-021, proposed)**
@@ -314,7 +319,7 @@ Creating a work order in Pulaski now means making it from a process (D-023); the
 
 - **Choosing the process.** The form asks for the material first, then offers the site's active processes with a released version whose scope covers it (`GET /api/processes?siteId=&materialId=`), pre-selecting the material's default. The command refuses a process that is inactive, has no released version or doesn't make the material. The order keeps the released version (`process_version_id`); a later release doesn't change it.
 - **Jobs.** Each operation becomes one planned production job per line or department it names, for that one's share of the quantity. Shares round down to six places (`core.qty`) and the operation's last entity takes the remainder, so every operation adds up to the order quantity. Jobs are numbered `<order>-<operation>`, or `<order>-<operation>-<n>` when an operation has several entities, and keep their operation (`process_operation_id`). Each goes at the end of its line's sequence; the planner moves it from there (D-014).
-- **Times.** The start is required. Every job is held until it (`earliest_start`), and an operation that follows others is held until their hold plus the link's lag, the longest path winning. That is only a lower bound: the projection does not yet hold a job until the work before it has started or ended. Making the projector follow the links is a later pass.
+- **Times.** The start is required. Every job is held until it (`earliest_start`), and an operation that follows others is held until their hold plus the link's lag, the longest path winning. That is only a lower bound; the projection also holds each job until the work it follows allows (D-046).
 - **Departments.** A job on a department waits in a window from its hold to the order's due date (D-022), so an operation on a department needs a due date after its hold.
 - **Checks.** Everything is checked before anything is written, and all problems are reported together, each naming its operation, line and material: the equipment must still be schedulable, active and in the process's site, and the material must be able to run there (a capability on the line, or on a line under the department; D-020, D-022). Nothing is created if any check fails.
 - **Capability decides, scope only filters.** A process's scope (D-023) says what it is meant to make; the capabilities (D-020) say whether its lines can actually run it. Scope alone is not enough, so the form checks each offered process with `GET /api/processes/{id}/order-check?materialId=`, which runs the same rules (`ProcessOrderRules`, one shared SQL query) as creating the order. A process that fails shows disabled, with its problems listed under the field; the check also lists department operations, so the form can mark the due date required.
@@ -690,7 +695,7 @@ A line's working time comes from the nearest equipment, the line itself first, t
 
 **API.** `GET /api/shift-schedules?siteId=`, `GET /api/shift-schedules/{id}`, `POST /api/shift-schedules`, `PUT /api/shift-schedules/{id}` (with its version), `POST /api/shift-schedules/preview` (works out a schedule, saved or not, for the next days; saves nothing), `PUT /api/equipment/{id}/calendar`. Events: `pulaski.shift_schedule.created.v1`, `pulaski.shift_schedule.updated.v1` (before and after), `pulaski.equipment.calendar_set.v1`.
 
-**Not yet:** crews and rotations of people; a one-off change to a single shift (an extra Saturday, a cancelled night) other than a calendar exception, which has no screen yet; reports, counts and OEE by shift; the Overview's strip by shift rather than a rolling 24 hours.
+**Not yet:** reports, counts and OEE by shift; the Overview's strip by shift rather than a rolling 24 hours. One-off changes to a shift are D-042.
 
 ## Seeing only what you may (D-039, proposed)
 
@@ -754,6 +759,89 @@ Sharing out by overlap means nobody re-clocks when the job on a line changes. Ru
 **Events:** `pulaski.crew.created.v1`, `…updated.v1`, `pulaski.person.created.v1`, `…updated.v1`, `pulaski.labor.started.v1`, `…ended.v1`, `…changed.v1`, `…corrected.v1`, `…shift_approved.v1`.
 
 **Not yet:** badges and terminals (`sec.badge`); qualifications; people from HR or the ERP; labor by shift on the Overview; a person working at another site than their own; editing a session's job or type on the review screen (only times and share); breaks.
+
+## Shift overrides (D-042, proposed)
+
+Amends D-038. A plant changes its shifts for a day without changing its schedule: an extra Saturday shift for a rush order, a night shift that starts late after a stocktake, a day shift off on a local holiday for one line's schedule.
+
+**An override** is one production day and one shift code of a schedule: the shift runs at a start time ("HH:mm", site-local) for a length (15 minutes to 24 hours) with an optional crew and name, or (`isWorking` false) doesn't run that day. A code the cycle runs that day is replaced for that day; a code it doesn't run is added as an extra shift. A day off needs a shift the cycle runs that day. A note (up to 500 characters) says why. Start, length, name and crew default to the cycle's shift of that code.
+
+**Kept with the schedule.** Overrides are a second `jsonb` array on `core.shift_schedule` (`overrides`), one entry per day and code, saved whole like the shifts, so removing one never deletes a row and the schedule's version covers both. At most 1000 per schedule.
+
+**Applied wherever shifts are worked out.** `ShiftSchedule.Expand` applies them, so the projection (D-014), labor's shift of a session (D-040), labor approval and reports by shift all see the same shifts. An override's shifts may not overlap their neighbours on that day or the days either side (checked on clock time, like the cycle); changing the cycle is checked with the overrides too. Shifts from an override are marked (`isOverride`) in the preview.
+
+**Locked by approved labor.** An override can't be set or removed for a shift on a day whose labor is approved (D-040), so approved hours never move under a changed shift.
+
+**Who and API.** `shifts.manage`, at the schedule's site. `PUT /api/shift-schedules/{id}/overrides` (version, date, code, isWorking, and optional name, start, minutes, crew, note) sets one; `DELETE /api/shift-schedules/{id}/overrides/{date}/{code}?version=` removes it. Schedules carry them (`overrides`), and the preview takes them. Events: `pulaski.shift_schedule.override_set.v1` (before and after), `pulaski.shift_schedule.override_removed.v1`.
+
+**Not calendar exceptions.** A calendar exception (`core.calendar_exception`, D-043) takes time out of everything below a piece of equipment, whatever schedule it follows: a plant shutdown. An override changes one schedule's shift.
+
+## Site settings (D-043, proposed)
+
+Amends D-015, D-035 and D-039. The settings a site has, which until now could be set only through the API, are maintained on **Configure → Site settings** (`/site-settings`), one part per setting, each saved on its own.
+
+| Part | Stored in | Rules |
+| --- | --- | --- |
+| Changeovers | `core.scheduling_policy.changeover_mode` (D-015) | `auto` or `scheduler`; version 0 while the site uses the default |
+| Reporting tolerances | `core.execution_policy` (D-035) | Output and consumption, 100 to 1000%; version 0 while the site uses the defaults (110%) |
+| Calendar exceptions | `core.calendar_exception` | A window on a site or anything in it (not the enterprise), up to 366 days, of kind holiday, planned shutdown, no demand or other, with a note |
+
+**Calendar exceptions.** They take time out of every line at or below their equipment, whichever schedule it follows, and out of around-the-clock time too (the projection already read them; D-014). They are switched off (`is_active`), never deleted, so the app role needs no DELETE and a removed one can be put back; the projection reads only active ones. A new or changed one needs its equipment active, and an exception's equipment never changes (remove it and add another). They may overlap. `GET /api/calendar-exceptions?siteId=&from=&includeRemoved=`, `POST /api/calendar-exceptions`, `PUT /api/calendar-exceptions/{id}` (with its version; `isActive` false removes). Events: `pulaski.calendar_exception.created.v1`, `…updated.v1`, `…removed.v1`.
+
+**Reporting tolerances are versioned.** `PUT /api/execution/sites/{siteId}/policy` now takes the version it read (`xmin`, 0 for the defaults) and answers 409 on a mismatch, like every other change (it used to overwrite).
+
+**Viewing (amends D-039).** A thirteenth view permission, `site_settings.view`, opens the screen and the policy reads; `site_settings.manage` brings it. Planner, Supervisor, Manager and Auditor have it to start with (migration 0016); a viewer sees every value with the inputs switched off. The policy reads also stay open to `schedule.view` and `floor.view`, and the exception list to `schedule.view` and `shifts.view`, since those screens show their effects.
+
+**The screen explains its effects.** The output tolerance is a limit (a report beyond the run's length × ideal rate × tolerance is refused, D-035); the consumption tolerance is a warning. Each shows a worked example as it is typed.
+
+**Not here:** the changeover rule matrix (`core.changeover_rule`) still has no screen.
+
+## Production by shift (D-044, proposed)
+
+Amends D-038 ("reports by shift, not yet"). Plants run their shift meetings on what each shift made, so good and scrap are reported by shift, with line, job and material.
+
+**Attribution.** A row of `ts.production_count` (D-035) belongs to the shift running on its line at its `occurred_at`: from the schedule the line follows (its own or the nearest ancestor's, D-038), with that schedule's overrides (D-042), worked out by `ShiftSchedule.Expand`. A report into an open run occurs when it is entered; one into an ended run occurs at the run's end (D-035), so it counts in the shift the run ended in. The shift's production day is the day it starts, so output after midnight on a night shift counts towards the evening it began. A count between shifts, or on a line with no shifts or running around the clock, belongs to the site-local day with no shift. `ShiftProduction.Total` in `Pulaski.Domain.Execution` is the pure function; nothing is stored, so changing a schedule re-attributes past counts too (as with the projection, D-014). `core.shift_instance` stays unused.
+
+**Counts are points, not spans.** A count is attributed whole to one shift; a long run reported once at its end isn't spread across the shifts it ran through. Reporting at each shift's end splits it. Spreading by run time would invent figures nobody reported.
+
+**Reconciling.** Every count lands in exactly one row (per production day, shift, line, job and unit). Good = processed − defective, as on the job page, so a rejected partial batch (D-036) moves good to scrap in the shift it was made. Each job's rows are set against its runs' totals (`core.job_run`), and match when all its reports fall in the chosen days.
+
+**API and screen.** `GET /api/execution/sites/{siteId}/production-by-shift?from=&to=` (production days, at most 93 apart, `floor.view`); the result's times are in the site's time zone. Floor → **Production by shift** (`/floor/production`), with CSV export. No new tables.
+
+**Not yet:** OEE and downtime by shift (machine state and downtime aren't recorded); the stop Pareto (issue #21) waits for them.
+
+## Planning rates from run history (D-045, proposed)
+
+Amends D-016 and its build pass 3, which planned a worker. The calculated rate can come from what the line actually made, but only when a planner asks, sees how it was worked out, and accepts it: a rate that moved by itself would move every projection with it.
+
+**The calculation** (`RunHistoryRate` in `Pulaski.Domain.Scheduling`, pure and repeatable). The sample is the ended runs (`core.job_run`) of production jobs of the run standard's material on its line that ended in the last 7 to 365 days (90 by default). Each run's good output is converted to the run standard's unit (D-026); its rate is good ÷ elapsed hours. Left out, each with its reason: runs under 30 minutes, runs with no good output, runs whose unit doesn't convert, and, with at least four runs, runs outside Tukey's fences (Q1 − 1.5 IQR, Q3 + 1.5 IQR), widened to at least 10% either side of the median so a very steady line keeps its normal spread. With fewer than 5 runs or 8 hours left there is no rate. Otherwise the rate is the used runs' total good ÷ their total hours (time-weighted, rounded to 2 places). Scrap doesn't count.
+
+**Review, then accept.** `GET /api/scheduling/run-standards/{id}/history-rate?days=` returns the window, every run with its rate or why it was left out, the fences, the totals and the suggested rate next to the calculated, ideal, modified and effective rates; it saves nothing (`materials.view` or `schedule.view`). `POST …/history-rate` (version, days, the reviewed rate; `rate.modify`) locks the run standard, works the rate out again and refuses with 409 if it is no longer the reviewed one; otherwise it sets `calculated_rate_per_hour` with basis `run_history` (D-016 `Recalculate`). The modified rate is never touched, so drift between them stays visible. Event `pulaski.run_standard.recalculated.v1`, with the window and sample counts.
+
+**Back to the ideal rate.** `POST …/ideal-rate` (version) sets the calculated rate to the capability's ideal rate in effect now, in its unit, with basis `ideal_rate`, so it follows the capability again (D-034). Refused when no capability is in effect; a unit change under a modified rate is refused as before.
+
+**Run time is elapsed time.** Without downtime capture a run's stops can't be taken out, so the rate is a realistic planning rate (it includes the stops a run usually has) rather than a performance rate. When downtime is recorded the sample can be refined.
+
+**Not yet:** a scheduled recalculation or a notice when history drifts far from the rate in force; per-shift or per-crew rates.
+
+## Process links in the projection (D-046, proposed)
+
+Amends D-014, D-019 and D-024. On the floor a job can't start until its process links are met (D-035); the projection now plans it that way, so a Pack job is never projected before the Extrude job it follows.
+
+**The rule, as on the floor** (`JobReadiness`). For each link into a job's operation, the jobs of the same work order on the link's earlier operation (not cancelled) decide: `after_start`, the first of them to start; `after_end`, the last of them to end; then the link's lag, as elapsed time. A job with several links waits for the latest. The times are the projected ones for jobs on a line, actual ones once a job has started or ended, and a group job's window (start; finish-by for `after_end`) while it waits on a department (D-022). The result is the job's `LinkReadyAt`, which works like a hold: an unstarted, unfirmed job starts no earlier.
+
+**Linked lines are projected together** (`LinkedProjection` in `Pulaski.Domain.Scheduling`, pure). A line's plan is loaded with the lines its jobs follow, and theirs in turn (upstream only, at most 40 lines); every caller of the projection (the line timeline, the board, the Overview, work order progress, shop orders, the placement preview, the move of a firmed job and dispatch) goes through it, so all agree and the published baseline matches the board. The projector runs on every line, the holds from that pass feed the next, and it stops when nothing moves. Holds only move later, so it settles unless jobs wait on each other in a circle.
+
+**Infeasible placements are reported, never fixed** (D-014: Pulaski doesn't reorder or move jobs).
+
+| Warning | When |
+| --- | --- |
+| `link_not_met` | A firmed job's anchored start (D-019) is before its link allows. It keeps its time |
+| `link_cycle` | After 16 passes the job's hold still moves: it waits, through the lines' sequences, on work that waits for it (e.g. Pack sequenced before Extrude on the same line). Its times are the last pass's |
+
+A running or paused job has started, so no link applies to it. The timeline carries each linked job's `linkReadyAt`; the board's side panel shows it.
+
+**Not here:** links don't constrain a group's window (its jobs are checked on their own, D-022), and the projection still doesn't share a group's capacity.
 
 ## Application architecture
 

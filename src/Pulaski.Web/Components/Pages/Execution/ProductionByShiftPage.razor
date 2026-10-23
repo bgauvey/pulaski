@@ -1,0 +1,203 @@
+@page "/floor/production"
+@attribute [RequiresView(PermissionCodes.FloorView)]
+@using System.Globalization
+@using Pulaski.Web.Services.Execution
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject Downloads Downloads
+@inject TimeProvider Clock
+
+@* Good and scrap by shift (D-044): each report lands in the shift running on its line when it counted, and that shift's
+   production day, so a night shift's output after midnight belongs to the day it started. *@
+<PageTitle>Production by shift · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Production by shift</h1>
+        <p class="text-muted mb-0">
+            Good and scrap each shift made, by line, job and material. A report counts in the shift running on its line when it was made
+            (or, for a report after the run, when the run ended).
+        </p>
+    </div>
+    <div class="inv-head-tools">
+        @if (Sites.Sites.Count > 1)
+        {
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+        <a class="btn btn-outline-secondary" href="floor">Back to the Floor</a>
+    </div>
+</div>
+
+<div class="inv-toolbar">
+    <label class="small text-muted" for="pbs-from">From</label>
+    <input id="pbs-from" type="date" class="form-control w-auto" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="e => SetDay(e, true)" />
+    <label class="small text-muted" for="pbs-to">to</label>
+    <input id="pbs-to" type="date" class="form-control w-auto" value="@_to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="e => SetDay(e, false)" />
+    <button type="button" class="btn btn-primary btn-sm" disabled="@(_busy || Sites.SiteId is null)" @onclick="LoadAsync">Show</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(_report is not { Rows.Count: > 0 })" @onclick="ExportAsync">Export CSV</button>
+    <span class="ms-auto small text-muted">Production days; at most 93 days.</span>
+</div>
+
+<ProblemAlert Error="_error" />
+
+@if (_report is { } report)
+{
+    @if (report.Rows.Count == 0)
+    {
+        <div class="empty-panel"><p class="text-muted mb-0">No production reported for these days.</p></div>
+    }
+    else
+    {
+        @foreach (var group in ProductionByShiftView.Groups(report.Rows))
+        {
+            <section class="inv-section" @key="(group.ProductionDate, group.ScheduleCode, group.ShiftCode, group.Label)">
+                <div class="inv-section-head">
+                    <h2 class="h6 mb-0">@group.Label</h2>
+                    <span class="small text-muted">
+                        @string.Join(" · ", group.Totals.Select(t => $"{ProductionByShiftView.Qty(t.GoodQty)} {t.UomCode} good, {ProductionByShiftView.Qty(t.ScrapQty)} scrap"))
+                    </span>
+                </div>
+                <div class="table-panel">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Line</th><th>Job</th><th>Work order</th><th>Material</th>
+                                <th class="inv-num">Good</th><th class="inv-num">Scrap</th><th>Unit</th><th class="inv-num">Reports</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in group.Rows)
+                            {
+                                <tr @key="(r.EquipmentId, r.JobId, r.UomCode)">
+                                    <td>@r.LineCode</td>
+                                    <td class="fw-semibold"><ScreenLink Href="@($"jobs/{r.JobId}")" Permission="@PermissionCodes.FloorView">@r.JobNumber</ScreenLink></td>
+                                    <td>@(r.WorkOrderNumber ?? "")</td>
+                                    <td>@r.MaterialCode <span class="text-muted small">@r.MaterialName</span></td>
+                                    <td class="inv-num">@ProductionByShiftView.Qty(r.GoodQty)</td>
+                                    <td class="inv-num">@ProductionByShiftView.Qty(r.ScrapQty)</td>
+                                    <td>@r.UomCode</td>
+                                    <td class="inv-num">@r.Reports</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+
+        <section class="inv-section" aria-labelledby="pbs-check">
+            <div class="inv-section-head"><h2 id="pbs-check" class="h6 mb-0">Against the jobs' runs</h2></div>
+            <p class="small text-muted">
+                Each job's good and scrap in these days next to its totals on its job page. They match when all the job's reports fall in these days;
+                otherwise the rest was reported on other days.
+            </p>
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Job</th><th class="inv-num">Good here</th><th class="inv-num">Scrap here</th><th class="inv-num">Good in its runs</th><th class="inv-num">Scrap in its runs</th><th>Unit</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var j in report.Jobs)
+                        {
+                            <tr @key="j.JobId">
+                                <td class="fw-semibold">@j.JobNumber</td>
+                                <td class="inv-num">@ProductionByShiftView.Qty(j.GoodQty)</td>
+                                <td class="inv-num">@ProductionByShiftView.Qty(j.ScrapQty)</td>
+                                <td class="inv-num">@ProductionByShiftView.Qty(j.RunGoodQty)</td>
+                                <td class="inv-num">@ProductionByShiftView.Qty(j.RunScrapQty)</td>
+                                <td>@j.UomCode</td>
+                                <td class="small">@(j.MatchesRuns ? "Matches" : "Part reported on other days")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private DateOnly _from;
+    private DateOnly _to;
+    private ProductionByShiftDto? _report;
+    private ApiException? _error;
+    private bool _busy;
+
+    private string? TimeZone => Sites.Site?.TimeZone;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        // The last seven production days, today included.
+        _to = DateOnly.FromDateTime(Display.ToSite(Clock.GetUtcNow(), TimeZone).DateTime);
+        _from = _to.AddDays(-6);
+        await LoadAsync();
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _report = null;
+        await LoadAsync();
+    }
+
+    private void SetDay(ChangeEventArgs e, bool from)
+    {
+        if (DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+        {
+            if (from)
+            {
+                _from = day;
+            }
+            else
+            {
+                _to = day;
+            }
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            _report = await Api.GetProductionByShiftAsync(site, _from, _to);
+            (_from, _to) = (_report.From, _report.To);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task ExportAsync() => Downloads.CsvAsync(
+        Csv.FileName("production-by-shift", Sites.Site?.Code, Display.ToSite(Clock.GetUtcNow(), TimeZone)),
+        Csv.Write(
+            ["Production day", "Schedule", "Shift", "Shift name", "Crew", "Shift start", "Shift end", "Line", "Job", "Work order", "Material", "Good", "Scrap", "Unit", "Reports"],
+            _report!.Rows.Select(r => (IReadOnlyList<object?>)
+            [
+                r.ProductionDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), r.ScheduleCode, r.ShiftCode, r.ShiftName, r.Crew, r.ShiftStart, r.ShiftEnd,
+                r.LineCode, r.JobNumber, r.WorkOrderNumber, r.MaterialCode, r.GoodQty, r.ScrapQty, r.UomCode, r.Reports,
+            ]))).AsTask();
+}

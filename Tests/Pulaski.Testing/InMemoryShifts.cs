@@ -130,6 +130,17 @@ public sealed class InMemoryShifts : IShiftReadStore, IShiftRepository
         }
     }
 
+    /// <summary>Shifts whose labor is approved (D-040), as (schedule, production day, shift code).</summary>
+    public HashSet<(Guid ScheduleId, DateOnly Date, string Code)> Approved { get; } = [];
+
+    public Task<bool> IsShiftApprovedAsync(Guid siteId, Guid scheduleId, DateOnly productionDate, string code, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(Approved.Contains((scheduleId, productionDate, code)));
+        }
+    }
+
     private Task<long> Save(ShiftScheduleRecord schedule)
     {
         lock (_lock)
@@ -150,6 +161,7 @@ public sealed class InMemoryShifts : IShiftReadStore, IShiftRepository
         CycleDays = s.Value.CycleDays,
         CycleStart = s.Value.CycleStart,
         Shifts = s.Value.Shifts,
+        Overrides = s.Value.Overrides ?? [],
         IsActive = s.Value.IsActive,
         HoursPerCycle = ShiftMapping.Hours(ShiftMapping.ToDomain(s.Value.Code, s.Value.Name, s.Value.CycleDays, s.Value.CycleStart, s.Value.Shifts).HoursPerCycle),
         UsedBy = [.. _equipment.Values.Where(e => e.Value.ShiftScheduleId == s.Value.Id).Select(e => e.Value.Code)],

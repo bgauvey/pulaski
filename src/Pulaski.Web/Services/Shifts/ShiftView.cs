@@ -44,3 +44,47 @@ public static class ShiftView
     public static int? Minutes(string? hours) =>
         decimal.TryParse(hours, NumberStyles.Number, CultureInfo.InvariantCulture, out var h) && h > 0 ? (int)Math.Round(h * 60) : null;
 }
+
+/// <summary>How the Shifts screen describes one-off changes to a schedule (D-042).</summary>
+public static class ShiftOverrideView
+{
+    /// <summary>The changes from <paramref name="today"/> on, or all of them, by day then shift.</summary>
+    public static IReadOnlyList<ShiftOverrideDto> Upcoming(IReadOnlyList<ShiftOverrideDto> overrides, DateOnly today, bool all) =>
+        [.. overrides.Where(o => all || o.Date >= today).OrderBy(o => o.Date).ThenBy(o => o.Code, StringComparer.Ordinal)];
+
+    /// <summary>"Doesn't run", "Extra shift 06:00–14:00" or "06:00–14:00 instead of 14:00–22:00".</summary>
+    public static string Describe(ShiftOverrideDto change, ShiftScheduleDto schedule)
+    {
+        if (!change.IsWorking)
+        {
+            return "Doesn't run";
+        }
+
+        var times = ShiftView.Times(new ShiftDto { Start = change.Start, Minutes = change.Minutes });
+        return Regular(schedule, change.Date, change.Code) is { } regular
+            ? $"{times} instead of {ShiftView.Times(regular)}"
+            : $"Extra shift {times}";
+    }
+
+    /// <summary>What saving would do: change the cycle's shift that day, or add one.</summary>
+    public static string Hint(ShiftScheduleDto schedule, DateOnly date, string code)
+    {
+        code = code.Trim();
+        if (code.Length == 0)
+        {
+            return "Choose one of the schedule's shifts, or type a new code for an extra shift.";
+        }
+
+        return Regular(schedule, date, code) is { } regular
+            ? $"{code} normally runs {ShiftView.Times(regular)} that day; this replaces it for that day only."
+            : $"{code} doesn't normally run that day, so this adds it as an extra shift.";
+    }
+
+    /// <summary>The cycle's shift of this code on that date, or null when the cycle has none that day.</summary>
+    public static ShiftDto? Regular(ShiftScheduleDto schedule, DateOnly date, string code)
+    {
+        var offset = (date.DayNumber - schedule.CycleStart.DayNumber) % schedule.CycleDays;
+        var day = offset < 0 ? offset + schedule.CycleDays : offset;
+        return schedule.Shifts.FirstOrDefault(s => s.Days.Contains(day) && string.Equals(s.Code, code.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+}

@@ -98,6 +98,10 @@ public interface ISchedulingRepository
     /// <returns>The new row version.</returns>
     Task<long> UpdateRunStandardModificationAsync(RunStandard standard, DateTimeOffset at, CancellationToken cancellationToken);
 
+    /// <summary>Writes the calculated rate, its basis, when and its unit (D-045); the modified rate is left alone.</summary>
+    /// <returns>The new row version.</returns>
+    Task<long> UpdateRunStandardCalculationAsync(RunStandard standard, DateTimeOffset at, CancellationToken cancellationToken);
+
     /// <summary>The site's changeover mode, locked <c>FOR UPDATE</c>; null when the site has no policy row.</summary>
     Task<Versioned<string>?> GetPolicyForUpdateAsync(Guid siteId, CancellationToken cancellationToken);
 
@@ -149,6 +153,37 @@ public sealed record LinePlanSource
     public IReadOnlyList<Unit> Units { get; init; } = [];
 
     public IReadOnlyList<MaterialConversionRow> Conversions { get; init; } = [];
+
+    /// <summary>
+    /// The process links into this line's jobs, and into the jobs on <see cref="Upstream"/>, with the jobs they follow (D-046).
+    /// Only the line asked for carries them.
+    /// </summary>
+    public IReadOnlyList<JobLinkRow> Links { get; init; } = [];
+
+    /// <summary>The other lines holding open jobs that this line's jobs follow, directly or through each other, projected with it (D-046).</summary>
+    public IReadOnlyList<LinePlanSource> Upstream { get; init; } = [];
+}
+
+/// <summary>
+/// A process link binding a job to one job it follows in the same work order (D-046), with what the projection needs of that
+/// job when it isn't on a projected line: its actual start and end, or its window on a group.
+/// </summary>
+public sealed record JobLinkRow
+{
+    public Guid LinkId { get; init; }
+    public Guid JobId { get; init; }
+    public Guid FromJobId { get; init; }
+    public string DependencyType { get; init; } = "";
+    public TimeSpan Lag { get; init; }
+    public int FromOperationNumber { get; init; }
+    public string FromOperationName { get; init; } = "";
+    public string FromStatus { get; init; } = "";
+    public Guid? FromEquipmentId { get; init; }
+    public bool FromIsOnGroup { get; init; }
+    public DateTimeOffset? FromEarliestStart { get; init; }
+    public DateTimeOffset? FromLatestEnd { get; init; }
+    public DateTimeOffset? FromStartedAt { get; init; }
+    public DateTimeOffset? FromEndedAt { get; init; }
 }
 
 public sealed record SchedulingLineRow

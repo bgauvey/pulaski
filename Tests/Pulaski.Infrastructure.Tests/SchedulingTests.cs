@@ -4,12 +4,15 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Scheduling;
+using Pulaski.Application.Shifts;
 using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Scheduling;
+using Pulaski.Contracts.Shifts;
 using Pulaski.Contracts.WorkOrders;
 using Pulaski.Domain;
 using Pulaski.Domain.Scheduling;
+using Pulaski.Domain.Shifts;
 using Pulaski.Domain.WorkOrders;
 
 namespace Pulaski.Infrastructure.Tests;
@@ -159,6 +162,24 @@ public sealed class SchedulingTests(DatabaseFixture db)
         var first = timeline.Segments[0];
         Assert.Equal(TimeSpan.FromHours(2), first.End - first.Start);
         Assert.Contains(timeline.Segments[1].Warnings, w => w.Code == ScheduleWarningCode.MissingChangeover);
+
+        // Removed on Site settings (D-043), it takes no time out; added again on the line, it does.
+        IReadOnlyList<CalendarExceptionDto> exceptions;
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            exceptions = await scope.ServiceProvider.GetRequiredService<IQueryHandler<ListCalendarExceptionsQuery, IReadOnlyList<CalendarExceptionDto>>>()
+                .HandleAsync(new ListCalendarExceptionsQuery(site, null, IncludeRemoved: false), CancellationToken.None);
+        }
+
+        var shutdown = Assert.Single(exceptions);
+        Assert.Equal((site, CalendarExceptionKind.PlannedShutdown), (shutdown.ScopeEquipmentId, shutdown.Kind));
+        await db.SendAsync(new UpdateCalendarExceptionCommand(shutdown.Id, shutdown.Version, shutdown.Kind, shutdown.StartsAt, shutdown.EndsAt, null, IsActive: false));
+        first = (await QueryAsync(line)).Segments[0];
+        Assert.Equal(TimeSpan.FromHours(1), first.End - first.Start);
+
+        await db.SendAsync(new CreateCalendarExceptionCommand(line, CalendarExceptionKind.Holiday, shutdown.StartsAt, shutdown.EndsAt, "Again"));
+        first = (await QueryAsync(line)).Segments[0];
+        Assert.Equal(TimeSpan.FromHours(2), first.End - first.Start);
     }
 
     [Fact]
@@ -349,6 +370,53 @@ public sealed class SchedulingTests(DatabaseFixture db)
         row = Assert.Single(await ListRunStandardsAsync(line));
         Assert.Equal((900m, RateSource.Calculated), (row.EffectiveRatePerHour, row.RateSource));
         Assert.Null(row.ModifiedBy);
+    }
+
+    [Fact]
+    public async Task A_rate_from_run_history_is_reviewed_accepted_and_put_back_to_the_ideal_rate()
+    {
+        var (site, line) = await CreateLineAsync();
+        var (white, _) = await CreateMaterialsAsync();
+        var wo = Guid.CreateVersion7();
+        var job = Guid.CreateVersion7();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            // Six ended 2-hour runs making 180–205 m, and an ideal rate of 120 m/h.
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO core.run_standard (equipment_id, material_id, uom_id, calculated_rate_per_hour, calculation_basis, calculated_at)
+                VALUES (@line, @white, @uom, 120, 'ideal_rate', now());
+                INSERT INTO core.equipment_capability (equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, effective_from)
+                VALUES (@line, @white, 120, @uom, now() - interval '1 year');
+                INSERT INTO core.work_order (id, site_id, order_number, material_id, planned_qty, uom_id)
+                VALUES (@wo, @site, @woNumber, @white, 2000, @uom);
+                INSERT INTO core.job (id, site_id, work_order_id, job_number, job_type, equipment_id, material_id, planned_qty, uom_id, sequence_rank, status)
+                VALUES (@job, @site, @wo, @jobNumber, 'production', @line, @white, 2000, @uom, 1, 'paused');
+                INSERT INTO core.job_run (job_id, equipment_id, run_no, started_at, ended_at, status, good_qty, uom_id)
+                SELECT @job, @line, n, now() - make_interval(days => n, hours => 2), now() - make_interval(days => n), 'ended', 175 + 5 * n, @uom
+                FROM generate_series(1, 6) AS n;
+                """,
+                new { site, line, white, wo, job, uom = db.UomId, woNumber = "WO-" + Guid.NewGuid().ToString("N")[..8], jobNumber = "J-" + Guid.NewGuid().ToString("N")[..8] });
+        }
+
+        var standard = Assert.Single(await ListRunStandardsAsync(line));
+        RunHistoryRateDto review;
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            review = await scope.ServiceProvider.GetRequiredService<IQueryHandler<GetRunHistoryRateQuery, RunHistoryRateDto>>()
+                .HandleAsync(new GetRunHistoryRateQuery(standard.Id, 90), CancellationToken.None);
+        }
+
+        Assert.Equal((6, 12m, 120m), (review.UsedRuns, review.UsedHours, review.IdealRatePerHour!.Value));
+        Assert.Equal(Math.Round((180m + 185 + 190 + 195 + 200 + 205) / 12m, 2), review.SuggestedRatePerHour);
+
+        var adopted = await db.SendAsync(new AdoptHistoryRateCommand(standard.Id, review.Version, 90, review.SuggestedRatePerHour!.Value));
+        var row = Assert.Single(await ListRunStandardsAsync(line));
+        Assert.Equal((review.SuggestedRatePerHour!.Value, CalculationBasis.RunHistory, adopted.Version), (row.CalculatedRatePerHour, row.CalculationBasis, row.Version));
+
+        await db.SendAsync(new UseIdealRateCommand(standard.Id, adopted.Version));
+        row = Assert.Single(await ListRunStandardsAsync(line));
+        Assert.Equal((120m, CalculationBasis.IdealRate), (row.CalculatedRatePerHour, row.CalculationBasis));
     }
 
     [Fact]

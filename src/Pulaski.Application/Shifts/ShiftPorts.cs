@@ -7,7 +7,10 @@ namespace Pulaski.Application.Shifts;
 
 /// <summary>A shift schedule as the commands see it (D-038).</summary>
 public sealed record ShiftScheduleRecord(Guid Id, Guid SiteId, string Code, string Name, string? Description, int CycleDays, DateOnly CycleStart,
-    IReadOnlyList<ShiftDto> Shifts, bool IsActive);
+    IReadOnlyList<ShiftDto> Shifts, bool IsActive, IReadOnlyList<ShiftOverrideDto>? Overrides = null)
+{
+    public ShiftSchedule ToDomain() => ShiftMapping.ToDomain(Code, Name, CycleDays, CycleStart, Shifts, Overrides);
+}
 
 /// <summary>The working-time setting of one piece of equipment (D-038).</summary>
 public sealed record EquipmentCalendar(Guid Id, Guid? SiteId, string Code, string Level, string Mode, Guid? ShiftScheduleId);
@@ -49,13 +52,43 @@ public interface IShiftRepository
     Task<Versioned<EquipmentCalendar>?> GetEquipmentCalendarForUpdateAsync(Guid equipmentId, CancellationToken cancellationToken);
 
     Task<long> SetEquipmentCalendarAsync(Guid equipmentId, string mode, Guid? shiftScheduleId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Whether labor for this shift on this production day is approved, and so locked (D-040).</summary>
+    Task<bool> IsShiftApprovedAsync(Guid siteId, Guid scheduleId, DateOnly productionDate, string code, CancellationToken cancellationToken);
 }
 
 /// <summary>Between the shifts as the API carries them and the domain's schedule.</summary>
 public static class ShiftMapping
 {
-    public static ShiftSchedule ToDomain(string code, string name, int cycleDays, DateOnly cycleStart, IReadOnlyList<ShiftDto> shifts) =>
-        new(code, name, cycleDays, cycleStart, [.. shifts.Select(ToDomain)]);
+    public static ShiftSchedule ToDomain(string code, string name, int cycleDays, DateOnly cycleStart, IReadOnlyList<ShiftDto> shifts,
+        IReadOnlyList<ShiftOverrideDto>? overrides = null) =>
+        new(code, name, cycleDays, cycleStart, [.. shifts.Select(ToDomain)], [.. (overrides ?? []).Select(ToDomain)]);
+
+    public static ShiftOverride ToDomain(ShiftOverrideDto entry) => new(
+        entry.Date,
+        entry.Code.Trim(),
+        entry.IsWorking,
+        TimeOnly.TryParseExact(entry.Start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var start) ? start : TimeOnly.MinValue,
+        TimeSpan.FromMinutes(entry.Minutes),
+        string.IsNullOrWhiteSpace(entry.Name) ? entry.Code.Trim() : entry.Name.Trim(),
+        string.IsNullOrWhiteSpace(entry.Crew) ? null : entry.Crew.Trim().ToUpperInvariant(),
+        string.IsNullOrWhiteSpace(entry.Note) ? null : entry.Note.Trim());
+
+    public static ShiftOverrideDto ToDto(ShiftOverride entry) => new()
+    {
+        Date = entry.ProductionDate,
+        Code = entry.Code,
+        IsWorking = entry.IsWorking,
+        Name = entry.Name,
+        Start = entry.Start.ToString("HH:mm", CultureInfo.InvariantCulture),
+        Minutes = (int)entry.Length.TotalMinutes,
+        Crew = entry.Crew,
+        Note = entry.Note,
+    };
+
+    /// <summary>The overrides as stored: in date then code order.</summary>
+    public static IReadOnlyList<ShiftOverrideDto> Sort(IEnumerable<ShiftOverrideDto> overrides) =>
+        [.. overrides.OrderBy(x => x.Date).ThenBy(x => x.Code, StringComparer.Ordinal)];
 
     public static ShiftDefinition ToDomain(ShiftDto shift) => new(
         shift.Code.Trim(),

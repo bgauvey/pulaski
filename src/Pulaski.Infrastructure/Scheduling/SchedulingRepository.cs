@@ -177,6 +177,14 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
         RETURNING xmin::text::bigint
         """;
 
+    private const string UpdateRunStandardCalculation = """
+        UPDATE core.run_standard
+        SET uom_id = @UomId, calculated_rate_per_hour = @CalculatedRatePerHour, calculation_basis = @CalculationBasis,
+            calculated_at = @CalculatedAt, updated_at = @At
+        WHERE id = @Id
+        RETURNING xmin::text::bigint
+        """;
+
     private const string GetPolicyForUpdate = """
         SELECT changeover_mode, xmin::text::bigint AS version
         FROM core.scheduling_policy
@@ -278,6 +286,13 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
         var parameters = new DynamicParameters(standard);
         parameters.Add("At", at);
         return session.ExecuteScalarAsync<long>(UpdateRunStandardModification, parameters, cancellationToken);
+    }
+
+    public Task<long> UpdateRunStandardCalculationAsync(RunStandard standard, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var parameters = new DynamicParameters(standard);
+        parameters.Add("At", at);
+        return session.ExecuteScalarAsync<long>(UpdateRunStandardCalculation, parameters, cancellationToken);
     }
 
     public async Task<Versioned<string>?> GetPolicyForUpdateAsync(Guid siteId, CancellationToken cancellationToken)

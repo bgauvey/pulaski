@@ -9,8 +9,20 @@ namespace Pulaski.Domain.Shifts;
 /// </summary>
 public sealed record ShiftDefinition(string Code, string Name, TimeOnly Start, TimeSpan Length, IReadOnlyList<int> Days, string? Crew = null);
 
-/// <summary>A shift on the calendar: when it runs, the production day it counts towards (the day it starts on) and its crew.</summary>
-public sealed record ShiftOccurrence(string Code, string Name, DateOnly ProductionDate, DateTimeOffset Start, DateTimeOffset End, string? Crew = null);
+/// <summary>
+/// A shift on the calendar: when it runs, the production day it counts towards (the day it starts on) and its crew.
+/// <see cref="IsOverride"/> marks a shift that one date's override added or changed (D-042).
+/// </summary>
+public sealed record ShiftOccurrence(string Code, string Name, DateOnly ProductionDate, DateTimeOffset Start, DateTimeOffset End, string? Crew = null,
+    bool IsOverride = false);
+
+/// <summary>
+/// One date's change to a schedule (D-042), leaving the repeating cycle alone. On <see cref="ProductionDate"/> the shift
+/// <see cref="Code"/> runs at <see cref="Start"/> for <see cref="Length"/> instead of as the cycle says (or, when the cycle
+/// has no such shift that day, runs as an extra one); when <see cref="IsWorking"/> is false it doesn't run that day.
+/// </summary>
+public sealed record ShiftOverride(DateOnly ProductionDate, string Code, bool IsWorking, TimeOnly Start, TimeSpan Length, string Name, string? Crew = null,
+    string? Note = null);
 
 /// <summary>How equipment gets its working time (D-038).</summary>
 public static class CalendarModes
@@ -30,11 +42,13 @@ public static class CalendarModes
 /// <summary>
 /// A site's shift schedule (D-038): shifts that repeat every <see cref="CycleDays"/> days from
 /// <see cref="CycleStart"/>. Shift times aren't stored: they are worked out from the schedule when needed, so
-/// a change applies at once and nothing has to be regenerated.
+/// a change applies at once and nothing has to be regenerated. <see cref="Overrides"/> change single dates (D-042).
 /// </summary>
-public sealed record ShiftSchedule(string Code, string Name, int CycleDays, DateOnly CycleStart, IReadOnlyList<ShiftDefinition> Shifts)
+public sealed record ShiftSchedule(string Code, string Name, int CycleDays, DateOnly CycleStart, IReadOnlyList<ShiftDefinition> Shifts,
+    IReadOnlyList<ShiftOverride>? Overrides = null)
 {
     public const int MaxCycleDays = 56;
+    public const int MaxOverrides = 1000;
     public const int MaxCodeLength = 30;
     public static readonly TimeSpan MinLength = TimeSpan.FromMinutes(15);
     public static readonly TimeSpan MaxLength = TimeSpan.FromHours(24);
@@ -55,7 +69,8 @@ public sealed record ShiftSchedule(string Code, string Name, int CycleDays, Date
     /// </summary>
     public IReadOnlyList<ShiftOccurrence> Expand(TimeZoneInfo zone, DateTimeOffset from, DateTimeOffset to)
     {
-        if (to <= from || Shifts.Count == 0)
+        var overrides = Overrides ?? [];
+        if (to <= from || (Shifts.Count == 0 && overrides.Count == 0))
         {
             return [];
         }
@@ -63,22 +78,50 @@ public sealed record ShiftSchedule(string Code, string Name, int CycleDays, Date
         // A shift that started the day before (or longer, for a 24-hour shift) can still be running at 'from'.
         var first = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(from, zone).DateTime).AddDays(-2);
         var last = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(to, zone).DateTime);
+        var byDate = overrides.Where(x => x.ProductionDate >= first && x.ProductionDate <= last).ToLookup(x => x.ProductionDate);
         var result = new List<ShiftOccurrence>();
+
+        void Add(DateOnly date, string code, string name, TimeOnly at, TimeSpan length, string? crew, bool isOverride)
+        {
+            var start = ToInstant(date.ToDateTime(at), zone);
+            var end = start + length;
+            if (end > from && start < to)
+            {
+                result.Add(new ShiftOccurrence(code, name, date, start, end, crew, isOverride));
+            }
+        }
+
         for (var date = first; date <= last; date = date.AddDays(1))
         {
             var day = CycleDay(date);
-            foreach (var shift in Shifts.Where(s => s.Days.Contains(day)))
+            var changed = byDate[date].ToDictionary(x => x.Code, StringComparer.OrdinalIgnoreCase);
+            foreach (var shift in Shifts.Where(s => s.Days.Contains(day) && !changed.ContainsKey(s.Code)))
             {
-                var start = ToInstant(date.ToDateTime(shift.Start), zone);
-                var end = start + shift.Length;
-                if (end > from && start < to)
-                {
-                    result.Add(new ShiftOccurrence(shift.Code, shift.Name, date, start, end, shift.Crew));
-                }
+                Add(date, shift.Code, shift.Name, shift.Start, shift.Length, shift.Crew, isOverride: false);
+            }
+
+            // An override replaces the cycle's shift of its code that day, or adds one; a day off removes it.
+            foreach (var entry in changed.Values.Where(x => x.IsWorking))
+            {
+                Add(date, entry.Code, entry.Name, entry.Start, entry.Length, entry.Crew, isOverride: true);
             }
         }
 
         return [.. result.OrderBy(o => o.Start)];
+    }
+
+    /// <summary>The schedule with one date's override for a shift set (added or replaced) or, with null, removed.</summary>
+    public ShiftSchedule WithOverride(DateOnly date, string code, ShiftOverride? entry) => this with
+    {
+        Overrides = [.. (Overrides ?? []).Where(x => x.ProductionDate != date || !string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)),
+            .. entry is null ? Array.Empty<ShiftOverride>() : [entry]],
+    };
+
+    /// <summary>The cycle's shift of this code on that date, ignoring overrides; null when the cycle has none that day.</summary>
+    public ShiftDefinition? RegularShift(DateOnly date, string code)
+    {
+        var day = CycleDay(date);
+        return Shifts.FirstOrDefault(s => s.Days.Contains(day) && string.Equals(s.Code, code, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -130,32 +173,72 @@ public sealed record ShiftSchedule(string Code, string Name, int CycleDays, Date
             }
         }
 
-        if (problems.Count == 0 && FirstOverlap() is { } overlap)
+        problems.AddRange(OverrideProblems());
+
+        if (problems.Count == 0 && FirstOverlap(this with { Overrides = [] }, CycleStart, CycleStart.AddDays(2 * CycleDays + 1), cycleDays: true) is { } overlap)
         {
             problems.Add(overlap);
+        }
+
+        // Each override's date, with the days either side a shift can run into.
+        foreach (var date in (Overrides ?? []).Select(x => x.ProductionDate).Distinct().Order())
+        {
+            if (problems.Count == 0 && FirstOverlap(this, date.AddDays(-1), date.AddDays(2), cycleDays: false) is { } clash)
+            {
+                problems.Add(clash);
+            }
         }
 
         return problems;
     }
 
-    // Checked on clock time, without daylight saving, over two cycles so a shift running past the end of the cycle
-    // meets the next cycle's first.
-    private string? FirstOverlap()
+    private IEnumerable<string> OverrideProblems()
     {
-        var start = CycleStart.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var occurrences = Expand(TimeZoneInfo.Utc, new DateTimeOffset(start), new DateTimeOffset(start.AddDays(2 * CycleDays + 1)));
+        var overrides = Overrides ?? [];
+        if (overrides.Count > MaxOverrides)
+        {
+            yield return $"A schedule keeps at most {MaxOverrides} overrides.";
+        }
+
+        foreach (var duplicate in overrides.GroupBy(x => (x.ProductionDate, x.Code.ToUpperInvariant())).Where(g => g.Count() > 1))
+        {
+            yield return $"Shift {duplicate.Key.Item2} has two overrides on {Day(duplicate.Key.ProductionDate)}.";
+        }
+
+        foreach (var entry in overrides)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Code) || entry.Code.Length > 10)
+            {
+                yield return "Each override names a shift code of up to 10 characters.";
+            }
+            else if (entry.IsWorking && (entry.Length < MinLength || entry.Length > MaxLength))
+            {
+                yield return $"Shift {entry.Code} on {Day(entry.ProductionDate)} is 15 minutes to 24 hours long.";
+            }
+        }
+    }
+
+    // Checked on clock time, without daylight saving. For the cycle itself over two cycles, so a shift running past the
+    // end of the cycle meets the next cycle's first; for an override over the days around it.
+    private static string? FirstOverlap(ShiftSchedule schedule, DateOnly first, DateOnly last, bool cycleDays)
+    {
+        var start = new DateTimeOffset(first.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        var occurrences = schedule.Expand(TimeZoneInfo.Utc, start, new DateTimeOffset(last.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)));
         for (var i = 1; i < occurrences.Count; i++)
         {
             var (a, b) = (occurrences[i - 1], occurrences[i]);
             if (b.Start < a.End)
             {
-                return $"Shift {b.Code} on day {CycleDay(b.ProductionDate) + 1} starts at {b.Start.ToString("HH:mm", CultureInfo.InvariantCulture)}, "
+                var day = cycleDays ? $"day {schedule.CycleDay(b.ProductionDate) + 1}" : Day(b.ProductionDate);
+                return $"Shift {b.Code} on {day} starts at {b.Start.ToString("HH:mm", CultureInfo.InvariantCulture)}, "
                     + $"before shift {a.Code} ends at {a.End.ToString("HH:mm", CultureInfo.InvariantCulture)}; shifts can't overlap.";
             }
         }
 
         return null;
     }
+
+    private static string Day(DateOnly date) => date.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture);
 
     private static DateTimeOffset ToInstant(DateTime local, TimeZoneInfo zone)
     {

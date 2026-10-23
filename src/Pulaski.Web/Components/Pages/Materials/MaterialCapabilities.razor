@@ -124,6 +124,8 @@
                 }
                 <button type="button" class="btn btn-link" @onclick="Cancel">Cancel</button>
             </div>
+            <RunHistoryPanel RunStandardId="rate.Capability.RunStandardId!.Value" LineCode="@rate.Capability.EquipmentCode" MaterialCode="@Material.Code"
+                             Basis="@rate.Capability.CalculationBasis" TimeZone="@rate.Capability.SiteTimeZone" OnChanged="OnHistoryRateChangedAsync" />
         </form>
     }
 
@@ -304,6 +306,13 @@
         _notes = [$"Planning rate on {rate.Capability.EquipmentCode} is the calculated {Qty(rate.Capability.CalculatedRatePerHour)} {rate.Capability.RunStandardUomCode}/h again."];
         _rate = null;
     });
+
+    private async Task OnHistoryRateChangedAsync(string note)
+    {
+        _notes = [note];
+        _rate = null;
+        await OnChanged.InvokeAsync();
+    }
 
     private async Task RunAsync(Func<Task> action, bool reload = true)
     {

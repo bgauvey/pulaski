@@ -163,6 +163,16 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> UpdateShiftScheduleAsync(Guid id, UpdateShiftScheduleRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/shift-schedules/{id}", request, ct);
 
+    public Task<VersionResponse> SetShiftOverrideAsync(Guid scheduleId, SetShiftOverrideRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/shift-schedules/{scheduleId}/overrides", request, ct);
+
+    public async Task<VersionResponse> RemoveShiftOverrideAsync(Guid scheduleId, DateOnly date, string code, long version, CancellationToken ct = default)
+    {
+        using var response = await SendCoreAsync(new HttpRequestMessage(
+            HttpMethod.Delete, $"api/shift-schedules/{scheduleId}/overrides/{date:yyyy-MM-dd}/{Uri.EscapeDataString(code)}?version={version}"), ct);
+        return await ReadAsync<VersionResponse>(response, ct);
+    }
+
     public Task<ShiftPreviewDto> PreviewShiftScheduleAsync(PreviewShiftScheduleRequest request, CancellationToken ct = default) =>
         SendAsync<ShiftPreviewDto>(HttpMethod.Post, "api/shift-schedules/preview", request, ct);
 
@@ -641,6 +651,39 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<ReportProductionResponse> ReportProductionAsync(Guid jobId, ReportProductionRequest request, CancellationToken ct = default) =>
         SendAsync<ReportProductionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/production", request, ct);
+
+    // Planning rates from run history (D-045)
+
+    public Task<RunHistoryRateDto> GetRunHistoryRateAsync(Guid runStandardId, int days, CancellationToken ct = default) =>
+        GetAsync<RunHistoryRateDto>($"api/scheduling/run-standards/{runStandardId}/history-rate?days={days}", ct);
+
+    public Task<VersionResponse> AdoptHistoryRateAsync(Guid runStandardId, AdoptHistoryRateRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/scheduling/run-standards/{runStandardId}/history-rate", request, ct);
+
+    public Task<VersionResponse> UseIdealRateAsync(Guid runStandardId, UseIdealRateRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/scheduling/run-standards/{runStandardId}/ideal-rate", request, ct);
+
+    // Site settings (D-043): changeover mode, reporting tolerances and calendar exceptions
+
+    public Task<SchedulingPolicyDto> GetSchedulingPolicyAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<SchedulingPolicyDto>($"api/scheduling/sites/{siteId}/policy", ct);
+
+    public Task<VersionResponse> SetSchedulingPolicyAsync(Guid siteId, SetSchedulingPolicyRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/scheduling/sites/{siteId}/policy", request, ct);
+
+    public Task<IReadOnlyList<CalendarExceptionDto>> ListCalendarExceptionsAsync(Guid siteId, DateTimeOffset? from, bool includeRemoved, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<CalendarExceptionDto>>(
+            $"api/calendar-exceptions?siteId={siteId}&includeRemoved={(includeRemoved ? "true" : "false")}"
+            + (from is { } f ? $"&from={Uri.EscapeDataString(f.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}" : ""), ct);
+
+    public Task<CreatedResponse> CreateCalendarExceptionAsync(CreateCalendarExceptionRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/calendar-exceptions", request, ct);
+
+    public Task<VersionResponse> UpdateCalendarExceptionAsync(Guid id, UpdateCalendarExceptionRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/calendar-exceptions/{id}", request, ct);
+
+    public Task<ProductionByShiftDto> GetProductionByShiftAsync(Guid siteId, DateOnly from, DateOnly to, CancellationToken ct = default) =>
+        GetAsync<ProductionByShiftDto>($"api/execution/sites/{siteId}/production-by-shift?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}", ct);
 
     public Task<ExecutionPolicyDto> GetExecutionPolicyAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<ExecutionPolicyDto>($"api/execution/sites/{siteId}/policy", ct);

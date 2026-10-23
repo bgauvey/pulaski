@@ -223,7 +223,7 @@ internal sealed class SequenceJobHandler(
     {
         var source = await scheduling.GetLinePlanAsync(
             lineId, now, now.AddDays(GetLineTimelineHandler.DefaultHorizonDays), cancellationToken);
-        var timeline = TimelineProjector.Project(TimelineMapping.ToPlan(source!, now));
+        var timeline = TimelineMapping.Project(source!, now);
         return timeline.Segments
             .FirstOrDefault(s => s.Kind == SegmentKind.Job && s.Start > firmedStart)?.JobId;
     }

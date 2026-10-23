@@ -31,7 +31,7 @@
                 }
                 @foreach (var warning in s.Warnings)
                 {
-                    <div class="drawer-alert @(warning.Code is "late" or "firmed_conflict" ? "is-warning" : "")">
+                    <div class="drawer-alert @(warning.Code is "late" or "firmed_conflict" or "link_not_met" or "link_cycle" ? "is-warning" : "")">
                         <Icon Name="alert" Size="18" /><span>@warning.Message</span>
                     </div>
                 }
@@ -43,6 +43,11 @@
                     {
                         <dt>Planned to</dt>
                         <dd>@group.Code <span class="text-muted">@(item.IsWindow ? "· waiting for a line" : $"· running on {item.LineCode}")</span></dd>
+                    }
+                    @if (s.LinkReadyAt is not null)
+                    {
+                        <dt>Process links</dt>
+                        <dd>Can start from @ScheduleFormat.When(s.LinkReadyAt, Tz) <span class="text-muted">· when the operations it follows allow</span></dd>
                     }
                     @if (s.LatestEnd is not null && !item.IsWindow)
                     {

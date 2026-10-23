@@ -101,8 +101,8 @@ internal sealed class PreviewJobPlacementHandler(
         jobs.Insert(slot, preview);
         var withJob = source with { Jobs = jobs };
 
-        var current = TimelineProjector.Project(TimelineMapping.ToPlan(source, now));
-        var proposed = TimelineProjector.Project(TimelineMapping.ToPlan(withJob, now));
+        var current = TimelineMapping.Project(source, now);
+        var proposed = TimelineMapping.Project(withJob, now);
 
         var startsNow = current.Segments.Where(s => s.Kind == SegmentKind.Job).ToDictionary(s => s.JobId, s => s.Start);
         var numbers = source.Jobs.ToDictionary(j => j.JobId, j => j.JobNumber);

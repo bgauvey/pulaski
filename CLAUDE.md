@@ -109,7 +109,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`sec.role`, `sec.role_permission.is_granted`), maintained on the Roles/Permissions tabs of Configure → Users; only `administrator` is in
   code (all permissions, everywhere, unchangeable); `Roles.Defaults` seeds a new database. Every other role is held at a
   site; every changing endpoint carries `.RequirePermission(permission, Site.…)`.
-- Viewing (D-039, proposed): 11 view permissions (`*.view`) decide screens and data; a change brings its views
+- Viewing (D-039, proposed): 13 view permissions (`*.view`) decide screens and data; a change brings its views
   (`Permissions.Implied`). Reads use `.RequireAny(site, views…)`, `.RequireAnyAtSite` (no site = every site) or
   `.RequireAnyView()` for lookups; lists filter with `.At(Visible.SitesAsync(...))`. Web pages carry
   `[RequiresView(...)]`, checked in `MainLayout` (not found, or the no-access panel); cross-screen links use `ScreenLink`.
@@ -123,6 +123,19 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   out to runs by overlap on read (`LaborRules.Attribute`); each session stores its shift (`EquipmentShifts.ShiftAt`).
   `core.labor_approval` locks a shift; corrections are new sessions (`corrects_session_id`, `is_void`). Clock-on locks
   the person; crew check-in locks people in id order in SQL. No background service.
+- Shift overrides (D-042, proposed): one production day's change to a schedule's shift (other times, off, or an extra shift) in
+  `core.shift_schedule.overrides` (`jsonb`, saved whole); `ShiftSchedule.Expand` applies them everywhere. Locked once that shift's
+  labor is approved. Not calendar exceptions, which take time out of everything below a piece of equipment.
+- Site settings (D-043, proposed): Configure → Site settings holds changeover mode, reporting tolerances (now versioned) and
+  calendar exceptions (switched off with `is_active`, never deleted); `site_settings.view` opens it, `site_settings.manage` changes it.
+- Production by shift (D-044, proposed): a count belongs to the shift running on its line at `occurred_at` and to that shift's
+  production day (`ShiftProduction.Total`), worked out on read; outside shifts, the site-local day. Rows reconcile to the runs.
+- Rates from run history (D-045, proposed): `RunHistoryRate.Calculate` (good ÷ run hours, short/empty/unconvertible and
+  Tukey-fence outliers left out, at least 5 runs and 8 h) is reviewed, then accepted (re-checked under the lock, 409 if changed)
+  as the calculated rate; a modified rate stays in force. No worker.
+- Links in the projection (D-046, proposed): `LinePlanLoader` loads a line with the lines its jobs follow; every projection goes
+  through `TimelineMapping.Project` → `LinkedProjection` (repeat until settled). Jobs wait for after-start/after-end plus lag;
+  firmed jobs keep their time (`link_not_met`), circular waits warn `link_cycle`. Nothing is reordered.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

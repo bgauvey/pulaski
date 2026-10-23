@@ -1,3 +1,4 @@
+using Pulaski.Application.Abstractions;
 using Pulaski.Application.Execution;
 using Pulaski.Contracts.Execution;
 using Pulaski.Domain.Execution;
@@ -12,6 +13,7 @@ public sealed class InMemoryExecution : IExecutionRepository, IExecutionReadStor
     private readonly Dictionary<Guid, JobRun> _runs = [];
     private readonly List<ProductionCountRow> _counts = [];
     private readonly Dictionary<Guid, ExecutionPolicy> _policies = [];
+    private readonly Dictionary<Guid, long> _policyVersions = [];
 
     /// <summary>A job's work order; <see cref="InMemoryStores"/> points it at its scheduling store.</summary>
     public Func<Guid, Guid?> WorkOrderOf { get; set; } = _ => null;
@@ -133,10 +135,22 @@ public sealed class InMemoryExecution : IExecutionRepository, IExecutionReadStor
         }
     }
 
-    public Task UpsertPolicyAsync(Guid siteId, ExecutionPolicy policy, DateTimeOffset at, CancellationToken cancellationToken)
+    public Task<Versioned<ExecutionPolicy>?> GetPolicyForUpdateAsync(Guid siteId, CancellationToken cancellationToken)
     {
-        SetPolicy(siteId, policy);
-        return Task.CompletedTask;
+        lock (_lock)
+        {
+            return Task.FromResult(_policies.TryGetValue(siteId, out var policy) ? new Versioned<ExecutionPolicy>(policy, _policyVersions.GetValueOrDefault(siteId, 1)) : null);
+        }
+    }
+
+    public Task<long> UpsertPolicyAsync(Guid siteId, ExecutionPolicy policy, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _policies[siteId] = policy;
+            var version = _policyVersions[siteId] = _policyVersions.GetValueOrDefault(siteId, 1) + 1;
+            return Task.FromResult(version);
+        }
     }
 
     public Task<(decimal RatePerHour, Guid UomId)?> GetIdealRateAsync(Guid lineId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken) =>

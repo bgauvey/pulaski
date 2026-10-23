@@ -4,9 +4,11 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Execution;
 using Pulaski.Application.Materials;
+using Pulaski.Application.Scheduling;
 using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Execution;
+using Pulaski.Contracts.Scheduling;
 using Pulaski.Domain;
 using Pulaski.Domain.WorkOrders;
 
@@ -89,6 +91,38 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task The_schedule_holds_pack_until_extrude_is_projected_to_end()
+    {
+        // D-046: Pack (20) starts after Extrude (10) ends. Extruding 1000 m at 100 m/h takes 10 h; packing at 500 m/h, 2 h.
+        var plant = await PlantAsync();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO core.run_standard (equipment_id, material_id, uom_id, calculated_rate_per_hour, calculation_basis, calculated_at)
+                VALUES (@extruder, @material, @uom, 100, 'ideal_rate', now()), (@packer, @material, @uom, 500, 'ideal_rate', now());
+                """,
+                new { extruder = plant.Extruder, packer = plant.Packer, material = db.MaterialId, uom = db.UomId });
+        }
+
+        var extrude = Assert.Single((await QueryAsync<GetLineTimelineQuery, LineTimelineDto>(new GetLineTimelineQuery(plant.Extruder))).Segments);
+        var pack = Assert.Single((await QueryAsync<GetLineTimelineQuery, LineTimelineDto>(new GetLineTimelineQuery(plant.Packer))).Segments);
+
+        // Each timeline is read at its own "now", a moment apart.
+        Assert.Equal(TimeSpan.FromHours(10), extrude.End - extrude.Start);
+        Assert.Equal(pack.LinkReadyAt, pack.Start);
+        Assert.InRange(pack.Start - extrude.End, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+        Assert.Equal(TimeSpan.FromHours(2), pack.End - pack.Start);
+
+        // Dispatching publishes the same: Pack's baseline starts when Extrude's ends.
+        var orderVersion = () => ScalarAsync<long>("SELECT xmin::text::bigint FROM core.work_order WHERE id = @Id", new { Id = plant.Order });
+        await db.SendAsync(new UndispatchWorkOrderCommand(plant.Order, await orderVersion()));
+        await db.SendAsync(new DispatchWorkOrderCommand(plant.Order, await orderVersion()));
+        var extrudeEnd = await ScalarAsync<DateTimeOffset>("SELECT planned_end FROM core.job WHERE id = @Id", new { Id = plant.Extrude });
+        Assert.Equal(extrudeEnd, await ScalarAsync<DateTimeOffset>("SELECT planned_start FROM core.job WHERE id = @Id", new { Id = plant.Pack }));
+    }
+
+    [Fact]
     public async Task A_job_runs_reports_within_its_rate_and_hands_on_to_the_next_operation()
     {
         var plant = await PlantAsync();
@@ -139,6 +173,15 @@ public sealed class ExecutionTests(DatabaseFixture db)
         Assert.Equal(2, await ScalarAsync<int>(
             "SELECT count(*)::int FROM ts.lot_event WHERE job_id = @Id AND run_id = @Run AND event_kind = 'produced'", new { Id = plant.Extrude, Run = started.RunId }));
 
+        // By shift (D-044): with no shifts the line's reports fall on the site's day, and add up to the job's runs.
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Chicago")).DateTime);
+        var byShift = await QueryAsync<GetProductionByShiftQuery, ProductionByShiftDto>(new GetProductionByShiftQuery(plant.Site, today.AddDays(-1), today.AddDays(1)));
+        var rows = byShift.Rows.Where(r => r.JobId == plant.Extrude).ToList();
+        Assert.Equal((104m, 5m, 2), (rows.Sum(r => r.GoodQty), rows.Sum(r => r.ScrapQty), rows.Sum(r => r.Reports)));
+        Assert.All(rows, r => Assert.Null(r.ShiftCode));
+        var check = Assert.Single(byShift.Jobs, j => j.JobId == plant.Extrude);
+        Assert.Equal((true, 104m, 5m), (check.MatchesRuns, check.RunGoodQty, check.RunScrapQty));
+
         // Pack can start now; completing it completes the order, and closing the order closes its jobs.
         await db.SendAsync(new StartJobCommand(plant.Pack, await VersionAsync(plant.Pack), SkipChangeover: true));
         await db.SendAsync(new CompleteJobCommand(plant.Pack, await VersionAsync(plant.Pack)));
@@ -157,8 +200,10 @@ public sealed class ExecutionTests(DatabaseFixture db)
         var plant = await PlantAsync();
         var policy = await QueryAsync<GetExecutionPolicyQuery, ExecutionPolicyDto>(new GetExecutionPolicyQuery(plant.Site));
         Assert.Equal((true, 110m), (policy.IsDefault, policy.RateTolerancePct));
-        await db.SendAsync(new SetExecutionPolicyCommand(plant.Site, 150m, 120m));
-        Assert.Equal(150m, (await QueryAsync<GetExecutionPolicyQuery, ExecutionPolicyDto>(new GetExecutionPolicyQuery(plant.Site))).RateTolerancePct);
+        var set = await db.SendAsync(new SetExecutionPolicyCommand(plant.Site, policy.Version, 150m, 120m));
+        var saved = await QueryAsync<GetExecutionPolicyQuery, ExecutionPolicyDto>(new GetExecutionPolicyQuery(plant.Site));
+        Assert.Equal((150m, false, set.Version), (saved.RateTolerancePct, saved.IsDefault, saved.Version));
+        await Assert.ThrowsAsync<Application.Errors.ConflictException>(() => db.SendAsync(new SetExecutionPolicyCommand(plant.Site, 0, 120m, 120m)));
 
         var started = await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
         await db.SendAsync(new PauseJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));

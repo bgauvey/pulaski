@@ -230,6 +230,36 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
     }
 
     [Fact]
+    public async Task Site_settings_are_seen_by_auditors_and_changed_only_by_managers()
+    {
+        var site = factory.Stores.Equipment.AddHierarchy().Site.Id;
+        factory.Stores.Security.SetSite(SiteOf.Equipment, site, site);
+        var holiday = new Pulaski.Contracts.Shifts.CreateCalendarExceptionRequest
+        {
+            ScopeEquipmentId = site,
+            Kind = "holiday",
+            StartsAt = new DateTimeOffset(2026, 12, 25, 6, 0, 0, TimeSpan.Zero),
+            EndsAt = new DateTimeOffset(2026, 12, 26, 6, 0, 0, TimeSpan.Zero),
+        };
+        var tolerances = new Pulaski.Contracts.Execution.SetExecutionPolicyRequest { RateTolerancePct = 120m, ConsumptionTolerancePct = 120m };
+        var changeovers = new Pulaski.Contracts.Scheduling.SetSchedulingPolicyRequest { ChangeoverMode = "scheduler" };
+
+        // The auditor sees the settings but can't change any of them.
+        var auditor = await factory.CreateClientAsAsync(Roles.Auditor, site);
+        Assert.Equal(HttpStatusCode.OK, (await auditor.GetAsync(new Uri($"/api/calendar-exceptions?siteId={site}", UriKind.Relative))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await auditor.PostAsJsonAsync("/api/calendar-exceptions", holiday)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await auditor.PutAsJsonAsync($"/api/execution/sites/{site}/policy", tolerances)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await auditor.PutAsJsonAsync($"/api/scheduling/sites/{site}/policy", changeovers)).StatusCode);
+
+        // An operator doesn't see them at all.
+        var op = await factory.CreateClientAsAsync(Roles.Operator, site);
+        Assert.Equal(HttpStatusCode.Forbidden, (await op.GetAsync(new Uri($"/api/calendar-exceptions?siteId={site}", UriKind.Relative))).StatusCode);
+
+        var manager = await factory.CreateClientAsAsync(Roles.Manager, site);
+        Assert.Equal(HttpStatusCode.Created, (await manager.PostAsJsonAsync("/api/calendar-exceptions", holiday)).StatusCode);
+    }
+
+    [Fact]
     public async Task Reads_need_the_view_at_the_site_and_lists_keep_to_the_callers_sites()
     {
         var here = Guid.CreateVersion7();

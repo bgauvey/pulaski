@@ -59,6 +59,7 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
         VALUES (@SiteId, @RateTolerancePct, @ConsumptionTolerancePct, @At)
         ON CONFLICT (site_id) DO UPDATE
         SET rate_tolerance_pct = EXCLUDED.rate_tolerance_pct, consumption_tolerance_pct = EXCLUDED.consumption_tolerance_pct, updated_at = EXCLUDED.updated_at
+        RETURNING xmin::text::bigint
         """;
 
     private const string PlannedComponent = """
@@ -187,8 +188,13 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
             ? new ExecutionPolicy(r.RateTolerancePct, r.ConsumptionTolerancePct)
             : ExecutionPolicy.Default;
 
-    public Task UpsertPolicyAsync(Guid siteId, ExecutionPolicy policy, DateTimeOffset at, CancellationToken cancellationToken) =>
-        session.ExecuteAsync(
+    public async Task<Versioned<ExecutionPolicy>?> GetPolicyForUpdateAsync(Guid siteId, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<PolicyRow>(ExecutionSql.Policy + "\nFOR UPDATE", new { SiteId = siteId }, cancellationToken) is { } r
+            ? new Versioned<ExecutionPolicy>(new ExecutionPolicy(r.RateTolerancePct, r.ConsumptionTolerancePct), r.Version)
+            : null;
+
+    public Task<long> UpsertPolicyAsync(Guid siteId, ExecutionPolicy policy, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(
             UpsertPolicy, new { SiteId = siteId, policy.RateTolerancePct, policy.ConsumptionTolerancePct, At = at }, cancellationToken);
 
     public async Task<(decimal RatePerHour, Guid UomId)?> GetIdealRateAsync(Guid lineId, Guid materialId, DateTimeOffset at, CancellationToken cancellationToken) =>
@@ -298,6 +304,7 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
     {
         public decimal RateTolerancePct { get; init; }
         public decimal ConsumptionTolerancePct { get; init; }
+        public long Version { get; init; }
     }
 
     private sealed class LastRunRow
