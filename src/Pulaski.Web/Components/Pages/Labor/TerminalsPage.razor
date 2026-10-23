@@ -1,0 +1,326 @@
+@page "/terminals"
+@attribute [RequiresView(PermissionCodes.Terminals)]
+@using System.Globalization
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject NavigationManager Navigation
+
+@* Shop-floor terminals (D-049): shared devices where people badge to clock on and off and take breaks. A terminal offers
+   the lines of a site, area or line, and works once enrolled with a one-time code typed on the device itself. *@
+<PageTitle>Terminals · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Terminals</h1>
+        <p class="text-muted mb-0">
+            Shared tablets and panel PCs where people badge to record their time. Register one here, then open
+            <code>@TerminalUrl</code> on the device and type its enrolment code. Badges are issued on <ScreenLink Href="people" Permission="@PermissionCodes.People">People</ScreenLink>.
+        </p>
+    </div>
+    @if (Sites.Sites.Count > 1)
+    {
+        <div class="inv-head-tools">
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        </div>
+    }
+</div>
+
+<ProblemAlert Error="_error" />
+
+@if (_code is { } pending)
+{
+    <div class="alert alert-info" role="status">
+        <div class="fs-4 fw-semibold font-monospace">@pending.Code.Code</div>
+        <div class="small">
+            For <strong>@pending.Terminal</strong>: open <code>@TerminalUrl</code> on the device and type this code before @Display.SiteTime(pending.Code.ExpiresAt, Sites.Site?.TimeZone)[11..].
+            It works once; this is the only time it is shown. Enrolling again later replaces the terminal's credential.
+        </div>
+        <button type="button" class="btn btn-sm btn-link px-0" @onclick="() => _code = null">Done</button>
+    </div>
+}
+
+@if (_terminals is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    <form class="inv-facts mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+        <h2 class="h6">@(_form.Id is null ? "Register a terminal" : $"Change {_form.Code}")</h2>
+        <div class="row g-2 align-items-end">
+            <div class="col-sm-2">
+                <label class="form-label small" for="term-code">Code</label>
+                <input id="term-code" class="form-control" maxlength="30" placeholder="e.g. EXT-T1" disabled="@(_form.Id is not null)" @bind="_form.Code" @bind:event="oninput" />
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label small" for="term-name">Name</label>
+                <input id="term-name" class="form-control" maxlength="100" placeholder="e.g. Extrusion hall, east wall" @bind="_form.Name" @bind:event="oninput" />
+            </div>
+            <div class="col-sm-2">
+                <label class="form-label small" for="term-scope">Offers the lines of</label>
+                <select id="term-scope" class="form-select" @bind="_form.ScopeId" @bind:after="ScopeChanged">
+                    @foreach (var e in Scopes)
+                    {
+                        <option value="@e.Id">@e.Code</option>
+                    }
+                </select>
+            </div>
+            <div class="col-sm-2">
+                <label class="form-label small" for="term-default">First line offered</label>
+                <select id="term-default" class="form-select" @bind="_form.DefaultId">
+                    <option value="@Guid.Empty">None</option>
+                    @foreach (var e in LinesIn(_form.ScopeId))
+                    {
+                        <option value="@e.Id">@e.Code</option>
+                    }
+                </select>
+            </div>
+            <div class="col-sm-2">
+                <label class="form-label small" for="term-mode">People identify with</label>
+                <select id="term-mode" class="form-select" @bind="_form.AuthMode">
+                    <option value="badge">Badge</option>
+                    <option value="badge_plus_pin">Badge and PIN</option>
+                </select>
+            </div>
+            <div class="col-sm-1">
+                @if (_form.Id is not null)
+                {
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="term-active" @bind="_form.IsActive" />
+                        <label class="form-check-label small" for="term-active">Active</label>
+                    </div>
+                }
+            </div>
+            <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_form.Name) || string.IsNullOrWhiteSpace(_form.Code) || _form.ScopeId == Guid.Empty)">
+                    @(_form.Id is null ? "Register terminal" : "Save terminal")
+                </button>
+                @if (_form.Id is not null)
+                {
+                    <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">Cancel</button>
+                }
+            </div>
+            <div class="col-12 small text-muted">
+                Badge and PIN suits terminals anyone could walk up to with a found badge. Switching a terminal off stops it working at once.
+            </div>
+        </div>
+    </form>
+
+    @if (_terminals.Count == 0)
+    {
+        <div class="empty-panel"><p class="text-muted mb-0">No terminals at @(Sites.Site?.Code ?? "this site") yet.</p></div>
+    }
+    else
+    {
+        <div class="table-panel">
+            <table class="table align-middle">
+                <thead><tr><th>Terminal</th><th>Offers</th><th>First line</th><th>Identify with</th><th>Enrolled</th><th>Last badge</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var t in _terminals)
+                    {
+                        <tr @key="t.Id" class="@(t.IsActive ? "" : "text-muted")">
+                            <td><span class="fw-semibold">@t.Code</span> <span class="small text-muted">@t.Name</span>@(t.IsActive ? "" : " · switched off")</td>
+                            <td>@t.ScopeCode</td>
+                            <td>@(t.DefaultCode ?? "—")</td>
+                            <td class="small">@(t.AuthMode == "badge_plus_pin" ? "Badge and PIN" : "Badge")</td>
+                            <td class="small">
+                                @(t.EnrolledAt is { } at ? Display.SiteTime(at, Sites.Site?.TimeZone) : "Not yet")
+                                @if (t.EnrolmentExpiresAt is not null)
+                                {
+                                    <div class="text-muted">code waiting</div>
+                                }
+                            </td>
+                            <td class="small">@(t.LastSeenAt is { } seen ? Display.SiteTime(seen, Sites.Site?.TimeZone) : "—")</td>
+                            <td class="text-end text-nowrap">
+                                @if (t.IsActive)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => CodeAsync(t)">Enrolment code</button>
+                                }
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => Edit(t)">Change</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private IReadOnlyList<TerminalDto>? _terminals;
+    private IReadOnlyList<EquipmentDto> _equipment = [];
+    private TerminalForm _form = new();
+    private (string Terminal, EnrolmentCodeResponse Code)? _code;
+    private ApiException? _error;
+    private bool _busy;
+
+    private string TerminalUrl => Navigation.ToAbsoluteUri(TerminalCookie.EnrolPath).ToString();
+
+    // The site itself, its areas, and its lines: what a terminal can offer the lines of.
+    private IEnumerable<EquipmentDto> Scopes =>
+        _equipment.Where(e => e.IsActive && (e.Id == Sites.SiteId || e.SiteId == Sites.SiteId) && (e.Level is "site" or "area" || e.CanRunJob))
+            .OrderBy(e => e.Depth).ThenBy(e => e.Code, StringComparer.Ordinal);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _equipment = await Api.ListEquipmentAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            _terminals = [];
+            return;
+        }
+
+        try
+        {
+            _terminals = await Api.ListTerminalsAsync(site);
+            if (_form.ScopeId == Guid.Empty)
+            {
+                ResetForm();
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _terminals = null;
+        _code = null;
+        _form = new();
+        await LoadAsync();
+    }
+
+    /// <summary>The active lines that run jobs at or below <paramref name="scopeId"/>.</summary>
+    private IEnumerable<EquipmentDto> LinesIn(Guid scopeId) =>
+        _equipment.Where(e => e.CanRunJob && e.IsActive && IsAtOrBelow(e, scopeId)).OrderBy(e => e.Code, StringComparer.Ordinal);
+
+    private bool IsAtOrBelow(EquipmentDto e, Guid ancestorId)
+    {
+        for (EquipmentDto? node = e; node is not null; node = node.ParentId is { } p ? _equipment.FirstOrDefault(x => x.Id == p) : null)
+        {
+            if (node.Id == ancestorId)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void ScopeChanged()
+    {
+        if (!LinesIn(_form.ScopeId).Any(l => l.Id == _form.DefaultId))
+        {
+            _form.DefaultId = Guid.Empty;
+        }
+    }
+
+    private void ResetForm() => _form = new TerminalForm { ScopeId = Sites.SiteId ?? Guid.Empty };
+
+    private void Edit(TerminalDto t) => _form = new TerminalForm
+    {
+        Id = t.Id,
+        Version = t.Version,
+        Code = t.Code,
+        Name = t.Name,
+        ScopeId = t.ScopeEquipmentId,
+        DefaultId = t.DefaultEquipmentId ?? Guid.Empty,
+        AuthMode = t.AuthMode,
+        IsActive = t.IsActive,
+    };
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        Guid? defaultId = _form.DefaultId == Guid.Empty ? null : _form.DefaultId;
+        if (_form.Id is { } id)
+        {
+            await Api.UpdateTerminalAsync(id, new UpdateTerminalRequest
+            {
+                Version = _form.Version,
+                Name = _form.Name,
+                ScopeEquipmentId = _form.ScopeId,
+                DefaultEquipmentId = defaultId,
+                AuthMode = _form.AuthMode,
+                IsActive = _form.IsActive,
+            });
+        }
+        else
+        {
+            await Api.CreateTerminalAsync(new CreateTerminalRequest
+            {
+                Code = _form.Code,
+                Name = _form.Name,
+                ScopeEquipmentId = _form.ScopeId,
+                DefaultEquipmentId = defaultId,
+                AuthMode = _form.AuthMode,
+            });
+        }
+
+        ResetForm();
+    });
+
+    private Task CodeAsync(TerminalDto t) => RunAsync(async () => _code = (t.Code, await Api.IssueEnrolmentCodeAsync(t.Id)));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class TerminalForm
+    {
+        public Guid? Id { get; init; }
+
+        public long Version { get; init; }
+
+        public string Code { get; set; } = "";
+
+        public string Name { get; set; } = "";
+
+        public Guid ScopeId { get; set; }
+
+        public Guid DefaultId { get; set; }
+
+        public string AuthMode { get; set; } = "badge";
+
+        public bool IsActive { get; set; } = true;
+    }
+}

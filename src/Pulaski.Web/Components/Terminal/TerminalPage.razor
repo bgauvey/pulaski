@@ -1,0 +1,234 @@
+@page "/terminal"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout TerminalLayout
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+
+@* A shop-floor terminal (D-049). Someone badges (a reader types the badge and Enter), with a PIN if the terminal asks; the
+   screen shows their time and big buttons to clock on, off or take a break; then it goes back to waiting. No one signs
+   in: the terminal's secret, in this device's cookie, and the badge's short ticket identify who records what. *@
+<PageTitle>@(_status?.TerminalName ?? "Terminal") · Pulaski</PageTitle>
+
+@if (_reset is { } seconds)
+{
+    <HeadContent><meta http-equiv="refresh" content="@seconds;url=@TerminalCookie.HomePath" /></HeadContent>
+}
+
+@if (_status is null)
+{
+    <h1 class="h3">This terminal isn't enrolled</h1>
+    <p>@(_error ?? "Ask a supervisor to enrol it.")</p>
+    <a class="btn btn-primary btn-lg" href="@TerminalCookie.EnrolPath">Enrol it</a>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-baseline mb-3">
+        <h1 class="h4 mb-0">@_status.TerminalName</h1>
+        <span class="text-muted small">@_status.TerminalCode</span>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_error</div>
+    }
+
+    @if (_done is not null)
+    {
+        <div class="alert alert-success fs-5" role="status">@_done</div>
+        @foreach (var note in _notes)
+        {
+            <div class="alert alert-warning" role="status">@note</div>
+        }
+        <a class="btn btn-outline-secondary btn-lg w-100" href="@TerminalCookie.HomePath">Next person</a>
+    }
+    else if (_status.PersonId is null)
+    {
+        <EditForm Model="Input" FormName="terminal" OnSubmit="SubmitAsync" method="post">
+            @if (_needsPin)
+            {
+                <input type="hidden" name="Input.Badge" value="@Input.Badge" />
+                <label class="form-label fs-5" for="pin">Your PIN</label>
+                <InputText id="pin" type="password" inputmode="numeric" class="form-control form-control-lg terminal-badge mb-3" autocomplete="off" autofocus @bind-Value="Input.Pin" />
+                <button type="submit" class="btn btn-primary btn-lg w-100">Go</button>
+            }
+            else
+            {
+                <label class="form-label fs-5" for="badge">Badge in</label>
+                <InputText id="badge" type="password" class="form-control form-control-lg terminal-badge mb-2" autocomplete="off" autofocus @bind-Value="Input.Badge" />
+                <p class="text-muted small mb-0">Hold your badge to the reader, or type its number and press Enter.</p>
+            }
+        </EditForm>
+    }
+    else
+    {
+        var tz = _status.TimeZone;
+        <h2 class="h3 mb-1">Hello, @_status.PersonName</h2>
+        <p class="text-muted mb-3">
+            @if (_status.Sessions.Count == 0)
+            {
+                <span>You aren't on a line.</span>
+            }
+            else
+            {
+                <span>On @string.Join(", ", _status.Sessions.Select(s => $"{s.EquipmentCode} {TerminalAction.Since(s.StartedAt, tz)}")).</span>
+            }
+            @if (_status.OpenBreak is { } onBreak)
+            {
+                <span> On a break @TerminalAction.Since(onBreak.StartedAt, tz).</span>
+            }
+        </p>
+
+        <EditForm Model="Input" FormName="terminal" OnSubmit="SubmitAsync" method="post">
+            <input type="hidden" name="Input.Ticket" value="@Input.Ticket" />
+            @* Only for saying thank you: who is acting is the ticket's, checked by the API. *@
+            <input type="hidden" name="Input.Name" value="@_status.PersonName" />
+            <div class="terminal-actions mb-3">
+                @if (_status.OpenBreak is not null)
+                {
+                    <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.EndBreak, null).Value)" class="btn btn-primary">End break</button>
+                }
+                else if (_status.Sessions.Count > 0)
+                {
+                    <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.Break, null).Value)" class="btn btn-outline-primary">Start break</button>
+                    <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.PaidBreak, null).Value)" class="btn btn-outline-primary">Start paid break</button>
+                }
+                @foreach (var s in _status.Sessions)
+                {
+                    <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.ClockOff, s.Id).Value)" class="btn btn-outline-danger">Clock off @s.EquipmentCode</button>
+                }
+                @foreach (var line in _status.Lines.Where(l => _status.Sessions.All(s => s.EquipmentId != l.Id)))
+                {
+                    <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.ClockOn, line.Id).Value)"
+                            class="btn @(line.Id == _status.DefaultEquipmentId ? "btn-primary" : "btn-outline-primary")">
+                        Clock on @line.Code<span class="d-block small fw-normal">@line.Name@(line.RunningJobNumber is { } job ? $" · {job}" : "")</span>
+                    </button>
+                }
+            </div>
+            <button type="submit" name="Input.Action" value="@TerminalAction.Done" class="btn btn-link btn-lg w-100">Not me / cancel</button>
+        </EditForm>
+    }
+}
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private TerminalForm Input { get; set; } = new();
+
+    private const int IdleSeconds = 20;
+    private const int DoneSeconds = 6;
+
+    private TerminalStatusDto? _status;
+    private string? _error;
+    private string? _done;
+    private IReadOnlyList<string> _notes = [];
+    private bool _needsPin;
+    private int? _reset;
+
+    private string? Secret => TerminalCookie.Get(HttpContext);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Secret is null)
+        {
+            Navigation.NavigateTo(TerminalCookie.EnrolPath, forceLoad: true);
+            return;
+        }
+
+        if (!HttpMethods.IsPost(HttpContext.Request.Method))
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _status = await Api.GetTerminalStatusAsync(Secret!);
+        }
+        catch (ApiException ex)
+        {
+            _status = null;
+            _error = ex.Detail ?? ex.Title;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        await LoadAsync();
+        if (_status is null)
+        {
+            return;
+        }
+
+        var action = TerminalAction.Parse(Input.Action);
+        if (action is { Kind: TerminalAction.Done })
+        {
+            return;
+        }
+
+        try
+        {
+            if (action is not null && !string.IsNullOrEmpty(Input.Ticket))
+            {
+                await ActAsync(action);
+            }
+            else if (!string.IsNullOrWhiteSpace(Input.Badge))
+            {
+                await IdentifyAsync();
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Detail ?? ex.Title;
+            _reset = DoneSeconds * 2;
+        }
+    }
+
+    private async Task IdentifyAsync()
+    {
+        var identity = await Api.IdentifyBadgeAsync(Secret!, new IdentifyBadgeRequest { BadgeValue = Input.Badge, Pin = string.IsNullOrEmpty(Input.Pin) ? null : Input.Pin });
+        if (identity.NeedsPin)
+        {
+            _needsPin = true;
+            _reset = IdleSeconds;
+            return;
+        }
+
+        _status = identity.Status;
+        Input.Ticket = identity.Ticket;
+        _reset = IdleSeconds;
+    }
+
+    private async Task ActAsync(TerminalAction action)
+    {
+        var request = new TerminalActionRequest
+        {
+            Ticket = Input.Ticket!,
+            EquipmentId = action.Kind == TerminalAction.ClockOn ? action.Id : null,
+            SessionId = action.Kind == TerminalAction.ClockOff ? action.Id : null,
+            IsPaid = action.Kind == TerminalAction.PaidBreak,
+        };
+        var result = await Api.TerminalActAsync(Secret!, action.ApiAction!, request);
+
+        _done = action.Confirmation(string.IsNullOrWhiteSpace(Input.Name) ? "Done" : Input.Name, _status!.Lines.FirstOrDefault(l => l.Id == action.Id)?.Code);
+        _notes = result.Notes;
+        _reset = DoneSeconds + (result.Notes.Count > 0 ? 6 : 0);
+    }
+
+    private sealed class TerminalForm
+    {
+        public string Badge { get; set; } = "";
+
+        public string? Pin { get; set; }
+
+        public string? Ticket { get; set; }
+
+        public string? Action { get; set; }
+
+        public string? Name { get; set; }
+    }
+}

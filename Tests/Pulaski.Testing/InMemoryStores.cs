@@ -70,6 +70,8 @@ public sealed class InMemoryStores
 
     public InMemoryLabor Labor { get; } = new();
 
+    public InMemoryTerminals Terminals { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -109,6 +111,9 @@ public sealed class InMemoryStores
         services.RemoveAll<ILaborReadStore>();
         services.RemoveAll<ILaborRepository>();
         services.RemoveAll<IQualificationRepository>();
+        services.RemoveAll<ITerminalRepository>();
+        services.RemoveAll<ITerminalReadStore>();
+        services.RemoveAll<IBadgeHasher>();
         services.RemoveAll<IQualificationReadStore>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
@@ -148,6 +153,9 @@ public sealed class InMemoryStores
         services.AddSingleton<ILaborRepository>(Labor);
         services.AddSingleton<IQualificationRepository>(Labor);
         services.AddSingleton<IQualificationReadStore>(Labor);
+        services.AddSingleton<ITerminalRepository>(Terminals);
+        services.AddSingleton<ITerminalReadStore>(Terminals);
+        services.AddSingleton<IBadgeHasher>(new ReversingBadgeHasher());
         return services;
     }
 }

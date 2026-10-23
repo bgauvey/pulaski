@@ -29,10 +29,13 @@ public static class LaborSources
     /// <summary>A supervisor checked the crew onto a line.</summary>
     public const string Crew = "crew";
 
+    /// <summary>The person badged at a shop-floor terminal (D-049).</summary>
+    public const string Terminal = "terminal";
+
     /// <summary>Replaces a session of an approved shift.</summary>
     public const string Correction = "correction";
 
-    public static IReadOnlyList<string> All { get; } = [Self, Supervisor, Crew, Correction];
+    public static IReadOnlyList<string> All { get; } = [Self, Supervisor, Crew, Terminal, Correction];
 }
 
 /// <summary>A stretch of time a person spent (D-040), as the rules see it.</summary>

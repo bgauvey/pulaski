@@ -558,29 +558,40 @@ A role granted to one user (or, later, to an identity-provider group) at a site.
 | `granted_by_user_id` | uuid → app_user | yes | Who granted it; null for the first administrator. |
 | `ended_by_user_id` | uuid → app_user | yes | Who took it away. |
 
-### sec.terminal — shop-floor devices · *Planned*
+### sec.terminal — shop-floor devices · *In use (D-049)*
+
+A shared tablet or panel PC where people badge to clock on and off and take breaks. Registered on Configure → Terminals and enrolled on the device with a one-time code, which gives it a random secret it sends as `Authorization: Terminal <secret>`. Only SHA-256 hashes of the code and the secret are kept. Switched off, not deleted; a switched-off terminal is refused at once.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `code` | text | no | Unique code. |
-| `name` | text | no | Display name. |
-| `scope_equipment_id` | uuid → equipment | no | What the terminal can see; an operator badging in sees only this. |
-| `default_equipment_id` | uuid → equipment | yes | The line it opens on. |
-| `auth_mode` | text | no | `user_login`, `badge` or `badge_plus_pin`. |
-| `is_active` | boolean | no | False when retired. |
-| `last_seen_at` | timestamptz | yes | Last contact. |
+| `site_id` | uuid → equipment | no | The site, from its scope; fixed. |
+| `code` | text | no | Unique per site, upper case; fixed once created. It is the actor of what the terminal records (`terminal:<code>`). |
+| `name` | text | no | Display name, such as where it hangs. |
+| `scope_equipment_id` | uuid → equipment | no | A site, area or line: the terminal offers the active lines that run jobs at or below it. |
+| `default_equipment_id` | uuid → equipment | yes | The line it offers first; one of those it offers. |
+| `auth_mode` | text | no | `badge` or `badge_plus_pin`. |
+| `is_active` | boolean | no | False when switched off. |
+| `secret_hash` | bytea | yes | SHA-256 of the device secret; null until enrolled. Unique. Enrolling again replaces it. |
+| `enrolled_at` | timestamptz | yes | When last enrolled. |
+| `enrolment_code_hash` | bytea | yes | SHA-256 of a waiting one-time code; cleared when used. |
+| `enrolment_expires_at` | timestamptz | yes | Until when the code works (15 minutes); set exactly with the code. |
+| `last_seen_at` | timestamptz | yes | When someone last badged there. |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
-### sec.badge — badge credentials · *Planned*
+### sec.badge — badge credentials · *In use (D-049)*
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `person_id` | uuid → person | no | Whose badge. |
-| `badge_hash` | bytea | no | Keyed hash (HMAC) of the badge value; the raw value is never stored. Unique. |
-| `pin_hash` | bytea | yes | Hash of the PIN, for `badge_plus_pin`. |
-| `issued_at` | timestamptz | no | When issued. |
-| `revoked_at` | timestamptz | yes | When revoked. |
+| `person_id` | uuid → person | no | Whose badge. At most one active badge per person (`badge_active_person_uq`): a new one revokes the old. |
+| `badge_hash` | bytea | no | HMAC-SHA256 of the badge value (trimmed, upper case) with a key derived from the API's signing key; the raw value is never stored. Unique among active badges (`badge_active_value_uq`). |
+| `pin_hash` | text | yes | The PIN (4 to 8 digits), hashed like a password, for `badge_plus_pin` terminals. |
+| `issued_at`, `issued_by` | timestamptz, text | no | When and by whom. |
+| `revoked_at`, `revoked_by` | timestamptz, text | yes | When revoked; revoked badges are kept. |
+| `failed_pins` | integer | no | Wrong PINs in a row; reset by a right one. |
+| `locked_until` | timestamptz | yes | Five wrong PINs lock the badge for 5 minutes. |
+| `last_used_at` | timestamptz | yes | When it last identified its person. |
 
 ## 7. Personnel
 
@@ -932,7 +943,7 @@ Low volume and reviewed after the fact, so it is relational. Direct time on a li
 | `production_date` | date | no | The day of the shift it belongs to, or the site-local day for equipment with no shifts. |
 | `shift_schedule_id` | uuid → shift_schedule | yes | The schedule of that shift; null for equipment with no shifts. |
 | `shift_code` | text | yes | The shift; set exactly when the schedule is (`labor_shift_ck`). |
-| `source` | text | no | `self` (clocked on), `supervisor`, `crew` (check-in) or `correction`. |
+| `source` | text | no | `self` (clocked on), `supervisor`, `crew` (check-in), `terminal` (badged at a terminal; `recorded_by` is `terminal:<code>`, D-049) or `correction`. |
 | `corrects_session_id` | uuid → labor_session | yes | For a correction, the session it replaces; set exactly for corrections (`labor_correction_ck`). A session is corrected at most once (`labor_corrected_once`). |
 | `is_void` | boolean | no | A correction that removes the session it corrects. |
 | `note` | text | yes | Free text; required for corrections (by the application). |
@@ -967,7 +978,7 @@ A break's time comes out of the worked hours of every session of the person it o
 | `started_at`, `ended_at` | timestamptz | no / yes | The break; open while `ended_at` is null; end after start, at most 4 hours. |
 | `is_paid` | boolean | no | Paid breaks are reported apart from unpaid ones; both are left out of worked time. |
 | `production_date`, `shift_schedule_id`, `shift_code` | date, uuid, text | no / yes / yes | The shift of the session it started in, as on `labor_session`. |
-| `source` | text | no | `self`, `supervisor` or `correction`. |
+| `source` | text | no | `self`, `supervisor`, `terminal` (D-049) or `correction`. |
 | `corrects_break_id` | uuid → labor_break | yes | The break a correction replaces; set exactly when `source` is `correction`. A break is corrected at most once. |
 | `is_void` | boolean | no | A correction that removes the break it corrects. |
 | `note` | text | yes | Free text, up to 500 characters. |

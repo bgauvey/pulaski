@@ -142,6 +142,7 @@
     private static string Source(BreakDto b) => b.Source switch
     {
         "self" => $"Taken by {b.RecordedBy}",
+        "terminal" => $"Badged at {b.RecordedBy.Replace("terminal:", "", StringComparison.Ordinal)}",
         "correction" => b.IsVoid ? $"Removed by {b.RecordedBy}" : $"Correction by {b.RecordedBy}",
         _ => $"By {b.RecordedBy}",
     };

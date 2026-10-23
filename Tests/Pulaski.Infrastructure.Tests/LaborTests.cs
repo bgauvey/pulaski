@@ -133,4 +133,53 @@ public sealed class LaborTests(DatabaseFixture db)
         Assert.Equal(("FORK", 0), (listed.Code, listed.Holders));
         Assert.Equal([$"QA-{_s}"], listed.RequiredOn);
     }
+
+    [Fact]
+    public async Task A_terminal_is_enrolled_and_a_badge_clocks_its_person_on_and_off()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "TENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "TS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse line = await db.SendAsync(new CreateEquipmentCommand(site.Id, "TL-" + _s, "Line", null, "work_center", "production_line", true, true, false, null));
+        CreatedResponse ann = await db.SendAsync(new CreatePersonCommand(site.Id, "300-" + _s, "Ann", null, null));
+
+        CreatedResponse created = await db.SendAsync(new CreateTerminalCommand("hall", "Hall", site.Id, line.Id, TerminalAuthModes.BadgePlusPin));
+        var code = await db.SendAsync(new IssueEnrolmentCodeCommand(created.Id));
+        var enrolled = await db.SendAsync(new EnrolTerminalCommand(code.Code));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new EnrolTerminalCommand(code.Code)));
+
+        var terminal = await TerminalAsync(enrolled.Secret);
+        Assert.Equal(("HALL", created.Id), (terminal.Code, terminal.Id));
+        var listed = Assert.Single(await QueryAsync<ListTerminalsQuery, IReadOnlyList<TerminalDto>>(new ListTerminalsQuery(site.Id)));
+        Assert.Equal(($"TL-{_s}", (DateTimeOffset?)null), (listed.DefaultCode, listed.EnrolmentExpiresAt));
+        Assert.NotNull(listed.EnrolledAt);
+
+        await db.SendAsync(new IssueBadgeCommand(ann.Id, "B-" + _s, "2468"));
+        Assert.Equal(new BadgeIdentity(true, null), await db.SendAsync(new IdentifyBadgeCommand(terminal, "B-" + _s, null)));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new IdentifyBadgeCommand(terminal, "B-" + _s, "1111")));
+        var who = await db.SendAsync(new IdentifyBadgeCommand(terminal, "b-" + _s, "2468"));
+        Assert.Equal(ann.Id, who.PersonId);
+
+        var on = await db.SendAsync(new TerminalClockOnCommand(terminal, ann.Id, line.Id));
+        await db.SendAsync(new TerminalStartBreakCommand(terminal, ann.Id, false));
+        var status = await QueryAsync<GetTerminalStatusQuery, TerminalStatusDto>(new GetTerminalStatusQuery(terminal, ann.Id));
+        Assert.Equal(("Ann", on.Id, $"TL-{_s}"), (status.PersonName, Assert.Single(status.Sessions).Id, Assert.Single(status.Lines).Code));
+        Assert.NotNull(status.OpenBreak);
+        Assert.Equal((LaborSources.Terminal, "terminal:HALL"), (status.Sessions[0].Source, status.Sessions[0].RecordedBy));
+
+        await db.SendAsync(new TerminalClockOffCommand(terminal, ann.Id, on.Id));
+        status = await QueryAsync<GetTerminalStatusQuery, TerminalStatusDto>(new GetTerminalStatusQuery(terminal, ann.Id));
+        Assert.Empty(status.Sessions);
+        Assert.Null(status.OpenBreak);
+
+        var badges = await QueryAsync<ListBadgesQuery, IReadOnlyList<BadgeDto>>(new ListBadgesQuery(site.Id));
+        Assert.Equal(("Ann", true), (Assert.Single(badges).PersonName, badges[0].HasPin));
+        await db.SendAsync(new RevokeBadgeCommand(badges[0].Id, "Lost"));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new IdentifyBadgeCommand(terminal, "B-" + _s, "2468")));
+    }
+
+    private async Task<TerminalRecord> TerminalAsync(string secret)
+    {
+        await using var scope = db.Services.CreateAsyncScope();
+        return (await scope.ServiceProvider.GetRequiredService<ITerminalReadStore>().FindBySecretAsync(TerminalRules.Sha256(secret), CancellationToken.None))!;
+    }
 }

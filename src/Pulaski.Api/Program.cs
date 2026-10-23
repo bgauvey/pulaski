@@ -33,6 +33,8 @@ if (security.SigningKey.Length < 32)
 
 builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.Section));
 builder.Services.AddSingleton<TokenIssuer>();
+builder.Services.AddSingleton<BadgeTickets>();
+builder.Services.AddSingleton<Pulaski.Application.Labor.IBadgeHasher, BadgeHasher>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(jwt =>
     {
@@ -82,5 +84,9 @@ api.MapMaterialEndpoints();
 api.MapExecutionEndpoints();
 api.MapShiftEndpoints();
 api.MapLaborEndpoints();
+api.MapTerminalAdminEndpoints();
+
+// Shop-floor terminals (D-049) are not users: they authenticate with their own secret, and only here.
+app.MapGroup("/api/terminal").MapTerminalEndpoints();
 
 app.Run();

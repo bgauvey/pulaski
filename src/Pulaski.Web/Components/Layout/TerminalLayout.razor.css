@@ -1,0 +1,34 @@
+.terminal-shell {
+    display: grid;
+    place-items: start center;
+    min-height: 100vh;
+    padding: var(--space-6) var(--space-4);
+    background: var(--bg);
+}
+
+.terminal-card {
+    width: 100%;
+    max-width: 44rem;
+    padding: var(--space-6);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    font-size: 19px;
+}
+
+.terminal-card ::deep .terminal-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: var(--space-3);
+}
+
+.terminal-card ::deep .terminal-actions .btn {
+    min-height: 4.5rem;
+    font-size: 20px;
+}
+
+.terminal-card ::deep .terminal-badge {
+    font-size: 24px;
+    letter-spacing: 0.1em;
+    text-align: center;
+}

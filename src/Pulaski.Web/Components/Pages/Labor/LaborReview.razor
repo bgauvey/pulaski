@@ -161,6 +161,7 @@ else if (_shift is { } detail)
     private static string Source(LaborSessionDto row) => row.Source switch
     {
         "self" => $"Clocked on by {row.RecordedBy}",
+        "terminal" => $"Badged at {row.RecordedBy.Replace("terminal:", "", StringComparison.Ordinal)}",
         "crew" => $"Crew check-in by {row.RecordedBy}",
         "correction" => row.IsVoid ? $"Removed by {row.RecordedBy}" : $"Correction by {row.RecordedBy}",
         _ => $"By {row.RecordedBy}",

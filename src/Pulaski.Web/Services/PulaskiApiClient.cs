@@ -742,6 +742,56 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ExecutionPolicyDto> SetExecutionPolicyAsync(Guid siteId, SetExecutionPolicyRequest request, CancellationToken ct = default) =>
         SendAsync<ExecutionPolicyDto>(HttpMethod.Put, $"api/execution/sites/{siteId}/policy", request, ct);
 
+    // Terminals and badges (D-049): managing them as a signed-in user
+
+    public Task<IReadOnlyList<TerminalDto>> ListTerminalsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<TerminalDto>>($"api/terminals?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> CreateTerminalAsync(CreateTerminalRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/terminals", request, ct);
+
+    public Task<VersionResponse> UpdateTerminalAsync(Guid id, UpdateTerminalRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/terminals/{id}", request, ct);
+
+    public Task<EnrolmentCodeResponse> IssueEnrolmentCodeAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<EnrolmentCodeResponse>(HttpMethod.Post, $"api/terminals/{id}/enrolment-code", new { }, ct);
+
+    public Task<IReadOnlyList<BadgeDto>> ListBadgesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<BadgeDto>>($"api/badges?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> IssueBadgeAsync(IssueBadgeRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/badges", request, ct);
+
+    public Task<VersionResponse> RevokeBadgeAsync(Guid badgeId, RevokeBadgeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/badges/{badgeId}/revoke", request, ct);
+
+    // At a terminal (D-049): no user signs in; the terminal's secret, from its cookie, is its credential.
+
+    public Task<TerminalEnrolledResponse> EnrolTerminalAsync(EnrolTerminalRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<TerminalEnrolledResponse>(null, HttpMethod.Post, "api/terminal/enrol", request, ct);
+
+    public Task<TerminalStatusDto> GetTerminalStatusAsync(string secret, CancellationToken ct = default) =>
+        TerminalSendAsync<TerminalStatusDto>(secret, HttpMethod.Get, "api/terminal", null, ct);
+
+    public Task<BadgeIdentityResponse> IdentifyBadgeAsync(string secret, IdentifyBadgeRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<BadgeIdentityResponse>(secret, HttpMethod.Post, "api/terminal/identify", request, ct);
+
+    /// <summary>One of <c>clock-on</c>, <c>clock-off</c>, <c>breaks/start</c> or <c>breaks/end</c> for the person the ticket names.</summary>
+    public Task<LaborResponse> TerminalActAsync(string secret, string action, TerminalActionRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<LaborResponse>(secret, HttpMethod.Post, $"api/terminal/{action}", request, ct);
+
+    private async Task<T> TerminalSendAsync<T>(string? secret, HttpMethod method, string uri, object? body, CancellationToken ct)
+    {
+        var request = new HttpRequestMessage(method, uri) { Content = body is null ? null : JsonContent.Create(body) };
+        if (secret is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Terminal", secret);
+        }
+
+        using var response = await SendCoreAsync(request, ct, signedIn: false);
+        return await ReadAsync<T>(response, ct);
+    }
+
     private async Task<T> GetAsync<T>(string uri, CancellationToken ct)
     {
         using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Get, uri), ct);

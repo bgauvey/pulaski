@@ -50,9 +50,11 @@ public sealed class InMemoryLabor : ILaborRepository, ILaborReadStore, IQualific
         return id;
     }
 
-    public Guid AddLine(Guid siteId, string code, Guid? scheduleId = null)
+    public Guid AddLine(Guid siteId, string code, Guid? scheduleId = null) => AddLineWithId(Guid.CreateVersion7(), siteId, code, scheduleId);
+
+    /// <summary>A line with a given id, so the equipment store can know it too.</summary>
+    public Guid AddLineWithId(Guid id, Guid siteId, string code, Guid? scheduleId = null)
     {
-        var id = Guid.CreateVersion7();
         lock (_lock)
         {
             _equipment[id] = (siteId, code, scheduleId);

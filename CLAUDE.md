@@ -142,6 +142,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Qualifications (D-048, proposed): per-site `core.qualification`; grants (`person_qualification`) for inclusive site-local days,
   renewed by a new grant, revoked not deleted; `equipment_qualification` applies down the closure. Clock-on/check-in warn
   (`QualificationRules.Missing`), never refuse.
+- Terminals and badges (D-049, proposed): `sec.terminal` is a device, enrolled with a one-time code for a secret (SHA-256
+  stored), calling only `/api/terminal/*` with `Authorization: Terminal <secret>` (`TerminalFilter`). Badges are HMAC'd
+  (`IBadgeHasher`), PINs password-hashed, 5 wrong PINs lock 5 min. Identify returns a 2-minute ticket (`BadgeTickets`); actions
+  reuse `LaborWriter`/`BreakWriter` with source `terminal`, actor `terminal:<code>`. Kiosk is static SSR at `/terminal`.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

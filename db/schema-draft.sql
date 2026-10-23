@@ -605,18 +605,6 @@ CREATE TABLE sec.role_assignment (
 CREATE INDEX role_assignment_user_ix  ON sec.role_assignment (app_user_id) WHERE app_user_id IS NOT NULL;
 CREATE INDEX role_assignment_group_ix ON sec.role_assignment (idp_group)   WHERE idp_group IS NOT NULL;
 
--- Shop-floor terminals (tablets, panel PCs). A terminal is bound to a scope
--- so an operator who badges in only sees that line.
-CREATE TABLE sec.terminal (
-    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
-    code                    text NOT NULL UNIQUE,
-    name                    text NOT NULL,
-    scope_equipment_id      uuid NOT NULL REFERENCES core.equipment(id),
-    default_equipment_id    uuid REFERENCES core.equipment(id),
-    auth_mode               text NOT NULL CHECK (auth_mode IN ('user_login','badge','badge_plus_pin')),
-    is_active               boolean NOT NULL DEFAULT true,
-    last_seen_at            timestamptz
-);
 
 -- =====================================================================
 -- 7. PERSONNEL (ISA-95 personnel model, for labor and qualifications)
@@ -637,15 +625,47 @@ CREATE TABLE core.person (
     CONSTRAINT person_uq UNIQUE (site_id, employee_number)
 );
 
--- Badge values are credentials: store a keyed hash (HMAC), never the raw value.
-CREATE TABLE sec.badge (
-    id          uuid PRIMARY KEY DEFAULT uuidv7(),
-    person_id   uuid NOT NULL REFERENCES core.person(id),
-    badge_hash  bytea NOT NULL UNIQUE,
-    pin_hash    bytea,
-    issued_at   timestamptz NOT NULL DEFAULT now(),
-    revoked_at  timestamptz
+-- Shop-floor terminals (D-049): shared tablets and panel PCs where people badge to record their labor. A terminal is
+-- registered for a site, area or line (its scope: the lines it offers) and enrolled once with a one-time code, which
+-- gives it a long random secret; only hashes of the code and the secret are kept. Switching it off cuts it off.
+CREATE TABLE sec.terminal (
+    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
+    code                    text NOT NULL,                          -- upper case; fixed once created
+    name                    text NOT NULL,
+    scope_equipment_id      uuid NOT NULL REFERENCES core.equipment(id),
+    default_equipment_id    uuid REFERENCES core.equipment(id),     -- the line offered first
+    auth_mode               text NOT NULL CHECK (auth_mode IN ('badge','badge_plus_pin')),
+    is_active               boolean NOT NULL DEFAULT true,
+    secret_hash             bytea UNIQUE,                           -- SHA-256 of the device secret; null until enrolled
+    enrolled_at             timestamptz,
+    enrolment_code_hash     bytea,                                  -- SHA-256 of the pending one-time code
+    enrolment_expires_at    timestamptz,
+    last_seen_at            timestamptz,
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    updated_at              timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT terminal_uq UNIQUE (site_id, code),
+    CONSTRAINT terminal_enrolment_ck CHECK ((enrolment_code_hash IS NULL) = (enrolment_expires_at IS NULL))
 );
+
+-- Badges (D-049). The badge value is a credential: only a keyed hash (HMAC) is kept, never the raw value. A PIN, for
+-- terminals that ask for one, is hashed like a password. Revoked, never deleted; at most one active badge per value
+-- and per person. Wrong PINs lock the badge for a while.
+CREATE TABLE sec.badge (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    person_id       uuid NOT NULL REFERENCES core.person(id),
+    badge_hash      bytea NOT NULL,
+    pin_hash        text,
+    issued_at       timestamptz NOT NULL DEFAULT now(),
+    issued_by       text NOT NULL,
+    revoked_at      timestamptz,
+    revoked_by      text,
+    failed_pins     integer NOT NULL DEFAULT 0,
+    locked_until    timestamptz,
+    last_used_at    timestamptz
+);
+CREATE UNIQUE INDEX badge_active_value_uq ON sec.badge (badge_hash) WHERE revoked_at IS NULL;
+CREATE UNIQUE INDEX badge_active_person_uq ON sec.badge (person_id) WHERE revoked_at IS NULL;
 
 -- Qualifications (D-048): a site's skills and certifications, who holds them for which days, and which equipment needs
 -- them (a requirement applies to the equipment and everything below it). Pulaski warns, never refuses, when someone
@@ -1087,7 +1107,7 @@ CREATE TABLE core.labor_session (
     production_date         date NOT NULL,                                 -- the shift's day, or the site-local day
     shift_schedule_id       uuid REFERENCES core.shift_schedule(id),
     shift_code              text,
-    source                  text NOT NULL CHECK (source IN ('self','supervisor','crew','correction')),
+    source                  text NOT NULL CHECK (source IN ('self','supervisor','crew','terminal','correction')),
     corrects_session_id     uuid REFERENCES core.labor_session(id),
     is_void                 boolean NOT NULL DEFAULT false,                -- a correction that removes the session it corrects
     note                    text,
@@ -1135,7 +1155,7 @@ CREATE TABLE core.labor_break (
     production_date         date NOT NULL,
     shift_schedule_id       uuid REFERENCES core.shift_schedule(id),
     shift_code              text,
-    source                  text NOT NULL CHECK (source IN ('self','supervisor','correction')),
+    source                  text NOT NULL CHECK (source IN ('self','supervisor','terminal','correction')),
     corrects_break_id       uuid REFERENCES core.labor_break(id),
     is_void                 boolean NOT NULL DEFAULT false,
     note                    text,
@@ -1652,7 +1672,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0014_labor'),
     ('0015_shift_overrides'),
     ('0016_site_settings'),
-    ('0017_breaks_and_qualifications');
+    ('0017_breaks_and_qualifications'),
+    ('0018_terminals_and_badges');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -1698,6 +1719,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('site_settings.manage', 'Set a site''s changeover mode, reporting tolerances and calendar exceptions'),
     ('shifts.manage', 'Maintain shift schedules and choose which one equipment follows'),
     ('people.manage', 'Maintain people and crews'),
+    ('terminals.manage', 'Register and enrol shop-floor terminals'),
     ('security.manage', 'Maintain users, roles and what each role may do')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
@@ -1781,6 +1803,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('manager', 'site_settings.manage'),
     ('manager', 'shifts.manage'),
     ('manager', 'people.manage'),
+    ('manager', 'terminals.manage'),
     ('manager', 'labor.approve'),
     ('auditor', 'overview.view'),
     ('auditor', 'work_orders.view'),
