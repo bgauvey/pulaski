@@ -1,0 +1,333 @@
+@using System.Globalization
+@using Pulaski.Web.Services.MachineData
+@inject PulaskiApiClient Api
+@inject Downloads Downloads
+@inject TimeProvider Clock
+
+@* Utilization and OEE between two production days (D-043): by equipment, shift and product, and where the time went; each exportable as CSV. *@
+<div class="inv-toolbar flex-wrap">
+    <label class="small text-muted" for="oee-from">From</label>
+    <input id="oee-from" type="date" class="form-control w-auto" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="e => SetDay(e, true)" />
+    <label class="small text-muted" for="oee-to">to</label>
+    <input id="oee-to" type="date" class="form-control w-auto" value="@_to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="e => SetDay(e, false)" />
+    <select class="form-select w-auto" aria-label="Equipment" value="@(_equipment?.ToString() ?? "")"
+            @onchange="@(e => _equipment = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
+        <option value="">All equipment</option>
+        @foreach (var m in Machines)
+        {
+            <option value="@m.EquipmentId">@m.Code · @m.Name</option>
+        }
+    </select>
+    <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="LoadAsync">Show</button>
+    <span class="ms-auto small text-muted">Production days; at most @MaxDays days.</span>
+</div>
+
+<ProblemAlert Error="_error" />
+
+@if (_report is { } report)
+{
+    @foreach (var note in report.Notes)
+    {
+        <p class="small text-warning-strong mb-1">@note</p>
+    }
+
+    <section class="inv-section" aria-labelledby="oee-equipment">
+        <div class="inv-section-head">
+            <h2 id="oee-equipment">By equipment</h2>
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(report.Equipment.Count == 0)" @onclick="ExportEquipmentAsync">Export CSV</button>
+        </div>
+        @if (report.Equipment.Count == 0)
+        {
+            <p class="text-muted small">No equipment tracks state here.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead>@FiguresHead("Equipment")</thead>
+                    <tbody>
+                        @foreach (var e in report.Equipment)
+                        {
+                            <tr @key="e.EquipmentId">
+                                <td style="padding-left: @(0.5 + e.Depth * 1.25)rem">
+                                    <span class="fw-semibold">@e.Code</span> <span class="small text-muted">@e.Name</span>
+                                    @if (MachineView.DerivationNote(e.StateDerivation) is { } how)
+                                    {
+                                        <div class="small text-muted">@how</div>
+                                    }
+                                </td>
+                                @FiguresCells(e.Figures)
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="small text-muted">
+                Scheduled is the time its shifts cover (the whole day without shifts). Planned leaves out non-production modes and planned stops.
+                Availability = run ÷ planned; performance = output at the ideal rate ÷ run time in jobs; quality = good ÷ all output.
+                Equipment that doesn't run jobs has availability only.
+            </p>
+        }
+    </section>
+
+    <section class="inv-section" aria-labelledby="oee-shifts">
+        <div class="inv-section-head">
+            <h2 id="oee-shifts">By shift</h2>
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(ShiftRows.Count == 0)" @onclick="ExportShiftsAsync">Export CSV</button>
+        </div>
+        @if (ShiftRows.Count == 0)
+        {
+            <p class="text-muted small">No shifts worked in this period.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Day</th><th>Shift</th><th>Crew</th>@FiguresHeadCells("Equipment")</tr></thead>
+                    <tbody>
+                        @foreach (var s in ShiftRows)
+                        {
+                            <tr @key="(s.EquipmentId, s.Start)">
+                                <td>@s.ProductionDate.ToString("ddd d MMM", CultureInfo.InvariantCulture)</td>
+                                <td>@(s.ShiftCode is null ? "Whole day" : $"{s.ShiftCode} {s.ShiftName}")</td>
+                                <td>@s.CrewCode</td>
+                                <td class="fw-semibold">@s.EquipmentCode</td>
+                                @FiguresCells(s.Figures)
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="small text-muted">The top equipment of each group; choose one piece of equipment to see its shifts alone.</p>
+        }
+    </section>
+
+    <section class="inv-section" aria-labelledby="oee-products">
+        <div class="inv-section-head">
+            <h2 id="oee-products">By product</h2>
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(report.Products.Count == 0)" @onclick="ExportProductsAsync">Export CSV</button>
+        </div>
+        @if (report.Products.Count == 0)
+        {
+            <p class="text-muted small">No jobs ran in this period.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Material</th><th>Ran on</th><th class="inv-num">Runs</th><th class="inv-num">Good</th><th class="inv-num">Scrap</th>
+                            <th class="inv-num">Run h</th><th class="inv-num">Down h</th>
+                            <th class="inv-num">Avail.</th><th class="inv-num">Perf.</th><th class="inv-num">Quality</th><th class="inv-num">OEE</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in report.Products)
+                        {
+                            <tr @key="(p.MaterialId, p.UomCode)">
+                                <td><span class="fw-semibold">@p.MaterialCode</span> <span class="small text-muted">@p.MaterialName</span></td>
+                                <td>@string.Join(", ", p.EquipmentCodes)</td>
+                                <td class="inv-num">@p.Runs</td>
+                                <td class="inv-num">@MachineView.Count(p.GoodQty) @p.UomCode</td>
+                                <td class="inv-num">@MachineView.Count(p.ScrapQty) @p.UomCode</td>
+                                <td class="inv-num">@Qty(p.Figures.RunHours)</td>
+                                <td class="inv-num">@Qty(p.Figures.DownHours)</td>
+                                <td class="inv-num">@MachineView.Pct(p.Figures.AvailabilityPct)</td>
+                                <td class="inv-num">@MachineView.Pct(p.Figures.PerformancePct)</td>
+                                <td class="inv-num">@MachineView.Pct(p.Figures.QualityPct)</td>
+                                <td class="inv-num fw-semibold">@MachineView.Pct(p.Figures.OeePct)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="small text-muted">Over the working time inside each material's runs. Good and scrap are as reported; machine counts aren't reports.</p>
+        }
+    </section>
+
+    <section class="inv-section" aria-labelledby="oee-uses">
+        <div class="inv-section-head">
+            <h2 id="oee-uses">Where the time went</h2>
+            <div class="d-flex gap-2">
+                <select class="form-select form-select-sm w-auto" aria-label="Equipment for where the time went" value="@(UsesOf?.ToString() ?? "")"
+                        @onchange="@(e => _usesOf = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
+                    @foreach (var e in report.Equipment)
+                    {
+                        <option value="@e.EquipmentId">@e.Code · @e.Name</option>
+                    }
+                </select>
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(report.Utilization.Count == 0)" @onclick="ExportUsesAsync">Export CSV</button>
+            </div>
+        </div>
+        @if (UseRows.Count == 0)
+        {
+            <p class="text-muted small">No scheduled time in this period.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Use</th><th>Reason</th><th class="inv-num">Hours</th><th class="inv-num">Share</th><th class="inv-num">Stops</th></tr></thead>
+                    <tbody>
+                        @foreach (var u in UseRows)
+                        {
+                            <tr @key="(u.Use, u.ReasonCodeId, u.NoSignal)">
+                                <td>@MachineView.UseLabel(u.Use)</td>
+                                <td>
+                                    @if (u.ReasonCode is not null)
+                                    {
+                                        <span>@u.ReasonCode · @u.ReasonName</span>
+                                    }
+                                    else if (u.Use == "down")
+                                    {
+                                        <span class="chip chip-warning">@(u.NoSignal ? "No signal" : "Uncoded")</span>
+                                    }
+                                </td>
+                                <td class="inv-num">@Qty(u.Hours)</td>
+                                <td class="inv-num">@Qty(u.SharePct)%</td>
+                                <td class="inv-num">@(u.Stops > 0 ? u.Stops.ToString(CultureInfo.InvariantCulture) : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="small text-muted">Share is of the equipment's scheduled time. Code stops on the Stops tab to move time out of Uncoded.</p>
+        }
+    </section>
+}
+else if (_error is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+
+@code {
+    private const int MaxDays = 31;
+
+    [Parameter, EditorRequired]
+    public Guid SiteId { get; set; }
+
+    [Parameter]
+    public string? SiteCode { get; set; }
+
+    [Parameter]
+    public string? TimeZone { get; set; }
+
+    /// <summary>The equipment that tracks state, to choose from.</summary>
+    [Parameter]
+    public IReadOnlyList<MachineStatusDto> Machines { get; set; } = [];
+
+    private DateOnly _from;
+    private DateOnly _to;
+    private Guid? _equipment;
+    private Guid? _usesOf;
+    private OeeReportDto? _report;
+    private ApiException? _error;
+    private bool _busy;
+
+    private IReadOnlyList<OeeShiftRowDto> ShiftRows => _report is null ? [] : MachineView.TopShifts(_report);
+
+    private Guid? UsesOf => _usesOf is { } id && _report?.Equipment.Any(e => e.EquipmentId == id) == true ? id : _report?.Equipment.FirstOrDefault()?.EquipmentId;
+
+    private IReadOnlyList<UtilizationRowDto> UseRows => _report?.Utilization.Where(u => u.EquipmentId == UsesOf).ToList() ?? [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _to = DateOnly.FromDateTime(Display.ToSite(Clock.GetUtcNow(), TimeZone).DateTime);
+        _from = _to.AddDays(-6);
+        await LoadAsync();
+    }
+
+    private void SetDay(ChangeEventArgs e, bool from)
+    {
+        if (DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+        {
+            if (from)
+            {
+                _from = day;
+            }
+            else
+            {
+                _to = day;
+            }
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _report = await Api.GetOeeReportAsync(SiteId, _from, _to, _equipment);
+            (_from, _to) = (_report.From, _report.To);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Qty(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static RenderFragment FiguresHead(string first) => @<tr>@FiguresHeadCells(first)</tr>;
+
+    private static RenderFragment FiguresHeadCells(string first) =>
+        @<text>
+            <th>@first</th><th class="inv-num">Scheduled h</th><th class="inv-num">Planned h</th><th class="inv-num">Run h</th>
+            <th class="inv-num">Down h</th><th class="inv-num">Stops</th>
+            <th class="inv-num">Avail.</th><th class="inv-num">Perf.</th><th class="inv-num">Quality</th><th class="inv-num">OEE</th>
+        </text>;
+
+    private static RenderFragment FiguresCells(OeeFiguresDto f) =>
+        @<text>
+            <td class="inv-num">@Qty(f.ScheduledHours)</td>
+            <td class="inv-num">@Qty(f.PlannedHours)</td>
+            <td class="inv-num">@Qty(f.RunHours)</td>
+            <td class="inv-num" title="@(f.UncodedHours > 0 ? $"{Qty(f.UncodedHours)} h not coded, {Qty(f.NoSignalHours)} h of it no signal" : "")">
+                @Qty(f.DownHours)
+                @if (f.UncodedHours > 0)
+                {
+                    <div class="small text-warning-strong">@Qty(f.UncodedHours) uncoded</div>
+                }
+            </td>
+            <td class="inv-num">@f.Stops@(f.MicroStops > 0 ? $" + {f.MicroStops} micro" : "")</td>
+            <td class="inv-num">@MachineView.Pct(f.AvailabilityPct)</td>
+            <td class="inv-num">@MachineView.Pct(f.PerformancePct)</td>
+            <td class="inv-num">@MachineView.Pct(f.QualityPct)</td>
+            <td class="inv-num fw-semibold">@MachineView.Pct(f.OeePct)</td>
+        </text>;
+
+    private static readonly string[] FigureHeaders =
+        ["Scheduled hours", "Non-production hours", "Planned stop hours", "Planned hours", "Run hours", "Down hours", "Uncoded hours", "No signal hours",
+         "Run without job hours", "Stops", "Micro-stops", "Availability %", "Performance %", "Quality %", "OEE %"];
+
+    private static IEnumerable<object?> FigureValues(OeeFiguresDto f) =>
+        [f.ScheduledHours, f.NonProductionHours, f.PlannedStopHours, f.PlannedHours, f.RunHours, f.DownHours, f.UncodedHours, f.NoSignalHours,
+         f.RunWithoutJobHours, f.Stops, f.MicroStops, f.AvailabilityPct, f.PerformancePct, f.QualityPct, f.OeePct];
+
+    private string File(string what) => Csv.FileName(what, SiteCode, Display.ToSite(Clock.GetUtcNow(), TimeZone));
+
+    private Task ExportEquipmentAsync() => Downloads.CsvAsync(File("oee-equipment"), Csv.Write(
+        ["Equipment", "Name", .. FigureHeaders],
+        _report!.Equipment.Select(e => (IReadOnlyList<object?>)[e.Code, e.Name, .. FigureValues(e.Figures)]))).AsTask();
+
+    private Task ExportShiftsAsync() => Downloads.CsvAsync(File("oee-shifts"), Csv.Write(
+        ["Day", "Shift", "Crew", "Equipment", .. FigureHeaders],
+        _report!.Shifts.Select(s => (IReadOnlyList<object?>)[s.ProductionDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), s.ShiftCode, s.CrewCode, s.EquipmentCode,
+            .. FigureValues(s.Figures)]))).AsTask();
+
+    private Task ExportProductsAsync() => Downloads.CsvAsync(File("oee-products"), Csv.Write(
+        ["Material", "Name", "Unit", "Good", "Scrap", "Runs", "Ran on", .. FigureHeaders],
+        _report!.Products.Select(p => (IReadOnlyList<object?>)[p.MaterialCode, p.MaterialName, p.UomCode, p.GoodQty, p.ScrapQty, p.Runs, string.Join(" ", p.EquipmentCodes),
+            .. FigureValues(p.Figures)]))).AsTask();
+
+    private Task ExportUsesAsync() => Downloads.CsvAsync(File("utilization"), Csv.Write(
+        ["Equipment", "Use", "Reason code", "Reason", "Hours", "Share %", "Stops"],
+        _report!.Utilization.Select(u => (IReadOnlyList<object?>)[u.EquipmentCode, MachineView.UseLabel(u.Use),
+            u.ReasonCode ?? (u.Use == "down" ? (u.NoSignal ? "No signal" : "Uncoded") : null), u.ReasonName, u.Hours, u.SharePct, u.Stops]))).AsTask();
+}

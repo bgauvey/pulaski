@@ -61,13 +61,37 @@ public static class MachineView
     }
 
     /// <summary>How a line's state was worked out, for its tile.</summary>
-    public static string? DerivationNote(MachineStatusDto machine) => machine.StateDerivation switch
+    public static string? DerivationNote(MachineStatusDto machine) => DerivationNote(machine.StateDerivation);
+
+    /// <summary>How equipment's state and time are worked out, for a tile or a report row; null for its own tags.</summary>
+    public static string? DerivationNote(string derivation) => derivation switch
     {
         "series" => "Worst of its machines",
         "parallel" => "Best of its machines",
         "constraint_machine" => "Its constraint machine",
         _ => null,
     };
+
+    /// <summary>A percentage as the reports show it, or a dash when there is nothing to measure it against.</summary>
+    public static string Pct(decimal? value) => value is { } v ? $"{v.ToString("0.0", CultureInfo.InvariantCulture)}%" : "—";
+
+    /// <summary>The label of a use of time in the utilization report (D-043).</summary>
+    public static string UseLabel(string use) => use switch
+    {
+        "run" => "Run",
+        "micro_stop" => "Micro-stops",
+        "down" => "Down",
+        "planned" => "Planned stop",
+        "non_production" => "Non-production mode",
+        _ => use,
+    };
+
+    /// <summary>The shift rows of the top equipment of each group (a line rather than each of its machines), in time order.</summary>
+    public static IReadOnlyList<OeeShiftRowDto> TopShifts(OeeReportDto report)
+    {
+        var tops = report.Equipment.Where(e => e.Depth == 0).Select(e => e.EquipmentId).ToHashSet();
+        return [.. report.Shifts.Where(s => tops.Contains(s.EquipmentId))];
+    }
 
     public static string Count(decimal value) => value.ToString("#,0.##", CultureInfo.InvariantCulture);
 

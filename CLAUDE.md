@@ -143,6 +143,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   code, else first state on the way with one); `equipment_live_state.open_downtime_*` points at the open stop. Operators code
   (`CodeDowntimeCommand`, `downtime.code`; offered reasons in `StopSql.CodingReasons`); Operate → Machines (`machines.view`) is the
   board (`GetMachineStatusHandler` derives series/parallel/constraint lines via `LineStates`) and the stops to code.
+- Utilization and OEE reports (D-043, proposed): computed on read, never stored (`GetOeeReportHandler`, `GET /machines/oee`, at most 31
+  production days). `Utilization.Classify` (unit mode, planned-downtime job, stop reason class, Execute; no signal = down), `Combine` for
+  derived lines, `Windows`/`Slice` to shifts and runs, `OeeTally` for A × P × Q with output weighed by ideal rate (earned hours). Output is
+  production reports only, never machine counts. Machines → Utilization and OEE tab; the Overview uses its current-shift rows.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

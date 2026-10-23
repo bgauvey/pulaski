@@ -49,6 +49,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-039 | Viewing: a user sees only the screens and sites their roles allow. Each screen has a view permission, which a change permission brings with it; the API checks it on every read and keeps lists to the caller's sites; the UI leaves out what can't be seen and answers "not found" | Proposed | 2026-10-17 |
 | D-040 | Labor: people (not necessarily users) and crews per site; a shift schedule's shifts name their crew. Supervisors check crews onto lines and operators clock themselves on; direct time is shared out to the runs on the line by overlap; a supervisor approves a shift's labor, which then locks, corrections being new sessions. Reports by job (against the standard crew), person and shift | Proposed | 2026-10-18 |
 | D-042 | Deleting an edge node deactivates it and its connections and tags atomically. Deleting a tag physically removes its configuration row whether active or inactive, first clearing any quality-characteristic source reference; append a deletion event, retain time-series history, and grant the app role DELETE only on `core.equipment_tag` | Decided | 2026-10-18 |
+| D-043 | Utilization and OEE reports: worked out on read from state changes, stops, runs and production reports, between production days (at most 31), by equipment, shift and product with a breakdown of time by use and reason. Time is classified by unit mode, then by the stop's reason class, else by Execute; lines take their time from their machines like their state. Performance and quality weigh output by the ideal rate; machine counts aren't used. Nothing is stored yet | Proposed | 2026-10-19 |
 
 ## Order hierarchy
 
@@ -812,7 +813,35 @@ A stop's reason comes from its first-out code through the profile; with no code,
 
 **Machines screen** (`machines.view`, Operate → Machines): a status board refreshed every 5 seconds, each piece of equipment that tracks state in its OEE category (the site's `core.oee_state_category`, else D-005's defaults); a line set to series or parallel takes the worst or best category of the equipment tracking state below it, a constraint-machine line its machine's state. And the stops to code. Starting roles: Operator and Supervisor see and code; Planner, Quality, Manager and Auditor see.
 
-**Not yet:** OPC UA and CIP connectors; alarm and warning history; process values; rules that synthesise a state from discrete signals; OEE and utilization reports, and their rollups; splitting, merging or entering stops by hand; machine counts as production reports; running the edge as a Windows service or systemd unit (it runs as a console worker or container).
+**Not yet:** OPC UA and CIP connectors; alarm and warning history; process values; rules that synthesise a state from discrete signals; OEE rollups (the reports are D-043); splitting, merging or entering stops by hand; machine counts as production reports; running the edge as a Windows service or systemd unit (it runs as a console worker or container).
+
+## Utilization and OEE reports (D-043, proposed)
+
+Utilization and OEE by equipment, line, shift and product (charter v1 item 6), worked out on read from the history D-041 records. Machines → **Utilization and OEE**, with `machines.view` (the Overview's current-shift OEE also with `overview.view`): `GET /machines/oee?siteId&from&to&equipmentId`.
+
+**Period.** Production days `from`–`to` in the site's time zone, at most 31; a longer range keeps its last 31 days. A shift counts towards the day it starts on, so the last day's night shift is read into the next morning. Nothing after now.
+
+**Scheduled time.** Each piece of equipment's working windows from its calendar (D-038): its schedule's shifts, or the whole site-local day for equipment around the clock. Time outside them is left out.
+
+**How each moment counts** (`Utilization.Classify`), in this order:
+
+| Condition | Use | OEE |
+| --- | --- | --- |
+| Unit mode not production time (`core.unit_mode`, the site's own row else the enterprise default; Production only by default) | non-production | Left out of planned time |
+| Inside the run of a job with `counts_as_planned_downtime` | planned | Left out of planned time |
+| In a stop whose effective reason is `planned` | planned | Left out of planned time |
+| In a micro-stop, or a stop whose reason is `runtime` | run | Run time |
+| In a stop whose reason is `downtime`, or not coded | down | Availability loss |
+| Executing (PackML 6) | run | Run time |
+| Anything else, including before the first state and with the signal lost | down (no signal when Undefined) | Availability loss |
+
+**Lines** take their time as they take their state (D-041): series the worst use at each moment (down, planned, non-production, run), parallel the best, constraint machine its machine's; ties go to the first machine in tree order. A derived line's stop starts whenever it goes down or into a planned stop from run or non-production.
+
+**Figures** (`OeeTally`). Planned time = scheduled − non-production − planned stops. Availability = run ÷ planned. Performance = earned hours ÷ run time inside runs with an ideal rate, where earned hours = processed ÷ the ideal rate of the capability in effect when the run started, converted to the report's unit (D-026). Quality = good earned hours ÷ earned hours. OEE = A × P × Q. Weighing by the ideal rate lets products in different units add up. Output is production reports and corrections (`source <> 'machine'`); machine counts aren't reports (D-041). A run without an ideal rate keeps its quantities but is left out of P and Q, and the report says so in a note. Run time with no job running is shown (`RunWithoutJobHours`) but isn't in performance, since its output can't be reported. The unrounded components are returned too, so a total over several lines is worked out from them, never by averaging percentages.
+
+**Rows.** By equipment (every active piece that tracks state, in tree order; equipment that runs no jobs has availability only); by shift (each equipment × working window); by product (material and job unit, over the time inside its runs, with good and scrap in the job's unit); and the time of each equipment by use and reason, with the stops that started in the period. A stop already going on when the period began isn't counted again.
+
+**Bounds.** Stops are read back 35 days before the period; one older than that still shows as down, uncoded. Rollups (`ts.oee_rollup`) stay for later, keyed on production date, schedule and shift code (D-041), once reading on demand is too slow.
 
 ## Application architecture
 

@@ -47,4 +47,36 @@ public class MachineViewTests
         Assert.Equal("OTHER · Other", MachineView.ReasonText(stop with { OperatorReasonCode = "OTHER", OperatorReasonName = "Other" }));
         Assert.Equal("", MachineView.ReasonText(stop with { MappedReasonCode = null }));
     }
+
+    [Fact]
+    public void Report_figures_read_as_percentages_and_uses_as_words()
+    {
+        Assert.Equal(("86.7%", "100.0%", "—"), (MachineView.Pct(86.666m), MachineView.Pct(100m), MachineView.Pct(null)));
+        Assert.Equal("Micro-stops", MachineView.UseLabel("micro_stop"));
+        Assert.Equal("Non-production mode", MachineView.UseLabel("non_production"));
+        Assert.Equal("Worst of its machines", MachineView.DerivationNote("series"));
+        Assert.Null(MachineView.DerivationNote("own_tags"));
+    }
+
+    [Fact]
+    public void Shifts_are_shown_for_the_top_of_each_group()
+    {
+        Guid line = Guid.CreateVersion7(), machine = Guid.CreateVersion7();
+        var figures = new OeeFiguresDto();
+        var report = new OeeReportDto
+        {
+            Equipment =
+            [
+                new() { EquipmentId = line, Code = "L1", Name = "Line", Figures = figures },
+                new() { EquipmentId = machine, Code = "FIL", Name = "Filler", ParentId = line, Depth = 1, Figures = figures },
+            ],
+            Shifts =
+            [
+                new() { EquipmentId = line, EquipmentCode = "L1", ShiftCode = "A", Figures = figures },
+                new() { EquipmentId = machine, EquipmentCode = "FIL", ShiftCode = "A", Figures = figures },
+            ],
+        };
+
+        Assert.Equal(["L1"], MachineView.TopShifts(report).Select(s => s.EquipmentCode));
+    }
 }

@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-10-18 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-10-22 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#20-reference) tables give the exact rules.
 
@@ -1427,7 +1427,7 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 
 ## 19. Machines: live status and stops
 
-**Operate → Machines.** What every machine is doing now, as its [edge node](#18-edge-nodes-collecting-machine-data) reports it, and its stops to code.
+**Operate → Machines.** What every machine is doing now, as its [edge node](#18-edge-nodes-collecting-machine-data) reports it, its stops to code, and its utilization and OEE over past days.
 
 ### Ideas to know first
 
@@ -1452,6 +1452,18 @@ The board refreshes every 5 seconds.
 3. Click **Code** on a stop. Choose the **Reason**, add a **Comment** if you like (some reasons need one), and click **Save**. Where the stop code mapped a reason, **Confirm …** accepts it in one click; until then the list shows it as *to confirm*.
 4. **Change** on a coded stop gives it another reason. The list shows who coded it, their comment, and the reason the code gave when the two differ.
 
+### Utilization and OEE reports
+
+1. Open the **Utilization and OEE** tab.
+2. Choose the production days (**From** and **to**, at most 31 days) and, if you like, one piece of **Equipment** (it and everything below it); click **Show**. It opens on the last 7 days, all equipment.
+3. **By equipment** lists each piece of equipment that tracks state, machines indented under their line, with its scheduled, planned, run and down hours, stops, and **availability**, **performance**, **quality** and **OEE**. Down time not coded yet shows as *uncoded* under the hours.
+4. **By shift** shows the same for each shift worked, for the line (the top of each group); choose one machine to see its own shifts.
+5. **By product** shows each material made: where it ran, how many runs, good and scrap as reported, and its OEE over the time inside its runs.
+6. **Where the time went** breaks one piece of equipment's scheduled time into run, micro-stops, down (by reason, **Uncoded** or **No signal**), planned stops (by reason) and non-production modes, longest first. Choose the equipment in the section's list.
+7. **Export CSV** on each section saves it as a file.
+
+A dash means there is nothing to measure that figure against, such as performance on a machine that doesn't run jobs.
+
 ### In detail
 
 - **Who:** seeing Machines needs permission to see machines; coding stops needs permission to code machine stops (Operators and Supervisors have both).
@@ -1460,6 +1472,14 @@ The board refreshes every 5 seconds.
 - **Unit mode:** a stop keeps the unit mode it began in; one in Maintenance or Manual is shown with that mode.
 - **Counts on the board** are the machine's processed less defective counts in the run open on it.
 - **Each coding is recorded** as an event, with the reason before and after and whether it confirmed the mapped one.
+- **Scheduled time** is what the equipment's [shift schedule](#15-shift-schedules) gives it: its shifts, counted towards the day they start on; equipment without shifts (around the clock) is scheduled the whole site-local day. Time outside its shifts isn't counted, and neither is time still to come.
+- **How each moment counts:** in a unit mode that isn't production time (Maintenance, Manual) it is *non-production*; in a stop it counts by its reason's class: **planned** reasons (setup, changeover, cleaning) are planned stops, **runtime** reasons are run time, **downtime** reasons and uncoded stops are down. A micro-stop is run time. Otherwise executing is run time and anything else is down. Before a machine has sent anything, or while its signal is lost, it is down with *no signal*. Time in a job that counts as planned downtime (planned maintenance) is a planned stop.
+- **Planned time** is scheduled time less non-production modes and planned stops. **Availability** = run time ÷ planned time.
+- **Performance** = output at the ideal rate ÷ run time in jobs. The ideal rate is the line's capability for the material when the run started. Run time with no job running isn't in it (its output can't be reported). **Quality** = good ÷ good and scrap. **OEE** = availability × performance × quality. Output comes from production reports; machine counts aren't reports and aren't used.
+- **Several products** add up by their time at the ideal rate (quantity ÷ ideal rate), so different units don't matter. A run without an ideal rate (no capability, or a rate whose unit doesn't convert) is listed in a note above the tables; its output shows in the product's good and scrap but not in performance or quality.
+- **Lines:** a line set to take its state from its machines takes its time from theirs: in series, at each moment the worst (down, then planned, then non-production, then run); in parallel, the best; or its constraint machine's. Its jobs and reports are its own, so the line has full OEE; a machine below it that runs no jobs has availability only.
+- **Stops** count the stops that started in the period (a stop already going on when it began isn't counted again); micro-stops are counted separately.
+- **Worked out when you ask:** nothing is stored, so coding a stop, changing a reason's class or correcting a shift schedule changes the report at once.
 
 ---
 
@@ -1536,12 +1556,12 @@ Between two production jobs on different materials, a line needs a changeover. P
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
 - **No screens yet for** calendar exceptions (holidays, shutdowns) or the changeover setting. Your administrator sets these up.
-- **Shifts are for planning and labor only:** a one-off change to a single shift (an extra Saturday), and counts or OEE by shift aren't built yet.
+- **One-off shift changes** (an extra Saturday) aren't built yet; shifts repeat as their schedule says.
 - **Labor:** no badges or shop-floor terminals, no qualifications, no breaks, and no import of people from HR or the ERP. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
 - **No adapters yet** for other external sources or for label printing: materials come from the screen, a CSV file, or the ERP one item at a time through the API. The CSV import doesn't take capabilities, doesn't create missing classes, and there is no template file to download (the panel shows the header line).
 - **Planning rates are calculated from the ideal rate only;** calculating them from run history isn't built yet.
-- **Machine data:** there is no OEE, utilization report or stop Pareto yet, and stops can't be split, merged or entered by hand. Machine counts don't replace production reports. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
-- **Production is reported by hand.** Counts from the machines, machine state, downtime, OEE, labor and quality aren't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
+- **Machine data:** stops can't be split, merged or entered by hand. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
+- **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
 - **Batches:** the batch size is per material, not per line (a 50 kg mixer next to a 200 kg one isn't modelled). A replacement job is always rounded up to whole batches; to make fewer, cancel it. Orders from the ERP aren't imported yet, so there is no rule yet for an ERP order that isn't whole batches. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **No screen for the reporting tolerances:** the rate and consumption tolerances (110% by default) are set per site through the API.
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).

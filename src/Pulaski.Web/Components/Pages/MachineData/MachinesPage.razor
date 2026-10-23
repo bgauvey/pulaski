@@ -7,7 +7,7 @@
 @inject TimeProvider Clock
 @inject CurrentUser User
 
-@* Machines (D-041): each machine's live state, and its stops to code. The board refreshes itself every 5 seconds. *@
+@* Machines (D-041): each machine's live state, its stops to code, and utilization and OEE reports (D-043). The board refreshes itself every 5 seconds. *@
 <PageTitle>Machines · Pulaski</PageTitle>
 
 <div class="inv-head">
@@ -36,6 +36,7 @@
     <button type="button" class="inv-tab btn btn-link @(_tab == "stops" ? "active" : "")" @onclick="ShowStopsAsync">
         Stops @if (_status?.Sum(m => m.UncodedStops) is > 0 and var n) { <span class="chip chip-warning ms-1">@n to code</span> }
     </button>
+    <button type="button" class="inv-tab btn btn-link @(_tab == "reports" ? "active" : "")" @onclick="@(() => _tab = "reports")">Utilization and OEE</button>
 </nav>
 
 <ProblemAlert Error="_error" />
@@ -70,6 +71,13 @@
             </section>
         }
         <p class="small text-muted">Updated @Display.SiteTime(_loadedAt, Sites.Site?.TimeZone) · refreshes every 5 seconds.</p>
+    }
+}
+else if (_tab == "reports")
+{
+    @if (Sites.SiteId is { } reportSite)
+    {
+        <OeeReports @key="reportSite" SiteId="reportSite" SiteCode="@Sites.Site?.Code" TimeZone="@Sites.Site?.TimeZone" Machines="@(_status ?? [])" />
     }
 }
 else

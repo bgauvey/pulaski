@@ -209,10 +209,11 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
             ("to", to.ToString("O", System.Globalization.CultureInfo.InvariantCulture)), ("equipmentId", equipmentId),
             ("uncodedOnly", uncodedOnly), ("includeMicroStops", includeMicroStops)), ct);
 
-    public Task<OeeReportDto> GetOeeReportAsync(Guid siteId, DateOnly from, DateOnly to, CancellationToken ct = default) =>
+    public Task<OeeReportDto> GetOeeReportAsync(Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId = null, CancellationToken ct = default) =>
         GetAsync<OeeReportDto>(Query("api/machines/oee", ("siteId", siteId),
             ("from", from.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),
-            ("to", to.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture))), ct);
+            ("to", to.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),
+            ("equipmentId", equipmentId)), ct);
 
     public Task<DowntimeCodedResponse> CodeStopAsync(Guid id, CodeDowntimeRequest request, CancellationToken ct = default) =>
         SendAsync<DowntimeCodedResponse>(HttpMethod.Post, $"api/machines/stops/{id}/code", request, ct);

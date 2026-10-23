@@ -79,6 +79,7 @@ public class OeeReportHandlerTests
         Assert.Equal((8m, 0.5m, 7.5m, 6.5m, 1m, 0m), (line.ScheduledHours, line.PlannedStopHours, line.PlannedHours, line.RunHours, line.DownHours, line.UncodedHours));
         Assert.Equal(2, line.Stops);
         Assert.Equal((86.7m, 81.5m, 94.3m, 66.7m), (line.AvailabilityPct, line.PerformancePct, line.QualityPct, line.OeePct));
+        Assert.Equal((7.5m, 6.5m, 6.5m, 5.3m, 5m), (line.PlannedHoursForOee, line.RunHoursForAvailability, line.RatedRunHoursForPerformance, line.IdealHours, line.GoodIdealHours));
 
         // A machine below the line has no runs of its own: availability only.
         var filler = report.Equipment[1].Figures;
