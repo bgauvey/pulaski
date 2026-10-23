@@ -117,12 +117,28 @@ internal static class SchedulingEndpoints
             TypedResults.Ok(await handler.HandleAsync(new ClearRunStandardCommand(id, request.Version, request.Reason), ct)))
         .RequirePermission(Permissions.RateModify, Site.Of(SiteOf.RunStandard));
 
+        // A planning rate from run history (D-045): reviewed first, then accepted; or back to the ideal rate.
+        group.MapGet("/run-standards/{id:guid}/history-rate", async Task<Ok<RunHistoryRateDto>> (
+            Guid id, int? days, IQueryHandler<GetRunHistoryRateQuery, RunHistoryRateDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetRunHistoryRateQuery(id, days ?? Domain.Scheduling.RunHistoryRate.DefaultDays), ct)))
+        .RequireAny(Site.Of(SiteOf.RunStandard), Permissions.MaterialsView, Permissions.ScheduleView);
+
+        group.MapPost("/run-standards/{id:guid}/history-rate", async Task<Ok<VersionResponse>> (
+            Guid id, AdoptHistoryRateRequest request, ICommandHandler<AdoptHistoryRateCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new AdoptHistoryRateCommand(id, request.Version, request.Days, request.RatePerHour), ct)))
+        .RequirePermission(Permissions.RateModify, Site.Of(SiteOf.RunStandard));
+
+        group.MapPost("/run-standards/{id:guid}/ideal-rate", async Task<Ok<VersionResponse>> (
+            Guid id, UseIdealRateRequest request, ICommandHandler<UseIdealRateCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new UseIdealRateCommand(id, request.Version), ct)))
+        .RequirePermission(Permissions.RateModify, Site.Of(SiteOf.RunStandard));
+
         group.MapGet("/sites/{siteId:guid}/policy", async Task<Ok<SchedulingPolicyDto>> (
             Guid siteId,
             IQueryHandler<GetSchedulingPolicyQuery, SchedulingPolicyDto> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new GetSchedulingPolicyQuery(siteId), ct)))
-        .RequireAny(Site.Route(), Permissions.ScheduleView, Permissions.SiteSettings);
+        .RequireAny(Site.Route(), Permissions.ScheduleView, Permissions.SiteSettingsView);
 
         group.MapPut("/sites/{siteId:guid}/policy", async Task<Ok<VersionResponse>> (
             Guid siteId,

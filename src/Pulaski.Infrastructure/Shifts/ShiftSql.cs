@@ -11,7 +11,7 @@ internal static class ShiftSql
 
     public const string Columns = """
         s.id, s.site_id, site.code AS site_code, s.code, s.name, s.description, s.cycle_days, s.cycle_start, s.shifts::text AS shifts_json,
-        s.is_active, s.xmin::text::bigint AS version
+        s.overrides::text AS overrides_json, s.is_active, s.xmin::text::bigint AS version
         """;
 
     /// <summary>
@@ -21,7 +21,8 @@ internal static class ShiftSql
     public const string EquipmentCalendars = """
         SELECT t.id AS equipment_id, t.site_id, t.code, coalesce(site.time_zone, 'UTC') AS time_zone,
                src.code AS source_code, coalesce(src.calendar_mode, 'inherit') AS mode,
-               s.id AS schedule_id, s.code AS schedule_code, s.name AS schedule_name, s.cycle_days, s.cycle_start, s.shifts::text AS shifts_json
+               s.id AS schedule_id, s.code AS schedule_code, s.name AS schedule_name, s.cycle_days, s.cycle_start, s.shifts::text AS shifts_json,
+               s.overrides::text AS overrides_json
         FROM core.equipment t
         LEFT JOIN core.equipment site ON site.id = t.site_id
         LEFT JOIN LATERAL (
@@ -51,16 +52,23 @@ internal static class ShiftSql
         public int CycleDays { get; init; }
         public DateOnly CycleStart { get; init; }
         public string? ShiftsJson { get; init; }
+        public string? OverridesJson { get; init; }
 
         /// <summary>The schedule it follows, or null (none set, or around the clock).</summary>
         public Domain.Shifts.ShiftSchedule? Schedule() => Mode == "schedule" && ScheduleCode is { } code
-            ? ShiftMapping.ToDomain(code, ScheduleName ?? code, CycleDays, CycleStart, Read(ShiftsJson ?? "[]"))
+            ? ShiftMapping.ToDomain(code, ScheduleName ?? code, CycleDays, CycleStart, Read(ShiftsJson ?? "[]"), ReadOverrides(OverridesJson))
             : null;
     }
 
     public static string Write(IReadOnlyList<ShiftDto> shifts) => JsonSerializer.Serialize(shifts, Json);
 
     public static IReadOnlyList<ShiftDto> Read(string json) => JsonSerializer.Deserialize<List<ShiftDto>>(json, Json) ?? [];
+
+    /// <summary>A schedule's date overrides (D-042), stored as one camelCase jsonb array like its shifts.</summary>
+    public static string WriteOverrides(IReadOnlyList<ShiftOverrideDto>? overrides) => JsonSerializer.Serialize(overrides ?? [], Json);
+
+    public static IReadOnlyList<ShiftOverrideDto> ReadOverrides(string? json) =>
+        string.IsNullOrEmpty(json) ? [] : JsonSerializer.Deserialize<List<ShiftOverrideDto>>(json, Json) ?? [];
 
     public sealed class Row
     {
@@ -73,10 +81,11 @@ internal static class ShiftSql
         public int CycleDays { get; init; }
         public DateOnly CycleStart { get; init; }
         public string ShiftsJson { get; init; } = "[]";
+        public string OverridesJson { get; init; } = "[]";
         public bool IsActive { get; init; }
         public long Version { get; init; }
 
-        public ShiftScheduleRecord ToRecord() => new(Id, SiteId, Code, Name, Description, CycleDays, CycleStart, Read(ShiftsJson), IsActive);
+        public ShiftScheduleRecord ToRecord() => new(Id, SiteId, Code, Name, Description, CycleDays, CycleStart, Read(ShiftsJson), IsActive, ReadOverrides(OverridesJson));
 
         public ShiftScheduleDto ToDto(IReadOnlyList<string> usedBy)
         {
@@ -92,6 +101,7 @@ internal static class ShiftSql
                 CycleDays = CycleDays,
                 CycleStart = CycleStart,
                 Shifts = shifts,
+                Overrides = ReadOverrides(OverridesJson),
                 IsActive = IsActive,
                 HoursPerCycle = ShiftMapping.Hours(ShiftMapping.ToDomain(Code, Name, CycleDays, CycleStart, shifts).HoursPerCycle),
                 UsedBy = usedBy,

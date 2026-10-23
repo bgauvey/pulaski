@@ -19,15 +19,15 @@ internal sealed class ShiftRepository(DbSession session) : IShiftRepository
     private const string IsSite = "SELECT EXISTS (SELECT 1 FROM core.equipment WHERE id = @Id AND level = 'site')";
 
     private const string Insert = """
-        INSERT INTO core.shift_schedule (id, site_id, code, name, description, cycle_days, cycle_start, shifts, is_active, created_at, updated_at)
-        VALUES (@Id, @SiteId, @Code, @Name, @Description, @CycleDays, @CycleStart, @Shifts::jsonb, @IsActive, @At, @At)
+        INSERT INTO core.shift_schedule (id, site_id, code, name, description, cycle_days, cycle_start, shifts, overrides, is_active, created_at, updated_at)
+        VALUES (@Id, @SiteId, @Code, @Name, @Description, @CycleDays, @CycleStart, @Shifts::jsonb, @Overrides::jsonb, @IsActive, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     private const string Update = """
         UPDATE core.shift_schedule
         SET name = @Name, description = @Description, cycle_days = @CycleDays, cycle_start = @CycleStart, shifts = @Shifts::jsonb,
-            is_active = @IsActive, updated_at = @At
+            overrides = @Overrides::jsonb, is_active = @IsActive, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -35,6 +35,11 @@ internal sealed class ShiftRepository(DbSession session) : IShiftRepository
     private const string CrewCodes = "SELECT code FROM core.crew WHERE site_id = @SiteId AND is_active ORDER BY code";
 
     private const string Users = "SELECT code FROM core.equipment WHERE shift_schedule_id = @Id ORDER BY code";
+
+    private const string ShiftApproved = """
+        SELECT EXISTS (SELECT 1 FROM core.labor_approval
+                       WHERE site_id = @SiteId AND production_date = @Date AND shift_schedule_id = @ScheduleId AND shift_code = @Code)
+        """;
 
     private const string GetCalendar = """
         SELECT id, site_id, code, level, calendar_mode AS mode, shift_schedule_id, xmin::text::bigint AS version
@@ -82,6 +87,9 @@ internal sealed class ShiftRepository(DbSession session) : IShiftRepository
     public Task<long> SetEquipmentCalendarAsync(Guid equipmentId, string mode, Guid? shiftScheduleId, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(SetCalendar, new { Id = equipmentId, Mode = mode, ScheduleId = shiftScheduleId, At = at }, cancellationToken);
 
+    public Task<bool> IsShiftApprovedAsync(Guid siteId, Guid scheduleId, DateOnly productionDate, string code, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(ShiftApproved, new { SiteId = siteId, ScheduleId = scheduleId, Date = productionDate, Code = code }, cancellationToken);
+
     private static object Args(ShiftScheduleRecord s, DateTimeOffset at) => new
     {
         s.Id,
@@ -92,6 +100,7 @@ internal sealed class ShiftRepository(DbSession session) : IShiftRepository
         s.CycleDays,
         s.CycleStart,
         Shifts = ShiftSql.Write(s.Shifts),
+        Overrides = ShiftSql.WriteOverrides(s.Overrides),
         s.IsActive,
         At = at,
     };

@@ -73,7 +73,11 @@ public interface IExecutionRepository
     /// <summary>Closes the work order's completed jobs, with a status change each; returns how many.</summary>
     Task<int> CloseCompletedJobsAsync(Guid workOrderId, DateTimeOffset at, CancellationToken cancellationToken);
 
-    Task UpsertPolicyAsync(Guid siteId, ExecutionPolicy policy, DateTimeOffset at, CancellationToken cancellationToken);
+    /// <summary>The site's own policy, locked, with its version; null while it uses the defaults.</summary>
+    Task<Versioned<ExecutionPolicy>?> GetPolicyForUpdateAsync(Guid siteId, CancellationToken cancellationToken);
+
+    /// <returns>The policy's new version.</returns>
+    Task<long> UpsertPolicyAsync(Guid siteId, ExecutionPolicy policy, DateTimeOffset at, CancellationToken cancellationToken);
 
     /// <summary>True when the run already has its one partial batch (D-036).</summary>
     Task<bool> RunHasPartialBatchAsync(Guid runId, CancellationToken cancellationToken);

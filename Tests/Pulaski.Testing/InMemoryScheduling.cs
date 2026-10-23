@@ -446,6 +446,9 @@ public sealed class InMemoryScheduling : ISchedulingReadStore, ISchedulingReposi
         }
     }
 
+    public Task<long> UpdateRunStandardCalculationAsync(RunStandard standard, DateTimeOffset at, CancellationToken cancellationToken) =>
+        UpdateRunStandardModificationAsync(standard, at, cancellationToken);
+
     public Task<Versioned<string>?> GetPolicyForUpdateAsync(Guid siteId, CancellationToken cancellationToken) =>
         Task.FromResult(FindPolicy(siteId));
 

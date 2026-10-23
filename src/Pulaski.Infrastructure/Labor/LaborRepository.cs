@@ -49,7 +49,7 @@ internal sealed class LaborRepository(DbSession session) : ILaborRepository
         RETURNING xmin::text::bigint
         """;
 
-    private const string GetSchedule = "SELECT code, name, cycle_days, cycle_start, shifts::text AS shifts_json FROM core.shift_schedule WHERE id = @Id";
+    private const string GetSchedule = "SELECT code, name, cycle_days, cycle_start, shifts::text AS shifts_json, overrides::text AS overrides_json FROM core.shift_schedule WHERE id = @Id";
 
     private const string TimeZone = "SELECT time_zone FROM core.equipment WHERE id = @Id AND level = 'site'";
 
@@ -151,7 +151,7 @@ internal sealed class LaborRepository(DbSession session) : ILaborRepository
 
     public async Task<ShiftSchedule?> GetScheduleAsync(Guid scheduleId, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<ScheduleRow>(GetSchedule, new { Id = scheduleId }, cancellationToken) is { } r
-            ? Application.Shifts.ShiftMapping.ToDomain(r.Code, r.Name, r.CycleDays, r.CycleStart, ShiftSql.Read(r.ShiftsJson))
+            ? Application.Shifts.ShiftMapping.ToDomain(r.Code, r.Name, r.CycleDays, r.CycleStart, ShiftSql.Read(r.ShiftsJson), ShiftSql.ReadOverrides(r.OverridesJson))
             : null;
 
     public Task<string?> GetSiteTimeZoneAsync(Guid siteId, CancellationToken cancellationToken) =>
@@ -263,6 +263,7 @@ internal sealed class LaborRepository(DbSession session) : ILaborRepository
         public int CycleDays { get; init; }
         public DateOnly CycleStart { get; init; }
         public string ShiftsJson { get; init; } = "[]";
+        public string OverridesJson { get; init; } = "[]";
     }
 
     private sealed class JobRow

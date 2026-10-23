@@ -47,6 +47,41 @@ internal static class ShiftEndpoints
                 id, request.Version, request.Name, request.Description, request.CycleDays, request.CycleStart, request.Shifts, request.IsActive), ct)))
         .RequirePermission(Permissions.Shifts, Site.Of(SiteOf.ShiftSchedule));
 
+        // One date's change to a schedule (D-042): set it, or take it off so the cycle applies again.
+        schedules.MapPut("/{id:guid}/overrides", async Task<Ok<VersionResponse>> (
+            Guid id, SetShiftOverrideRequest request, ICommandHandler<SetShiftOverrideCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetShiftOverrideCommand(
+                id, request.Version, request.Date, request.Code, request.IsWorking, request.Name, request.Start, request.Minutes, request.Crew, request.Note), ct)))
+        .RequirePermission(Permissions.Shifts, Site.Of(SiteOf.ShiftSchedule));
+
+        schedules.MapDelete("/{id:guid}/overrides/{date}/{code}", async Task<Ok<VersionResponse>> (
+            Guid id, DateOnly date, string code, long version, ICommandHandler<RemoveShiftOverrideCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RemoveShiftOverrideCommand(id, version, date, code), ct)))
+        .RequirePermission(Permissions.Shifts, Site.Of(SiteOf.ShiftSchedule));
+
+        // Time taken out of the calendar of a site, area or line and everything below it (D-043).
+        var exceptions = routes.MapGroup("/calendar-exceptions").WithTags("Site settings");
+
+        exceptions.MapGet("/", async Task<Ok<IReadOnlyList<CalendarExceptionDto>>> (
+            Guid siteId, DateTimeOffset? from, bool? includeRemoved, IQueryHandler<ListCalendarExceptionsQuery, IReadOnlyList<CalendarExceptionDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListCalendarExceptionsQuery(siteId, from, includeRemoved ?? false), ct)))
+        .RequireAny(Site.Query(), Permissions.SiteSettingsView, Permissions.ScheduleView, Permissions.ShiftsView);
+
+        exceptions.MapPost("/", async Task<Created<CreatedResponse>> (
+            CreateCalendarExceptionRequest request, ICommandHandler<CreateCalendarExceptionCommand, CreatedResponse> handler, CancellationToken ct) =>
+        {
+            var created = await handler.HandleAsync(new CreateCalendarExceptionCommand(
+                request.ScopeEquipmentId, request.Kind, request.StartsAt, request.EndsAt, request.Note), ct);
+            return TypedResults.Created($"/api/calendar-exceptions/{created.Id}", created);
+        })
+        .RequirePermission(Permissions.SiteSettings, Site.FromBody<CreateCalendarExceptionRequest>(SiteOf.Equipment, r => r.ScopeEquipmentId));
+
+        exceptions.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (
+            Guid id, UpdateCalendarExceptionRequest request, ICommandHandler<UpdateCalendarExceptionCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new UpdateCalendarExceptionCommand(
+                id, request.Version, request.Kind, request.StartsAt, request.EndsAt, request.Note, request.IsActive), ct)))
+        .RequirePermission(Permissions.SiteSettings, Site.Of(SiteOf.CalendarException));
+
         routes.MapPut("/equipment/{id:guid}/calendar", async Task<Ok<VersionResponse>> (
             Guid id, SetEquipmentCalendarRequest request, ICommandHandler<SetEquipmentCalendarCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new SetEquipmentCalendarCommand(id, request.Version, request.Mode, request.ShiftScheduleId), ct)))

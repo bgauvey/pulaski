@@ -62,6 +62,11 @@ public static class EventTypes
     public const string EquipmentCalendarSet = "pulaski.equipment.calendar_set.v1";
     public const string ShiftScheduleCreated = "pulaski.shift_schedule.created.v1";
     public const string ShiftScheduleUpdated = "pulaski.shift_schedule.updated.v1";
+    public const string ShiftOverrideSet = "pulaski.shift_schedule.override_set.v1";
+    public const string ShiftOverrideRemoved = "pulaski.shift_schedule.override_removed.v1";
+    public const string CalendarExceptionCreated = "pulaski.calendar_exception.created.v1";
+    public const string CalendarExceptionUpdated = "pulaski.calendar_exception.updated.v1";
+    public const string CalendarExceptionRemoved = "pulaski.calendar_exception.removed.v1";
     public const string CrewCreated = "pulaski.crew.created.v1";
     public const string CrewUpdated = "pulaski.crew.updated.v1";
     public const string PersonCreated = "pulaski.person.created.v1";

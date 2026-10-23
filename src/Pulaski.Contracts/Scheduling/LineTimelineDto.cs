@@ -93,6 +93,9 @@ public sealed record TimelineSegmentDto
     public DateTimeOffset? DueAt { get; init; }
     public DateTimeOffset? EarliestStart { get; init; }
 
+    /// <summary>When the job's process links let it start, from the projected times of the jobs it follows (D-046); null without links.</summary>
+    public DateTimeOffset? LinkReadyAt { get; init; }
+
     /// <summary>Finish by: the end of a group job's window, kept when a line takes it (D-022).</summary>
     public DateTimeOffset? LatestEnd { get; init; }
 

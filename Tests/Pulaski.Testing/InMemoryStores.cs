@@ -60,6 +60,14 @@ public sealed class InMemoryStores
 
     public InMemoryShifts Shifts { get; } = new();
 
+    public InMemoryCalendarExceptions CalendarExceptions { get; } = new();
+
+    public InMemoryProductionReports ProductionReports { get; } = new();
+
+    private InMemoryRunHistory? _runHistory;
+
+    public InMemoryRunHistory RunHistory => _runHistory ??= new(Scheduling);
+
     public InMemoryLabor Labor { get; } = new();
 
     /// <summary>Replaces any registered stores with these instances.</summary>
@@ -94,6 +102,10 @@ public sealed class InMemoryStores
         services.RemoveAll<IPasswordHasher>();
         services.RemoveAll<IShiftReadStore>();
         services.RemoveAll<IShiftRepository>();
+        services.RemoveAll<ICalendarExceptionReadStore>();
+        services.RemoveAll<ICalendarExceptionRepository>();
+        services.RemoveAll<IProductionReportReadStore>();
+        services.RemoveAll<IRunHistoryReadStore>();
         services.RemoveAll<ILaborReadStore>();
         services.RemoveAll<ILaborRepository>();
 
@@ -126,6 +138,10 @@ public sealed class InMemoryStores
         services.AddSingleton<IPasswordHasher>(new PlainPasswordHasher());
         services.AddSingleton<IShiftReadStore>(Shifts);
         services.AddSingleton<IShiftRepository>(Shifts);
+        services.AddSingleton<ICalendarExceptionReadStore>(CalendarExceptions);
+        services.AddSingleton<ICalendarExceptionRepository>(CalendarExceptions);
+        services.AddSingleton<IProductionReportReadStore>(ProductionReports);
+        services.AddSingleton<IRunHistoryReadStore>(RunHistory);
         services.AddSingleton<ILaborReadStore>(Labor);
         services.AddSingleton<ILaborRepository>(Labor);
         return services;

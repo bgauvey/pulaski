@@ -87,6 +87,23 @@ public sealed record ClearRunStandardRequest
     public string? Reason { get; init; }
 }
 
+/// <summary>
+/// Makes the rate worked out from run history the calculated planning rate (D-045). <see cref="RatePerHour"/> is the rate that
+/// was reviewed: if the history now gives another, nothing changes and the answer is 409.
+/// </summary>
+public sealed record AdoptHistoryRateRequest
+{
+    public long Version { get; init; }
+    public int Days { get; init; } = 90;
+    public decimal RatePerHour { get; init; }
+}
+
+/// <summary>Takes the calculated planning rate back to the capability's ideal rate, which it then follows (D-045).</summary>
+public sealed record UseIdealRateRequest
+{
+    public long Version { get; init; }
+}
+
 /// <summary>Version 0 when the site still uses the default policy.</summary>
 public sealed record SetSchedulingPolicyRequest
 {

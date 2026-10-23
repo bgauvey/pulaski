@@ -6,7 +6,8 @@ namespace Pulaski.Domain.Scheduling;
 /// when its first run started; <c>DueAt</c> is the work order due date. <c>FirmedStart</c> is
 /// set for a firmed job: it is anchored there and does not move in time (D-019).
 /// <c>ToRateUnit</c> converts a quantity in the job's unit to the unit of its run standard, when
-/// they differ and the material converts between them (D-026).
+/// they differ and the material converts between them (D-026). <c>LinkReadyAt</c> is when its process links let it start,
+/// from the projected times of the jobs it follows (D-046), and <c>LinkLabel</c> names them.
 /// </summary>
 public sealed record PlannedJob(
     Guid JobId,
@@ -22,7 +23,9 @@ public sealed record PlannedJob(
     DateTimeOffset? DueAt,
     DateTimeOffset? FirmedStart = null,
     DateTimeOffset? LatestEnd = null,
-    decimal? ToRateUnit = null);
+    decimal? ToRateUnit = null,
+    DateTimeOffset? LinkReadyAt = null,
+    string? LinkLabel = null);
 
 /// <summary>The effective run-standard rate for one material on the line (D-016).</summary>
 public sealed record RunRate(Guid MaterialId, Guid UomId, decimal RatePerHour, string Source);
@@ -67,13 +70,16 @@ public static class ScheduleWarningCode
     public const string NoRunner = "no_runner";
     public const string WindowTooShort = "window_too_short";
     public const string WindowPassed = "window_passed";
+    public const string LinkNotMet = "link_not_met";
+    public const string LinkCycle = "link_cycle";
 }
 
 public sealed record ScheduleWarning(string Code, string Message);
 
 /// <summary>
 /// A span on the line's timeline. For a placeholder, <see cref="JobId"/> is the production job it
-/// precedes. <see cref="Start"/> of a started job is when it actually started.
+/// precedes. <see cref="Start"/> of a started job is when it actually started. <see cref="LinkReadyAt"/> is when the job's
+/// process links let it start, when it has any (D-046).
 /// </summary>
 public sealed record TimelineSegment(
     string Kind,
@@ -85,7 +91,8 @@ public sealed record TimelineSegment(
     RunRate? Rate,
     MaterialRef? FromMaterial,
     ChangeoverResolution? Changeover,
-    IReadOnlyList<ScheduleWarning> Warnings);
+    IReadOnlyList<ScheduleWarning> Warnings,
+    DateTimeOffset? LinkReadyAt = null);
 
 /// <summary>
 /// Two segments on the same line whose times intersect, from <see cref="Start"/> to <see cref="End"/>.
@@ -237,10 +244,27 @@ public static class TimelineProjector
             }
 
             from = firmed > plan.Now ? firmed : plan.Now;
+
+            // Firmed means it keeps its time (D-019), so a link it can't meet is reported, not fixed (D-046).
+            if (job.LinkReadyAt is { } ready && ready > from)
+            {
+                warnings.Add(new ScheduleWarning(
+                    ScheduleWarningCode.LinkNotMet,
+                    $"Firmed to start {from:u}, but {job.LinkLabel ?? "the operation it follows"} lets it start only at {ready:u}."));
+            }
         }
-        else if (!started && job.EarliestStart is { } earliest && earliest > from)
+        else if (!started)
         {
-            from = earliest;
+            if (job.EarliestStart is { } earliest && earliest > from)
+            {
+                from = earliest;
+            }
+
+            // It waits for the operations it follows (D-046).
+            if (job.LinkReadyAt is { } ready && ready > from)
+            {
+                from = ready;
+            }
         }
 
         var placed = plan.Calendar.Place(from, work);
@@ -259,7 +283,7 @@ public static class TimelineProjector
         }
 
         var start = started && job.StartedAt is { } actual ? actual : placed.Start;
-        return new TimelineSegment(SegmentKind.Job, job.JobId, start, placed.End, work, remaining, rate, null, null, warnings);
+        return new TimelineSegment(SegmentKind.Job, job.JobId, start, placed.End, work, remaining, rate, null, null, warnings, job.LinkReadyAt);
     }
 
     private static (TimeSpan Work, decimal? Remaining, RunRate? Rate) ProductionWork(

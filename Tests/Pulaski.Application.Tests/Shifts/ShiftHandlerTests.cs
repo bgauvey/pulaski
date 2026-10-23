@@ -30,6 +30,10 @@ public class ShiftHandlerTests
 
     private UpdateShiftScheduleHandler Update() => new(_f.Stores.UnitOfWork, Shifts, _f.Stores.Events, _f.Events);
 
+    private SetShiftOverrideHandler SetOverride() => new(_f.Stores.UnitOfWork, Shifts, _f.Stores.Events, _f.Events);
+
+    private RemoveShiftOverrideHandler RemoveOverride() => new(_f.Stores.UnitOfWork, Shifts, _f.Stores.Events, _f.Events);
+
     private SetEquipmentCalendarHandler Set() => new(_f.Stores.UnitOfWork, Shifts, _f.Stores.Events, _f.Events);
 
     private Task<Contracts.Common.CreatedResponse> CreateAsync(Guid site, string code = "1x8", params ShiftDto[] shifts) =>
@@ -125,5 +129,63 @@ public class ShiftHandlerTests
         }), CancellationToken.None);
         Assert.Empty(bad.Shifts);
         Assert.NotEmpty(bad.Problems);
+    }
+
+    [Fact]
+    public async Task A_one_off_change_takes_the_cycles_times_when_left_out_and_keeps_the_cycle()
+    {
+        var created = await CreateAsync(_site);
+        var saturday = new DateOnly(2026, 10, 24);
+
+        // An extra Saturday shift A, with A's times from the cycle.
+        await SetOverride().HandleAsync(new SetShiftOverrideCommand(
+            created.Id, Shifts.Schedule(created.Id)!.Version, saturday, "a", IsWorking: true, null, null, null, null, " Overtime "), CancellationToken.None);
+
+        var saved = Shifts.Schedule(created.Id)!.Value;
+        var extra = Assert.Single(saved.Overrides!);
+        Assert.Equal(("a", "Days", "06:00", 480, "Overtime"), (extra.Code, extra.Name, extra.Start, extra.Minutes, extra.Note));
+        Assert.Equal([0, 1, 2, 3, 4], Assert.Single(saved.Shifts).Days);
+        Assert.Equal(EventTypes.ShiftOverrideSet, _f.Stores.Events.Appended[^1].Type);
+
+        // Changing it replaces it; taking A off on a Monday adds a second; changing the schedule keeps both.
+        await SetOverride().HandleAsync(new SetShiftOverrideCommand(
+            created.Id, Shifts.Schedule(created.Id)!.Version, saturday, "A", IsWorking: true, null, "07:00", 300, null, null), CancellationToken.None);
+        await SetOverride().HandleAsync(new SetShiftOverrideCommand(
+            created.Id, Shifts.Schedule(created.Id)!.Version, Monday, "A", IsWorking: false, null, null, null, null, "Holiday"), CancellationToken.None);
+        await Update().HandleAsync(new UpdateShiftScheduleCommand(
+            created.Id, Shifts.Schedule(created.Id)!.Version, "Renamed", null, 7, Monday, [Days], IsActive: true), CancellationToken.None);
+
+        saved = Shifts.Schedule(created.Id)!.Value;
+        Assert.Equal([(Monday, false, "06:00"), (saturday, true, "07:00")], saved.Overrides!.Select(o => (o.Date, o.IsWorking, o.Start)));
+
+        await RemoveOverride().HandleAsync(new RemoveShiftOverrideCommand(created.Id, Shifts.Schedule(created.Id)!.Version, saturday, "A"), CancellationToken.None);
+        Assert.Equal([Monday], Shifts.Schedule(created.Id)!.Value.Overrides!.Select(o => o.Date));
+        Assert.Equal(EventTypes.ShiftOverrideRemoved, _f.Stores.Events.Appended[^1].Type);
+    }
+
+    [Fact]
+    public async Task One_off_changes_are_refused_when_they_cant_apply()
+    {
+        var created = await CreateAsync(_site);
+        long Version() => Shifts.Schedule(created.Id)!.Version;
+        SetShiftOverrideCommand Change(DateOnly date, string code, bool working = true, string? start = null, int? minutes = null, string? crew = null) =>
+            new(created.Id, Version(), date, code, working, null, start, minutes, crew, null);
+
+        // Saturday has no A to take off; a new code needs its times; it can't run into another shift; the crew must exist.
+        await Assert.ThrowsAsync<DomainRuleException>(() => SetOverride().HandleAsync(Change(new DateOnly(2026, 10, 17), "A", working: false), CancellationToken.None));
+        await Assert.ThrowsAsync<ValidationException>(() => SetOverride().HandleAsync(Change(Monday, "OT"), CancellationToken.None));
+        await SetOverride().HandleAsync(Change(Monday, "OT", start: "16:00", minutes: 240), CancellationToken.None);
+        var clash = await Assert.ThrowsAsync<ValidationException>(() => SetOverride().HandleAsync(Change(Monday, "A", start: "09:00", minutes: 480), CancellationToken.None));
+        Assert.Contains("can't overlap", clash.Errors["Shifts"][0], StringComparison.Ordinal);
+        await Assert.ThrowsAsync<ValidationException>(() => SetOverride().HandleAsync(Change(Monday, "A", crew: "BLUE"), CancellationToken.None));
+
+        // Approved labor locks the shift that day.
+        Shifts.Approved.Add((created.Id, Monday, "OT"));
+        await Assert.ThrowsAsync<DomainRuleException>(() =>
+            RemoveOverride().HandleAsync(new RemoveShiftOverrideCommand(created.Id, Version(), Monday, "OT"), CancellationToken.None));
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            RemoveOverride().HandleAsync(new RemoveShiftOverrideCommand(created.Id, Version(), Monday, "A"), CancellationToken.None));
+        await Assert.ThrowsAsync<ConflictException>(() =>
+            RemoveOverride().HandleAsync(new RemoveShiftOverrideCommand(created.Id, 1, Monday, "OT"), CancellationToken.None));
     }
 }

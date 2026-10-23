@@ -81,14 +81,20 @@ internal static class ExecutionEndpoints
             TypedResults.Ok(await handler.HandleAsync(new ListPendingPartialBatchesQuery(siteId), ct)))
         .RequireAny(Site.Route(), Permissions.FloorView);
 
+        // Good and scrap by shift for production days (D-044); at most 93 days apart.
+        sites.MapGet("/{siteId:guid}/production-by-shift", async Task<Ok<ProductionByShiftDto>> (
+            Guid siteId, DateOnly from, DateOnly to, IQueryHandler<GetProductionByShiftQuery, ProductionByShiftDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetProductionByShiftQuery(siteId, from, to), ct)))
+        .RequireAny(Site.Route(), Permissions.FloorView);
+
         sites.MapGet("/{siteId:guid}/policy", async Task<Ok<ExecutionPolicyDto>> (
             Guid siteId, IQueryHandler<GetExecutionPolicyQuery, ExecutionPolicyDto> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new GetExecutionPolicyQuery(siteId), ct)))
-        .RequireAny(Site.Route(), Permissions.FloorView, Permissions.SiteSettings);
+        .RequireAny(Site.Route(), Permissions.FloorView, Permissions.SiteSettingsView);
 
         sites.MapPut("/{siteId:guid}/policy", async Task<Ok<ExecutionPolicyDto>> (
             Guid siteId, SetExecutionPolicyRequest request, ICommandHandler<SetExecutionPolicyCommand, ExecutionPolicyDto> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new SetExecutionPolicyCommand(siteId, request.RateTolerancePct, request.ConsumptionTolerancePct), ct)))
+            TypedResults.Ok(await handler.HandleAsync(new SetExecutionPolicyCommand(siteId, request.Version, request.RateTolerancePct, request.ConsumptionTolerancePct), ct)))
         .RequirePermission(Permissions.SiteSettings, Site.Route());
 
         return routes;

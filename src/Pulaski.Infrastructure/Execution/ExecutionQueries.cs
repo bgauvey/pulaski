@@ -295,6 +295,7 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
             RateTolerancePct = policy.RateTolerancePct,
             ConsumptionTolerancePct = policy.ConsumptionTolerancePct,
             IsDefault = row is null,
+            Version = row?.Version ?? 0,
         };
     }
 

@@ -393,7 +393,7 @@ Planned production time comes from the shifts of the schedule each line follows 
 
 ### core.shift_schedule — a site's shift schedule · *In use (D-038)*
 
-Shifts that repeat every `cycle_days` from `cycle_start`, in the site's time zone. Shift times aren't stored: planning works them out from the schedule the line follows (its own, or the nearest ancestor's). Switched off, not deleted.
+Shifts that repeat every `cycle_days` from `cycle_start`, in the site's time zone, with one-off changes to single days. Shift times aren't stored: planning, labor and reports work them out from the schedule the line follows (its own, or the nearest ancestor's), overrides applied. Switched off, not deleted.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -405,6 +405,7 @@ Shifts that repeat every `cycle_days` from `cycle_start`, in the site's time zon
 | `cycle_days` | integer | no | Length of the cycle, 1 to 56: 7 for weekly, 28 for a four-week rotation. |
 | `cycle_start` | date | no | The cycle's first day (site-local). |
 | `shifts` | jsonb | no | The shifts, saved whole: an array of `{code, name, start "HH:mm", minutes, days [0…cycle_days − 1], crew}` (`crew`, D-040, is the code of an active crew of the site, or null). They don't overlap, also across the end of the cycle; each belongs to the day it starts on. |
+| `overrides` | jsonb | no | One-off changes to single production days (D-042), saved whole: an array of `{date, code, isWorking, name, start "HH:mm", minutes, crew, note}`, at most one per date and code. A code the cycle runs that day is replaced (or, with `isWorking` false, taken off); another code is an extra shift. They don't overlap the shifts around them. At most 1000. |
 | `is_active` | boolean | no | False when switched off: it can't be chosen. One that equipment follows can't be switched off. |
 | `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
@@ -434,15 +435,19 @@ For recording shifts as worked (reporting by shift, crews), which isn't built. P
 | `starts_at`, `ends_at` | timestamptz | no | The shift window; end after start. |
 | `is_scheduled` | boolean | no | False when the shift exists but is not staffed, so no work is planned in it. |
 
-### core.calendar_exception — time taken out of the calendar · *In use (read)*
+### core.calendar_exception — time taken out of the calendar · *In use (D-043)*
+
+Holidays, shutdowns and weeks without demand, maintained on Configure → Site settings. The projection takes the active ones on the line and every equipment above it out of the line's working time, whatever schedule it follows. Removed ones are switched off, never deleted.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `scope_equipment_id` | uuid → equipment | no | Applies to this equipment and everything below it. |
-| `kind` | text | no | `holiday`, `no_demand`, `planned_shutdown` or `other`. |
-| `starts_at`, `ends_at` | timestamptz | no | The window removed; end after start. |
-| `note` | text | yes | Free text. |
+| `scope_equipment_id` | uuid → equipment | no | Applies to this equipment and everything below it: a site or anything in one (not the enterprise), active when saved. |
+| `kind` | text | no | `holiday`, `no_demand`, `planned_shutdown` or `other`; a label only, every kind takes the time out alike. |
+| `starts_at`, `ends_at` | timestamptz | no | The window removed; end after start, at most 366 days. |
+| `note` | text | yes | Free text, up to 500 characters. |
+| `is_active` | boolean | no | False once removed: it takes no time out. It can be put back. |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
 ## 5. Reason codes
 
@@ -744,6 +749,8 @@ A site without a row uses the defaults.
 | `consumption_tolerance_pct` | numeric(6,1) | no | Consumption beyond the planned components × this percent is recorded with a warning. 100 to 1000; default 110. |
 | `updated_at` | timestamptz | no | Last change. |
 
+Maintained on Configure → Site settings (D-043). Its `xmin` is the version a change must name; a site without a row is at version 0.
+
 ### core.scheduling_policy — per-site scheduling settings (D-015) · *In use*
 
 A site without a row uses the defaults.
@@ -764,8 +771,8 @@ The rate the projection uses: runtime = remaining quantity ÷ effective rate. Hi
 | `equipment_id` | uuid → equipment | no | The line. Unique with the material. |
 | `material_id` | uuid → material | no | The material. |
 | `uom_id` | uuid → uom | no | The rate is this unit per hour. Follows the capability's rate unit while the basis is `ideal_rate` and no modified rate is set. |
-| `calculated_rate_per_hour` | numeric(18,6) | no | Written only by Pulaski: from the capability's ideal rate, recalculated when that changes while the basis is `ideal_rate` (D-034); later from run history. Positive. |
-| `calculation_basis` | text | no | `ideal_rate` or `run_history`. |
+| `calculated_rate_per_hour` | numeric(18,6) | no | Written only by Pulaski: from the capability's ideal rate, recalculated when that changes while the basis is `ideal_rate` (D-034); or the rate from run history a planner reviewed and accepted (D-045). Positive. |
+| `calculation_basis` | text | no | `ideal_rate` or `run_history`. A `run_history` rate doesn't follow the ideal rate until it is put back to `ideal_rate`. |
 | `calculated_at` | timestamptz | no | When it was last calculated. |
 | `modified_rate_per_hour` | numeric(18,6) | yes | Set by a person. While set it is the gold standard; recalculation never overwrites it. |
 | `modified_at` | timestamptz | yes | When modified. Set together with the rate. |
