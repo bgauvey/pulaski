@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc;
+using PdfSharp.Pdf.IO;
+using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Common;
 using Pulaski.Application.Scheduling;
 using Pulaski.Contracts.EquipmentModel;
@@ -85,6 +87,50 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
         Assert.Equal($"/api/work-orders/{created.Id}", response.Headers.Location?.ToString());
         var order = await _client.GetFromJsonAsync<WorkOrderDto>($"/api/work-orders/{created.Id}");
         Assert.Equal("Call the customer before packing.", order!.Notes);
+    }
+
+    [Fact]
+    public async Task Shop_order_download_returns_a_readable_pdf_with_a_job_page()
+    {
+        var order = factory.Stores.WorkOrders.Add("planned");
+        var jobId = Guid.CreateVersion7();
+        factory.Stores.WorkOrders.ShopOrderJobs = id => id == order.Id
+            ? new ShopOrderJobsRow
+            {
+                SiteTimeZone = "America/Chicago",
+                Jobs =
+                [
+                    new ShopOrderJobRow
+                    {
+                        JobId = jobId,
+                        JobNumber = "WO-JOB-10",
+                        JobType = "production",
+                        Status = "completed",
+                        EquipmentId = Guid.CreateVersion7(),
+                        EquipmentCode = "EXTRUDER-01",
+                        PlannedQty = 100m,
+                        UomCode = "kg",
+                        OperationNumber = 10,
+                        OperationName = "Extrude",
+                        OperationDescription = "Run the extrusion profile.",
+                        BaselineStart = new DateTimeOffset(2026, 10, 19, 13, 0, 0, TimeSpan.Zero),
+                        BaselineEnd = new DateTimeOffset(2026, 10, 19, 14, 0, 0, TimeSpan.Zero),
+                        RatePerHour = 100m,
+                        RateUomCode = "kg",
+                        RateSource = "calculated",
+                    },
+                ],
+            }
+            : null;
+
+        using var response = await _client.GetAsync($"/api/work-orders/{order.Id}/shop-order.pdf");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/pdf", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("shop-order-", response.Content.Headers.ContentDisposition?.FileName, StringComparison.Ordinal);
+        var content = await response.Content.ReadAsByteArrayAsync();
+        using var pdf = PdfReader.Open(new MemoryStream(content), PdfDocumentOpenMode.Import);
+        Assert.Equal(1, pdf.PageCount);
     }
 
     [Fact]

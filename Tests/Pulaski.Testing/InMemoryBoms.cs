@@ -18,6 +18,8 @@ public sealed class InMemoryBoms : IBomReadStore, IBomRepository
     /// <summary>Released versions written out as rows, by version id.</summary>
     public HashSet<Guid> ReleasedRows { get; } = [];
 
+    public IReadOnlyList<PlannedComponentDto> PlannedComponents { get; set; } = [];
+
     public IReadOnlyList<JobMaterial> JobMaterials
     {
         get
@@ -257,7 +259,7 @@ public sealed class InMemoryBoms : IBomReadStore, IBomRepository
     }
 
     public Task<IReadOnlyList<PlannedComponentDto>> ListPlannedComponentsAsync(Guid workOrderId, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<PlannedComponentDto>>([]);
+        Task.FromResult(PlannedComponents);
 
     private IEnumerable<BomVersion> VersionsOf(Guid bomId) => _versions.Values.Select(v => v.Value).Where(v => v.BomId == bomId);
 

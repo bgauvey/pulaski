@@ -8,6 +8,13 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="PDFsharp" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
+    <PackageReference Include="ZXing.Net" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\Roboto\Roboto-Variable.ttf" />
   </ItemGroup>
 
 </Project>

@@ -221,6 +221,13 @@ public sealed class ProcessTests(DatabaseFixture db)
         Assert.Equal("Rush for the dealer show.", row.Notes);
         Assert.Equal(created.Version, row.Version);
 
+        var shopOrder = (await reads.GetShopOrderJobsAsync(created.Id, CancellationToken.None))!;
+        Assert.Equal("America/Chicago", shopOrder.SiteTimeZone);
+        Assert.Equal(
+            [(10, $"{number}-10-1"), (10, $"{number}-10-2"), (30, $"{number}-30")],
+            shopOrder.Jobs.Select(job => (job.OperationNumber, job.JobNumber)));
+        Assert.All(shopOrder.Jobs, job => Assert.Equal("m", job.UomCode));
+
         await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
         {
             var jobs = (await connection.QueryAsync<(string JobNumber, Guid EquipmentId, decimal PlannedQty, DateTimeOffset EarliestStart, int Operation)>(

@@ -1,4 +1,5 @@
 using Pulaski.Api.Endpoints;
+using Pulaski.Api.WorkOrders;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Pulaski.Api.Infrastructure;
@@ -15,6 +16,7 @@ var connectionString = builder.Configuration.GetConnectionString("Pulaski")
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(connectionString);
+builder.Services.AddSingleton<ShopOrderPdfRenderer>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IRequestContext, HttpRequestContext>();
