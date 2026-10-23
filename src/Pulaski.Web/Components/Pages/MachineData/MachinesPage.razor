@@ -1,0 +1,447 @@
+@page "/machines"
+@attribute [RequiresView(PermissionCodes.MachinesView)]
+@implements IDisposable
+@using Pulaski.Web.Services.MachineData
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject TimeProvider Clock
+@inject CurrentUser User
+
+@* Machines (D-050): each machine's live state, its stops to code, and utilization and OEE reports (D-052). The board refreshes itself every 5 seconds. *@
+<PageTitle>Machines · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Machines</h1>
+        <p class="text-muted mb-0">
+            What every machine is doing now, as its edge node reports it, and its stops. A stop is time a machine isn't executing; stops shorter
+            than the machine's micro-stop threshold aren't coded. Give each stop its reason, or confirm the one its stop code maps to.
+        </p>
+    </div>
+    @if (Sites.Sites.Count > 1)
+    {
+        <div class="inv-head-tools">
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        </div>
+    }
+</div>
+
+<nav class="inv-tabs" aria-label="Machines">
+    <button type="button" class="inv-tab btn btn-link @(_tab == "status" ? "active" : "")" @onclick="@(() => _tab = "status")">Status</button>
+    <button type="button" class="inv-tab btn btn-link @(_tab == "stops" ? "active" : "")" @onclick="ShowStopsAsync">
+        Stops @if (_status?.Sum(m => m.UncodedStops) is > 0 and var n) { <span class="chip chip-warning ms-1">@n to code</span> }
+    </button>
+    <button type="button" class="inv-tab btn btn-link @(_tab == "reports" ? "active" : "")" @onclick="@(() => _tab = "reports")">Utilization and OEE</button>
+</nav>
+
+<ProblemAlert Error="_error" />
+
+@if (_tab == "status")
+{
+    @if (_status is null)
+    {
+        @if (_error is null)
+        {
+            <p class="text-muted">Loading…</p>
+        }
+    }
+    else if (_status.Count == 0)
+    {
+        <div class="empty-panel">
+            <p class="text-muted mb-0">No equipment at @(Sites.Site?.Code ?? "this site") tracks state. Tick <strong>Tracks state</strong> on the Equipment screen, and bind its signals on an edge node.</p>
+        </div>
+    }
+    else
+    {
+        @foreach (var (head, below) in MachineView.Groups(_status))
+        {
+            <section class="machine-group" @key="head.EquipmentId">
+                <div class="machine-tiles">
+                    @Tile(head, isHead: true)
+                    @foreach (var m in below)
+                    {
+                        @Tile(m, isHead: false)
+                    }
+                </div>
+            </section>
+        }
+        <p class="small text-muted">Updated @Display.SiteTime(_loadedAt, Sites.Site?.TimeZone) · refreshes every 5 seconds.</p>
+    }
+}
+else if (_tab == "reports")
+{
+    @if (Sites.SiteId is { } reportSite)
+    {
+        <OeeReports @key="reportSite" SiteId="reportSite" SiteCode="@Sites.Site?.Code" TimeZone="@Sites.Site?.TimeZone" Machines="@(_status ?? [])" />
+    }
+}
+else
+{
+    <div class="inv-toolbar flex-wrap">
+        <select class="form-select w-auto" aria-label="Equipment" value="@(_equipment?.ToString() ?? "")" @onchange="OnEquipmentChangedAsync">
+            <option value="">All equipment</option>
+            @foreach (var m in _status ?? [])
+            {
+                <option value="@m.EquipmentId">@m.Code · @m.Name</option>
+            }
+        </select>
+        <select class="form-select w-auto" aria-label="Period" value="@_hours" @onchange="OnPeriodChangedAsync">
+            <option value="8">Last 8 hours</option>
+            <option value="24">Last 24 hours</option>
+            <option value="168">Last 7 days</option>
+        </select>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="uncoded-only" checked="@_uncodedOnly" @onchange="@(e => ToggleAsync(() => _uncodedOnly = e.Value is true))" />
+            <label class="form-check-label" for="uncoded-only">Only stops to code</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="micro" checked="@_micro" @onchange="@(e => ToggleAsync(() => _micro = e.Value is true))" />
+            <label class="form-check-label" for="micro">Show micro-stops</label>
+        </div>
+    </div>
+
+    @if (_stops is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+    else if (_stops.Count == 0)
+    {
+        <div class="empty-panel"><p class="text-muted mb-0">@(_uncodedOnly ? "Nothing to code: every stop in this period has its reason." : "No stops in this period.")</p></div>
+    }
+    else
+    {
+        <div class="table-panel">
+            <table class="table align-middle">
+                <thead>
+                    <tr><th>Started</th><th class="inv-num">Duration</th><th>Equipment</th><th>Stopped in</th><th>Stop code</th><th>Reason</th><th>Job</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _stops)
+                    {
+                        <tr @key="s.Id" class="@(s.IsMicroStop ? "text-muted" : "")">
+                            <td>@Display.SiteTime(s.StartedAt, Sites.Site?.TimeZone)</td>
+                            <td class="inv-num">
+                                @MachineView.Duration(TimeSpan.FromSeconds(s.DurationSeconds))
+                                @if (s.EndedAt is null)
+                                {
+                                    <span class="chip chip-warning ms-1">ongoing</span>
+                                }
+                            </td>
+                            <td class="fw-semibold">@s.EquipmentCode</td>
+                            <td>@s.PackMlName @(s.UnitMode == 1 ? "" : $"({MachineView.UnitModeLabel(s.UnitMode)})")</td>
+                            <td>@(s.StopCode is { } code ? $"{code}{(s.StopCodeText is null ? "" : " · " + s.StopCodeText)}" : "")</td>
+                            <td>
+                                @if (s.IsMicroStop)
+                                {
+                                    <span class="small">Micro-stop</span>
+                                }
+                                else if (s.OperatorReasonCode is not null)
+                                {
+                                    <span>@MachineView.ReasonText(s)</span>
+                                    @if (s.OperatorReasonId != s.MappedReasonId && s.MappedReasonCode is not null)
+                                    {
+                                        <div class="small text-muted">The code said @s.MappedReasonCode</div>
+                                    }
+                                    <div class="small text-muted">@s.CodedBy@(s.Comment is null ? "" : " · " + s.Comment)</div>
+                                }
+                                else if (s.MappedReasonCode is not null)
+                                {
+                                    <span>@MachineView.ReasonText(s)</span> <span class="chip ms-1" title="From the stop code; confirm it or give another">to confirm</span>
+                                }
+                                else
+                                {
+                                    <span class="chip chip-warning">Uncoded</span>
+                                }
+                            </td>
+                            <td>@s.JobNumber</td>
+                            <td class="text-end">
+                                @if (CanCode(s) && _coding?.Id != s.Id)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => StartCodingAsync(s)">@(s.OperatorReasonCode is null ? "Code" : "Change")</button>
+                                }
+                            </td>
+                        </tr>
+                        @if (_coding?.Id == s.Id)
+                        {
+                            <tr @key="(s.Id, 1)">
+                                <td colspan="8">
+                                    <form class="d-flex flex-wrap gap-2 align-items-center" @onsubmit="SaveCodeAsync" @onsubmit:preventDefault>
+                                        <select class="form-select w-auto" aria-label="Reason for the stop" value="@(_reasonId?.ToString() ?? "")"
+                                                @onchange="@(e => _reasonId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
+                                            <option value="">Reason…</option>
+                                            @foreach (var r in _reasons)
+                                            {
+                                                <option value="@r.Id">@MachineProfileView.ReasonLabel(r)</option>
+                                            }
+                                        </select>
+                                        <input class="form-control inv-grow" maxlength="1000" aria-label="Comment" placeholder="@(NeedsComment ? "Comment (needed for this reason)" : "Comment (optional)")"
+                                               @bind="_comment" @bind:event="oninput" />
+                                        @if (s.MappedReasonId is { } mapped && _reasons.Any(r => r.Id == mapped))
+                                        {
+                                            <button type="button" class="btn btn-outline-primary" disabled="@_saving" @onclick="() => ConfirmAsync(mapped)">Confirm @s.MappedReasonCode</button>
+                                        }
+                                        <button type="submit" class="btn btn-primary" disabled="@(_saving || _reasonId is null || (NeedsComment && string.IsNullOrWhiteSpace(_comment)))">Save</button>
+                                        <button type="button" class="btn btn-link" @onclick="@(() => _coding = null)">Cancel</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_stops.Count == 1000)
+        {
+            <p class="small text-muted">Showing the latest 1000 stops; narrow the period or equipment to see the rest.</p>
+        }
+    }
+}
+
+@code {
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
+
+    private readonly CancellationTokenSource _cts = new();
+    private IReadOnlyList<MachineStatusDto>? _status;
+    private IReadOnlyList<DowntimeDto>? _stops;
+    private IReadOnlyList<ReasonCodeDto> _reasons = [];
+    private readonly Dictionary<Guid, IReadOnlyList<ReasonCodeDto>> _reasonsByEquipment = [];
+    private ApiException? _error;
+    private DateTimeOffset _loadedAt;
+    private string _tab = "status";
+    private Guid? _equipment;
+    private int _hours = 24;
+    private bool _uncodedOnly = true;
+    private bool _micro;
+    private bool _saving;
+    private DowntimeDto? _coding;
+    private Guid? _reasonId;
+    private string? _comment;
+
+    private bool NeedsComment => _reasonId is { } id && _reasons.FirstOrDefault(r => r.Id == id)?.RequiresComment == true;
+
+    private bool CanCode(DowntimeDto stop) => !stop.IsMicroStop && User.Can(PermissionCodes.DowntimeCode, Sites.SiteId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStatusAsync();
+        _ = TickAsync(_cts.Token);
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+
+    private async Task LoadStatusAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _status = Sites.SiteId is { } site ? await Api.GetMachineStatusAsync(site) : [];
+            _loadedAt = Clock.GetUtcNow();
+            _error = null;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task LoadStopsAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            _stops = [];
+            return;
+        }
+
+        try
+        {
+            var now = Clock.GetUtcNow();
+            _stops = await Api.ListStopsAsync(site, now.AddHours(-_hours), now.AddMinutes(1), _equipment, _uncodedOnly, _micro);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task TickAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(RefreshInterval, Clock);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                await InvokeAsync(async () =>
+                {
+                    if (_coding is null && !_saving)
+                    {
+                        await LoadStatusAsync();
+                        if (_tab == "stops")
+                        {
+                            await LoadStopsAsync();
+                        }
+
+                        StateHasChanged();
+                    }
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Page closed.
+        }
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        (_equipment, _coding) = (null, null);
+        await LoadStatusAsync();
+        await LoadStopsAsync();
+    }
+
+    private async Task ShowStopsAsync()
+    {
+        _tab = "stops";
+        await LoadStopsAsync();
+    }
+
+    private async Task ShowStopsOfAsync(Guid equipmentId)
+    {
+        (_equipment, _uncodedOnly) = (equipmentId, true);
+        await ShowStopsAsync();
+    }
+
+    private async Task OnEquipmentChangedAsync(ChangeEventArgs e)
+    {
+        _equipment = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await LoadStopsAsync();
+    }
+
+    private async Task OnPeriodChangedAsync(ChangeEventArgs e)
+    {
+        _hours = int.TryParse(e.Value?.ToString(), out var hours) ? hours : 24;
+        await LoadStopsAsync();
+    }
+
+    private async Task ToggleAsync(Action change)
+    {
+        change();
+        await LoadStopsAsync();
+    }
+
+    private async Task StartCodingAsync(DowntimeDto stop)
+    {
+        try
+        {
+            if (!_reasonsByEquipment.TryGetValue(stop.EquipmentId, out var reasons))
+            {
+                reasons = await Api.ListCodingReasonsAsync(stop.EquipmentId);
+                _reasonsByEquipment[stop.EquipmentId] = reasons;
+            }
+
+            (_coding, _reasons, _reasonId, _comment) = (stop, reasons, stop.OperatorReasonId ?? stop.MappedReasonId, stop.Comment);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private Task ConfirmAsync(Guid mapped)
+    {
+        _reasonId = mapped;
+        return SaveCodeAsync();
+    }
+
+    private async Task SaveCodeAsync()
+    {
+        if (_coding is not { } stop || _reasonId is not { } reason)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        try
+        {
+            await Api.CodeStopAsync(stop.Id, new CodeDowntimeRequest { StartedAt = stop.StartedAt, ReasonCodeId = reason, Comment = _comment });
+            _coding = null;
+            await LoadStopsAsync();
+            await LoadStatusAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private RenderFragment Tile(MachineStatusDto m, bool isHead) =>
+        @<article class="machine-tile @MachineView.CategoryClass(m.Category) @(isHead ? "is-head" : "")" aria-label="@m.Code: @MachineView.CategoryLabel(m.Category)">
+            <div class="machine-tile-head">
+                <span class="machine-tile-code">@m.Code</span>
+                <span class="machine-tile-state">@MachineView.CategoryLabel(m.Category)</span>
+            </div>
+            <div class="machine-tile-line">@m.Name</div>
+            @if (m.PackMlName is not null)
+            {
+                <div class="machine-tile-line">
+                    @m.PackMlName@(m.StateSince is { } since ? $" for {MachineView.Duration(_loadedAt - since)}" : "")
+                    @if (m.UnitMode is { } mode && mode != 1)
+                    {
+                        <span class="chip ms-1">@MachineView.UnitModeLabel(mode)</span>
+                    }
+                </div>
+            }
+            @if (MachineView.DerivationNote(m) is { } note)
+            {
+                <div class="machine-tile-line">@note</div>
+            }
+            @if (m.OpenStop is { } stop)
+            {
+                <div class="machine-tile-stop">
+                    Stopped @MachineView.Duration(_loadedAt - stop.StartedAt):
+                    @if (stop.ReasonCode is not null)
+                    {
+                        <span>@stop.ReasonCode · @stop.ReasonName</span>
+                    }
+                    else
+                    {
+                        <span class="chip chip-warning">uncoded</span>
+                    }
+                    @if (m.StopCodeText is not null)
+                    {
+                        <div class="text-muted">@m.StopCode · @m.StopCodeText</div>
+                    }
+                </div>
+            }
+            @if (m.JobNumber is not null)
+            {
+                <div class="machine-tile-line">@m.JobNumber@(m.MaterialCode is null ? "" : $" · {m.MaterialCode}")@(m.RunGoodCount is { } good ? $" · {MachineView.Count(good)} good" : "")</div>
+            }
+            @if (m.MachineSpeed is { } speed && m.Category == "producing")
+            {
+                <div class="machine-tile-line">Speed @EdgeView.Reading(speed)</div>
+            }
+            @if (m.EdgeQuiet)
+            {
+                <div class="machine-tile-line"><span class="chip chip-warning">@m.EdgeNodeCode quiet</span></div>
+            }
+            @if (m.UncodedStops > 0)
+            {
+                <div class="mt-auto"><button type="button" class="btn btn-sm btn-link p-0" @onclick="() => ShowStopsOfAsync(m.EquipmentId)">@m.UncodedStops @(m.UncodedStops == 1 ? "stop" : "stops") to code</button></div>
+            }
+        </article>;
+}

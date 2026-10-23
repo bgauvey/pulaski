@@ -57,6 +57,9 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-047 | Breaks: a person's break is its own interval (paid or unpaid), never a change to their sessions. Its time comes out of the worked hours of every session it overlaps and is reported apart; it starts while the person is on a line, belongs to that session's shift and locks with its approval | Proposed | 2026-10-23 |
 | D-048 | Qualifications: per-site qualifications with a default validity; grants for whole site-local days (a renewal is a new grant), revoked rather than deleted; equipment requires them for itself and everything below it. Clock-on and check-in warn, never refuse, when someone lacks one | Proposed | 2026-10-23 |
 | D-049 | Shop-floor terminals and badges: a terminal is a registered device, not a user, enrolled once with a one-time code that gives it a secret; people identify there by badge (and PIN where the terminal asks) and record their own labor through the same rules, as source `terminal`. Badge values and PINs are stored only as hashes | Proposed | 2026-10-23 |
+| D-050 | Machine data: connectors run in the Pulaski Edge worker, never the API (Sparkplug B first), turning samples into signals through tag bindings, buffered and forwarded in order; machine profiles map state values to PackML and stop codes to utilization reasons; ingest keeps each machine's live state, opens and closes stops for operators to code, and keeps counters. Raw state is always stored (D-005) | Proposed | 2026-10-18 |
+| D-051 | Deleting an edge node deactivates it and its connections and tags atomically. Deleting a tag physically removes its configuration row whether active or inactive, first clearing any quality-characteristic source reference; append a deletion event, retain time-series history, and grant the app role DELETE only on `core.equipment_tag` | Decided | 2026-10-18 |
+| D-052 | Utilization and OEE reports: worked out on read from state changes, stops, runs and production reports, between production days (at most 31), by equipment, shift and product with a breakdown of time by use and reason. Time is classified by unit mode, then by the stop's reason class, else by Execute; lines take their time from their machines like their state. Performance and quality weigh output by the ideal rate; machine counts aren't used. Nothing is stored yet | Proposed | 2026-10-19 |
 
 ## Order hierarchy
 
@@ -311,7 +314,7 @@ A process describes how an order is made, as a template that order creation will
 - **Quantity on lines.** Every operation makes the whole order quantity, so the jobs of one operation add up to the order and the jobs of all operations add up to a multiple of it. How much of an order is on lines is what its least-placed operation plans (`OperationQuantities`), for the progress roll-up and the "Not on a line" tile alike (amended 2026-10-16).
 - **Equipment and shares.** Each operation names at least one line, or department (D-022), in the process's site. Several entities on one operation run in parallel, each taking its share of the quantity; the shares total 100%. Machines and other equipment that neither runs nor plans jobs are refused.
 - **Versions.** A process starts with an empty draft, version 1. The editor saves the draft's whole definition after every change; the draft may be incomplete but never malformed (duplicate numbers, a loop, a share out of range). Releasing checks it is complete, makes the previously released version obsolete, and writes the operations, their equipment and the links out as fixed rows that jobs will reference. A released version never changes: changing the process starts a new draft, a copy with new ids. Orders keep the version they were made from.
-- **Storage.** A version's definition is one `jsonb` document, so editing a draft never deletes rows (the application role has no DELETE). The relational rows exist only for released versions, because they are referenced (D-010).
+- **Storage.** A version's definition is one `jsonb` document, so editing a draft never deletes rows (the application role has no DELETE on process tables). The relational rows exist only for released versions, because they are referenced (D-010).
 - **What it makes.** A process has a scope: all materials, or chosen material classes and single materials, in any mix. Extrude and Pack fits every extruded profile, so it makes the "Extruded profiles" class rather than a list of items. Order creation will offer every released process whose scope covers the order's material (`GET /api/processes?materialId=`). The scope belongs to the process, not to a version.
 - **Default process.** Of the processes that make a material, the material may name one as its default, which order creation pre-selects; the planner can pick another. A default must be inside the process's scope; the editor flags a default the scope no longer covers.
 - **Editor** (`/processes/{id}`): a palette of the site's lines and departments (collapsible), a canvas (drag equipment onto an operation, or onto the canvas for a new one; drag an operation by its header; drag from its right-hand handle to the next operation to link them), the shared property grid (collapsible) for the selected operation, link or the process (with what it makes and its defaults; lists are added to from the grid's footer and taken out with each row's ×), and a table of every operation's equipment and shares. A released version opens read-only.
@@ -537,7 +540,7 @@ Materials are the items everything else refers to: BOMs, processes, capabilities
 
 - **Where.** Only on active equipment with `can_run_job`. A department gets its eligibility from the lines below it (D-022), so it never has capabilities of its own. The material must be active, and the rate unit must convert to its base unit (D-026).
 - **No overlap.** Two periods of one material on one line never share an instant, so "is there a capability now?" always has one answer. The handler checks first and says so in words; the `capability_no_overlap` exclusion constraint is the backstop for a race.
-- **Ended, not deleted.** The app role has no DELETE, and history should still say what could run where. *End now* sets `effective_to` to now; a capability that hasn't started yet is changed instead. Ending one under open jobs reports how many stay on the line, unable to be moved there or dispatched until it has a capability again; nothing is moved for the planner (D-014).
+- **Ended, not deleted.** The app role has no DELETE on capability tables, and history should still say what could run where. *End now* sets `effective_to` to now; a capability that hasn't started yet is changed instead. Ending one under open jobs reports how many stay on the line, unable to be moved there or dispatched until it has a capability again; nothing is moved for the planner (D-014).
 - **Lock order.** Each change locks the line row first, as every scheduling write does (D-017), then the material and the capability, so it serializes with the eligibility checks of job placement and dispatch.
 - **Events:** `pulaski.capability.added.v1`, `…changed.v1` and `…ended.v1`, each with the capability before and after.
 
@@ -650,7 +653,7 @@ Who owns the configuration: equipment, units → Administrator; shift schedules 
 
 - A role has a code (lower-case letters, digits and `_`, fixed once created), a name, a description and its permissions. `POST /api/roles` creates one; `PUT /api/roles/{code}` changes its name, description, active flag and all its permissions at once (with its version); `PUT /api/roles/{code}/permissions/{permission}` grants or takes away one (the Permissions screen; doing what is already so changes nothing). Each change moves the role's version on.
 - A change applies at once to everyone who holds the role: what a user may do is read with their roles on every request.
-- **Switched off, not deleted.** A role someone holds can't be switched off (every user keeps a role); a switched-off role can't be given. A permission taken away keeps its `sec.role_permission` row with `is_granted = false`, since the app role has no DELETE; the events say who changed what.
+- **Switched off, not deleted.** A role someone holds can't be switched off (every user keeps a role); a switched-off role can't be given. A permission taken away keeps its `sec.role_permission` row with `is_granted = false`, since the app role has no DELETE on security tables; the events say who changed what.
 - Events: `pulaski.role.created.v1`, `pulaski.role.updated.v1` (before and after), `pulaski.role.permission_changed.v1`.
 
 **Where it is checked.** In the API, on every changing endpoint (`.RequirePermission(permission, site)`): the site is found from what the request is about (the job, lot, count, process, partial batch, capability, run standard or work order, or the location or line in the body) by `ISiteLookup`. Something that belongs to no site, such as an enterprise-wide process or reason, needs the permission at any site. A refusal is 403 with the permission in words. The UI hides or switches off what the user may not do, but the API decides.
@@ -698,7 +701,7 @@ A line's working time comes from the nearest equipment, the line itself first, t
 
 **API.** `GET /api/shift-schedules?siteId=`, `GET /api/shift-schedules/{id}`, `POST /api/shift-schedules`, `PUT /api/shift-schedules/{id}` (with its version), `POST /api/shift-schedules/preview` (works out a schedule, saved or not, for the next days; saves nothing), `PUT /api/equipment/{id}/calendar`. Events: `pulaski.shift_schedule.created.v1`, `pulaski.shift_schedule.updated.v1` (before and after), `pulaski.equipment.calendar_set.v1`.
 
-**Not yet:** reports, counts and OEE by shift; the Overview's strip by shift rather than a rolling 24 hours. One-off changes to a shift are D-042.
+**Not yet:** the Overview's strip by shift rather than a rolling 24 hours. One-off changes to a shift are D-042; production by shift D-044; utilization and OEE by shift D-052.
 
 ## Seeing only what you may (D-039, proposed)
 
@@ -811,7 +814,7 @@ Amends D-038 ("reports by shift, not yet"). Plants run their shift meetings on w
 
 **API and screen.** `GET /api/execution/sites/{siteId}/production-by-shift?from=&to=` (production days, at most 93 apart, `floor.view`); the result's times are in the site's time zone. Floor → **Production by shift** (`/floor/production`), with CSV export. No new tables.
 
-**Not yet:** OEE and downtime by shift (machine state and downtime aren't recorded); the stop Pareto (issue #21) waits for them.
+**Not yet:** the stop Pareto (issue #21). Utilization and OEE by shift are D-052.
 
 ## Planning rates from run history (D-045, proposed)
 
@@ -823,7 +826,7 @@ Amends D-016 and its build pass 3, which planned a worker. The calculated rate c
 
 **Back to the ideal rate.** `POST …/ideal-rate` (version) sets the calculated rate to the capability's ideal rate in effect now, in its unit, with basis `ideal_rate`, so it follows the capability again (D-034). Refused when no capability is in effect; a unit change under a modified rate is refused as before.
 
-**Run time is elapsed time.** Without downtime capture a run's stops can't be taken out, so the rate is a realistic planning rate (it includes the stops a run usually has) rather than a performance rate. When downtime is recorded the sample can be refined.
+**Run time is elapsed time.** A run's stops aren't taken out, so the rate is a realistic planning rate (it includes the stops a run usually has) rather than a performance rate. Machine stops are now recorded (D-050), so the sample can be refined to use them.
 
 **Not yet:** a scheduled recalculation or a notice when history drifts far from the rate in force; per-shift or per-crew rates.
 
@@ -894,6 +897,93 @@ Amends D-037 and D-040. Many operators never sign in; at the start of a shift th
 
 **Not yet:** signing in as a user on a terminal (`user_login`, dropped from the planned modes); recording setup, indirect or training time at a terminal; production or downtime reporting from it; a terminal for several sites.
 
+## Machine data, utilization and OEE (D-050, proposed)
+
+Live state, counts and stop reasons from the equipment, turned into utilization and OEE (charter v1 items 2, 3 and 6; the first vertical slice). Builds on D-005, which stays as decided.
+
+**Edge and connectors.** Connectors run in `Pulaski.Edge`, a separate worker service on plant hardware, never in the API. Every connector implements one small interface: connect, subscribe to a list of addresses, and emit *samples* (address, value, source timestamp, quality). A connector knows nothing about PackML or OEE. Above it, shared edge code turns samples into signals for the tag bindings (`core.equipment_tag`) and buffers them in a local SQLite file and forwards to the API in order with an idempotency key, so a network drop loses nothing. The edge may run on its own machine: it talks to the API only over HTTPS, signing in as a service user with an edge permission, and only the API writes the database. It fetches its bindings from the API at start and when they change. OPC UA, CIP (EtherNet/IP) and others are later connectors on the same interface.
+
+**Sparkplug B first.** The first connector is MQTT Sparkplug B, acting as a Sparkplug host application: it subscribes to `spBv1.0/#`, learns metric names and aliases from NBIRTH/DBIRTH, asks for a rebirth on a sequence gap, and treats NDEATH/DDEATH as no signal (PackML 0 `Undefined`, D-005). A binding names group, edge node, device and metric. The demo uses an open-source PackML simulator in Sparkplug mode with an MQTT broker, in docker compose.
+
+**Machine profiles.** A profile describes one kind of machine: identical machines share it; machines of different vendors or models each have their own (three robotic packers from three vendors are three profiles). Equipment has at most one profile, and may override single codes. A profile holds:
+
+- **State values.** The state arrives as one value on one tag; the profile maps each raw value to its PackML state. The default is PackML's own numbers; a controller with another numbering (an ISA-88 phase, say) gets its own map. Both raw and mapped state are stored.
+- **Stop reasons.** The machine's first-out stop, alarm and warning codes (code, message, category), each mapped to a Pulaski utilization reason. Unmapped codes are kept and show as uncoded.
+
+Both lists import from CSV, all or nothing with a dry run (as D-034). Tag addresses are not in the CSV; they are bound per equipment.
+
+A profile belongs to a site, like the reasons it maps to; its code is fixed once created. A new profile starts with PackML's own 18 states. The file's columns are `kind` (`state`, `stop_reason`, `alarm`, `warning`), `value`, `name`, `packml_state` (state rows only, number or name), `category` and `reason` (a utilization reason code). Each kind in a file replaces that list: its entries are created or updated, active entries it leaves out are switched off, and kinds it doesn't mention are left alone. Nothing is deleted. Every change to a profile's lists moves the profile's version, so two people editing it get a conflict, not a silent overwrite. A profile used by active equipment can't be switched off.
+
+**Overrides.** A machine may give one of its profile's stop codes its own reason, or leave it uncoded (`core.equipment_stop_reason_map`); removing the override brings back the profile's reason. Overrides move the equipment's version.
+
+**Who.** Profiles, machine data and overrides are part of maintaining equipment: `equipment.view` to see them, `equipment.manage` at the site to change them. Utilization reasons are maintained with the other reasons (`reasons.manage`).
+
+**Utilization reasons.** Reason codes of kind `utilization` (replacing the planned `downtime` kind) in the site's reason tree, shared across equipment so they compare in reports; a profile with reasons ticked on it narrows the list an operator sees on its machines to those plus the ones its codes and states map to; with none ticked, every utilization reason of the site is offered. Each reason has a class (`utilization_class`), which may change, since OEE is worked out from it on read:
+
+| Class | Means | OEE |
+| --- | --- | --- |
+| `runtime` | Producing, or running slow | Run time; losses show in performance and quality |
+| `downtime` | Unplanned stop when the machine should run | Availability loss |
+| `planned` | Scheduled non-production: setup, teardown, changeover, cleaning, planned maintenance | Excluded from planned time |
+
+A stop's reason comes from its first-out code through the profile; with no code, from a default reason per PackML state on the profile (Suspended = starved or blocked). Operators confirm or override, and both values are kept (D-005).
+
+**Time base.** Planned production time is the time the equipment's shift calendar (D-038) says it works, minus `planned` reasons and non-Production unit modes. Time inside a shift when the machine is available but idle or not scheduled counts as availability loss; time outside the calendar is excluded.
+
+**Micro-stops.** A stop shorter than the equipment's micro-stop threshold is logged as a micro-stop: it isn't queued for coding and isn't availability loss. Its time stays run time, so the output it cost shows as lower performance. The threshold is a property of each equipment, default 5 minutes, changed on the equipment page: an extruder may use 2 minutes, a pack cell more.
+
+**Line state** (answers the open question). Each line sets how its state comes from its machines: `series` (sequential process, the worst machine state), `parallel` (parallel operations, the best), `constraint_machine`, or `own_tags`. From worst to best: no signal, stopped or faulted, held, waiting, ready or transitioning, producing.
+
+**OEE.** Availability × performance × quality by equipment, line, shift and product, computed on read from the raw history; performance uses the ideal rate of the run standard (D-034). Rollups (`ts.oee_rollup`) come later and key on production date, schedule and shift code like labor (D-038, D-040), not `shift_instance`.
+
+**Events.** State changes, counts and stops land in `ts` tables, not the audit log (telemetry boundary above). Operator coding, profile, binding and reason changes are events as usual: `pulaski.machine_profile.created.v1`, `…updated.v1`, `…state_set.v1`, `…code_set.v1`, `…reasons_set.v1`, `…imported.v1`, `pulaski.equipment.machine_data_set.v1`, `pulaski.equipment.stop_reason_override_set.v1`.
+
+**Edge nodes and tags (as built).** An edge node (`core.edge_node`) belongs to a site and reads through connections (`core.edge_connection`: a protocol and its settings, never secrets). A tag (`core.equipment_tag`) binds an address read through a connection to a role on equipment of that site that tracks state: `state`, `unit_mode`, `stop_reason`, `processed_count`, `defective_count`, `consumed_count` or `machine_speed`; one active tag per role on a piece of equipment, one per address. A Sparkplug B address is `group/node[/device]:metric`. The edge reports every address its connections see (`core.edge_metric`), so tags are bound by picking them. Nodes, connections and tags are part of maintaining equipment (`equipment.manage`).
+
+**Deletion (D-051).** Deleting an edge node switches it and all its connections and tags off atomically. Deleting a tag removes its `core.equipment_tag` row whether active or inactive; before deletion, any quality characteristic using it as an automatic source is retained with its source cleared. The append-only deletion event records the prior tag and detached characteristic IDs. Time-series samples and the event log remain. The application role's only `core` DELETE privilege is on `core.equipment_tag`. Reactivating a node does not reactivate its connections or tags; each must be reactivated separately.
+
+**The edge's job, and Pulaski's.** The edge forwards each bound tag's raw value when it changes or is lost (a machine speed at most every 5 seconds), and the last value seen when a tag is newly bound. It doesn't interpret anything. Pulaski maps the raw state through the equipment's profile (no profile: PackML's own numbers; a value the profile doesn't know: Undefined), latches the first-out stop code until the machine runs (Execute) again, and turns counter readings into counts across rollovers and resets. Each change of state or unit mode is a `ts.equipment_state_change` row with the raw value and the stop code then latched; losing the signal is Undefined with source `edge_gap`. Counts are `ts.production_count` rows with source `machine` in the run open on the equipment; they aren't production reports and change no run's quantities yet. Each machine's current state is `core.equipment_live_state`, its last counter readings `core.equipment_counter`.
+
+**Forwarding once.** The edge numbers every signal in its SQLite buffer and sends batches in order with the buffer's stream id; Pulaski applies each sequence number of a stream once (`core.edge_node.last_sequence`) and the edge drops what was applied. A new buffer is a new stream. The edge keeps its last configuration in the buffer, so it collects without Pulaski; it reads the configuration every minute, restarting a connection whose settings changed. It signs in as a local user holding the **Edge node** role (`edge.ingest`) at the site; that user changes its temporary password once, in Pulaski.
+
+**Sparkplug B host.** The connector asks a node for a rebirth (`Node Control/Rebirth`) when its data arrives before a birth, when its sequence numbers skip, and, for every node its bound addresses name, on connecting, so an idle machine's state is known without waiting for it to change. With a host id it publishes its STATE (online, and offline as its will).
+
+**Stops (as built).** A stop (`ts.downtime`) is time a machine isn't executing: ingest opens one when it leaves Execute, or first reports another state, or loses its signal, and closes it when it executes again; the states on the way stay in the state history. It keeps the state and unit mode it stopped in, the run open then, and the first first-out code reported during it. Its mapped reason is that code's (the machine's override, else its profile's), else the reason of the first state on its way that has one. Closing it shorter than the machine's threshold makes it a micro-stop. The machine's live state points at its open stop.
+
+**Coding.** An operator with `downtime.code` gives a stop that isn't a micro-stop a reason: one offered for the machine (with reasons ticked on its profile, those and the ones its codes and states map to; with none ticked, every utilization reason of the site), with a comment where the reason needs one. Confirming the mapped reason is the same act. The operator's reason is kept beside the mapped one (D-005), and coding again replaces it; each coding is an event (`pulaski.downtime.coded.v1`) with the reason before and after and whether it confirmed. A stop to code is one without a reason, not a micro-stop, and either ended or already longer than the threshold.
+
+**Machines screen** (`machines.view`, Operate → Machines): a status board refreshed every 5 seconds, each piece of equipment that tracks state in its OEE category (the site's `core.oee_state_category`, else D-005's defaults); a line set to series or parallel takes the worst or best category of the equipment tracking state below it, a constraint-machine line its machine's state. And the stops to code. Starting roles: Operator and Supervisor see and code; Planner, Quality, Manager and Auditor see.
+
+**Not yet:** OPC UA and CIP connectors; alarm and warning history; process values; rules that synthesise a state from discrete signals; OEE rollups (the reports are D-052); splitting, merging or entering stops by hand; machine counts as production reports; running the edge as a Windows service or systemd unit (it runs as a console worker or container).
+
+## Utilization and OEE reports (D-052, proposed)
+
+Utilization and OEE by equipment, line, shift and product (charter v1 item 6), worked out on read from the history D-050 records. Machines → **Utilization and OEE**, with `machines.view` (the Overview's current-shift OEE also with `overview.view`): `GET /machines/oee?siteId&from&to&equipmentId`.
+
+**Period.** Production days `from`–`to` in the site's time zone, at most 31; a longer range keeps its last 31 days. A shift counts towards the day it starts on, so the last day's night shift is read into the next morning. Nothing after now.
+
+**Scheduled time.** Each piece of equipment's working windows from its calendar (D-038): its schedule's shifts, or the whole site-local day for equipment around the clock. Time outside them is left out.
+
+**How each moment counts** (`Utilization.Classify`), in this order:
+
+| Condition | Use | OEE |
+| --- | --- | --- |
+| Unit mode not production time (`core.unit_mode`, the site's own row else the enterprise default; Production only by default) | non-production | Left out of planned time |
+| Inside the run of a job with `counts_as_planned_downtime` | planned | Left out of planned time |
+| In a stop whose effective reason is `planned` | planned | Left out of planned time |
+| In a micro-stop, or a stop whose reason is `runtime` | run | Run time |
+| In a stop whose reason is `downtime`, or not coded | down | Availability loss |
+| Executing (PackML 6) | run | Run time |
+| Anything else, including before the first state and with the signal lost | down (no signal when Undefined) | Availability loss |
+
+**Lines** take their time as they take their state (D-050): series the worst use at each moment (down, planned, non-production, run), parallel the best, constraint machine its machine's; ties go to the first machine in tree order. A derived line's stop starts whenever it goes down or into a planned stop from run or non-production.
+
+**Figures** (`OeeTally`). Planned time = scheduled − non-production − planned stops. Availability = run ÷ planned. Performance = earned hours ÷ run time inside runs with an ideal rate, where earned hours = processed ÷ the ideal rate of the capability in effect when the run started, converted to the report's unit (D-026). Quality = good earned hours ÷ earned hours. OEE = A × P × Q. Weighing by the ideal rate lets products in different units add up. Output is production reports and corrections (`source <> 'machine'`); machine counts aren't reports (D-050). A run without an ideal rate keeps its quantities but is left out of P and Q, and the report says so in a note. Run time with no job running is shown (`RunWithoutJobHours`) but isn't in performance, since its output can't be reported. The unrounded components are returned too, so a total over several lines is worked out from them, never by averaging percentages.
+
+**Rows.** By equipment (every active piece that tracks state, in tree order; equipment that runs no jobs has availability only); by shift (each equipment × working window); by product (material and job unit, over the time inside its runs, with good and scrap in the job's unit); and the time of each equipment by use and reason, with the stops that started in the period. A stop already going on when the period began isn't counted again.
+
+**Bounds.** Stops are read back 35 days before the period; one older than that still shows as down, uncoded. Rollups (`ts.oee_rollup`) stay for later, keyed on production date, schedule and shift code (D-050), once reading on demand is too slow.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
@@ -911,7 +1001,7 @@ Pulaski.Web (Blazor)  --HTTP/JSON-->  Pulaski.Api  -->  Application (CQRS)  --> 
 - **No `CALL` from the application.** PostgreSQL procedures don't return result sets; they need OUT parameters or refcursors, which Dapper handles awkwardly. Since Npgsql 7, `CommandType.StoredProcedure` sends `CALL`, so it is not used at all. Procedures are kept for set-based maintenance jobs such as partition creation or rollup rebuilds.
 - **Writes: direct SQL in the command handler's transaction.** A handler opens an `IUnitOfWork` and reads the aggregate `FOR UPDATE`, or `FOR SHARE` for a referenced parent. It checks the version, applies the domain rules in C#, writes through a `*Repository`, appends the event through `IEventLog`, and commits. The state change and its event commit together (D-007). The application generates the UUIDv7s (D-006), chooses the event type and builds the CloudEvents envelope. Domain rules therefore live only in C#, where they are unit-tested, not split between C# and PL/pgSQL.
 - **Concurrency.** The version is `xmin` (`xmin::text::bigint AS version`). The caller sends the version it read; a mismatch is a 409. Unique, foreign-key and check violations are mapped to 409 and 422 in Infrastructure.
-- **Privileges.** `db/app-role.sql` creates the NOLOGIN group role `pulaski_app`, which a deployment's login joins. It has SELECT, INSERT and UPDATE on `core`, and only SELECT and INSERT on `evt.event`, so the log is append-only by privilege as well as by trigger. Nothing has DELETE. The integration tests connect as a member of this role.
+- **Privileges.** `db/app-role.sql` creates the NOLOGIN group role `pulaski_app`, which a deployment's login joins. It has SELECT, INSERT and UPDATE on `core`, plus DELETE only on `core.equipment_tag`; it has only SELECT and INSERT on `evt.event`, so the log is append-only by privilege as well as by trigger. The integration tests connect as a member of this role.
 
 **API (D-013).** Separate commands and queries with hand-written handlers, and no mediator library.
 
@@ -945,7 +1035,7 @@ These need an answer before the related area is built; tick each one as it moves
 
 **Machine state**
 
-- [ ] How is a line's state derived from its machines: constraint machine, worst state, or configured per line?
+- [x] How is a line's state derived from its machines: constraint machine, worst state, or configured per line? Configured per line: series = worst, parallel = best (D-050).
 - [ ] On target lines, are PackML-native PLCs common, or will synthesised states be the norm?
 
 **Storage**

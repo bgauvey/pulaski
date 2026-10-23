@@ -58,6 +58,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
         await ExecuteAsync("SELECT ts.create_month_partitions('ts.job_status_change', current_date - 31, 3)");
         await ExecuteAsync("SELECT ts.create_month_partitions('ts.lot_event', current_date - 31, 3)");
         await ExecuteAsync("SELECT ts.create_month_partitions('ts.production_count', current_date - 31, 3)");
+        await ExecuteAsync("SELECT ts.create_month_partitions('ts.equipment_state_change', current_date - 31, 3)");
+        await ExecuteAsync("SELECT ts.create_month_partitions('ts.downtime', current_date - 31, 3)");
         await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(dbDir, "seed-reasons.sql")));
 
         UomId = Guid.CreateVersion7();

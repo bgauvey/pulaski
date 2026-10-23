@@ -1,6 +1,7 @@
 -- =====================================================================
 -- Pulaski — starter reason codes                            2026-10-16
--- Enterprise-wide reasons for inventory adjustments and holds (D-027), scrap and run ends (D-035).
+-- Enterprise-wide reasons for inventory adjustments and holds (D-027), scrap and run ends (D-035), and
+-- utilization reasons for machine time (D-050).
 -- Load after schema-draft.sql. Re-runnable: existing codes are left alone.
 --
 -- Like the rest of the seed these are master data loaded before go-live,
@@ -38,4 +39,25 @@ INSERT INTO core.reason_code (site_id, reason_kind, code, name, requires_comment
     (NULL, 'run_end', 'PRIORITY',  'Higher-priority job',    false, 40),
     (NULL, 'run_end', 'QUALITY',   'Quality problem',        false, 50),
     (NULL, 'run_end', 'OTHER',     'Other',                  true,  90)
+ON CONFLICT (site_id, reason_kind, code) DO NOTHING;
+
+-- Utilization reasons (D-050): what a machine's time counts as. Runtime is run time; downtime is availability
+-- loss; planned is scheduled non-production, left out of planned time. Machine profiles map stop codes to these.
+INSERT INTO core.reason_code (site_id, reason_kind, utilization_class, code, name, requires_comment, sort_order) VALUES
+    (NULL, 'utilization', 'runtime',  'RUN',       'Running',                          false, 10),
+    (NULL, 'utilization', 'runtime',  'SLOW',      'Running below rate',               false, 20),
+    (NULL, 'utilization', 'downtime', 'JAM',       'Jam',                              false, 110),
+    (NULL, 'utilization', 'downtime', 'FAULT',     'Machine fault',                    false, 120),
+    (NULL, 'utilization', 'downtime', 'ADJUST',    'Adjustment',                       false, 130),
+    (NULL, 'utilization', 'downtime', 'STARVED',   'Starved: waiting for material or upstream', false, 140),
+    (NULL, 'utilization', 'downtime', 'BLOCKED',   'Blocked: downstream full',         false, 150),
+    (NULL, 'utilization', 'downtime', 'QUALITY',   'Quality stop',                     false, 160),
+    (NULL, 'utilization', 'downtime', 'NO-CREW',   'No operator',                      false, 170),
+    (NULL, 'utilization', 'downtime', 'NO-ORDER',  'Available, nothing scheduled',     false, 180),
+    (NULL, 'utilization', 'downtime', 'OTHER',     'Other',                            true,  190),
+    (NULL, 'utilization', 'planned',  'SETUP',     'Setup and changeover',             false, 210),
+    (NULL, 'utilization', 'planned',  'TEARDOWN',  'Teardown',                         false, 220),
+    (NULL, 'utilization', 'planned',  'CLEAN',     'Planned cleaning',                 false, 230),
+    (NULL, 'utilization', 'planned',  'PM',        'Planned maintenance',              false, 240),
+    (NULL, 'utilization', 'planned',  'BREAK',     'Scheduled break',                  false, 250)
 ON CONFLICT (site_id, reason_kind, code) DO NOTHING;

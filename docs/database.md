@@ -1,6 +1,6 @@
 # Pulaski — Database Reference
 
-Oct 13, 2026 · Bill Gauvey
+Oct 18, 2026 · Bill Gauvey
 
 This is the reference for every table and column in `db/schema-draft.sql` (PostgreSQL 18). It explains what each table is for and what each column means. The SQL file stays the source of truth for exact types and constraints; when the two disagree, fix this document. Decisions referenced as D-nnn are in [domain-model-decisions.md](domain-model-decisions.md).
 
@@ -21,7 +21,7 @@ This is the reference for every table and column in `db/schema-draft.sql` (Postg
 | Partitioned tables | Range-partitioned by a time column, monthly by default (`ts.create_month_partitions`). The primary key always includes that column. There is no default partition: a missing partition makes inserts fail, so the API keeps three months ahead through `ts.ensure_partitions` (D-028). |
 | Migrations (D-028) | `schema-draft.sql` is the complete schema for a new database; each change also ships as a re-runnable `db/migrations/NNNN_*.sql`, applied by `db/migrate.sh` and recorded in `public.schema_migration`. |
 | Foreign keys into history | None. A row pointing at a partitioned table stores the id (and its time) without an FK, so old partitions can be dropped. |
-| Deletes | The application role (`pulaski_app`, `db/app-role.sql`) has no `DELETE` anywhere. Master data is deactivated (`is_active`), and corrections are new rows or events. |
+| Deletes | The application role (`pulaski_app`, `db/app-role.sql`) has `DELETE` only on `core.equipment_tag`; other master data is deactivated. Events and time-partitioned history are never deleted. |
 
 ## Map
 
@@ -31,7 +31,8 @@ Equipment model            Material & capability          Calendar
             ├─ link ─ residence_time   material ─ uom_conversion   crew
             ├─ tag                     bom ─ bom_version ─ bom_item shift_instance
             ├─ stop_reason_map         equipment_capability (D-020) calendar_exception
-            └─ oee_state_category
+            ├─ oee_state_category
+            └─ machine_profile ─ _state, _code, _reason (D-050)
 
 Orders & scheduling                       Execution & inventory
  manufacturing_order                       job_run ─── ts.production_count, ts.downtime
@@ -99,9 +100,10 @@ One self-referencing table holds enterprise, sites, areas, work centers (lines),
 | `holds_inventory` | boolean | no | Lots can be located here (storage, feed point). |
 | `single_material` | boolean | no | Takes one material at a time (D-032): another material can arrive only when the quantity of the one there is zero. Needs `holds_inventory`. |
 | `commingles_lots` | boolean | no | Lots here mix and can't be told apart, like a silo or tank (D-031): every arrival joins one balance per material. Needs `holds_inventory`. |
-| `state_derivation` | text | yes | How a line's state is derived: `own_tags`, `constraint_machine`, `worst_child` or `rule`. Open question; not used yet. |
-| `constraint_equipment_id` | uuid → equipment | yes | The constraint machine, required when `state_derivation = 'constraint_machine'`. |
-| `micro_stop_threshold` | interval | no | Stops shorter than this count as micro-stops. Default 2 minutes. |
+| `state_derivation` | text | no | Where its state comes from (D-050): `own_tags` (default, its own state tag), `series` (the worst state of its machines), `parallel` (the best) or `constraint_machine`. Set on the Equipment screen; nothing reads it until machine data is collected. |
+| `constraint_equipment_id` | uuid → equipment | yes | The constraint machine: set exactly when `state_derivation = 'constraint_machine'` (`equipment_derivation_ck`), and equipment below this one that tracks state. |
+| `micro_stop_threshold` | interval | no | Stops shorter than this are micro-stops (D-050): logged, not queued for coding, not availability loss. 0 to 60 minutes (`equipment_micro_stop_ck`), default 5. |
+| `machine_profile_id` | uuid → machine_profile | yes | The machine profile its state and stop codes are read with (D-050). Only equipment that tracks state takes one, of its own site. |
 | `time_zone` | text | yes | IANA zone, required on sites. Shift times and reports use it. |
 | `is_active` | boolean | no | False when retired. |
 | `calendar_mode` | text | no | Which working time it follows for planning (D-038): `inherit` (default, its parent's; at the top with nothing set, around the clock), `schedule` (its own) or `around_the_clock`. |
@@ -143,25 +145,96 @@ How long material takes to travel a link, for time-window genealogy. Optionally 
 | `ref_residence` | interval | no | The residence time, at `ref_speed` when speed-scaled. |
 | `ref_speed` | numeric(18,6) | yes | Reference line speed; required and positive for `speed_scaled`. |
 
-### core.equipment_tag — machine signal bindings · *Planned*
+### core.edge_node — Pulaski Edge nodes · *In use (D-050)*
 
-One row per signal the edge node reads, and what it means.
+A worker on plant hardware that reads machines through its connections, buffers what it reads and forwards it. It signs in as a local user holding the Edge node role (`edge.ingest`) at the site. Maintained on Configure → Edge nodes (`equipment.manage`).
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key; the edge's `EdgeNodeId`. |
+| `site_id` | uuid → equipment | no | Its site. |
+| `code` | text | no | Upper case, unique per site (`edge_node_code_uq`), fixed once created. |
+| `name`, `description` | text | no / yes | Display name and notes. |
+| `is_active` | boolean | no | Off: Pulaski refuses its data and the edge stops collecting. |
+| `stream_id` | uuid | yes | The edge's buffer, as of its last batch. A new buffer is a new stream. |
+| `last_sequence` | bigint | no | The highest sequence number of `stream_id` applied; a batch at or below it is skipped, so sending again is harmless. |
+| `last_seen_at` | timestamptz | yes | When it last forwarded signals or reported what it sees. |
+| `agent_version` | text | yes | The version of Pulaski Edge it runs. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.edge_connection — what an edge node reads · *In use (D-050)*
+
+One data source, read through one connector. Secrets such as broker passwords live in the edge's own configuration, never here.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `equipment_id` | uuid → equipment | no | The equipment the signal belongs to. |
-| `tag_role` | text | no | `state`, `unit_mode`, `stop_reason`, `alarm`, `warning`, `processed_count`, `defective_count`, `consumed_count`, `machine_speed` or `process_value`. |
-| `source_protocol` | text | no | `sparkplug_b`, `opc_ua`, `synthesized` or `manual`. |
-| `edge_node` | text | yes | Sparkplug edge node, or OPC UA endpoint name. |
-| `source_address` | text | no | Sparkplug metric path or OPC UA NodeId. Unique with protocol and edge node. |
-| `data_type` | text | no | `bool`, `int`, `float` or `string`. |
-| `uom_id` | uuid → uom | yes | Unit of the value. |
-| `scale_factor`, `scale_offset` | numeric(18,9) | no | Engineering value = raw × factor + offset. Defaults 1 and 0. |
-| `counter_rollover` | bigint | yes | Counters only: the value at which the counter wraps. |
-| `deadband` | numeric(18,9) | yes | Process values only: ignore changes smaller than this. |
-| `is_active` | boolean | no | False when no longer read. |
-| `created_at` | timestamptz | no | Insert time. |
+| `edge_node_id` | uuid → edge_node | no | The node that reads it. |
+| `code` | text | no | Unique per node (`edge_connection_code_uq`); the key for its secrets in the edge's configuration. |
+| `name` | text | no | Display name. |
+| `protocol` | text | no | `sparkplug_b`. |
+| `settings` | jsonb | no | The connector's settings as text values: for Sparkplug B `host`, `port`, `tls`, `groupId`, `hostId`, `clientId`, `username`. |
+| `is_active` | boolean | no | Off: the edge stops reading it. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.edge_metric — addresses a connection has seen · *In use (D-050)*
+
+What the edge reported seeing (Sparkplug birth certificates and data), so tags can be bound by picking them. Upserted by the edge.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `connection_id` | uuid → edge_connection | no | Part of the primary key. |
+| `address` | text | no | `group/node[/device]:metric`. Part of the primary key. |
+| `data_type` | text | yes | As the source declared it, e.g. `Int32`. |
+| `last_value` | text | yes | The last value seen, as text. |
+| `last_seen_at` | timestamptz | no | When it was last seen. |
+
+### core.equipment_tag — machine signal bindings · *In use (D-050)*
+
+One signal an edge reads for a piece of equipment, and what it means. One active tag per role on a piece of equipment, process values aside (`equipment_tag_role_uq`), and one per address on a connection (`equipment_tag_source_uq`). A tag may be physically deleted by equipment maintainers; any quality-characteristic source binding is cleared first. The deletion event and time-series history remain.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key; the edge's signals name it. |
+| `equipment_id` | uuid → equipment | no | Equipment of the node's site that tracks state. |
+| `tag_role` | text | no | `state`, `unit_mode`, `stop_reason`, `processed_count`, `defective_count`, `consumed_count` or `machine_speed`; `alarm`, `warning` and `process_value` aren't recorded yet. |
+| `connection_id` | uuid → edge_connection | no | Where it is read. |
+| `source_address` | text | no | Sparkplug B: `group/node[/device]:metric`. |
+| `uom_id` | uuid → uom | yes | Unit of the value; not used yet. |
+| `scale_factor`, `scale_offset` | numeric(18,9) | no | Counts are multiplied by the factor; a speed is value × factor + offset. Defaults 1 and 0. |
+| `counter_rollover` | bigint | yes | Counters only: the value the counter wraps at. Without it a counter going back is taken as reset to zero. |
+| `deadband` | numeric(18,9) | yes | Process values only; not used yet. |
+| `is_active` | boolean | no | Off: its signals are skipped. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.equipment_live_state — each machine's current state · *In use (D-050)*
+
+As its signals last left it. Written by machine data ingest only.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `equipment_id` | uuid → equipment | no | Primary key. |
+| `raw_state` | integer | yes | The value the machine sent; null with no signal. |
+| `packml_state` | smallint → packml_state | no | Its meaning, through the equipment's machine profile. |
+| `unit_mode` | smallint | no | Unit mode; 1 (Production) until the machine reports one. |
+| `state_since` | timestamptz | no | When the state or mode last changed. |
+| `stop_reason` | integer | yes | The latched first-out stop code: kept when the machine reports 0, cleared when it runs (Execute) again. |
+| `machine_speed` | numeric(18,6) | yes | Latest speed, scaled. |
+| `signal_at` | timestamptz | no | The newest signal applied. |
+| `edge_node_id` | uuid → edge_node | yes | The node it last came from. |
+| `open_downtime_id`, `open_downtime_started_at` | uuid, timestamptz | yes | Its stop in progress in `ts.downtime` (no foreign key into history); both null while it executes (`equipment_live_downtime_ck`). |
+| `updated_at` | timestamptz | no | When it was written. |
+
+### core.equipment_counter — last counter readings · *In use (D-050)*
+
+The last raw reading of each machine counter, so the next reading becomes a count.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `equipment_id` | uuid → equipment | no | Part of the primary key. |
+| `count_kind` | text | no | `processed`, `defective` or `consumed`. Part of the primary key. |
+| `raw_counter` | bigint | no | The reading. |
+| `read_at` | timestamptz | no | When it was read. |
 
 ### core.unit_mode — PackML unit modes · *Planned (seeded)*
 
@@ -454,14 +527,15 @@ Holidays, shutdowns and weeks without demand, maintained on Configure → Site s
 
 ### core.reason_code — reason trees · *In use*
 
-One tree per kind of reason. Branches group; leaves are selected. Inventory uses the `inventory_adjustment` and `hold` kinds (D-027); `db/seed-reasons.sql` loads a starter set, and the Reasons screen adds and changes them (D-030). A code and its kind never change once created; the name, `requires_comment`, `sort_order` and `is_active` can. The tree (`parent_id`) isn't edited yet.
+One tree per kind of reason. Branches group; leaves are selected. Inventory uses the `inventory_adjustment` and `hold` kinds (D-027); machine time uses `utilization` (D-050); `db/seed-reasons.sql` loads a starter set, and the Reasons screen adds and changes them (D-030). A code and its kind never change once created; the name, `requires_comment`, `sort_order`, `is_active` and a utilization reason's class can. The tree (`parent_id`) isn't edited yet.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
 | `site_id` | uuid → equipment | yes | Null for enterprise-wide codes. |
 | `parent_id` | uuid → reason_code | yes | Parent node in the tree. |
-| `reason_kind` | text | no | `downtime`, `scrap`, `hold`, `inventory_adjustment`, `indirect_labor`, `run_end`, `spc_cause` or `sample_exclusion`. |
+| `reason_kind` | text | no | `utilization`, `scrap`, `hold`, `inventory_adjustment`, `indirect_labor`, `run_end`, `spc_cause` or `sample_exclusion`. `utilization` replaced the planned `downtime` kind (0019). |
+| `utilization_class` | text | yes | For a utilization reason, and only for one (`reason_code_utilization_ck`): `runtime` (run time), `downtime` (availability loss) or `planned` (left out of planned time) (D-050). |
 | `code` | text | no | Unique per site and kind. |
 | `name` | text | no | Display name. |
 | `oee_impact` | text | no | Which OEE factor it lowers: `availability`, `performance`, `quality`, `planned` (excluded from OEE) or `none`. |
@@ -470,15 +544,68 @@ One tree per kind of reason. Branches group; leaves are selected. Inventory uses
 | `sort_order` | integer | no | Display order among siblings. |
 | `is_active` | boolean | no | False when retired. |
 
-### core.equipment_stop_reason_map — PLC stop reasons · *Planned*
+### core.machine_profile — one kind of machine · *In use (D-050)*
 
-Maps a machine's PackML `Admin.StopReason` (first-out) value to a Pulaski reason.
+How a kind of machine reports itself: its state values and its own stop, alarm and warning codes. Identical machines share one; a machine of another vendor or model gets its own. Kept per site, like the reasons it maps to. Maintained on Configure → Machine profiles (`equipment.manage`). Every change to its lists also updates the row, so its version (`xmin`) guards the lists too.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The site it belongs to. |
+| `code` | text | no | Upper case, unique per site (`machine_profile_code_uq`), fixed once created. |
+| `name` | text | no | Display name. |
+| `vendor`, `model` | text | yes | Who makes it and which model. |
+| `description` | text | yes | Notes. |
+| `is_active` | boolean | no | Switched off rather than deleted; not while active equipment uses it. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.machine_profile_state — a profile's state values · *In use (D-050)*
+
+The values the machine's state tag takes, each with the PackML state it means. A new profile gets PackML's own 18 numbers. Switched off, never deleted.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `profile_id` | uuid → machine_profile | no | Part of the primary key. |
+| `raw_value` | integer | no | The value the machine sends. Part of the primary key. |
+| `name` | text | no | The controller's name for it. |
+| `packml_state` | smallint → packml_state | no | The PackML state it means. |
+| `reason_code_id` | uuid → reason_code | yes | Utilization reason for time in this state when the machine gives no stop code, e.g. Suspended = starved. |
+| `is_active` | boolean | no | False when an import left it out or someone switched it off. |
+
+### core.machine_profile_code — a profile's stop, alarm and warning codes · *In use (D-050)*
+
+The machine's own codes (PackML `Admin.StopReason`, `Admin.Alarm`, `Admin.Warning` ids), each mapped to a utilization reason. An unmapped stop code shows as uncoded.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `profile_id` | uuid → machine_profile | no | Part of the primary key. |
+| `code_kind` | text | no | `stop_reason`, `alarm` or `warning`. Part of the primary key. |
+| `raw_value` | integer | no | The id the machine sends. Part of the primary key. |
+| `message` | text | no | The vendor's text for it. |
+| `category` | text | yes | The vendor's grouping, e.g. Mechanical. |
+| `reason_code_id` | uuid → reason_code | yes | The utilization reason it counts as. |
+| `is_active` | boolean | no | False when an import left it out or someone switched it off. |
+
+### core.machine_profile_reason — reasons offered on a profile's machines · *In use (D-050)*
+
+The utilization reasons operators may choose on the profile's machines, besides the ones its codes and states map to.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `profile_id` | uuid → machine_profile | no | Part of the primary key. |
+| `reason_code_id` | uuid → reason_code | no | Part of the primary key. |
+| `is_offered` | boolean | no | False once unticked (rows aren't deleted). |
+
+### core.equipment_stop_reason_map — one machine's own stop reasons · *In use (D-050)*
+
+Where one machine's stop code means something other than on the rest of its profile's machines. Changing it updates the equipment row, so the equipment's version guards it.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `equipment_id` | uuid → equipment | no | The machine. Part of the primary key. |
-| `plc_reason_value` | integer | no | The value the PLC reports. Part of the primary key. |
-| `reason_code_id` | uuid → reason_code | no | The Pulaski reason it means. |
+| `plc_reason_value` | integer | no | The stop code (a `stop_reason` of its profile). Part of the primary key. |
+| `reason_code_id` | uuid → reason_code | yes | Its reason on this machine; null leaves the code uncoded here. |
+| `is_active` | boolean | no | False removes the override: the profile's reason applies again. |
 
 ## 6. User control (`sec`)
 
@@ -538,7 +665,7 @@ One row per user who signs in with a Pulaski password.
 | --- | --- | --- | --- |
 | `role_id` | uuid → role | no | The role. Part of the primary key. |
 | `permission_code` | text → permission | no | The permission. Part of the primary key. |
-| `is_granted` | boolean | no | False once the permission has been taken away: rows are kept, since the app role has no DELETE. |
+| `is_granted` | boolean | no | False once the permission has been taken away: rows are kept; the app role has no DELETE on this table. |
 | `changed_at` | timestamptz | no | When it was last granted or taken away. |
 | `changed_by_user_id` | uuid → app_user | yes | Who did. |
 
@@ -996,7 +1123,7 @@ A break's time comes out of the worked hours of every session of the person it o
 | `code` | text | no | Unique per site. |
 | `name` | text | no | Display name. |
 | `equipment_id` | uuid → equipment | no | Where it is measured. |
-| `equipment_tag_id` | uuid → equipment_tag | yes | Set when sampled automatically from process data. |
+| `equipment_tag_id` | uuid → equipment_tag | yes | Set when sampled automatically from process data; cleared if its tag is physically deleted. |
 | `data_kind` | text | no | `variable` (measured) or `attribute` (counted). |
 | `chart_type` | text | no | `xbar_r`, `xbar_s`, `i_mr` (variables) or `p`, `np`, `c`, `u` (attributes). |
 | `subgroup_size` | smallint | no | Measurements per subgroup; 1 for `i_mr`. |
@@ -1076,7 +1203,7 @@ The alert's current state; the violation itself is history in `ts.spc_violation`
 
 All tables here are partitioned by their time column, with that column in the primary key. Columns named `run_id` hold a `core.job_run` id without an FK.
 
-### ts.equipment_state_change — PackML state transitions · *Planned*
+### ts.equipment_state_change — PackML state transitions · *In use (D-050)*
 
 Each row is a change of the (state, mode) pair and carries when the previous pair began, so every row closes one complete interval and the table stays insert-only.
 
@@ -1093,28 +1220,32 @@ Each row is a change of the (state, mode) pair and carries when the previous pai
 | `run_id` | uuid | yes | The run at the time. |
 | `source` | text | no | `packtags`, `synthesized`, `manual` or `edge_gap` (no signal). |
 | `edge_sequence` | bigint | yes | Edge sequence number, for store-and-forward ordering and deduplication. |
-| `recorded_at` | timestamptz | no | When Pulaski received it. |
+| `raw_state` | integer | yes | The value the machine sent; `packml_state` is its meaning. Null with no signal (D-050). |
+| `stop_reason` | integer | yes | The first-out stop code latched when the state changed (D-050). |
+| `recorded_at` | timestamptz | no | When Pulaski received it; later than `occurred_at` when the edge buffered through an outage. |
 
-### ts.downtime — stop intervals · *Planned*
+### ts.downtime — machine stops · *In use (D-050)*
 
-Updated while open and when coded; each change is also an event.
+Time a machine isn't executing: opened by machine data ingest when it leaves Execute (or loses its signal), closed when it executes again, and coded by operators. Updated while open and when coded (the app may update this table, never delete); coding is also an event (`pulaski.downtime.coded.v1`). The machine's open stop is pointed at from `core.equipment_live_state`.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key with `started_at`. |
-| `started_at` | timestamptz | no | Start. Partition key. |
-| `ended_at` | timestamptz | yes | End; null while stopped. |
-| `equipment_id` | uuid → equipment | no | The equipment. |
-| `run_id` | uuid | yes | The run at the time. |
-| `packml_state` | smallint → packml_state | no | The stopped state. |
-| `plc_stop_reason` | integer | yes | First-out reason reported by the PLC. |
-| `mapped_reason_code_id` | uuid → reason_code | yes | The PLC reason mapped through `equipment_stop_reason_map`. |
-| `operator_reason_code_id` | uuid → reason_code | yes | The reason an operator chose. |
+| `started_at` | timestamptz | no | When it left Execute. Partition key. |
+| `ended_at` | timestamptz | yes | When it executed again; null while stopped. |
+| `equipment_id` | uuid → equipment | no | The machine. |
+| `run_id` | uuid | yes | The run open when it stopped. |
+| `packml_state` | smallint → packml_state | no | The state it stopped in. |
+| `unit_mode` | smallint | no | The unit mode it stopped in. |
+| `plc_stop_reason` | integer | yes | The first first-out stop code reported during the stop. |
+| `mapped_reason_code_id` | uuid → reason_code | yes | The reason that code maps to (the machine's override, else its profile), else the reason of the first state on its way that has one. |
+| `operator_reason_code_id` | uuid → reason_code | yes | The reason an operator chose: confirming the mapped one, or another. |
 | `effective_reason_code_id` | uuid | yes | Generated: the operator's reason if set, otherwise the mapped one. Both are kept. |
-| `is_micro_stop` | boolean | no | Shorter than the equipment's micro-stop threshold. |
-| `coded_by_user_id` | uuid | yes | Who coded it. |
+| `is_micro_stop` | boolean | no | Shorter than the machine's micro-stop threshold: not coded, not availability loss. Set when it closes. |
+| `coded_by` | text | yes | Who coded it, as on `evt.event` (issuer and subject, or the local user name). |
+| `coded_by_user_id` | uuid | yes | The Pulaski user who coded it. |
 | `coded_at` | timestamptz | yes | When. |
-| `comment` | text | yes | Free text. |
+| `comment` | text | yes | The operator's comment. |
 
 ### ts.equipment_alarm — alarms and warnings · *Planned*
 
@@ -1144,7 +1275,7 @@ Deltas calculated at the edge, with rollover handled there; the raw counter is k
 | `raw_counter` | bigint | yes | The counter value read. |
 | `uom_id` | uuid → uom | yes | Unit. |
 | `scrap_reason_code_id` | uuid → reason_code | yes | Why, for defective counts. |
-| `source` | text | no | `machine`, `operator` or `correction`. |
+| `source` | text | no | `machine` (from an edge, D-050: not a production report, and changes no run's quantities yet), `operator` or `correction`. |
 | `corrects_id` | uuid | yes | For corrections: the row being offset. |
 | `job_id` | uuid | yes | The run's job. No FK, as for `run_id`. |
 | `recorded_at` | timestamptz | no | When it was entered. Later than the run's end for a late report. |
@@ -1157,7 +1288,7 @@ No surrogate id and no FKs, because size and insert cost matter at this volume. 
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `equipment_tag_id` | uuid | no | The tag (no FK). Primary key with `occurred_at`. |
+| `equipment_tag_id` | uuid | no | The source tag id (no FK); historical samples remain if its tag is deleted. Primary key with `occurred_at`. |
 | `occurred_at` | timestamptz | no | Sample time. Partition key. |
 | `value_num` | double precision | yes | Numeric value. |
 | `value_text` | text | yes | Text value. |

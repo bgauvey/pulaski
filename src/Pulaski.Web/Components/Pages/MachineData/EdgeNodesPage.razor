@@ -1,0 +1,178 @@
+@page "/edge-nodes"
+@attribute [RequiresView(PermissionCodes.EquipmentView)]
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@using Pulaski.Web.Services.MachineData
+
+@* Pulaski Edge nodes (D-050): workers on plant hardware that read the machines through their connections and forward what they
+   read to Pulaski. *@
+<PageTitle>Edge nodes · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Edge nodes</h1>
+        <p class="text-muted mb-0">
+            A Pulaski Edge node runs on plant hardware, close to the machines. It reads them through its connections (an MQTT Sparkplug B broker),
+            keeps what it reads in a local buffer, and forwards it here, so a network drop loses nothing. Add a node here, then its connections
+            and the tags that bind what it reads to your equipment.
+        </p>
+    </div>
+    @if (Sites.Sites.Count > 1)
+    {
+        <div class="inv-head-tools">
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        </div>
+    }
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Equipment" What="maintain edge nodes" SiteId="Sites.SiteId" />
+
+@if (CanManage)
+{
+    <form class="inv-toolbar" @onsubmit="CreateAsync" @onsubmit:preventDefault>
+        <input class="form-control" style="width: 9rem" maxlength="20" placeholder="CODE" aria-label="Edge node code" @bind="_code" @bind:event="oninput" />
+        <input class="form-control inv-grow" maxlength="100" placeholder="Name, e.g. Packaging hall gateway" aria-label="Edge node name" @bind="_name" @bind:event="oninput" />
+        <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))">Add edge node</button>
+    </form>
+}
+
+@if (_nodes is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_nodes.Count == 0)
+{
+    <div class="empty-panel"><p class="text-muted mb-0">No edge nodes at @(Sites.Site?.Code ?? "this site") yet.</p></div>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead><tr><th>Code</th><th>Name</th><th class="inv-num">Connections</th><th class="inv-num">Tags</th><th>Last heard from</th><th>Version</th><th>Active</th>@if (CanManage) { <th></th> }</tr></thead>
+            <tbody>
+                @foreach (var n in _nodes)
+                {
+                    <tr @key="n.Id" class="@(n.IsActive ? "" : "text-muted")">
+                        <td><a class="fw-semibold" href="edge-nodes/@n.Id">@n.Code</a></td>
+                        <td>@n.Name</td>
+                        <td class="inv-num">@n.ConnectionCount</td>
+                        <td class="inv-num">@n.TagCount</td>
+                        <td>@EdgeView.LastHeard(n.LastSeenAt, DateTimeOffset.UtcNow, Sites.Site?.TimeZone)</td>
+                        <td>@n.AgentVersion</td>
+                        <td>@(n.IsActive ? "Yes" : "No")</td>
+                        @if (CanManage)
+                        {
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-danger" disabled="@_saving" @onclick="() => DeleteNodeAsync(n)">Delete</button>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<EdgeNodeDto>? _nodes;
+    private ApiException? _error;
+    private bool _saving;
+    private string? _code;
+    private string? _name;
+
+    private bool CanManage => User.Can(PermissionCodes.Equipment, Sites.SiteId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            _nodes = [];
+            return;
+        }
+
+        try
+        {
+            _nodes = await Api.ListEdgeNodesAsync(site);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var created = await Api.CreateEdgeNodeAsync(new CreateEdgeNodeRequest { SiteId = Sites.SiteId!.Value, Code = _code!, Name = _name! });
+            Navigation.NavigateTo($"edge-nodes/{created.Id}");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteNodeAsync(EdgeNodeDto node)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm",
+                $"Delete edge node {node.Code}? This will deactivate the node and all its connections and tags. Historical data will be kept."))
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        try
+        {
+            await Api.DeleteEdgeNodeAsync(node.Id);
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

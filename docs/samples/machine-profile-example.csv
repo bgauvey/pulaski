@@ -1,0 +1,31 @@
+kind,value,name,packml_state,category,reason
+state,0,Undefined,Undefined,,
+state,1,Clearing,Clearing,,
+state,2,Stopped,Stopped,,
+state,3,Starting,Starting,,
+state,4,Idle,Idle,,NO-ORDER
+state,5,Suspended,Suspended,,STARVED
+state,6,Execute,Execute,,RUN
+state,7,Stopping,Stopping,,
+state,8,Aborting,Aborting,,
+state,9,Aborted,Aborted,,FAULT
+state,10,Holding,Holding,,
+state,11,Held,Held,,
+state,12,Unholding,Unholding,,
+state,13,Suspending,Suspending,,
+state,14,Unsuspending,Unsuspending,,
+state,15,Resetting,Resetting,,
+state,16,Completing,Completing,,
+state,17,Complete,Complete,,
+stop_reason,1,Emergency stop pressed,,Safety,FAULT
+stop_reason,2,Guard door open,,Safety,ADJUST
+stop_reason,10,Infeed jam,,Mechanical,JAM
+stop_reason,11,Discharge jam,,Mechanical,JAM
+stop_reason,20,Out of cases,,Supplies,STARVED
+stop_reason,21,Glue level low,,Supplies,STARVED
+stop_reason,30,Downstream conveyor full,,Flow,BLOCKED
+stop_reason,40,Servo fault,,Electrical,FAULT
+stop_reason,50,Product rejected three times in a row,,Quality,QUALITY
+stop_reason,60,Format change,,Changeover,SETUP
+alarm,100,Air pressure low,,Utilities,
+warning,200,Case magazine nearly empty,,Supplies,

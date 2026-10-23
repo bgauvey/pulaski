@@ -9,8 +9,8 @@
 <div class="mb-3">
     <h1 class="mb-1">Reason codes</h1>
     <p class="text-muted mb-0">
-        The reasons people choose when they write stock up or off, hold a lot, and later code downtime or scrap. A code and its kind can't change once
-        created, because history refers to them; switch a reason off instead of reusing it.
+        The reasons people choose when they write stock up or off, hold a lot, report scrap or end a run, and the utilization reasons a machine's
+        time is coded with. A code and its kind can't change once created, because history refers to them; switch a reason off instead of reusing it.
     </p>
 </div>
 
@@ -38,6 +38,15 @@
             <option value="@site.Id">@site.Code only</option>
         }
     </select>
+    @if (_kind == Utilization)
+    {
+        <select class="form-select w-auto" aria-label="Class" @bind="_newClass">
+            @foreach (var c in Classes)
+            {
+                <option value="@c">@ClassLabel(c)</option>
+            }
+        </select>
+    }
     <div class="form-check">
         <input class="form-check-input" type="checkbox" id="new-comment" @bind="_newRequiresComment" />
         <label class="form-check-label" for="new-comment">Needs a comment</label>
@@ -56,6 +65,14 @@
 else
 {
     var shown = _reasons.Where(r => r.Kind == _kind).ToList();
+    @if (_kind == Utilization)
+    {
+        <p class="small text-muted">
+            A utilization reason's class says what the time means for OEE: <strong>runtime</strong> is producing or running slow,
+            <strong>downtime</strong> is an unplanned stop that counts against availability, and <strong>planned</strong> (setup, teardown,
+            cleaning, planned maintenance) is left out of planned time. A machine profile maps the machine's own stop codes to these reasons.
+        </p>
+    }
     @if (shown.Count == 0)
     {
         <div class="empty-panel"><p class="text-muted mb-0">No @Display.Label(_kind).ToLowerInvariant() reasons yet. Add one above.</p></div>
@@ -70,6 +87,10 @@ else
                         <th>Code</th>
                         <th>Name</th>
                         <th>Applies to</th>
+                        @if (_kind == Utilization)
+                        {
+                            <th>Class</th>
+                        }
                         <th>Needs a comment</th>
                         <th class="inv-num">Order</th>
                         <th>Active</th>
@@ -84,6 +105,18 @@ else
                             <td class="fw-semibold">@r.Code</td>
                             <td><input class="form-control form-control-sm" maxlength="100" aria-label="Name of @r.Code" value="@edit.Name" @onchange="e => Change(r, x => x with { Name = Text(e) })" disabled="@(!r.IsSelectable)" /></td>
                             <td>@(r.SiteCode ?? "Every site")</td>
+                            @if (_kind == Utilization)
+                            {
+                                <td>
+                                    <select class="form-select form-select-sm" aria-label="Class of @r.Code" value="@edit.UtilizationClass"
+                                            @onchange="e => Change(r, x => x with { UtilizationClass = Text(e) })">
+                                        @foreach (var c in Classes)
+                                        {
+                                            <option value="@c">@ClassLabel(c)</option>
+                                        }
+                                    </select>
+                                </td>
+                            }
                             <td><input class="form-check-input" type="checkbox" aria-label="@r.Code needs a comment" checked="@edit.RequiresComment" @onchange="e => Change(r, x => x with { RequiresComment = e.Value is true })" /></td>
                             <td class="inv-num"><input type="number" class="form-control form-control-sm text-end" style="width: 5rem" min="0" max="10000" aria-label="Order of @r.Code" value="@edit.SortOrder" @onchange="e => Change(r, x => x with { SortOrder = int.TryParse(Text(e), out var n) ? n : x.SortOrder })" /></td>
                             <td><input class="form-check-input" type="checkbox" aria-label="@r.Code active" checked="@edit.IsActive" @onchange="e => Change(r, x => x with { IsActive = e.Value is true })" /></td>
@@ -104,7 +137,9 @@ else
 }
 
 @code {
-    private static readonly string[] Kinds = ["inventory_adjustment", "hold", "downtime", "scrap", "indirect_labor", "run_end", "spc_cause", "sample_exclusion"];
+    private const string Utilization = "utilization";
+    private static readonly string[] Kinds = ["inventory_adjustment", "hold", Utilization, "scrap", "indirect_labor", "run_end", "spc_cause", "sample_exclusion"];
+    private static readonly string[] Classes = ["downtime", "planned", "runtime"];
 
     private IReadOnlyList<ReasonCodeAdminDto>? _reasons;
     private readonly Dictionary<Guid, ReasonCodeAdminDto> _edits = [];
@@ -114,6 +149,7 @@ else
     private string? _newName;
     private Guid? _newSiteId;
     private bool _newRequiresComment;
+    private string _newClass = "downtime";
     private bool _saving;
 
     // A reason for every site is enterprise-wide, so holding the permission at any site is enough (D-037).
@@ -136,6 +172,13 @@ else
     private ReasonCodeAdminDto Edit(ReasonCodeAdminDto reason) => _edits.GetValueOrDefault(reason.Id) ?? reason;
 
     private static string Text(ChangeEventArgs e) => e.Value?.ToString() ?? "";
+
+    private static string ClassLabel(string utilizationClass) => utilizationClass switch
+    {
+        "runtime" => "Runtime",
+        "planned" => "Planned (not in OEE)",
+        _ => "Downtime",
+    };
 
     // Edits are kept until saved; one that brings a reason back to how it is drops out.
     private void Change(ReasonCodeAdminDto reason, Func<ReasonCodeAdminDto, ReasonCodeAdminDto> apply)
@@ -177,6 +220,7 @@ else
                 Name = _newName!,
                 RequiresComment = _newRequiresComment,
                 SortOrder = Math.Min(nextOrder, 10_000),
+                UtilizationClass = _kind == Utilization ? _newClass : null,
             });
             _newCode = _newName = null;
             _newRequiresComment = false;
@@ -193,6 +237,7 @@ else
             RequiresComment = edit.RequiresComment,
             SortOrder = edit.SortOrder,
             IsActive = edit.IsActive,
+            UtilizationClass = edit.UtilizationClass,
         }));
     }
 

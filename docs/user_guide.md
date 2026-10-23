@@ -2,7 +2,7 @@
 
 *Last updated: 2026-10-23 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
-This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#18-reference) tables give the exact rules.
+This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#21-reference) tables give the exact rules.
 
 ## Contents
 
@@ -23,10 +23,13 @@ This guide explains how to use Pulaski to set up your plant, plan production and
 15. [Shift schedules](#15-shift-schedules)
 16. [Labor, people and crews](#16-labor-people-and-crews)
 17. [Site settings](#17-site-settings)
-18. [Reference](#18-reference)
-19. [What Pulaski doesn't do yet](#19-what-pulaski-doesnt-do-yet)
-20. [Troubleshooting and questions](#20-troubleshooting-and-questions)
-21. [Glossary](#21-glossary)
+18. [Machine profiles](#18-machine-profiles)
+19. [Edge nodes: collecting machine data](#19-edge-nodes-collecting-machine-data)
+20. [Machines: live status and stops](#20-machines-live-status-and-stops)
+21. [Reference](#21-reference)
+22. [What Pulaski doesn't do yet](#22-what-pulaski-doesnt-do-yet)
+23. [Troubleshooting and questions](#23-troubleshooting-and-questions)
+24. [Glossary](#24-glossary)
 
 ---
 
@@ -45,7 +48,7 @@ Today you can use Pulaski to:
 - publish the plan to the floor and freeze it;
 - keep **inventory**: receive material lots into stores, write stock up or off, move and hold lots, record what each job used and made, and trace any lot back to what it was made from or forward to what was made from it.
 
-Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#19-what-pulaski-doesnt-do-yet).
+Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#22-what-pulaski-doesnt-do-yet).
 
 ### Opening Pulaski
 
@@ -186,7 +189,9 @@ If you are starting from an empty Pulaski, work through this list in order. Each
 | 7 | BOMs for the materials you make (optional, recommended) | [BOMs](#7-bills-of-materials-boms) | Without a BOM, an order plans no components. |
 | 8 | Work orders | [Schedule → New work order](#8-creating-a-work-order) | Now you can plan. |
 | 9 | Inventory locations: stores, staging areas and feed points, with **Holds inventory** ticked | [Equipment](#4-equipment) | Lots have to be somewhere. |
-| 10 | Reason codes for write-ups, write-offs and holds | [Reasons](#reason-codes) (a starter set comes with `db/seed-reasons.sql`) | Every adjustment and hold needs a reason. |
+| 10 | Reason codes for write-ups, write-offs and holds, and utilization reasons for machine time | [Reasons](#reason-codes) (a starter set comes with `db/seed-reasons.sql`) | Every adjustment and hold needs a reason; machine profiles map stop codes to utilization reasons. |
+| 11 | Machine profiles, and which one each machine uses | [Machine profiles](#18-machine-profiles), then [Equipment](#4-equipment) | So the machine's state values and stop codes mean something in Pulaski. |
+| 12 | Edge nodes, their connections, and tags binding machine signals to equipment (optional) | [Edge nodes](#19-edge-nodes-collecting-machine-data) | So Pulaski hears machine state and counts. |
 
 The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plant PLT1 with EXT-01, EXT-02 and PACK1, the stores RM-STORE and staging FG-STAGE, 200 materials, and the standard units with conversions for the demo materials), so you can start at step 6.
 
@@ -210,14 +215,14 @@ The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plan
 | ERP changes to accept | Orders the ERP changed after dispatch | Needs an ERP connection |
 | Labor to approve | Labor sessions from the last shift to approve | Needs labor tracking |
 
-**This shift** will show OEE (with availability, performance and quality against target), good output against plan, scrap and downtime with its biggest reason. All four need machine data.
+**This shift** shows OEE and its availability, performance and quality components from the current shift's machine and production reports. Site OEE combines the active production lines from their underlying time and ideal-output components; it does not average line percentages. When there is no rated production to calculate OEE, it shows a dash. Good output against plan, scrap and downtime are not shown here yet.
 
 **Lines** has one row per line:
 
 - **State:** the machine state. Until the line is connected it says **No signal**.
 - **Now or next:** the job the schedule has on the line now, or the next one and when it starts, with how much of it is made.
 - **The strip** covers six hours back to eighteen hours ahead, with a black line at *now*. The top lane will show what the line actually did (hatched while there's no signal); the bottom lane shows the planned jobs: outlined for planned, solid for dispatched or firmed, hatched for changeovers. Hover over a job to see it; click it to open its order on the Schedule. If nothing is planned in the window, the lane says when the next work starts.
-- **OEE** for the line, once there's machine data.
+- **OEE** for the line's current shift, with small bars for availability, performance and quality. The value comes from the machine/OEE report and refreshes with the Overview. A dash means there is no rated production data for that shift.
 - **Flags** at the end: a red mark if work overlaps on the line, an amber clock if a job has a schedule warning (hover for the messages).
 
 At the bottom, **Work orders** counts orders at each stage, Planned → Dispatched → Firmed → In progress → Completed (click one to list them), and **Starting next** lists the next six jobs to start across the plant.
@@ -235,7 +240,7 @@ At the bottom, **Work orders** counts orders at each stage, Planned → Dispatch
   - Type in **Filter by code or name** to find equipment; matching rows stay visible with their parents.
   - Arrow keys move through the tree when it has focus.
   - The bottom line counts the items (and the matches while filtering).
-- **Right: the properties** of the selected equipment, grouped into *Identity*, *Classification*, *Capabilities*, *Site*, *Status*, *Working time* and *Hierarchy*.
+- **Right: the properties** of the selected equipment, grouped into *Identity*, *Classification*, *Capabilities*, *Site*, *Status*, *Machine data* (equipment that tracks state), *Working time* and *Hierarchy*.
   - Click a property to see what it means in the description area at the bottom.
   - Switch between grouped (**Categorized**) and **Alphabetical** order, or search the properties by name.
 
@@ -271,6 +276,20 @@ Select it and edit a property on the right. Text saves when you press **Enter** 
 
 **Lines vs departments.** A line has *Schedulable* and *Can run jobs*. A department (an area that you plan to, with lines below it) has *Schedulable* only; the tree shows it as **Plans for children**. A line can also have *Can run jobs* without *Schedulable*: it then only takes jobs from a department above it.
 
+### Machine data
+
+Equipment with **Tracks state** set shows a **Machine data** group:
+
+1. **Machine profile**: how its controller reports state and stop codes. Choose one of its site's [machine profiles](#18-machine-profiles), or *None*.
+2. **Micro-stop threshold**: stops shorter than this many minutes are micro-stops. They are logged but not queued for a reason, and they don't count against availability. Default 5 minutes; 0 to 60, in steps of half a minute. An extruder may use 2, a pack cell more.
+3. **State from**: where its state comes from.
+   - *Its own state tag* (default).
+   - *Worst of its machines (series)*: for a line whose machines run one after another, so one stopped machine stops the line.
+   - *Best of its machines (parallel)*: for machines running side by side, so the line runs while any of them does.
+   - *Its constraint machine*: the line's state is one machine's. A **Constraint machine** row appears; Pulaski first picks the first machine below that tracks state, and you can choose another.
+
+Each saves as soon as you change it. The profile reads the machine's data as it arrives through an [edge node](#19-edge-nodes-collecting-machine-data); the threshold decides which stops are micro-stops, and *State from* how a line shows on [Machines](#20-machines-live-status-and-stops).
+
 ### Deactivate equipment
 
 Set **Active** to *false*. Inactive equipment stays in the tree and in history, greyed out, but can no longer be used for new work. Pulaski never deletes equipment.
@@ -282,6 +301,7 @@ Set **Active** to *false*. Inactive equipment stays in the tree and in history, 
 - Roles allowed at each level: work center: production line, process cell, production unit, storage zone; work unit: work cell, unit, machine, storage unit; equipment module: machine, feed point, module; control module: module.
 - Codes are unique within a site.
 - The **Working time** group: **Shifts** chooses when it works for planning (*Inherit from parent*, one of its site's shift schedules, or *Around the clock*), and **Shifts in effect** shows what it ends up with and where from, such as *2X8 · Two shifts, from PLT1*. See [Shift schedules](#15-shift-schedules). Changing **Shifts** needs permission to maintain shift schedules, not equipment.
+- **Machine data** needs permission to maintain equipment. A machine profile must be active and of the equipment's own site, and only equipment that tracks state takes one. A constraint machine must be below the line and track state.
 - The **Hierarchy** group shows the parent, the owning site, the number of children and Pulaski's internal id (useful for support and the API).
 
 ---
@@ -961,11 +981,12 @@ A **count** checks what is really at a location and puts the records right.
 
 ### Reason codes
 
-**Configure → Reasons** lists the reasons people choose, one tab per kind: inventory adjustments, holds, and the kinds later screens will use (downtime, scrap…).
+**Configure → Reasons** lists the reasons people choose, one tab per kind: inventory adjustments, holds, scrap, run ends, **utilization** (what a machine's time counts as), and kinds later screens will use.
 
 1. To add one, type a **code** (letters, digits, `-`, `_` or `.`), a **name**, choose **Every site** or one site, tick **Needs a comment** if people must explain, and click **Add**.
 2. To change one, edit its name, comment setting, order or **Active** box, then click **Save** on its row (**Undo** throws the change away).
 3. A code and its kind can't change once created, because history refers to them. To stop using a reason, untick **Active**.
+4. A **utilization** reason also has a **Class**: *Runtime* (producing or running slow), *Downtime* (an unplanned stop, counted against availability) or *Planned (not in OEE)* (setup, teardown, cleaning, planned maintenance, breaks). Choose it when you add the reason; you can change it later on its row and **Save**.
 
 ### Locations
 
@@ -1141,7 +1162,7 @@ A class's code can't change and a class is never deleted: switch it off instead.
 
 ### In detail
 
-- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#19-what-pulaski-doesnt-do-yet)).
+- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#22-what-pulaski-doesnt-do-yet)).
 - **Codes** are unique across all materials, whatever their origin; an import whose code is already used by another material is refused.
 - **Events.** Each change is recorded in the event log as `pulaski.material.created.v1`, `…updated.v1` or `…imported.v1` (and `pulaski.material_class.created.v1` / `…updated.v1`), with the material before and after.
 - **Concurrency.** As elsewhere, if someone else changed the material or class since you opened it, you'll see *"changed by someone else"*: reload and try again.
@@ -1177,14 +1198,15 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | --- | --- |
 | **Administrator** | Everything, at every site, including users and roles. |
 | **Planner** | The schedule (place, sequence, pin, assign and cancel jobs); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; materials. |
-| **Supervisor** | Start, pause, complete and reopen jobs; report production; record and approve labor; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches. |
-| **Operator** | Start, pause and complete jobs; report production; receive and move lots; clock themselves on and off. |
+| **Supervisor** | Start, pause, complete and reopen jobs; report production; record and approve labor; code machine stops; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches. |
+| **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off. |
 | **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); approve or reject partial batches. |
 | **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; the site's settings. |
 | **Auditor** | Correct inventory; stock counts. Can't plan or run jobs. |
 | **Process engineer** | Processes, BOMs and which lines can run each material. |
+| **Edge node** | Nothing on screen: it is for the user a Pulaski Edge node signs in as, to read its configuration and forward machine data. |
 
-Equipment and units belong to the Administrator. Someone with two roles can do what either allows.
+Equipment (with machine profiles and edge nodes) and units belong to the Administrator. Someone with two roles can do what either allows.
 
 When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator.
 
@@ -1195,10 +1217,10 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 | Role | Sees |
 | --- | --- |
 | **Administrator**, **Auditor**, **Manager** | Every screen (Users only for Administrator). |
-| **Planner** | Overview, Work orders, Schedule, Floor, Inventory, Materials, Processes and BOMs, Site settings (to look at). |
-| **Supervisor** | Overview, Work orders (to look at), Floor, Inventory, Labor, Site settings (to look at). |
-| **Operator** | Overview, Work orders (to look at), Floor, Inventory. |
-| **Quality** | Overview, Floor, Inventory, Materials. |
+| **Planner** | Overview, Work orders, Schedule, Floor, Machines, Inventory, Materials, Processes and BOMs, Site settings (to look at). |
+| **Supervisor** | Overview, Work orders (to look at), Floor, Machines, Inventory, Labor, Site settings (to look at). |
+| **Operator** | Overview, Work orders (to look at), Floor, Machines, Inventory. |
+| **Quality** | Overview, Floor, Machines, Inventory, Materials. |
 | **Process engineer** | Equipment, Materials, Processes and BOMs, Units. |
 
 - **Start page.** After signing in you land on the Overview, or, if you can't see it, the first screen in the menu you can.
@@ -1451,7 +1473,174 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 
 ---
 
-## 18. Reference
+## 18. Machine profiles
+
+**Configure → Machine profiles.** A machine profile describes how one kind of machine reports itself: the values its state tag takes and the PackML state each one means, and its own stop, alarm and warning codes with the utilization reason each one counts as. Identical machines share a profile; machines from different vendors or of different models each get their own. You give each machine its profile on the [Equipment](#machine-data) screen.
+
+Machine data arrives through [edge nodes](#19-edge-nodes-collecting-machine-data): the profile turns what each machine sends into PackML states.
+
+### Ideas to know first
+
+- **PackML states.** Pulaski records machine state as the 18 standard PackML states (0 Undefined, 2 Stopped, 4 Idle, 5 Suspended, 6 Execute, 11 Held…). Many controllers send those numbers as they are; some number their states another way. A profile says what each value means.
+- **Stop codes.** When a machine stops, it reports a first-out code: the first thing that went wrong. These codes are the vendor's own, so each profile lists them, with their message and category.
+- **Utilization reasons.** Each code, and each state, can count as a [utilization reason](#reason-codes), such as *Jam* (downtime) or *Setup* (planned). A code with no reason shows as uncoded, for an operator to code.
+
+### Add a profile
+
+1. Open **Configure → Machine profiles**. With more than one site, choose the site at the top.
+2. Type a **Code** (such as `PACKER-A`; it can't change later), a **Name**, and optionally the **Vendor** and **Model**. Click **Add profile**.
+3. The profile opens. It starts with PackML's own 18 states.
+
+### Import the machine's definitions from a CSV file
+
+1. On the profile, click **Import CSV**.
+2. Choose the file. Pulaski checks it and shows what it would do, row by row: *Add*, *Change*, *Switch off* or *Unchanged*, or the errors.
+3. If every row is valid, click **Import**. Nothing is saved until every row is valid.
+
+The file's first line names the columns, in any order and case:
+
+| Column | Means |
+| --- | --- |
+| `kind` | `state`, `stop_reason`, `alarm` or `warning`. Required. |
+| `value` | The number the machine sends. Required. |
+| `name` | The state's name, or the code's message. Required. |
+| `packml_state` | State rows only: the PackML state it means, as a number (0 to 17) or a name such as `Execute`. Leave it empty on code rows. |
+| `category` | The vendor's grouping, such as *Mechanical*. Optional. |
+| `reason` | The code of the utilization reason it counts as, such as `JAM`. Optional. |
+
+**Each kind in the file replaces that list:** its rows are added or changed, and entries of that kind the file leaves out are switched off. A kind the file doesn't mention stays as it is, so a file of stop reasons only keeps the states. An example file is `docs/samples/machine-profile-example.csv`. **Export CSV** saves the profile's active entries in the same format, to edit and import again.
+
+### Change a profile
+
+1. **States**: change a value's **Name**, **PackML state** or **Reason with no stop code** (what time in that state counts as when the machine gives no code, such as Suspended = *Starved*), or untick **Active**, then click **Save** on the row. To add a value, fill in the row above the table and click **Add state**.
+2. **Stop reasons**, **Alarms** and **Warnings**: change the **Message**, **Category** or **Reason**, or untick **Active**, and click **Save**. A stop code without a reason is marked **No reason**. Add a code with the row above the table.
+3. **Reasons offered**: tick the utilization reasons operators may choose when they code a stop on this profile's machines, and click **Save offered reasons**. With none ticked, every utilization reason of the site is offered; once you tick some, operators see those and the ones its codes and states map to (marked *mapped*).
+4. The name, vendor, model and **Active** box at the top save with **Save**.
+
+### One machine is different
+
+If one machine's code means something else than on the others with the same profile:
+
+1. Open the profile's **Machines** tab. It lists the equipment using the profile.
+2. Under the machine, choose the **Stop code** and its reason on that machine (or *Leave uncoded*), and click **Override**.
+3. Click **Use the profile's** to remove it again.
+
+### In detail
+
+- **Who:** seeing profiles needs permission to see equipment; changing them, and the machine data on equipment, needs permission to maintain equipment at the site.
+- **A profile belongs to a site**, and maps only to reasons for every site or for that site. Its code is unique in the site.
+- **Nothing is deleted.** States and codes are switched off; an unticked reason stays recorded as unticked.
+- **Switching a profile off** is refused while active equipment uses it: give those machines another profile first.
+- **Two people at once:** every change to a profile's lists counts as a change to the profile, so someone saving after another's change is asked to reload.
+- **Errors in a file** name the line: a value that isn't a whole number, an unknown kind, a missing or unknown PackML state, a PackML state on a code row (usually a missing column), a value that appears twice, a name too long, or a reason that isn't an active utilization reason of the site.
+
+## 19. Edge nodes: collecting machine data
+
+**Configure → Edge nodes.** A Pulaski Edge node is a small program on plant hardware, near the machines. It reads them through an MQTT broker they publish to in **Sparkplug B**, keeps what it reads in a buffer on its own disk, and forwards it to Pulaski. If the network or Pulaski goes down, it keeps reading and forwards everything once it can, so nothing is lost.
+
+### Ideas to know first
+
+- **Connections** are where an edge node reads from: today, an MQTT broker. Pulaski listens as a Sparkplug B host application.
+- **Tags** bind a signal to equipment: *this* metric is PACK1's state, *that* one its processed count. A Sparkplug B address reads `group/node/device:metric`, for example `Plant1/Packing/PACK-01:Status/StateCurrent`.
+- **What Pulaski does with them.** A state value goes through the equipment's [machine profile](#18-machine-profiles) to its PackML state, and every change of state is kept, with the value the machine sent. The machine's first-out stop code is kept until it runs again. Counter readings become counts, in the job running on the equipment. Losing the signal is recorded as *Undefined*.
+
+### Add an edge node
+
+1. Open **Configure → Edge nodes**. With more than one site, choose the site.
+2. Type a **Code** (such as `GW-PACK`; it can't change later) and a **Name**, and click **Add edge node**. Its page opens.
+3. On **Connections**, give the broker a **Code** and **Name**, its **Broker host** and **Port**, tick **TLS** if it uses it, and optionally the Sparkplug **Group id** (to hear only one group), a **Host id** (Pulaski then announces itself, so nodes know it is listening), a **Client id** and a **User name**. Click **Add connection**.
+4. On **Configure → Users**, add a user for the edge (such as `edge-gw-pack`) with the **Edge node** role at the site. Sign in as that user once and set its password, then sign out.
+5. On the node's **Setup** tab, copy the configuration into the edge's `appsettings.json` on the edge machine, fill in the user's password (and the broker's, if it has a user name), and start Pulaski Edge.
+6. To remove a node from use, click **Delete** on its row or page and confirm. Its connections and tags are switched off with it.
+
+### Bind tags
+
+1. Once the edge runs, open its **Seen** tab: every metric its brokers have announced, with its last value. Type in **Filter addresses** to find one.
+2. Click **Bind** next to a metric. Pulaski guesses the role from the name; choose the **Equipment** (only equipment of the site that tracks state is offered) and check the **Role**.
+3. For a count, set the **Scale** (how many units one count is) and, if the counter wraps, its **Rollover** value. Click **Bind tag**.
+4. To type an address instead, use the same form on the **Tags** tab. To change a tag, edit its address, scale, rollover or **Active** checkbox and click **Save**. To delete a tag completely, whether active or inactive, click **Delete** on its row and confirm.
+
+The edge reads its tags every minute, so new and changed ones take effect without restarting it.
+
+### Watch it work
+
+- The node's heading shows **Forwarding** while it is heard from, **Quiet** after 2 minutes without anything (offline, or nothing changed), and when it was last heard from and its version.
+- **Live** shows each bound machine's PackML state (and the value it sent, where different), since when, its unit mode, latched stop code and speed. Click **Refresh** to update. Its stops are on [Machines](#20-machines-live-status-and-stops).
+- **Tags** shows each tag's last value.
+
+### In detail
+
+- **Who:** seeing edge nodes needs permission to see equipment; adding and changing them, their connections and tags needs permission to maintain equipment at the site. The edge's own user needs only the **Edge node** role and sees no screens.
+- **Sending once.** The edge numbers everything it buffers and Pulaski applies each number once, so forwarding again after a failure changes nothing. A new buffer file starts a new numbering, which Pulaski recognises.
+- **What the edge forwards:** a tag's value when it changes, when it is lost, and the last value seen when the tag is newly bound; a speed at most every 5 seconds. A connection it hears from without a birth certificate is asked for one (a Sparkplug *rebirth*), as is every node its tags name when it connects, so an idle machine's state is known.
+- **Stop codes** are latched: a machine that clears its code once acknowledged keeps it in Pulaski until it runs (Execute) again.
+- **Counts** are taken across the rollover value; a counter going back without one is taken as reset to zero. Machine counts go into the run open on the equipment but don't change the job's reported quantities yet: production is still reported on the Floor.
+- **Switching a node off** stops Pulaski taking its data and the edge collecting. Switching a tag or connection off stops it being read.
+- **Delete behavior.** Deleting a node deactivates it and all its connections and tags. Deleting a tag physically removes its binding, so it disappears from the Tags tab; this works whether the tag is active or inactive. Any quality characteristic using it as an automatic source is kept but detached. The deletion event and historical machine data are retained. Add a new binding if the signal is needed again. Reactivating a node later does not reactivate its connections or tags; switch those back on individually if needed.
+- **Without Pulaski**, the edge starts with the last configuration it kept.
+- **The demo simulators.** `docker compose -f deploy/simulator/compose.yaml up -d` starts a local-only MQTT broker and three PackML simulators: group `Plant1`, nodes `Extruder`, `Saw` and `Packer`, and devices `EXT-01-EXT`, `EXT-01-SAW` and `PACK1`. The Spruiktec simulators publish standard PackML state numbers; `deploy/simulator/packml-simulator-profile.csv` is an example profile with the matching state values. The broker is anonymous and has no TLS: keep it on your development machine.
+- **Connect the edge.** Add a Sparkplug B connection on the edge node with broker host `localhost`, port `1883` (or the value of `PULASKI_MQTT_PORT` if 1883 is occupied), and group id `Plant1`. If Pulaski Edge runs in the same Docker Compose network as the broker, use host `broker` and port `1883` instead. Bind the three simulator addresses from the Seen tab, for example `Plant1/Extruder/EXT-01-EXT:Status/StateCurrent`, `Plant1/Saw/EXT-01-SAW:Status/StateCurrent` and `Plant1/Packer/PACK1:Status/StateCurrent`. Useful companion metrics include `Status/UnitModeCurrent`, `Status/CurMachSpeed`, and the `Admin/Prod*Count/0/AccCount` counters.
+- **Start a simulated machine.** After a fresh start, wait for its initial `Clearing` transition to finish at `Stopped`. Then Reset takes 1–10 seconds to reach `Idle`; the simulator command tool's `--delay-seconds 12` allows for that before it sends Start. For example, run `dotnet run --project tools/Pulaski.SparkplugCommand -- --host localhost --port 1883 --delay-seconds 12 spBv1.0/Plant1/DCMD/Extruder/EXT-01-EXT Command/Reset=true Command/Start=true`. Change `Extruder/EXT-01-EXT` to `Saw/EXT-01-SAW` or `Packer/PACK1` for the other devices; use the configured broker port if it is not 1883. Start takes another 1–10 seconds to reach `Execute`.
+
+## 20. Machines: live status and stops
+
+**Operate → Machines.** What every machine is doing now, as its [edge node](#19-edge-nodes-collecting-machine-data) reports it, its stops to code, and its utilization and OEE over past days.
+
+### Ideas to know first
+
+- **A stop** is time a machine isn't executing: it starts when the machine leaves Execute (or loses its signal) and ends when it executes again. The states it passes through on the way (Stopping, Stopped, Resetting…) are one stop.
+- **Its reason.** A stop takes the reason its first-out stop code maps to in the machine's [profile](#18-machine-profiles); with no code, the reason of the first state on its way that has one (Suspended = *Starved*, say). An operator confirms that reason or gives another, and both are kept.
+- **Micro-stops** are stops shorter than the machine's micro-stop threshold (5 minutes unless set otherwise on the Equipment screen). They are listed but not coded, and don't count against availability.
+
+### The status board
+
+1. Open **Operate → Machines**. With more than one site, choose the site.
+2. Each tile is a piece of equipment that tracks state, coloured by what it is doing: **Producing** (green), **Waiting** (starved or blocked), **Held**, **Stopped**, **Ready** (idle, starting, resetting…), and **No signal** or **Not reporting** (hatched).
+3. A tile shows the PackML state and for how long, the unit mode when it isn't Production, the stop in progress with its reason (or **uncoded**) and stop code, the job running with its good count so far, and the speed.
+4. A line sits first in its row, with the machines below it. A line set to take its state from its machines says so: **Worst of its machines** (series), **Best of its machines** (parallel) or **Its constraint machine**.
+5. **… stops to code** on a tile opens that machine's stops. **… quiet** means its edge node hasn't been heard from for 2 minutes.
+
+The board refreshes every 5 seconds.
+
+### Code stops
+
+1. Open the **Stops** tab. The heading shows how many are waiting. **Only stops to code** is ticked: stops with no reason, longer than the micro-stop threshold, including one still going on.
+2. Choose the **Equipment** and **Period** (8 hours, 24 hours or 7 days) to look at. Untick **Only stops to code** to see every stop, with its reason; tick **Show micro-stops** to see those too.
+3. Click **Code** on a stop. Choose the **Reason**, add a **Comment** if you like (some reasons need one), and click **Save**. Where the stop code mapped a reason, **Confirm …** accepts it in one click; until then the list shows it as *to confirm*.
+4. **Change** on a coded stop gives it another reason. The list shows who coded it, their comment, and the reason the code gave when the two differ.
+
+### Utilization and OEE reports
+
+1. Open the **Utilization and OEE** tab.
+2. Choose the production days (**From** and **to**, at most 31 days) and, if you like, one piece of **Equipment** (it and everything below it); click **Show**. It opens on the last 7 days, all equipment.
+3. **By equipment** lists each piece of equipment that tracks state, machines indented under their line, with its scheduled, planned, run and down hours, stops, and **availability**, **performance**, **quality** and **OEE**. Down time not coded yet shows as *uncoded* under the hours.
+4. **By shift** shows the same for each shift worked, for the line (the top of each group); choose one machine to see its own shifts.
+5. **By product** shows each material made: where it ran, how many runs, good and scrap as reported, and its OEE over the time inside its runs.
+6. **Where the time went** breaks one piece of equipment's scheduled time into run, micro-stops, down (by reason, **Uncoded** or **No signal**), planned stops (by reason) and non-production modes, longest first. Choose the equipment in the section's list.
+7. **Export CSV** on each section saves it as a file.
+
+A dash means there is nothing to measure that figure against, such as performance on a machine that doesn't run jobs.
+
+### In detail
+
+- **Who:** seeing Machines needs permission to see machines; coding stops needs permission to code machine stops (Operators and Supervisors have both).
+- **Which reasons are offered:** with reasons ticked on the machine's profile (**Reasons offered**), those and the ones its codes and states map to; with none ticked, or no profile, every utilization reason of the site.
+- **Stop code:** the first one the machine reports during the stop is the stop's, even if the machine reports another later. A machine's own override (on the profile's **Machines** tab) beats the profile.
+- **Unit mode:** a stop keeps the unit mode it began in; one in Maintenance or Manual is shown with that mode.
+- **Counts on the board** are the machine's processed less defective counts in the run open on it.
+- **Each coding is recorded** as an event, with the reason before and after and whether it confirmed the mapped one.
+- **Scheduled time** is what the equipment's [shift schedule](#15-shift-schedules) gives it: its shifts, counted towards the day they start on; equipment without shifts (around the clock) is scheduled the whole site-local day. Time outside its shifts isn't counted, and neither is time still to come.
+- **How each moment counts:** in a unit mode that isn't production time (Maintenance, Manual) it is *non-production*; in a stop it counts by its reason's class: **planned** reasons (setup, changeover, cleaning) are planned stops, **runtime** reasons are run time, **downtime** reasons and uncoded stops are down. A micro-stop is run time. Otherwise executing is run time and anything else is down. Before a machine has sent anything, or while its signal is lost, it is down with *no signal*. Time in a job that counts as planned downtime (planned maintenance) is a planned stop.
+- **Planned time** is scheduled time less non-production modes and planned stops. **Availability** = run time ÷ planned time.
+- **Performance** = output at the ideal rate ÷ run time in jobs. The ideal rate is the line's capability for the material when the run started. Run time with no job running isn't in it (its output can't be reported). **Quality** = good ÷ good and scrap. **OEE** = availability × performance × quality. Output comes from production reports; machine counts aren't reports and aren't used.
+- **Several products** add up by their time at the ideal rate (quantity ÷ ideal rate), so different units don't matter. A run without an ideal rate (no capability, or a rate whose unit doesn't convert) is listed in a note above the tables; its output shows in the product's good and scrap but not in performance or quality.
+- **Lines:** a line set to take its state from its machines takes its time from theirs: in series, at each moment the worst (down, then planned, then non-production, then run); in parallel, the best; or its constraint machine's. Its jobs and reports are its own, so the line has full OEE; a machine below it that runs no jobs has availability only.
+- **Stops** count the stops that started in the period (a stop already going on when it began isn't counted again); micro-stops are counted separately.
+- **Worked out when you ask:** nothing is stored, so coding a stop, changing a reason's class or correcting a shift schedule changes the report at once.
+
+---
+
+## 21. Reference
 
 ### Work order statuses
 
@@ -1521,16 +1710,16 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 ---
 
-## 19. What Pulaski doesn't do yet
+## 22. What Pulaski doesn't do yet
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
 - **No screen yet for the changeover rules** (how long each material change takes): they are set up in the database.
-- **By shift:** production counts and labor are reported by shift; OEE by shift isn't, because machine state and downtime aren't recorded yet.
 - **Labor:** no import of people from HR or the ERP. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
 - **No adapters yet** for other external sources or for label printing: materials come from the screen, a CSV file, or the ERP one item at a time through the API. The CSV import doesn't take capabilities, doesn't create missing classes, and there is no template file to download (the panel shows the header line).
-- **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded (stops inside a run aren't known yet, since downtime isn't recorded).
-- **Production is reported by hand.** Counts from the machines, machine state, downtime, OEE, labor and quality aren't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
+- **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
+- **Machine data:** stops can't be split, merged or entered by hand. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
+- **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
 - **Batches:** the batch size is per material, not per line (a 50 kg mixer next to a 200 kg one isn't modelled). A replacement job is always rounded up to whole batches; to make fewer, cancel it. Orders from the ERP aren't imported yet, so there is no rule yet for an ERP order that isn't whole batches. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
 - **Not in inventory yet:** pallets or containers that hold several lots, lot labels and barcode scanning, lot attributes and certificates of analysis, setting stock aside for a job, and suggestions of which lot to use first. Movements can't be back-dated.
@@ -1539,7 +1728,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Where lots mix, genealogy is approximate:** every lot that ever joined a silo's balance counts as a parent of everything taken from it afterwards. Residence time and first-in, first-out through a silo come with machine data.
 - **Inventory movements aren't sent to the ERP yet:** they are recorded as events, but the connection that delivers them isn't built.
 - **Shortages use published times, not the live schedule,** and don't count incoming deliveries.
-- **The Overview** shows no machine state, counts, OEE, downtime, quality, lots or labor yet: those parts are hatched placeholders until the data exists. Its line strip is a rolling 24 hours rather than the current shift.
+- **The Overview** still shows no live machine state, reported counts, good output, scrap, downtime, quality, lots or labor. OEE is available for the current shift from the machine/OEE report; its timeline strip remains a rolling 24 hours rather than the current shift.
 - **Notes** can only be written when the order is created.
 - **Released product specifications** are not maintained in Pulaski yet. Shop-order sheets flag this gap and require operators to verify the approved specification elsewhere.
 - **Signing in through your company's identity provider** (Okta, Entra ID, AD FS, Keycloak) isn't built yet: users have Pulaski passwords, and an administrator resets forgotten ones (Pulaski sends no e-mail).
@@ -1550,7 +1739,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 
 ---
 
-## 20. Troubleshooting and questions
+## 23. Troubleshooting and questions
 
 **"You may not do this…" or a button I expected isn't there.**
 Your roles don't allow that change, or not at this site. The message names the permission; ask an administrator (see [What each role can change](#what-each-role-can-change)).
@@ -1617,7 +1806,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 
 ---
 
-## 21. Glossary
+## 24. Glossary
 
 | Term | Meaning |
 | --- | --- |
@@ -1634,6 +1823,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Department / group** | Equipment you can plan to that doesn't run jobs itself; its lines do. |
 | **Dispatch** | Publish an order to the floor, fixing its baseline. |
 | **Draft / released / obsolete** | Versions of a process or BOM: being edited / in use for new orders / replaced. |
+| **Edge node** | Pulaski Edge, running near the machines: reads them, buffers what it reads and forwards it to Pulaski. |
 | **Firm** | Freeze an order's plan; its jobs keep their start times. |
 | **Genealogy** | Which lots were made from which. |
 | **Hold / quarantine** | Statuses that keep a lot on hand but stop it being consumed until released. |
@@ -1644,10 +1834,12 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Location** | Equipment that holds inventory: a store, staging area or feed point. |
 | **Lock** | Pin a job so it keeps its place. |
 | **Lot** | One numbered batch of a material, with its quantity, location and history. |
+| **Machine profile** | How one kind of machine reports itself: what its state values mean in PackML, and its own stop, alarm and warning codes with their utilization reasons. |
 | **Material class** | A group of similar materials, such as *Extruded profiles*. |
 | **Material type** | A label from the item master, such as its MRP class (raw, finished, packaging…); it drives no rules. |
 | **Origin** | Where a material is maintained: in Pulaski, or in the ERP, which then owns its code, name, base unit and type. |
 | **Merge** | Combine lots of one material into one. |
+| **Micro-stop** | A stop shorter than the equipment's threshold (5 minutes by default): logged, but not coded and not counted against availability. |
 | **Operation** | One step of a process, run on one or more lines or departments. |
 | **Packaging unit** | A unit like box, bag or pallet whose size depends on the material; it converts only through a material conversion. |
 | **Partial batch** | A batch cut short when the line stopped. Accepted for work in progress; held for approval for finished goods. |
@@ -1669,8 +1861,12 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Shortage** | What open jobs still need of a component beyond the stock available. |
 | **Site** | A plant, with its own time zone. |
 | **Split** | Divide part of a lot into a new lot. |
+| **Stop** | Time a machine isn't executing, from leaving Execute until it executes again, with the reason it is coded with. |
 | **Substitution** | Consuming a material a job had no planned component of. |
 | **Trace** | Following genealogy back to everything a lot was made from, or forward to everything made from it. |
+| **Sparkplug B** | A standard way for machines to publish their data over MQTT, with birth certificates naming each metric. |
+| **Tag** | A machine signal bound to equipment, with the role it plays (state, a count…). |
+| **Utilization reason** | What a machine's time counts as: *runtime*, *downtime* (against availability) or *planned* (left out of OEE). |
 | **Where used** | The BOMs and open jobs that use a material as a component. |
 | **Window** | The time span a department job must be run in. |
 | **Work order** | A request to make a quantity of one material by a due date. |

@@ -86,10 +86,10 @@ CREATE TABLE core.equipment (
     holds_inventory         boolean NOT NULL DEFAULT false,         -- lots can be located here
     commingles_lots         boolean NOT NULL DEFAULT false,         -- lots here mix into one balance per material, like a silo (D-031)
     single_material         boolean NOT NULL DEFAULT false,         -- takes one material at a time (D-032)
-    -- line state derivation (open question: constraint vs worst vs configured)
-    state_derivation        text CHECK (state_derivation IN ('own_tags','constraint_machine','worst_child','rule')),
+    -- machine data (D-050): where its state comes from, and how short a stop is a micro-stop
+    state_derivation        text NOT NULL DEFAULT 'own_tags' CHECK (state_derivation IN ('own_tags','series','parallel','constraint_machine')),
     constraint_equipment_id uuid REFERENCES core.equipment(id),
-    micro_stop_threshold    interval NOT NULL DEFAULT interval '2 minutes',
+    micro_stop_threshold    interval NOT NULL DEFAULT interval '5 minutes',
     time_zone               text,                                   -- IANA zone, required on sites
     is_active               boolean NOT NULL DEFAULT true,
     created_at              timestamptz NOT NULL DEFAULT now(),
@@ -113,7 +113,8 @@ CREATE TABLE core.equipment (
     CONSTRAINT equipment_site_ck CHECK (level = 'enterprise' OR site_id IS NOT NULL),
     CONSTRAINT equipment_tz_ck   CHECK (level <> 'site' OR time_zone IS NOT NULL),
     CONSTRAINT equipment_root_ck CHECK ((level = 'enterprise') = (parent_id IS NULL)),
-    CONSTRAINT equipment_derivation_ck CHECK (state_derivation <> 'constraint_machine' OR constraint_equipment_id IS NOT NULL),
+    CONSTRAINT equipment_derivation_ck CHECK ((state_derivation = 'constraint_machine') = (constraint_equipment_id IS NOT NULL)),
+    CONSTRAINT equipment_micro_stop_ck CHECK (micro_stop_threshold >= interval '0' AND micro_stop_threshold <= interval '1 hour'),
     CONSTRAINT equipment_commingles_ck CHECK (NOT commingles_lots OR holds_inventory),
     CONSTRAINT equipment_single_material_ck CHECK (NOT single_material OR holds_inventory),
     CONSTRAINT equipment_code_uq UNIQUE (site_id, code)
@@ -156,7 +157,51 @@ CREATE TABLE core.residence_time (
     CONSTRAINT residence_time_uq UNIQUE NULLS NOT DISTINCT (equipment_link_id, material_id)
 );
 
--- Machine tag mapping (edge binding). One row per signal the edge reads.
+-- Pulaski Edge nodes (D-050): a worker on plant hardware that runs connectors, buffers what they read and forwards it.
+-- It signs in as a service user holding edge.ingest at the site. stream_id/last_sequence make forwarding idempotent:
+-- a batch at or below last_sequence of the same stream was already applied.
+CREATE TABLE core.edge_node (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    code                text NOT NULL,                          -- upper case, fixed once created
+    name                text NOT NULL,
+    description         text,
+    is_active           boolean NOT NULL DEFAULT true,
+    stream_id           uuid,                                   -- the edge's buffer; a new one restarts the sequence
+    last_sequence       bigint NOT NULL DEFAULT 0,
+    last_seen_at        timestamptz,
+    agent_version       text,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT edge_node_code_uq UNIQUE (site_id, code)
+);
+
+-- One data source an edge node reads, through one connector: an MQTT Sparkplug B broker today (D-050).
+-- Secrets (broker passwords) stay in the edge's own configuration, never here.
+CREATE TABLE core.edge_connection (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    edge_node_id        uuid NOT NULL REFERENCES core.edge_node(id),
+    code                text NOT NULL,
+    name                text NOT NULL,
+    protocol            text NOT NULL CHECK (protocol IN ('sparkplug_b')),
+    settings            jsonb NOT NULL DEFAULT '{}',            -- the connector's own settings, e.g. host, port, TLS, group
+    is_active           boolean NOT NULL DEFAULT true,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT edge_connection_code_uq UNIQUE (edge_node_id, code)
+);
+
+-- What a connection has seen (Sparkplug birth certificates), so tags can be bound by picking them. Upserted by the edge.
+CREATE TABLE core.edge_metric (
+    connection_id       uuid NOT NULL REFERENCES core.edge_connection(id),
+    address             text NOT NULL,                          -- Sparkplug: group/node[/device]:metric
+    data_type           text,
+    last_value          text,
+    last_seen_at        timestamptz NOT NULL,
+    PRIMARY KEY (connection_id, address)
+);
+
+-- Machine tag mapping (edge binding, D-050). One row per signal the edge reads for a piece of equipment.
 CREATE TABLE core.equipment_tag (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
@@ -164,20 +209,47 @@ CREATE TABLE core.equipment_tag (
                             'state','unit_mode','stop_reason','alarm','warning',
                             'processed_count','defective_count','consumed_count',
                             'machine_speed','process_value')),
-    source_protocol     text NOT NULL CHECK (source_protocol IN ('sparkplug_b','opc_ua','synthesized','manual')),
-    edge_node           text,                                   -- Sparkplug edge node / OPC UA endpoint name
-    source_address      text NOT NULL,                          -- Sparkplug metric path or OPC UA NodeId
-    data_type           text NOT NULL CHECK (data_type IN ('bool','int','float','string')),
+    connection_id       uuid NOT NULL REFERENCES core.edge_connection(id),
+    source_address      text NOT NULL,                          -- Sparkplug: group/node[/device]:metric
     uom_id              uuid REFERENCES core.uom(id),
     scale_factor        numeric(18,9) NOT NULL DEFAULT 1,
     scale_offset        numeric(18,9) NOT NULL DEFAULT 0,
-    counter_rollover    bigint,                                 -- counters only: wrap value
+    counter_rollover    bigint,                                 -- counters only: the value it wraps at
     deadband            numeric(18,9),                          -- process values only
     is_active           boolean NOT NULL DEFAULT true,
     created_at          timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT equipment_tag_source_uq UNIQUE NULLS NOT DISTINCT (source_protocol, edge_node, source_address)
+    updated_at          timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX equipment_tag_equipment_ix ON core.equipment_tag (equipment_id, tag_role);
+-- One active tag per role on a piece of equipment (process values aside), and one role per address.
+CREATE UNIQUE INDEX equipment_tag_role_uq ON core.equipment_tag (equipment_id, tag_role) WHERE is_active AND tag_role <> 'process_value';
+CREATE UNIQUE INDEX equipment_tag_source_uq ON core.equipment_tag (connection_id, source_address) WHERE is_active;
+
+-- Each machine's state as its signals last left it (D-050): current state, so relational. Written by ingest only.
+CREATE TABLE core.equipment_live_state (
+    equipment_id        uuid PRIMARY KEY REFERENCES core.equipment(id),
+    raw_state           integer,                                -- what the machine sent; packml_state is its meaning
+    packml_state        smallint NOT NULL REFERENCES core.packml_state(code),
+    unit_mode           smallint NOT NULL DEFAULT 1,
+    state_since         timestamptz NOT NULL,
+    stop_reason         integer,                                -- the latest first-out stop code
+    machine_speed       numeric(18,6),
+    signal_at           timestamptz NOT NULL,                   -- the newest signal applied
+    edge_node_id        uuid REFERENCES core.edge_node(id),
+    open_downtime_id    uuid,                                   -- the stop in progress: (id, started_at) into ts.downtime, no FK
+    open_downtime_started_at timestamptz,
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT equipment_live_downtime_ck CHECK ((open_downtime_id IS NULL) = (open_downtime_started_at IS NULL))
+);
+
+-- The last raw value of each machine counter, so a new reading becomes a count (D-050).
+CREATE TABLE core.equipment_counter (
+    equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
+    count_kind          text NOT NULL CHECK (count_kind IN ('processed','defective','consumed')),
+    raw_counter         bigint NOT NULL,
+    read_at             timestamptz NOT NULL,
+    PRIMARY KEY (equipment_id, count_kind)
+);
 
 -- PackML unit modes. Default policy: only Production-mode time is planned time.
 CREATE TABLE core.unit_mode (
@@ -276,7 +348,7 @@ CREATE TABLE core.process (
 );
 
 -- What a process can make, beyond makes_all_materials: whole material classes and single
--- materials. A row taken out of the scope is switched off, not deleted (the app never deletes).
+-- materials. A row taken out of the scope is switched off, not deleted.
 CREATE TABLE core.process_material_class (
     process_id          uuid NOT NULL REFERENCES core.process(id),
     material_class_id   uuid NOT NULL REFERENCES core.material_class(id),
@@ -506,8 +578,9 @@ CREATE TABLE core.reason_code (
     site_id             uuid REFERENCES core.equipment(id),     -- null = enterprise-wide
     parent_id           uuid REFERENCES core.reason_code(id),
     reason_kind         text NOT NULL CHECK (reason_kind IN (
-                            'downtime','scrap','hold','inventory_adjustment',
+                            'utilization','scrap','hold','inventory_adjustment',
                             'indirect_labor','run_end','spc_cause','sample_exclusion')),
+    utilization_class   text CHECK (utilization_class IN ('runtime','downtime','planned')),  -- utilization reasons only (D-050)
     code                text NOT NULL,
     name                text NOT NULL,
     oee_impact          text NOT NULL DEFAULT 'none' CHECK (oee_impact IN ('availability','performance','quality','planned','none')),
@@ -515,14 +588,68 @@ CREATE TABLE core.reason_code (
     requires_comment    boolean NOT NULL DEFAULT false,
     sort_order          integer NOT NULL DEFAULT 0,
     is_active           boolean NOT NULL DEFAULT true,
-    CONSTRAINT reason_code_uq UNIQUE NULLS NOT DISTINCT (site_id, reason_kind, code)
+    CONSTRAINT reason_code_uq UNIQUE NULLS NOT DISTINCT (site_id, reason_kind, code),
+    CONSTRAINT reason_code_utilization_ck CHECK ((reason_kind = 'utilization') = (utilization_class IS NOT NULL))
 );
 
--- PackML Admin.StopReason (first-out) value -> Pulaski reason.
+-- Machine profiles (D-050): one kind of machine, as its controller reports it. Identical machines share a
+-- profile; equipment names its profile and may override single stop codes. Kept per site, like its reasons.
+CREATE TABLE core.machine_profile (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id         uuid NOT NULL REFERENCES core.equipment(id),
+    code            text NOT NULL,                              -- upper case, fixed once created
+    name            text NOT NULL,
+    vendor          text,
+    model           text,
+    description     text,
+    is_active       boolean NOT NULL DEFAULT true,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),         -- also bumped by every change to its lists, so its version guards them
+    CONSTRAINT machine_profile_code_uq UNIQUE (site_id, code)
+);
+
+-- The values the machine's state tag takes, each mapped to its PackML state. A new profile gets PackML's own
+-- numbers; a controller that numbers its states otherwise gets its own. Switched off, never deleted.
+CREATE TABLE core.machine_profile_state (
+    profile_id      uuid NOT NULL REFERENCES core.machine_profile(id),
+    raw_value       integer NOT NULL,
+    name            text NOT NULL,                              -- the controller's name for it
+    packml_state    smallint NOT NULL REFERENCES core.packml_state(code),
+    reason_code_id  uuid REFERENCES core.reason_code(id),       -- utilization reason while in it with no stop code, e.g. Suspended = starved
+    is_active       boolean NOT NULL DEFAULT true,
+    PRIMARY KEY (profile_id, raw_value)
+);
+
+-- The machine's own first-out stop, alarm and warning codes (PackML Admin.StopReason, Alarm, Warning ids),
+-- each mapped to a utilization reason. An unmapped code is kept and shows as uncoded.
+CREATE TABLE core.machine_profile_code (
+    profile_id      uuid NOT NULL REFERENCES core.machine_profile(id),
+    code_kind       text NOT NULL CHECK (code_kind IN ('stop_reason','alarm','warning')),
+    raw_value       integer NOT NULL,
+    message         text NOT NULL,
+    category        text,                                       -- the vendor's grouping, e.g. Mechanical
+    reason_code_id  uuid REFERENCES core.reason_code(id),
+    is_active       boolean NOT NULL DEFAULT true,
+    PRIMARY KEY (profile_id, code_kind, raw_value)
+);
+
+-- The utilization reasons operators may choose on the profile's machines, besides those its codes map to.
+CREATE TABLE core.machine_profile_reason (
+    profile_id      uuid NOT NULL REFERENCES core.machine_profile(id),
+    reason_code_id  uuid NOT NULL REFERENCES core.reason_code(id),
+    is_offered      boolean NOT NULL DEFAULT true,              -- unticked rather than deleted
+    PRIMARY KEY (profile_id, reason_code_id)
+);
+
+ALTER TABLE core.equipment ADD COLUMN machine_profile_id uuid REFERENCES core.machine_profile(id);
+CREATE INDEX equipment_machine_profile_ix ON core.equipment (machine_profile_id) WHERE machine_profile_id IS NOT NULL;
+
+-- One machine's own reason for a stop code where it differs from its profile (D-050).
 CREATE TABLE core.equipment_stop_reason_map (
     equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
     plc_reason_value    integer NOT NULL,
-    reason_code_id      uuid NOT NULL REFERENCES core.reason_code(id),
+    reason_code_id      uuid REFERENCES core.reason_code(id),   -- null: this machine leaves the code uncoded
+    is_active           boolean NOT NULL DEFAULT true,          -- off: the profile's reason applies again
     PRIMARY KEY (equipment_id, plc_reason_value)
 );
 
@@ -578,7 +705,7 @@ CREATE TABLE sec.role (
     updated_at  timestamptz NOT NULL DEFAULT now()
 );
 
--- A permission taken away keeps its row with is_granted = false: the app role has no DELETE (D-037).
+-- A permission taken away keeps its row with is_granted = false: the app role has no DELETE on security tables (D-037).
 CREATE TABLE sec.role_permission (
     role_id             uuid NOT NULL REFERENCES sec.role(id) ON DELETE CASCADE,
     permission_code     text NOT NULL REFERENCES sec.permission(code),
@@ -1290,6 +1417,8 @@ CREATE TABLE ts.equipment_state_change (
     run_id              uuid,
     source              text NOT NULL CHECK (source IN ('packtags','synthesized','manual','edge_gap')),
     edge_sequence       bigint,                                 -- store-and-forward ordering / dedup
+    raw_state           integer,                                -- what the machine sent (D-050); packml_state is its meaning
+    stop_reason         integer,                                -- the machine's first-out stop code when the state changed
     recorded_at         timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (id, occurred_at)
 ) PARTITION BY RANGE (occurred_at);
@@ -1313,6 +1442,8 @@ CREATE TABLE ts.downtime (
     coded_by_user_id            uuid,
     coded_at                    timestamptz,
     comment                     text,
+    unit_mode                   smallint NOT NULL DEFAULT 1,        -- the machine's unit mode when it stopped (D-050)
+    coded_by                    text,                               -- who coded it, as on evt.event
     PRIMARY KEY (id, started_at),
     CONSTRAINT downtime_span_ck CHECK (ended_at IS NULL OR ended_at >= started_at)
 ) PARTITION BY RANGE (started_at);
@@ -1673,7 +1804,11 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0015_shift_overrides'),
     ('0016_site_settings'),
     ('0017_breaks_and_qualifications'),
-    ('0018_terminals_and_badges');
+    ('0018_terminals_and_badges'),
+    ('0019_machine_profiles'),
+    ('0020_edge'),
+    ('0021_stops'),
+    ('0022_tag_deletion');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -1693,6 +1828,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('reasons.view', 'See reason codes'),
     ('shifts.view', 'See shift schedules'),
     ('labor.view', 'See labor: who is on, shift review and labor reports'),
+    ('machines.view', 'See machines: their live state and their stops'),
     ('site_settings.view', 'See a site''s settings: changeover mode, reporting tolerances and calendar exceptions'),
     ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
     ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
@@ -1705,6 +1841,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('labor.record_own', 'Clock yourself on and off lines and jobs'),
     ('labor.record', 'Record labor for others and check crews onto lines'),
     ('labor.approve', 'Approve a shift''s labor and correct approved labor'),
+    ('downtime.code', 'Code machine stops: confirm or change their reason'),
     ('lot.receive', 'Receive lots'),
     ('lot.move', 'Move lots between locations'),
     ('lot.ship', 'Ship lots'),
@@ -1715,12 +1852,13 @@ INSERT INTO sec.permission (code, description) VALUES
     ('processes.manage', 'Maintain processes, BOMs and capabilities'),
     ('units.manage', 'Maintain units of measure'),
     ('reasons.manage', 'Maintain reason codes'),
-    ('equipment.manage', 'Maintain equipment: sites, lines, locations'),
+    ('equipment.manage', 'Maintain equipment: sites, lines, locations, machine profiles, edge nodes and tags'),
     ('site_settings.manage', 'Set a site''s changeover mode, reporting tolerances and calendar exceptions'),
     ('shifts.manage', 'Maintain shift schedules and choose which one equipment follows'),
     ('people.manage', 'Maintain people and crews'),
     ('terminals.manage', 'Register and enrol shop-floor terminals'),
-    ('security.manage', 'Maintain users, roles and what each role may do')
+    ('security.manage', 'Maintain users, roles and what each role may do'),
+    ('edge.ingest', 'Send machine data as a Pulaski Edge node: read its configuration and forward what it collects')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
 -- The roles a new database starts with (Roles.Defaults); after that they are the administrator's to change.
@@ -1728,12 +1866,13 @@ ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 INSERT INTO sec.role (code, name, description, is_system) VALUES
     ('administrator', 'Administrator', 'Everything, everywhere, including users and roles.', true),
     ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes.', true),
-    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor. Doesn''t correct inventory.', true),
-    ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off.', true),
+    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor; codes machine stops. Doesn''t correct inventory.', true),
+    ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops.', true),
     ('quality', 'Quality', 'Holds and releases lots, corrects inventory and decides on partial batches.', true),
     ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people and the site''s settings.', true),
     ('auditor', 'Auditor', 'Views everything and corrects inventory; counts stock. Doesn''t plan or run jobs.', true),
-    ('process_engineer', 'Process engineer', 'Maintains processes, BOMs and capabilities. Sees equipment, materials and units.', true)
+    ('process_engineer', 'Process engineer', 'Maintains processes, BOMs and capabilities. Sees equipment, materials and units.', true),
+    ('edge_node', 'Edge node', 'For the service user a Pulaski Edge node signs in as: reads its configuration and forwards machine data. Sees no screens.', true)
 ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO sec.role_permission (role_id, permission_code)
@@ -1745,6 +1884,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('planner', 'inventory.view'),
     ('planner', 'materials.view'),
     ('planner', 'processes.view'),
+    ('planner', 'machines.view'),
     ('planner', 'site_settings.view'),
     ('planner', 'schedule.plan'),
     ('planner', 'work_order.manage'),
@@ -1768,6 +1908,8 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('supervisor', 'labor.view'),
     ('supervisor', 'labor.record'),
     ('supervisor', 'labor.approve'),
+    ('supervisor', 'machines.view'),
+    ('supervisor', 'downtime.code'),
     ('operator', 'overview.view'),
     ('operator', 'floor.view'),
     ('operator', 'inventory.view'),
@@ -1777,10 +1919,13 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('operator', 'lot.receive'),
     ('operator', 'lot.move'),
     ('operator', 'labor.record_own'),
+    ('operator', 'machines.view'),
+    ('operator', 'downtime.code'),
     ('quality', 'overview.view'),
     ('quality', 'floor.view'),
     ('quality', 'inventory.view'),
     ('quality', 'materials.view'),
+    ('quality', 'machines.view'),
     ('quality', 'lot.hold'),
     ('quality', 'inventory.correct'),
     ('quality', 'partial_batch.decide'),
@@ -1796,6 +1941,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('manager', 'reasons.view'),
     ('manager', 'shifts.view'),
     ('manager', 'labor.view'),
+    ('manager', 'machines.view'),
     ('manager', 'site_settings.view'),
     ('manager', 'job.reopen'),
     ('manager', 'work_order.close'),
@@ -1817,6 +1963,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('auditor', 'reasons.view'),
     ('auditor', 'shifts.view'),
     ('auditor', 'labor.view'),
+    ('auditor', 'machines.view'),
     ('auditor', 'site_settings.view'),
     ('auditor', 'inventory.correct'),
     ('auditor', 'stock_count.manage'),
@@ -1824,7 +1971,8 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('process_engineer', 'materials.view'),
     ('process_engineer', 'processes.view'),
     ('process_engineer', 'units.view'),
-    ('process_engineer', 'processes.manage')
+    ('process_engineer', 'processes.manage'),
+    ('edge_node', 'edge.ingest')
 ) AS v(role_code, permission_code)
 JOIN sec.role r ON r.code = v.role_code
 ON CONFLICT (role_id, permission_code) DO NOTHING;

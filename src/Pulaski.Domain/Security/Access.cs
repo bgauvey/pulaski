@@ -20,6 +20,7 @@ public static class Permissions
     public const string ReasonsView = "reasons.view";
     public const string ShiftsView = "shifts.view";
     public const string LaborView = "labor.view";
+    public const string MachinesView = "machines.view";
     public const string SiteSettingsView = "site_settings.view";
 
     // Changing (D-037).
@@ -47,9 +48,13 @@ public static class Permissions
     public const string LaborRecordOwn = "labor.record_own";
     public const string LaborRecord = "labor.record";
     public const string LaborApprove = "labor.approve";
+    public const string DowntimeCode = "downtime.code";
     public const string People = "people.manage";
     public const string Terminals = "terminals.manage";
     public const string Security = "security.manage";
+
+    // Machine data (D-050): what a Pulaski Edge node's service user holds.
+    public const string EdgeIngest = "edge.ingest";
 
     /// <summary>Every permission, in the order screens list them, with its area and what it allows.</summary>
     public static IReadOnlyList<PermissionInfo> Catalog { get; } =
@@ -66,6 +71,7 @@ public static class Permissions
         new(ReasonsView, "Viewing", "See reason codes"),
         new(ShiftsView, "Viewing", "See shift schedules"),
         new(LaborView, "Viewing", "See labor: who is on, shift review and labor reports"),
+        new(MachinesView, "Viewing", "See machines: their live state and their stops"),
         new(SiteSettingsView, "Viewing", "See a site's settings: changeover mode, reporting tolerances and calendar exceptions"),
         new(SchedulePlan, "Planning", "Plan jobs: create, sequence, pin, assign to lines and cancel them"),
         new(WorkOrderManage, "Planning", "Create work orders, dispatch, un-dispatch and firm them"),
@@ -78,6 +84,7 @@ public static class Permissions
         new(LaborRecordOwn, "Labor", "Clock yourself on and off lines and jobs"),
         new(LaborRecord, "Labor", "Record labor for others and check crews onto lines"),
         new(LaborApprove, "Labor", "Approve a shift's labor and correct approved labor"),
+        new(DowntimeCode, "Floor", "Code machine stops: confirm or change their reason"),
         new(LotReceive, "Inventory", "Receive lots"),
         new(LotMove, "Inventory", "Move lots between locations"),
         new(LotShip, "Inventory", "Ship lots"),
@@ -88,12 +95,13 @@ public static class Permissions
         new(Processes, "Configuration", "Maintain processes, BOMs and capabilities"),
         new(Units, "Configuration", "Maintain units of measure"),
         new(Reasons, "Configuration", "Maintain reason codes"),
-        new(Equipment, "Configuration", "Maintain equipment: sites, lines, locations"),
+        new(Equipment, "Configuration", "Maintain equipment: sites, lines, locations, machine profiles, edge nodes and tags"),
         new(SiteSettings, "Configuration", "Set a site's changeover mode, reporting tolerances and calendar exceptions"),
         new(Shifts, "Configuration", "Maintain shift schedules and choose which one equipment follows"),
         new(People, "Configuration", "Maintain people and crews"),
         new(Terminals, "Configuration", "Register and enrol shop-floor terminals"),
         new(Security, "Administration", "Maintain users, roles and what each role may do"),
+        new(EdgeIngest, "Machine data", "Send machine data as a Pulaski Edge node: read its configuration and forward what it collects"),
     ];
 
     /// <summary>Every permission with what it allows, as <c>sec.permission</c> holds them.</summary>
@@ -137,6 +145,7 @@ public static class Permissions
         [LaborRecord] = [LaborView, FloorView],
         [LaborApprove] = [LaborView],
         [People] = [LaborView],
+        [DowntimeCode] = [MachinesView],
         // Terminals are placed on lines; their screen lists the site's equipment.
         [Terminals] = [EquipmentView],
     };
@@ -163,6 +172,7 @@ public static class Roles
     public const string Manager = "manager";
     public const string Auditor = "auditor";
     public const string ProcessEngineer = "process_engineer";
+    public const string EdgeNode = "edge_node";
 
     public const int MaxCodeLength = 50;
 
@@ -172,21 +182,22 @@ public static class Roles
         new(Administrator, "Administrator", IsGlobal: true, [.. Permissions.All.Keys], "Everything, everywhere, including users and roles."),
         new(Planner, "Planner", false,
             [Permissions.OverviewView, Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.FloorView, Permissions.InventoryView,
-             Permissions.MaterialsView, Permissions.ProcessesView, Permissions.SiteSettingsView,
+             Permissions.MaterialsView, Permissions.ProcessesView, Permissions.MachinesView, Permissions.SiteSettingsView,
              Permissions.SchedulePlan, Permissions.WorkOrderManage, Permissions.WorkOrderClose, Permissions.RateModify, Permissions.Materials],
             "Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes."),
         new(Supervisor, "Supervisor", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView, Permissions.SiteSettingsView,
              Permissions.JobExecute, Permissions.JobReopen, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove,
              Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide,
-             Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove],
-            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor. Doesn't correct inventory."),
+             Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode],
+            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor; codes machine stops. Doesn't correct inventory."),
         new(Operator, "Operator", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
-             Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove, Permissions.LaborRecordOwn],
-            "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off."),
+             Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove, Permissions.LaborRecordOwn,
+             Permissions.MachinesView, Permissions.DowntimeCode],
+            "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops."),
         new(Quality, "Quality", false,
-            [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView,
+            [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView, Permissions.MachinesView,
              Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide],
             "Holds and releases lots, corrects inventory and decides on partial batches."),
         new(Manager, "Manager", false,
@@ -199,6 +210,8 @@ public static class Roles
         new(ProcessEngineer, "Process engineer", false,
             [Permissions.EquipmentView, Permissions.MaterialsView, Permissions.ProcessesView, Permissions.UnitsView, Permissions.Processes],
             "Maintains processes, BOMs and capabilities. Sees equipment, materials and units."),
+        new(EdgeNode, "Edge node", false, [Permissions.EdgeIngest],
+            "For the service user a Pulaski Edge node signs in as: reads its configuration and forwards machine data. Sees no screens."),
     ];
 
     /// <summary>Only the administrator is held everywhere; every other role is held at a site.</summary>

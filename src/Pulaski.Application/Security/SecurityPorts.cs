@@ -99,7 +99,7 @@ public interface ISecurityRepository
     /// <summary>Saves the name, description and active flag; every change to a role, its permissions too, gives it a new version.</summary>
     Task<long> UpdateRoleAsync(SecurityRole role, DateTimeOffset at, CancellationToken cancellationToken);
 
-    /// <summary>Grants or takes away one permission. Rows are kept, flagged, since the app role has no DELETE.</summary>
+    /// <summary>Grants or takes away one permission. Rows are kept, flagged; the app role has no DELETE on security tables.</summary>
     Task SetRolePermissionAsync(Guid roleId, string permission, bool granted, DateTimeOffset at, Guid? by, CancellationToken cancellationToken);
 
     /// <summary>How many active assignments of the role there are now.</summary>
@@ -129,6 +129,11 @@ public enum SiteOf
     Crew,
     Person,
     LaborSession,
+    MachineProfile,
+    EdgeNode,
+    EdgeConnection,
+    EquipmentTag,
+    Downtime,
     CalendarException,
     LaborBreak,
     Qualification,

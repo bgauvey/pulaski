@@ -84,6 +84,9 @@ api.MapMaterialEndpoints();
 api.MapExecutionEndpoints();
 api.MapShiftEndpoints();
 api.MapLaborEndpoints();
+api.MapMachineDataEndpoints();
+api.MapEdgeEndpoints();
+api.MapMachineEndpoints();
 api.MapTerminalAdminEndpoints();
 
 // Shop-floor terminals (D-049) are not users: they authenticate with their own secret, and only here.

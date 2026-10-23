@@ -1,11 +1,11 @@
 @page "/"
 @attribute [RequiresView(PermissionCodes.OverviewView)]
 @* The plant overview (docs/admin-dashboard-brief.md). In five seconds it answers: which lines
-   are running, which are not and why, and what needs a person. Everything Pulaski can't know
-   yet (machine state, counts, OEE, quality, lots, labor) is a placeholder in its final place, so
-   the layout doesn't move when that data arrives. *@
+   are running, which are not and why, and what needs a person. OEE comes from the machine report;
+   live state, output, quality, lots and labor remain placeholders until those views are built. *@
 @implements IDisposable
 @using System.Globalization
+@using Pulaski.Contracts.MachineData
 @using Pulaski.Web.Services.Scheduling
 @inject PulaskiApiClient Api
 @inject CurrentUser User
@@ -69,23 +69,29 @@
     }
 </section>
 
-@* ---- This shift: needs machine data ---- *@
+@* ---- This shift: OEE is calculated from machine data; other measures remain placeholders. *@
 <section class="ov-summary" aria-labelledby="summary-title">
     <div class="ov-summary-head">
         <h2 id="summary-title" class="ov-h2">This shift</h2>
-        <span class="ov-pending"><Icon Name="plug" Size="16" /> Fills in once lines send machine data through the edge connector</span>
+        <span class="ov-pending"><Icon Name="plug" Size="16" /> @OeeSummaryNote</span>
     </div>
     <div class="ov-summary-band">
         <div class="ov-sum">
             <span class="ov-sum-label">OEE</span>
-            <span class="ov-sum-value is-ghost">—</span>
-            <div class="ov-apq" aria-label="Availability, performance and quality: no data yet">
-                @foreach (var part in new[] { "Availability", "Performance", "Quality" })
+            <span class="ov-sum-value @(CurrentShiftOee?.OeePct is null ? "is-ghost" : "")">@FormatPct(CurrentShiftOee?.OeePct)</span>
+            <div class="ov-apq" aria-label="@OeeSummaryLabel">
+                @foreach (var part in OeeParts(CurrentShiftOee))
                 {
                     <span class="ov-apq-row">
-                        <span class="ov-apq-name">@part</span>
-                        <span class="ov-meter is-ghost"><span class="ov-meter-target" style="left: 85%"></span></span>
-                        <span class="ov-apq-value">—</span>
+                        <span class="ov-apq-name">@part.Label</span>
+                        <span class="ov-meter @(part.Value is null ? "is-ghost" : "")">
+                            @if (part.Value is { } value)
+                            {
+                                <span class="ov-meter-fill" style="width: @MeterWidth(value)"></span>
+                            }
+                            <span class="ov-meter-target" style="left: 85%"></span>
+                        </span>
+                        <span class="ov-apq-value">@FormatPct(part.Value)</span>
                     </span>
                 }
             </div>
@@ -157,6 +163,7 @@
             @foreach (var line in _lines)
             {
                 var timeline = _timelines.GetValueOrDefault(line.Id);
+                var lineOee = CurrentShift(line.Id)?.Figures;
                 var segments = timeline?.Segments ?? [];
                 var job = OverviewModel.NowOrNext(segments, Now);
                 var flags = Flags(timeline);
@@ -229,9 +236,13 @@
                         <span class="ov-now" style="left: @Pct(_window.Percent(Now))" aria-hidden="true"></span>
                     </span>
 
-                    <span role="cell" class="ov-oee" title="Line OEE needs machine data.">
-                        <span class="ov-oee-value">—</span>
-                        <span class="ov-oee-bars" aria-hidden="true"><span></span><span></span><span></span></span>
+                    <span role="cell" class="ov-oee" title="@OeeTitle(lineOee)">
+                        <span class="ov-oee-value @(lineOee?.OeePct is null ? "is-empty" : "")">@FormatPct(lineOee?.OeePct)</span>
+                        <span class="ov-oee-bars" aria-label="@OeeTitle(lineOee)">
+                            <span class="@(lineOee?.AvailabilityPct is null ? "is-empty" : "")"><i style="width: @MeterWidth(lineOee?.AvailabilityPct)"></i></span>
+                            <span class="@(lineOee?.PerformancePct is null ? "is-empty" : "")"><i style="width: @MeterWidth(lineOee?.PerformancePct)"></i></span>
+                            <span class="@(lineOee?.QualityPct is null ? "is-empty" : "")"><i style="width: @MeterWidth(lineOee?.QualityPct)"></i></span>
+                        </span>
                     </span>
 
                     <span role="cell" class="ov-flags">
@@ -332,6 +343,7 @@
     private IReadOnlyList<EquipmentDto> _equipment = [];
     private List<EquipmentDto>? _lines;
     private Dictionary<Guid, LineTimelineDto> _timelines = [];
+    private OeeReportDto? _oeeReport;
     private IReadOnlyList<WorkOrderDto> _orders = [];
     private IReadOnlyList<WorkOrderProgressDto> _progress = [];
     private Guid _siteId;
@@ -437,6 +449,7 @@
         _siteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty;
         _lines = null;
         _timelines = [];
+        _oeeReport = null;
         await LoadAsync();
     }
 
@@ -460,10 +473,16 @@
             var orders = Api.ListWorkOrdersAsync();
             var progress = Api.ListWorkOrderProgressAsync(_siteId == Guid.Empty ? null : _siteId);
             var timelines = lines.Select(l => Api.GetLineTimelineAsync(l.Id)).ToList();
+            var siteNow = Display.ToSite(Now, Tz);
+            var productionDate = DateOnly.FromDateTime(siteNow.DateTime);
+            Task<OeeReportDto>? oee = _siteId == Guid.Empty
+                ? null
+                : Api.GetOeeReportAsync(_siteId, productionDate.AddDays(-1), productionDate);
 
             _orders = [.. (await orders).Where(o => o.SiteId == _siteId)];
             _progress = await progress;
             _timelines = (await Task.WhenAll(timelines)).ToDictionary(t => t.LineId);
+            _oeeReport = oee is null ? null : await oee;
             _lines = lines;
             _window = OverviewWindow.Around(Now);
             _loadedAt = Now;
@@ -523,6 +542,38 @@
         : $"Next {ScheduleFormat.When(job.Start, Tz)}";
 
     private static string Pct(double value) => value.ToString("0.###", CultureInfo.InvariantCulture) + "%";
+
+    private OverviewOee? CurrentShiftOee => _oeeReport is null ? null : OverviewModel.CurrentShiftOee(_oeeReport.Shifts, Now);
+
+    private OeeShiftRowDto? CurrentShift(Guid equipmentId) =>
+        _oeeReport is null ? null : OverviewModel.CurrentShift(_oeeReport.Shifts, equipmentId, Now);
+
+    private string OeeSummaryNote => _oeeReport is null
+        ? _siteId == Guid.Empty ? "Choose a site to view OEE" : "Loading current-shift OEE…"
+        : CurrentShiftOee?.OeePct is not null
+            ? "Current-shift OEE from reported machine data · refreshes every 30 seconds"
+            : "No rated production data has been reported this shift";
+
+    private string OeeSummaryLabel => CurrentShiftOee is { } oee
+        ? $"Current-shift OEE {FormatPct(oee.OeePct)}; availability {FormatPct(oee.AvailabilityPct)}, performance {FormatPct(oee.PerformancePct)}, quality {FormatPct(oee.QualityPct)}"
+        : "No current-shift OEE data";
+
+    private static IReadOnlyList<(string Label, decimal? Value)> OeeParts(OverviewOee? oee) =>
+    [
+        ("Availability", oee?.AvailabilityPct),
+        ("Performance", oee?.PerformancePct),
+        ("Quality", oee?.QualityPct),
+    ];
+
+    private static string FormatPct(decimal? value) =>
+        value is { } percent ? percent.ToString("0.#", CultureInfo.InvariantCulture) + "%" : "—";
+
+    private static string MeterWidth(decimal? value) =>
+        Math.Clamp(value ?? 0m, 0m, 100m).ToString("0.###", CultureInfo.InvariantCulture) + "%";
+
+    private static string OeeTitle(OeeFiguresDto? figures) => figures is null
+        ? "No current-shift OEE data"
+        : $"Availability {FormatPct(figures.AvailabilityPct)}, performance {FormatPct(figures.PerformancePct)}, quality {FormatPct(figures.QualityPct)}";
 
     private static string Number(decimal? value) => (value ?? 0m).ToString("#,##0.###", CultureInfo.InvariantCulture);
 

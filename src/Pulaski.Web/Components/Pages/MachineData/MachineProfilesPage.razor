@@ -1,0 +1,171 @@
+@page "/machine-profiles"
+@attribute [RequiresView(PermissionCodes.EquipmentView)]
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+@inject NavigationManager Navigation
+
+@* Machine profiles (D-050): one kind of machine, as its controller reports it. Identical machines share one; a machine of
+   another vendor or model gets its own. Equipment names its profile on the Equipment screen. *@
+<PageTitle>Machine profiles · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Machine profiles</h1>
+        <p class="text-muted mb-0">
+            How each kind of machine reports itself: the values its state tag takes and the PackML state each one means, and its own stop, alarm and
+            warning codes with the utilization reason each one counts as. Identical machines share a profile; give each machine its profile on the
+            Equipment screen, under Machine data.
+        </p>
+    </div>
+    @if (Sites.Sites.Count > 1)
+    {
+        <div class="inv-head-tools">
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        </div>
+    }
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Equipment" What="maintain machine profiles" SiteId="Sites.SiteId" />
+
+@if (CanManage)
+{
+    <form class="inv-toolbar" @onsubmit="CreateAsync" @onsubmit:preventDefault>
+        <input class="form-control" style="width: 9rem" maxlength="20" placeholder="CODE" aria-label="Profile code" @bind="_code" @bind:event="oninput" />
+        <input class="form-control inv-grow" maxlength="100" placeholder="Name, e.g. Case packer, vendor A" aria-label="Profile name" @bind="_name" @bind:event="oninput" />
+        <input class="form-control" style="width: 10rem" maxlength="100" placeholder="Vendor" aria-label="Vendor" @bind="_vendor" />
+        <input class="form-control" style="width: 10rem" maxlength="100" placeholder="Model" aria-label="Model" @bind="_model" />
+        <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))">Add profile</button>
+    </form>
+}
+
+@if (_profiles is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_profiles.Count == 0)
+{
+    <div class="empty-panel">
+        <p class="text-muted mb-0">
+            No machine profiles at @(Sites.Site?.Code ?? "this site") yet. Add one for each kind of machine, then import its definitions from a CSV file.
+        </p>
+    </div>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead>
+                <tr><th>Code</th><th>Name</th><th>Vendor and model</th><th class="inv-num">Stop codes</th><th class="inv-num">Without a reason</th><th class="inv-num">Machines</th><th>Active</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _profiles)
+                {
+                    <tr @key="p.Id" class="@(p.IsActive ? "" : "text-muted")">
+                        <td><a class="fw-semibold" href="machine-profiles/@p.Id">@p.Code</a></td>
+                        <td>@p.Name</td>
+                        <td>@string.Join(" · ", new[] { p.Vendor, p.Model }.Where(x => !string.IsNullOrEmpty(x)))</td>
+                        <td class="inv-num">@p.StopCodeCount</td>
+                        <td class="inv-num">
+                            @if (p.UnmappedStopCodeCount > 0)
+                            {
+                                <span class="chip chip-warning" title="Stops with these codes show as uncoded until they get a reason">@p.UnmappedStopCodeCount</span>
+                            }
+                            else
+                            {
+                                @("0")
+                            }
+                        </td>
+                        <td class="inv-num">@p.MachineCount</td>
+                        <td>@(p.IsActive ? "Yes" : "No")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<MachineProfileDto>? _profiles;
+    private ApiException? _error;
+    private bool _saving;
+    private string? _code;
+    private string? _name;
+    private string? _vendor;
+    private string? _model;
+
+    private bool CanManage => User.Can(PermissionCodes.Equipment, Sites.SiteId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            _profiles = [];
+            return;
+        }
+
+        try
+        {
+            _profiles = await Api.ListMachineProfilesAsync(site);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var created = await Api.CreateMachineProfileAsync(new CreateMachineProfileRequest
+            {
+                SiteId = Sites.SiteId!.Value,
+                Code = _code!,
+                Name = _name!,
+                Vendor = _vendor,
+                Model = _model,
+            });
+            Navigation.NavigateTo($"machine-profiles/{created.Id}");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

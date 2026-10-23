@@ -1,5 +1,5 @@
 using System.Globalization;
-using System.Text;
+using Pulaski.Application.Abstractions;
 
 namespace Pulaski.Application.Materials;
 
@@ -36,7 +36,7 @@ public static class MaterialCsv
 
     public static MaterialImportSource Parse(string text)
     {
-        var records = Read(text.TrimStart('﻿'));
+        var records = CsvText.Read(text);
         if (records.Count == 0)
         {
             return new MaterialImportSource([], ["The file is empty."]);
@@ -47,7 +47,7 @@ public static class MaterialCsv
         var header = records[0].Fields;
         for (var i = 0; i < header.Count; i++)
         {
-            var name = Normalize(header[i]);
+            var name = CsvText.Normalize(header[i]);
             if (name.Length == 0)
             {
                 continue;
@@ -81,7 +81,7 @@ public static class MaterialCsv
         return new MaterialImportSource(rows, rows.Count == 0 ? ["The file has a header but no rows."] : []);
     }
 
-    private static MaterialImportRow ToRow(Record record, Dictionary<string, int> index)
+    private static MaterialImportRow ToRow(CsvRecord record, Dictionary<string, int> index)
     {
         var rowProblems = new List<string>();
         string? Cell(string column) =>
@@ -143,86 +143,6 @@ public static class MaterialCsv
         };
     }
 
-    private static string Normalize(string header) =>
-        header.Trim().ToLowerInvariant().Replace(' ', '_').Replace('-', '_');
-
     private static string? Canonical(string name) =>
         Columns.ContainsKey(name) ? name : Columns.FirstOrDefault(c => c.Value.Contains(name)).Key;
-
-    private sealed record Record(int Line, IReadOnlyList<string> Fields);
-
-    /// <summary>RFC 4180 records: quoted fields may hold separators, doubled quotes and line breaks.</summary>
-    private static List<Record> Read(string text)
-    {
-        var firstLine = text.Split('\n', 2)[0];
-        var separator = firstLine.Count(ch => ch == ';') > firstLine.Count(ch => ch == ',') ? ';' : ',';
-
-        var records = new List<Record>();
-        var fields = new List<string>();
-        var field = new StringBuilder();
-        var line = 1;
-        var recordLine = 1;
-        var quoted = false;
-
-        for (var i = 0; i < text.Length; i++)
-        {
-            var ch = text[i];
-            if (quoted)
-            {
-                if (ch == '"' && i + 1 < text.Length && text[i + 1] == '"')
-                {
-                    field.Append('"');
-                    i++;
-                }
-                else if (ch == '"')
-                {
-                    quoted = false;
-                }
-                else
-                {
-                    line += ch == '\n' ? 1 : 0;
-                    field.Append(ch);
-                }
-
-                continue;
-            }
-
-            switch (ch)
-            {
-                case '"' when field.Length == 0:
-                    quoted = true;
-                    break;
-                case '\r':
-                    break;
-                case '\n':
-                    fields.Add(field.ToString());
-                    records.Add(new Record(recordLine, [.. fields]));
-                    fields.Clear();
-                    field.Clear();
-                    line++;
-                    recordLine = line;
-                    break;
-                default:
-                    if (ch == separator)
-                    {
-                        fields.Add(field.ToString());
-                        field.Clear();
-                    }
-                    else
-                    {
-                        field.Append(ch);
-                    }
-
-                    break;
-            }
-        }
-
-        if (field.Length > 0 || fields.Count > 0)
-        {
-            fields.Add(field.ToString());
-            records.Add(new Record(recordLine, [.. fields]));
-        }
-
-        return records;
-    }
 }

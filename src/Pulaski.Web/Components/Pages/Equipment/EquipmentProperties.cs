@@ -1,4 +1,6 @@
+using System.Globalization;
 using Pulaski.Contracts.EquipmentModel;
+using Pulaski.Contracts.MachineData;
 using Pulaski.Contracts.Shifts;
 using Pulaski.Web.Services;
 
@@ -61,8 +63,16 @@ public static class EquipmentProperties
     private const string Status = "Status";
     private const string Hierarchy = "Hierarchy";
     private const string WorkingTime = "Working time";
+    private const string MachineData = "Machine data";
 
     public const string CalendarKey = "calendar";
+    public const string MachineProfileKey = "machineProfile";
+    public const string MicroStopKey = "microStop";
+    public const string StateDerivationKey = "stateDerivation";
+    public const string ConstraintKey = "constraintMachine";
+
+    /// <summary>The rows saved through the equipment's machine data (D-050), apart from the rest of it.</summary>
+    public static IReadOnlySet<string> MachineDataKeys { get; } = new HashSet<string>([MachineProfileKey, MicroStopKey, StateDerivationKey, ConstraintKey]);
     private const string Inherit = "inherit";
     private const string AroundTheClock = "around_the_clock";
     private const string SchedulePrefix = "schedule:";
@@ -93,7 +103,8 @@ public static class EquipmentProperties
     /// equipment itself, <paramref name="canSetShifts"/> for the shift schedule it follows (D-037, D-038).
     /// </summary>
     public static IReadOnlyList<PropertyItem> ForExisting(
-        EquipmentDto e, EquipmentTree tree, IReadOnlyList<ShiftScheduleDto>? schedules = null, bool canEdit = true, bool canSetShifts = true)
+        EquipmentDto e, EquipmentTree tree, IReadOnlyList<ShiftScheduleDto>? schedules = null, bool canEdit = true, bool canSetShifts = true,
+        IReadOnlyList<MachineProfileDto>? profiles = null)
     {
         var parent = e.ParentId is { } parentId ? tree.Find(parentId) : null;
         var site = e.SiteId is { } siteId ? tree.Find(siteId) : null;
@@ -132,6 +143,11 @@ public static class EquipmentProperties
         items.Add(Bool("isActive", "Active", Status,
             "Inactive equipment stays in the hierarchy and its history, greyed out.", e.IsActive));
 
+        if (e.TracksState)
+        {
+            items.AddRange(MachineDataItems(e, tree, profiles ?? []));
+        }
+
         if (!canEdit)
         {
             items = [.. items.Select(i => i.Editor == PropertyEditor.ReadOnly ? i : i with { Locked = true })];
@@ -154,6 +170,129 @@ public static class EquipmentProperties
 
         return items;
     }
+
+    /// <summary>The machine data rows (D-050): its profile, where its state comes from, and its micro-stop threshold.</summary>
+    private static IEnumerable<PropertyItem> MachineDataItems(EquipmentDto e, EquipmentTree tree, IReadOnlyList<MachineProfileDto> profiles)
+    {
+        var own = profiles.Where(p => p.SiteId == e.SiteId && (p.IsActive || p.Id == e.MachineProfileId));
+        yield return new()
+        {
+            Key = MachineProfileKey,
+            Name = "Machine profile",
+            Category = MachineData,
+            Description = "How its controller reports state and stop codes: the profile maps its state values to PackML states and its stop codes to utilization reasons. "
+                + "Profiles are kept on Configure → Machine profiles.",
+            Value = e.MachineProfileId?.ToString() ?? "",
+            Editor = PropertyEditor.Choice,
+            Choices = [new("", "None"), .. own.Select(p => new PropertyChoice(p.Id.ToString(), $"{p.Code} · {p.Name}{(p.IsActive ? "" : " (switched off)")}"))],
+        };
+        yield return new()
+        {
+            Key = MicroStopKey,
+            Name = "Micro-stop threshold",
+            Category = MachineData,
+            Description = "Stops shorter than this are micro-stops: logged, but not queued for a reason and not counted against availability; "
+                + "the output they cost shows as lower performance. An extruder may use 2 minutes, a pack cell more.",
+            Value = Minutes(e.MicroStopThresholdSeconds),
+            Editor = PropertyEditor.Number,
+            Min = 0,
+            Max = 60,
+            Step = 0.5,
+            Suffix = "min",
+        };
+        yield return new()
+        {
+            Key = StateDerivationKey,
+            Name = "State from",
+            Category = MachineData,
+            Description = "Where its state comes from: its own state tag, or for a line, its machines: the worst of their states when they run one after "
+                + "another (series), the best when they run side by side (parallel), or one constraint machine.",
+            Value = e.StateDerivation,
+            Editor = PropertyEditor.Choice,
+            Choices =
+            [
+                new("own_tags", "Its own state tag"),
+                new("series", "Worst of its machines (series)"),
+                new("parallel", "Best of its machines (parallel)"),
+                new("constraint_machine", "Its constraint machine"),
+            ],
+        };
+
+        if (e.StateDerivation == "constraint_machine")
+        {
+            yield return new()
+            {
+                Key = ConstraintKey,
+                Name = "Constraint machine",
+                Category = MachineData,
+                Description = "The machine below it whose state is its own.",
+                Value = e.ConstraintEquipmentId?.ToString() ?? "",
+                Editor = PropertyEditor.Choice,
+                Choices = [.. ConstraintCandidates(e, tree).Select(c => new PropertyChoice(c.Id.ToString(), $"{c.Code} · {c.Name}"))],
+            };
+        }
+    }
+
+    /// <summary>Equipment below <paramref name="e"/> that tracks state, in tree order.</summary>
+    public static IReadOnlyList<EquipmentDto> ConstraintCandidates(EquipmentDto e, EquipmentTree tree)
+    {
+        var found = new List<EquipmentDto>();
+        void Walk(Guid id)
+        {
+            foreach (var child in tree.ChildrenOf(id))
+            {
+                if (child.TracksState)
+                {
+                    found.Add(child);
+                }
+
+                Walk(child.Id);
+            }
+        }
+
+        Walk(e.Id);
+        return found;
+    }
+
+    /// <summary>
+    /// The machine data request for an edit of one of the <see cref="MachineDataKeys"/> rows, or null if the value can't be read.
+    /// Choosing a constraint machine line picks its first machine that tracks state; the row then lets it be changed.
+    /// </summary>
+    public static SetEquipmentMachineDataRequest? MachineDataChange(EquipmentDto e, PropertyChange change, EquipmentTree tree)
+    {
+        var request = new SetEquipmentMachineDataRequest
+        {
+            Version = e.Version,
+            MachineProfileId = e.MachineProfileId,
+            StateDerivation = e.StateDerivation,
+            ConstraintEquipmentId = e.ConstraintEquipmentId,
+            MicroStopThresholdSeconds = e.MicroStopThresholdSeconds,
+        };
+
+        switch (change.Key)
+        {
+            case MachineProfileKey:
+                return request with { MachineProfileId = Guid.TryParse(change.Value, out var profile) ? profile : null };
+            case MicroStopKey:
+                return double.TryParse(change.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var minutes)
+                    ? request with { MicroStopThresholdSeconds = (int)Math.Round(minutes * 60) }
+                    : null;
+            case StateDerivationKey:
+                var derivation = change.Value ?? "own_tags";
+                return request with
+                {
+                    StateDerivation = derivation,
+                    ConstraintEquipmentId = derivation == "constraint_machine" ? e.ConstraintEquipmentId ?? (ConstraintCandidates(e, tree) is [var first, ..] ? first.Id : null) : null,
+                };
+            case ConstraintKey:
+                return Guid.TryParse(change.Value, out var machine) ? request with { ConstraintEquipmentId = machine } : null;
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>Seconds as minutes for the grid: 300 → "5", 90 → "1.5".</summary>
+    public static string Minutes(int seconds) => (seconds / 60.0).ToString("0.##", CultureInfo.InvariantCulture);
 
     /// <summary>The working-time request for an edit of the <see cref="CalendarKey"/> row.</summary>
     public static SetEquipmentCalendarRequest CalendarChange(EquipmentDto e, string? value) =>

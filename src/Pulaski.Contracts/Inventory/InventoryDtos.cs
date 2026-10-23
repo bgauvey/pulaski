@@ -302,6 +302,9 @@ public sealed record ReasonCodeDto
     public required string Code { get; init; }
     public required string Name { get; init; }
     public bool RequiresComment { get; init; }
+
+    /// <summary>For a utilization reason (D-050): <c>runtime</c>, <c>downtime</c> or <c>planned</c>.</summary>
+    public string? UtilizationClass { get; init; }
 }
 
 /// <summary>Something worth knowing about a movement that didn't stop it.</summary>
@@ -458,6 +461,9 @@ public sealed record ReasonCodeAdminDto
 
     /// <summary>False for a branch of a reason tree, which only groups.</summary>
     public bool IsSelectable { get; init; }
+
+    /// <summary>For a utilization reason (D-050): <c>runtime</c>, <c>downtime</c> or <c>planned</c>.</summary>
+    public string? UtilizationClass { get; init; }
     public long Version { get; init; }
 }
 

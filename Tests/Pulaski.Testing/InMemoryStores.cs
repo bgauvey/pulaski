@@ -6,6 +6,7 @@ using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Execution;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.Labor;
+using Pulaski.Application.MachineData;
 using Pulaski.Application.Materials;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
@@ -70,6 +71,14 @@ public sealed class InMemoryStores
 
     public InMemoryLabor Labor { get; } = new();
 
+    public InMemoryMachineData MachineData { get; } = new();
+
+    public InMemoryEdge Edge { get; } = new();
+
+    public InMemoryStops Stops { get; } = new();
+
+    public InMemoryOee Oee { get; } = new();
+
     public InMemoryTerminals Terminals { get; } = new();
 
     /// <summary>Replaces any registered stores with these instances.</summary>
@@ -110,6 +119,13 @@ public sealed class InMemoryStores
         services.RemoveAll<IRunHistoryReadStore>();
         services.RemoveAll<ILaborReadStore>();
         services.RemoveAll<ILaborRepository>();
+        services.RemoveAll<IMachineDataReadStore>();
+        services.RemoveAll<IMachineDataRepository>();
+        services.RemoveAll<IEdgeReadStore>();
+        services.RemoveAll<IEdgeRepository>();
+        services.RemoveAll<IStopReadStore>();
+        services.RemoveAll<IStopRepository>();
+        services.RemoveAll<IOeeReadStore>();
         services.RemoveAll<IQualificationRepository>();
         services.RemoveAll<ITerminalRepository>();
         services.RemoveAll<ITerminalReadStore>();
@@ -151,6 +167,13 @@ public sealed class InMemoryStores
         services.AddSingleton<IRunHistoryReadStore>(RunHistory);
         services.AddSingleton<ILaborReadStore>(Labor);
         services.AddSingleton<ILaborRepository>(Labor);
+        services.AddSingleton<IMachineDataReadStore>(MachineData);
+        services.AddSingleton<IMachineDataRepository>(MachineData);
+        services.AddSingleton<IEdgeReadStore>(Edge);
+        services.AddSingleton<IEdgeRepository>(Edge);
+        services.AddSingleton<IStopReadStore>(Stops);
+        services.AddSingleton<IStopRepository>(Stops);
+        services.AddSingleton<IOeeReadStore>(Oee);
         services.AddSingleton<IQualificationRepository>(Labor);
         services.AddSingleton<IQualificationReadStore>(Labor);
         services.AddSingleton<ITerminalRepository>(Terminals);

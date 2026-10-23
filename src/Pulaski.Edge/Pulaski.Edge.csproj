@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <UserSecretsId>pulaski-edge</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pulaski.Contracts\Pulaski.Contracts.csproj" />
+    <ProjectReference Include="..\Pulaski.Connectors\Pulaski.Connectors.csproj" />
+    <ProjectReference Include="..\Pulaski.Connectors.Sparkplug\Pulaski.Connectors.Sparkplug.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Pulaski.Edge.Tests" />
+  </ItemGroup>
+
+</Project>

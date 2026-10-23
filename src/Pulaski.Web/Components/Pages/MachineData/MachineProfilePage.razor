@@ -1,0 +1,571 @@
+@page "/machine-profiles/{ProfileId:guid}"
+@attribute [RequiresView(PermissionCodes.EquipmentView)]
+@using Pulaski.Web.Services.MachineData
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+@inject Downloads Downloads
+
+@* One machine profile (D-050): its state values, its stop, alarm and warning codes with their utilization reasons, the reasons
+   operators may choose on its machines, and the machines that use it with their own overrides. *@
+<PageTitle>@(_detail?.Profile.Code ?? "Machine profile") · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <div class="small mb-1"><a href="machine-profiles">← Machine profiles</a></div>
+        <h1 class="mb-1">
+            @(_detail?.Profile.Code ?? "Machine profile")
+            @if (_detail?.Profile is { IsActive: false })
+            {
+                <span class="chip chip-muted ms-2 align-middle">Inactive</span>
+            }
+        </h1>
+        <p class="text-muted mb-0">@_detail?.Profile.Name</p>
+    </div>
+    @if (_detail is not null)
+    {
+        <div class="inv-head-tools">
+            <button type="button" class="btn btn-outline-secondary" @onclick="ExportAsync">Export CSV</button>
+            @if (CanManage)
+            {
+                <button type="button" class="btn btn-primary" @onclick="@(() => _importing = !_importing)">Import CSV</button>
+            }
+        </div>
+    }
+</div>
+
+<ProblemAlert Error="_error" />
+
+@if (_detail is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    var p = _detail.Profile;
+    <ViewOnlyNote Permission="@PermissionCodes.Equipment" What="maintain machine profiles" SiteId="p.SiteId" />
+
+    @if (_importing && CanManage)
+    {
+        <ProfileCsvImport ProfileId="p.Id" Version="p.Version" OnImported="LoadAsync" OnClose="@(() => _importing = false)" />
+    }
+
+    <fieldset class="view-only-scope" disabled="@(!CanManage)">
+        <form class="inv-toolbar" @onsubmit="SaveProfileAsync" @onsubmit:preventDefault>
+            <input class="form-control inv-grow" maxlength="100" aria-label="Name" placeholder="Name" @bind="_name" />
+            <input class="form-control" style="width: 10rem" maxlength="100" aria-label="Vendor" placeholder="Vendor" @bind="_vendor" />
+            <input class="form-control" style="width: 10rem" maxlength="100" aria-label="Model" placeholder="Model" @bind="_model" />
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="profile-active" @bind="_active" />
+                <label class="form-check-label" for="profile-active">Active</label>
+            </div>
+            <button type="submit" class="btn btn-outline-primary" disabled="@(_saving || !ProfileChanged)">Save</button>
+        </form>
+    </fieldset>
+
+    <nav class="inv-tabs" aria-label="Profile">
+        @foreach (var (tab, label, count) in Tabs())
+        {
+            <button type="button" class="inv-tab btn btn-link @(_tab == tab ? "active" : "")" @onclick="() => _tab = tab">
+                @label <span class="small text-muted">@count</span>
+            </button>
+        }
+    </nav>
+
+    <fieldset class="view-only-scope" disabled="@(!CanManage)">
+        @if (_tab == "states")
+        {
+            <p class="small text-muted">
+                The values the machine's state tag takes, and the PackML state each one means. A new profile starts with PackML's own numbers; change them
+                for a controller that numbers its states otherwise. The reason is what time in that state counts as when the machine gives no stop code.
+            </p>
+            @if (CanManage)
+            {
+                <form class="inv-toolbar" @onsubmit="AddStateAsync" @onsubmit:preventDefault>
+                    <input type="number" class="form-control" style="width: 8rem" placeholder="Value" aria-label="New state value" @bind="_newStateValue" />
+                    <input class="form-control inv-grow" maxlength="100" placeholder="Name on the controller" aria-label="New state name" @bind="_newStateName" @bind:event="oninput" />
+                    <select class="form-select w-auto" aria-label="New state's PackML state" @bind="_newStatePackMl">
+                        @for (var i = 0; i < MachineProfileView.PackMlNames.Count; i++)
+                        {
+                            <option value="@i">@i · @MachineProfileView.PackMlNames[i]</option>
+                        }
+                    </select>
+                    <button type="submit" class="btn btn-primary" disabled="@(_saving || _newStateValue is null || string.IsNullOrWhiteSpace(_newStateName))">Add state</button>
+                </form>
+            }
+
+            <div class="table-panel">
+                <table class="table align-middle">
+                    <thead><tr><th class="inv-num">Value</th><th>Name</th><th>PackML state</th><th>Reason with no stop code</th><th>Active</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var s in _detail.States)
+                        {
+                            var edit = StateEdit(s);
+                            <tr @key="s.RawValue" class="@(s.IsActive ? "" : "text-muted")">
+                                <td class="inv-num fw-semibold">@s.RawValue</td>
+                                <td><input class="form-control form-control-sm" maxlength="100" aria-label="Name of state @s.RawValue" value="@edit.Name" @onchange="e => ChangeState(s, x => x with { Name = Text(e) })" /></td>
+                                <td>
+                                    <select class="form-select form-select-sm" aria-label="PackML state of @s.RawValue" value="@edit.PackMlState"
+                                            @onchange="e => ChangeState(s, x => x with { PackMlState = int.TryParse(Text(e), out var n) ? n : x.PackMlState })">
+                                        @for (var i = 0; i < MachineProfileView.PackMlNames.Count; i++)
+                                        {
+                                            <option value="@i">@i · @MachineProfileView.PackMlNames[i]</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td>@ReasonSelect($"Reason for state {s.RawValue}", edit.ReasonCodeId, edit.ReasonCode, "No reason", id => ChangeState(s, x => x with { ReasonCodeId = id }))</td>
+                                <td><input class="form-check-input" type="checkbox" aria-label="State @s.RawValue active" checked="@edit.IsActive" @onchange="e => ChangeState(s, x => x with { IsActive = e.Value is true })" /></td>
+                                <td class="text-end">
+                                    @if (_stateEdits.ContainsKey(s.RawValue))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-primary" disabled="@_saving" @onclick="() => SaveStateAsync(edit)">Save</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _stateEdits.Remove(s.RawValue)">Undo</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else if (MachineProfileView.CodeKinds.Contains(_tab))
+        {
+            var codes = _detail.Codes.Where(c => c.Kind == _tab).ToList();
+            <p class="small text-muted">
+                @(_tab == "stop_reason"
+                    ? "The machine's first-out stop codes (PackML Admin.StopReason). A stop takes the reason its code maps to; a code without one shows as uncoded, and operators can confirm or change it."
+                    : "The machine's own codes, kept with their messages. Alarm and warning history comes later; their reasons are kept for it.")
+            </p>
+            @if (CanManage)
+            {
+                <form class="inv-toolbar" @onsubmit="AddCodeAsync" @onsubmit:preventDefault>
+                    <input type="number" class="form-control" style="width: 8rem" placeholder="Value" aria-label="New code value" @bind="_newCodeValue" />
+                    <input class="form-control inv-grow" maxlength="200" placeholder="Message" aria-label="New code message" @bind="_newCodeMessage" @bind:event="oninput" />
+                    <input class="form-control" style="width: 10rem" maxlength="50" placeholder="Category" aria-label="New code category" @bind="_newCodeCategory" />
+                    @ReasonSelect("New code's reason", _newCodeReason, null, "No reason", id => _newCodeReason = id)
+                    <button type="submit" class="btn btn-primary" disabled="@(_saving || _newCodeValue is null || string.IsNullOrWhiteSpace(_newCodeMessage))">Add @MachineProfileView.KindLabel(_tab).ToLowerInvariant()</button>
+                </form>
+            }
+
+            @if (codes.Count == 0)
+            {
+                <div class="empty-panel"><p class="text-muted mb-0">No @MachineProfileView.KindLabel(_tab).ToLowerInvariant() codes yet. Add them above or import the machine's list from CSV.</p></div>
+            }
+            else
+            {
+                <div class="table-panel">
+                    <table class="table align-middle">
+                        <thead><tr><th class="inv-num">Value</th><th>Message</th><th>Category</th><th>Reason</th><th>Active</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var c in codes)
+                            {
+                                var edit = CodeEdit(c);
+                                <tr @key="c.RawValue" class="@(c.IsActive ? "" : "text-muted")">
+                                    <td class="inv-num fw-semibold">@c.RawValue</td>
+                                    <td><input class="form-control form-control-sm" maxlength="200" aria-label="Message of @c.RawValue" value="@edit.Message" @onchange="e => ChangeCode(c, x => x with { Message = Text(e) })" /></td>
+                                    <td><input class="form-control form-control-sm" maxlength="50" aria-label="Category of @c.RawValue" value="@edit.Category" @onchange="e => ChangeCode(c, x => x with { Category = NullIfBlank(Text(e)) })" /></td>
+                                    <td>
+                                        @ReasonSelect($"Reason for {c.RawValue}", edit.ReasonCodeId, edit.ReasonCode, "No reason (uncoded)", id => ChangeCode(c, x => x with { ReasonCodeId = id }))
+                                        @if (c.IsActive && c.ReasonCodeId is null && c.Kind == "stop_reason")
+                                        {
+                                            <span class="chip chip-warning ms-1" title="Stops with this code show as uncoded">No reason</span>
+                                        }
+                                    </td>
+                                    <td><input class="form-check-input" type="checkbox" aria-label="@c.RawValue active" checked="@edit.IsActive" @onchange="e => ChangeCode(c, x => x with { IsActive = e.Value is true })" /></td>
+                                    <td class="text-end">
+                                        @if (_codeEdits.ContainsKey((c.Kind, c.RawValue)))
+                                        {
+                                            <button type="button" class="btn btn-sm btn-primary" disabled="@_saving" @onclick="() => SaveCodeAsync(edit)">Save</button>
+                                            <button type="button" class="btn btn-sm btn-link" @onclick="() => _codeEdits.Remove((c.Kind, c.RawValue))">Undo</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+        else if (_tab == "reasons")
+        {
+            <p class="small text-muted">
+                The utilization reasons operators may choose when they code a stop on this profile's machines. With none ticked, every utilization reason
+                of the site is offered; with some ticked, those and the ones its codes and states map to. Reasons are kept on Configure → Reasons, under Utilization.
+            </p>
+            @if (_reasons.Count == 0)
+            {
+                <div class="empty-panel"><p class="text-muted mb-0">The site has no utilization reasons yet. Add them on Configure → Reasons.</p></div>
+            }
+            else
+            {
+                <div class="table-panel">
+                    <table class="table align-middle">
+                        <thead><tr><th>Offered</th><th>Code</th><th>Name</th><th>Class</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in _reasons.OrderBy(r => r.UtilizationClass).ThenBy(r => r.Code))
+                            {
+                                var mapped = Mapped.Contains(r.Id);
+                                <tr @key="r.Id">
+                                    <td>
+                                        <input class="form-check-input" type="checkbox" aria-label="Offer @r.Code" checked="@(mapped || _offered.Contains(r.Id))" disabled="@mapped"
+                                               @onchange="e => Toggle(r.Id, e.Value is true)" />
+                                        @if (mapped)
+                                        {
+                                            <span class="small text-muted ms-1">mapped</span>
+                                        }
+                                    </td>
+                                    <td class="fw-semibold">@r.Code</td>
+                                    <td>@r.Name</td>
+                                    <td>@MachineProfileView.ClassLabel(r.UtilizationClass)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (CanManage)
+                {
+                    <button type="button" class="btn btn-primary" disabled="@(_saving || _offered.SetEquals(_detail.OfferedReasonIds))" @onclick="SaveReasonsAsync">Save offered reasons</button>
+                }
+            }
+        }
+        else
+        {
+            <p class="small text-muted">
+                The equipment that uses this profile; give equipment its profile on the Equipment screen, under Machine data. A machine whose stop code means
+                something else than on the others can take its own reason for it here.
+            </p>
+            @if (_detail.Machines.Count == 0)
+            {
+                <div class="empty-panel"><p class="text-muted mb-0">No equipment uses this profile yet.</p></div>
+            }
+            @foreach (var m in _detail.Machines)
+            {
+                var stopCodes = _detail.Codes.Where(c => c.Kind == "stop_reason" && c.IsActive).ToList();
+                <section class="inv-facts mb-3" @key="m.EquipmentId">
+                    <h2 class="h6 mb-2">@m.Code · @m.Name @(m.IsActive ? "" : "(inactive)")</h2>
+                    @if (m.Overrides.Count == 0)
+                    {
+                        <p class="small text-muted mb-2">Uses the profile's reasons for every code.</p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm align-middle">
+                            <thead><tr><th class="inv-num">Code</th><th>Message</th><th>On the profile</th><th>On @m.Code</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var o in m.Overrides)
+                                {
+                                    var onProfile = _detail.Codes.FirstOrDefault(c => c.Kind == "stop_reason" && c.RawValue == o.RawValue);
+                                    <tr @key="o.RawValue">
+                                        <td class="inv-num fw-semibold">@o.RawValue</td>
+                                        <td>@onProfile?.Message</td>
+                                        <td>@(onProfile?.ReasonCode ?? "No reason")</td>
+                                        <td>@(o.ReasonCode ?? "Uncoded")</td>
+                                        <td class="text-end">
+                                            @if (CanManage)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => RemoveOverrideAsync(m, o.RawValue)">Use the profile's</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    @if (CanManage && stopCodes.Count > 0)
+                    {
+                        var draft = OverrideDraft(m.EquipmentId);
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <select class="form-select form-select-sm w-auto" aria-label="Stop code for @m.Code" value="@draft.RawValue" @onchange="e => draft.RawValue = int.TryParse(Text(e), out var n) ? n : null">
+                                <option value="">Stop code…</option>
+                                @foreach (var c in stopCodes)
+                                {
+                                    <option value="@c.RawValue">@c.RawValue · @c.Message</option>
+                                }
+                            </select>
+                            @ReasonSelect($"Reason on {m.Code}", draft.ReasonCodeId, null, "Leave uncoded", id => draft.ReasonCodeId = id, small: true)
+                            <button type="button" class="btn btn-sm btn-outline-primary" disabled="@(_saving || draft.RawValue is null)" @onclick="() => AddOverrideAsync(m, draft)">Override</button>
+                        </div>
+                    }
+                </section>
+            }
+        }
+    </fieldset>
+}
+
+@code {
+    [Parameter]
+    public Guid ProfileId { get; set; }
+
+    private MachineProfileDetailDto? _detail;
+    private IReadOnlyList<ReasonCodeDto> _reasons = [];
+    private ApiException? _error;
+    private bool _saving;
+    private bool _importing;
+    private string _tab = "states";
+
+    private string? _name;
+    private string? _vendor;
+    private string? _model;
+    private bool _active;
+
+    private readonly Dictionary<int, ProfileStateDto> _stateEdits = [];
+    private readonly Dictionary<(string, int), ProfileCodeDto> _codeEdits = [];
+    private readonly Dictionary<Guid, Override> _overrideDrafts = [];
+    private HashSet<Guid> _offered = [];
+
+    private int? _newStateValue;
+    private string? _newStateName;
+    private int _newStatePackMl;
+    private int? _newCodeValue;
+    private string? _newCodeMessage;
+    private string? _newCodeCategory;
+    private Guid? _newCodeReason;
+
+    private sealed class Override
+    {
+        public int? RawValue { get; set; }
+        public Guid? ReasonCodeId { get; set; }
+    }
+
+    private bool CanManage => _detail is not null && User.Can(PermissionCodes.Equipment, _detail.Profile.SiteId);
+
+    private bool ProfileChanged => _detail is { Profile: var p }
+        && (Trim(_name) != p.Name || NullIfBlank(_vendor ?? "") != p.Vendor || NullIfBlank(_model ?? "") != p.Model || _active != p.IsActive);
+
+    /// <summary>Reasons the profile's codes and states map to: always offered.</summary>
+    private HashSet<Guid> Mapped => [.. _detail!.Codes.Where(c => c.IsActive && c.ReasonCodeId is not null).Select(c => c.ReasonCodeId!.Value)
+        .Concat(_detail.States.Where(s => s.IsActive && s.ReasonCodeId is not null).Select(s => s.ReasonCodeId!.Value))];
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private IEnumerable<(string Tab, string Label, int Count)> Tabs()
+    {
+        yield return ("states", "States", _detail!.States.Count(s => s.IsActive));
+        foreach (var kind in MachineProfileView.CodeKinds)
+        {
+            yield return (kind, MachineProfileView.KindLabel(kind) + "s", _detail.Codes.Count(c => c.Kind == kind && c.IsActive));
+        }
+
+        yield return ("reasons", "Reasons offered", Mapped.Union(_detail.OfferedReasonIds).Count());
+        yield return ("machines", "Machines", _detail.Machines.Count);
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _detail = await Api.GetMachineProfileAsync(ProfileId);
+            _reasons = await Api.ListReasonCodesAsync("utilization", _detail.Profile.SiteId);
+            (_name, _vendor, _model, _active) = (_detail.Profile.Name, _detail.Profile.Vendor, _detail.Profile.Model, _detail.Profile.IsActive);
+            _offered = [.. _detail.OfferedReasonIds];
+            _stateEdits.Clear();
+            _codeEdits.Clear();
+            _overrideDrafts.Clear();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private static string Text(ChangeEventArgs e) => e.Value?.ToString() ?? "";
+
+    private static string Trim(string? value) => (value ?? "").Trim();
+
+    private static string? NullIfBlank(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private ProfileStateDto StateEdit(ProfileStateDto s) => _stateEdits.GetValueOrDefault(s.RawValue) ?? s;
+
+    private ProfileCodeDto CodeEdit(ProfileCodeDto c) => _codeEdits.GetValueOrDefault((c.Kind, c.RawValue)) ?? c;
+
+    private Override OverrideDraft(Guid equipmentId)
+    {
+        if (!_overrideDrafts.TryGetValue(equipmentId, out var draft))
+        {
+            draft = new Override();
+            _overrideDrafts[equipmentId] = draft;
+        }
+
+        return draft;
+    }
+
+    private void ChangeState(ProfileStateDto s, Func<ProfileStateDto, ProfileStateDto> apply)
+    {
+        var changed = apply(StateEdit(s));
+        if (changed == s)
+        {
+            _stateEdits.Remove(s.RawValue);
+        }
+        else
+        {
+            _stateEdits[s.RawValue] = changed;
+        }
+    }
+
+    private void ChangeCode(ProfileCodeDto c, Func<ProfileCodeDto, ProfileCodeDto> apply)
+    {
+        var changed = apply(CodeEdit(c));
+        if (changed == c)
+        {
+            _codeEdits.Remove((c.Kind, c.RawValue));
+        }
+        else
+        {
+            _codeEdits[(c.Kind, c.RawValue)] = changed;
+        }
+    }
+
+    private void Toggle(Guid reasonId, bool on)
+    {
+        if (on)
+        {
+            _offered.Add(reasonId);
+        }
+        else
+        {
+            _offered.Remove(reasonId);
+        }
+    }
+
+    // A reason chosen earlier and switched off since stays listed while it is chosen.
+    private RenderFragment ReasonSelect(string label, Guid? value, string? valueCode, string none, Action<Guid?> onChange, bool small = true) =>
+        @<select class="form-select @(small ? "form-select-sm" : "") w-auto" aria-label="@label" value="@(value?.ToString() ?? "")"
+                 @onchange="e => onChange(Guid.TryParse(Text(e), out var id) ? id : null)">
+            <option value="">@none</option>
+            @if (value is { } chosen && _reasons.All(r => r.Id != chosen))
+            {
+                <option value="@chosen">@(valueCode ?? "Reason") (switched off)</option>
+            }
+            @foreach (var r in _reasons)
+            {
+                <option value="@r.Id">@MachineProfileView.ReasonLabel(r)</option>
+            }
+        </select>;
+
+    private async Task ExportAsync()
+    {
+        if (_detail is { } d)
+        {
+            await Downloads.CsvAsync(Csv.FileName($"machine-profile-{d.Profile.Code}", null, DateTimeOffset.Now), MachineProfileView.ExportCsv(d));
+        }
+    }
+
+    private Task SaveProfileAsync() => RunAsync(() => Api.UpdateMachineProfileAsync(ProfileId, new UpdateMachineProfileRequest
+    {
+        Version = _detail!.Profile.Version,
+        Name = Trim(_name),
+        Vendor = NullIfBlank(_vendor ?? ""),
+        Model = NullIfBlank(_model ?? ""),
+        Description = _detail.Profile.Description,
+        IsActive = _active,
+    }));
+
+    private Task SaveStateAsync(ProfileStateDto s) => RunAsync(() => Api.SetProfileStateAsync(ProfileId, s.RawValue, new SetProfileStateRequest
+    {
+        Version = _detail!.Profile.Version,
+        Name = s.Name,
+        PackMlState = s.PackMlState,
+        ReasonCodeId = s.ReasonCodeId,
+        IsActive = s.IsActive,
+    }));
+
+    private Task AddStateAsync()
+    {
+        if (_newStateValue is not { } value)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (_detail!.States.Any(s => s.RawValue == value))
+        {
+            _error = new ApiException(422, "Already in the list", $"The profile already has state value {value}; change it in the list.", null);
+            return Task.CompletedTask;
+        }
+
+        return RunAsync(async () =>
+        {
+            await Api.SetProfileStateAsync(ProfileId, value, new SetProfileStateRequest
+            {
+                Version = _detail.Profile.Version,
+                Name = Trim(_newStateName),
+                PackMlState = _newStatePackMl,
+            });
+            (_newStateValue, _newStateName, _newStatePackMl) = (null, null, 0);
+        });
+    }
+
+    private Task SaveCodeAsync(ProfileCodeDto c) => RunAsync(() => Api.SetProfileCodeAsync(ProfileId, c.Kind, c.RawValue, new SetProfileCodeRequest
+    {
+        Version = _detail!.Profile.Version,
+        Message = c.Message,
+        Category = c.Category,
+        ReasonCodeId = c.ReasonCodeId,
+        IsActive = c.IsActive,
+    }));
+
+    private Task AddCodeAsync()
+    {
+        if (_newCodeValue is not { } value)
+        {
+            return Task.CompletedTask;
+        }
+
+        var kind = _tab;
+        if (_detail!.Codes.Any(c => c.Kind == kind && c.RawValue == value))
+        {
+            _error = new ApiException(422, "Already in the list", $"The profile already has {MachineProfileView.KindLabel(kind).ToLowerInvariant()} {value}; change it in the list.", null);
+            return Task.CompletedTask;
+        }
+
+        return RunAsync(async () =>
+        {
+            await Api.SetProfileCodeAsync(ProfileId, kind, value, new SetProfileCodeRequest
+            {
+                Version = _detail.Profile.Version,
+                Message = Trim(_newCodeMessage),
+                Category = NullIfBlank(_newCodeCategory ?? ""),
+                ReasonCodeId = _newCodeReason,
+            });
+            (_newCodeValue, _newCodeMessage, _newCodeCategory, _newCodeReason) = (null, null, null, null);
+        });
+    }
+
+    private Task SaveReasonsAsync() => RunAsync(() => Api.SetProfileReasonsAsync(ProfileId, new SetProfileReasonsRequest
+    {
+        Version = _detail!.Profile.Version,
+        ReasonCodeIds = [.. _offered],
+    }));
+
+    private Task AddOverrideAsync(ProfileMachineDto machine, Override draft) =>
+        draft.RawValue is { } raw
+            ? RunAsync(() => Api.SetStopReasonOverrideAsync(machine.EquipmentId, raw, new SetStopReasonOverrideRequest { Version = machine.Version, ReasonCodeId = draft.ReasonCodeId }))
+            : Task.CompletedTask;
+
+    private Task RemoveOverrideAsync(ProfileMachineDto machine, int rawValue) =>
+        RunAsync(() => Api.SetStopReasonOverrideAsync(machine.EquipmentId, rawValue, new SetStopReasonOverrideRequest { Version = machine.Version, IsActive = false }));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            if (ex.IsConflict)
+            {
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

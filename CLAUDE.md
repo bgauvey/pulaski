@@ -37,7 +37,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   - Don't use `CALL` from the app. Procedures are for set-based maintenance jobs only. Npgsql's
     `CommandType.StoredProcedure` sends `CALL`, so never use it for functions either.
   - Domain rules live in C# (`Pulaski.Domain`), not PL/pgSQL. The app role (`pulaski_app`,
-    `db/app-role.sql`) has SELECT/INSERT/UPDATE on `core`, SELECT/INSERT only on `evt.event`, no DELETE.
+    `db/app-role.sql`) has SELECT/INSERT/UPDATE on `core`, plus DELETE only on `core.equipment_tag`;
+    it has SELECT/INSERT only on `evt.event`.
 - Optimistic concurrency via `xmin` (`xmin::text::bigint AS version`): the handler reads the row
   `FOR UPDATE`, compares the caller's version (409 on mismatch) and writes; no row_version columns.
 - API is CQRS (D-013): commands and queries in `Pulaski.Application` with hand-written handlers
@@ -46,7 +47,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Identity (D-037, proposed): local sign-in now (`pulaski-local`, PBKDF2 hashes in `sec.local_credential`, API-issued
   HMAC JWT from `Security:SigningKey`); OpenID Connect (Okta, Entra ID, AD FS, Keycloak) later as another bearer scheme.
   Users are keyed by issuer + subject. The UI keeps the token in a cookie session and sends it on every API call.
-- Machine data: MQTT Sparkplug B and OPC UA, built on the connector SDK.
+- Machine data: MQTT Sparkplug B and OPC UA, built on the connector SDK (`src/Pulaski.Connectors`: `IConnector`, samples;
+  `Pulaski.Connectors.Sparkplug`: hand-written protobuf codec, host logic in `SparkplugHost`, MQTTnet 4). `src/Pulaski.Edge` is the
+  worker: `TagBinder` (samples → signals on change), `EdgeBuffer` (SQLite store-and-forward), `ConnectorHost`, `Forwarder`.
 - Containers for the demo and Linux sites; Windows service option.
 
 ## Domain conventions
@@ -146,6 +149,27 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   stored), calling only `/api/terminal/*` with `Authorization: Terminal <secret>` (`TerminalFilter`). Badges are HMAC'd
   (`IBadgeHasher`), PINs password-hashed, 5 wrong PINs lock 5 min. Identify returns a 2-minute ticket (`BadgeTickets`); actions
   reuse `LaborWriter`/`BreakWriter` with source `terminal`, actor `terminal:<code>`. Kiosk is static SSR at `/terminal`.
+- Machine data and OEE (D-050, proposed): connectors run in the separate `Pulaski.Edge` worker behind one interface that
+  emits samples (address, value, timestamp, quality); shared edge code binds them via `core.equipment_tag`, buffers in SQLite (edge may be another machine)
+  and forwards to the API (only the API writes the DB). Sparkplug B host first. Machine profiles (`core.machine_profile*`, per site,
+  one per kind of machine; `equipment_stop_reason_map` = per-machine overrides) map raw state values → PackML and stop codes →
+  `utilization` reasons (`MachineProfileCsv`; each kind in a file replaces its list). List changes bump the profile's version;
+  overrides bump the equipment's. Reason classes runtime / downtime / planned (excluded); micro-stops < the equipment's threshold
+  (default 5 min, `PUT /equipment/{id}/machine-data`) aren't availability loss; line state series = worst, parallel = best.
+  Permissions: `equipment.view` / `equipment.manage`. OEE computed on read; telemetry stays out of `evt.event`.
+  Edge (as built): `core.edge_node` / `edge_connection` (settings jsonb, no secrets) / `edge_metric` (seen) / `equipment_tag`. The edge
+  forwards raw values; ingest (`IngestEdgeSignalsCommand`, locks node then equipment in id order) maps state through the profile,
+  latches stop codes (`LiveStateRules`), counts across rollover (`Counters.Delta`), writes `ts.equipment_state_change`,
+  `ts.production_count` (source `machine`, excluded from reports) and `core.equipment_live_state`; skips seq ≤ `last_sequence` of the
+  same `stream_id`. The edge's user holds role `edge_node` (`edge.ingest`).
+  Stops: ingest opens/closes `ts.downtime` (`StopRules`: leave Execute → open, Execute → close, micro by threshold; reason from first
+  code, else first state on the way with one); `equipment_live_state.open_downtime_*` points at the open stop. Operators code
+  (`CodeDowntimeCommand`, `downtime.code`; offered reasons in `StopSql.CodingReasons`); Operate → Machines (`machines.view`) is the
+  board (`GetMachineStatusHandler` derives series/parallel/constraint lines via `LineStates`) and the stops to code.
+- Utilization and OEE reports (D-052, proposed): computed on read, never stored (`GetOeeReportHandler`, `GET /machines/oee`, at most 31
+  production days). `Utilization.Classify` (unit mode, planned-downtime job, stop reason class, Execute; no signal = down), `Combine` for
+  derived lines, `Windows`/`Slice` to shifts and runs, `OeeTally` for A × P × Q with output weighed by ideal rate (earned hours). Output is
+  production reports only, never machine counts. Machines → Utilization and OEE tab; the Overview uses its current-shift rows.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
@@ -196,9 +220,9 @@ Treat these as working assumptions; confirm with Bill before building anything t
 - Load schema: `psql -d pulaski -v ON_ERROR_STOP=1 -f db/schema-draft.sql`, then
   `db/app-role.sql` (re-runnable), then `db/seed-demo.sql` (empty database only), then optionally
   `db/seed-materials.sql` (200 demo materials in 11 classes; re-runnable), then `db/seed-units.sql` (standard units
-  and demo material conversions, D-026; re-runnable), then `db/seed-reasons.sql` (starter adjustment and hold
-  reasons, D-027; re-runnable).
-- Layout: production projects in `src/`, test projects in `Tests/` (shared in-memory fakes in
+  and demo material conversions, D-026; re-runnable), then `db/seed-reasons.sql` (starter adjustment, hold and
+  utilization reasons, D-027, D-050; re-runnable).
+- Layout: production projects in `src/`, dev tools in `tools/`, the simulator compose file in `deploy/simulator/`, test projects in `Tests/` (shared in-memory fakes in
   `Tests/Pulaski.Testing`); `.editorconfig`,
   `Directory.Build.props`, `Directory.Packages.props` (central package versions) and
   `nuget.config` sit at the repo root.
@@ -210,3 +234,7 @@ Treat these as working assumptions; confirm with Bill before building anything t
   `src/Pulaski.Api/appsettings.Development.json` (`Security:BootstrapAdmin`); change it at the first sign-in.
 - Run: `dotnet run --project src/Pulaski.Api` (http://localhost:5080, OpenAPI at
   `/openapi/v1.json`) and `dotnet run --project src/Pulaski.Web` (http://localhost:5090).
+- Machine data demo: `docker compose -f deploy/simulator/compose.yaml up -d` (broker + PackML simulators for EXT-01-EXT,
+  EXT-01-SAW and PACK1; `PULASKI_MQTT_PORT=1884` if 1883 is taken), then `dotnet run --project src/Pulaski.Edge` with
+  `Edge__EdgeNodeId`, `Edge__Username`, `Edge__Password` (from Configure → Edge nodes → Setup). Send the simulator
+  commands with `tools/Pulaski.SparkplugCommand`.

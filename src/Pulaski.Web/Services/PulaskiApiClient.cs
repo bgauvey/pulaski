@@ -7,6 +7,7 @@ using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Labor;
+using Pulaski.Contracts.MachineData;
 using Pulaski.Contracts.Materials;
 using Pulaski.Contracts.Processes;
 using Pulaski.Contracts.ReferenceData;
@@ -229,6 +230,100 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<VersionResponse> SetEquipmentCalendarAsync(Guid equipmentId, SetEquipmentCalendarRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{equipmentId}/calendar", request, ct);
+
+    // Machine data (D-050)
+
+    public Task<VersionResponse> SetEquipmentMachineDataAsync(Guid equipmentId, SetEquipmentMachineDataRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{equipmentId}/machine-data", request, ct);
+
+    public Task<VersionResponse> SetStopReasonOverrideAsync(Guid equipmentId, int rawValue, SetStopReasonOverrideRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{equipmentId}/stop-reason-overrides/{rawValue}", request, ct);
+
+    public Task<IReadOnlyList<MachineProfileDto>> ListMachineProfilesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MachineProfileDto>>($"api/machine-profiles?siteId={siteId}", ct);
+
+    public Task<MachineProfileDetailDto> GetMachineProfileAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<MachineProfileDetailDto>($"api/machine-profiles/{id}", ct);
+
+    public Task<CreatedResponse> CreateMachineProfileAsync(CreateMachineProfileRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/machine-profiles", request, ct);
+
+    public Task<VersionResponse> UpdateMachineProfileAsync(Guid id, UpdateMachineProfileRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/machine-profiles/{id}", request, ct);
+
+    public Task<VersionResponse> SetProfileStateAsync(Guid id, int rawValue, SetProfileStateRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/machine-profiles/{id}/states/{rawValue}", request, ct);
+
+    public Task<VersionResponse> SetProfileCodeAsync(Guid id, string kind, int rawValue, SetProfileCodeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/machine-profiles/{id}/codes/{Uri.EscapeDataString(kind)}/{rawValue}", request, ct);
+
+    public Task<VersionResponse> SetProfileReasonsAsync(Guid id, SetProfileReasonsRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/machine-profiles/{id}/reasons", request, ct);
+
+    // Machines: status, stops and OEE (D-050, D-052)
+
+    public Task<IReadOnlyList<MachineStatusDto>> GetMachineStatusAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MachineStatusDto>>($"api/machines/status?siteId={siteId}", ct);
+
+    public Task<IReadOnlyList<DowntimeDto>> ListStopsAsync(Guid siteId, DateTimeOffset from, DateTimeOffset to, Guid? equipmentId, bool uncodedOnly, bool includeMicroStops, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<DowntimeDto>>(Query("api/machines/stops", ("siteId", siteId), ("from", from.ToString("O", System.Globalization.CultureInfo.InvariantCulture)),
+            ("to", to.ToString("O", System.Globalization.CultureInfo.InvariantCulture)), ("equipmentId", equipmentId),
+            ("uncodedOnly", uncodedOnly), ("includeMicroStops", includeMicroStops)), ct);
+
+    public Task<OeeReportDto> GetOeeReportAsync(Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId = null, CancellationToken ct = default) =>
+        GetAsync<OeeReportDto>(Query("api/machines/oee", ("siteId", siteId),
+            ("from", from.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),
+            ("to", to.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),
+            ("equipmentId", equipmentId)), ct);
+
+    public Task<DowntimeCodedResponse> CodeStopAsync(Guid id, CodeDowntimeRequest request, CancellationToken ct = default) =>
+        SendAsync<DowntimeCodedResponse>(HttpMethod.Post, $"api/machines/stops/{id}/code", request, ct);
+
+    public Task<IReadOnlyList<ReasonCodeDto>> ListCodingReasonsAsync(Guid equipmentId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ReasonCodeDto>>($"api/equipment/{equipmentId}/coding-reasons", ct);
+
+    // Edge nodes, connections and tags (D-050)
+
+    public Task<IReadOnlyList<EdgeNodeDto>> ListEdgeNodesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<EdgeNodeDto>>($"api/edge-nodes?siteId={siteId}", ct);
+
+    public Task<EdgeNodeDetailDto> GetEdgeNodeAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<EdgeNodeDetailDto>($"api/edge-nodes/{id}", ct);
+
+    public Task<CreatedResponse> CreateEdgeNodeAsync(CreateEdgeNodeRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/edge-nodes", request, ct);
+
+    public Task<VersionResponse> UpdateEdgeNodeAsync(Guid id, UpdateEdgeNodeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/edge-nodes/{id}", request, ct);
+
+    public Task DeleteEdgeNodeAsync(Guid id, CancellationToken ct = default) =>
+        DeleteAsync($"api/edge-nodes/{id}", ct);
+
+    public Task<CreatedResponse> CreateEdgeConnectionAsync(Guid nodeId, CreateEdgeConnectionRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/edge-nodes/{nodeId}/connections", request, ct);
+
+    public Task<VersionResponse> UpdateEdgeConnectionAsync(Guid id, UpdateEdgeConnectionRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/edge-connections/{id}", request, ct);
+
+    public Task<CreatedResponse> CreateEquipmentTagAsync(CreateEquipmentTagRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/equipment-tags", request, ct);
+
+    public Task<VersionResponse> UpdateEquipmentTagAsync(Guid id, UpdateEquipmentTagRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment-tags/{id}", request, ct);
+
+    public Task DeleteEquipmentTagAsync(Guid id, CancellationToken ct = default) =>
+        DeleteAsync($"api/equipment-tags/{id}", ct);
+
+    /// <summary>Checks (<paramref name="dryRun"/>) or imports a machine's definitions from CSV into a profile, all or nothing (D-050).</summary>
+    public async Task<ProfileImportResponse> ImportMachineProfileCsvAsync(Guid id, long version, string csv, bool dryRun, CancellationToken ct = default)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/machine-profiles/{id}/import/csv?version={version}&dryRun={(dryRun ? "true" : "false")}")
+        {
+            Content = new StringContent(csv, System.Text.Encoding.UTF8, "text/csv"),
+        };
+        using var response = await SendCoreAsync(request, ct);
+        return await ReadAsync<ProfileImportResponse>(response, ct);
+    }
 
     // Work orders
 
@@ -803,6 +898,15 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         var request = new HttpRequestMessage(method, uri) { Content = JsonContent.Create(body) };
         using var response = await SendCoreAsync(request, ct);
         return await ReadAsync<T>(response, ct);
+    }
+
+    private async Task DeleteAsync(string uri, CancellationToken ct)
+    {
+        using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Delete, uri), ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await ApiException.FromResponseAsync(response, ct);
+        }
     }
 
     private async Task<HttpResponseMessage> SendCoreAsync(HttpRequestMessage request, CancellationToken ct, bool signedIn = true)
