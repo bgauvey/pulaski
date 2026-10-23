@@ -54,6 +54,8 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-044 | Production by shift: each production count belongs to the shift running on its line when it occurred, from the line's schedule with its overrides, and to that shift's production day; counts outside shifts belong to the site-local day. Worked out on read; every count lands in one row, so the report reconciles to the runs | Proposed | 2026-10-23 |
 | D-045 | Planning rates from run history: worked out on request, not by a worker, as good output ÷ run time over a line's ended runs of the material in a window, with short, empty, unconvertible and unusual (Tukey-fence) runs left out and a minimum of runs and hours. A planner reviews it and accepts it as the calculated rate; it is checked again on accept; a modified rate stays in force | Proposed | 2026-10-23 |
 | D-046 | Process links drive the projection: a job of an order made from a process waits for the jobs it follows (after start: the first to start; after end: the last to end; plus the lag), using their projected or actual times. Linked lines are projected together until the times settle; a firmed job keeps its time and warns `link_not_met`, circular waits warn `link_cycle`. Nothing is reordered or moved | Proposed | 2026-10-23 |
+| D-047 | Breaks: a person's break is its own interval (paid or unpaid), never a change to their sessions. Its time comes out of the worked hours of every session it overlaps and is reported apart; it starts while the person is on a line, belongs to that session's shift and locks with its approval | Proposed | 2026-10-23 |
+| D-048 | Qualifications: per-site qualifications with a default validity; grants for whole site-local days (a renewal is a new grant), revoked rather than deleted; equipment requires them for itself and everything below it. Clock-on and check-in warn, never refuse, when someone lacks one | Proposed | 2026-10-23 |
 
 ## Order hierarchy
 
@@ -758,7 +760,7 @@ Sharing out by overlap means nobody re-clocks when the job on a line changes. Ru
 
 **Events:** `pulaski.crew.created.v1`, `…updated.v1`, `pulaski.person.created.v1`, `…updated.v1`, `pulaski.labor.started.v1`, `…ended.v1`, `…changed.v1`, `…corrected.v1`, `…shift_approved.v1`.
 
-**Not yet:** badges and terminals (`sec.badge`); qualifications; people from HR or the ERP; labor by shift on the Overview; a person working at another site than their own; editing a session's job or type on the review screen (only times and share); breaks.
+**Not yet:** badges and terminals (`sec.badge`); people from HR or the ERP; labor by shift on the Overview; a person working at another site than their own; editing a session's job or type on the review screen (only times and share). Breaks are D-047, qualifications D-048.
 
 ## Shift overrides (D-042, proposed)
 
@@ -842,6 +844,36 @@ Amends D-014, D-019 and D-024. On the floor a job can't start until its process 
 A running or paused job has started, so no link applies to it. The timeline carries each linked job's `linkReadyAt`; the board's side panel shows it.
 
 **Not here:** links don't constrain a group's window (its jobs are checked on their own, D-022), and the projection still doesn't share a group's capacity.
+
+## Breaks (D-047, proposed)
+
+Amends D-040. Labor reports separate working time from breaks, so payroll and efficiency don't count a lunch as time on the line.
+
+**A break is its own interval** (`core.labor_break`): a person, a start, an end (open while on break), paid or unpaid, a note. It never changes the person's sessions: their start, end and share stay as recorded, so allocation (D-040), approval and the sharing out to runs keep working on what was recorded.
+
+**Worked time.** A session's worked hours are its elapsed time outside the person's breaks × its share (`LaborRules.WorkedHours`, `WorkingPieces`); the run shares (`LaborRules.Attribute`) are worked out from the same pieces, so a break also comes out of direct time on the job running then. Someone on two lines at 50% who takes a 30-minute break loses 15 minutes on each. Break hours (`LaborRules.BreakHours`) count each break once, only while the person was on, split into paid and unpaid. Reports show worked hours with paid and unpaid break hours beside them; paid breaks are for payroll to add back.
+
+**Rules.** A break starts while the person is on a line (inside a session that counts) and belongs to that session's shift (its production day, schedule and code). It lasts at most 4 hours, isn't ahead of now, and doesn't overlap another of their breaks; at most one is open per person. It ends when the person ends it, when they leave their last line (clock-off or check-out), or when the shift is approved. Approved, it is locked like the sessions: a correction (`corrects_break_id`, `labor.approve`, with a reason) replaces it or with `is_void` removes it.
+
+**Who and API.** An operator takes their own (`labor.record_own`, `POST /api/labor/me/breaks`, `…/me/breaks/{id}/end`); a supervisor records and changes others' (`labor.record`, `POST /api/labor/breaks`, `…/{id}/end`, `PUT /api/labor/breaks/{id}`); `POST /api/labor/breaks/{id}/correct` needs `labor.approve`. Sessions carry `hours` (worked) and `breakHours`; shifts and the by-person report carry paid and unpaid break hours; a shift's review lists its breaks. Events: `pulaski.labor.break_started.v1`, `…break_ended.v1`, `…break_changed.v1`, `…break_corrected.v1`.
+
+**Not yet:** breaks planned on a shift schedule (a fixed lunch), filled in on their own.
+
+## Qualifications (D-048, proposed)
+
+Amends D-040 ("qualifications, not yet") and replaces the planned `core.qualification`, `person_qualification` and `equipment_qualification` tables, which were never written (migration 0017).
+
+**A qualification** belongs to a site: a code (upper case, fixed), a name, a description and how long a grant lasts by default (`validity_months`, or no expiry). Switched off, not deleted.
+
+**A grant** gives one to a person of the same site for whole site-local days, `valid_from` to `expires_on` inclusive (no expiry when null). Without days it runs from today for the qualification's validity. A renewal is a new grant, so the history stays; a person holds the qualification on a day when any grant is valid then. A grant's days and note can change; it is revoked (with a reason, from now) rather than deleted, and a revoked grant can't change. States: valid, not yet, expired, revoked (`QualificationRules.Status`).
+
+**Requirements.** Equipment requires a qualification of its site for itself and everything below it (`equipment_qualification`, read through `equipment_closure`), so requiring forklift on an area covers its lines. Switched off with `is_required`, not deleted.
+
+**Warn, never refuse.** Clocking someone on or checking a crew in still happens when they lack a required qualification on the session's site-local day; the response's notes say what is missing and why (not held, expired, revoked, not valid yet), and the Labor screen marks them *Not qualified* while they are on (`QualificationRules.Missing`). Like consumption beyond plan (D-035), the floor knows best; the warning makes the gap visible.
+
+**Who and API.** `people.manage` maintains qualifications and grants (`GET/POST /api/qualifications`, `PUT /api/qualifications/{id}`, `GET/POST /api/qualifications/grants`, `PUT …/grants/{id}`, `POST …/grants/{id}/revoke`); the grants list filters by person, qualification and `expiringWithinDays`. `equipment.manage` sets requirements (`GET/PUT /api/equipment/{id}/qualifications`). Reads need `labor.view` (and `equipment.view` for the list and requirements). Events: `pulaski.qualification.created.v1`, `…updated.v1`, `…granted.v1`, `…grant_changed.v1`, `…revoked.v1`, `pulaski.equipment.qualification_set.v1`.
+
+**Not yet:** refusing unqualified people where a plant wants it; qualifications from HR; notices before a grant expires.
 
 ## Application architecture
 

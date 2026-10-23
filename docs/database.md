@@ -37,7 +37,7 @@ Orders & scheduling                       Execution & inventory
  manufacturing_order                       job_run ─── ts.production_count, ts.downtime
   └─ work_order                            lot ─ material_load, lot_genealogy, ts.lot_event,
                                                 stock_count ─ stock_count_line
-      └─ job ── job_material               labor_session
+      └─ job ── job_material               labor_session, labor_break, labor_approval
           └─ job_run                       quality_characteristic ─ spec_limit, control_limit,
  scheduling_policy, run_standard,             characteristic_rule, spc_alert,
  changeover_rule                              ts.quality_sample, ts.spc_violation
@@ -45,7 +45,8 @@ Orders & scheduling                       Execution & inventory
 People & access                            History & events
  sec.app_user, role, permission,           ts.* (state, downtime, alarms, counts,
  role_assignment, terminal, badge            process values, job status, lots, quality, OEE)
- core.person, qualification                evt.event, evt.sink_checkpoint
+ core.person, qualification,               evt.event, evt.sink_checkpoint
+ person_qualification, equipment_qualification
 ```
 
 ---
@@ -599,32 +600,49 @@ A person is not necessarily a user: many operators only badge in.
 | `is_active` | boolean | no | False when they leave; refused while they are clocked on. |
 | `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
-### core.qualification — skills and certifications · *Planned*
+### core.qualification — skills and certifications · *In use (D-048)*
+
+A site's qualifications, maintained on Configure → People → Qualifications. Switched off, not deleted: a switched-off one can't be granted or required, and its requirements stop applying.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `site_id` | uuid → equipment | yes | Null for enterprise-wide. |
-| `code` | text | no | Unique per site. |
+| `site_id` | uuid → equipment | no | The site. |
+| `code` | text | no | Unique per site, upper case; fixed once created. |
 | `name` | text | no | Display name. |
+| `description` | text | yes | Up to 500 characters. |
+| `validity_months` | integer | yes | How long a new grant lasts by default, 1 to 120 months; null: it doesn't expire. |
+| `is_active` | boolean | no | False when switched off. |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
-### core.person_qualification — who holds what · *Planned*
+### core.person_qualification — who holds what, for which days · *In use (D-048)*
 
-| Column | Type | Null | Description |
-| --- | --- | --- | --- |
-| `person_id` | uuid → person | no | The person. Part of the primary key. |
-| `qualification_id` | uuid → qualification | no | The qualification. Part of the primary key. |
-| `granted_at` | timestamptz | no | When granted. |
-| `expires_at` | timestamptz | yes | When it lapses. |
-
-### core.equipment_qualification — what equipment requires · *Planned*
-
-Requirements are inherited down the equipment hierarchy.
+A grant. A renewal is a new grant, so a person may have several of one qualification; they hold it on a day when any grant is valid then. Revoked, never deleted.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `equipment_id` | uuid → equipment | no | The equipment. Part of the primary key. |
-| `qualification_id` | uuid → qualification | no | Required to run it. Part of the primary key. |
+| `id` | uuid | no | Primary key. |
+| `person_id` | uuid → person | no | The person. |
+| `qualification_id` | uuid → qualification | no | A qualification of the person's site. |
+| `valid_from` | date | no | The first valid day (site-local). |
+| `expires_on` | date | yes | The last valid day, inclusive; null: no expiry. Not before `valid_from`. |
+| `note` | text | yes | Such as a certificate number. |
+| `granted_by` | text | no | Who recorded it (actor). |
+| `revoked_at` | timestamptz | yes | From when it no longer counts. |
+| `revoked_by` | text | yes | Who revoked it; set exactly when `revoked_at` is. |
+| `revoke_reason` | text | yes | Why. |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
+
+### core.equipment_qualification — what equipment requires · *In use (D-048)*
+
+Requirements apply to the equipment and everything below it (through `equipment_closure`). Set on Configure → Equipment. Pulaski warns, never refuses, when someone without one is put on a line.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `equipment_id` | uuid → equipment | no | The equipment, in the qualification's site. Part of the primary key. |
+| `qualification_id` | uuid → qualification | no | Required to work on it. Part of the primary key. |
+| `is_required` | boolean | no | False once no longer required (rows are never deleted). |
+| `updated_at` | timestamptz | no | Last change. |
 
 ## 8. Orders and scheduling
 
@@ -936,6 +954,25 @@ One row per site, production day and shift (`labor_approval_uq`, nulls equal, so
 | `approved_by_user_id` | uuid → app_user | yes | Their user. |
 | `approved_at` | timestamptz | no | When. |
 | `note` | text | yes | Free text. |
+
+### core.labor_break — a person's break · *In use (D-047)*
+
+A break's time comes out of the worked hours of every session of the person it overlaps, whatever their share; the sessions themselves never change. It is reported on its own, paid or unpaid, and counts only while the person was on. It must start inside one of their sessions and belongs to that session's shift, so it locks with the shift's approval; after that a correction replaces it or, with `is_void`, removes it. At most one open break per person (`labor_break_one_open_per_person`); a person's breaks don't overlap. An open break ends when the person leaves their last line, or with the shift's approval.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The person's site. |
+| `person_id` | uuid → person | no | Who. |
+| `started_at`, `ended_at` | timestamptz | no / yes | The break; open while `ended_at` is null; end after start, at most 4 hours. |
+| `is_paid` | boolean | no | Paid breaks are reported apart from unpaid ones; both are left out of worked time. |
+| `production_date`, `shift_schedule_id`, `shift_code` | date, uuid, text | no / yes / yes | The shift of the session it started in, as on `labor_session`. |
+| `source` | text | no | `self`, `supervisor` or `correction`. |
+| `corrects_break_id` | uuid → labor_break | yes | The break a correction replaces; set exactly when `source` is `correction`. A break is corrected at most once. |
+| `is_void` | boolean | no | A correction that removes the break it corrects. |
+| `note` | text | yes | Free text, up to 500 characters. |
+| `recorded_by` | text | no | Who recorded it (actor). |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
 ## 11. Quality and SPC
 

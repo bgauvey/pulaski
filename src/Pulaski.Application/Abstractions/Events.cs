@@ -76,6 +76,16 @@ public static class EventTypes
     public const string LaborChanged = "pulaski.labor.changed.v1";
     public const string LaborCorrected = "pulaski.labor.corrected.v1";
     public const string LaborShiftApproved = "pulaski.labor.shift_approved.v1";
+    public const string LaborBreakStarted = "pulaski.labor.break_started.v1";
+    public const string LaborBreakEnded = "pulaski.labor.break_ended.v1";
+    public const string LaborBreakChanged = "pulaski.labor.break_changed.v1";
+    public const string LaborBreakCorrected = "pulaski.labor.break_corrected.v1";
+    public const string QualificationCreated = "pulaski.qualification.created.v1";
+    public const string QualificationUpdated = "pulaski.qualification.updated.v1";
+    public const string QualificationGranted = "pulaski.qualification.granted.v1";
+    public const string QualificationGrantChanged = "pulaski.qualification.grant_changed.v1";
+    public const string QualificationRevoked = "pulaski.qualification.revoked.v1";
+    public const string EquipmentQualificationSet = "pulaski.equipment.qualification_set.v1";
     public const string WorkOrderCreated = "pulaski.work_order.created.v1";
     public const string WorkOrderStatusChanged = "pulaski.work_order.status_changed.v1";
     public const string JobCreated = "pulaski.job.created.v1";

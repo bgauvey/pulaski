@@ -12,7 +12,7 @@
     <div>
         <h1 class="mb-1">People and crews</h1>
         <p class="text-muted mb-0">
-            Everyone whose time is recorded, and the crews they work in. A shift schedule names the crew on each shift, so a supervisor can check the
+            Everyone whose time is recorded, the crews they work in and the qualifications they hold. A shift schedule names the crew on each shift, so a supervisor can check the
             whole crew onto a line at once. People don't need a Pulaski sign-in; link one to let them clock themselves on.
         </p>
     </div>
@@ -32,6 +32,7 @@
 <nav class="inv-tabs" aria-label="People and crews">
     <button type="button" class="inv-tab btn btn-link @(_tab == "people" ? "active" : "")" @onclick="@(() => _tab = "people")">People <span class="small text-muted">@(_people?.Count(p => p.IsActive) ?? 0)</span></button>
     <button type="button" class="inv-tab btn btn-link @(_tab == "crews" ? "active" : "")" @onclick="@(() => _tab = "crews")">Crews <span class="small text-muted">@(_crews?.Count(c => c.IsActive) ?? 0)</span></button>
+    <button type="button" class="inv-tab btn btn-link @(_tab == "qualifications" ? "active" : "")" @onclick="@(() => _tab = "qualifications")">Qualifications</button>
 </nav>
 
 <ProblemAlert Error="_error" />
@@ -107,7 +108,7 @@ else if (_tab == "people")
         </fieldset>
     }
 }
-else
+else if (_tab == "crews")
 {
     @if (CanManage)
     {
@@ -151,6 +152,10 @@ else
             </div>
         </fieldset>
     }
+}
+else
+{
+    <QualificationsPanel @key="Sites.SiteId" SiteId="Sites.SiteId!.Value" People="_people" CanManage="CanManage" TimeZone="@Sites.Site?.TimeZone" />
 }
 
 @code {

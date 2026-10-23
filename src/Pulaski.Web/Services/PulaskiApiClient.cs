@@ -149,6 +149,57 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<LaborResponse> ApproveShiftAsync(Guid siteId, ApproveShiftRequest request, CancellationToken ct = default) =>
         SendAsync<LaborResponse>(HttpMethod.Post, $"api/labor/sites/{siteId}/approvals", request, ct);
 
+    // Breaks (D-047)
+
+    public Task<LaborResponse> StartMyBreakAsync(StartBreakRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, "api/labor/me/breaks", request, ct);
+
+    public Task<LaborResponse> EndMyBreakAsync(Guid breakId, EndBreakRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, $"api/labor/me/breaks/{breakId}/end", request, ct);
+
+    public Task<LaborResponse> StartBreakAsync(StartBreakRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, "api/labor/breaks", request, ct);
+
+    public Task<LaborResponse> EndBreakAsync(Guid breakId, EndBreakRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, $"api/labor/breaks/{breakId}/end", request, ct);
+
+    public Task<LaborResponse> UpdateBreakAsync(Guid breakId, UpdateBreakRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Put, $"api/labor/breaks/{breakId}", request, ct);
+
+    public Task<LaborResponse> CorrectBreakAsync(Guid breakId, CorrectBreakRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, $"api/labor/breaks/{breakId}/correct", request, ct);
+
+    // Qualifications (D-048)
+
+    public Task<IReadOnlyList<QualificationDto>> ListQualificationsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<QualificationDto>>($"api/qualifications?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> CreateQualificationAsync(CreateQualificationRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/qualifications", request, ct);
+
+    public Task<VersionResponse> UpdateQualificationAsync(Guid id, UpdateQualificationRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/qualifications/{id}", request, ct);
+
+    public Task<IReadOnlyList<QualificationGrantDto>> ListQualificationGrantsAsync(Guid siteId, Guid? personId = null, Guid? qualificationId = null, int? expiringWithinDays = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<QualificationGrantDto>>(
+            $"api/qualifications/grants?siteId={siteId}" + (personId is { } p ? $"&personId={p}" : "") + (qualificationId is { } q ? $"&qualificationId={q}" : "")
+            + (expiringWithinDays is { } d ? $"&expiringWithinDays={d}" : ""), ct);
+
+    public Task<CreatedResponse> GrantQualificationAsync(GrantQualificationRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/qualifications/grants", request, ct);
+
+    public Task<VersionResponse> UpdateQualificationGrantAsync(Guid grantId, UpdateQualificationGrantRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/qualifications/grants/{grantId}", request, ct);
+
+    public Task<VersionResponse> RevokeQualificationGrantAsync(Guid grantId, RevokeQualificationGrantRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/qualifications/grants/{grantId}/revoke", request, ct);
+
+    public Task<EquipmentQualificationsDto> GetEquipmentQualificationsAsync(Guid equipmentId, CancellationToken ct = default) =>
+        GetAsync<EquipmentQualificationsDto>($"api/equipment/{equipmentId}/qualifications", ct);
+
+    public Task<VersionResponse> SetEquipmentQualificationAsync(Guid equipmentId, SetEquipmentQualificationRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{equipmentId}/qualifications", request, ct);
+
     public Task<LaborReportDto> GetLaborReportAsync(Guid siteId, DateOnly from, DateOnly to, CancellationToken ct = default) =>
         GetAsync<LaborReportDto>($"api/labor/sites/{siteId}/report?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}", ct);
 

@@ -1,0 +1,227 @@
+@using System.Globalization
+@inject PulaskiApiClient Api
+
+@* The breaks of a shift under review (D-047): their time comes out of the people's worked hours. Before approval a
+   supervisor adds and changes them; after it, a correction replaces or removes one, with a reason. *@
+<section class="inv-section" aria-labelledby="breaks-heading">
+    <div class="inv-section-head">
+        <h2 id="breaks-heading" class="h6 mb-0">Breaks</h2>
+        <span class="small text-muted">@Qty(Detail.Shift.UnpaidBreakHours) h unpaid · @Qty(Detail.Shift.PaidBreakHours) h paid</span>
+    </div>
+    <ProblemAlert Error="_error" />
+
+    @if (Detail.Breaks.Count == 0)
+    {
+        <p class="small text-muted">No breaks recorded in this shift.</p>
+    }
+    else
+    {
+        <div class="table-panel">
+            <table class="table table-sm align-middle">
+                <thead><tr><th>Person</th><th>From</th><th>To</th><th>Paid</th><th class="inv-num">Hours</th><th>Recorded</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var b in Detail.Breaks)
+                    {
+                        var faded = b.IsSuperseded || b.IsVoid;
+                        <tr @key="b.Id" class="@(faded ? "text-muted text-decoration-line-through" : "")">
+                            <td><span class="fw-semibold">@b.PersonName</span> <span class="small text-muted">@b.EmployeeNumber</span></td>
+                            @if (_edit?.Id == b.Id)
+                            {
+                                <td><input type="datetime-local" class="form-control form-control-sm" aria-label="From" @bind="_edit.From" /></td>
+                                <td><input type="datetime-local" class="form-control form-control-sm" aria-label="To" @bind="_edit.To" /></td>
+                                <td><input type="checkbox" class="form-check-input" aria-label="Paid" @bind="_edit.IsPaid" /></td>
+                            }
+                            else
+                            {
+                                <td class="small">@Time(b.StartedAt)</td>
+                                <td class="small">@(b.EndedAt is { } e ? Time(e) : "on break")</td>
+                                <td class="small">@(b.IsPaid ? "Paid" : "Unpaid")</td>
+                            }
+                            <td class="inv-num">@Qty(b.Hours)</td>
+                            <td class="small text-muted">@Source(b)@(b.Note is { } n ? $" · {n}" : "")</td>
+                            <td class="text-end text-nowrap">
+                                @if (_edit?.Id == b.Id)
+                                {
+                                    @if (_edit.IsCorrection)
+                                    {
+                                        <input class="form-control form-control-sm d-inline-block" style="width: 12rem" maxlength="500" placeholder="Why (required)" aria-label="Why" @bind="_edit.Note" />
+                                    }
+                                    <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || (_edit.IsCorrection && string.IsNullOrWhiteSpace(_edit.Note)))" @onclick="() => SaveAsync(b)">Save</button>
+                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _edit = null">Cancel</button>
+                                }
+                                else if (!b.IsApproved && CanRecord && !faded)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link p-0" @onclick="() => StartEdit(b, false, false)">Change</button>
+                                    @if (b.EndedAt is null)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link p-0 ms-2" disabled="@_busy" @onclick="() => EndAsync(b)">End</button>
+                                    }
+                                }
+                                else if (b.IsApproved && CanApprove && !faded)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link p-0" @onclick="() => StartEdit(b, true, false)">Correct</button>
+                                    <button type="button" class="btn btn-sm btn-link p-0 ms-2 text-danger" @onclick="() => StartEdit(b, true, true)">Remove</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (CanRecord && !Detail.Shift.IsApproved && People.Count > 0)
+    {
+        <form class="row g-2 align-items-end mt-1" @onsubmit="AddAsync" @onsubmit:preventDefault>
+            <div class="col-sm-3">
+                <label class="form-label small" for="brk-person">Who</label>
+                <select id="brk-person" class="form-select form-select-sm" @bind="_add.PersonId">
+                    <option value="@Guid.Empty">Choose…</option>
+                    @foreach (var (id, name) in People)
+                    {
+                        <option value="@id">@name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label small" for="brk-from">From</label>
+                <input id="brk-from" type="datetime-local" class="form-control form-control-sm" @bind="_add.From" />
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label small" for="brk-to">To</label>
+                <input id="brk-to" type="datetime-local" class="form-control form-control-sm" @bind="_add.To" />
+            </div>
+            <div class="col-sm-1">
+                <div class="form-check mb-1">
+                    <input id="brk-paid" type="checkbox" class="form-check-input" @bind="_add.IsPaid" />
+                    <label class="form-check-label small" for="brk-paid">Paid</label>
+                </div>
+            </div>
+            <div class="col-sm-2">
+                <button type="submit" class="btn btn-sm btn-outline-secondary" disabled="@(_busy || _add.PersonId == Guid.Empty || _add.To is null || _add.To <= _add.From)">Add break</button>
+            </div>
+        </form>
+    }
+    <p class="small text-muted mt-2">A break's time comes out of every line the person was on then; their sessions stay as recorded. Struck-through breaks were replaced or removed after approval.</p>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public ShiftLaborDto Detail { get; set; } = default!;
+
+    [Parameter] public string? TimeZone { get; set; }
+
+    [Parameter] public bool CanRecord { get; set; }
+
+    [Parameter] public bool CanApprove { get; set; }
+
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private BreakEdit? _edit;
+    private readonly BreakEdit _add = new();
+    private ApiException? _error;
+    private bool _busy;
+
+    // Whoever has time in the shift can have a break in it.
+    private IReadOnlyList<(Guid Id, string Name)> People =>
+        [.. Detail.Sessions.Where(s => !s.IsVoid && !s.IsSuperseded).DistinctBy(s => s.PersonId).Select(s => (s.PersonId, s.PersonName)).OrderBy(p => p.PersonName, StringComparer.Ordinal)];
+
+    protected override void OnParametersSet()
+    {
+        if (_add.From == default)
+        {
+            var start = Detail.Shift.Start ?? Detail.Sessions.Select(s => (DateTimeOffset?)s.StartedAt).Min() ?? DateTimeOffset.UtcNow;
+            _add.From = Display.ToSite(start, TimeZone).DateTime.AddHours(4);
+            _add.To = _add.From.AddMinutes(30);
+        }
+    }
+
+    private string Time(DateTimeOffset at) => Display.ToSite(at, TimeZone).ToString("ddd HH:mm", CultureInfo.InvariantCulture);
+
+    private static string Qty(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static string Source(BreakDto b) => b.Source switch
+    {
+        "self" => $"Taken by {b.RecordedBy}",
+        "correction" => b.IsVoid ? $"Removed by {b.RecordedBy}" : $"Correction by {b.RecordedBy}",
+        _ => $"By {b.RecordedBy}",
+    };
+
+    private void StartEdit(BreakDto b, bool correction, bool remove) => _edit = new BreakEdit
+    {
+        Id = b.Id,
+        Version = b.Version,
+        IsCorrection = correction,
+        IsVoid = remove,
+        From = Display.ToSite(b.StartedAt, TimeZone).DateTime,
+        To = b.EndedAt is { } e ? Display.ToSite(e, TimeZone).DateTime : null,
+        IsPaid = b.IsPaid,
+        Note = correction ? null : b.Note,
+    };
+
+    private Task SaveAsync(BreakDto b) => RunAsync(async () =>
+    {
+        var edit = _edit!;
+        var from = Display.FromSiteLocal(edit.From, TimeZone)!.Value;
+        var to = Display.FromSiteLocal(edit.To, TimeZone);
+        if (edit.IsCorrection)
+        {
+            await Api.CorrectBreakAsync(b.Id, new CorrectBreakRequest { Void = edit.IsVoid, StartedAt = from, EndedAt = to ?? from, IsPaid = edit.IsPaid, Note = edit.Note ?? "" });
+        }
+        else
+        {
+            await Api.UpdateBreakAsync(b.Id, new UpdateBreakRequest { Version = edit.Version, StartedAt = from, EndedAt = to, IsPaid = edit.IsPaid, Note = edit.Note });
+        }
+
+        _edit = null;
+    });
+
+    private Task EndAsync(BreakDto b) => RunAsync(() => Api.EndBreakAsync(b.Id, new EndBreakRequest { Version = b.Version }));
+
+    private Task AddAsync() => RunAsync(() => Api.StartBreakAsync(new StartBreakRequest
+    {
+        PersonId = _add.PersonId,
+        IsPaid = _add.IsPaid,
+        StartedAt = Display.FromSiteLocal(_add.From, TimeZone),
+        EndedAt = Display.FromSiteLocal(_add.To, TimeZone),
+    }));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+            await OnChanged.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class BreakEdit
+    {
+        public Guid Id { get; init; }
+
+        public long Version { get; init; }
+
+        public bool IsCorrection { get; init; }
+
+        public bool IsVoid { get; init; }
+
+        public Guid PersonId { get; set; }
+
+        public DateTime From { get; set; }
+
+        public DateTime? To { get; set; }
+
+        public bool IsPaid { get; set; }
+
+        public string? Note { get; set; }
+    }
+}
