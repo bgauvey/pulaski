@@ -56,6 +56,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-046 | Process links drive the projection: a job of an order made from a process waits for the jobs it follows (after start: the first to start; after end: the last to end; plus the lag), using their projected or actual times. Linked lines are projected together until the times settle; a firmed job keeps its time and warns `link_not_met`, circular waits warn `link_cycle`. Nothing is reordered or moved | Proposed | 2026-10-23 |
 | D-047 | Breaks: a person's break is its own interval (paid or unpaid), never a change to their sessions. Its time comes out of the worked hours of every session it overlaps and is reported apart; it starts while the person is on a line, belongs to that session's shift and locks with its approval | Proposed | 2026-10-23 |
 | D-048 | Qualifications: per-site qualifications with a default validity; grants for whole site-local days (a renewal is a new grant), revoked rather than deleted; equipment requires them for itself and everything below it. Clock-on and check-in warn, never refuse, when someone lacks one | Proposed | 2026-10-23 |
+| D-049 | Shop-floor terminals and badges: a terminal is a registered device, not a user, enrolled once with a one-time code that gives it a secret; people identify there by badge (and PIN where the terminal asks) and record their own labor through the same rules, as source `terminal`. Badge values and PINs are stored only as hashes | Proposed | 2026-10-23 |
 
 ## Order hierarchy
 
@@ -760,7 +761,7 @@ Sharing out by overlap means nobody re-clocks when the job on a line changes. Ru
 
 **Events:** `pulaski.crew.created.v1`, `…updated.v1`, `pulaski.person.created.v1`, `…updated.v1`, `pulaski.labor.started.v1`, `…ended.v1`, `…changed.v1`, `…corrected.v1`, `…shift_approved.v1`.
 
-**Not yet:** badges and terminals (`sec.badge`); people from HR or the ERP; labor by shift on the Overview; a person working at another site than their own; editing a session's job or type on the review screen (only times and share). Breaks are D-047, qualifications D-048.
+**Not yet:** people from HR or the ERP; labor by shift on the Overview; a person working at another site than their own; editing a session's job or type on the review screen (only times and share). Breaks are D-047, qualifications D-048, badges and terminals D-049.
 
 ## Shift overrides (D-042, proposed)
 
@@ -874,6 +875,24 @@ Amends D-040 ("qualifications, not yet") and replaces the planned `core.qualific
 **Who and API.** `people.manage` maintains qualifications and grants (`GET/POST /api/qualifications`, `PUT /api/qualifications/{id}`, `GET/POST /api/qualifications/grants`, `PUT …/grants/{id}`, `POST …/grants/{id}/revoke`); the grants list filters by person, qualification and `expiringWithinDays`. `equipment.manage` sets requirements (`GET/PUT /api/equipment/{id}/qualifications`). Reads need `labor.view` (and `equipment.view` for the list and requirements). Events: `pulaski.qualification.created.v1`, `…updated.v1`, `…granted.v1`, `…grant_changed.v1`, `…revoked.v1`, `pulaski.equipment.qualification_set.v1`.
 
 **Not yet:** refusing unqualified people where a plant wants it; qualifications from HR; notices before a grant expires.
+
+## Shop-floor terminals and badges (D-049, proposed)
+
+Amends D-037 and D-040. Many operators never sign in; at the start of a shift they walk past a shared tablet or panel PC with a badge reader. The terminal must know who they are reliably, record exactly what they would record themselves, and be impossible to use as a back door into the rest of Pulaski.
+
+**A terminal is a device, not a user** (`sec.terminal`). A manager (`terminals.manage`, new; Manager has it to start with) registers it on Configure → Terminals for a site, area or line (its scope: it offers the active lines that run jobs at or below it), a first line to offer, and how people identify: badge, or badge and PIN. Then they issue a **one-time enrolment code** (ten characters, 15 minutes) and type it on the device at `/terminal/enrol`. Enrolling gives the terminal a 256-bit random secret, returned once and kept in an HttpOnly cookie on that device; the API keeps only SHA-256 hashes of codes and secrets. Enrolling again (with a new code) replaces the secret, and switching the terminal off refuses it at once.
+
+**Its own door.** A terminal calls `/api/terminal/*` with `Authorization: Terminal <secret>`; those endpoints accept nothing else, and every other endpoint refuses a terminal (it is not a bearer token). What a terminal records is attributed to it: events and `recorded_by` carry `terminal:<code>`, and sessions and breaks get the new source `terminal`.
+
+**Badges** (`sec.badge`), issued on Configure → People (`people.manage`) by scanning or typing the value: stored as HMAC-SHA256 with a key derived from the API's signing key (badge values are short and readable, so a plain hash could be guessed), never the value. A person has one active badge; a new one revokes the old; a value is unique among active badges. A PIN of 4 to 8 digits, for `badge_plus_pin` terminals, is hashed like a password. Five wrong PINs in a row lock the badge for 5 minutes (`pulaski.badge.pin_failed.v1` each).
+
+**Identifying.** `POST /api/terminal/identify` with the badge (and PIN): an unknown, revoked or other-site badge, or a switched-off person, is "not recognised", saying nothing more; at a PIN terminal, a badge alone only answers that a PIN is needed. A recognised badge returns the person's open time and break and a **ticket**: a JWT for another audience (`pulaski-terminal`), naming the person and the terminal, valid for 2 minutes. The badge value isn't sent again: the next action presents the ticket, and a ticket from another terminal, expired or forged, is refused.
+
+**Actions, under the existing rules.** `POST /api/terminal/clock-on` (direct time from now, on a line the terminal offers), `/clock-off` (one of the person's own open sessions), `/breaks/start` (paid or unpaid) and `/breaks/end`, each with the ticket. They go through the same writers as clocking on oneself (D-040) and breaks (D-047): one line at a time per person, at most 100% of their time, the shift's approval locking it, qualification warnings (D-048), breaks ending with the last line. Nothing a terminal does is a correction or an approval; those stay with supervisors.
+
+**The screen** (`/terminal`, server-rendered forms, no sign-in): a badge field (readers that type the badge and Enter work as they are), then the PIN where asked, then the person's time and large buttons (clock on to each offered line, the first line highlighted; clock off; start a paid or unpaid break; end break). It goes back to waiting 20 seconds after a badge and a few seconds after an action.
+
+**Not yet:** signing in as a user on a terminal (`user_login`, dropped from the planned modes); recording setup, indirect or training time at a terminal; production or downtime reporting from it; a terminal for several sites.
 
 ## Application architecture
 

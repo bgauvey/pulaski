@@ -1180,7 +1180,7 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | **Supervisor** | Start, pause, complete and reopen jobs; report production; record and approve labor; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches. |
 | **Operator** | Start, pause and complete jobs; report production; receive and move lots; clock themselves on and off. |
 | **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); approve or reject partial batches. |
-| **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; the site's settings. |
+| **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; the site's settings. |
 | **Auditor** | Correct inventory; stock counts. Can't plan or run jobs. |
 | **Process engineer** | Processes, BOMs and which lines can run each material. |
 
@@ -1321,6 +1321,7 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 - **A share of their time.** Someone tending two lines is on each at 50%. A person's time adds up to at most 100%.
 - **Shifts and approval.** Time belongs to the shift running when it started (or starting within two hours). Once a shift has ended, a supervisor approves it: open time ends when the shift ended, and the shift is locked. After that, a change is a **correction** with a reason.
 - **Breaks** are recorded on their own, paid or unpaid. A break's time comes out of the hours of every line the person is on, and is shown apart in the reports; the time they were clocked on stays as it was.
+- **Terminals and badges.** A shared tablet or panel PC can be a **terminal** where people badge to clock on and off and take breaks, without signing in to Pulaski. Each person has one badge; a terminal can also ask for a PIN.
 - **Qualifications** are the skills and certificates a line needs, such as a forklift licence. Each person holds them for a set of days. Someone checked onto a line without a qualification it needs is still checked on, and Pulaski warns.
 
 ### Set up people and crews
@@ -1344,6 +1345,25 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 2. Click **Clock on** on the line you are working on. Pulaski refuses if you are already on another line with all your time: clock off there first. If the line needs a qualification you don't hold, a note says so.
 3. Click **Start break** when you go on a break, and **End break** when you are back. One break covers all the lines you are on.
 4. Click **Clock off** when you leave it. A break you are still on ends with it.
+
+### Badge at a terminal (everyone)
+
+1. Hold your badge to the reader (or type its number and press Enter). If the terminal asks, type your **PIN** and press **Go**.
+2. The terminal greets you and shows what you are on. Press **Clock on** and a line (the highlighted one is this terminal's usual line), **Clock off**, **Start break**, **Start paid break** or **End break**.
+3. It says what it did, and any warning (such as a missing qualification), then waits for the next person. **Not me / cancel** goes straight back.
+
+### Set up a terminal (managers)
+
+1. Open **Configure → Terminals**. Type a **Code** (it can't change later) and a **Name** such as where it hangs. Under **Offers the lines of**, choose the site, an area or a line, then the **First line offered**, and whether people identify with **Badge** or **Badge and PIN**. Click **Register terminal**.
+2. Click **Enrolment code** on its row. A ten-character code shows, once, with the time it runs out (15 minutes).
+3. On the device, open the address the page shows (ending `/terminal/enrol`), type the code and press **Enrol**. The device now shows the badge screen; leave it there.
+4. To stop a terminal working (lost, stolen, moved), click **Change**, untick **Active** and save. To move it to another device, issue a new code and enrol the new device: the old one stops working.
+
+### Issue badges
+
+1. On **Configure → People**, click **Issue** in the person's **Badge** column.
+2. Scan the badge into **Scan badge** (or type its number) and, for terminals that ask for one, type a **PIN** of 4 to 8 digits. Click **Issue**.
+3. **Replace** gives a new badge (the old one stops working); **Revoke** takes it away, for a lost badge.
 
 ### Breaks (supervisors)
 
@@ -1384,6 +1404,8 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 - **Hours** are worked time: elapsed time outside the person's breaks × share; an open session counts until now. Someone on two lines at 50% who takes a 30-minute break loses 15 minutes on each, and has 30 minutes of break.
 - **Breaks:** a break must start while the person is on a line, belongs to that line's shift, lasts at most 4 hours and can't overlap another of theirs. Paid and unpaid breaks both come out of worked hours; paid ones are reported for payroll to add back. Breaks lock with their shift's approval, like time on a line.
 - **Qualifications** belong to a site. A grant is valid from its first day to its last, both included, in the site's time zone; a renewal is a new grant, and the old one stays in the list. A revoked grant no longer counts from the moment it is revoked. Switching a qualification off stops it being granted or required. The Labor screen marks someone on a line without what it requires **Not qualified**; point at it to see what is missing and why.
+- **Terminals:** a terminal records only the badged person's own time: direct time on a line it offers, ending their own sessions, and their breaks, under the same rules as clocking yourself on. Shift review shows *Badged at* and the terminal for that time. A badge that is unknown, revoked or from another site is just *not recognised*. Five wrong PINs in a row lock the badge for 5 minutes. A badge scan is good for 2 minutes; after that, badge again. Pulaski keeps only a scrambled form of badge numbers and PINs, so they can't be read back: to change a PIN, issue the badge again.
+- **Who:** registering terminals needs permission to register and enrol terminals (Manager); issuing badges, permission to maintain people and crews. People badging at a terminal need no Pulaski permission of their own: the terminal is trusted for that.
 - **Who:** qualifications and grants need permission to maintain people and crews; requiring them on equipment needs permission to maintain equipment. Recording breaks for others needs permission to record labor; taking your own, permission to clock yourself on.
 
 ---
@@ -1505,7 +1527,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 
 - **No screen yet for the changeover rules** (how long each material change takes): they are set up in the database.
 - **By shift:** production counts and labor are reported by shift; OEE by shift isn't, because machine state and downtime aren't recorded yet.
-- **Labor:** no badges or shop-floor terminals, and no import of people from HR or the ERP. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
+- **Labor:** no import of people from HR or the ERP. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
 - **No adapters yet** for other external sources or for label printing: materials come from the screen, a CSV file, or the ERP one item at a time through the API. The CSV import doesn't take capabilities, doesn't create missing classes, and there is no template file to download (the panel shows the header line).
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded (stops inside a run aren't known yet, since downtime isn't recorded).
 - **Production is reported by hand.** Counts from the machines, machine state, downtime, OEE, labor and quality aren't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.

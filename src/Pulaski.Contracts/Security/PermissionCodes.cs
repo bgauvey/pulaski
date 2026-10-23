@@ -48,5 +48,6 @@ public static class PermissionCodes
     public const string LaborRecord = "labor.record";
     public const string LaborApprove = "labor.approve";
     public const string People = "people.manage";
+    public const string Terminals = "terminals.manage";
     public const string Security = "security.manage";
 }

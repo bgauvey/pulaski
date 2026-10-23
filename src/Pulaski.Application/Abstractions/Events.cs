@@ -86,6 +86,13 @@ public static class EventTypes
     public const string QualificationGrantChanged = "pulaski.qualification.grant_changed.v1";
     public const string QualificationRevoked = "pulaski.qualification.revoked.v1";
     public const string EquipmentQualificationSet = "pulaski.equipment.qualification_set.v1";
+    public const string TerminalCreated = "pulaski.terminal.created.v1";
+    public const string TerminalUpdated = "pulaski.terminal.updated.v1";
+    public const string TerminalEnrolmentCodeIssued = "pulaski.terminal.enrolment_code_issued.v1";
+    public const string TerminalEnrolled = "pulaski.terminal.enrolled.v1";
+    public const string BadgeIssued = "pulaski.badge.issued.v1";
+    public const string BadgeRevoked = "pulaski.badge.revoked.v1";
+    public const string BadgePinFailed = "pulaski.badge.pin_failed.v1";
     public const string WorkOrderCreated = "pulaski.work_order.created.v1";
     public const string WorkOrderStatusChanged = "pulaski.work_order.status_changed.v1";
     public const string JobCreated = "pulaski.job.created.v1";

@@ -47,6 +47,7 @@ public sealed class CurrentUser
         ("shifts", PermissionCodes.ShiftsView),
         ("site-settings", PermissionCodes.SiteSettingsView),
         ("people", PermissionCodes.People),
+        ("terminals", PermissionCodes.Terminals),
         ("users", PermissionCodes.Security),
     ];
 

@@ -15,6 +15,12 @@ internal sealed class HttpRequestContext(IHttpContextAccessor accessor, IIdGener
     {
         get
         {
+            // At a shop-floor terminal (D-049) the terminal records the time, for the person who badged.
+            if (accessor.HttpContext?.Items[Security.TerminalFilter.ItemKey] is Application.Labor.TerminalRecord terminal)
+            {
+                return terminal.ActorId;
+            }
+
             var user = accessor.HttpContext?.User;
             var subject = user?.FindFirst("sub")?.Value;
             var issuer = user?.FindFirst("iss")?.Value;

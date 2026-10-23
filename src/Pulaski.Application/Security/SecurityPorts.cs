@@ -133,6 +133,8 @@ public enum SiteOf
     LaborBreak,
     Qualification,
     QualificationGrant,
+    Terminal,
+    Badge,
 }
 
 /// <summary>Finds the site something belongs to, so a role held at that site can be checked (D-037).</summary>
