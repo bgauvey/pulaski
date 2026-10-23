@@ -3,7 +3,7 @@ using Pulaski.Contracts.MachineData;
 
 namespace Pulaski.Web.Services.MachineData;
 
-/// <summary>Labels and the CSV export for the machine profile screens (D-041).</summary>
+/// <summary>Labels and the CSV export for the machine profile screens (D-050).</summary>
 public static class MachineProfileView
 {
     public const string State = "state";

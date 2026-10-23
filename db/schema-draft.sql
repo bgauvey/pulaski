@@ -86,7 +86,7 @@ CREATE TABLE core.equipment (
     holds_inventory         boolean NOT NULL DEFAULT false,         -- lots can be located here
     commingles_lots         boolean NOT NULL DEFAULT false,         -- lots here mix into one balance per material, like a silo (D-031)
     single_material         boolean NOT NULL DEFAULT false,         -- takes one material at a time (D-032)
-    -- machine data (D-041): where its state comes from, and how short a stop is a micro-stop
+    -- machine data (D-050): where its state comes from, and how short a stop is a micro-stop
     state_derivation        text NOT NULL DEFAULT 'own_tags' CHECK (state_derivation IN ('own_tags','series','parallel','constraint_machine')),
     constraint_equipment_id uuid REFERENCES core.equipment(id),
     micro_stop_threshold    interval NOT NULL DEFAULT interval '5 minutes',
@@ -157,7 +157,7 @@ CREATE TABLE core.residence_time (
     CONSTRAINT residence_time_uq UNIQUE NULLS NOT DISTINCT (equipment_link_id, material_id)
 );
 
--- Pulaski Edge nodes (D-041): a worker on plant hardware that runs connectors, buffers what they read and forwards it.
+-- Pulaski Edge nodes (D-050): a worker on plant hardware that runs connectors, buffers what they read and forwards it.
 -- It signs in as a service user holding edge.ingest at the site. stream_id/last_sequence make forwarding idempotent:
 -- a batch at or below last_sequence of the same stream was already applied.
 CREATE TABLE core.edge_node (
@@ -176,7 +176,7 @@ CREATE TABLE core.edge_node (
     CONSTRAINT edge_node_code_uq UNIQUE (site_id, code)
 );
 
--- One data source an edge node reads, through one connector: an MQTT Sparkplug B broker today (D-041).
+-- One data source an edge node reads, through one connector: an MQTT Sparkplug B broker today (D-050).
 -- Secrets (broker passwords) stay in the edge's own configuration, never here.
 CREATE TABLE core.edge_connection (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -201,7 +201,7 @@ CREATE TABLE core.edge_metric (
     PRIMARY KEY (connection_id, address)
 );
 
--- Machine tag mapping (edge binding, D-041). One row per signal the edge reads for a piece of equipment.
+-- Machine tag mapping (edge binding, D-050). One row per signal the edge reads for a piece of equipment.
 CREATE TABLE core.equipment_tag (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
@@ -225,7 +225,7 @@ CREATE INDEX equipment_tag_equipment_ix ON core.equipment_tag (equipment_id, tag
 CREATE UNIQUE INDEX equipment_tag_role_uq ON core.equipment_tag (equipment_id, tag_role) WHERE is_active AND tag_role <> 'process_value';
 CREATE UNIQUE INDEX equipment_tag_source_uq ON core.equipment_tag (connection_id, source_address) WHERE is_active;
 
--- Each machine's state as its signals last left it (D-041): current state, so relational. Written by ingest only.
+-- Each machine's state as its signals last left it (D-050): current state, so relational. Written by ingest only.
 CREATE TABLE core.equipment_live_state (
     equipment_id        uuid PRIMARY KEY REFERENCES core.equipment(id),
     raw_state           integer,                                -- what the machine sent; packml_state is its meaning
@@ -242,7 +242,7 @@ CREATE TABLE core.equipment_live_state (
     CONSTRAINT equipment_live_downtime_ck CHECK ((open_downtime_id IS NULL) = (open_downtime_started_at IS NULL))
 );
 
--- The last raw value of each machine counter, so a new reading becomes a count (D-041).
+-- The last raw value of each machine counter, so a new reading becomes a count (D-050).
 CREATE TABLE core.equipment_counter (
     equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
     count_kind          text NOT NULL CHECK (count_kind IN ('processed','defective','consumed')),
@@ -498,6 +498,8 @@ CREATE TABLE core.equipment_capability (
 -- A site's shift schedule (D-038): shifts repeating every cycle_days from cycle_start (a site-local date).
 -- The shifts are one jsonb document, [{code, name, start "HH:mm", minutes, days [0..cycle_days-1]}], saved
 -- whole like a process draft, so editing never deletes rows. Shift times are worked out on read, not stored.
+-- overrides change single dates (D-042): [{date, code, isWorking, name, start, minutes, crew, note}], one per date and code,
+-- replacing that day's shift of the code, adding one, or (isWorking false) taking it off.
 CREATE TABLE core.shift_schedule (
     id          uuid PRIMARY KEY DEFAULT uuidv7(),
     site_id     uuid NOT NULL REFERENCES core.equipment(id),
@@ -507,6 +509,7 @@ CREATE TABLE core.shift_schedule (
     cycle_days  integer NOT NULL CHECK (cycle_days BETWEEN 1 AND 56),  -- 7 for weekly, 28 for a four-week rotation
     cycle_start date NOT NULL,                                  -- the cycle's first day
     shifts      jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(shifts) = 'array'),
+    overrides   jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(overrides) = 'array'),
     is_active   boolean NOT NULL DEFAULT true,                  -- switched off rather than deleted
     created_at  timestamptz NOT NULL DEFAULT now(),
     updated_at  timestamptz NOT NULL DEFAULT now(),
@@ -550,6 +553,8 @@ CREATE TABLE core.shift_instance (
         scope_equipment_id WITH =, tstzrange(starts_at, ends_at) WITH &&)
 );
 
+-- Time taken out of the calendar of a site, area or line and everything below it (D-043), whatever schedule it follows.
+-- Maintained on Configure -> Site settings; removed ones are switched off, never deleted.
 CREATE TABLE core.calendar_exception (
     id                      uuid PRIMARY KEY DEFAULT uuidv7(),
     scope_equipment_id      uuid NOT NULL REFERENCES core.equipment(id),
@@ -557,6 +562,9 @@ CREATE TABLE core.calendar_exception (
     starts_at               timestamptz NOT NULL,
     ends_at                 timestamptz NOT NULL,
     note                    text,
+    is_active               boolean NOT NULL DEFAULT true,          -- false once removed: it takes no time out
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    updated_at              timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT calendar_exception_span_ck CHECK (ends_at > starts_at)
 );
 CREATE INDEX calendar_exception_scope_ix ON core.calendar_exception (scope_equipment_id, starts_at);
@@ -572,7 +580,7 @@ CREATE TABLE core.reason_code (
     reason_kind         text NOT NULL CHECK (reason_kind IN (
                             'utilization','scrap','hold','inventory_adjustment',
                             'indirect_labor','run_end','spc_cause','sample_exclusion')),
-    utilization_class   text CHECK (utilization_class IN ('runtime','downtime','planned')),  -- utilization reasons only (D-041)
+    utilization_class   text CHECK (utilization_class IN ('runtime','downtime','planned')),  -- utilization reasons only (D-050)
     code                text NOT NULL,
     name                text NOT NULL,
     oee_impact          text NOT NULL DEFAULT 'none' CHECK (oee_impact IN ('availability','performance','quality','planned','none')),
@@ -584,7 +592,7 @@ CREATE TABLE core.reason_code (
     CONSTRAINT reason_code_utilization_ck CHECK ((reason_kind = 'utilization') = (utilization_class IS NOT NULL))
 );
 
--- Machine profiles (D-041): one kind of machine, as its controller reports it. Identical machines share a
+-- Machine profiles (D-050): one kind of machine, as its controller reports it. Identical machines share a
 -- profile; equipment names its profile and may override single stop codes. Kept per site, like its reasons.
 CREATE TABLE core.machine_profile (
     id              uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -636,7 +644,7 @@ CREATE TABLE core.machine_profile_reason (
 ALTER TABLE core.equipment ADD COLUMN machine_profile_id uuid REFERENCES core.machine_profile(id);
 CREATE INDEX equipment_machine_profile_ix ON core.equipment (machine_profile_id) WHERE machine_profile_id IS NOT NULL;
 
--- One machine's own reason for a stop code where it differs from its profile (D-041).
+-- One machine's own reason for a stop code where it differs from its profile (D-050).
 CREATE TABLE core.equipment_stop_reason_map (
     equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
     plc_reason_value    integer NOT NULL,
@@ -724,18 +732,6 @@ CREATE TABLE sec.role_assignment (
 CREATE INDEX role_assignment_user_ix  ON sec.role_assignment (app_user_id) WHERE app_user_id IS NOT NULL;
 CREATE INDEX role_assignment_group_ix ON sec.role_assignment (idp_group)   WHERE idp_group IS NOT NULL;
 
--- Shop-floor terminals (tablets, panel PCs). A terminal is bound to a scope
--- so an operator who badges in only sees that line.
-CREATE TABLE sec.terminal (
-    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
-    code                    text NOT NULL UNIQUE,
-    name                    text NOT NULL,
-    scope_equipment_id      uuid NOT NULL REFERENCES core.equipment(id),
-    default_equipment_id    uuid REFERENCES core.equipment(id),
-    auth_mode               text NOT NULL CHECK (auth_mode IN ('user_login','badge','badge_plus_pin')),
-    is_active               boolean NOT NULL DEFAULT true,
-    last_seen_at            timestamptz
-);
 
 -- =====================================================================
 -- 7. PERSONNEL (ISA-95 personnel model, for labor and qualifications)
@@ -756,36 +752,89 @@ CREATE TABLE core.person (
     CONSTRAINT person_uq UNIQUE (site_id, employee_number)
 );
 
--- Badge values are credentials: store a keyed hash (HMAC), never the raw value.
+-- Shop-floor terminals (D-049): shared tablets and panel PCs where people badge to record their labor. A terminal is
+-- registered for a site, area or line (its scope: the lines it offers) and enrolled once with a one-time code, which
+-- gives it a long random secret; only hashes of the code and the secret are kept. Switching it off cuts it off.
+CREATE TABLE sec.terminal (
+    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
+    code                    text NOT NULL,                          -- upper case; fixed once created
+    name                    text NOT NULL,
+    scope_equipment_id      uuid NOT NULL REFERENCES core.equipment(id),
+    default_equipment_id    uuid REFERENCES core.equipment(id),     -- the line offered first
+    auth_mode               text NOT NULL CHECK (auth_mode IN ('badge','badge_plus_pin')),
+    is_active               boolean NOT NULL DEFAULT true,
+    secret_hash             bytea UNIQUE,                           -- SHA-256 of the device secret; null until enrolled
+    enrolled_at             timestamptz,
+    enrolment_code_hash     bytea,                                  -- SHA-256 of the pending one-time code
+    enrolment_expires_at    timestamptz,
+    last_seen_at            timestamptz,
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    updated_at              timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT terminal_uq UNIQUE (site_id, code),
+    CONSTRAINT terminal_enrolment_ck CHECK ((enrolment_code_hash IS NULL) = (enrolment_expires_at IS NULL))
+);
+
+-- Badges (D-049). The badge value is a credential: only a keyed hash (HMAC) is kept, never the raw value. A PIN, for
+-- terminals that ask for one, is hashed like a password. Revoked, never deleted; at most one active badge per value
+-- and per person. Wrong PINs lock the badge for a while.
 CREATE TABLE sec.badge (
-    id          uuid PRIMARY KEY DEFAULT uuidv7(),
-    person_id   uuid NOT NULL REFERENCES core.person(id),
-    badge_hash  bytea NOT NULL UNIQUE,
-    pin_hash    bytea,
-    issued_at   timestamptz NOT NULL DEFAULT now(),
-    revoked_at  timestamptz
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    person_id       uuid NOT NULL REFERENCES core.person(id),
+    badge_hash      bytea NOT NULL,
+    pin_hash        text,
+    issued_at       timestamptz NOT NULL DEFAULT now(),
+    issued_by       text NOT NULL,
+    revoked_at      timestamptz,
+    revoked_by      text,
+    failed_pins     integer NOT NULL DEFAULT 0,
+    locked_until    timestamptz,
+    last_used_at    timestamptz
 );
+CREATE UNIQUE INDEX badge_active_value_uq ON sec.badge (badge_hash) WHERE revoked_at IS NULL;
+CREATE UNIQUE INDEX badge_active_person_uq ON sec.badge (person_id) WHERE revoked_at IS NULL;
 
+-- Qualifications (D-048): a site's skills and certifications, who holds them for which days, and which equipment needs
+-- them (a requirement applies to the equipment and everything below it). Pulaski warns, never refuses, when someone
+-- without one is put on a line. Nothing is deleted: grants are revoked, requirements switched off.
 CREATE TABLE core.qualification (
-    id          uuid PRIMARY KEY DEFAULT uuidv7(),
-    site_id     uuid REFERENCES core.equipment(id),
-    code        text NOT NULL,
-    name        text NOT NULL,
-    CONSTRAINT qualification_uq UNIQUE NULLS NOT DISTINCT (site_id, code)
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id         uuid NOT NULL REFERENCES core.equipment(id),
+    code            text NOT NULL,                                  -- upper case; fixed once created
+    name            text NOT NULL,
+    description     text,
+    validity_months integer CHECK (validity_months BETWEEN 1 AND 120),  -- default length of a grant; null: doesn't expire
+    is_active       boolean NOT NULL DEFAULT true,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT qualification_uq UNIQUE (site_id, code)
 );
 
+-- A grant (D-048): valid from valid_from to expires_on, whole site-local days, both inclusive. A renewal is a new grant.
 CREATE TABLE core.person_qualification (
-    person_id           uuid NOT NULL REFERENCES core.person(id) ON DELETE CASCADE,
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    person_id           uuid NOT NULL REFERENCES core.person(id),
     qualification_id    uuid NOT NULL REFERENCES core.qualification(id),
-    granted_at          timestamptz NOT NULL,
-    expires_at          timestamptz,
-    PRIMARY KEY (person_id, qualification_id)
+    valid_from          date NOT NULL,
+    expires_on          date,                                       -- last valid day; null: doesn't expire
+    note                text,
+    granted_by          text NOT NULL,
+    revoked_at          timestamptz,
+    revoked_by          text,
+    revoke_reason       text,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT person_qualification_days_ck CHECK (expires_on IS NULL OR expires_on >= valid_from),
+    CONSTRAINT person_qualification_revoked_ck CHECK ((revoked_at IS NULL) = (revoked_by IS NULL))
 );
+CREATE INDEX person_qualification_person_ix ON core.person_qualification (person_id, qualification_id);
 
--- Qualifications required to run equipment (inherited down the hierarchy).
+-- Qualifications required to work on equipment, inherited down the hierarchy (D-048).
 CREATE TABLE core.equipment_qualification (
     equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
     qualification_id    uuid NOT NULL REFERENCES core.qualification(id),
+    is_required         boolean NOT NULL DEFAULT true,              -- false once taken off
+    updated_at          timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (equipment_id, qualification_id)
 );
 
@@ -1185,7 +1234,7 @@ CREATE TABLE core.labor_session (
     production_date         date NOT NULL,                                 -- the shift's day, or the site-local day
     shift_schedule_id       uuid REFERENCES core.shift_schedule(id),
     shift_code              text,
-    source                  text NOT NULL CHECK (source IN ('self','supervisor','crew','correction')),
+    source                  text NOT NULL CHECK (source IN ('self','supervisor','crew','terminal','correction')),
     corrects_session_id     uuid REFERENCES core.labor_session(id),
     is_void                 boolean NOT NULL DEFAULT false,                -- a correction that removes the session it corrects
     note                    text,
@@ -1219,6 +1268,36 @@ CREATE TABLE core.labor_approval (
     CONSTRAINT labor_approval_shift_ck CHECK ((shift_schedule_id IS NULL) = (shift_code IS NULL)),
     CONSTRAINT labor_approval_uq UNIQUE NULLS NOT DISTINCT (site_id, production_date, shift_schedule_id, shift_code)
 );
+
+-- A person's break (D-047): its time comes out of every session of theirs it overlaps, without changing them, and is
+-- reported on its own, paid or unpaid. It belongs to the shift of the session it started in, and locks with that shift's
+-- approval; after that a correction replaces it (corrects_break_id) or, with is_void, removes it.
+CREATE TABLE core.labor_break (
+    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
+    person_id               uuid NOT NULL REFERENCES core.person(id),
+    started_at              timestamptz NOT NULL,
+    ended_at                timestamptz,                            -- null while on break
+    is_paid                 boolean NOT NULL DEFAULT false,
+    production_date         date NOT NULL,
+    shift_schedule_id       uuid REFERENCES core.shift_schedule(id),
+    shift_code              text,
+    source                  text NOT NULL CHECK (source IN ('self','supervisor','terminal','correction')),
+    corrects_break_id       uuid REFERENCES core.labor_break(id),
+    is_void                 boolean NOT NULL DEFAULT false,
+    note                    text,
+    recorded_by             text NOT NULL,
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    updated_at              timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT labor_break_span_ck CHECK (ended_at IS NULL OR ended_at > started_at),
+    CONSTRAINT labor_break_shift_ck CHECK ((shift_schedule_id IS NULL) = (shift_code IS NULL)),
+    CONSTRAINT labor_break_correction_ck CHECK ((source = 'correction') = (corrects_break_id IS NOT NULL)),
+    CONSTRAINT labor_break_void_ck CHECK (NOT is_void OR corrects_break_id IS NOT NULL)
+);
+CREATE INDEX labor_break_person_ix ON core.labor_break (person_id, started_at);
+CREATE INDEX labor_break_shift_ix ON core.labor_break (site_id, production_date, shift_code);
+CREATE UNIQUE INDEX labor_break_one_open_per_person ON core.labor_break (person_id) WHERE ended_at IS NULL;
+CREATE UNIQUE INDEX labor_break_corrected_once ON core.labor_break (corrects_break_id) WHERE corrects_break_id IS NOT NULL;
 
 -- =====================================================================
 -- 11. QUALITY AND SPC (definitions and alert state)
@@ -1338,7 +1417,7 @@ CREATE TABLE ts.equipment_state_change (
     run_id              uuid,
     source              text NOT NULL CHECK (source IN ('packtags','synthesized','manual','edge_gap')),
     edge_sequence       bigint,                                 -- store-and-forward ordering / dedup
-    raw_state           integer,                                -- what the machine sent (D-041); packml_state is its meaning
+    raw_state           integer,                                -- what the machine sent (D-050); packml_state is its meaning
     stop_reason         integer,                                -- the machine's first-out stop code when the state changed
     recorded_at         timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (id, occurred_at)
@@ -1363,7 +1442,7 @@ CREATE TABLE ts.downtime (
     coded_by_user_id            uuid,
     coded_at                    timestamptz,
     comment                     text,
-    unit_mode                   smallint NOT NULL DEFAULT 1,        -- the machine's unit mode when it stopped (D-041)
+    unit_mode                   smallint NOT NULL DEFAULT 1,        -- the machine's unit mode when it stopped (D-050)
     coded_by                    text,                               -- who coded it, as on evt.event
     PRIMARY KEY (id, started_at),
     CONSTRAINT downtime_span_ck CHECK (ended_at IS NULL OR ended_at >= started_at)
@@ -1722,10 +1801,14 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0012_shift_schedules'),
     ('0013_view_permissions'),
     ('0014_labor'),
-    ('0015_machine_profiles'),
-    ('0016_edge'),
-    ('0017_stops'),
-    ('0018_tag_deletion');
+    ('0015_shift_overrides'),
+    ('0016_site_settings'),
+    ('0017_breaks_and_qualifications'),
+    ('0018_terminals_and_badges'),
+    ('0019_machine_profiles'),
+    ('0020_edge'),
+    ('0021_stops'),
+    ('0022_tag_deletion');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -1746,6 +1829,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('shifts.view', 'See shift schedules'),
     ('labor.view', 'See labor: who is on, shift review and labor reports'),
     ('machines.view', 'See machines: their live state and their stops'),
+    ('site_settings.view', 'See a site''s settings: changeover mode, reporting tolerances and calendar exceptions'),
     ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
     ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
     ('work_order.close', 'Cancel and close work orders'),
@@ -1769,9 +1853,10 @@ INSERT INTO sec.permission (code, description) VALUES
     ('units.manage', 'Maintain units of measure'),
     ('reasons.manage', 'Maintain reason codes'),
     ('equipment.manage', 'Maintain equipment: sites, lines, locations, machine profiles, edge nodes and tags'),
-    ('site_settings.manage', 'Set a site''s changeover mode and reporting tolerances'),
+    ('site_settings.manage', 'Set a site''s changeover mode, reporting tolerances and calendar exceptions'),
     ('shifts.manage', 'Maintain shift schedules and choose which one equipment follows'),
     ('people.manage', 'Maintain people and crews'),
+    ('terminals.manage', 'Register and enrol shop-floor terminals'),
     ('security.manage', 'Maintain users, roles and what each role may do'),
     ('edge.ingest', 'Send machine data as a Pulaski Edge node: read its configuration and forward what it collects')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
@@ -1800,6 +1885,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('planner', 'materials.view'),
     ('planner', 'processes.view'),
     ('planner', 'machines.view'),
+    ('planner', 'site_settings.view'),
     ('planner', 'schedule.plan'),
     ('planner', 'work_order.manage'),
     ('planner', 'work_order.close'),
@@ -1807,6 +1893,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('planner', 'materials.manage'),
     ('supervisor', 'overview.view'),
     ('supervisor', 'floor.view'),
+    ('supervisor', 'site_settings.view'),
     ('supervisor', 'inventory.view'),
     ('supervisor', 'work_orders.view'),
     ('supervisor', 'job.execute'),
@@ -1855,12 +1942,14 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('manager', 'shifts.view'),
     ('manager', 'labor.view'),
     ('manager', 'machines.view'),
+    ('manager', 'site_settings.view'),
     ('manager', 'job.reopen'),
     ('manager', 'work_order.close'),
     ('manager', 'reasons.manage'),
     ('manager', 'site_settings.manage'),
     ('manager', 'shifts.manage'),
     ('manager', 'people.manage'),
+    ('manager', 'terminals.manage'),
     ('manager', 'labor.approve'),
     ('auditor', 'overview.view'),
     ('auditor', 'work_orders.view'),
@@ -1875,6 +1964,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('auditor', 'shifts.view'),
     ('auditor', 'labor.view'),
     ('auditor', 'machines.view'),
+    ('auditor', 'site_settings.view'),
     ('auditor', 'inventory.correct'),
     ('auditor', 'stock_count.manage'),
     ('process_engineer', 'equipment.view'),

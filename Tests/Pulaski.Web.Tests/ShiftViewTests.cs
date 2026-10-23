@@ -20,6 +20,35 @@ public class ShiftViewTests
         Assert.Equal(expected, ShiftView.DayLabel(day, cycle, Monday));
 
     [Fact]
+    public void One_off_changes_say_what_they_do_against_the_cycle()
+    {
+        var schedule = new ShiftScheduleDto
+        {
+            Id = Guid.CreateVersion7(),
+            SiteId = Guid.CreateVersion7(),
+            Code = "1X8",
+            Name = "Days",
+            CycleDays = 7,
+            CycleStart = Monday,
+            Shifts = [new ShiftDto { Code = "A", Start = "06:00", Minutes = 480, Days = [0, 1, 2, 3, 4] }],
+            Overrides =
+            [
+                new ShiftOverrideDto { Date = Monday.AddDays(5), Code = "A", Start = "06:00", Minutes = 300 },
+                new ShiftOverrideDto { Date = Monday.AddDays(7), Code = "A", Start = "08:00", Minutes = 480 },
+                new ShiftOverrideDto { Date = Monday, Code = "A", IsWorking = false },
+            ],
+        };
+
+        Assert.Equal("Extra shift 06:00–11:00", ShiftOverrideView.Describe(schedule.Overrides[0], schedule));
+        Assert.Equal("08:00–16:00 instead of 06:00–14:00", ShiftOverrideView.Describe(schedule.Overrides[1], schedule));
+        Assert.Equal("Doesn't run", ShiftOverrideView.Describe(schedule.Overrides[2], schedule));
+        Assert.Contains("adds it as an extra shift", ShiftOverrideView.Hint(schedule, Monday.AddDays(6), "A"), StringComparison.Ordinal);
+        Assert.Contains("replaces it for that day only", ShiftOverrideView.Hint(schedule, Monday.AddDays(-7), "a"), StringComparison.Ordinal);
+        Assert.Equal([Monday.AddDays(5), Monday.AddDays(7)], ShiftOverrideView.Upcoming(schedule.Overrides, Monday.AddDays(1), all: false).Select(o => o.Date));
+        Assert.Equal(3, ShiftOverrideView.Upcoming(schedule.Overrides, Monday.AddDays(1), all: true).Count);
+    }
+
+    [Fact]
     public void Shifts_read_as_their_times_with_the_next_day_marked()
     {
         Assert.Equal("06:00–14:00", ShiftView.Times(new ShiftDto { Start = "06:00", Minutes = 480 }));

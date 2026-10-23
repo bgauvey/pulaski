@@ -11,7 +11,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Infrastructure.Tests;
 
-/// <summary>The utilization and OEE report end to end (D-043): history written by ingest and reports, read with real SQL as the application login.</summary>
+/// <summary>The utilization and OEE report end to end (D-052): history written by ingest and reports, read with real SQL as the application login.</summary>
 [Collection(DatabaseTests.Name)]
 public sealed class OeeReportTests(DatabaseFixture db)
 {

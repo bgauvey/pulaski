@@ -3,7 +3,7 @@ using Pulaski.Connectors;
 using Pulaski.Connectors.Sparkplug;
 using Pulaski.Edge;
 
-// Pulaski Edge (D-041): runs connectors on plant hardware, buffers what they read in SQLite and forwards it to Pulaski.
+// Pulaski Edge (D-050): runs connectors on plant hardware, buffers what they read in SQLite and forwards it to Pulaski.
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.Configure<EdgeOptions>(builder.Configuration.GetSection(EdgeOptions.Section));
 builder.Services.AddSingleton(TimeProvider.System);

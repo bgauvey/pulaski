@@ -169,7 +169,7 @@
                     {
                         <li>
                             <span class="fw-semibold">@day.Key.ToString("ddd d MMM", CultureInfo.InvariantCulture)</span>
-                            @string.Join(" · ", day.Select(s => $"{s.Code} {s.Start:HH\\:mm}–{s.End:HH\\:mm}{(s.Crew is { } crew ? $" ({crew})" : "")}"))
+                            @string.Join(" · ", day.Select(s => $"{s.Code} {s.Start:HH\\:mm}–{s.End:HH\\:mm}{(s.Crew is { } crew ? $" ({crew})" : "")}{(s.IsOverride ? " (one-off)" : "")}"))
                         </li>
                     }
                     @if (_preview.Shifts.Count == 0)
@@ -185,6 +185,12 @@
             <button type="button" class="btn btn-outline-secondary" @onclick="() => _edit = null">Cancel</button>
         </div>
     </form>
+}
+
+@if (_overridesFor is { } overridesId && _schedules?.FirstOrDefault(s => s.Id == overridesId) is { } overridden)
+{
+    <ShiftOverridesPanel @key="overridden.Id" Schedule="overridden" Crews="_crews" CanManage="CanManage"
+                         OnChanged="OnOverridesChangedAsync" OnClose="() => _overridesFor = null" />
 }
 
 @if (_schedules is null)
@@ -226,11 +232,18 @@ else
                             <div class="small text-muted">@s.Name@(s.Description is { } d ? $" · {d}" : "")</div>
                         </td>
                         <td class="small">Every @s.CycleDays @(s.CycleDays == 1 ? "day" : "days") from @s.CycleStart.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture)</td>
-                        <td class="small">@ShiftView.Summary(s.Shifts)</td>
+                        <td class="small">
+                            @ShiftView.Summary(s.Shifts)
+                            @if (ShiftOverrideView.Upcoming(s.Overrides, DateOnly.FromDateTime(DateTime.Today), all: false).Count is > 0 and var upcoming)
+                            {
+                                <div class="text-muted">@upcoming one-off @(upcoming == 1 ? "change" : "changes") coming up</div>
+                            }
+                        </td>
                         <td class="inv-num">@ShiftView.Hours(s.HoursPerCycle)</td>
                         <td class="small">@(s.UsedBy.Count == 0 ? "Nothing yet" : string.Join(", ", s.UsedBy))</td>
                         <td class="small">@(s.IsActive ? "Active" : "Switched off")</td>
-                        <td class="text-end">
+                        <td class="text-end text-nowrap">
+                            <button type="button" class="btn btn-sm btn-link" @onclick="() => _overridesFor = s.Id">One-off changes</button>
                             @if (CanManage && _edit is null)
                             {
                                 <button type="button" class="btn btn-sm btn-link" @onclick="() => StartEditAsync(s)">Change</button>
@@ -248,6 +261,7 @@ else
     private IReadOnlyList<ShiftScheduleDto>? _schedules;
     private IReadOnlyList<CrewDto> _crews = [];
     private ScheduleEdit? _edit;
+    private Guid? _overridesFor;
     private ShiftPreviewDto? _preview;
     private ApiException? _error;
     private string? _message;
@@ -297,10 +311,17 @@ else
         }
     }
 
+    private async Task OnOverridesChangedAsync(string? message)
+    {
+        _message = message;
+        await LoadAsync();
+    }
+
     private async Task OnSiteChangedAsync(ChangeEventArgs e)
     {
         Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
         _edit = null;
+        _overridesFor = null;
         _schedules = null;
         await LoadAsync();
     }
@@ -338,6 +359,7 @@ else
             IsActive = schedule.IsActive,
             Version = schedule.Version,
             Rows = [.. schedule.Shifts.Select(ShiftRow.From)],
+            Overrides = schedule.Overrides,
         };
         _message = null;
         await PreviewAsync();
@@ -413,6 +435,7 @@ else
                 CycleDays = edit.CycleDays,
                 CycleStart = edit.CycleStart,
                 Shifts = edit.ToShifts(),
+                Overrides = edit.Overrides,
                 Days = 7,
             });
         }
@@ -496,6 +519,9 @@ else
         public long Version { get; init; }
 
         public List<ShiftRow> Rows { get; init; } = [];
+
+        /// <summary>The saved one-off changes, so the preview shows the days they change (D-042).</summary>
+        public IReadOnlyList<ShiftOverrideDto> Overrides { get; init; } = [];
 
         public IReadOnlyList<ShiftDto> ToShifts() => [.. Rows.Select(r => r.ToDto())];
     }

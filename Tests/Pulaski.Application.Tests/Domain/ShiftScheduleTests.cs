@@ -85,4 +85,50 @@ public class ShiftScheduleTests
         Assert.Empty(TwoShifts.Problems());
         Assert.NotEmpty((TwoShifts with { CycleDays = 60 }).Problems());
     }
+
+    [Fact]
+    public void An_override_changes_adds_or_takes_off_a_shift_on_one_date_only()
+    {
+        // Monday 19 Oct: A starts at 08:00 for 6 hours. Saturday 24 Oct: an extra A. Tuesday 20 Oct: no B.
+        var changed = TwoShifts with
+        {
+            Overrides =
+            [
+                new(new DateOnly(2026, 10, 19), "A", IsWorking: true, new TimeOnly(8, 0), TimeSpan.FromHours(6), "Late days"),
+                new(new DateOnly(2026, 10, 24), "A", IsWorking: true, new TimeOnly(6, 0), TimeSpan.FromHours(8), "Days", Crew: "RED"),
+                new(new DateOnly(2026, 10, 20), "B", IsWorking: false, TimeOnly.MinValue, TimeSpan.Zero, "B"),
+            ],
+        };
+
+        var week = changed.Expand(Chicago, Local(10, 19, 0), Local(10, 26, 0));
+
+        var monday = week.Where(s => s.ProductionDate == new DateOnly(2026, 10, 19)).ToList();
+        Assert.Equal([("A", 8, true), ("B", 14, false)], monday.Select(s => (s.Code, TimeZoneInfo.ConvertTime(s.Start, Chicago).Hour, s.IsOverride)));
+        Assert.Equal(Local(10, 19, 14), monday[0].End);
+        Assert.Equal(["A"], week.Where(s => s.ProductionDate == new DateOnly(2026, 10, 20)).Select(s => s.Code));
+        var saturday = Assert.Single(week, s => s.ProductionDate == new DateOnly(2026, 10, 24));
+        Assert.Equal(("RED", true), (saturday.Crew, saturday.IsOverride));
+        Assert.Equal(10, week.Count);
+
+        // The cycle is untouched: the next Monday is as usual.
+        var next = changed.Expand(Chicago, Local(10, 26, 0), Local(10, 27, 0));
+        Assert.Equal(6, TimeZoneInfo.ConvertTime(next[0].Start, Chicago).Hour);
+        Assert.Empty(changed.Problems());
+    }
+
+    [Fact]
+    public void An_override_that_overlaps_a_neighbouring_shift_or_repeats_is_a_problem()
+    {
+        var late = new ShiftOverride(new DateOnly(2026, 10, 19), "A", IsWorking: true, new TimeOnly(9, 0), TimeSpan.FromHours(8), "Days");
+        var clash = Assert.Single((TwoShifts with { Overrides = [late] }).Problems());
+        Assert.Contains("Mon 19 Oct 2026", clash, StringComparison.Ordinal);
+        Assert.Contains("can't overlap", clash, StringComparison.Ordinal);
+
+        Assert.Contains((TwoShifts with { Overrides = [late, late with { Start = new TimeOnly(5, 0) }] }).Problems(),
+            p => p.Contains("two overrides", StringComparison.Ordinal));
+        Assert.NotEmpty((TwoShifts with { Overrides = [late with { Start = new TimeOnly(4, 0), Length = TimeSpan.FromMinutes(5) }] }).Problems());
+
+        var replaced = TwoShifts.WithOverride(late.ProductionDate, "a", late with { Start = new TimeOnly(5, 0) }).WithOverride(late.ProductionDate, "A", null);
+        Assert.Empty(replaced.Overrides!);
+    }
 }

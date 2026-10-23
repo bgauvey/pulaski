@@ -92,4 +92,28 @@ public sealed class ShiftTests(DatabaseFixture db)
         Assert.Contains("\"start\": \"22:00\"", json, StringComparison.Ordinal);
         Assert.Contains("\"name\": \"C\"", json, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task One_off_changes_are_kept_with_the_schedule_and_read_back()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "KENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "KS-" + _s, "Site", null, "site", "site", false, false, false, "America/Chicago"));
+        var monday = new DateOnly(2026, 10, 12);
+        CreatedResponse created = await db.SendAsync(new CreateShiftScheduleCommand(site.Id, "1X8", "One shift", null, 7, monday, [Shift("A", "06:00", 8)]));
+
+        var saturday = monday.AddDays(5);
+        var set = await db.SendAsync(new SetShiftOverrideCommand(created.Id, created.Version, saturday, "a", true, null, null, 240, null, "Overtime"));
+        var off = await db.SendAsync(new SetShiftOverrideCommand(created.Id, set.Version, monday, "A", false, null, null, null, null, null));
+
+        var schedule = await QueryAsync<GetShiftScheduleQuery, ShiftScheduleDto>(new GetShiftScheduleQuery(created.Id));
+        Assert.Equal([(monday, "A", false), (saturday, "A", true)], schedule.Overrides.Select(o => (o.Date, o.Code, o.IsWorking)));
+        Assert.Equal((240, "06:00", "Overtime"), (schedule.Overrides[1].Minutes, schedule.Overrides[1].Start, schedule.Overrides[1].Note));
+        Assert.Equal(off.Version, schedule.Version);
+
+        var removed = await db.SendAsync(new RemoveShiftOverrideCommand(created.Id, off.Version, monday, "a"));
+        schedule = await QueryAsync<GetShiftScheduleQuery, ShiftScheduleDto>(new GetShiftScheduleQuery(created.Id));
+        Assert.Equal([saturday], schedule.Overrides.Select(o => o.Date));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new RemoveShiftOverrideCommand(created.Id, off.Version, saturday, "A")));
+        Assert.Equal(removed.Version, schedule.Version);
+    }
 }

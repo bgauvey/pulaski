@@ -1,8 +1,8 @@
 # Pulaski User Guide
 
-*Last updated: 2026-10-19 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-10-23 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
-This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#20-reference) tables give the exact rules.
+This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#21-reference) tables give the exact rules.
 
 ## Contents
 
@@ -22,13 +22,14 @@ This guide explains how to use Pulaski to set up your plant, plan production and
 14. [Users, roles and signing in](#14-users-roles-and-signing-in)
 15. [Shift schedules](#15-shift-schedules)
 16. [Labor, people and crews](#16-labor-people-and-crews)
-17. [Machine profiles](#17-machine-profiles)
-18. [Edge nodes: collecting machine data](#18-edge-nodes-collecting-machine-data)
-19. [Machines: live status and stops](#19-machines-live-status-and-stops)
-20. [Reference](#20-reference)
-21. [What Pulaski doesn't do yet](#21-what-pulaski-doesnt-do-yet)
-22. [Troubleshooting and questions](#22-troubleshooting-and-questions)
-23. [Glossary](#23-glossary)
+17. [Site settings](#17-site-settings)
+18. [Machine profiles](#18-machine-profiles)
+19. [Edge nodes: collecting machine data](#19-edge-nodes-collecting-machine-data)
+20. [Machines: live status and stops](#20-machines-live-status-and-stops)
+21. [Reference](#21-reference)
+22. [What Pulaski doesn't do yet](#22-what-pulaski-doesnt-do-yet)
+23. [Troubleshooting and questions](#23-troubleshooting-and-questions)
+24. [Glossary](#24-glossary)
 
 ---
 
@@ -47,7 +48,7 @@ Today you can use Pulaski to:
 - publish the plan to the floor and freeze it;
 - keep **inventory**: receive material lots into stores, write stock up or off, move and hold lots, record what each job used and made, and trace any lot back to what it was made from or forward to what was made from it.
 
-Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#21-what-pulaski-doesnt-do-yet).
+Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#22-what-pulaski-doesnt-do-yet).
 
 ### Opening Pulaski
 
@@ -189,8 +190,8 @@ If you are starting from an empty Pulaski, work through this list in order. Each
 | 8 | Work orders | [Schedule → New work order](#8-creating-a-work-order) | Now you can plan. |
 | 9 | Inventory locations: stores, staging areas and feed points, with **Holds inventory** ticked | [Equipment](#4-equipment) | Lots have to be somewhere. |
 | 10 | Reason codes for write-ups, write-offs and holds, and utilization reasons for machine time | [Reasons](#reason-codes) (a starter set comes with `db/seed-reasons.sql`) | Every adjustment and hold needs a reason; machine profiles map stop codes to utilization reasons. |
-| 11 | Machine profiles, and which one each machine uses | [Machine profiles](#17-machine-profiles), then [Equipment](#4-equipment) | So the machine's state values and stop codes mean something in Pulaski. |
-| 12 | Edge nodes, their connections, and tags binding machine signals to equipment (optional) | [Edge nodes](#18-edge-nodes-collecting-machine-data) | So Pulaski hears machine state and counts. |
+| 11 | Machine profiles, and which one each machine uses | [Machine profiles](#18-machine-profiles), then [Equipment](#4-equipment) | So the machine's state values and stop codes mean something in Pulaski. |
+| 12 | Edge nodes, their connections, and tags binding machine signals to equipment (optional) | [Edge nodes](#19-edge-nodes-collecting-machine-data) | So Pulaski hears machine state and counts. |
 
 The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plant PLT1 with EXT-01, EXT-02 and PACK1, the stores RM-STORE and staging FG-STAGE, 200 materials, and the standard units with conversions for the demo materials), so you can start at step 6.
 
@@ -279,7 +280,7 @@ Select it and edit a property on the right. Text saves when you press **Enter** 
 
 Equipment with **Tracks state** set shows a **Machine data** group:
 
-1. **Machine profile**: how its controller reports state and stop codes. Choose one of its site's [machine profiles](#17-machine-profiles), or *None*.
+1. **Machine profile**: how its controller reports state and stop codes. Choose one of its site's [machine profiles](#18-machine-profiles), or *None*.
 2. **Micro-stop threshold**: stops shorter than this many minutes are micro-stops. They are logged but not queued for a reason, and they don't count against availability. Default 5 minutes; 0 to 60, in steps of half a minute. An extruder may use 2, a pack cell more.
 3. **State from**: where its state comes from.
    - *Its own state tag* (default).
@@ -287,7 +288,7 @@ Equipment with **Tracks state** set shows a **Machine data** group:
    - *Best of its machines (parallel)*: for machines running side by side, so the line runs while any of them does.
    - *Its constraint machine*: the line's state is one machine's. A **Constraint machine** row appears; Pulaski first picks the first machine below that tracks state, and you can choose another.
 
-Each saves as soon as you change it. The profile reads the machine's data as it arrives through an [edge node](#18-edge-nodes-collecting-machine-data); the threshold decides which stops are micro-stops, and *State from* how a line shows on [Machines](#19-machines-live-status-and-stops).
+Each saves as soon as you change it. The profile reads the machine's data as it arrives through an [edge node](#19-edge-nodes-collecting-machine-data); the threshold decides which stops are micro-stops, and *State from* how a line shows on [Machines](#20-machines-live-status-and-stops).
 
 ### Deactivate equipment
 
@@ -295,6 +296,7 @@ Set **Active** to *false*. Inactive equipment stays in the tree and in history, 
 
 ### In detail
 
+- **Required qualifications:** under the properties, a site, area or line lists the qualifications working on it requires, its own and those from above it (*from …*). **Require** adds one; **×** stops requiring it. They apply to everything below. Pulaski warns when someone without one is put on a line, but doesn't stop them. See [Qualifications](#qualifications).
 - The levels, top to bottom: enterprise, site, area, work center, work unit, equipment module, control module. A child always sits below its parent's level.
 - Roles allowed at each level: work center: production line, process cell, production unit, storage zone; work unit: work cell, unit, machine, storage unit; equipment module: machine, feed point, module; control module: module.
 - Codes are unique within a site.
@@ -382,7 +384,7 @@ Orders already made keep the version they were made from. If a draft already exi
 - Operations with no path of links between them run in parallel; links make them sequential. Links must flow one way; a loop is refused.
 - A released process with more than one operation must be connected.
 - Only lines and departments of the process's own site can be used; machines and other equipment that neither runs nor plans jobs are refused.
-- Today the link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule doesn't yet wait for the earlier operation to actually start or finish. See [What Pulaski doesn't do yet](#21-what-pulaski-doesnt-do-yet).
+- The link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule then also waits for the earlier operation's jobs as they are projected: see [Process links on the schedule](#process-links-on-the-schedule).
 
 ---
 
@@ -712,6 +714,19 @@ Pulaski checks each department job on its own; it doesn't share out a department
 - **Firm** freezes the plan: no more un-dispatch, and each job is anchored at its baseline start (see [Job rules](#job-rules)).
 - New jobs can only be added to a **planned** order.
 
+### Process links on the schedule
+
+For an order made from a [process](#5-processes), a job waits on the schedule for the operation it follows, as it would on the floor.
+
+- **After start:** the job can't start before the first job of the earlier operation is projected to start (or actually started), plus the lag.
+- **After end:** it can't start before the last job of the earlier operation is projected to end (or actually ended), plus the lag.
+- The side panel shows **Process links: Can start from …** for such a job. When the earlier operation moves, by resequencing, a line change or production running slow, the later one moves with it on the next refresh, on every view, and so does the work queued behind it on its line.
+- An earlier operation waiting on a department counts by its window: from its start, and until its finish-by for *after end*.
+- **Pulaski never moves a job to another line or changes the order of a line** to meet a link. Two warnings tell you when it can't be met:
+  - **Link not met:** a firmed job keeps its firmed start, but the operation it follows won't allow it by then. Move the earlier operation's work forward on its line, or move that work to a line that can start it sooner.
+  - **Link cycle:** the job waits for work that, through the sequence of the lines, waits for it. For example, a Pack job sequenced before the Extrude job it follows on the same line. Resequence one of them.
+- **Dispatching** publishes the times with the links applied, so the baseline agrees with the board.
+
 ### Overlaps
 
 Pulaski lays work end to end on each line, so two jobs on a line only overlap when work runs into a **firmed** job's fixed start. When that happens, a red banner appears on every view: *1 overlap: a line can't run these at the same time*, listing each pair with a hint and a **Show** button. The jobs are outlined, and a notice pops up the moment a new overlap appears, whether from your edit, another planner's, or simply time passing. Pulaski never fixes an overlap itself: move or resequence work, or un-firm the order.
@@ -727,7 +742,7 @@ Pulaski lays work end to end on each line, so two jobs on a line only overlap wh
 - **Runs.** A job runs in one or more **runs**: starting a job opens a run, pausing or completing it ends the run, and resuming opens the next. Good and scrap are reported into a run, and so are the lots the job uses and makes.
 - **Only one run at a time on a line.** Pause or complete what is running before starting the next job.
 - **When a job can start.** Its work order must be on the floor (dispatched or firmed). If its order was made from a process, the process links must be met: a Pack operation set to start *after Extrude ends* can't start until every Extrude job of the order is completed, plus any lag. Pulaski never starts a job by itself; it tells you when one can start.
-- **The rate check.** A run can't hold more than the line could have made in it: its length × the line's **ideal rate** for the material × the site's tolerance (110% unless your administrator changed it). Reporting 1000 m after one hour on a line rated 100 m/h is refused. The check uses the ideal rate from the line's capability, not the planning rate, which is usually lower.
+- **The rate check.** A run can't hold more than the line could have made in it: its length × the line's **ideal rate** for the material × the site's tolerance (110% unless a manager changed it on [Site settings](#17-site-settings)). Reporting 1000 m after one hour on a line rated 100 m/h is refused. The check uses the ideal rate from the line's capability, not the planning rate, which is usually lower.
 - **The order follows its jobs.** Starting an order's first job firms the order (if it was only dispatched) and puts it **in progress**; completing its last open job **completes** it; reopening a job takes it back to in progress.
 
 ### The board
@@ -771,6 +786,25 @@ The run's rate check still applies: an hour-long run can't take more than an hou
 ### The job page
 
 `jobs/<job>` shows the job's status, planned, good and scrap quantities, its **runs** (line, start, end, length, good, scrap, the most the run can hold, and why it ended) and its **production reports** (when entered, which run, good, scrap, scrap reason, who and any comment). The buttons offer what the job's status allows: **Start** or **Resume**, **Pause**, **Complete**, **Reopen** for a completed job whose order isn't closed, and **Report production**. **Materials and lots** opens the job's inventory page.
+
+### Production by shift
+
+What each shift made, for a supervisor's shift report or the morning meeting.
+
+1. On **Operate → Floor**, click **Production by shift**.
+2. Choose **From** and **to** (production days, up to 93) and click **Show**. It opens on the last seven days.
+3. Each shift is a block, headed by its day, name, code, schedule, times and crew, with its good and scrap per unit. Below it, one row per line and job: work order, material, good, scrap, unit and how many reports it adds up.
+4. **Against the jobs' runs** lists each job's good and scrap in these days next to the totals on its job page. *Matches* means every report of the job is in these days; otherwise part of it was reported on other days.
+5. **Export CSV** saves every row, with the shift's start and end.
+
+**In detail**
+
+- **Which shift a report counts in:** the shift running on its line when the report was made, from the [shift schedule](#15-shift-schedules) the line follows with its one-off changes. A report into a run that had already ended counts when the run ended.
+- **Which day:** a shift's production day is the day it starts, so a night shift's output after midnight counts towards the evening it began. A report between shifts, or on a line without shifts, counts towards the site's calendar day and shows as *outside shifts*.
+- **Good** is everything a report made less its scrap. A rejected partial batch moves its quantity from good to scrap in the shift the batch was made.
+- **Every report is counted once,** so a job's rows add up to its runs' totals when the days cover all its reports.
+- **Reports are counted when they are made, not spread over the run:** a single report for a 12-hour run counts in the shift running when it was entered. Report at the end of each shift to split a run between shifts.
+- **Who:** anyone who can see the Floor at the site.
 
 ### Materials made in batches
 
@@ -1035,11 +1069,29 @@ The **Where it can run** table lists each line that can run the material: its id
 2. Enter the **Modified rate** and a note saying why (for example *trial on new die*), then click **Set modified rate**. Pulaski now plans with your rate.
 3. To go back, click **Rate** again, then **Back to calculated**. Whatever is in the note box is kept as the reason.
 
+**Calculate the planning rate from run history**
+
+What the line really makes, rather than its ideal rate.
+
+1. Click **Rate** on the line's row. Under **From run history**, choose how far back to look (**Runs that ended in the last** 30 to 365 days; 90 to start with) and click **Work it out**.
+2. Pulaski shows the rate the runs give, how many runs and hours it used, and how it compares with the rate in force. Below it, every run it looked at: its job, when it ended, its hours, good output and rate, and whether it was **Used** or **Left out**, with why.
+3. If the rate looks right, click **Use … as the calculated rate**. Nothing changes until you do.
+4. To go back to the ideal rate later, click **Rate**, then **Back to the ideal rate**.
+
 **In detail**
+
+- **The rate** is the good output of the used runs ÷ their hours, so a long run counts for more than a short one. Scrap doesn't count: the planning rate is for good output.
+- **Which runs:** ended runs of production jobs of the material on that line, ended in the chosen days. Runs under 30 minutes, runs with no good output, and runs whose unit doesn't convert to the planning rate's unit are left out.
+- **Unusual runs:** with four or more runs, a run much slower or faster than the rest (outside 1.5 times the spread of the middle half of the runs, and never closer than 10% either side of the middle run) is left out, so a breakdown or a report put into the wrong run doesn't move the rate. The limits are shown under the list.
+- **Enough history:** a rate needs at least 5 used runs and 8 hours. With less, Pulaski says how much it has and offers no rate.
+- **A modified rate stays in force.** Using a history rate changes the calculated rate only; if a modified rate is set, planning keeps using it, and the comparison shows how far it has drifted. Clear the modified rate to plan with the history rate.
+- **Checked again when you accept.** If a run ended or was reported since you looked and the rate is different, Pulaski says so and shows the new figures; review them and accept again.
+- **It doesn't update by itself.** A rate from run history stays until you work it out again or go back to the ideal rate, and a new ideal rate on the capability no longer changes it.
+- **Who:** permission to set the planning rate (Planner, to start with).
 
 - **Periods.** A capability applies from the start of its first day to the start of its end day, in the line's site time zone. One that starts today starts the moment you add it, so it can follow straight on from one you ended earlier today. Two periods for the same material on the same line can't overlap: end or change the other one first.
 - **Nothing is deleted.** Ending sets the end to now. A capability that hasn't started yet can't be ended; change its dates instead.
-- **The planning rate** is one per line and material, whatever the capability periods. Pulaski calculates it from the ideal rate for now (later from run history; then the ideal rate no longer changes it). You can't change a capability's rate unit while the planning rate has a modified rate in the old unit: clear the modified rate first.
+- **The planning rate** is one per line and material, whatever the capability periods. Pulaski calculates it from the ideal rate until you use a rate from run history (above); from then on the ideal rate no longer changes it, until you go back to it. You can't change a capability's rate unit while the planning rate has a modified rate in the old unit: clear the modified rate first.
 - **Events:** `pulaski.capability.added.v1`, `…changed.v1`, `…ended.v1`, `pulaski.run_standard.created.v1` and `…recalculated.v1`, besides the existing `…modified.v1` and `…modification_cleared.v1`.
 
 ### Import materials from a CSV file
@@ -1110,7 +1162,7 @@ A class's code can't change and a class is never deleted: switch it off instead.
 
 ### In detail
 
-- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#21-what-pulaski-doesnt-do-yet)).
+- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#22-what-pulaski-doesnt-do-yet)).
 - **Codes** are unique across all materials, whatever their origin; an import whose code is already used by another material is refused.
 - **Events.** Each change is recorded in the event log as `pulaski.material.created.v1`, `…updated.v1` or `…imported.v1` (and `pulaski.material_class.created.v1` / `…updated.v1`), with the material before and after.
 - **Concurrency.** As elsewhere, if someone else changed the material or class since you opened it, you'll see *"changed by someone else"*: reload and try again.
@@ -1149,7 +1201,7 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | **Supervisor** | Start, pause, complete and reopen jobs; report production; record and approve labor; code machine stops; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches. |
 | **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off. |
 | **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); approve or reject partial batches. |
-| **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; the site's settings. |
+| **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; the site's settings. |
 | **Auditor** | Correct inventory; stock counts. Can't plan or run jobs. |
 | **Process engineer** | Processes, BOMs and which lines can run each material. |
 | **Edge node** | Nothing on screen: it is for the user a Pulaski Edge node signs in as, to read its configuration and forward machine data. |
@@ -1165,8 +1217,8 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 | Role | Sees |
 | --- | --- |
 | **Administrator**, **Auditor**, **Manager** | Every screen (Users only for Administrator). |
-| **Planner** | Overview, Work orders, Schedule, Floor, Machines, Inventory, Materials, Processes and BOMs. |
-| **Supervisor** | Overview, Work orders (to look at), Floor, Machines, Inventory, Labor. |
+| **Planner** | Overview, Work orders, Schedule, Floor, Machines, Inventory, Materials, Processes and BOMs, Site settings (to look at). |
+| **Supervisor** | Overview, Work orders (to look at), Floor, Machines, Inventory, Labor, Site settings (to look at). |
 | **Operator** | Overview, Work orders (to look at), Floor, Machines, Inventory. |
 | **Quality** | Overview, Floor, Machines, Inventory, Materials. |
 | **Process engineer** | Equipment, Materials, Processes and BOMs, Units. |
@@ -1248,6 +1300,18 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 2. Under **Working time**, set **Shifts** to the schedule. Everything below it that inherits now follows it too.
 3. **Shifts in effect** shows the result. To make one line run around the clock under a site that has shifts, set that line's **Shifts** to *Around the clock*.
 
+### Change one day: one-off changes
+
+For an extra Saturday, a shift that starts late one day, or a shift that doesn't run on one day, without changing the repeating schedule.
+
+1. On **Configure → Shifts**, click **One-off changes** on the schedule's row. The panel lists the changes from today on (**Show earlier changes too** lists the rest).
+2. Choose the **Day** and the **Shift**. Pick one of the schedule's shifts, or type a new code for an extra shift. The line under the form says whether you are replacing that day's shift or adding one.
+3. Under **That day it**, choose **Runs** and set **Starts**, **Hours** and **Crew**, or choose **Doesn't run**. The times start as the schedule's.
+4. Add a **Note** if you like, such as why, and click **Save change**. Planning and labor use it straight away.
+5. To change one, click **Change** on its row, adjust it and click **Save change**. To go back to the schedule for that day, click **Remove**.
+
+The schedule list says how many one-off changes are coming up, and the preview when you change a schedule marks the shifts they set *(one-off)*.
+
 ### Change or switch off a schedule
 
 1. On **Configure → Shifts**, click **Change** on the schedule's row.
@@ -1260,7 +1324,8 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 - **Days in the grid** are weekdays (*Mon*, *Tue*) when the cycle is a whole number of weeks, with the week number (*W2 Mon*) beyond one week, and *Day 1*, *Day 2* otherwise.
 - **Daylight saving:** shifts keep their clock times. A shift that would start in the hour the clocks skip starts when they have gone forward; a shift's length is real time, so a night shift is an hour longer or shorter on the night the clocks change.
 - **Hours a cycle** is the working time in one cycle, the sum of each shift's length times the days it runs.
-- **Calendar exceptions** (holidays, shutdowns) still take time out of the shifts, but have no screen yet.
+- **One-off changes** apply to the one production day only: a shift on that day keeps the day it starts on, so a changed night shift still belongs to the day it starts. A changed shift can't overlap the shifts before or after it, and *Doesn't run* needs a shift the schedule runs that day. Changing the schedule keeps its one-off changes, and they are checked together. Once a supervisor has approved that shift's labor on that day, its one-off change can't be set or removed.
+- **One-off changes and calendar exceptions** are different: a one-off change alters one schedule's shift on one day; a [calendar exception](#calendar-exceptions-holidays-and-shutdowns) takes time out of everything below a site, area or line, whichever schedule it follows.
 - **Who:** maintaining schedules, and choosing which one equipment follows, needs permission to maintain shift schedules (the Manager role has it to start with). Seeing them needs permission to see shift schedules, or to see equipment.
 
 ---
@@ -1277,6 +1342,9 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 - **Jobs change, people don't re-clock.** Direct time on a line counts towards whatever ran on it while the person was there. Time on a line with nothing running is shown as *idle*.
 - **A share of their time.** Someone tending two lines is on each at 50%. A person's time adds up to at most 100%.
 - **Shifts and approval.** Time belongs to the shift running when it started (or starting within two hours). Once a shift has ended, a supervisor approves it: open time ends when the shift ended, and the shift is locked. After that, a change is a **correction** with a reason.
+- **Breaks** are recorded on their own, paid or unpaid. A break's time comes out of the hours of every line the person is on, and is shown apart in the reports; the time they were clocked on stays as it was.
+- **Terminals and badges.** A shared tablet or panel PC can be a **terminal** where people badge to clock on and off and take breaks, without signing in to Pulaski. Each person has one badge; a terminal can also ask for a PIN.
+- **Qualifications** are the skills and certificates a line needs, such as a forklift licence. Each person holds them for a set of days. Someone checked onto a line without a qualification it needs is still checked on, and Pulaski warns.
 
 ### Set up people and crews
 
@@ -1296,8 +1364,43 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 ### Clock yourself on (operators)
 
 1. Open **Operate → Floor**.
-2. Click **Clock on** on the line you are working on. Pulaski refuses if you are already on another line with all your time: clock off there first.
-3. Click **Clock off** when you leave it.
+2. Click **Clock on** on the line you are working on. Pulaski refuses if you are already on another line with all your time: clock off there first. If the line needs a qualification you don't hold, a note says so.
+3. Click **Start break** when you go on a break, and **End break** when you are back. One break covers all the lines you are on.
+4. Click **Clock off** when you leave it. A break you are still on ends with it.
+
+### Badge at a terminal (everyone)
+
+1. Hold your badge to the reader (or type its number and press Enter). If the terminal asks, type your **PIN** and press **Go**.
+2. The terminal greets you and shows what you are on. Press **Clock on** and a line (the highlighted one is this terminal's usual line), **Clock off**, **Start break**, **Start paid break** or **End break**.
+3. It says what it did, and any warning (such as a missing qualification), then waits for the next person. **Not me / cancel** goes straight back.
+
+### Set up a terminal (managers)
+
+1. Open **Configure → Terminals**. Type a **Code** (it can't change later) and a **Name** such as where it hangs. Under **Offers the lines of**, choose the site, an area or a line, then the **First line offered**, and whether people identify with **Badge** or **Badge and PIN**. Click **Register terminal**.
+2. Click **Enrolment code** on its row. A ten-character code shows, once, with the time it runs out (15 minutes).
+3. On the device, open the address the page shows (ending `/terminal/enrol`), type the code and press **Enrol**. The device now shows the badge screen; leave it there.
+4. To stop a terminal working (lost, stolen, moved), click **Change**, untick **Active** and save. To move it to another device, issue a new code and enrol the new device: the old one stops working.
+
+### Issue badges
+
+1. On **Configure → People**, click **Issue** in the person's **Badge** column.
+2. Scan the badge into **Scan badge** (or type its number) and, for terminals that ask for one, type a **PIN** of 4 to 8 digits. Click **Issue**.
+3. **Replace** gives a new badge (the old one stops working); **Revoke** takes it away, for a lost badge.
+
+### Breaks (supervisors)
+
+1. On **Operate → Labor → On now**, click **Break** (unpaid) or **Paid break** next to someone. They show *On break since …*.
+2. Click **End break** when they are back. Leaving their last line ends a break too.
+3. To record a break afterwards, open **Shift review**, choose the shift, and under **Breaks** choose **Who**, **From**, **To** and **Paid**, then click **Add break**.
+4. To fix one, click **Change** on its row. After the shift is approved, click **Correct** or **Remove** and say why.
+
+### Qualifications
+
+1. Open **Configure → People → Qualifications**. Type a **Code** (such as `FORK`; it can't change later), a **Name** and, if a grant should expire, **Months valid**. Click **Add qualification**.
+2. On **Configure → Equipment**, select a site, area or line and, under **Required qualifications**, choose the qualification and click **Require**. It applies to everything below that equipment too.
+3. Back on **Qualifications**, under **Who holds what**, choose the person and the qualification. **Valid from** is today and **until** is filled in from the months valid; change them if you need to. Click **Grant**.
+4. To extend one, click **Renew**: it starts the day after the current grant ends. **Change** fixes a grant's days; **Revoke** ends it, with a reason.
+5. Tick **Expiring in 30 days** to see who needs renewing soon, or click **Holders** on a qualification to see who holds it.
 
 ### Review and approve a shift
 
@@ -1310,7 +1413,7 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 
 1. Open **Operate → Labor → Reports**, choose **From** and **to** (production days, up to 93), and click **Show**.
 2. **By job** shows run hours, direct and setup hours, the standard (run hours × the line's standard crew size for the material) and **efficiency** (standard ÷ direct hours: under 100% took more people than the standard).
-3. **By person** shows each person's hours by kind, and how much of their direct time was idle. **By shift** shows each shift's hours and whether it is approved.
+3. **By person** shows each person's worked hours by kind, how much of their direct time was idle, and their **paid** and **unpaid breaks**. **By shift** shows each shift's worked hours, its breaks and whether it is approved.
 4. **Export CSV** on each table saves it, for payroll or the ERP.
 
 ### In detail
@@ -1320,15 +1423,61 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 - **Times can't be ahead of now.** Setup needs a job (the job running on the line, when added from **On now**); indirect needs an indirect labor reason.
 - **Switching someone off** is refused while they are clocked on.
 - **Nothing runs on its own.** Time stays open until someone ends it, checks the line out, or approves the shift.
-- **Hours** are elapsed time × share; an open session counts until now.
+- **Hours** are worked time: elapsed time outside the person's breaks × share; an open session counts until now. Someone on two lines at 50% who takes a 30-minute break loses 15 minutes on each, and has 30 minutes of break.
+- **Breaks:** a break must start while the person is on a line, belongs to that line's shift, lasts at most 4 hours and can't overlap another of theirs. Paid and unpaid breaks both come out of worked hours; paid ones are reported for payroll to add back. Breaks lock with their shift's approval, like time on a line.
+- **Qualifications** belong to a site. A grant is valid from its first day to its last, both included, in the site's time zone; a renewal is a new grant, and the old one stays in the list. A revoked grant no longer counts from the moment it is revoked. Switching a qualification off stops it being granted or required. The Labor screen marks someone on a line without what it requires **Not qualified**; point at it to see what is missing and why.
+- **Terminals:** a terminal records only the badged person's own time: direct time on a line it offers, ending their own sessions, and their breaks, under the same rules as clocking yourself on. Shift review shows *Badged at* and the terminal for that time. A badge that is unknown, revoked or from another site is just *not recognised*. Five wrong PINs in a row lock the badge for 5 minutes. A badge scan is good for 2 minutes; after that, badge again. Pulaski keeps only a scrambled form of badge numbers and PINs, so they can't be read back: to change a PIN, issue the badge again.
+- **Who:** registering terminals needs permission to register and enrol terminals (Manager); issuing badges, permission to maintain people and crews. People badging at a terminal need no Pulaski permission of their own: the terminal is trusted for that.
+- **Who:** qualifications and grants need permission to maintain people and crews; requiring them on equipment needs permission to maintain equipment. Recording breaks for others needs permission to record labor; taking your own, permission to clock yourself on.
 
 ---
 
-## 17. Machine profiles
+## 17. Site settings
+
+**Configure → Site settings.** Three things that apply to a whole site: who places changeovers on the schedule, how far production reports may go, and the holidays and shutdowns when the site doesn't work. Each part has its own **Save** button.
+
+### Ideas to know first
+
+- **Changeovers** are the time a line needs between two materials. *Automatic* (the default) lets Pulaski add them to the schedule; *Placed by planners* leaves it to the planners, and Pulaski warns where one is missing. See [Changeovers](#changeovers).
+- **Reporting tolerances** keep production reports believable. The output tolerance is a **limit**: a report that would take a run past its length × the line's ideal rate × the tolerance is refused. The consumption tolerance is a **warning**: using more of a component than planned × the tolerance is recorded, with a warning to check it. Both are 110% to start with.
+- **Calendar exceptions** take time out of the calendar: a holiday, a planned shutdown, a week with no demand. One set on the site covers everything in it; one on an area or line covers that and everything below it, whichever [shift schedule](#15-shift-schedules) it follows. Planning places no work in it.
+
+### Choose who places changeovers
+
+1. Open **Configure → Site settings**. With more than one site, choose the site at the top.
+2. Under **Changeovers**, choose **Automatic** or **Placed by planners**.
+3. Click **Save changeovers**. The schedule uses it on its next refresh.
+
+### Set the reporting tolerances
+
+1. Under **Reporting tolerances**, type the **Output** and **Consumption** percentages, from 100 to 1000. The example under each box shows what the number allows.
+2. Click **Save tolerances**. **Use the defaults** puts both back to 110%; click **Save tolerances** to keep that.
+
+### Calendar exceptions: holidays and shutdowns
+
+1. Under **Calendar exceptions**, the list shows those from now on; **Show past and removed ones too** shows the rest.
+2. To add one, choose what it **Applies to** (the site, an area, or a line or department), its **Kind**, **From** and **Until** (site time), and a **Note** if you like, then click **Add exception**. A new one starts as tomorrow, all day.
+3. To change one, click **Change**, adjust it and click **Save exception**. What it applies to can't change: remove it and add another.
+4. To stop it taking time out, click **Remove**. A removed one stays in the list (with **Show past and removed ones too**), and **Put back** restores it.
+
+### In detail
+
+- **Who:** seeing this screen needs permission to see site settings; the Planner, Supervisor, Manager and Auditor roles have it to start with. Changing anything on it needs permission to change site settings (Manager). Someone who can only see it finds the boxes switched off and a note saying why.
+- **Changeovers:** in *Automatic*, a changeover job a planner placed still replaces the one Pulaski would add. In *Placed by planners*, a changeover job without its own length is sized from the changeover rules.
+- **Output tolerance:** good and scrap together count towards the limit. It uses the line's *ideal* rate for the material (from its capability), not the planning rate, so honest reports from a fast run aren't refused.
+- **Consumption tolerance:** the planned amount grows with what the job has made, so a job that made more than planned may use proportionally more before a warning.
+- **A change applies from the next report or refresh.** Reports already made aren't checked again.
+- **Calendar exceptions** are in site time, may last up to 366 days, and may overlap one another. They apply to every schedule, and to a line running around the clock. Work that runs into one waits until it ends. A line that is switched off can't get a new one.
+- **Not shift changes:** to change one shift on one day (an extra Saturday), use [one-off changes on Shifts](#change-one-day-one-off-changes).
+- **Two people at once:** if someone else saved first, Pulaski says so and shows their values; make your change again.
+
+---
+
+## 18. Machine profiles
 
 **Configure → Machine profiles.** A machine profile describes how one kind of machine reports itself: the values its state tag takes and the PackML state each one means, and its own stop, alarm and warning codes with the utilization reason each one counts as. Identical machines share a profile; machines from different vendors or of different models each get their own. You give each machine its profile on the [Equipment](#machine-data) screen.
 
-Machine data arrives through [edge nodes](#18-edge-nodes-collecting-machine-data): the profile turns what each machine sends into PackML states.
+Machine data arrives through [edge nodes](#19-edge-nodes-collecting-machine-data): the profile turns what each machine sends into PackML states.
 
 ### Ideas to know first
 
@@ -1385,7 +1534,7 @@ If one machine's code means something else than on the others with the same prof
 - **Two people at once:** every change to a profile's lists counts as a change to the profile, so someone saving after another's change is asked to reload.
 - **Errors in a file** name the line: a value that isn't a whole number, an unknown kind, a missing or unknown PackML state, a PackML state on a code row (usually a missing column), a value that appears twice, a name too long, or a reason that isn't an active utilization reason of the site.
 
-## 18. Edge nodes: collecting machine data
+## 19. Edge nodes: collecting machine data
 
 **Configure → Edge nodes.** A Pulaski Edge node is a small program on plant hardware, near the machines. It reads them through an MQTT broker they publish to in **Sparkplug B**, keeps what it reads in a buffer on its own disk, and forwards it to Pulaski. If the network or Pulaski goes down, it keeps reading and forwards everything once it can, so nothing is lost.
 
@@ -1393,7 +1542,7 @@ If one machine's code means something else than on the others with the same prof
 
 - **Connections** are where an edge node reads from: today, an MQTT broker. Pulaski listens as a Sparkplug B host application.
 - **Tags** bind a signal to equipment: *this* metric is PACK1's state, *that* one its processed count. A Sparkplug B address reads `group/node/device:metric`, for example `Plant1/Packing/PACK-01:Status/StateCurrent`.
-- **What Pulaski does with them.** A state value goes through the equipment's [machine profile](#17-machine-profiles) to its PackML state, and every change of state is kept, with the value the machine sent. The machine's first-out stop code is kept until it runs again. Counter readings become counts, in the job running on the equipment. Losing the signal is recorded as *Undefined*.
+- **What Pulaski does with them.** A state value goes through the equipment's [machine profile](#18-machine-profiles) to its PackML state, and every change of state is kept, with the value the machine sent. The machine's first-out stop code is kept until it runs again. Counter readings become counts, in the job running on the equipment. Losing the signal is recorded as *Undefined*.
 
 ### Add an edge node
 
@@ -1416,7 +1565,7 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 ### Watch it work
 
 - The node's heading shows **Forwarding** while it is heard from, **Quiet** after 2 minutes without anything (offline, or nothing changed), and when it was last heard from and its version.
-- **Live** shows each bound machine's PackML state (and the value it sent, where different), since when, its unit mode, latched stop code and speed. Click **Refresh** to update. Its stops are on [Machines](#19-machines-live-status-and-stops).
+- **Live** shows each bound machine's PackML state (and the value it sent, where different), since when, its unit mode, latched stop code and speed. Click **Refresh** to update. Its stops are on [Machines](#20-machines-live-status-and-stops).
 - **Tags** shows each tag's last value.
 
 ### In detail
@@ -1433,14 +1582,14 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 - **Connect the edge.** Add a Sparkplug B connection on the edge node with broker host `localhost`, port `1883` (or the value of `PULASKI_MQTT_PORT` if 1883 is occupied), and group id `Plant1`. If Pulaski Edge runs in the same Docker Compose network as the broker, use host `broker` and port `1883` instead. Bind the three simulator addresses from the Seen tab, for example `Plant1/Extruder/EXT-01-EXT:Status/StateCurrent`, `Plant1/Saw/EXT-01-SAW:Status/StateCurrent` and `Plant1/Packer/PACK1:Status/StateCurrent`. Useful companion metrics include `Status/UnitModeCurrent`, `Status/CurMachSpeed`, and the `Admin/Prod*Count/0/AccCount` counters.
 - **Start a simulated machine.** After a fresh start, wait for its initial `Clearing` transition to finish at `Stopped`. Then Reset takes 1–10 seconds to reach `Idle`; the simulator command tool's `--delay-seconds 12` allows for that before it sends Start. For example, run `dotnet run --project tools/Pulaski.SparkplugCommand -- --host localhost --port 1883 --delay-seconds 12 spBv1.0/Plant1/DCMD/Extruder/EXT-01-EXT Command/Reset=true Command/Start=true`. Change `Extruder/EXT-01-EXT` to `Saw/EXT-01-SAW` or `Packer/PACK1` for the other devices; use the configured broker port if it is not 1883. Start takes another 1–10 seconds to reach `Execute`.
 
-## 19. Machines: live status and stops
+## 20. Machines: live status and stops
 
-**Operate → Machines.** What every machine is doing now, as its [edge node](#18-edge-nodes-collecting-machine-data) reports it, its stops to code, and its utilization and OEE over past days.
+**Operate → Machines.** What every machine is doing now, as its [edge node](#19-edge-nodes-collecting-machine-data) reports it, its stops to code, and its utilization and OEE over past days.
 
 ### Ideas to know first
 
 - **A stop** is time a machine isn't executing: it starts when the machine leaves Execute (or loses its signal) and ends when it executes again. The states it passes through on the way (Stopping, Stopped, Resetting…) are one stop.
-- **Its reason.** A stop takes the reason its first-out stop code maps to in the machine's [profile](#17-machine-profiles); with no code, the reason of the first state on its way that has one (Suspended = *Starved*, say). An operator confirms that reason or gives another, and both are kept.
+- **Its reason.** A stop takes the reason its first-out stop code maps to in the machine's [profile](#18-machine-profiles); with no code, the reason of the first state on its way that has one (Suspended = *Starved*, say). An operator confirms that reason or gives another, and both are kept.
 - **Micro-stops** are stops shorter than the machine's micro-stop threshold (5 minutes unless set otherwise on the Equipment screen). They are listed but not coded, and don't count against availability.
 
 ### The status board
@@ -1491,7 +1640,7 @@ A dash means there is nothing to measure that figure against, such as performanc
 
 ---
 
-## 20. Reference
+## 21. Reference
 
 ### Work order statuses
 
@@ -1537,6 +1686,8 @@ Warnings never block anything; they tell you something needs a look.
 | **Firmed conflict** | Work runs into a firmed job's anchored start (an overlap). | See [Overlaps](#overlaps). |
 | **Missed finish by** | Projected to finish after its finish-by time. | Resequence or move it. |
 | **Window too short** | Even the fastest line can't finish the department job in its window. | Widen the window or split the job. |
+| **Link not met** | A firmed job keeps its time, but the operation it follows won't allow it to start then. | Move the earlier operation's work forward, or to a line that can start it sooner. See [Process links on the schedule](#process-links-on-the-schedule). |
+| **Link cycle** | The job waits for work that, through the lines' sequences, waits for it. | Resequence one of them so the earlier operation comes first. |
 | **Window passed** | The window has closed and no line has taken the job. | Assign it or re-plan it. |
 | No runner | No line in the department can run this material any more. | Add a capability, or plan elsewhere. |
 
@@ -1555,23 +1706,21 @@ An order can count in several tiles (starting today *and* behind, for example).
 
 ### Changeovers
 
-Between two production jobs on different materials, a line needs a changeover. Pulaski sizes it from the plant's changeover rules (for example *white to grey: 30 minutes*, *grey to white: 2 hours*), or from the line's standard changeover for the incoming material. By default Pulaski inserts these automatically as placeholders and recalculates them as you resequence. A plant can instead choose to have planners place changeover jobs themselves; Pulaski then warns where one is missing. Your administrator sets which.
+Between two production jobs on different materials, a line needs a changeover. Pulaski sizes it from the plant's changeover rules (for example *white to grey: 30 minutes*, *grey to white: 2 hours*), or from the line's standard changeover for the incoming material. By default Pulaski inserts these automatically as placeholders and recalculates them as you resequence. A plant can instead choose to have planners place changeover jobs themselves; Pulaski then warns where one is missing. A manager chooses which on [Site settings](#17-site-settings).
 
 ---
 
-## 21. What Pulaski doesn't do yet
+## 22. What Pulaski doesn't do yet
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
-- **No screens yet for** calendar exceptions (holidays, shutdowns) or the changeover setting. Your administrator sets these up.
-- **One-off shift changes** (an extra Saturday) aren't built yet; shifts repeat as their schedule says.
-- **Labor:** no badges or shop-floor terminals, no qualifications, no breaks, and no import of people from HR or the ERP. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
+- **No screen yet for the changeover rules** (how long each material change takes): they are set up in the database.
+- **Labor:** no import of people from HR or the ERP. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
 - **No adapters yet** for other external sources or for label printing: materials come from the screen, a CSV file, or the ERP one item at a time through the API. The CSV import doesn't take capabilities, doesn't create missing classes, and there is no template file to download (the panel shows the header line).
-- **Planning rates are calculated from the ideal rate only;** calculating them from run history isn't built yet.
+- **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** stops can't be split, merged or entered by hand. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
 - **Batches:** the batch size is per material, not per line (a 50 kg mixer next to a 200 kg one isn't modelled). A replacement job is always rounded up to whole batches; to make fewer, cancel it. Orders from the ERP aren't imported yet, so there is no rule yet for an ERP order that isn't whole batches. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
-- **No screen for the reporting tolerances:** the rate and consumption tolerances (110% by default) are set per site through the API.
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
 - **Not in inventory yet:** pallets or containers that hold several lots, lot labels and barcode scanning, lot attributes and certificates of analysis, setting stock aside for a job, and suggestions of which lot to use first. Movements can't be back-dated.
 - **Reversing is limited** to a lot's latest movement, and not consumption, production, splits, merges, transfers between balances or corrections: put those right with another movement.
@@ -1579,7 +1728,6 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Where lots mix, genealogy is approximate:** every lot that ever joined a silo's balance counts as a parent of everything taken from it afterwards. Residence time and first-in, first-out through a silo come with machine data.
 - **Inventory movements aren't sent to the ERP yet:** they are recorded as events, but the connection that delivers them isn't built.
 - **Shortages use published times, not the live schedule,** and don't count incoming deliveries.
-- **Process links don't drive the schedule yet:** a Pack job can be projected to start before the Extrude job it follows. On the floor the link is enforced: the Pack job can't start until the link is met.
 - **The Overview** still shows no live machine state, reported counts, good output, scrap, downtime, quality, lots or labor. OEE is available for the current shift from the machine/OEE report; its timeline strip remains a rolling 24 hours rather than the current shift.
 - **Notes** can only be written when the order is created.
 - **Released product specifications** are not maintained in Pulaski yet. Shop-order sheets flag this gap and require operators to verify the approved specification elsewhere.
@@ -1591,7 +1739,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 
 ---
 
-## 22. Troubleshooting and questions
+## 23. Troubleshooting and questions
 
 **"You may not do this…" or a button I expected isn't there.**
 Your roles don't allow that change, or not at this site. The message names the permission; ask an administrator (see [What each role can change](#what-each-role-can-change)).
@@ -1658,7 +1806,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 
 ---
 
-## 23. Glossary
+## 24. Glossary
 
 | Term | Meaning |
 | --- | --- |

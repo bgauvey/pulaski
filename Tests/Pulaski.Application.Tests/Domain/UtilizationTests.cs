@@ -3,7 +3,7 @@ using Pulaski.Domain.Shifts;
 
 namespace Pulaski.Application.Tests.Domain;
 
-/// <summary>Utilization and OEE from machine history (D-043): classifying time, lines from machines, shifts, runs and the figures.</summary>
+/// <summary>Utilization and OEE from machine history (D-052): classifying time, lines from machines, shifts, runs and the figures.</summary>
 public class UtilizationTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 10, 19, 6, 0, 0, TimeSpan.Zero);

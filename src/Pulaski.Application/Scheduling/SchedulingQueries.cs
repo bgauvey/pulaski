@@ -41,7 +41,7 @@ internal sealed class GetLineTimelineHandler(ISchedulingReadStore store, TimePro
             return TimelineMapping.ToGroupDto(source, now);
         }
 
-        var timeline = TimelineProjector.Project(TimelineMapping.ToPlan(source, now));
+        var timeline = TimelineMapping.Project(source, now);
         return TimelineMapping.ToDto(source, timeline);
     }
 }
@@ -63,6 +63,34 @@ internal sealed class GetSchedulingPolicyHandler(ISchedulingReadStore store)
 
 internal static class TimelineMapping
 {
+    /// <summary>
+    /// The line's timeline, projected together with the lines its jobs follow so process links hold (D-046). Without links
+    /// this is the one-line projection.
+    /// </summary>
+    public static LineTimeline Project(LinePlanSource source, DateTimeOffset now)
+    {
+        var plan = ToPlan(source, now);
+        if (source.Links.Count == 0)
+        {
+            return TimelineProjector.Project(plan);
+        }
+
+        var links = source.Links.Select(l => new JobLink(
+            l.LinkId, l.JobId, l.FromJobId, l.DependencyType, l.Lag, $"{l.FromOperationNumber} {l.FromOperationName}")).ToList();
+        var known = source.Links.DistinctBy(l => l.FromJobId).ToDictionary(l => l.FromJobId, l => Known(l, now));
+        var timelines = LinkedProjection.Project([plan, .. source.Upstream.Where(u => !u.Line.IsGroup).Select(u => ToPlan(u, now))], links, known);
+        return timelines[source.Line.Id];
+    }
+
+    // A job on a projected line is timed by its projection; otherwise by what has happened, or its window on a group (D-022).
+    private static KnownJobTimes Known(JobLinkRow link, DateTimeOffset now)
+    {
+        var ended = link.FromStatus is JobStatus.Completed or JobStatus.Closed;
+        return link.FromIsOnGroup
+            ? new KnownJobTimes(link.FromStartedAt ?? link.FromEarliestStart ?? now, ended ? link.FromEndedAt : link.FromLatestEnd)
+            : new KnownJobTimes(link.FromStartedAt, ended ? link.FromEndedAt : null);
+    }
+
     public static LinePlan ToPlan(LinePlanSource source, DateTimeOffset now)
     {
         var calendar = Calendar(source);
@@ -138,6 +166,7 @@ internal static class TimelineMapping
             ChangeoverSource = segment.Changeover?.Source,
             DueAt = placeholder ? null : job.DueAt,
             EarliestStart = placeholder ? null : job.EarliestStart,
+            LinkReadyAt = placeholder ? null : segment.LinkReadyAt,
             BaselineStart = placeholder ? null : job.PlannedStart,
             BaselineEnd = placeholder ? null : job.PlannedEnd,
             IsLocked = !placeholder && job.IsLocked,

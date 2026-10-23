@@ -6,7 +6,7 @@ using Pulaski.Contracts.MachineData;
 namespace Pulaski.Edge;
 
 /// <summary>
-/// Turns what connectors read into signals for the tags bound to it (D-041), and writes them to the buffer. A tag's value is
+/// Turns what connectors read into signals for the tags bound to it (D-050), and writes them to the buffer. A tag's value is
 /// forwarded when it changes, and when it is lost; a machine speed at most every <see cref="EdgeOptions.SpeedInterval"/>.
 /// Addresses nothing is bound to are only kept as seen, for binding.
 /// </summary>

@@ -1,0 +1,82 @@
+@inject PulaskiApiClient Api
+
+@* A person's badge (D-049): issued by scanning or typing its value, with a PIN for terminals that ask for one; a new badge
+   replaces the old. Only a hash is kept, so the value is never shown again. *@
+@if (_issuing)
+{
+    <div class="d-flex gap-1">
+        <input type="password" class="form-control form-control-sm" style="width: 9rem" autocomplete="off" placeholder="Scan badge" aria-label="Badge of @Person.DisplayName" @bind="_value" />
+        <input type="password" inputmode="numeric" class="form-control form-control-sm" style="width: 6rem" autocomplete="off" placeholder="PIN" aria-label="PIN (optional)" @bind="_pin" />
+        <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_value))" @onclick="IssueAsync">Issue</button>
+        <button type="button" class="btn btn-sm btn-link" @onclick="() => _issuing = false">Cancel</button>
+    </div>
+}
+else
+{
+    <span class="small">
+        @if (Badge is { } b)
+        {
+            <span>Since @b.IssuedAt.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)@(b.HasPin ? ", PIN" : "")@(b.LockedUntil is not null ? " · locked" : "")</span>
+        }
+        else
+        {
+            <span class="text-muted">No badge</span>
+        }
+    </span>
+    @if (CanManage && Person.IsActive)
+    {
+        <button type="button" class="btn btn-sm btn-link" @onclick="() => _issuing = true">@(Badge is null ? "Issue" : "Replace")</button>
+        @if (Badge is not null)
+        {
+            <button type="button" class="btn btn-sm btn-link text-danger" disabled="@_busy" @onclick="RevokeAsync">Revoke</button>
+        }
+    }
+}
+@if (_error is not null)
+{
+    <div class="small text-danger">@(_error.Detail ?? _error.Title)</div>
+}
+
+@code {
+    [Parameter, EditorRequired] public PersonDto Person { get; set; } = default!;
+
+    /// <summary>The person's active badge, if any.</summary>
+    [Parameter] public BadgeDto? Badge { get; set; }
+
+    [Parameter] public bool CanManage { get; set; }
+
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private bool _issuing;
+    private string? _value;
+    private string? _pin;
+    private bool _busy;
+    private ApiException? _error;
+
+    private Task IssueAsync() => RunAsync(async () =>
+    {
+        await Api.IssueBadgeAsync(new IssueBadgeRequest { PersonId = Person.Id, BadgeValue = _value ?? "", Pin = string.IsNullOrWhiteSpace(_pin) ? null : _pin });
+        (_issuing, _value, _pin) = (false, null, null);
+    });
+
+    private Task RevokeAsync() => RunAsync(() => Api.RevokeBadgeAsync(Badge!.Id, new RevokeBadgeRequest()));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+            await OnChanged.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

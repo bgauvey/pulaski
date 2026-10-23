@@ -1,6 +1,6 @@
 namespace Pulaski.Contracts.MachineData;
 
-// ---- Maintained on the Edge nodes screen (D-041) ----
+// ---- Maintained on the Edge nodes screen (D-050) ----
 
 /// <summary>A Pulaski Edge node: a worker on plant hardware that runs connectors and forwards what they read.</summary>
 public sealed record EdgeNodeDto
@@ -74,7 +74,7 @@ public sealed record EdgeMetricDto
     public Guid? TagId { get; init; }
 }
 
-/// <summary>A machine's state as its signals last left it (D-041).</summary>
+/// <summary>A machine's state as its signals last left it (D-050).</summary>
 public sealed record EquipmentLiveDto
 {
     public required Guid EquipmentId { get; init; }
@@ -156,7 +156,7 @@ public sealed record UpdateEquipmentTagRequest
 
 // ---- Used by the edge itself (permission edge.ingest) ----
 
-/// <summary>What an edge node reads (D-041): its connections and the tags bound through them.</summary>
+/// <summary>What an edge node reads (D-050): its connections and the tags bound through them.</summary>
 public sealed record EdgeConfigDto
 {
     public required Guid EdgeNodeId { get; init; }

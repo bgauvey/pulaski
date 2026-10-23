@@ -1,6 +1,6 @@
 namespace Pulaski.Domain.MachineData;
 
-/// <summary>What a bound tag carries (D-005, D-041): values of <c>core.equipment_tag.tag_role</c>.</summary>
+/// <summary>What a bound tag carries (D-005, D-050): values of <c>core.equipment_tag.tag_role</c>.</summary>
 public static class TagRoles
 {
     public const string State = "state";
@@ -30,7 +30,7 @@ public static class TagRoles
     };
 }
 
-/// <summary>A machine's state as its signals last left it (D-041), as <c>core.equipment_live_state</c> holds it.</summary>
+/// <summary>A machine's state as its signals last left it (D-050), as <c>core.equipment_live_state</c> holds it.</summary>
 public sealed record MachineLive(
     int? RawState, int PackMlState, int UnitMode, DateTimeOffset StateSince, int? StopReason, decimal? MachineSpeed, DateTimeOffset SignalAt);
 
@@ -40,7 +40,7 @@ public sealed record StateChange(
     int? StopReason, bool SignalLost);
 
 /// <summary>
-/// How signals change a machine's live state (D-041). Signals arrive in the order the edge read them. The state's raw value is
+/// How signals change a machine's live state (D-050). Signals arrive in the order the edge read them. The state's raw value is
 /// stored with its PackML meaning; losing the signal is PackML 0, Undefined (D-005). The first-out stop code is latched: a
 /// machine that clears it once acknowledged doesn't lose it, and it is cleared only when the machine runs (Execute) again.
 /// </summary>
@@ -108,7 +108,7 @@ public static class LiveStateRules
     private static DateTimeOffset Max(DateTimeOffset a, DateTimeOffset b) => a >= b ? a : b;
 }
 
-/// <summary>Machine counters (PackML <c>Admin.ProdProcessedCount</c> and the like) turned into counts (D-041).</summary>
+/// <summary>Machine counters (PackML <c>Admin.ProdProcessedCount</c> and the like) turned into counts (D-050).</summary>
 public static class Counters
 {
     /// <summary>
@@ -131,7 +131,7 @@ public static class Counters
     }
 }
 
-/// <summary>Idempotent forwarding from an edge node (D-041): each batch carries its buffer's stream id and sequence numbers.</summary>
+/// <summary>Idempotent forwarding from an edge node (D-050): each batch carries its buffer's stream id and sequence numbers.</summary>
 public static class EdgeStreams
 {
     /// <summary>Whether a signal with <paramref name="sequence"/> of <paramref name="stream"/> is still to be applied.</summary>

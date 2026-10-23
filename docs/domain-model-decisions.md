@@ -48,9 +48,18 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-038 | Shift schedules: each site's schedules repeat over a cycle of days; equipment inherits its parent's working time, follows a schedule of its own, or runs around the clock. Shift times are worked out from the schedule on read, never stored | Proposed | 2026-10-17 |
 | D-039 | Viewing: a user sees only the screens and sites their roles allow. Each screen has a view permission, which a change permission brings with it; the API checks it on every read and keeps lists to the caller's sites; the UI leaves out what can't be seen and answers "not found" | Proposed | 2026-10-17 |
 | D-040 | Labor: people (not necessarily users) and crews per site; a shift schedule's shifts name their crew. Supervisors check crews onto lines and operators clock themselves on; direct time is shared out to the runs on the line by overlap; a supervisor approves a shift's labor, which then locks, corrections being new sessions. Reports by job (against the standard crew), person and shift | Proposed | 2026-10-18 |
-| D-042 | Deleting an edge node deactivates it and its connections and tags atomically. Deleting a tag physically removes its configuration row whether active or inactive, first clearing any quality-characteristic source reference; append a deletion event, retain time-series history, and grant the app role DELETE only on `core.equipment_tag` | Decided | 2026-10-18 |
-| D-043 | Utilization and OEE reports: worked out on read from state changes, stops, runs and production reports, between production days (at most 31), by equipment, shift and product with a breakdown of time by use and reason. Time is classified by unit mode, then by the stop's reason class, else by Execute; lines take their time from their machines like their state. Performance and quality weigh output by the ideal rate; machine counts aren't used. Nothing is stored yet | Proposed | 2026-10-19 |
 | D-041 | Shop orders are downloadable PDFs with one traveler sheet per job. Each sheet shows the order, operation, projected schedule (or published baseline when no live projection is available), effective run rate, order note, operation description and planned BOM components. A Code 128 barcode encodes `order-number|OP-number`; missing operation numbers use `OP-NA`. Since released product specifications are not maintained in the application, the sheet must say so and direct operators to verify the approved specification | Decided | 2026-10-19 |
+| D-042 | Shift overrides: a schedule's shift can be changed for one production day (other times or crew, not running) and an extra shift added, without changing the cycle. Overrides are kept with the schedule, applied wherever shifts are worked out, and locked once that shift's labor is approved | Proposed | 2026-10-23 |
+| D-043 | Site settings screen: changeover mode, reporting tolerances and calendar exceptions are maintained on one screen per site, seen with a new view permission (`site_settings.view`) and changed with `site_settings.manage`. Calendar exceptions are switched off rather than deleted; the reporting tolerances gain a version | Proposed | 2026-10-23 |
+| D-044 | Production by shift: each production count belongs to the shift running on its line when it occurred, from the line's schedule with its overrides, and to that shift's production day; counts outside shifts belong to the site-local day. Worked out on read; every count lands in one row, so the report reconciles to the runs | Proposed | 2026-10-23 |
+| D-045 | Planning rates from run history: worked out on request, not by a worker, as good output ÷ run time over a line's ended runs of the material in a window, with short, empty, unconvertible and unusual (Tukey-fence) runs left out and a minimum of runs and hours. A planner reviews it and accepts it as the calculated rate; it is checked again on accept; a modified rate stays in force | Proposed | 2026-10-23 |
+| D-046 | Process links drive the projection: a job of an order made from a process waits for the jobs it follows (after start: the first to start; after end: the last to end; plus the lag), using their projected or actual times. Linked lines are projected together until the times settle; a firmed job keeps its time and warns `link_not_met`, circular waits warn `link_cycle`. Nothing is reordered or moved | Proposed | 2026-10-23 |
+| D-047 | Breaks: a person's break is its own interval (paid or unpaid), never a change to their sessions. Its time comes out of the worked hours of every session it overlaps and is reported apart; it starts while the person is on a line, belongs to that session's shift and locks with its approval | Proposed | 2026-10-23 |
+| D-048 | Qualifications: per-site qualifications with a default validity; grants for whole site-local days (a renewal is a new grant), revoked rather than deleted; equipment requires them for itself and everything below it. Clock-on and check-in warn, never refuse, when someone lacks one | Proposed | 2026-10-23 |
+| D-049 | Shop-floor terminals and badges: a terminal is a registered device, not a user, enrolled once with a one-time code that gives it a secret; people identify there by badge (and PIN where the terminal asks) and record their own labor through the same rules, as source `terminal`. Badge values and PINs are stored only as hashes | Proposed | 2026-10-23 |
+| D-050 | Machine data: connectors run in the Pulaski Edge worker, never the API (Sparkplug B first), turning samples into signals through tag bindings, buffered and forwarded in order; machine profiles map state values to PackML and stop codes to utilization reasons; ingest keeps each machine's live state, opens and closes stops for operators to code, and keeps counters. Raw state is always stored (D-005) | Proposed | 2026-10-18 |
+| D-051 | Deleting an edge node deactivates it and its connections and tags atomically. Deleting a tag physically removes its configuration row whether active or inactive, first clearing any quality-characteristic source reference; append a deletion event, retain time-series history, and grant the app role DELETE only on `core.equipment_tag` | Decided | 2026-10-18 |
+| D-052 | Utilization and OEE reports: worked out on read from state changes, stops, runs and production reports, between production days (at most 31), by equipment, shift and product with a breakdown of time by use and reason. Time is classified by unit mode, then by the stop's reason class, else by Execute; lines take their time from their machines like their state. Performance and quality weigh output by the ideal rate; machine counts aren't used. Nothing is stored yet | Proposed | 2026-10-19 |
 
 ## Order hierarchy
 
@@ -257,7 +266,7 @@ Only work orders are planned and dispatched. A job is a piece of a work order on
 
 1. Foundation: decisions, schema, the domain projector, and a read-only timeline API. *(built)*
 2. Commands: create and sequence jobs, lock, cancel and replace, run-standard modify and clear, the scheduling policy, and the work order dispatch (publish), un-dispatch and firm. *(built)*
-3. Calculated rates from run history (a worker), with drift against the modified standard.
+3. Calculated rates from run history, with drift against the modified standard. *(built on request rather than by a worker, D-045)*
 4. Blazor scheduling board (D-021). *(first pass built)*
 
 **Scheduling board (D-021, proposed)**
@@ -316,7 +325,7 @@ Creating a work order in Pulaski now means making it from a process (D-023); the
 
 - **Choosing the process.** The form asks for the material first, then offers the site's active processes with a released version whose scope covers it (`GET /api/processes?siteId=&materialId=`), pre-selecting the material's default. The command refuses a process that is inactive, has no released version or doesn't make the material. The order keeps the released version (`process_version_id`); a later release doesn't change it.
 - **Jobs.** Each operation becomes one planned production job per line or department it names, for that one's share of the quantity. Shares round down to six places (`core.qty`) and the operation's last entity takes the remainder, so every operation adds up to the order quantity. Jobs are numbered `<order>-<operation>`, or `<order>-<operation>-<n>` when an operation has several entities, and keep their operation (`process_operation_id`). Each goes at the end of its line's sequence; the planner moves it from there (D-014).
-- **Times.** The start is required. Every job is held until it (`earliest_start`), and an operation that follows others is held until their hold plus the link's lag, the longest path winning. That is only a lower bound: the projection does not yet hold a job until the work before it has started or ended. Making the projector follow the links is a later pass.
+- **Times.** The start is required. Every job is held until it (`earliest_start`), and an operation that follows others is held until their hold plus the link's lag, the longest path winning. That is only a lower bound; the projection also holds each job until the work it follows allows (D-046).
 - **Departments.** A job on a department waits in a window from its hold to the order's due date (D-022), so an operation on a department needs a due date after its hold.
 - **Checks.** Everything is checked before anything is written, and all problems are reported together, each naming its operation, line and material: the equipment must still be schedulable, active and in the process's site, and the material must be able to run there (a capability on the line, or on a line under the department; D-020, D-022). Nothing is created if any check fails.
 - **Capability decides, scope only filters.** A process's scope (D-023) says what it is meant to make; the capabilities (D-020) say whether its lines can actually run it. Scope alone is not enough, so the form checks each offered process with `GET /api/processes/{id}/order-check?materialId=`, which runs the same rules (`ProcessOrderRules`, one shared SQL query) as creating the order. A process that fails shows disabled, with its problems listed under the field; the check also lists department operations, so the form can mark the due date required.
@@ -692,7 +701,7 @@ A line's working time comes from the nearest equipment, the line itself first, t
 
 **API.** `GET /api/shift-schedules?siteId=`, `GET /api/shift-schedules/{id}`, `POST /api/shift-schedules`, `PUT /api/shift-schedules/{id}` (with its version), `POST /api/shift-schedules/preview` (works out a schedule, saved or not, for the next days; saves nothing), `PUT /api/equipment/{id}/calendar`. Events: `pulaski.shift_schedule.created.v1`, `pulaski.shift_schedule.updated.v1` (before and after), `pulaski.equipment.calendar_set.v1`.
 
-**Not yet:** crews and rotations of people; a one-off change to a single shift (an extra Saturday, a cancelled night) other than a calendar exception, which has no screen yet; reports, counts and OEE by shift; the Overview's strip by shift rather than a rolling 24 hours.
+**Not yet:** the Overview's strip by shift rather than a rolling 24 hours. One-off changes to a shift are D-042; production by shift D-044; utilization and OEE by shift D-052.
 
 ## Seeing only what you may (D-039, proposed)
 
@@ -755,9 +764,140 @@ Sharing out by overlap means nobody re-clocks when the job on a line changes. Ru
 
 **Events:** `pulaski.crew.created.v1`, `…updated.v1`, `pulaski.person.created.v1`, `…updated.v1`, `pulaski.labor.started.v1`, `…ended.v1`, `…changed.v1`, `…corrected.v1`, `…shift_approved.v1`.
 
-**Not yet:** badges and terminals (`sec.badge`); qualifications; people from HR or the ERP; labor by shift on the Overview; a person working at another site than their own; editing a session's job or type on the review screen (only times and share); breaks.
+**Not yet:** people from HR or the ERP; labor by shift on the Overview; a person working at another site than their own; editing a session's job or type on the review screen (only times and share). Breaks are D-047, qualifications D-048, badges and terminals D-049.
 
-## Machine data, utilization and OEE (D-041, proposed)
+## Shift overrides (D-042, proposed)
+
+Amends D-038. A plant changes its shifts for a day without changing its schedule: an extra Saturday shift for a rush order, a night shift that starts late after a stocktake, a day shift off on a local holiday for one line's schedule.
+
+**An override** is one production day and one shift code of a schedule: the shift runs at a start time ("HH:mm", site-local) for a length (15 minutes to 24 hours) with an optional crew and name, or (`isWorking` false) doesn't run that day. A code the cycle runs that day is replaced for that day; a code it doesn't run is added as an extra shift. A day off needs a shift the cycle runs that day. A note (up to 500 characters) says why. Start, length, name and crew default to the cycle's shift of that code.
+
+**Kept with the schedule.** Overrides are a second `jsonb` array on `core.shift_schedule` (`overrides`), one entry per day and code, saved whole like the shifts, so removing one never deletes a row and the schedule's version covers both. At most 1000 per schedule.
+
+**Applied wherever shifts are worked out.** `ShiftSchedule.Expand` applies them, so the projection (D-014), labor's shift of a session (D-040), labor approval and reports by shift all see the same shifts. An override's shifts may not overlap their neighbours on that day or the days either side (checked on clock time, like the cycle); changing the cycle is checked with the overrides too. Shifts from an override are marked (`isOverride`) in the preview.
+
+**Locked by approved labor.** An override can't be set or removed for a shift on a day whose labor is approved (D-040), so approved hours never move under a changed shift.
+
+**Who and API.** `shifts.manage`, at the schedule's site. `PUT /api/shift-schedules/{id}/overrides` (version, date, code, isWorking, and optional name, start, minutes, crew, note) sets one; `DELETE /api/shift-schedules/{id}/overrides/{date}/{code}?version=` removes it. Schedules carry them (`overrides`), and the preview takes them. Events: `pulaski.shift_schedule.override_set.v1` (before and after), `pulaski.shift_schedule.override_removed.v1`.
+
+**Not calendar exceptions.** A calendar exception (`core.calendar_exception`, D-043) takes time out of everything below a piece of equipment, whatever schedule it follows: a plant shutdown. An override changes one schedule's shift.
+
+## Site settings (D-043, proposed)
+
+Amends D-015, D-035 and D-039. The settings a site has, which until now could be set only through the API, are maintained on **Configure → Site settings** (`/site-settings`), one part per setting, each saved on its own.
+
+| Part | Stored in | Rules |
+| --- | --- | --- |
+| Changeovers | `core.scheduling_policy.changeover_mode` (D-015) | `auto` or `scheduler`; version 0 while the site uses the default |
+| Reporting tolerances | `core.execution_policy` (D-035) | Output and consumption, 100 to 1000%; version 0 while the site uses the defaults (110%) |
+| Calendar exceptions | `core.calendar_exception` | A window on a site or anything in it (not the enterprise), up to 366 days, of kind holiday, planned shutdown, no demand or other, with a note |
+
+**Calendar exceptions.** They take time out of every line at or below their equipment, whichever schedule it follows, and out of around-the-clock time too (the projection already read them; D-014). They are switched off (`is_active`), never deleted, so the app role needs no DELETE and a removed one can be put back; the projection reads only active ones. A new or changed one needs its equipment active, and an exception's equipment never changes (remove it and add another). They may overlap. `GET /api/calendar-exceptions?siteId=&from=&includeRemoved=`, `POST /api/calendar-exceptions`, `PUT /api/calendar-exceptions/{id}` (with its version; `isActive` false removes). Events: `pulaski.calendar_exception.created.v1`, `…updated.v1`, `…removed.v1`.
+
+**Reporting tolerances are versioned.** `PUT /api/execution/sites/{siteId}/policy` now takes the version it read (`xmin`, 0 for the defaults) and answers 409 on a mismatch, like every other change (it used to overwrite).
+
+**Viewing (amends D-039).** A thirteenth view permission, `site_settings.view`, opens the screen and the policy reads; `site_settings.manage` brings it. Planner, Supervisor, Manager and Auditor have it to start with (migration 0016); a viewer sees every value with the inputs switched off. The policy reads also stay open to `schedule.view` and `floor.view`, and the exception list to `schedule.view` and `shifts.view`, since those screens show their effects.
+
+**The screen explains its effects.** The output tolerance is a limit (a report beyond the run's length × ideal rate × tolerance is refused, D-035); the consumption tolerance is a warning. Each shows a worked example as it is typed.
+
+**Not here:** the changeover rule matrix (`core.changeover_rule`) still has no screen.
+
+## Production by shift (D-044, proposed)
+
+Amends D-038 ("reports by shift, not yet"). Plants run their shift meetings on what each shift made, so good and scrap are reported by shift, with line, job and material.
+
+**Attribution.** A row of `ts.production_count` (D-035) belongs to the shift running on its line at its `occurred_at`: from the schedule the line follows (its own or the nearest ancestor's, D-038), with that schedule's overrides (D-042), worked out by `ShiftSchedule.Expand`. A report into an open run occurs when it is entered; one into an ended run occurs at the run's end (D-035), so it counts in the shift the run ended in. The shift's production day is the day it starts, so output after midnight on a night shift counts towards the evening it began. A count between shifts, or on a line with no shifts or running around the clock, belongs to the site-local day with no shift. `ShiftProduction.Total` in `Pulaski.Domain.Execution` is the pure function; nothing is stored, so changing a schedule re-attributes past counts too (as with the projection, D-014). `core.shift_instance` stays unused.
+
+**Counts are points, not spans.** A count is attributed whole to one shift; a long run reported once at its end isn't spread across the shifts it ran through. Reporting at each shift's end splits it. Spreading by run time would invent figures nobody reported.
+
+**Reconciling.** Every count lands in exactly one row (per production day, shift, line, job and unit). Good = processed − defective, as on the job page, so a rejected partial batch (D-036) moves good to scrap in the shift it was made. Each job's rows are set against its runs' totals (`core.job_run`), and match when all its reports fall in the chosen days.
+
+**API and screen.** `GET /api/execution/sites/{siteId}/production-by-shift?from=&to=` (production days, at most 93 apart, `floor.view`); the result's times are in the site's time zone. Floor → **Production by shift** (`/floor/production`), with CSV export. No new tables.
+
+**Not yet:** the stop Pareto (issue #21). Utilization and OEE by shift are D-052.
+
+## Planning rates from run history (D-045, proposed)
+
+Amends D-016 and its build pass 3, which planned a worker. The calculated rate can come from what the line actually made, but only when a planner asks, sees how it was worked out, and accepts it: a rate that moved by itself would move every projection with it.
+
+**The calculation** (`RunHistoryRate` in `Pulaski.Domain.Scheduling`, pure and repeatable). The sample is the ended runs (`core.job_run`) of production jobs of the run standard's material on its line that ended in the last 7 to 365 days (90 by default). Each run's good output is converted to the run standard's unit (D-026); its rate is good ÷ elapsed hours. Left out, each with its reason: runs under 30 minutes, runs with no good output, runs whose unit doesn't convert, and, with at least four runs, runs outside Tukey's fences (Q1 − 1.5 IQR, Q3 + 1.5 IQR), widened to at least 10% either side of the median so a very steady line keeps its normal spread. With fewer than 5 runs or 8 hours left there is no rate. Otherwise the rate is the used runs' total good ÷ their total hours (time-weighted, rounded to 2 places). Scrap doesn't count.
+
+**Review, then accept.** `GET /api/scheduling/run-standards/{id}/history-rate?days=` returns the window, every run with its rate or why it was left out, the fences, the totals and the suggested rate next to the calculated, ideal, modified and effective rates; it saves nothing (`materials.view` or `schedule.view`). `POST …/history-rate` (version, days, the reviewed rate; `rate.modify`) locks the run standard, works the rate out again and refuses with 409 if it is no longer the reviewed one; otherwise it sets `calculated_rate_per_hour` with basis `run_history` (D-016 `Recalculate`). The modified rate is never touched, so drift between them stays visible. Event `pulaski.run_standard.recalculated.v1`, with the window and sample counts.
+
+**Back to the ideal rate.** `POST …/ideal-rate` (version) sets the calculated rate to the capability's ideal rate in effect now, in its unit, with basis `ideal_rate`, so it follows the capability again (D-034). Refused when no capability is in effect; a unit change under a modified rate is refused as before.
+
+**Run time is elapsed time.** A run's stops aren't taken out, so the rate is a realistic planning rate (it includes the stops a run usually has) rather than a performance rate. Machine stops are now recorded (D-050), so the sample can be refined to use them.
+
+**Not yet:** a scheduled recalculation or a notice when history drifts far from the rate in force; per-shift or per-crew rates.
+
+## Process links in the projection (D-046, proposed)
+
+Amends D-014, D-019 and D-024. On the floor a job can't start until its process links are met (D-035); the projection now plans it that way, so a Pack job is never projected before the Extrude job it follows.
+
+**The rule, as on the floor** (`JobReadiness`). For each link into a job's operation, the jobs of the same work order on the link's earlier operation (not cancelled) decide: `after_start`, the first of them to start; `after_end`, the last of them to end; then the link's lag, as elapsed time. A job with several links waits for the latest. The times are the projected ones for jobs on a line, actual ones once a job has started or ended, and a group job's window (start; finish-by for `after_end`) while it waits on a department (D-022). The result is the job's `LinkReadyAt`, which works like a hold: an unstarted, unfirmed job starts no earlier.
+
+**Linked lines are projected together** (`LinkedProjection` in `Pulaski.Domain.Scheduling`, pure). A line's plan is loaded with the lines its jobs follow, and theirs in turn (upstream only, at most 40 lines); every caller of the projection (the line timeline, the board, the Overview, work order progress, shop orders, the placement preview, the move of a firmed job and dispatch) goes through it, so all agree and the published baseline matches the board. The projector runs on every line, the holds from that pass feed the next, and it stops when nothing moves. Holds only move later, so it settles unless jobs wait on each other in a circle.
+
+**Infeasible placements are reported, never fixed** (D-014: Pulaski doesn't reorder or move jobs).
+
+| Warning | When |
+| --- | --- |
+| `link_not_met` | A firmed job's anchored start (D-019) is before its link allows. It keeps its time |
+| `link_cycle` | After 16 passes the job's hold still moves: it waits, through the lines' sequences, on work that waits for it (e.g. Pack sequenced before Extrude on the same line). Its times are the last pass's |
+
+A running or paused job has started, so no link applies to it. The timeline carries each linked job's `linkReadyAt`; the board's side panel shows it.
+
+**Not here:** links don't constrain a group's window (its jobs are checked on their own, D-022), and the projection still doesn't share a group's capacity.
+
+## Breaks (D-047, proposed)
+
+Amends D-040. Labor reports separate working time from breaks, so payroll and efficiency don't count a lunch as time on the line.
+
+**A break is its own interval** (`core.labor_break`): a person, a start, an end (open while on break), paid or unpaid, a note. It never changes the person's sessions: their start, end and share stay as recorded, so allocation (D-040), approval and the sharing out to runs keep working on what was recorded.
+
+**Worked time.** A session's worked hours are its elapsed time outside the person's breaks × its share (`LaborRules.WorkedHours`, `WorkingPieces`); the run shares (`LaborRules.Attribute`) are worked out from the same pieces, so a break also comes out of direct time on the job running then. Someone on two lines at 50% who takes a 30-minute break loses 15 minutes on each. Break hours (`LaborRules.BreakHours`) count each break once, only while the person was on, split into paid and unpaid. Reports show worked hours with paid and unpaid break hours beside them; paid breaks are for payroll to add back.
+
+**Rules.** A break starts while the person is on a line (inside a session that counts) and belongs to that session's shift (its production day, schedule and code). It lasts at most 4 hours, isn't ahead of now, and doesn't overlap another of their breaks; at most one is open per person. It ends when the person ends it, when they leave their last line (clock-off or check-out), or when the shift is approved. Approved, it is locked like the sessions: a correction (`corrects_break_id`, `labor.approve`, with a reason) replaces it or with `is_void` removes it.
+
+**Who and API.** An operator takes their own (`labor.record_own`, `POST /api/labor/me/breaks`, `…/me/breaks/{id}/end`); a supervisor records and changes others' (`labor.record`, `POST /api/labor/breaks`, `…/{id}/end`, `PUT /api/labor/breaks/{id}`); `POST /api/labor/breaks/{id}/correct` needs `labor.approve`. Sessions carry `hours` (worked) and `breakHours`; shifts and the by-person report carry paid and unpaid break hours; a shift's review lists its breaks. Events: `pulaski.labor.break_started.v1`, `…break_ended.v1`, `…break_changed.v1`, `…break_corrected.v1`.
+
+**Not yet:** breaks planned on a shift schedule (a fixed lunch), filled in on their own.
+
+## Qualifications (D-048, proposed)
+
+Amends D-040 ("qualifications, not yet") and replaces the planned `core.qualification`, `person_qualification` and `equipment_qualification` tables, which were never written (migration 0017).
+
+**A qualification** belongs to a site: a code (upper case, fixed), a name, a description and how long a grant lasts by default (`validity_months`, or no expiry). Switched off, not deleted.
+
+**A grant** gives one to a person of the same site for whole site-local days, `valid_from` to `expires_on` inclusive (no expiry when null). Without days it runs from today for the qualification's validity. A renewal is a new grant, so the history stays; a person holds the qualification on a day when any grant is valid then. A grant's days and note can change; it is revoked (with a reason, from now) rather than deleted, and a revoked grant can't change. States: valid, not yet, expired, revoked (`QualificationRules.Status`).
+
+**Requirements.** Equipment requires a qualification of its site for itself and everything below it (`equipment_qualification`, read through `equipment_closure`), so requiring forklift on an area covers its lines. Switched off with `is_required`, not deleted.
+
+**Warn, never refuse.** Clocking someone on or checking a crew in still happens when they lack a required qualification on the session's site-local day; the response's notes say what is missing and why (not held, expired, revoked, not valid yet), and the Labor screen marks them *Not qualified* while they are on (`QualificationRules.Missing`). Like consumption beyond plan (D-035), the floor knows best; the warning makes the gap visible.
+
+**Who and API.** `people.manage` maintains qualifications and grants (`GET/POST /api/qualifications`, `PUT /api/qualifications/{id}`, `GET/POST /api/qualifications/grants`, `PUT …/grants/{id}`, `POST …/grants/{id}/revoke`); the grants list filters by person, qualification and `expiringWithinDays`. `equipment.manage` sets requirements (`GET/PUT /api/equipment/{id}/qualifications`). Reads need `labor.view` (and `equipment.view` for the list and requirements). Events: `pulaski.qualification.created.v1`, `…updated.v1`, `…granted.v1`, `…grant_changed.v1`, `…revoked.v1`, `pulaski.equipment.qualification_set.v1`.
+
+**Not yet:** refusing unqualified people where a plant wants it; qualifications from HR; notices before a grant expires.
+
+## Shop-floor terminals and badges (D-049, proposed)
+
+Amends D-037 and D-040. Many operators never sign in; at the start of a shift they walk past a shared tablet or panel PC with a badge reader. The terminal must know who they are reliably, record exactly what they would record themselves, and be impossible to use as a back door into the rest of Pulaski.
+
+**A terminal is a device, not a user** (`sec.terminal`). A manager (`terminals.manage`, new; Manager has it to start with) registers it on Configure → Terminals for a site, area or line (its scope: it offers the active lines that run jobs at or below it), a first line to offer, and how people identify: badge, or badge and PIN. Then they issue a **one-time enrolment code** (ten characters, 15 minutes) and type it on the device at `/terminal/enrol`. Enrolling gives the terminal a 256-bit random secret, returned once and kept in an HttpOnly cookie on that device; the API keeps only SHA-256 hashes of codes and secrets. Enrolling again (with a new code) replaces the secret, and switching the terminal off refuses it at once.
+
+**Its own door.** A terminal calls `/api/terminal/*` with `Authorization: Terminal <secret>`; those endpoints accept nothing else, and every other endpoint refuses a terminal (it is not a bearer token). What a terminal records is attributed to it: events and `recorded_by` carry `terminal:<code>`, and sessions and breaks get the new source `terminal`.
+
+**Badges** (`sec.badge`), issued on Configure → People (`people.manage`) by scanning or typing the value: stored as HMAC-SHA256 with a key derived from the API's signing key (badge values are short and readable, so a plain hash could be guessed), never the value. A person has one active badge; a new one revokes the old; a value is unique among active badges. A PIN of 4 to 8 digits, for `badge_plus_pin` terminals, is hashed like a password. Five wrong PINs in a row lock the badge for 5 minutes (`pulaski.badge.pin_failed.v1` each).
+
+**Identifying.** `POST /api/terminal/identify` with the badge (and PIN): an unknown, revoked or other-site badge, or a switched-off person, is "not recognised", saying nothing more; at a PIN terminal, a badge alone only answers that a PIN is needed. A recognised badge returns the person's open time and break and a **ticket**: a JWT for another audience (`pulaski-terminal`), naming the person and the terminal, valid for 2 minutes. The badge value isn't sent again: the next action presents the ticket, and a ticket from another terminal, expired or forged, is refused.
+
+**Actions, under the existing rules.** `POST /api/terminal/clock-on` (direct time from now, on a line the terminal offers), `/clock-off` (one of the person's own open sessions), `/breaks/start` (paid or unpaid) and `/breaks/end`, each with the ticket. They go through the same writers as clocking on oneself (D-040) and breaks (D-047): one line at a time per person, at most 100% of their time, the shift's approval locking it, qualification warnings (D-048), breaks ending with the last line. Nothing a terminal does is a correction or an approval; those stay with supervisors.
+
+**The screen** (`/terminal`, server-rendered forms, no sign-in): a badge field (readers that type the badge and Enter work as they are), then the PIN where asked, then the person's time and large buttons (clock on to each offered line, the first line highlighted; clock off; start a paid or unpaid break; end break). It goes back to waiting 20 seconds after a badge and a few seconds after an action.
+
+**Not yet:** signing in as a user on a terminal (`user_login`, dropped from the planned modes); recording setup, indirect or training time at a terminal; production or downtime reporting from it; a terminal for several sites.
+
+## Machine data, utilization and OEE (D-050, proposed)
 
 Live state, counts and stop reasons from the equipment, turned into utilization and OEE (charter v1 items 2, 3 and 6; the first vertical slice). Builds on D-005, which stays as decided.
 
@@ -800,7 +940,7 @@ A stop's reason comes from its first-out code through the profile; with no code,
 
 **Edge nodes and tags (as built).** An edge node (`core.edge_node`) belongs to a site and reads through connections (`core.edge_connection`: a protocol and its settings, never secrets). A tag (`core.equipment_tag`) binds an address read through a connection to a role on equipment of that site that tracks state: `state`, `unit_mode`, `stop_reason`, `processed_count`, `defective_count`, `consumed_count` or `machine_speed`; one active tag per role on a piece of equipment, one per address. A Sparkplug B address is `group/node[/device]:metric`. The edge reports every address its connections see (`core.edge_metric`), so tags are bound by picking them. Nodes, connections and tags are part of maintaining equipment (`equipment.manage`).
 
-**Deletion (D-042).** Deleting an edge node switches it and all its connections and tags off atomically. Deleting a tag removes its `core.equipment_tag` row whether active or inactive; before deletion, any quality characteristic using it as an automatic source is retained with its source cleared. The append-only deletion event records the prior tag and detached characteristic IDs. Time-series samples and the event log remain. The application role's only `core` DELETE privilege is on `core.equipment_tag`. Reactivating a node does not reactivate its connections or tags; each must be reactivated separately.
+**Deletion (D-051).** Deleting an edge node switches it and all its connections and tags off atomically. Deleting a tag removes its `core.equipment_tag` row whether active or inactive; before deletion, any quality characteristic using it as an automatic source is retained with its source cleared. The append-only deletion event records the prior tag and detached characteristic IDs. Time-series samples and the event log remain. The application role's only `core` DELETE privilege is on `core.equipment_tag`. Reactivating a node does not reactivate its connections or tags; each must be reactivated separately.
 
 **The edge's job, and Pulaski's.** The edge forwards each bound tag's raw value when it changes or is lost (a machine speed at most every 5 seconds), and the last value seen when a tag is newly bound. It doesn't interpret anything. Pulaski maps the raw state through the equipment's profile (no profile: PackML's own numbers; a value the profile doesn't know: Undefined), latches the first-out stop code until the machine runs (Execute) again, and turns counter readings into counts across rollovers and resets. Each change of state or unit mode is a `ts.equipment_state_change` row with the raw value and the stop code then latched; losing the signal is Undefined with source `edge_gap`. Counts are `ts.production_count` rows with source `machine` in the run open on the equipment; they aren't production reports and change no run's quantities yet. Each machine's current state is `core.equipment_live_state`, its last counter readings `core.equipment_counter`.
 
@@ -814,11 +954,11 @@ A stop's reason comes from its first-out code through the profile; with no code,
 
 **Machines screen** (`machines.view`, Operate → Machines): a status board refreshed every 5 seconds, each piece of equipment that tracks state in its OEE category (the site's `core.oee_state_category`, else D-005's defaults); a line set to series or parallel takes the worst or best category of the equipment tracking state below it, a constraint-machine line its machine's state. And the stops to code. Starting roles: Operator and Supervisor see and code; Planner, Quality, Manager and Auditor see.
 
-**Not yet:** OPC UA and CIP connectors; alarm and warning history; process values; rules that synthesise a state from discrete signals; OEE rollups (the reports are D-043); splitting, merging or entering stops by hand; machine counts as production reports; running the edge as a Windows service or systemd unit (it runs as a console worker or container).
+**Not yet:** OPC UA and CIP connectors; alarm and warning history; process values; rules that synthesise a state from discrete signals; OEE rollups (the reports are D-052); splitting, merging or entering stops by hand; machine counts as production reports; running the edge as a Windows service or systemd unit (it runs as a console worker or container).
 
-## Utilization and OEE reports (D-043, proposed)
+## Utilization and OEE reports (D-052, proposed)
 
-Utilization and OEE by equipment, line, shift and product (charter v1 item 6), worked out on read from the history D-041 records. Machines → **Utilization and OEE**, with `machines.view` (the Overview's current-shift OEE also with `overview.view`): `GET /machines/oee?siteId&from&to&equipmentId`.
+Utilization and OEE by equipment, line, shift and product (charter v1 item 6), worked out on read from the history D-050 records. Machines → **Utilization and OEE**, with `machines.view` (the Overview's current-shift OEE also with `overview.view`): `GET /machines/oee?siteId&from&to&equipmentId`.
 
 **Period.** Production days `from`–`to` in the site's time zone, at most 31; a longer range keeps its last 31 days. A shift counts towards the day it starts on, so the last day's night shift is read into the next morning. Nothing after now.
 
@@ -836,13 +976,13 @@ Utilization and OEE by equipment, line, shift and product (charter v1 item 6), w
 | Executing (PackML 6) | run | Run time |
 | Anything else, including before the first state and with the signal lost | down (no signal when Undefined) | Availability loss |
 
-**Lines** take their time as they take their state (D-041): series the worst use at each moment (down, planned, non-production, run), parallel the best, constraint machine its machine's; ties go to the first machine in tree order. A derived line's stop starts whenever it goes down or into a planned stop from run or non-production.
+**Lines** take their time as they take their state (D-050): series the worst use at each moment (down, planned, non-production, run), parallel the best, constraint machine its machine's; ties go to the first machine in tree order. A derived line's stop starts whenever it goes down or into a planned stop from run or non-production.
 
-**Figures** (`OeeTally`). Planned time = scheduled − non-production − planned stops. Availability = run ÷ planned. Performance = earned hours ÷ run time inside runs with an ideal rate, where earned hours = processed ÷ the ideal rate of the capability in effect when the run started, converted to the report's unit (D-026). Quality = good earned hours ÷ earned hours. OEE = A × P × Q. Weighing by the ideal rate lets products in different units add up. Output is production reports and corrections (`source <> 'machine'`); machine counts aren't reports (D-041). A run without an ideal rate keeps its quantities but is left out of P and Q, and the report says so in a note. Run time with no job running is shown (`RunWithoutJobHours`) but isn't in performance, since its output can't be reported. The unrounded components are returned too, so a total over several lines is worked out from them, never by averaging percentages.
+**Figures** (`OeeTally`). Planned time = scheduled − non-production − planned stops. Availability = run ÷ planned. Performance = earned hours ÷ run time inside runs with an ideal rate, where earned hours = processed ÷ the ideal rate of the capability in effect when the run started, converted to the report's unit (D-026). Quality = good earned hours ÷ earned hours. OEE = A × P × Q. Weighing by the ideal rate lets products in different units add up. Output is production reports and corrections (`source <> 'machine'`); machine counts aren't reports (D-050). A run without an ideal rate keeps its quantities but is left out of P and Q, and the report says so in a note. Run time with no job running is shown (`RunWithoutJobHours`) but isn't in performance, since its output can't be reported. The unrounded components are returned too, so a total over several lines is worked out from them, never by averaging percentages.
 
 **Rows.** By equipment (every active piece that tracks state, in tree order; equipment that runs no jobs has availability only); by shift (each equipment × working window); by product (material and job unit, over the time inside its runs, with good and scrap in the job's unit); and the time of each equipment by use and reason, with the stops that started in the period. A stop already going on when the period began isn't counted again.
 
-**Bounds.** Stops are read back 35 days before the period; one older than that still shows as down, uncoded. Rollups (`ts.oee_rollup`) stay for later, keyed on production date, schedule and shift code (D-041), once reading on demand is too slow.
+**Bounds.** Stops are read back 35 days before the period; one older than that still shows as down, uncoded. Rollups (`ts.oee_rollup`) stay for later, keyed on production date, schedule and shift code (D-050), once reading on demand is too slow.
 
 ## Application architecture
 
@@ -895,7 +1035,7 @@ These need an answer before the related area is built; tick each one as it moves
 
 **Machine state**
 
-- [x] How is a line's state derived from its machines: constraint machine, worst state, or configured per line? Configured per line: series = worst, parallel = best (D-041).
+- [x] How is a line's state derived from its machines: constraint machine, worst state, or configured per line? Configured per line: series = worst, parallel = best (D-050).
 - [ ] On target lines, are PackML-native PLCs common, or will synthesised states be the norm?
 
 **Storage**

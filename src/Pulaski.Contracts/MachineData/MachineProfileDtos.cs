@@ -1,6 +1,6 @@
 namespace Pulaski.Contracts.MachineData;
 
-/// <summary>One kind of machine, as its controller reports it (D-041), as profile lists show it.</summary>
+/// <summary>One kind of machine, as its controller reports it (D-050), as profile lists show it.</summary>
 public sealed record MachineProfileDto
 {
     public required Guid Id { get; init; }
@@ -23,7 +23,7 @@ public sealed record MachineProfileDto
     public long Version { get; init; }
 }
 
-/// <summary>A value the machine's state tag takes, and the PackML state it means (D-041).</summary>
+/// <summary>A value the machine's state tag takes, and the PackML state it means (D-050).</summary>
 public sealed record ProfileStateDto
 {
     public required int RawValue { get; init; }
@@ -37,7 +37,7 @@ public sealed record ProfileStateDto
     public bool IsActive { get; init; }
 }
 
-/// <summary>One of the machine's stop, alarm or warning codes, and the utilization reason it maps to (D-041).</summary>
+/// <summary>One of the machine's stop, alarm or warning codes, and the utilization reason it maps to (D-050).</summary>
 public sealed record ProfileCodeDto
 {
     /// <summary><c>stop_reason</c>, <c>alarm</c> or <c>warning</c>.</summary>
@@ -73,7 +73,7 @@ public sealed record ProfileMachineDto
     public long Version { get; init; }
 }
 
-/// <summary>A profile with its lists (D-041).</summary>
+/// <summary>A profile with its lists (D-050).</summary>
 public sealed record MachineProfileDetailDto
 {
     public required MachineProfileDto Profile { get; init; }
@@ -85,7 +85,7 @@ public sealed record MachineProfileDetailDto
     public IReadOnlyList<ProfileMachineDto> Machines { get; init; } = [];
 }
 
-/// <summary>What a profile import did, or would do, row by row (D-041).</summary>
+/// <summary>What a profile import did, or would do, row by row (D-050).</summary>
 public sealed record ProfileImportResponse
 {
     /// <summary>True when the rows were saved: no errors and not a dry run.</summary>

@@ -7,7 +7,7 @@ using Pulaski.Domain.MachineData;
 namespace Pulaski.Application.MachineData;
 
 /// <summary>
-/// Applies a batch of signals an edge node forwarded (D-041), in sequence order, once: signals of the same stream at or below
+/// Applies a batch of signals an edge node forwarded (D-050), in sequence order, once: signals of the same stream at or below
 /// the last applied sequence are skipped, so a batch sent again changes nothing. Telemetry, so no events (D-005).
 /// </summary>
 public sealed record IngestEdgeSignalsCommand(Guid EdgeNodeId, Guid StreamId, string? AgentVersion, IReadOnlyList<EdgeSignalDto> Signals)

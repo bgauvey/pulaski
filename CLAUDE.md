@@ -112,7 +112,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`sec.role`, `sec.role_permission.is_granted`), maintained on the Roles/Permissions tabs of Configure → Users; only `administrator` is in
   code (all permissions, everywhere, unchangeable); `Roles.Defaults` seeds a new database. Every other role is held at a
   site; every changing endpoint carries `.RequirePermission(permission, Site.…)`.
-- Viewing (D-039, proposed): 11 view permissions (`*.view`) decide screens and data; a change brings its views
+- Viewing (D-039, proposed): 13 view permissions (`*.view`) decide screens and data; a change brings its views
   (`Permissions.Implied`). Reads use `.RequireAny(site, views…)`, `.RequireAnyAtSite` (no site = every site) or
   `.RequireAnyView()` for lookups; lists filter with `.At(Visible.SitesAsync(...))`. Web pages carry
   `[RequiresView(...)]`, checked in `MainLayout` (not found, or the no-access panel); cross-screen links use `ScreenLink`.
@@ -126,7 +126,30 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   out to runs by overlap on read (`LaborRules.Attribute`); each session stores its shift (`EquipmentShifts.ShiftAt`).
   `core.labor_approval` locks a shift; corrections are new sessions (`corrects_session_id`, `is_void`). Clock-on locks
   the person; crew check-in locks people in id order in SQL. No background service.
-- Machine data and OEE (D-041, proposed): connectors run in the separate `Pulaski.Edge` worker behind one interface that
+- Shift overrides (D-042, proposed): one production day's change to a schedule's shift (other times, off, or an extra shift) in
+  `core.shift_schedule.overrides` (`jsonb`, saved whole); `ShiftSchedule.Expand` applies them everywhere. Locked once that shift's
+  labor is approved. Not calendar exceptions, which take time out of everything below a piece of equipment.
+- Site settings (D-043, proposed): Configure → Site settings holds changeover mode, reporting tolerances (now versioned) and
+  calendar exceptions (switched off with `is_active`, never deleted); `site_settings.view` opens it, `site_settings.manage` changes it.
+- Production by shift (D-044, proposed): a count belongs to the shift running on its line at `occurred_at` and to that shift's
+  production day (`ShiftProduction.Total`), worked out on read; outside shifts, the site-local day. Rows reconcile to the runs.
+- Rates from run history (D-045, proposed): `RunHistoryRate.Calculate` (good ÷ run hours, short/empty/unconvertible and
+  Tukey-fence outliers left out, at least 5 runs and 8 h) is reviewed, then accepted (re-checked under the lock, 409 if changed)
+  as the calculated rate; a modified rate stays in force. No worker.
+- Links in the projection (D-046, proposed): `LinePlanLoader` loads a line with the lines its jobs follow; every projection goes
+  through `TimelineMapping.Project` → `LinkedProjection` (repeat until settled). Jobs wait for after-start/after-end plus lag;
+  firmed jobs keep their time (`link_not_met`), circular waits warn `link_cycle`. Nothing is reordered.
+- Breaks (D-047, proposed): `core.labor_break` per person (paid/unpaid), never a change to sessions; worked hours =
+  session time outside the person's breaks × share (`LaborRules.WorkedHours`, also in `Attribute`). A break starts inside a
+  session, takes its shift, locks with approval (corrections like sessions) and ends when the person leaves their last line.
+- Qualifications (D-048, proposed): per-site `core.qualification`; grants (`person_qualification`) for inclusive site-local days,
+  renewed by a new grant, revoked not deleted; `equipment_qualification` applies down the closure. Clock-on/check-in warn
+  (`QualificationRules.Missing`), never refuse.
+- Terminals and badges (D-049, proposed): `sec.terminal` is a device, enrolled with a one-time code for a secret (SHA-256
+  stored), calling only `/api/terminal/*` with `Authorization: Terminal <secret>` (`TerminalFilter`). Badges are HMAC'd
+  (`IBadgeHasher`), PINs password-hashed, 5 wrong PINs lock 5 min. Identify returns a 2-minute ticket (`BadgeTickets`); actions
+  reuse `LaborWriter`/`BreakWriter` with source `terminal`, actor `terminal:<code>`. Kiosk is static SSR at `/terminal`.
+- Machine data and OEE (D-050, proposed): connectors run in the separate `Pulaski.Edge` worker behind one interface that
   emits samples (address, value, timestamp, quality); shared edge code binds them via `core.equipment_tag`, buffers in SQLite (edge may be another machine)
   and forwards to the API (only the API writes the DB). Sparkplug B host first. Machine profiles (`core.machine_profile*`, per site,
   one per kind of machine; `equipment_stop_reason_map` = per-machine overrides) map raw state values → PackML and stop codes →
@@ -143,7 +166,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   code, else first state on the way with one); `equipment_live_state.open_downtime_*` points at the open stop. Operators code
   (`CodeDowntimeCommand`, `downtime.code`; offered reasons in `StopSql.CodingReasons`); Operate → Machines (`machines.view`) is the
   board (`GetMachineStatusHandler` derives series/parallel/constraint lines via `LineStates`) and the stops to code.
-- Utilization and OEE reports (D-043, proposed): computed on read, never stored (`GetOeeReportHandler`, `GET /machines/oee`, at most 31
+- Utilization and OEE reports (D-052, proposed): computed on read, never stored (`GetOeeReportHandler`, `GET /machines/oee`, at most 31
   production days). `Utilization.Classify` (unit mode, planned-downtime job, stop reason class, Execute; no signal = down), `Combine` for
   derived lines, `Windows`/`Slice` to shifts and runs, `OeeTally` for A × P × Q with output weighed by ideal rate (earned hours). Output is
   production reports only, never machine counts. Machines → Utilization and OEE tab; the Overview uses its current-shift rows.
@@ -198,7 +221,7 @@ Treat these as working assumptions; confirm with Bill before building anything t
   `db/app-role.sql` (re-runnable), then `db/seed-demo.sql` (empty database only), then optionally
   `db/seed-materials.sql` (200 demo materials in 11 classes; re-runnable), then `db/seed-units.sql` (standard units
   and demo material conversions, D-026; re-runnable), then `db/seed-reasons.sql` (starter adjustment, hold and
-  utilization reasons, D-027, D-041; re-runnable).
+  utilization reasons, D-027, D-050; re-runnable).
 - Layout: production projects in `src/`, dev tools in `tools/`, the simulator compose file in `deploy/simulator/`, test projects in `Tests/` (shared in-memory fakes in
   `Tests/Pulaski.Testing`); `.editorconfig`,
   `Directory.Build.props`, `Directory.Packages.props` (central package versions) and

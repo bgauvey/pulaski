@@ -5,7 +5,7 @@ using Pulaski.Domain.MachineData;
 namespace Pulaski.Application.MachineData;
 
 /// <summary>
-/// Loads a machine's definitions into its profile (D-041), all or nothing. Each kind of entry in the rows replaces that list:
+/// Loads a machine's definitions into its profile (D-050), all or nothing. Each kind of entry in the rows replaces that list:
 /// the file's entries are created or updated, and active entries of that kind it leaves out are switched off. A kind the
 /// rows don't mention is left as it is, so a file of stop reasons keeps the states.
 /// </summary>

@@ -3,7 +3,7 @@ using Pulaski.Contracts.MachineData;
 
 namespace Pulaski.Web.Services.MachineData;
 
-/// <summary>Labels and layout for the Machines screen (D-041).</summary>
+/// <summary>Labels and layout for the Machines screen (D-050).</summary>
 public static class MachineView
 {
     /// <summary>The label of an OEE category (D-005).</summary>
@@ -75,7 +75,7 @@ public static class MachineView
     /// <summary>A percentage as the reports show it, or a dash when there is nothing to measure it against.</summary>
     public static string Pct(decimal? value) => value is { } v ? $"{v.ToString("0.0", CultureInfo.InvariantCulture)}%" : "—";
 
-    /// <summary>The label of a use of time in the utilization report (D-043).</summary>
+    /// <summary>The label of a use of time in the utilization report (D-052).</summary>
     public static string UseLabel(string use) => use switch
     {
         "run" => "Run",

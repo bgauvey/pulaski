@@ -1,9 +1,9 @@
 namespace Pulaski.Contracts.MachineData;
 
-// ---- Utilization and OEE reports (D-043) ----
+// ---- Utilization and OEE reports (D-052) ----
 
 /// <summary>
-/// Utilization and OEE between two production days (D-043): by equipment, by shift and by product, and where each piece of
+/// Utilization and OEE between two production days (D-052): by equipment, by shift and by product, and where each piece of
 /// equipment's time went. Worked out on read from the machine history.
 /// </summary>
 public sealed record OeeReportDto

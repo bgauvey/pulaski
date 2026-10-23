@@ -1,3 +1,4 @@
+using System.Globalization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Contracts.Common;
@@ -15,22 +16,35 @@ public sealed record CreateShiftScheduleCommand(Guid SiteId, string Code, string
 public sealed record UpdateShiftScheduleCommand(Guid Id, long ExpectedVersion, string Name, string? Description, int CycleDays, DateOnly CycleStart,
     IReadOnlyList<ShiftDto> Shifts, bool IsActive) : ICommand<VersionResponse>;
 
+/// <summary>
+/// Sets one date's override for a shift (D-042): it runs at other times, runs as an extra shift, or (not working) is off
+/// that day. Start and length default to the cycle's shift of that code. The repeating cycle doesn't change.
+/// </summary>
+public sealed record SetShiftOverrideCommand(Guid ScheduleId, long ExpectedVersion, DateOnly Date, string Code, bool IsWorking, string? Name,
+    string? Start, int? Minutes, string? Crew, string? Note) : ICommand<VersionResponse>;
+
+/// <summary>Takes one date's override off a shift, so the cycle applies that day again (D-042).</summary>
+public sealed record RemoveShiftOverrideCommand(Guid ScheduleId, long ExpectedVersion, DateOnly Date, string Code) : ICommand<VersionResponse>;
+
 /// <summary>Which working time equipment follows (D-038): its parent's, its own schedule, or around the clock.</summary>
 public sealed record SetEquipmentCalendarCommand(Guid EquipmentId, long ExpectedVersion, string Mode, Guid? ShiftScheduleId) : ICommand<VersionResponse>;
 
 internal static class ShiftRules
 {
     /// <summary>The crews the shifts name are active crews of the site (D-040).</summary>
-    public static async Task EnsureCrewsAsync(IShiftRepository shifts, Guid siteId, IReadOnlyList<ShiftDto> definition, CancellationToken cancellationToken)
+    public static async Task EnsureCrewsAsync(IShiftRepository shifts, Guid siteId, IReadOnlyList<ShiftDto> definition, CancellationToken cancellationToken) =>
+        await EnsureCrewsAsync(shifts, siteId, definition.Select(s => s.Crew), cancellationToken);
+
+    public static async Task EnsureCrewsAsync(IShiftRepository shifts, Guid siteId, IEnumerable<string?> crews, CancellationToken cancellationToken)
     {
-        var named = definition.Where(s => s.Crew is not null).Select(s => s.Crew!).Distinct().ToList();
+        var named = crews.OfType<string>().Distinct().ToList();
         if (named.Count == 0)
         {
             return;
         }
 
-        var crews = await shifts.ListCrewCodesAsync(siteId, cancellationToken);
-        var unknown = named.Except(crews, StringComparer.Ordinal).ToList();
+        var active = await shifts.ListCrewCodesAsync(siteId, cancellationToken);
+        var unknown = named.Except(active, StringComparer.Ordinal).ToList();
         if (unknown.Count > 0)
         {
             throw new ValidationException(new Dictionary<string, string[]> { ["Shifts"] = [$"Not an active crew of the site: {string.Join(", ", unknown)}."] });
@@ -39,7 +53,8 @@ internal static class ShiftRules
 
     /// <summary>Checks the fields and the shifts; throws a validation error naming what is wrong.</summary>
     public static (string Name, string? Description, IReadOnlyList<ShiftDto> Shifts) Validate(
-        Validator validator, string code, string name, string? description, int cycleDays, DateOnly cycleStart, IReadOnlyList<ShiftDto> shifts)
+        Validator validator, string code, string name, string? description, int cycleDays, DateOnly cycleStart, IReadOnlyList<ShiftDto> shifts,
+        IReadOnlyList<ShiftOverrideDto>? overrides = null)
     {
         var trimmedName = name.Trim();
         var trimmedDescription = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
@@ -50,13 +65,135 @@ internal static class ShiftRules
             .Require(shifts.All(ShiftMapping.HasValidStart), "Shifts", "Give each shift a start time as HH:mm.");
         validator.ThrowIfInvalid();
 
-        var problems = ShiftMapping.ToDomain(code, trimmedName, cycleDays, cycleStart, shifts).Problems();
+        ThrowIfProblems(ShiftMapping.ToDomain(code, trimmedName, cycleDays, cycleStart, shifts, overrides));
+        return (trimmedName, trimmedDescription, ShiftMapping.Normalize(shifts));
+    }
+
+    public static void ThrowIfProblems(ShiftSchedule schedule)
+    {
+        var problems = schedule.Problems();
         if (problems.Count > 0)
         {
             throw new ValidationException(new Dictionary<string, string[]> { ["Shifts"] = [.. problems] });
         }
+    }
 
-        return (trimmedName, trimmedDescription, ShiftMapping.Normalize(shifts));
+    /// <summary>The schedule, locked, at the version the caller saw.</summary>
+    public static async Task<ShiftScheduleRecord> GetAtVersionAsync(IShiftRepository shifts, Guid id, long expectedVersion, CancellationToken cancellationToken)
+    {
+        var current = await shifts.GetForUpdateAsync(id, cancellationToken) ?? throw new NotFoundException($"Shift schedule {id} not found.");
+        if (current.Version != expectedVersion)
+        {
+            throw new ConflictException($"{current.Value.Code} was changed by someone else. Reload and try again.");
+        }
+
+        return current.Value;
+    }
+
+    /// <summary>Approved labor locks its shift (D-040), so the shift's times on that day can't change under it.</summary>
+    public static async Task EnsureNotApprovedAsync(IShiftRepository shifts, ShiftScheduleRecord schedule, DateOnly date, string code, CancellationToken cancellationToken)
+    {
+        if (await shifts.IsShiftApprovedAsync(schedule.SiteId, schedule.Id, date, code, cancellationToken))
+        {
+            throw new DomainRuleException($"Labor for shift {code} on {date:yyyy-MM-dd} is approved, so its times are locked.");
+        }
+    }
+}
+
+internal sealed class SetShiftOverrideHandler(
+    IUnitOfWork unitOfWork,
+    IShiftRepository shifts,
+    IEventLog eventLog,
+    IEventFactory events) : ICommandHandler<SetShiftOverrideCommand, VersionResponse>
+{
+    public async Task<VersionResponse> HandleAsync(SetShiftOverrideCommand command, CancellationToken cancellationToken)
+    {
+        var code = command.Code.Trim();
+        var note = string.IsNullOrWhiteSpace(command.Note) ? null : command.Note.Trim();
+        new Validator()
+            .Require(command.Date != default, "Date", "Choose the day.")
+            .Require(code.Length is > 0 and <= 10, "Code", "A shift code of up to 10 characters.")
+            .Require(command.Start is null || ShiftMapping.HasValidStart(new ShiftDto { Start = command.Start }), "Start", "A start time as HH:mm.")
+            .Require(note is null || note.Length <= 500, "Note", "At most 500 characters.")
+            .ThrowIfInvalid();
+
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var current = await ShiftRules.GetAtVersionAsync(shifts, command.ScheduleId, command.ExpectedVersion, cancellationToken);
+        var schedule = current.ToDomain();
+
+        // Times default to the cycle's shift of that code on that day, or of that code on any day for an extra shift.
+        var regular = schedule.RegularShift(command.Date, code);
+        var template = regular ?? schedule.Shifts.FirstOrDefault(s => string.Equals(s.Code, code, StringComparison.OrdinalIgnoreCase));
+        code = template?.Code ?? code;
+        if (!command.IsWorking && regular is null)
+        {
+            throw new DomainRuleException($"Shift {code} doesn't run on {command.Date:yyyy-MM-dd}, so there is nothing to take off.");
+        }
+
+        var start = command.Start ?? template?.Start.ToString("HH:mm", CultureInfo.InvariantCulture);
+        var minutes = command.Minutes ?? (int?)template?.Length.TotalMinutes;
+        if (command.IsWorking && (start is null || minutes is null))
+        {
+            throw new ValidationException(new Dictionary<string, string[]> { ["Start"] = [$"{code} isn't one of the schedule's shifts; give its start and length."] });
+        }
+
+        var crew = command.IsWorking ? (string.IsNullOrWhiteSpace(command.Crew) ? null : command.Crew.Trim().ToUpperInvariant()) : null;
+        var entry = new ShiftOverrideDto
+        {
+            Date = command.Date,
+            Code = code,
+            IsWorking = command.IsWorking,
+            Name = string.IsNullOrWhiteSpace(command.Name) ? template?.Name ?? code : command.Name.Trim(),
+            Start = start ?? "00:00",
+            Minutes = minutes ?? 0,
+            Crew = crew,
+            Note = note,
+        };
+
+        var before = current.Overrides?.FirstOrDefault(x => x.Date == command.Date && string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase));
+        if (before == entry)
+        {
+            return new VersionResponse(command.ExpectedVersion);
+        }
+
+        await ShiftRules.EnsureNotApprovedAsync(shifts, current, command.Date, code, cancellationToken);
+        await ShiftRules.EnsureCrewsAsync(shifts, current.SiteId, [crew], cancellationToken);
+        var changed = schedule.WithOverride(command.Date, code, ShiftMapping.ToDomain(entry));
+        ShiftRules.ThrowIfProblems(changed);
+
+        var updated = current with { Overrides = ShiftMapping.Sort([.. changed.Overrides!.Select(ShiftMapping.ToDto)]) };
+        var envelope = events.Create(EventTypes.ShiftOverrideSet, "shift_schedule", current.Id, new { Before = before, After = entry });
+        var version = await shifts.UpdateAsync(updated, envelope.OccurredAt, cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new VersionResponse(version);
+    }
+}
+
+internal sealed class RemoveShiftOverrideHandler(
+    IUnitOfWork unitOfWork,
+    IShiftRepository shifts,
+    IEventLog eventLog,
+    IEventFactory events) : ICommandHandler<RemoveShiftOverrideCommand, VersionResponse>
+{
+    public async Task<VersionResponse> HandleAsync(RemoveShiftOverrideCommand command, CancellationToken cancellationToken)
+    {
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var current = await ShiftRules.GetAtVersionAsync(shifts, command.ScheduleId, command.ExpectedVersion, cancellationToken);
+        var code = command.Code.Trim();
+        var before = current.Overrides?.FirstOrDefault(x => x.Date == command.Date && string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase))
+            ?? throw new NotFoundException($"{current.Code} has no override for shift {code} on {command.Date:yyyy-MM-dd}.");
+
+        await ShiftRules.EnsureNotApprovedAsync(shifts, current, command.Date, before.Code, cancellationToken);
+        var changed = current.ToDomain().WithOverride(command.Date, before.Code, null);
+        ShiftRules.ThrowIfProblems(changed);
+
+        var updated = current with { Overrides = ShiftMapping.Sort([.. changed.Overrides!.Select(ShiftMapping.ToDto)]) };
+        var envelope = events.Create(EventTypes.ShiftOverrideRemoved, "shift_schedule", current.Id, new { Before = before });
+        var version = await shifts.UpdateAsync(updated, envelope.OccurredAt, cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new VersionResponse(version);
     }
 }
 
@@ -112,7 +249,7 @@ internal sealed class UpdateShiftScheduleHandler(
         }
 
         var (name, description, definition) = ShiftRules.Validate(
-            new Validator(), current.Value.Code, command.Name, command.Description, command.CycleDays, command.CycleStart, command.Shifts);
+            new Validator(), current.Value.Code, command.Name, command.Description, command.CycleDays, command.CycleStart, command.Shifts, current.Value.Overrides);
         await ShiftRules.EnsureCrewsAsync(shifts, current.Value.SiteId, definition, cancellationToken);
 
         // Equipment that follows a schedule needs it: switch the equipment to another first (it is never left without working time).

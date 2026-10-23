@@ -1,4 +1,4 @@
-# Pulaski machine data demo (D-041): an MQTT broker and three PackML simulators publishing Sparkplug B.
+# Pulaski machine data demo (D-050): an MQTT broker and three PackML simulators publishing Sparkplug B.
 #
 #   docker compose -f deploy/simulator/compose.yaml up -d
 #

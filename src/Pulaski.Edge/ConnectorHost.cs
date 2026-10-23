@@ -5,7 +5,7 @@ using Pulaski.Contracts.MachineData;
 namespace Pulaski.Edge;
 
 /// <summary>
-/// Runs a connector for each active connection of the edge node (D-041), with the configuration from Pulaski, or the last one
+/// Runs a connector for each active connection of the edge node (D-050), with the configuration from Pulaski, or the last one
 /// kept in the buffer while Pulaski can't be reached. Refreshes the configuration regularly: a connection whose settings changed
 /// is restarted, a new tag is read from then on. Also reports the addresses its connections have seen.
 /// </summary>

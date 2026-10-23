@@ -7,7 +7,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Application.MachineData;
 
-/// <summary>A stop as coding sees it (D-041).</summary>
+/// <summary>A stop as coding sees it (D-050).</summary>
 public sealed record StopRecord(
     Guid Id, DateTimeOffset StartedAt, DateTimeOffset? EndedAt, Guid EquipmentId, string EquipmentCode, Guid? MappedReasonCodeId, Guid? OperatorReasonCodeId,
     bool IsMicroStop, string? Comment);
@@ -15,7 +15,7 @@ public sealed record StopRecord(
 /// <summary>A reason an operator may choose for a stop, with whether it needs a comment.</summary>
 public sealed record CodingReason(Guid Id, bool RequiresComment);
 
-/// <summary>Write side for coding stops (D-041).</summary>
+/// <summary>Write side for coding stops (D-050).</summary>
 public interface IStopRepository
 {
     Task<StopRecord?> GetStopForUpdateAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
@@ -27,7 +27,7 @@ public interface IStopRepository
         CancellationToken cancellationToken);
 }
 
-/// <summary>Read side for machine status and stops (D-041).</summary>
+/// <summary>Read side for machine status and stops (D-050).</summary>
 public interface IStopReadStore
 {
     /// <summary>Every piece of equipment of the site that tracks state, in tree order, with what it last reported.</summary>
@@ -47,7 +47,7 @@ public sealed record MachineStatusRow(MachineStatusDto Status, Guid? ConstraintE
 
 public sealed record StopFilter(Guid SiteId, Guid? EquipmentId, DateTimeOffset From, DateTimeOffset To, bool UncodedOnly, bool IncludeMicroStops);
 
-/// <summary>An operator codes a stop (D-041): confirms the reason its code maps to, or gives another. Both are kept (D-005).</summary>
+/// <summary>An operator codes a stop (D-050): confirms the reason its code maps to, or gives another. Both are kept (D-005).</summary>
 public sealed record CodeDowntimeCommand(Guid Id, DateTimeOffset StartedAt, Guid ReasonCodeId, string? Comment) : ICommand<DowntimeCodedResponse>;
 
 internal sealed class CodeDowntimeHandler(IUnitOfWork unitOfWork, IStopRepository stops, IEventLog eventLog, IEventFactory events, IRequestContext request, TimeProvider time)
@@ -102,7 +102,7 @@ public sealed record ListStopsQuery(StopFilter Filter) : IQuery<IReadOnlyList<Do
 
 public sealed record ListCodingReasonsQuery(Guid EquipmentId) : IQuery<IReadOnlyList<ReasonCodeDto>>;
 
-/// <summary>The status board: each machine's state, and each line's from its machines as it is set to (D-041).</summary>
+/// <summary>The status board: each machine's state, and each line's from its machines as it is set to (D-050).</summary>
 internal sealed class GetMachineStatusHandler(IStopReadStore store, TimeProvider time) : IQueryHandler<GetMachineStatusQuery, IReadOnlyList<MachineStatusDto>>
 {
     public async Task<IReadOnlyList<MachineStatusDto>> HandleAsync(GetMachineStatusQuery query, CancellationToken cancellationToken)

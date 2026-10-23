@@ -12,7 +12,7 @@
     <div>
         <h1 class="mb-1">People and crews</h1>
         <p class="text-muted mb-0">
-            Everyone whose time is recorded, and the crews they work in. A shift schedule names the crew on each shift, so a supervisor can check the
+            Everyone whose time is recorded, the crews they work in and the qualifications they hold. A shift schedule names the crew on each shift, so a supervisor can check the
             whole crew onto a line at once. People don't need a Pulaski sign-in; link one to let them clock themselves on.
         </p>
     </div>
@@ -32,6 +32,7 @@
 <nav class="inv-tabs" aria-label="People and crews">
     <button type="button" class="inv-tab btn btn-link @(_tab == "people" ? "active" : "")" @onclick="@(() => _tab = "people")">People <span class="small text-muted">@(_people?.Count(p => p.IsActive) ?? 0)</span></button>
     <button type="button" class="inv-tab btn btn-link @(_tab == "crews" ? "active" : "")" @onclick="@(() => _tab = "crews")">Crews <span class="small text-muted">@(_crews?.Count(c => c.IsActive) ?? 0)</span></button>
+    <button type="button" class="inv-tab btn btn-link @(_tab == "qualifications" ? "active" : "")" @onclick="@(() => _tab = "qualifications")">Qualifications</button>
 </nav>
 
 <ProblemAlert Error="_error" />
@@ -72,7 +73,7 @@ else if (_tab == "people")
         <fieldset class="view-only-scope" disabled="@(!CanManage)">
             <div class="table-panel">
                 <table class="table align-middle">
-                    <thead><tr><th>Employee no.</th><th>Name</th><th>Crew</th><th>Signs in as</th><th>Active</th><th></th></tr></thead>
+                    <thead><tr><th>Employee no.</th><th>Name</th><th>Crew</th><th>Signs in as</th><th>Badge</th><th>Active</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var p in _people)
                         {
@@ -91,6 +92,7 @@ else if (_tab == "people")
                                     </select>
                                 </td>
                                 <td><input class="form-control form-control-sm" maxlength="100" placeholder="No sign-in" aria-label="User name of @p.DisplayName" value="@edit.Username" @onchange="e => ChangePerson(p, x => x with { Username = NullIfBlank(Text(e)) })" /></td>
+                                <td class="text-nowrap"><BadgeCell Person="p" Badge="@_badges.FirstOrDefault(b => b.PersonId == p.Id && b.RevokedAt is null)" CanManage="CanManage" OnChanged="LoadAsync" /></td>
                                 <td><input class="form-check-input" type="checkbox" aria-label="@p.DisplayName active" checked="@edit.IsActive" @onchange="e => ChangePerson(p, x => x with { IsActive = e.Value is true })" /></td>
                                 <td class="text-end">
                                     @if (_personEdits.ContainsKey(p.Id))
@@ -107,7 +109,7 @@ else if (_tab == "people")
         </fieldset>
     }
 }
-else
+else if (_tab == "crews")
 {
     @if (CanManage)
     {
@@ -152,10 +154,15 @@ else
         </fieldset>
     }
 }
+else
+{
+    <QualificationsPanel @key="Sites.SiteId" SiteId="Sites.SiteId!.Value" People="_people" CanManage="CanManage" TimeZone="@Sites.Site?.TimeZone" />
+}
 
 @code {
     private string _tab = "people";
     private IReadOnlyList<PersonDto>? _people;
+    private IReadOnlyList<BadgeDto> _badges = [];
     private IReadOnlyList<CrewDto>? _crews;
     private readonly Dictionary<Guid, PersonDto> _personEdits = [];
     private readonly Dictionary<Guid, CrewDto> _crewEdits = [];
@@ -202,6 +209,7 @@ else
         {
             _crews = await Api.ListCrewsAsync(site);
             _people = await Api.ListPeopleAsync(site);
+            _badges = await Api.ListBadgesAsync(site);
             _personEdits.Clear();
             _crewEdits.Clear();
         }

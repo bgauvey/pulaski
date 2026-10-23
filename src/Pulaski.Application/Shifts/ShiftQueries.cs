@@ -37,7 +37,8 @@ internal sealed class PreviewShiftScheduleHandler(IShiftReadStore store, TimePro
             return new ShiftPreviewDto { Problems = ["Give each shift a start time as HH:mm."], TimeZone = timeZone };
         }
 
-        var schedule = ShiftMapping.ToDomain("PREVIEW", "Preview", request.CycleDays, request.CycleStart == default ? Today(zone) : request.CycleStart, request.Shifts);
+        var schedule = ShiftMapping.ToDomain("PREVIEW", "Preview", request.CycleDays, request.CycleStart == default ? Today(zone) : request.CycleStart, request.Shifts,
+            request.Overrides);
         var problems = schedule.Problems();
         if (problems.Count > 0)
         {
@@ -51,7 +52,7 @@ internal sealed class PreviewShiftScheduleHandler(IShiftReadStore store, TimePro
         {
             Shifts = [.. schedule.Expand(zone, start, end)
                 .Where(o => o.Start >= start)
-                .Select(o => new ShiftOccurrenceDto(o.Code, o.Name, o.ProductionDate, TimeZoneInfo.ConvertTime(o.Start, zone), TimeZoneInfo.ConvertTime(o.End, zone), o.Crew))],
+                .Select(o => new ShiftOccurrenceDto(o.Code, o.Name, o.ProductionDate, TimeZoneInfo.ConvertTime(o.Start, zone), TimeZoneInfo.ConvertTime(o.End, zone), o.Crew, o.IsOverride))],
             HoursPerCycle = ShiftMapping.Hours(schedule.HoursPerCycle),
             TimeZone = timeZone,
         };

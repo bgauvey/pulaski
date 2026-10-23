@@ -5,7 +5,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Testing;
 
-/// <summary>In-memory machine profiles and equipment machine data (D-041). Sites, reasons and equipment are added by the test.</summary>
+/// <summary>In-memory machine profiles and equipment machine data (D-050). Sites, reasons and equipment are added by the test.</summary>
 public sealed class InMemoryMachineData : IMachineDataRepository, IMachineDataReadStore
 {
     private readonly Lock _lock = new();

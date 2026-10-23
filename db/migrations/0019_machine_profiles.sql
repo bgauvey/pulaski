@@ -1,4 +1,4 @@
--- 0015 · Machine profiles and utilization reasons (D-041): profiles map a machine's state values to PackML and its
+-- 0019 · Machine profiles and utilization reasons (D-050): profiles map a machine's state values to PackML and its
 -- stop codes to utilization reasons; downtime reasons become utilization reasons with a class; equipment gets its
 -- profile, its line-state derivation and a 5-minute micro-stop default. Nothing used the planned columns, so they are
 -- reshaped in place. Re-runnable; no BEGIN/COMMIT (db/migrate.sh runs it in one transaction).

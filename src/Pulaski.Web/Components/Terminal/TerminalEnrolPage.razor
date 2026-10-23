@@ -1,0 +1,62 @@
+@page "/terminal/enrol"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout TerminalLayout
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+
+@* Enrolling a shop-floor terminal (D-049) with the one-time code a manager issued on Configure → Terminals. The terminal's
+   secret comes back once and is kept in this device's cookie. A plain form: setting the cookie needs a real request. *@
+<PageTitle>Enrol terminal · Pulaski</PageTitle>
+
+<h1 class="h3 mb-2">Enrol this terminal</h1>
+<p class="text-muted">
+    On a signed-in screen, open <strong>Configure → Terminals</strong>, click <strong>Enrolment code</strong> on this terminal's row and type the code here.
+    It works once, within 15 minutes.
+    @if (TerminalCookie.Get(HttpContext) is not null)
+    {
+        <span>This device is enrolled already; enrolling again replaces that.</span>
+    }
+</p>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger" role="alert">@_error</div>
+}
+
+<EditForm Model="Input" FormName="enrol" OnSubmit="EnrolAsync" method="post">
+    <label class="form-label" for="code">Enrolment code</label>
+    <InputText id="code" class="form-control form-control-lg terminal-badge mb-3" autocomplete="off" autofocus placeholder="K7QM2-XW9PD" @bind-Value="Input.Code" />
+    <button type="submit" class="btn btn-primary btn-lg w-100">Enrol</button>
+</EditForm>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private EnrolForm Input { get; set; } = new();
+
+    private string? _error;
+
+    private async Task EnrolAsync()
+    {
+        try
+        {
+            var enrolled = await Api.EnrolTerminalAsync(new EnrolTerminalRequest { Code = Input.Code });
+            TerminalCookie.Set(HttpContext, enrolled.Secret);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Detail ?? ex.Title;
+            return;
+        }
+
+        Navigation.NavigateTo(TerminalCookie.HomePath, forceLoad: true);
+    }
+
+    private sealed class EnrolForm
+    {
+        public string Code { get; set; } = "";
+    }
+}

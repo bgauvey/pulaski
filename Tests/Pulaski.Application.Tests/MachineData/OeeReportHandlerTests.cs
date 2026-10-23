@@ -8,7 +8,7 @@ using Pulaski.Testing;
 namespace Pulaski.Application.Tests.MachineData;
 
 /// <summary>
-/// The utilization and OEE report (D-043). The fixture's clock is Monday 2026-10-12 14:00 UTC, the end of the line's day shift:
+/// The utilization and OEE report (D-052). The fixture's clock is Monday 2026-10-12 14:00 UTC, the end of the line's day shift:
 /// a series line of two machines, one jammed for an hour, the other in a planned changeover for half an hour.
 /// </summary>
 public class OeeReportHandlerTests

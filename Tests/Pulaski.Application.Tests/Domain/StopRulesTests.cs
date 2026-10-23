@@ -2,7 +2,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Application.Tests.Domain;
 
-/// <summary>Stops from state changes, OEE categories and line state (D-005, D-041).</summary>
+/// <summary>Stops from state changes, OEE categories and line state (D-005, D-050).</summary>
 public class StopRulesTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 10, 18, 8, 0, 0, TimeSpan.Zero);

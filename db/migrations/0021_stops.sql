@@ -1,4 +1,4 @@
--- 0017 · Stops (D-041): machine stops in ts.downtime are opened and closed by machine data ingest and coded by operators, so
+-- 0021 · Stops (D-050): machine stops in ts.downtime are opened and closed by machine data ingest and coded by operators, so
 -- the app may update them; each keeps the unit mode it stopped in and who coded it. A machine's live state points at its open
 -- stop. Permissions machines.view and downtime.code. Re-runnable; no BEGIN/COMMIT (db/migrate.sh runs it in one transaction).
 

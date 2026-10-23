@@ -5,7 +5,7 @@ using Pulaski.Domain.MachineData;
 namespace Pulaski.Application.MachineData;
 
 /// <summary>
-/// One entry of a machine's definitions (D-041): a value of its state tag, or one of its stop, alarm or warning codes.
+/// One entry of a machine's definitions (D-050): a value of its state tag, or one of its stop, alarm or warning codes.
 /// <see cref="Problems"/> holds what the source couldn't read; the row is then an error.
 /// </summary>
 public sealed record ProfileImportRow
@@ -32,7 +32,7 @@ public sealed record ProfileImportRow
 public sealed record ProfileImportSource(IReadOnlyList<ProfileImportRow> Rows, IReadOnlyList<string> Problems);
 
 /// <summary>
-/// Reads a machine's definitions from CSV (D-041). The first line names the columns, in any order and case:
+/// Reads a machine's definitions from CSV (D-050). The first line names the columns, in any order and case:
 /// kind, value and name are required; packml_state is required on state rows; category and reason are optional.
 /// </summary>
 public static class MachineProfileCsv

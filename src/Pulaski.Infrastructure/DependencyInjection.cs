@@ -60,6 +60,11 @@ public static class DependencyInjection
         services.AddSingleton<DatabaseMaintenance>();
         services.AddSingleton<IMaterialReadStore, MaterialQueries>();
         services.AddSingleton<IShiftReadStore, ShiftQueries>();
+        services.AddSingleton<ICalendarExceptionReadStore, CalendarExceptionQueries>();
+        services.AddSingleton<IProductionReportReadStore, ProductionReportQueries>();
+        services.AddSingleton<IRunHistoryReadStore, RunHistoryQueries>();
+        services.AddSingleton<IQualificationReadStore, QualificationQueries>();
+        services.AddSingleton<ITerminalReadStore, TerminalQueries>();
         services.AddSingleton<ILaborReadStore, LaborQueries>();
         services.AddSingleton<IMachineDataReadStore, MachineDataQueries>();
         services.AddSingleton<IEdgeReadStore, EdgeQueries>();
@@ -82,6 +87,9 @@ public static class DependencyInjection
         services.AddScoped<IExecutionRepository, ExecutionRepository>();
         services.AddScoped<ISecurityRepository, SecurityRepository>();
         services.AddScoped<IShiftRepository, ShiftRepository>();
+        services.AddScoped<ICalendarExceptionRepository, CalendarExceptionRepository>();
+        services.AddScoped<IQualificationRepository, QualificationRepository>();
+        services.AddScoped<ITerminalRepository, TerminalRepository>();
         services.AddScoped<ILaborRepository, LaborRepository>();
         services.AddScoped<IMachineDataRepository, MachineDataRepository>();
         services.AddScoped<IEdgeRepository, EdgeRepository>();

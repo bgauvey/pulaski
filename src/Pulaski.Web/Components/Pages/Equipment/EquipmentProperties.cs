@@ -71,7 +71,7 @@ public static class EquipmentProperties
     public const string StateDerivationKey = "stateDerivation";
     public const string ConstraintKey = "constraintMachine";
 
-    /// <summary>The rows saved through the equipment's machine data (D-041), apart from the rest of it.</summary>
+    /// <summary>The rows saved through the equipment's machine data (D-050), apart from the rest of it.</summary>
     public static IReadOnlySet<string> MachineDataKeys { get; } = new HashSet<string>([MachineProfileKey, MicroStopKey, StateDerivationKey, ConstraintKey]);
     private const string Inherit = "inherit";
     private const string AroundTheClock = "around_the_clock";
@@ -171,7 +171,7 @@ public static class EquipmentProperties
         return items;
     }
 
-    /// <summary>The machine data rows (D-041): its profile, where its state comes from, and its micro-stop threshold.</summary>
+    /// <summary>The machine data rows (D-050): its profile, where its state comes from, and its micro-stop threshold.</summary>
     private static IEnumerable<PropertyItem> MachineDataItems(EquipmentDto e, EquipmentTree tree, IReadOnlyList<MachineProfileDto> profiles)
     {
         var own = profiles.Where(p => p.SiteId == e.SiteId && (p.IsActive || p.Id == e.MachineProfileId));

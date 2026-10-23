@@ -5,7 +5,7 @@ namespace Pulaski.Application.Abstractions;
 /// <summary>One record of a CSV file and the line it starts on.</summary>
 public sealed record CsvRecord(int Line, IReadOnlyList<string> Fields);
 
-/// <summary>Reads CSV files for the imports (D-034, D-041): a comma or semicolon separates fields, quotes follow RFC 4180.</summary>
+/// <summary>Reads CSV files for the imports (D-034, D-050): a comma or semicolon separates fields, quotes follow RFC 4180.</summary>
 public static class CsvText
 {
     /// <summary>A header as a column name: trimmed, lower case, spaces and dashes as '_'.</summary>

@@ -24,7 +24,7 @@ public sealed record ListEdgeNodesQuery(Guid SiteId) : IQuery<IReadOnlyList<Edge
 
 public sealed record GetEdgeNodeQuery(Guid Id) : IQuery<EdgeNodeDetailDto>;
 
-/// <summary>What an edge node reads (D-041), for the edge itself.</summary>
+/// <summary>What an edge node reads (D-050), for the edge itself.</summary>
 public sealed record GetEdgeConfigQuery(Guid Id) : IQuery<EdgeConfigDto>;
 
 internal sealed class ListEdgeNodesHandler(IEdgeReadStore store) : IQueryHandler<ListEdgeNodesQuery, IReadOnlyList<EdgeNodeDto>>

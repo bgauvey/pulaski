@@ -81,6 +81,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
         services.AddApplication();
         services.AddInfrastructure(AppConnectionString);
         services.AddSingleton<IRequestContext>(_actor);
+
+        // The API keys badge hashes with its signing key (D-049); here a stand-in does.
+        services.AddSingleton<Application.Labor.IBadgeHasher>(new ReversingBadgeHasher());
         Services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 

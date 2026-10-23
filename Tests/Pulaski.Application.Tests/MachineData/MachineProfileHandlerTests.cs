@@ -7,7 +7,7 @@ using Pulaski.Testing;
 
 namespace Pulaski.Application.Tests.MachineData;
 
-/// <summary>Machine profiles, their import, and the machine data on equipment (D-041).</summary>
+/// <summary>Machine profiles, their import, and the machine data on equipment (D-050).</summary>
 public class MachineProfileHandlerTests
 {
     private readonly HandlerFixture _f = new();

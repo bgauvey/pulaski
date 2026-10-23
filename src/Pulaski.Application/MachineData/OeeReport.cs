@@ -7,7 +7,7 @@ using Pulaski.Domain.MachineData;
 namespace Pulaski.Application.MachineData;
 
 /// <summary>
-/// Utilization and OEE between two production days (D-043), for a piece of equipment and everything below it that tracks state,
+/// Utilization and OEE between two production days (D-052), for a piece of equipment and everything below it that tracks state,
 /// or the whole site: by equipment, shift and product, and where each one's time went.
 /// </summary>
 public sealed record GetOeeReportQuery(Guid SiteId, DateOnly From, DateOnly To, Guid? EquipmentId) : IQuery<OeeReportDto>;

@@ -10,7 +10,7 @@ using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
 
-/// <summary>Machine profiles and the machine data on equipment (D-041). Both are part of maintaining equipment.</summary>
+/// <summary>Machine profiles and the machine data on equipment (D-050). Both are part of maintaining equipment.</summary>
 internal static class MachineDataEndpoints
 {
     /// <summary>Largest CSV file accepted, in bytes (characters, once read).</summary>

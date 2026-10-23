@@ -92,6 +92,84 @@ internal static class LaborEndpoints
             TypedResults.Ok(await handler.HandleAsync(new CheckOutCommand(request.EquipmentId, request.EndedAt), ct)))
         .RequirePermission(Permissions.LaborRecord, Site.FromBody<CheckOutRequest>(SiteOf.Equipment, r => r.EquipmentId));
 
+        // ---- Breaks (D-047) ----
+        labor.MapPost("/me/breaks", async Task<Ok<LaborResponse>> (StartBreakRequest request, ICommandHandler<StartBreakCommand, LaborResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new StartBreakCommand(null, request.IsPaid, request.StartedAt, request.EndedAt, request.Note), ct)))
+        .RequirePermission(Permissions.LaborRecordOwn);
+
+        labor.MapPost("/me/breaks/{id:guid}/end", async Task<Ok<LaborResponse>> (Guid id, EndBreakRequest request, ICommandHandler<EndBreakCommand, LaborResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new EndBreakCommand(id, request.Version, request.EndedAt, OwnOnly: true), ct)))
+        .RequirePermission(Permissions.LaborRecordOwn, Site.Of(SiteOf.LaborBreak));
+
+        labor.MapPost("/breaks", async Task<Ok<LaborResponse>> (StartBreakRequest request, ICommandHandler<StartBreakCommand, LaborResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new StartBreakCommand(request.PersonId ?? Guid.Empty, request.IsPaid, request.StartedAt, request.EndedAt, request.Note), ct)))
+        .RequirePermission(Permissions.LaborRecord, Site.FromBody<StartBreakRequest>(SiteOf.Person, r => r.PersonId));
+
+        labor.MapPost("/breaks/{id:guid}/end", async Task<Ok<LaborResponse>> (Guid id, EndBreakRequest request, ICommandHandler<EndBreakCommand, LaborResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new EndBreakCommand(id, request.Version, request.EndedAt, OwnOnly: false), ct)))
+        .RequirePermission(Permissions.LaborRecord, Site.Of(SiteOf.LaborBreak));
+
+        labor.MapPut("/breaks/{id:guid}", async Task<Ok<LaborResponse>> (Guid id, UpdateBreakRequest request, ICommandHandler<UpdateBreakCommand, LaborResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new UpdateBreakCommand(id, request.Version, request.StartedAt, request.EndedAt, request.IsPaid, request.Note), ct)))
+        .RequirePermission(Permissions.LaborRecord, Site.Of(SiteOf.LaborBreak));
+
+        labor.MapPost("/breaks/{id:guid}/correct", async Task<Ok<LaborResponse>> (Guid id, CorrectBreakRequest request, ICommandHandler<CorrectBreakCommand, LaborResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CorrectBreakCommand(id, request.Void, request.StartedAt, request.EndedAt, request.IsPaid, request.Note), ct)))
+        .RequirePermission(Permissions.LaborApprove, Site.Of(SiteOf.LaborBreak));
+
+        // ---- Qualifications (D-048) ----
+        var qualifications = routes.MapGroup("/qualifications").WithTags("Labor");
+
+        qualifications.MapGet("/", async Task<Ok<IReadOnlyList<QualificationDto>>> (Guid siteId, IQueryHandler<ListQualificationsQuery, IReadOnlyList<QualificationDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListQualificationsQuery(siteId), ct)))
+        .RequireAny(Site.Query(), Permissions.LaborView, Permissions.EquipmentView);
+
+        qualifications.MapPost("/", async Task<Created<CreatedResponse>> (CreateQualificationRequest request, ICommandHandler<CreateQualificationCommand, CreatedResponse> handler, CancellationToken ct) =>
+        {
+            var created = await handler.HandleAsync(new CreateQualificationCommand(request.SiteId, request.Code, request.Name, request.Description, request.ValidityMonths), ct);
+            return TypedResults.Created($"/api/qualifications/{created.Id}", created);
+        })
+        .RequirePermission(Permissions.People, Site.FromBody<CreateQualificationRequest>(SiteOf.Equipment, r => r.SiteId));
+
+        qualifications.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (Guid id, UpdateQualificationRequest request, ICommandHandler<UpdateQualificationCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new UpdateQualificationCommand(id, request.Version, request.Name, request.Description, request.ValidityMonths, request.IsActive), ct)))
+        .RequirePermission(Permissions.People, Site.Of(SiteOf.Qualification));
+
+        qualifications.MapGet("/grants", async Task<Ok<IReadOnlyList<QualificationGrantDto>>> (
+            Guid siteId, Guid? personId, Guid? qualificationId, int? expiringWithinDays,
+            IQueryHandler<ListQualificationGrantsQuery, IReadOnlyList<QualificationGrantDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListQualificationGrantsQuery(siteId, personId, qualificationId, expiringWithinDays), ct)))
+        .RequireAny(Site.Query(), Permissions.LaborView);
+
+        qualifications.MapPost("/grants", async Task<Created<CreatedResponse>> (GrantQualificationRequest request, ICommandHandler<GrantQualificationCommand, CreatedResponse> handler, CancellationToken ct) =>
+        {
+            var created = await handler.HandleAsync(new GrantQualificationCommand(request.PersonId, request.QualificationId, request.ValidFrom, request.ExpiresOn, request.Note), ct);
+            return TypedResults.Created($"/api/qualifications/grants/{created.Id}", created);
+        })
+        .RequirePermission(Permissions.People, Site.FromBody<GrantQualificationRequest>(SiteOf.Person, r => r.PersonId));
+
+        qualifications.MapPut("/grants/{id:guid}", async Task<Ok<VersionResponse>> (
+            Guid id, UpdateQualificationGrantRequest request, ICommandHandler<UpdateQualificationGrantCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new UpdateQualificationGrantCommand(id, request.Version, request.ValidFrom, request.ExpiresOn, request.Note), ct)))
+        .RequirePermission(Permissions.People, Site.Of(SiteOf.QualificationGrant));
+
+        qualifications.MapPost("/grants/{id:guid}/revoke", async Task<Ok<VersionResponse>> (
+            Guid id, RevokeQualificationGrantRequest request, ICommandHandler<RevokeQualificationGrantCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RevokeQualificationGrantCommand(id, request.Version, request.Reason), ct)))
+        .RequirePermission(Permissions.People, Site.Of(SiteOf.QualificationGrant));
+
+        routes.MapGet("/equipment/{id:guid}/qualifications", async Task<Ok<EquipmentQualificationsDto>> (
+            Guid id, IQueryHandler<GetEquipmentQualificationsQuery, EquipmentQualificationsDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetEquipmentQualificationsQuery(id), ct)))
+        .WithTags("Labor")
+        .RequireAny(Site.Of(SiteOf.Equipment), Permissions.EquipmentView, Permissions.LaborView);
+
+        routes.MapPut("/equipment/{id:guid}/qualifications", async Task<Ok<VersionResponse>> (
+            Guid id, SetEquipmentQualificationRequest request, ICommandHandler<SetEquipmentQualificationCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetEquipmentQualificationCommand(id, request.QualificationId, request.IsRequired), ct)))
+        .WithTags("Labor")
+        .RequirePermission(Permissions.Equipment, Site.Of(SiteOf.Equipment));
+
         var sites = labor.MapGroup("/sites/{siteId:guid}");
 
         // Who is on each line: the Labor screen, and the floor for whoever clocks on there.

@@ -12,7 +12,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Infrastructure.Tests;
 
-/// <summary>Utilization reasons, machine profiles and equipment machine data end to end (D-041): real SQL, as the application login.</summary>
+/// <summary>Utilization reasons, machine profiles and equipment machine data end to end (D-050): real SQL, as the application login.</summary>
 [Collection(DatabaseTests.Name)]
 public sealed class MachineDataTests(DatabaseFixture db)
 {

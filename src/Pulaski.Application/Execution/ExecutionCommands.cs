@@ -40,7 +40,7 @@ public sealed record PartialBatchInput(decimal Quantity, Guid LocationId, string
 public sealed record ReopenJobCommand(Guid JobId, long ExpectedVersion) : ICommand<ExecutionResponse>;
 
 /// <summary>Sets a site's tolerances for production reporting (D-035).</summary>
-public sealed record SetExecutionPolicyCommand(Guid SiteId, decimal RateTolerancePct, decimal ConsumptionTolerancePct) : ICommand<ExecutionPolicyDto>;
+public sealed record SetExecutionPolicyCommand(Guid SiteId, long ExpectedVersion, decimal RateTolerancePct, decimal ConsumptionTolerancePct) : ICommand<ExecutionPolicyDto>;
 
 /// <summary>A job locked for an execution change, with its work order and the order's open jobs (D-017 order: lines, order, jobs).</summary>
 internal sealed record LockedJob(
@@ -505,17 +505,31 @@ internal sealed class SetExecutionPolicyHandler(
             throw new NotFoundException($"Site {command.SiteId} not found.");
         }
 
-        var before = await execution.GetPolicyAsync(command.SiteId, cancellationToken);
+        var current = await execution.GetPolicyForUpdateAsync(command.SiteId, cancellationToken);
+        if ((current?.Version ?? 0) != command.ExpectedVersion)
+        {
+            throw new ConflictException("The site's reporting tolerances were changed by someone else. Reload and try again.");
+        }
+
+        var before = current?.Value ?? ExecutionPolicy.Default;
         var after = new ExecutionPolicy(command.RateTolerancePct, command.ConsumptionTolerancePct);
+        if (current is not null && before == after)
+        {
+            return Dto(command.SiteId, after, current.Version);
+        }
+
         var envelope = events.Create(EventTypes.ExecutionPolicyChanged, "equipment", command.SiteId, new { Before = before, After = after });
-        await execution.UpsertPolicyAsync(command.SiteId, after, timeProvider.GetUtcNow(), cancellationToken);
+        var version = await execution.UpsertPolicyAsync(command.SiteId, after, timeProvider.GetUtcNow(), cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new ExecutionPolicyDto
-        {
-            SiteId = command.SiteId,
-            RateTolerancePct = after.RateTolerancePct,
-            ConsumptionTolerancePct = after.ConsumptionTolerancePct,
-        };
+        return Dto(command.SiteId, after, version);
     }
+
+    private static ExecutionPolicyDto Dto(Guid siteId, ExecutionPolicy policy, long version) => new()
+    {
+        SiteId = siteId,
+        RateTolerancePct = policy.RateTolerancePct,
+        ConsumptionTolerancePct = policy.ConsumptionTolerancePct,
+        Version = version,
+    };
 }

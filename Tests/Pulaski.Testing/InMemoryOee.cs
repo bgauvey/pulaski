@@ -4,7 +4,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Testing;
 
-/// <summary>In-memory machine history for the utilization and OEE report (D-043). The test adds equipment, states, stops, runs and counts.</summary>
+/// <summary>In-memory machine history for the utilization and OEE report (D-052). The test adds equipment, states, stops, runs and counts.</summary>
 public sealed class InMemoryOee : IOeeReadStore
 {
     private readonly Lock _lock = new();

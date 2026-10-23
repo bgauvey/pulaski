@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Pulaski.Connectors;
 
-/// <summary>Whether a sample can be trusted (D-041). <see cref="Bad"/> means no signal: the source went away or reports the value as bad.</summary>
+/// <summary>Whether a sample can be trusted (D-050). <see cref="Bad"/> means no signal: the source went away or reports the value as bad.</summary>
 public enum SampleQuality
 {
     Good,
@@ -10,7 +10,7 @@ public enum SampleQuality
 }
 
 /// <summary>
-/// One value a connector read (D-041). The address is the connector's own (for Sparkplug B, <c>group/node[/device]:metric</c>);
+/// One value a connector read (D-050). The address is the connector's own (for Sparkplug B, <c>group/node[/device]:metric</c>);
 /// the value is a number, boolean or string as the source sent it, null when it has none.
 /// </summary>
 public sealed record ConnectorSample(string Address, object? Value, DateTimeOffset Timestamp, SampleQuality Quality = SampleQuality.Good);
@@ -37,7 +37,7 @@ public sealed record ConnectorSettings(string ConnectionCode, IReadOnlyDictionar
 }
 
 /// <summary>
-/// A connector (D-041): connects to one data source and publishes samples until stopped. It knows nothing about PackML,
+/// A connector (D-050): connects to one data source and publishes samples until stopped. It knows nothing about PackML,
 /// equipment or OEE; the edge host binds addresses to equipment. A connector reconnects by itself when its source drops,
 /// and reports the addresses it lost as <see cref="SampleQuality.Bad"/>.
 /// </summary>

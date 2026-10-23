@@ -4,7 +4,7 @@ using Pulaski.Contracts.MachineData;
 
 namespace Pulaski.Web.Services.MachineData;
 
-/// <summary>Labels, settings and the configuration snippet for the edge node screens (D-041).</summary>
+/// <summary>Labels, settings and the configuration snippet for the edge node screens (D-050).</summary>
 public static class EdgeView
 {
     /// <summary>The roles a tag can take today, with what each carries.</summary>

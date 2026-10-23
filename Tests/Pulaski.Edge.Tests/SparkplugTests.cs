@@ -4,7 +4,7 @@ using Pulaski.Connectors.Sparkplug;
 
 namespace Pulaski.Edge.Tests;
 
-/// <summary>The Sparkplug B payload codec and the host application's handling of births, data and deaths (D-041).</summary>
+/// <summary>The Sparkplug B payload codec and the host application's handling of births, data and deaths (D-050).</summary>
 public class SparkplugTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 10, 18, 8, 0, 0, TimeSpan.Zero);

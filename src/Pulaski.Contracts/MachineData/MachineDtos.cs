@@ -1,6 +1,6 @@
 namespace Pulaski.Contracts.MachineData;
 
-/// <summary>A piece of equipment on the machine status board (D-041): its live state, or its state derived from its machines.</summary>
+/// <summary>A piece of equipment on the machine status board (D-050): its live state, or its state derived from its machines.</summary>
 public sealed record MachineStatusDto
 {
     public required Guid EquipmentId { get; init; }
@@ -53,7 +53,7 @@ public sealed record MachineOpenStopDto
     public bool IsCoded { get; init; }
 }
 
-/// <summary>One stop of a machine (D-041), with the reason its stop code maps to and the one an operator gave.</summary>
+/// <summary>One stop of a machine (D-050), with the reason its stop code maps to and the one an operator gave.</summary>
 public sealed record DowntimeDto
 {
     public required Guid Id { get; init; }

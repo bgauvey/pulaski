@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace Pulaski.Domain.MachineData;
 
-/// <summary>What a utilization reason means for OEE (D-041): values of <c>core.reason_code.utilization_class</c>.</summary>
+/// <summary>What a utilization reason means for OEE (D-050): values of <c>core.reason_code.utilization_class</c>.</summary>
 public static class UtilizationClasses
 {
     /// <summary>Producing, or running slow: run time, whose losses show in performance and quality.</summary>
@@ -17,7 +17,7 @@ public static class UtilizationClasses
     public static IReadOnlyList<string> All { get; } = [Runtime, Downtime, Planned];
 }
 
-/// <summary>The kinds of code a machine reports (D-041): PackML <c>Admin.StopReason</c>, <c>Admin.Alarm</c> and <c>Admin.Warning</c> ids.</summary>
+/// <summary>The kinds of code a machine reports (D-050): PackML <c>Admin.StopReason</c>, <c>Admin.Alarm</c> and <c>Admin.Warning</c> ids.</summary>
 public static class StopCodeKinds
 {
     public const string StopReason = "stop_reason";
@@ -27,7 +27,7 @@ public static class StopCodeKinds
     public static IReadOnlyList<string> All { get; } = [StopReason, Alarm, Warning];
 }
 
-/// <summary>Where a piece of equipment's state comes from (D-041).</summary>
+/// <summary>Where a piece of equipment's state comes from (D-050).</summary>
 public static class StateDerivations
 {
     /// <summary>Its own state tag.</summary>
@@ -82,7 +82,7 @@ public static class PackMlStates
     }
 }
 
-/// <summary>Rules for machine profiles and the machine data on equipment (D-041).</summary>
+/// <summary>Rules for machine profiles and the machine data on equipment (D-050).</summary>
 public static partial class MachineProfileRules
 {
     /// <summary>A new piece of equipment's micro-stop threshold.</summary>

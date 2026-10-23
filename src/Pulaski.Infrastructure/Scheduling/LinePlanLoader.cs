@@ -103,7 +103,7 @@ internal static class LinePlanLoader
     // The nearest equipment, the line first, that doesn't inherit its working time (D-038).
     private const string CalendarSource = """
         SELECT e.code AS source_code, e.calendar_mode AS mode, s.code, s.name, s.cycle_days, s.cycle_start, s.shifts::text AS shifts_json,
-               site.time_zone
+               s.overrides::text AS overrides_json, site.time_zone
         FROM core.equipment_closure c
         JOIN core.equipment e ON e.id = c.ancestor_id
         LEFT JOIN core.shift_schedule s ON s.id = e.shift_schedule_id
@@ -119,13 +119,87 @@ internal static class LinePlanLoader
         FROM core.calendar_exception x
         JOIN core.equipment_closure c ON c.ancestor_id = x.scope_equipment_id
         WHERE c.descendant_id = @LineId
+          AND x.is_active
           AND x.ends_at > @From
           AND x.starts_at < @To
         ORDER BY x.starts_at
         """;
 
-    /// <summary>Null if the equipment does not exist. Pass the command's transaction, or null for a plain read.</summary>
+    // The process links into the jobs (D-046): each job of the same work order on the link's earlier operation, with its line,
+    // whether it waits on a group, its window and what has happened to it.
+    private const string Links = """
+        SELECT d.id AS link_id, j.id AS job_id, u.id AS from_job_id, d.dependency_type, d.lag,
+               fo.operation_number AS from_operation_number, fo.name AS from_operation_name,
+               u.status AS from_status, u.equipment_id AS from_equipment_id, (ue.is_schedulable AND NOT ue.can_run_job) AS from_is_on_group,
+               u.earliest_start AS from_earliest_start, u.latest_end AS from_latest_end,
+               r.started_at AS from_started_at, r.ended_at AS from_ended_at
+        FROM core.job j
+        JOIN core.process_dependency d ON d.to_operation_id = j.process_operation_id
+        JOIN core.process_operation fo ON fo.id = d.from_operation_id
+        JOIN core.job u ON u.work_order_id = j.work_order_id AND u.process_operation_id = d.from_operation_id AND u.status <> 'cancelled'
+        LEFT JOIN core.equipment ue ON ue.id = u.equipment_id
+        LEFT JOIN LATERAL (
+            SELECT min(jr.started_at) AS started_at, max(jr.ended_at) AS ended_at FROM core.job_run jr WHERE jr.job_id = u.id
+        ) r ON true
+        WHERE j.id = ANY(@JobIds)
+        """;
+
+    /// <summary>The most lines a linked projection loads, so a sprawling site can't make one timeline load everything.</summary>
+    private const int MaxLinkedLines = 40;
+
+    private static readonly string[] OpenStatuses = ["planned", "dispatched", "firmed", "running", "paused"];
+
+    /// <summary>
+    /// The line's plan with the lines it is linked to (D-046): following each open job's process links to the jobs it follows,
+    /// and those jobs' lines' links in turn, so the projection can hold every job until the work it follows allows. Null if the
+    /// equipment does not exist. Pass the command's transaction, or null for a plain read.
+    /// </summary>
     public static async Task<LinePlanSource?> LoadAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction? transaction,
+        Guid lineId,
+        DateTimeOffset windowStart,
+        DateTimeOffset windowEnd,
+        CancellationToken cancellationToken)
+    {
+        var root = await LoadLineAsync(connection, transaction, lineId, windowStart, windowEnd, cancellationToken);
+        if (root is null || root.Line.IsGroup)
+        {
+            return root;
+        }
+
+        var lines = new Dictionary<Guid, LinePlanSource> { [lineId] = root };
+        var links = new List<JobLinkRow>();
+        var pending = new Queue<LinePlanSource>([root]);
+        while (pending.TryDequeue(out var source))
+        {
+            Guid[] jobIds = [.. source.Jobs.Where(j => j.ProcessOperationId is not null && j.WorkOrderId is not null).Select(j => j.JobId)];
+            if (jobIds.Length == 0)
+            {
+                continue;
+            }
+
+            var found = (await connection.QueryAsync<JobLinkRow>(new CommandDefinition(Links, new { JobIds = jobIds }, transaction, cancellationToken: cancellationToken))).AsList();
+            links.AddRange(found);
+            foreach (var upstream in found
+                .Where(l => !l.FromIsOnGroup && l.FromEquipmentId is not null && OpenStatuses.Contains(l.FromStatus))
+                .Select(l => l.FromEquipmentId!.Value)
+                .Distinct())
+            {
+                if (lines.Count < MaxLinkedLines && !lines.ContainsKey(upstream)
+                    && await LoadLineAsync(connection, transaction, upstream, windowStart, windowEnd, cancellationToken) is { Line.IsGroup: false } loaded)
+                {
+                    lines[upstream] = loaded;
+                    pending.Enqueue(loaded);
+                }
+            }
+        }
+
+        return root with { Links = links, Upstream = [.. lines.Values.Where(l => l.Line.Id != lineId)] };
+    }
+
+    /// <summary>One line's plan inputs, without its links.</summary>
+    private static async Task<LinePlanSource?> LoadLineAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction? transaction,
         Guid lineId,
@@ -185,7 +259,8 @@ internal static class LinePlanLoader
             case { Mode: CalendarModes.AroundTheClock }:
                 return (true, [new WindowRow { StartsAt = DateTimeOffset.MinValue, EndsAt = DateTimeOffset.MaxValue }], $"Around the clock, from {calendar.SourceCode}");
             case { Mode: CalendarModes.Schedule, Code: { } code, TimeZone: { } timeZone }:
-                var schedule = ShiftMapping.ToDomain(code, calendar.Name ?? code, calendar.CycleDays, calendar.CycleStart, ShiftSql.Read(calendar.ShiftsJson ?? "[]"));
+                var schedule = ShiftMapping.ToDomain(code, calendar.Name ?? code, calendar.CycleDays, calendar.CycleStart, ShiftSql.Read(calendar.ShiftsJson ?? "[]"),
+                    ShiftSql.ReadOverrides(calendar.OverridesJson));
                 var windows = schedule.Expand(TimeZoneInfo.FindSystemTimeZoneById(timeZone), from, to.AddDays(31))
                     .Select(o => new WindowRow { StartsAt = o.Start, EndsAt = o.End })
                     .ToList();
@@ -204,6 +279,7 @@ internal static class LinePlanLoader
         public int CycleDays { get; init; }
         public DateOnly CycleStart { get; init; }
         public string? ShiftsJson { get; init; }
+        public string? OverridesJson { get; init; }
         public string? TimeZone { get; init; }
     }
 }

@@ -303,13 +303,76 @@ public sealed record ExecutionPolicyDto
 
     /// <summary>True when the site has no policy of its own and uses the defaults.</summary>
     public bool IsDefault { get; init; }
+
+    /// <summary>0 while the site uses the defaults.</summary>
+    public long Version { get; init; }
 }
 
+/// <summary>Version 0 when the site still uses the default tolerances.</summary>
 public sealed record SetExecutionPolicyRequest
 {
+    public long Version { get; init; }
     public decimal RateTolerancePct { get; init; } = 110m;
     public decimal ConsumptionTolerancePct { get; init; } = 110m;
 }
 
 /// <summary>A partial batch's decision (D-036) and what it did.</summary>
 public sealed record PartialBatchDecisionResponse(Guid Id, string Status, IReadOnlyList<string> Notes);
+
+/// <summary>
+/// Good and scrap by shift (D-044) for a site's production days <see cref="From"/> to <see cref="To"/>: one row per production
+/// day, shift, line, job and unit. <see cref="Jobs"/> checks each job's rows against its runs' totals.
+/// </summary>
+public sealed record ProductionByShiftDto
+{
+    public required Guid SiteId { get; init; }
+    public DateOnly From { get; init; }
+    public DateOnly To { get; init; }
+    public string TimeZone { get; init; } = "";
+    public IReadOnlyList<ShiftProductionRowDto> Rows { get; init; } = [];
+    public IReadOnlyList<ShiftProductionJobDto> Jobs { get; init; } = [];
+}
+
+/// <summary>
+/// What one job made on one line in one shift. With no <see cref="ShiftCode"/>, what it made on that production day outside any
+/// shift (or on a line without shifts). Times are in the site's time zone.
+/// </summary>
+public sealed record ShiftProductionRowDto
+{
+    public DateOnly ProductionDate { get; init; }
+    public string? ScheduleCode { get; init; }
+    public string? ShiftCode { get; init; }
+    public string? ShiftName { get; init; }
+    public string? Crew { get; init; }
+    public DateTimeOffset? ShiftStart { get; init; }
+    public DateTimeOffset? ShiftEnd { get; init; }
+    public Guid EquipmentId { get; init; }
+    public string LineCode { get; init; } = "";
+    public Guid JobId { get; init; }
+    public string JobNumber { get; init; } = "";
+    public string? WorkOrderNumber { get; init; }
+    public string MaterialCode { get; init; } = "";
+    public string MaterialName { get; init; } = "";
+    public string UomCode { get; init; } = "";
+    public decimal GoodQty { get; init; }
+    public decimal ScrapQty { get; init; }
+
+    /// <summary>How many production reports the row adds up.</summary>
+    public int Reports { get; init; }
+}
+
+/// <summary>
+/// A job's good and scrap in the report against what its runs hold (the job page's totals). <see cref="MatchesRuns"/> when they
+/// are equal: every report of the job falls in the report's days. Otherwise the rest was reported on other days.
+/// </summary>
+public sealed record ShiftProductionJobDto
+{
+    public Guid JobId { get; init; }
+    public string JobNumber { get; init; } = "";
+    public string UomCode { get; init; } = "";
+    public decimal GoodQty { get; init; }
+    public decimal ScrapQty { get; init; }
+    public decimal RunGoodQty { get; init; }
+    public decimal RunScrapQty { get; init; }
+    public bool MatchesRuns { get; init; }
+}

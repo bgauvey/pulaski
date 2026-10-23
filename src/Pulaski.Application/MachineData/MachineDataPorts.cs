@@ -5,23 +5,23 @@ namespace Pulaski.Application.MachineData;
 
 public sealed record MachineProfileRecord(Guid Id, Guid SiteId, string Code, string Name, string? Vendor, string? Model, string? Description, bool IsActive);
 
-/// <summary>A value of a profile's state tag and the PackML state it means (D-041).</summary>
+/// <summary>A value of a profile's state tag and the PackML state it means (D-050).</summary>
 public sealed record ProfileStateRecord(Guid ProfileId, int RawValue, string Name, int PackMlState, Guid? ReasonCodeId, bool IsActive);
 
-/// <summary>A stop, alarm or warning code of a profile and its utilization reason (D-041).</summary>
+/// <summary>A stop, alarm or warning code of a profile and its utilization reason (D-050).</summary>
 public sealed record ProfileCodeRecord(Guid ProfileId, string Kind, int RawValue, string Message, string? Category, Guid? ReasonCodeId, bool IsActive);
 
 /// <summary>A utilization reason a profile at a site may use: an active one for every site or for that site.</summary>
 public sealed record UtilizationReasonRecord(Guid Id, string Code, string UtilizationClass);
 
-/// <summary>The machine data on equipment (D-041).</summary>
+/// <summary>The machine data on equipment (D-050).</summary>
 public sealed record EquipmentMachineDataRecord(
     Guid EquipmentId, Guid? SiteId, string Code, bool TracksState, Guid? MachineProfileId, string StateDerivation, Guid? ConstraintEquipmentId, TimeSpan MicroStopThreshold);
 
 /// <summary>Equipment as the constraint machine of another: where it sits and whether it tracks state.</summary>
 public sealed record ConstraintCandidate(Guid EquipmentId, string Code, bool TracksState, bool IsBelow);
 
-/// <summary>Write side for machine profiles and equipment machine data (D-041): runs inside the current <see cref="IUnitOfWork"/>.</summary>
+/// <summary>Write side for machine profiles and equipment machine data (D-050): runs inside the current <see cref="IUnitOfWork"/>.</summary>
 public interface IMachineDataRepository
 {
     Task<bool> IsSiteAsync(Guid siteId, CancellationToken cancellationToken);
@@ -69,7 +69,7 @@ public interface IMachineDataRepository
     Task UpsertOverrideAsync(Guid equipmentId, int rawValue, Guid? reasonCodeId, bool isActive, CancellationToken cancellationToken);
 }
 
-/// <summary>Read side for machine profiles (D-041).</summary>
+/// <summary>Read side for machine profiles (D-050).</summary>
 public interface IMachineDataReadStore
 {
     Task<IReadOnlyList<MachineProfileDto>> ListProfilesAsync(Guid siteId, CancellationToken cancellationToken);

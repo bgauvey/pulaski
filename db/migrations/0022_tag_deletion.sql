@@ -1,4 +1,4 @@
--- 0018 · Tag deletion (D-042): tag bindings may be physically removed after their quality source references are cleared.
+-- 0022 · Tag deletion (D-051): tag bindings may be physically removed after their quality source references are cleared.
 -- The application role receives DELETE on this table only. Re-runnable; no BEGIN/COMMIT (db/migrate.sh runs it in one transaction).
 
 DO $$

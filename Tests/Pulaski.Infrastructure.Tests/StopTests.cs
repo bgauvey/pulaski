@@ -11,7 +11,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Infrastructure.Tests;
 
-/// <summary>Stops from machine data, coding them and the status board end to end (D-041): real SQL, as the application login.</summary>
+/// <summary>Stops from machine data, coding them and the status board end to end (D-050): real SQL, as the application login.</summary>
 [Collection(DatabaseTests.Name)]
 public sealed class StopTests(DatabaseFixture db)
 {

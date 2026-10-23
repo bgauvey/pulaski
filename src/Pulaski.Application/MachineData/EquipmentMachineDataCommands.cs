@@ -6,7 +6,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Application.MachineData;
 
-/// <summary>An equipment's machine data (D-041): its profile, where its state comes from, and its micro-stop threshold.</summary>
+/// <summary>An equipment's machine data (D-050): its profile, where its state comes from, and its micro-stop threshold.</summary>
 public sealed record SetEquipmentMachineDataCommand(
     Guid EquipmentId, long ExpectedVersion, Guid? MachineProfileId, string StateDerivation, Guid? ConstraintEquipmentId, int MicroStopThresholdSeconds)
     : ICommand<VersionResponse>;

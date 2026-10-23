@@ -1,13 +1,22 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Labor;
 using Pulaski.Contracts.Labor;
+using Pulaski.Domain.Labor;
 using Pulaski.Domain.Shifts;
 
 namespace Pulaski.Testing;
 
-/// <summary>In-memory crews, people and labor (D-040). Lines are added with the schedule they follow, if any.</summary>
-public sealed class InMemoryLabor : ILaborRepository, ILaborReadStore
+/// <summary>
+/// In-memory crews, people, labor, breaks and qualifications (D-040, D-047, D-048). Lines are added with the schedule they
+/// follow, if any, and optionally the equipment above them.
+/// </summary>
+public sealed class InMemoryLabor : ILaborRepository, ILaborReadStore, IQualificationRepository, IQualificationReadStore
 {
+    private readonly Dictionary<Guid, Versioned<BreakRecord>> _breaks = [];
+    private readonly Dictionary<Guid, Versioned<QualificationRecord>> _qualifications = [];
+    private readonly Dictionary<Guid, Versioned<GrantRecord>> _grants = [];
+    private readonly Dictionary<(Guid Equipment, Guid Qualification), bool> _requirements = [];
+    private readonly Dictionary<Guid, Guid> _parents = [];
     private readonly Lock _lock = new();
     private readonly Dictionary<Guid, string> _sites = [];
     private readonly Dictionary<Guid, Versioned<CrewRecord>> _crews = [];
@@ -41,9 +50,11 @@ public sealed class InMemoryLabor : ILaborRepository, ILaborReadStore
         return id;
     }
 
-    public Guid AddLine(Guid siteId, string code, Guid? scheduleId = null)
+    public Guid AddLine(Guid siteId, string code, Guid? scheduleId = null) => AddLineWithId(Guid.CreateVersion7(), siteId, code, scheduleId);
+
+    /// <summary>A line with a given id, so the equipment store can know it too.</summary>
+    public Guid AddLineWithId(Guid id, Guid siteId, string code, Guid? scheduleId = null)
     {
-        var id = Guid.CreateVersion7();
         lock (_lock)
         {
             _equipment[id] = (siteId, code, scheduleId);
@@ -192,6 +203,159 @@ public sealed class InMemoryLabor : ILaborRepository, ILaborReadStore
 
         return Task.CompletedTask;
     }
+
+    /// <summary>Puts <paramref name="childId"/> below <paramref name="parentId"/>, so it inherits its requirements.</summary>
+    public void SetParent(Guid childId, Guid parentId)
+    {
+        lock (_lock)
+        {
+            _parents[childId] = parentId;
+        }
+    }
+
+    public IReadOnlyList<BreakRecord> Breaks()
+    {
+        lock (_lock)
+        {
+            return [.. _breaks.Values.Select(b => b.Value).OrderBy(b => b.StartedAt)];
+        }
+    }
+
+    public Versioned<BreakRecord> Break(Guid id)
+    {
+        lock (_lock)
+        {
+            return _breaks[id];
+        }
+    }
+
+    public Versioned<GrantRecord> Grant(Guid id)
+    {
+        lock (_lock)
+        {
+            return _grants[id];
+        }
+    }
+
+    // ---- Breaks (D-047) ----
+
+    public Task<Versioned<BreakRecord>?> GetBreakForUpdateAsync(Guid id, CancellationToken cancellationToken) => Locked(() => _breaks.GetValueOrDefault(id));
+
+    public Task<Versioned<BreakRecord>?> GetOpenBreakForUpdateAsync(Guid personId, CancellationToken cancellationToken) =>
+        Locked(() => _breaks.Values.FirstOrDefault(b => b.Value.PersonId == personId && b.Value.EndedAt is null));
+
+    public Task<IReadOnlyList<BreakRecord>> ListBreaksOfPersonAsync(Guid personId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<BreakRecord>>(() => [.. BreakRows(b => b.PersonId == personId && b.StartedAt < windowEnd && (b.EndedAt is null || b.EndedAt > windowStart))
+            .Where(r => !r.IsSuperseded && !r.Break.IsVoid).Select(r => r.Break)]);
+
+    public Task<IReadOnlyList<SessionRecord>> ListSessionsOfPersonAtAsync(Guid personId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<SessionRecord>>(() => [.. Rows(s => s.PersonId == personId && !s.IsVoid && s.StartedAt <= at && (s.EndedAt is null || s.EndedAt > at))
+            .Where(r => !r.IsSuperseded).Select(r => r.Session)]);
+
+    public Task<IReadOnlyList<BreakRecord>> ListShiftBreaksForUpdateAsync(ShiftKey shift, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<BreakRecord>>(() => [.. _breaks.Values.Where(b => b.Value.Shift == shift).Select(b => b.Value)]);
+
+    public Task<bool> IsBreakCorrectedAsync(Guid breakId, CancellationToken cancellationToken) => Locked(() => _breaks.Values.Any(b => b.Value.CorrectsBreakId == breakId));
+
+    public Task<long> InsertBreakAsync(BreakRecord record, DateTimeOffset at, CancellationToken cancellationToken) => Locked(() => Save(_breaks, record.Id, record));
+
+    public Task<long> UpdateBreakAsync(BreakRecord record, DateTimeOffset at, CancellationToken cancellationToken) => Locked(() => Save(_breaks, record.Id, record));
+
+    public Task<IReadOnlyList<BreakRow>> ListBreaksAsync(Guid siteId, Guid? personId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<BreakRow>>(() => [.. BreakRows(b => b.SiteId == siteId && (personId is null || b.PersonId == personId)
+            && b.StartedAt < windowEnd && (b.EndedAt is null || b.EndedAt > windowStart))]);
+
+    // ---- Qualifications (D-048) ----
+
+    public Task<IReadOnlyList<RequiredQualification>> ListRequiredQualificationsAsync(Guid equipmentId, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<RequiredQualification>>(() => [.. Required(equipmentId).Select(r => new RequiredQualification(r.Q.Id, r.Q.Code, r.Q.Name))]);
+
+    public Task<IReadOnlyList<QualificationGrant>> ListGrantsOfPersonAsync(Guid personId, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<QualificationGrant>>(() => [.. _grants.Values.Where(g => g.Value.PersonId == personId).Select(g => DomainGrant(g.Value))]);
+
+    public Task<IReadOnlyList<LineRequirement>> ListLineRequirementsAsync(Guid siteId, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<LineRequirement>>(() => [.. _equipment.Where(e => e.Value.SiteId == siteId)
+            .SelectMany(e => Required(e.Key).Select(r => new LineRequirement(e.Key, new RequiredQualification(r.Q.Id, r.Q.Code, r.Q.Name))))]);
+
+    public Task<IReadOnlyList<PersonGrant>> ListSiteGrantsAsync(Guid siteId, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<PersonGrant>>(() => [.. _grants.Values.Where(g => _people[g.Value.PersonId].Value.SiteId == siteId)
+            .Select(g => new PersonGrant(g.Value.PersonId, DomainGrant(g.Value)))]);
+
+    public Task<Versioned<QualificationRecord>?> GetQualificationForUpdateAsync(Guid id, CancellationToken cancellationToken) => Locked(() => _qualifications.GetValueOrDefault(id));
+
+    public Task<bool> CodeExistsAsync(Guid siteId, string code, CancellationToken cancellationToken) =>
+        Locked(() => _qualifications.Values.Any(q => q.Value.SiteId == siteId && q.Value.Code == code));
+
+    public Task<long> InsertQualificationAsync(QualificationRecord qualification, DateTimeOffset at, CancellationToken cancellationToken) =>
+        Locked(() => Save(_qualifications, qualification.Id, qualification));
+
+    public Task<long> UpdateQualificationAsync(QualificationRecord qualification, DateTimeOffset at, CancellationToken cancellationToken) =>
+        Locked(() => Save(_qualifications, qualification.Id, qualification));
+
+    public Task<Versioned<GrantRecord>?> GetGrantForUpdateAsync(Guid id, CancellationToken cancellationToken) => Locked(() => _grants.GetValueOrDefault(id));
+
+    public Task<long> InsertGrantAsync(GrantRecord grant, DateTimeOffset at, CancellationToken cancellationToken) => Locked(() => Save(_grants, grant.Id, grant));
+
+    public Task<long> UpdateGrantAsync(GrantRecord grant, DateTimeOffset at, CancellationToken cancellationToken) => Locked(() => Save(_grants, grant.Id, grant));
+
+    public Task<bool?> GetRequirementForUpdateAsync(Guid equipmentId, Guid qualificationId, CancellationToken cancellationToken) =>
+        Locked(() => _requirements.TryGetValue((equipmentId, qualificationId), out var on) ? on : (bool?)null);
+
+    public Task<long> SetRequirementAsync(Guid equipmentId, Guid qualificationId, bool isRequired, DateTimeOffset at, CancellationToken cancellationToken) =>
+        Locked(() =>
+        {
+            _requirements[(equipmentId, qualificationId)] = isRequired;
+            return ++_next;
+        });
+
+    public Task<IReadOnlyList<QualificationDto>> ListQualificationsAsync(Guid siteId, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<QualificationDto>>(() => [.. _qualifications.Values.Where(q => q.Value.SiteId == siteId).OrderBy(q => q.Value.Code, StringComparer.Ordinal).Select(q => new QualificationDto
+        {
+            Id = q.Value.Id, SiteId = q.Value.SiteId, Code = q.Value.Code, Name = q.Value.Name, Description = q.Value.Description,
+            ValidityMonths = q.Value.ValidityMonths, IsActive = q.Value.IsActive, Version = q.Version,
+            RequiredOn = [.. _requirements.Where(r => r.Value && r.Key.Qualification == q.Value.Id).Select(r => _equipment.TryGetValue(r.Key.Equipment, out var e) ? e.Code : "?")],
+        })]);
+
+    public Task<IReadOnlyList<GrantRow>> ListGrantsAsync(Guid siteId, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<GrantRow>>(() => [.. _grants.Values.Where(g => _people[g.Value.PersonId].Value.SiteId == siteId).Select(g =>
+        {
+            var person = _people[g.Value.PersonId].Value;
+            var q = _qualifications[g.Value.QualificationId].Value;
+            return new GrantRow(g.Value, person.DisplayName, person.EmployeeNumber, person.SiteId, q.Code, q.Name, g.Version);
+        })]);
+
+    public Task<IReadOnlyList<RequirementRow>?> ListRequirementsAsync(Guid equipmentId, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<RequirementRow>?>(() => _equipment.ContainsKey(equipmentId)
+            ? [.. Required(equipmentId).Select(r => new RequirementRow(r.Q.Id, r.Q.Code, r.Q.Name, r.From, _equipment[r.From].Code, r.From == equipmentId))]
+            : null);
+
+    private IEnumerable<(QualificationRecord Q, Guid From)> Required(Guid equipmentId)
+    {
+        for (Guid? at = equipmentId; at is { } id; at = _parents.TryGetValue(id, out var parent) ? parent : null)
+        {
+            foreach (var r in _requirements.Where(r => r.Value && r.Key.Equipment == id))
+            {
+                var q = _qualifications[r.Key.Qualification].Value;
+                if (q.IsActive)
+                {
+                    yield return (q, id);
+                }
+            }
+        }
+    }
+
+    private static QualificationGrant DomainGrant(GrantRecord g) => new(g.QualificationId, g.ValidFrom, g.ExpiresOn, g.RevokedAt);
+
+    private IEnumerable<BreakRow> BreakRows(Func<BreakRecord, bool> filter) =>
+        _breaks.Values.Where(b => filter(b.Value)).OrderBy(b => b.Value.StartedAt).Select(b => new BreakRow
+        {
+            Break = b.Value,
+            PersonName = _people[b.Value.PersonId].Value.DisplayName,
+            EmployeeNumber = _people[b.Value.PersonId].Value.EmployeeNumber,
+            IsSuperseded = _breaks.Values.Any(c => c.Value.CorrectsBreakId == b.Value.Id),
+            IsApproved = _approvals.Any(a => a.Shift == b.Value.Shift),
+            Version = b.Version,
+        });
 
     // ---- ILaborReadStore ----
 

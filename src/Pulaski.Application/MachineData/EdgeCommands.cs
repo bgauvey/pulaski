@@ -19,7 +19,7 @@ public sealed record CreateEdgeConnectionCommand(Guid EdgeNodeId, string Code, s
 public sealed record UpdateEdgeConnectionCommand(Guid Id, long ExpectedVersion, string Name, IReadOnlyDictionary<string, string> Settings, bool IsActive)
     : ICommand<VersionResponse>;
 
-/// <summary>Binds a signal the edge reads to a role on a piece of equipment (D-041).</summary>
+/// <summary>Binds a signal the edge reads to a role on a piece of equipment (D-050).</summary>
 public sealed record CreateEquipmentTagCommand(
     Guid EquipmentId, string Role, Guid ConnectionId, string Address, decimal ScaleFactor, decimal ScaleOffset, long? CounterRollover)
     : ICommand<CreatedResponse>;
@@ -29,7 +29,7 @@ public sealed record UpdateEquipmentTagCommand(
     : ICommand<VersionResponse>;
 public sealed record DeleteEquipmentTagCommand(Guid Id) : ICommand<bool>;
 
-/// <summary>Connector protocols, their settings and their addresses (D-041).</summary>
+/// <summary>Connector protocols, their settings and their addresses (D-050).</summary>
 public static partial class EdgeProtocols
 {
     public const string SparkplugB = "sparkplug_b";

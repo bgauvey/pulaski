@@ -6,7 +6,7 @@ using Pulaski.Contracts.MachineData;
 namespace Pulaski.Edge;
 
 /// <summary>
-/// The edge's store-and-forward buffer (D-041): a local SQLite file. Every signal is written here before it is forwarded, under
+/// The edge's store-and-forward buffer (D-050): a local SQLite file. Every signal is written here before it is forwarded, under
 /// an increasing sequence number, and removed only once Pulaski has applied it, so a network drop or a restart loses nothing.
 /// The file's stream id tells Pulaski when the buffer was lost and its numbering starts again. The last configuration is kept
 /// too, so the edge keeps collecting when it starts without Pulaski.

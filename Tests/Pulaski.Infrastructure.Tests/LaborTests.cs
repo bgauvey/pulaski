@@ -86,4 +86,100 @@ public sealed class LaborTests(DatabaseFixture db)
         Assert.Equal(3, await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM core.labor_session WHERE site_id = @Id", new { site.Id }));
         Assert.Equal(1, await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM core.labor_approval WHERE site_id = @Id", new { site.Id }));
     }
+
+    [Fact]
+    public async Task Breaks_come_out_of_worked_time_and_lines_warn_who_lacks_a_required_qualification()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "QENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "QS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse area = await db.SendAsync(new CreateEquipmentCommand(site.Id, "QA-" + _s, "Area", null, "area", "area", false, false, false, null));
+        CreatedResponse line = await db.SendAsync(new CreateEquipmentCommand(area.Id, "QL-" + _s, "Line", null, "work_center", "production_line", true, true, false, null));
+        CreatedResponse ann = await db.SendAsync(new CreatePersonCommand(site.Id, "200-" + _s, "Ann", null, null));
+        CreatedResponse bob = await db.SendAsync(new CreatePersonCommand(site.Id, "201-" + _s, "Bob", null, null));
+
+        // The area requires FORK, so its line does; Ann holds it, Bob doesn't.
+        CreatedResponse fork = await db.SendAsync(new CreateQualificationCommand(site.Id, "fork", "Forklift", "Counterbalance", 12));
+        await db.SendAsync(new SetEquipmentQualificationCommand(area.Id, fork.Id, true));
+        CreatedResponse granted = await db.SendAsync(new GrantQualificationCommand(ann.Id, fork.Id, null, null, null));
+        var requirements = await QueryAsync<GetEquipmentQualificationsQuery, EquipmentQualificationsDto>(new GetEquipmentQualificationsQuery(line.Id));
+        Assert.Equal(("FORK", $"QA-{_s}"), (Assert.Single(requirements.Inherited).Code, requirements.Inherited[0].FromEquipmentCode));
+
+        var started = DateTimeOffset.UtcNow.AddHours(-3);
+        var checkIn = await db.SendAsync(new CheckInCommand(line.Id, [ann.Id, bob.Id], started));
+        Assert.Contains(checkIn.Notes, n => n == $"Bob isn't qualified for QL-{_s}: FORK Forklift (not held).");
+
+        // A 30-minute unpaid break an hour in; then an open paid one.
+        await db.SendAsync(new StartBreakCommand(ann.Id, false, started.AddHours(1), started.AddHours(1.5), "Lunch"));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new StartBreakCommand(ann.Id, false, started.AddHours(1.25), started.AddHours(2), null)));
+        var coffee = await db.SendAsync(new StartBreakCommand(ann.Id, true, started.AddHours(2.5), null, null));
+
+        var onLine = Assert.Single(await QueryAsync<ListLineLaborQuery, IReadOnlyList<LineLaborDto>>(new ListLineLaborQuery(site.Id)));
+        var anns = onLine.Sessions.Single(s => s.PersonId == ann.Id);
+        Assert.Equal((2m, 1m), (anns.Hours, anns.BreakHours));
+        Assert.Empty(anns.MissingQualifications);
+        Assert.Equal(["FORK Forklift (not held)"], onLine.Sessions.Single(s => s.PersonId == bob.Id).MissingQualifications);
+        Assert.Equal(coffee.Id, Assert.Single(onLine.Breaks).Id);
+
+        // Clocking Ann off ends her open break with it; the report keeps breaks apart from worked time.
+        await db.SendAsync(new ClockOffCommand(anns.Id, anns.Version, null, OwnOnly: false));
+        var report = await QueryAsync<GetLaborReportQuery, LaborReportDto>(new GetLaborReportQuery(site.Id, DateOnly.FromDateTime(started.UtcDateTime), DateOnly.FromDateTime(DateTime.UtcNow)));
+        var annRow = report.People.Single(p => p.PersonId == ann.Id);
+        Assert.Equal((2m, 0.5m, 0.5m), (annRow.TotalHours, annRow.PaidBreakHours, annRow.UnpaidBreakHours));
+
+        var grants = await QueryAsync<ListQualificationGrantsQuery, IReadOnlyList<QualificationGrantDto>>(new ListQualificationGrantsQuery(site.Id, null, fork.Id, null));
+        Assert.Equal((granted.Id, GrantStatus.Valid), (Assert.Single(grants).Id, grants[0].Status));
+        await db.SendAsync(new RevokeQualificationGrantCommand(granted.Id, grants[0].Version, "Expired licence"));
+        var listed = Assert.Single(await QueryAsync<ListQualificationsQuery, IReadOnlyList<QualificationDto>>(new ListQualificationsQuery(site.Id)));
+        Assert.Equal(("FORK", 0), (listed.Code, listed.Holders));
+        Assert.Equal([$"QA-{_s}"], listed.RequiredOn);
+    }
+
+    [Fact]
+    public async Task A_terminal_is_enrolled_and_a_badge_clocks_its_person_on_and_off()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "TENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "TS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse line = await db.SendAsync(new CreateEquipmentCommand(site.Id, "TL-" + _s, "Line", null, "work_center", "production_line", true, true, false, null));
+        CreatedResponse ann = await db.SendAsync(new CreatePersonCommand(site.Id, "300-" + _s, "Ann", null, null));
+
+        CreatedResponse created = await db.SendAsync(new CreateTerminalCommand("hall", "Hall", site.Id, line.Id, TerminalAuthModes.BadgePlusPin));
+        var code = await db.SendAsync(new IssueEnrolmentCodeCommand(created.Id));
+        var enrolled = await db.SendAsync(new EnrolTerminalCommand(code.Code));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new EnrolTerminalCommand(code.Code)));
+
+        var terminal = await TerminalAsync(enrolled.Secret);
+        Assert.Equal(("HALL", created.Id), (terminal.Code, terminal.Id));
+        var listed = Assert.Single(await QueryAsync<ListTerminalsQuery, IReadOnlyList<TerminalDto>>(new ListTerminalsQuery(site.Id)));
+        Assert.Equal(($"TL-{_s}", (DateTimeOffset?)null), (listed.DefaultCode, listed.EnrolmentExpiresAt));
+        Assert.NotNull(listed.EnrolledAt);
+
+        await db.SendAsync(new IssueBadgeCommand(ann.Id, "B-" + _s, "2468"));
+        Assert.Equal(new BadgeIdentity(true, null), await db.SendAsync(new IdentifyBadgeCommand(terminal, "B-" + _s, null)));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new IdentifyBadgeCommand(terminal, "B-" + _s, "1111")));
+        var who = await db.SendAsync(new IdentifyBadgeCommand(terminal, "b-" + _s, "2468"));
+        Assert.Equal(ann.Id, who.PersonId);
+
+        var on = await db.SendAsync(new TerminalClockOnCommand(terminal, ann.Id, line.Id));
+        await db.SendAsync(new TerminalStartBreakCommand(terminal, ann.Id, false));
+        var status = await QueryAsync<GetTerminalStatusQuery, TerminalStatusDto>(new GetTerminalStatusQuery(terminal, ann.Id));
+        Assert.Equal(("Ann", on.Id, $"TL-{_s}"), (status.PersonName, Assert.Single(status.Sessions).Id, Assert.Single(status.Lines).Code));
+        Assert.NotNull(status.OpenBreak);
+        Assert.Equal((LaborSources.Terminal, "terminal:HALL"), (status.Sessions[0].Source, status.Sessions[0].RecordedBy));
+
+        await db.SendAsync(new TerminalClockOffCommand(terminal, ann.Id, on.Id));
+        status = await QueryAsync<GetTerminalStatusQuery, TerminalStatusDto>(new GetTerminalStatusQuery(terminal, ann.Id));
+        Assert.Empty(status.Sessions);
+        Assert.Null(status.OpenBreak);
+
+        var badges = await QueryAsync<ListBadgesQuery, IReadOnlyList<BadgeDto>>(new ListBadgesQuery(site.Id));
+        Assert.Equal(("Ann", true), (Assert.Single(badges).PersonName, badges[0].HasPin));
+        await db.SendAsync(new RevokeBadgeCommand(badges[0].Id, "Lost"));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new IdentifyBadgeCommand(terminal, "B-" + _s, "2468")));
+    }
+
+    private async Task<TerminalRecord> TerminalAsync(string secret)
+    {
+        await using var scope = db.Services.CreateAsyncScope();
+        return (await scope.ServiceProvider.GetRequiredService<ITerminalReadStore>().FindBySecretAsync(TerminalRules.Sha256(secret), CancellationToken.None))!;
+    }
 }

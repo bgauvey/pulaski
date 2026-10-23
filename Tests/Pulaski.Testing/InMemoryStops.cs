@@ -4,7 +4,7 @@ using Pulaski.Contracts.MachineData;
 
 namespace Pulaski.Testing;
 
-/// <summary>In-memory stops to code and the machine status board (D-041). The test adds stops, reasons and status rows.</summary>
+/// <summary>In-memory stops to code and the machine status board (D-050). The test adds stops, reasons and status rows.</summary>
 public sealed class InMemoryStops : IStopRepository, IStopReadStore
 {
     private readonly Lock _lock = new();

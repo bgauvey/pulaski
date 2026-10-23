@@ -6,7 +6,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Application.MachineData;
 
-/// <summary>A new machine profile at a site (D-041), starting with PackML's own state numbers. Its code is fixed once created.</summary>
+/// <summary>A new machine profile at a site (D-050), starting with PackML's own state numbers. Its code is fixed once created.</summary>
 public sealed record CreateMachineProfileCommand(Guid SiteId, string Code, string Name, string? Vendor, string? Model, string? Description)
     : ICommand<CreatedResponse>;
 

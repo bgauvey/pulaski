@@ -9,7 +9,7 @@ using Pulaski.Testing;
 
 namespace Pulaski.Application.Tests.MachineData;
 
-/// <summary>Stops from machine data, coding them, and the machine status board (D-041).</summary>
+/// <summary>Stops from machine data, coding them, and the machine status board (D-050).</summary>
 public class StopHandlerTests
 {
     private static readonly DateTimeOffset T0 = HandlerFixture.Now;

@@ -9,7 +9,7 @@ using Pulaski.Testing;
 
 namespace Pulaski.Application.Tests.MachineData;
 
-/// <summary>Edge nodes, connections, tags and machine data ingest (D-041).</summary>
+/// <summary>Edge nodes, connections, tags and machine data ingest (D-050).</summary>
 public class EdgeHandlerTests
 {
     private static readonly DateTimeOffset T0 = HandlerFixture.Now;

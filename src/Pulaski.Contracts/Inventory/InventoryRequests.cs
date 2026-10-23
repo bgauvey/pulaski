@@ -183,7 +183,7 @@ public sealed record CreateReasonCodeRequest
     public bool RequiresComment { get; init; }
     public int SortOrder { get; init; }
 
-    /// <summary>Required for a utilization reason (D-041): <c>runtime</c>, <c>downtime</c> or <c>planned</c>.</summary>
+    /// <summary>Required for a utilization reason (D-050): <c>runtime</c>, <c>downtime</c> or <c>planned</c>.</summary>
     public string? UtilizationClass { get; init; }
 }
 
@@ -195,6 +195,6 @@ public sealed record UpdateReasonCodeRequest
     public int SortOrder { get; init; }
     public bool IsActive { get; init; } = true;
 
-    /// <summary>A utilization reason's class (D-041); left out, it stays.</summary>
+    /// <summary>A utilization reason's class (D-050); left out, it stays.</summary>
     public string? UtilizationClass { get; init; }
 }

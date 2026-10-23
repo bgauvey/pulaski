@@ -2,7 +2,7 @@ namespace Pulaski.Domain.MachineData;
 
 /// <summary>
 /// What a PackML state counts as for OEE (D-005): values of <c>core.oee_state_category.category</c>. A site may map states
-/// otherwise; this is the default. Ordered from worst to best, which is how a line's state is taken from its machines (D-041).
+/// otherwise; this is the default. Ordered from worst to best, which is how a line's state is taken from its machines (D-050).
 /// </summary>
 public static class OeeCategories
 {
@@ -31,7 +31,7 @@ public static class OeeCategories
     public static int Rank(string category) => BySeverity.ToList().IndexOf(category) is var i and >= 0 ? i : 0;
 }
 
-/// <summary>How a line's state comes from its machines (D-041).</summary>
+/// <summary>How a line's state comes from its machines (D-050).</summary>
 public static class LineStates
 {
     /// <summary>
@@ -68,7 +68,7 @@ public sealed record StopReasons(IReadOnlyDictionary<int, Guid?> ByStopCode, IRe
 }
 
 /// <summary>
-/// Stops from state changes (D-041). A stop is time the machine isn't executing: it starts when the machine leaves Execute (or
+/// Stops from state changes (D-050). A stop is time the machine isn't executing: it starts when the machine leaves Execute (or
 /// first reports another state, or loses its signal) and ends when it executes again; the states it passes through on the way
 /// stay in the state history. Its reason is mapped from the first-out stop code latched during it, else from the first state on its
 /// way that has one. A stop shorter than the machine's threshold is a micro-stop: logged, not to be coded, not availability loss.

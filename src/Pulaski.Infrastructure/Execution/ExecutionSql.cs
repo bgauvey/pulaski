@@ -39,6 +39,6 @@ internal static class ExecutionSql
         """;
 
     public const string Policy = """
-        SELECT rate_tolerance_pct, consumption_tolerance_pct FROM core.execution_policy WHERE site_id = @SiteId
+        SELECT rate_tolerance_pct, consumption_tolerance_pct, xmin::text::bigint AS version FROM core.execution_policy WHERE site_id = @SiteId
         """;
 }

@@ -1,4 +1,4 @@
--- 0016 · Pulaski Edge (D-041): edge nodes, their connections and the metrics they have seen; tag bindings now name the
+-- 0020 · Pulaski Edge (D-050): edge nodes, their connections and the metrics they have seen; tag bindings now name the
 -- connection they are read through; each machine's live state and counters; the raw state and stop code on state
 -- changes; the edge.ingest permission and the Edge node role. Nothing used the planned equipment_tag shape, so it is
 -- reshaped in place. Re-runnable; no BEGIN/COMMIT (db/migrate.sh runs it in one transaction).

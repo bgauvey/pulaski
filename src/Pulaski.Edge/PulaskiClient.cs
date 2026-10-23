@@ -7,7 +7,7 @@ using Pulaski.Contracts.Security;
 
 namespace Pulaski.Edge;
 
-/// <summary>The edge's calls to the Pulaski API (D-041), signed in as its service user; signs in again when the token runs out.</summary>
+/// <summary>The edge's calls to the Pulaski API (D-050), signed in as its service user; signs in again when the token runs out.</summary>
 public sealed class PulaskiClient(HttpClient http, IOptions<EdgeOptions> options, TimeProvider time, ILogger<PulaskiClient> log) : IDisposable
 {
     public static string AgentVersion { get; } = typeof(PulaskiClient).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";

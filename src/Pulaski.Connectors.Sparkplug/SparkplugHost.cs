@@ -24,7 +24,7 @@ public sealed record SparkplugTopic(string Group, string MessageType, string Nod
 public sealed record SparkplugOutcome(IReadOnlyList<ConnectorSample> Samples, IReadOnlyList<DiscoveredAddress> Discovered, (string Group, string Node)? Rebirth);
 
 /// <summary>
-/// The Sparkplug B host application's view of the edge nodes it hears (D-041), without MQTT: births name metrics and their aliases,
+/// The Sparkplug B host application's view of the edge nodes it hears (D-050), without MQTT: births name metrics and their aliases,
 /// data refers to them by alias, deaths mean no signal. A node whose birth Pulaski missed, or whose sequence numbers skip, is asked
 /// to send its birth again (a rebirth), since its aliases can't be trusted until then.
 /// </summary>

@@ -3,8 +3,8 @@ using Pulaski.Domain.Shifts;
 namespace Pulaski.Domain.MachineData;
 
 /// <summary>
-/// What a stretch of a machine's time was used for (D-043). Ordered worst first: a line whose machines run in series takes the
-/// worst of theirs, one whose machines run in parallel the best (D-041).
+/// What a stretch of a machine's time was used for (D-052). Ordered worst first: a line whose machines run in series takes the
+/// worst of theirs, one whose machines run in parallel the best (D-050).
 /// </summary>
 public enum TimeUse
 {
@@ -43,7 +43,7 @@ public sealed record RunWindow(Guid RunId, DateTimeOffset Start, DateTimeOffset?
 public sealed record UseSlice(UseSpan Span, int Window, Guid? RunId);
 
 /// <summary>
-/// Utilization from machine history (D-041, D-043), worked out on read. A machine's time is first classified, then cut to its
+/// Utilization from machine history (D-050, D-052), worked out on read. A machine's time is first classified, then cut to its
 /// working windows and runs; time outside the calendar is left out.
 /// </summary>
 public static class Utilization
@@ -140,7 +140,7 @@ public static class Utilization
     }
 
     /// <summary>
-    /// A line's time from its machines' (D-041): in series the worst use at each moment, in parallel the best; ties go to the
+    /// A line's time from its machines' (D-050): in series the worst use at each moment, in parallel the best; ties go to the
     /// first machine. A stop of the line starts whenever it goes down or into a planned stop from anything else. With no
     /// machines it had no signal.
     /// </summary>
@@ -316,7 +316,7 @@ public static class Utilization
 }
 
 /// <summary>
-/// Availability, performance and quality over some working time (D-043). Performance and quality weigh output by the ideal
+/// Availability, performance and quality over some working time (D-052). Performance and quality weigh output by the ideal
 /// rate (earned hours = quantity ÷ ideal rate), so products made in different units add up; output of a run without an ideal
 /// rate counts in its quantities but not in either.
 /// </summary>

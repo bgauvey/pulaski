@@ -2,7 +2,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Application.Tests.Domain;
 
-/// <summary>Signals into live state, counters into counts, and idempotent edge streams (D-041).</summary>
+/// <summary>Signals into live state, counters into counts, and idempotent edge streams (D-050).</summary>
 public class LiveStateTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 10, 18, 8, 0, 0, TimeSpan.Zero);

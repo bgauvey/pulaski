@@ -1,7 +1,7 @@
 -- =====================================================================
 -- Pulaski — starter reason codes                            2026-10-16
 -- Enterprise-wide reasons for inventory adjustments and holds (D-027), scrap and run ends (D-035), and
--- utilization reasons for machine time (D-041).
+-- utilization reasons for machine time (D-050).
 -- Load after schema-draft.sql. Re-runnable: existing codes are left alone.
 --
 -- Like the rest of the seed these are master data loaded before go-live,
@@ -41,7 +41,7 @@ INSERT INTO core.reason_code (site_id, reason_kind, code, name, requires_comment
     (NULL, 'run_end', 'OTHER',     'Other',                  true,  90)
 ON CONFLICT (site_id, reason_kind, code) DO NOTHING;
 
--- Utilization reasons (D-041): what a machine's time counts as. Runtime is run time; downtime is availability
+-- Utilization reasons (D-050): what a machine's time counts as. Runtime is run time; downtime is availability
 -- loss; planned is scheduled non-production, left out of planned time. Machine profiles map stop codes to these.
 INSERT INTO core.reason_code (site_id, reason_kind, utilization_class, code, name, requires_comment, sort_order) VALUES
     (NULL, 'utilization', 'runtime',  'RUN',       'Running',                          false, 10),

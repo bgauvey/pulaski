@@ -10,7 +10,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Infrastructure.Tests;
 
-/// <summary>Edge nodes, tags and machine data ingest end to end (D-041): real SQL, as the application login.</summary>
+/// <summary>Edge nodes, tags and machine data ingest end to end (D-050): real SQL, as the application login.</summary>
 [Collection(DatabaseTests.Name)]
 public sealed class EdgeTests(DatabaseFixture db)
 {

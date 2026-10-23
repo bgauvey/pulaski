@@ -37,7 +37,7 @@ else if (_shift is { } detail)
                 <div class="fw-semibold">@(s.ShiftCode is null ? $"{s.ProductionDate:ddd d MMM}, lines without shifts" : $"Shift {s.ShiftCode} {s.ShiftName}, {s.ProductionDate:ddd d MMM}")</div>
                 <div class="small text-muted">
                     @(s.Start is { } start ? $"{Time(start)}–{Time(s.End!.Value)}" : "The whole day")@(s.CrewCode is { } crew ? $" · crew {crew}" : "")
-                    · @Qty(s.Hours) hours · @s.Sessions @(s.Sessions == 1 ? "session" : "sessions")@(s.OpenSessions > 0 ? $", {s.OpenSessions} open" : "")
+                    · @Qty(s.Hours) hours worked@(s.PaidBreakHours + s.UnpaidBreakHours > 0 ? $", {Qty(s.PaidBreakHours + s.UnpaidBreakHours)} on breaks" : "") · @s.Sessions @(s.Sessions == 1 ? "session" : "sessions")@(s.OpenSessions > 0 ? $", {s.OpenSessions} open" : "")
                 </div>
             </div>
             <div class="ms-auto">
@@ -86,7 +86,7 @@ else if (_shift is { } detail)
                             <td class="small">@(row.EndedAt is { } e ? Time(e) : "open")</td>
                             <td class="inv-num">@Qty(row.AllocationPct)%</td>
                         }
-                        <td class="inv-num">@Qty(row.Hours)</td>
+                        <td class="inv-num" title="@(row.BreakHours > 0 ? $"{Qty(row.BreakHours)} h of breaks left out" : null)">@Qty(row.Hours)</td>
                         <td class="small text-muted">@Source(row)@(row.Note is { } n ? $" · {n}" : "")</td>
                         <td class="text-end text-nowrap">
                             @if (_edit?.Id == row.Id)
@@ -117,7 +117,10 @@ else if (_shift is { } detail)
             </tbody>
         </table>
     </div>
-    <p class="small text-muted mt-2">Struck-through rows were replaced or removed by a correction after approval; the hours count the correction.</p>
+    <p class="small text-muted mt-2">Struck-through rows were replaced or removed by a correction after approval; the hours count the correction. Hours are worked time: breaks are left out.</p>
+
+    <ShiftBreaksPanel @key="(s.ProductionDate, s.ShiftScheduleId, s.ShiftCode)" Detail="detail" TimeZone="@TimeZone" CanRecord="CanRecord" CanApprove="CanApprove"
+                      OnChanged="() => OpenAsync(s)" />
 }
 
 @code {
@@ -158,6 +161,7 @@ else if (_shift is { } detail)
     private static string Source(LaborSessionDto row) => row.Source switch
     {
         "self" => $"Clocked on by {row.RecordedBy}",
+        "terminal" => $"Badged at {row.RecordedBy.Replace("terminal:", "", StringComparison.Ordinal)}",
         "crew" => $"Crew check-in by {row.RecordedBy}",
         "correction" => row.IsVoid ? $"Removed by {row.RecordedBy}" : $"Correction by {row.RecordedBy}",
         _ => $"By {row.RecordedBy}",

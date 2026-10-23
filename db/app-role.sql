@@ -36,7 +36,7 @@ GRANT SELECT, INSERT ON ts.job_status_change TO pulaski_app;
 GRANT SELECT, INSERT ON ts.lot_event TO pulaski_app;
 GRANT SELECT, INSERT ON ts.production_count TO pulaski_app;
 GRANT SELECT, INSERT ON ts.equipment_state_change TO pulaski_app;
--- Stops are updated while open and when coded (D-041); still never deleted.
+-- Stops are updated while open and when coded (D-050); still never deleted.
 GRANT SELECT, INSERT, UPDATE ON ts.downtime TO pulaski_app;
 
 -- Users, roles and local passwords (D-037). Roles are data an administrator maintains; the API copies the
@@ -44,6 +44,9 @@ GRANT SELECT, INSERT, UPDATE ON ts.downtime TO pulaski_app;
 GRANT USAGE ON SCHEMA sec TO pulaski_app;
 GRANT SELECT, INSERT, UPDATE ON sec.app_user, sec.role_assignment, sec.local_credential TO pulaski_app;
 GRANT SELECT, INSERT, UPDATE ON sec.role, sec.permission, sec.role_permission TO pulaski_app;
+
+-- Shop-floor terminals and badges (D-049): enrolled, switched off and revoked, never deleted.
+GRANT SELECT, INSERT, UPDATE ON sec.terminal, sec.badge TO pulaski_app;
 
 -- Partition maintenance and the schema version check at API startup (D-028). Guarded, so this
 -- file still runs on a database that db/migrate.sh hasn't brought up to date yet.

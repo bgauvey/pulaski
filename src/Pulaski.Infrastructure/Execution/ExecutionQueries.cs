@@ -75,7 +75,7 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
         """;
 
     // One report writes a processed row and, with scrap, a defective row in the same transaction, so they share recorded_at.
-    // Machine counts (D-041) aren't reports.
+    // Machine counts (D-050) aren't reports.
     private const string Reports = """
         SELECT c.run_id, r.run_no, max(c.occurred_at) AS occurred_at, c.recorded_at,
                coalesce(sum(c.delta_qty) FILTER (WHERE c.count_kind = 'processed'), 0)
@@ -296,6 +296,7 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
             RateTolerancePct = policy.RateTolerancePct,
             ConsumptionTolerancePct = policy.ConsumptionTolerancePct,
             IsDefault = row is null,
+            Version = row?.Version ?? 0,
         };
     }
 

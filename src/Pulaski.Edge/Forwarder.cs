@@ -4,7 +4,7 @@ using Pulaski.Contracts.MachineData;
 namespace Pulaski.Edge;
 
 /// <summary>
-/// Forwards the buffer to Pulaski in order (D-041), a batch at a time, and drops a batch once Pulaski has applied it. While
+/// Forwards the buffer to Pulaski in order (D-050), a batch at a time, and drops a batch once Pulaski has applied it. While
 /// Pulaski can't be reached the buffer just grows; sending a batch again is harmless, since Pulaski skips what it applied.
 /// </summary>
 public sealed class Forwarder(PulaskiClient api, EdgeBuffer buffer, IOptions<EdgeOptions> options, TimeProvider time, ILogger<Forwarder> log) : BackgroundService

@@ -3,7 +3,7 @@ using Pulaski.Contracts.MachineData;
 
 namespace Pulaski.Edge.Tests;
 
-/// <summary>The edge's buffer and the binding of samples to tags (D-041).</summary>
+/// <summary>The edge's buffer and the binding of samples to tags (D-050).</summary>
 public sealed class EdgeTests : IDisposable
 {
     private static readonly DateTimeOffset T0 = new(2026, 10, 18, 8, 0, 0, TimeSpan.Zero);

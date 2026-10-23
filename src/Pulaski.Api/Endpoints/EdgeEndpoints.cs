@@ -10,7 +10,7 @@ using Pulaski.Domain.Security;
 namespace Pulaski.Api.Endpoints;
 
 /// <summary>
-/// Pulaski Edge (D-041): edge nodes, their connections and tag bindings, maintained as part of equipment; and the calls the
+/// Pulaski Edge (D-050): edge nodes, their connections and tag bindings, maintained as part of equipment; and the calls the
 /// edge itself makes, signed in as a service user holding <c>edge.ingest</c> at the node's site.
 /// </summary>
 internal static class EdgeEndpoints

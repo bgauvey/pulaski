@@ -6,7 +6,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Infrastructure.MachineData;
 
-/// <summary>Read side for machine profiles (D-041).</summary>
+/// <summary>Read side for machine profiles (D-050).</summary>
 internal sealed class MachineDataQueries(NpgsqlDataSource dataSource) : IMachineDataReadStore
 {
     private const string Profiles = """

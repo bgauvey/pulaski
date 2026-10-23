@@ -6,7 +6,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Infrastructure.MachineData;
 
-/// <summary>Read side for edge nodes (D-041).</summary>
+/// <summary>Read side for edge nodes (D-050).</summary>
 internal sealed class EdgeQueries(NpgsqlDataSource dataSource) : IEdgeReadStore
 {
     private const string Nodes = """

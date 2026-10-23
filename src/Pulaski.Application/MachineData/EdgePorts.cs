@@ -35,10 +35,10 @@ public sealed record StateChangeRow(Guid Id, Guid EquipmentId, Guid? RunId, long
 /// <summary>A machine count for <c>ts.production_count</c> (source <c>machine</c>).</summary>
 public sealed record MachineCountRow(Guid Id, DateTimeOffset OccurredAt, Guid EquipmentId, Guid? RunId, Guid? JobId, string CountKind, decimal Quantity, long RawCounter);
 
-/// <summary>What deciding a machine's stops needs (D-041): its micro-stop threshold, its profile's reasons, and its open stop.</summary>
+/// <summary>What deciding a machine's stops needs (D-050): its micro-stop threshold, its profile's reasons, and its open stop.</summary>
 public sealed record StopContext(Guid EquipmentId, TimeSpan MicroStop, StopReasons Reasons, MachineStop? Open);
 
-/// <summary>Write side for edge nodes, their connections and tags, and machine data ingest (D-041).</summary>
+/// <summary>Write side for edge nodes, their connections and tags, and machine data ingest (D-050).</summary>
 public interface IEdgeRepository
 {
     Task<bool> IsSiteAsync(Guid siteId, CancellationToken cancellationToken);
@@ -116,7 +116,7 @@ public interface IEdgeRepository
     Task UpsertMetricsAsync(IReadOnlyList<EdgeMetricReportDto> metrics, CancellationToken cancellationToken);
 }
 
-/// <summary>Read side for edge nodes (D-041).</summary>
+/// <summary>Read side for edge nodes (D-050).</summary>
 public interface IEdgeReadStore
 {
     Task<IReadOnlyList<EdgeNodeDto>> ListNodesAsync(Guid siteId, CancellationToken cancellationToken);

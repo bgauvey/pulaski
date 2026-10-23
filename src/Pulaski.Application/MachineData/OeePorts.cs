@@ -20,7 +20,7 @@ public sealed record OeeCountRecord(Guid RunId, DateTimeOffset OccurredAt, Guid?
 
 public sealed record OeeReasonRecord(Guid Id, string Code, string Name, string? UtilizationClass);
 
-/// <summary>Read side for the utilization and OEE report (D-043): the machine history of a period, untouched.</summary>
+/// <summary>Read side for the utilization and OEE report (D-052): the machine history of a period, untouched.</summary>
 public interface IOeeReadStore
 {
     Task<string?> GetSiteTimeZoneAsync(Guid siteId, CancellationToken cancellationToken);
@@ -42,7 +42,7 @@ public interface IOeeReadStore
     /// <summary>The runs on the equipment overlapping <c>[windowStart, windowEnd)</c>.</summary>
     Task<IReadOnlyList<OeeRunRecord>> ListRunsAsync(IReadOnlyCollection<Guid> equipmentIds, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken);
 
-    /// <summary>Production reported on the equipment in <c>[windowStart, windowEnd)</c>; machine counts (D-041) aren't reports and are left out.</summary>
+    /// <summary>Production reported on the equipment in <c>[windowStart, windowEnd)</c>; machine counts (D-050) aren't reports and are left out.</summary>
     Task<IReadOnlyList<OeeCountRecord>> ListCountsAsync(IReadOnlyCollection<Guid> equipmentIds, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<OeeReasonRecord>> ListReasonsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);

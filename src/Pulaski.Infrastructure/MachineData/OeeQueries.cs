@@ -8,7 +8,7 @@ using Pulaski.Infrastructure.Shifts;
 
 namespace Pulaski.Infrastructure.MachineData;
 
-/// <summary>Read side for the utilization and OEE report (D-043): the machine history of a period, as recorded.</summary>
+/// <summary>Read side for the utilization and OEE report (D-052): the machine history of a period, as recorded.</summary>
 internal sealed class OeeQueries(NpgsqlDataSource dataSource) : IOeeReadStore
 {
     private const string TimeZone = "SELECT time_zone FROM core.equipment WHERE id = @Id AND level = 'site'";

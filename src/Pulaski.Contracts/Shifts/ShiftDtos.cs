@@ -13,6 +13,23 @@ public sealed record ShiftDto
     public string? Crew { get; init; }
 }
 
+/// <summary>
+/// One date's change to a schedule (D-042): on <see cref="Date"/> (the production day) shift <see cref="Code"/> runs at
+/// <see cref="Start"/> ("HH:mm", site time) for <see cref="Minutes"/>, replacing the cycle's shift of that code or adding one,
+/// or, when <see cref="IsWorking"/> is false, doesn't run.
+/// </summary>
+public sealed record ShiftOverrideDto
+{
+    public DateOnly Date { get; init; }
+    public string Code { get; init; } = "";
+    public bool IsWorking { get; init; } = true;
+    public string Name { get; init; } = "";
+    public string Start { get; init; } = "06:00";
+    public int Minutes { get; init; } = 480;
+    public string? Crew { get; init; }
+    public string? Note { get; init; }
+}
+
 /// <summary>A site's shift schedule and the equipment that follows it (D-038).</summary>
 public sealed record ShiftScheduleDto
 {
@@ -25,6 +42,9 @@ public sealed record ShiftScheduleDto
     public int CycleDays { get; init; }
     public DateOnly CycleStart { get; init; }
     public IReadOnlyList<ShiftDto> Shifts { get; init; } = [];
+
+    /// <summary>Changes to single dates, by date then code (D-042).</summary>
+    public IReadOnlyList<ShiftOverrideDto> Overrides { get; init; } = [];
     public bool IsActive { get; init; }
 
     /// <summary>Working hours in one cycle.</summary>
@@ -65,13 +85,35 @@ public sealed record PreviewShiftScheduleRequest
     public DateOnly CycleStart { get; init; }
     public IReadOnlyList<ShiftDto> Shifts { get; init; } = [];
 
+    /// <summary>The schedule's date overrides, applied to the shifts shown (D-042).</summary>
+    public IReadOnlyList<ShiftOverrideDto> Overrides { get; init; } = [];
+
     /// <summary>The first site-local day to show; today when left out.</summary>
     public DateOnly? From { get; init; }
     public int Days { get; init; } = 7;
 }
 
-/// <summary>A shift on the calendar, with its times in the site's time zone.</summary>
-public sealed record ShiftOccurrenceDto(string Code, string Name, DateOnly ProductionDate, DateTimeOffset Start, DateTimeOffset End, string? Crew = null);
+/// <summary>A shift on the calendar, with its times in the site's time zone; <c>IsOverride</c> when a date override set it (D-042).</summary>
+public sealed record ShiftOccurrenceDto(string Code, string Name, DateOnly ProductionDate, DateTimeOffset Start, DateTimeOffset End, string? Crew = null,
+    bool IsOverride = false);
+
+/// <summary>Sets one date's override for a shift (D-042), adding it or replacing the one there.</summary>
+public sealed record SetShiftOverrideRequest
+{
+    public long Version { get; init; }
+    public DateOnly Date { get; init; }
+    public string Code { get; init; } = "";
+    public bool IsWorking { get; init; } = true;
+    public string? Name { get; init; }
+
+    /// <summary>"HH:mm"; left out, the cycle's start for this shift.</summary>
+    public string? Start { get; init; }
+
+    /// <summary>Left out, the cycle's length for this shift.</summary>
+    public int? Minutes { get; init; }
+    public string? Crew { get; init; }
+    public string? Note { get; init; }
+}
 
 public sealed record ShiftPreviewDto
 {

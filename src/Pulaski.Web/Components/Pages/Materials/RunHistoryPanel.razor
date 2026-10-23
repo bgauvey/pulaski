@@ -1,0 +1,160 @@
+@using System.Globalization
+@inject PulaskiApiClient Api
+
+@* A planning rate from run history (D-045): worked out on request, shown with every run it looked at and why any was left
+   out, and only made the calculated rate when the planner accepts it. A modified rate stays in force either way. *@
+<div class="border-top pt-3 mt-3">
+    <h4 class="h6 mb-1">From run history</h4>
+    <p class="small text-muted mb-2">
+        Work out the rate @LineCode really made @MaterialCode at: good output ÷ run time over its ended runs. Short runs, runs with no good output
+        and unusually slow or fast runs are left out. Nothing changes until you accept it.
+    </p>
+    <div class="d-flex flex-wrap gap-2 align-items-end">
+        <div>
+            <label class="form-label small" for="hist-days">Runs that ended in the last</label>
+            <select id="hist-days" class="form-select form-select-sm" @bind="_days">
+                @foreach (var d in new[] { 30, 60, 90, 180, 365 })
+                {
+                    <option value="@d">@d days</option>
+                }
+            </select>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="ReviewAsync">Work it out</button>
+        @if (Basis == "run_history")
+        {
+            <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="UseIdealAsync">Back to the ideal rate</button>
+        }
+    </div>
+
+    <ProblemAlert Error="_error" />
+
+    @if (_review is { } r)
+    {
+        <div class="mt-3">
+            @if (r.SuggestedRatePerHour is { } suggested)
+            {
+                <p class="mb-2">
+                    <span class="fw-semibold">@Qty(suggested) @r.UomCode/h</span>
+                    from @r.UsedRuns runs, @Qty(r.UsedHours) hours and @Qty(r.UsedGoodQty) @r.UomCode good.
+                    <span class="small text-muted">
+                        Now: calculated @Qty(r.CalculatedRatePerHour)@(r.IdealRatePerHour is { } ideal ? $", ideal {Qty(ideal)}" : "")@(r.ModifiedRatePerHour is { } m ? $", modified {Qty(m)} (in force)" : "") @r.UomCode/h;
+                        @Drift(suggested, r.EffectiveRatePerHour) the rate in force.
+                    </span>
+                </p>
+                @if (r.ModifiedRatePerHour is not null)
+                {
+                    <p class="small text-muted mb-2">Accepting sets the calculated rate. The modified rate stays in force for planning until you clear it.</p>
+                }
+                <button type="button" class="btn btn-sm btn-primary mb-2" disabled="@_busy" @onclick="AdoptAsync">Use @Qty(suggested) @r.UomCode/h as the calculated rate</button>
+            }
+            else
+            {
+                <p class="small text-warning-strong mb-2">No rate: @r.NotEnough It needs @r.MinRuns runs and @Qty(r.MinHours) hours of usable history.</p>
+            }
+
+            @if (r.Runs.Count == 0)
+            {
+                <p class="small text-muted mb-0">No ended runs of @MaterialCode on @LineCode in the last @r.Days days.</p>
+            }
+            else
+            {
+                <table class="table table-sm align-middle small mb-1">
+                    <thead><tr><th>Job</th><th>Run</th><th>Ended</th><th class="inv-num">Hours</th><th class="inv-num">Good, @r.UomCode</th><th class="inv-num">@r.UomCode/h</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var run in r.Runs)
+                        {
+                            <tr @key="run.RunId" class="@(run.Excluded is null ? "" : "text-muted")">
+                                <td>@run.JobNumber</td>
+                                <td>@run.RunNo</td>
+                                <td>@Display.ToSite(run.EndedAt, TimeZone).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</td>
+                                <td class="inv-num">@Qty(run.Hours)</td>
+                                <td class="inv-num">@(run.GoodQty is { } g ? Qty(g) : "—")</td>
+                                <td class="inv-num">@(run.RatePerHour is { } rate ? Qty(rate) : "—")</td>
+                                <td>@(run.Excluded is { } why ? $"Left out: {why}" : "Used")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (r.SlowFence is { } slow && r.FastFence is { } fast)
+                {
+                    <p class="small text-muted mb-0">Runs under @Qty(slow) or over @Qty(fast) @r.UomCode/h count as unusual.</p>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid RunStandardId { get; set; }
+
+    [Parameter, EditorRequired] public string LineCode { get; set; } = "";
+
+    [Parameter, EditorRequired] public string MaterialCode { get; set; } = "";
+
+    /// <summary>The run standard's calculation basis: <c>ideal_rate</c> or <c>run_history</c>.</summary>
+    [Parameter] public string Basis { get; set; } = "ideal_rate";
+
+    /// <summary>The line's site time zone, for the runs' times.</summary>
+    [Parameter] public string? TimeZone { get; set; }
+
+    /// <summary>The rate changed; the note says how.</summary>
+    [Parameter] public EventCallback<string> OnChanged { get; set; }
+
+    private int _days = 90;
+    private RunHistoryRateDto? _review;
+    private ApiException? _error;
+    private bool _busy;
+
+    private Task ReviewAsync() => RunAsync(async () => _review = await Api.GetRunHistoryRateAsync(RunStandardId, _days));
+
+    private Task AdoptAsync() => RunAsync(async () =>
+    {
+        var r = _review!;
+        await Api.AdoptHistoryRateAsync(RunStandardId, new AdoptHistoryRateRequest { Version = r.Version, Days = r.Days, RatePerHour = r.SuggestedRatePerHour!.Value });
+        _review = null;
+        await OnChanged.InvokeAsync($"The calculated planning rate on {LineCode} is now {Qty(r.SuggestedRatePerHour!.Value)} {r.UomCode}/h, from run history.");
+    });
+
+    private Task UseIdealAsync() => RunAsync(async () =>
+    {
+        var review = _review ?? await Api.GetRunHistoryRateAsync(RunStandardId, _days);
+        await Api.UseIdealRateAsync(RunStandardId, new UseIdealRateRequest { Version = review.Version });
+        _review = null;
+        await OnChanged.InvokeAsync($"The calculated planning rate on {LineCode} follows the ideal rate again.");
+    });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            if (ex.IsConflict)
+            {
+                _review = await Api.GetRunHistoryRateAsync(RunStandardId, _days);
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Drift(decimal suggested, decimal inForce)
+    {
+        if (inForce <= 0)
+        {
+            return "against";
+        }
+
+        var pct = (suggested - inForce) / inForce * 100m;
+        return Math.Abs(pct) < 0.5m ? "about the same as" : $"{Qty(Math.Abs(pct))}% {(pct > 0 ? "faster than" : "slower than")}";
+    }
+
+    private static string Qty(decimal value) => value.ToString("#,0.##", CultureInfo.InvariantCulture);
+}

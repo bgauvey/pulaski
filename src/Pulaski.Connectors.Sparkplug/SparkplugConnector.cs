@@ -7,7 +7,7 @@ using MQTTnet.Protocol;
 
 namespace Pulaski.Connectors.Sparkplug;
 
-/// <summary>Makes Sparkplug B connectors (D-041).</summary>
+/// <summary>Makes Sparkplug B connectors (D-050).</summary>
 public sealed class SparkplugConnectorFactory(TimeProvider time) : IConnectorFactory
 {
     public string Protocol => "sparkplug_b";
@@ -35,7 +35,7 @@ public sealed record SparkplugOptions(string Host, int Port, bool Tls, string Cl
 }
 
 /// <summary>
-/// A Sparkplug B host application (D-041): subscribes to the namespace (or one group), turns births, data and deaths into
+/// A Sparkplug B host application (D-050): subscribes to the namespace (or one group), turns births, data and deaths into
 /// samples, asks nodes for a rebirth when needed, and with a host id publishes its STATE so edge nodes know it is listening.
 /// It reconnects by itself; while the broker is away every address it heard is reported lost.
 /// </summary>

@@ -1,0 +1,480 @@
+@page "/site-settings"
+@attribute [RequiresView(PermissionCodes.SiteSettingsView)]
+@using System.Globalization
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+@inject TimeProvider Clock
+
+@* A site's settings (D-043): how changeovers get onto the schedule (D-015), the tolerances production reporting allows
+   (D-035), and the holidays and shutdowns taken out of the calendar. Each part saves on its own. *@
+<PageTitle>Site settings · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Site settings</h1>
+        <p class="text-muted mb-0">How a site plans changeovers, how far production reports may go, and when it doesn't work.</p>
+    </div>
+    <div class="inv-head-tools">
+        @if (Sites.Sites.Count > 1)
+        {
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.SiteSettings" What="change the site's settings" SiteId="Sites.SiteId" />
+
+@if (_message is { } message)
+{
+    <div class="alert alert-success d-flex align-items-center gap-2" role="status">
+        <span>@message</span>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">Dismiss</button>
+    </div>
+}
+
+@if (Sites.SiteId is null)
+{
+    <p class="text-muted">There is no site yet. Add one on <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink>.</p>
+}
+else
+{
+    <section class="inv-facts mb-3" aria-labelledby="changeover-heading">
+        <h2 class="h6" id="changeover-heading">Changeovers</h2>
+        @if (_scheduling is null)
+        {
+            <p class="small text-muted mb-0">Loading…</p>
+        }
+        else
+        {
+            <fieldset disabled="@(!CanManage)">
+                <legend class="visually-hidden">Who places changeovers</legend>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="changeover-mode" id="mode-auto" checked="@(_changeoverMode == "auto")"
+                           @onchange='() => _changeoverMode = "auto"' />
+                    <label class="form-check-label" for="mode-auto">
+                        <span class="fw-semibold">Automatic</span>
+                        <span class="d-block small text-muted">Pulaski adds a changeover wherever the material changes on a line, sized from the changeover rules, and resizes it as you resequence. It becomes a real changeover job when the next job starts.</span>
+                    </label>
+                </div>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="radio" name="changeover-mode" id="mode-scheduler" checked="@(_changeoverMode == "scheduler")"
+                           @onchange='() => _changeoverMode = "scheduler"' />
+                    <label class="form-check-label" for="mode-scheduler">
+                        <span class="fw-semibold">Placed by planners</span>
+                        <span class="d-block small text-muted">Planners add changeover jobs themselves. Pulaski sizes them from the rules unless they have their own length, and warns <em>Missing changeover</em> where the material changes with none in between.</span>
+                    </label>
+                </div>
+            </fieldset>
+            <p class="small text-muted mt-2 mb-2">
+                @(_scheduling.IsDefault ? "This site uses the default, automatic." : "")
+                The schedule shows a change on its next refresh, for every line in the site.
+            </p>
+            @if (CanManage)
+            {
+                <button type="button" class="btn btn-sm btn-primary" disabled="@(_saving || _changeoverMode == _scheduling.ChangeoverMode)" @onclick="SaveChangeoverAsync">Save changeovers</button>
+            }
+        }
+    </section>
+
+    <section class="inv-facts mb-3" aria-labelledby="tolerance-heading">
+        <h2 class="h6" id="tolerance-heading">Reporting tolerances</h2>
+        @if (_execution is null)
+        {
+            <p class="small text-muted mb-0">Loading…</p>
+        }
+        else
+        {
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold" for="rate-tolerance">Output, % of the ideal rate</label>
+                    <div class="input-group input-group-sm" style="max-width: 12rem">
+                        <input id="rate-tolerance" type="number" class="form-control" min="100" max="1000" step="0.1" disabled="@(!CanManage)"
+                               aria-describedby="rate-help" @bind="_rateTolerance" @bind:event="oninput" />
+                        <span class="input-group-text">%</span>
+                    </div>
+                    @if (SiteSettingsView.ToleranceProblem(_rateTolerance) is { } rateProblem)
+                    {
+                        <div class="small text-warning-strong mt-1">@rateProblem</div>
+                    }
+                    <p class="small text-muted mt-1 mb-0" id="rate-help">
+                        A <strong>limit</strong>: a run can't report more than its length × the line's ideal rate for the material × this percentage.
+                        @SiteSettingsView.RateExample(_rateTolerance)
+                    </p>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold" for="consumption-tolerance">Consumption, % of the planned components</label>
+                    <div class="input-group input-group-sm" style="max-width: 12rem">
+                        <input id="consumption-tolerance" type="number" class="form-control" min="100" max="1000" step="0.1" disabled="@(!CanManage)"
+                               aria-describedby="consumption-help" @bind="_consumptionTolerance" @bind:event="oninput" />
+                        <span class="input-group-text">%</span>
+                    </div>
+                    @if (SiteSettingsView.ToleranceProblem(_consumptionTolerance) is { } consumptionProblem)
+                    {
+                        <div class="small text-warning-strong mt-1">@consumptionProblem</div>
+                    }
+                    <p class="small text-muted mt-1 mb-0" id="consumption-help">
+                        A <strong>warning</strong>: a job may consume a component beyond its plan (scaled up when it makes more than planned) × this percentage, and the report says so.
+                        @SiteSettingsView.ConsumptionExample(_consumptionTolerance)
+                    </p>
+                </div>
+            </div>
+            <p class="small text-muted mt-2 mb-2">
+                100 to 1000%. @(_execution.IsDefault ? "This site uses the defaults, 110% each." : "")
+                A change applies to the next report on the site's lines; reports already made aren't checked again.
+            </p>
+            @if (CanManage)
+            {
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-primary" disabled="@(_saving || !TolerancesChanged || SiteSettingsView.ToleranceProblem(_rateTolerance) is not null || SiteSettingsView.ToleranceProblem(_consumptionTolerance) is not null)"
+                            @onclick="SaveTolerancesAsync">Save tolerances</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_saving"
+                            @onclick="() => { _rateTolerance = SiteSettingsView.DefaultTolerance; _consumptionTolerance = SiteSettingsView.DefaultTolerance; }">Use the defaults</button>
+                </div>
+            }
+        }
+    </section>
+
+    <section class="inv-facts mb-3" id="calendar-exceptions" aria-labelledby="exceptions-heading">
+        <h2 class="h6" id="exceptions-heading">Calendar exceptions: holidays and shutdowns</h2>
+        <p class="small text-muted">
+            Time taken out of the calendar of the site, an area or a line, and everything below it, whichever shift schedule it follows. Planning places no work in it;
+            work that would run into it waits until it ends. Times are in the site's time zone@(SiteZone is { } zone ? $" ({zone})" : "").
+            To change one shift on one day instead, use <ScreenLink Href="shifts" Permission="@PermissionCodes.ShiftsView">one-off changes on Shifts</ScreenLink>.
+        </p>
+
+        @if (_exceptions is null)
+        {
+            <p class="small text-muted">Loading…</p>
+        }
+        else
+        {
+            var now = Clock.GetUtcNow();
+            @if (_exceptions.Count == 0)
+            {
+                <p class="small text-muted">@(_showAll ? "No calendar exceptions at this site." : "No calendar exceptions from now on.")</p>
+            }
+            else
+            {
+                <table class="table table-sm align-middle mb-2">
+                    <thead>
+                        <tr>
+                            <th>When</th>
+                            <th>Applies to</th>
+                            <th>Kind</th>
+                            <th>Note</th>
+                            <th></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var x in _exceptions)
+                        {
+                            <tr @key="x.Id" class="@(x.IsActive && x.EndsAt > now ? "" : "text-muted")">
+                                <td class="small">@SiteSettingsView.Window(x, SiteZone)</td>
+                                <td class="small">@x.ScopeCode@(x.ScopeName != x.ScopeCode ? $" · {x.ScopeName}" : "")</td>
+                                <td class="small">@SiteSettingsView.KindLabel(x.Kind)</td>
+                                <td class="small">@(x.Note ?? "")</td>
+                                <td class="small">@(x.IsActive ? SiteSettingsView.When(x, now) : "Removed")</td>
+                                <td class="text-end text-nowrap">
+                                    @if (CanManage)
+                                    {
+                                        @if (x.IsActive)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => Edit(x)">Change</button>
+                                            <button type="button" class="btn btn-sm btn-link text-danger" disabled="@_saving" @onclick="() => SetActiveAsync(x, false)">Remove</button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => SetActiveAsync(x, true)">Put back</button>
+                                        }
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            <button type="button" class="btn btn-sm btn-link p-0 mb-3" @onclick="ToggleAllAsync">
+                @(_showAll ? "Show from now on" : "Show past and removed ones too")
+            </button>
+
+            @if (CanManage)
+            {
+                <form class="row g-2 align-items-end" @onsubmit="SaveExceptionAsync" @onsubmit:preventDefault>
+                    <div class="col-12"><h3 class="h6 mb-0">@(_form.Id is null ? "Add a calendar exception" : "Change the calendar exception")</h3></div>
+                    <div class="col-sm-3">
+                        <label class="form-label small" for="x-scope">Applies to</label>
+                        <select id="x-scope" class="form-select form-select-sm" @bind="_form.ScopeId" disabled="@(_form.Id is not null)">
+                            @foreach (var e in _scopes)
+                            {
+                                <option value="@e.Id">@(new string(' ', Math.Max(0, e.Depth - 1) * 2))@e.Code · @e.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-sm-2">
+                        <label class="form-label small" for="x-kind">Kind</label>
+                        <select id="x-kind" class="form-select form-select-sm" @bind="_form.Kind">
+                            @foreach (var (kind, label) in SiteSettingsView.Kinds)
+                            {
+                                <option value="@kind">@label</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-sm-2">
+                        <label class="form-label small" for="x-from">From</label>
+                        <input id="x-from" type="datetime-local" class="form-control form-control-sm" @bind="_form.From" />
+                    </div>
+                    <div class="col-sm-2">
+                        <label class="form-label small" for="x-to">Until</label>
+                        <input id="x-to" type="datetime-local" class="form-control form-control-sm" @bind="_form.To" />
+                    </div>
+                    <div class="col">
+                        <label class="form-label small" for="x-note">Note (optional)</label>
+                        <input id="x-note" class="form-control form-control-sm" maxlength="500" placeholder="e.g. Christmas shutdown" @bind="_form.Note" />
+                    </div>
+                    <div class="col-auto d-flex gap-2">
+                        <button type="submit" class="btn btn-sm btn-primary" disabled="@(_saving || _form.ScopeId == Guid.Empty || _form.To <= _form.From)">
+                            @(_form.Id is null ? "Add exception" : "Save exception")
+                        </button>
+                        @if (_form.Id is not null)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ResetForm">Cancel</button>
+                        }
+                    </div>
+                    @if (_form.To <= _form.From)
+                    {
+                        <div class="col-12 small text-warning-strong">It must end after it starts.</div>
+                    }
+                </form>
+            }
+        }
+    </section>
+}
+
+@code {
+    private SchedulingPolicyDto? _scheduling;
+    private ExecutionPolicyDto? _execution;
+    private IReadOnlyList<CalendarExceptionDto>? _exceptions;
+    private IReadOnlyList<EquipmentDto> _scopes = [];
+    private string _changeoverMode = "auto";
+    private decimal? _rateTolerance;
+    private decimal? _consumptionTolerance;
+    private bool _showAll;
+    private bool _saving;
+    private ApiException? _error;
+    private string? _message;
+    private readonly ExceptionForm _form = new();
+
+    private bool CanManage => User.Can(PermissionCodes.SiteSettings, Sites.SiteId);
+
+    private string? SiteZone => Sites.Site?.TimeZone;
+
+    private bool TolerancesChanged => _execution is not null
+        && (_rateTolerance != _execution.RateTolerancePct || _consumptionTolerance != _execution.ConsumptionTolerancePct || _execution.IsDefault);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _scheduling = null;
+        _execution = null;
+        _exceptions = null;
+        _message = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            return;
+        }
+
+        try
+        {
+            _scheduling = await Api.GetSchedulingPolicyAsync(site);
+            _changeoverMode = _scheduling.ChangeoverMode;
+            _execution = await Api.GetExecutionPolicyAsync(site);
+            _rateTolerance = _execution.RateTolerancePct;
+            _consumptionTolerance = _execution.ConsumptionTolerancePct;
+            await LoadExceptionsAsync();
+            if (CanManage && _scopes.Count == 0)
+            {
+                _scopes = SiteSettingsView.Scopes(await Api.ListEquipmentAsync(site), site);
+                ResetForm();
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task LoadExceptionsAsync() =>
+        _exceptions = await Api.ListCalendarExceptionsAsync(Sites.SiteId!.Value, _showAll ? null : Clock.GetUtcNow(), includeRemoved: _showAll);
+
+    private async Task ToggleAllAsync()
+    {
+        _showAll = !_showAll;
+        try
+        {
+            await LoadExceptionsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task SaveChangeoverAsync() => await RunAsync(async site =>
+    {
+        await Api.SetSchedulingPolicyAsync(site, new SetSchedulingPolicyRequest { Version = _scheduling!.Version, ChangeoverMode = _changeoverMode });
+        return _changeoverMode == "auto" ? "Changeovers are now added automatically." : "Changeovers are now placed by planners.";
+    });
+
+    private async Task SaveTolerancesAsync() => await RunAsync(async site =>
+    {
+        await Api.SetExecutionPolicyAsync(site, new SetExecutionPolicyRequest
+        {
+            Version = _execution!.Version,
+            RateTolerancePct = _rateTolerance!.Value,
+            ConsumptionTolerancePct = _consumptionTolerance!.Value,
+        });
+        return "Saved the reporting tolerances; the next report uses them.";
+    });
+
+    private async Task SaveExceptionAsync() => await RunAsync(async site =>
+    {
+        var startsAt = Display.FromSiteLocal(_form.From, SiteZone)!.Value;
+        var endsAt = Display.FromSiteLocal(_form.To, SiteZone)!.Value;
+        if (_form.Id is { } id)
+        {
+            await Api.UpdateCalendarExceptionAsync(id, new UpdateCalendarExceptionRequest
+            {
+                Version = _form.Version,
+                Kind = _form.Kind,
+                StartsAt = startsAt,
+                EndsAt = endsAt,
+                Note = _form.Note,
+                IsActive = true,
+            });
+            ResetForm();
+            return "Saved the calendar exception. The schedule shows it on its next refresh.";
+        }
+
+        await Api.CreateCalendarExceptionAsync(new CreateCalendarExceptionRequest
+        {
+            ScopeEquipmentId = _form.ScopeId,
+            Kind = _form.Kind,
+            StartsAt = startsAt,
+            EndsAt = endsAt,
+            Note = _form.Note,
+        });
+        ResetForm();
+        return "Added the calendar exception. The schedule shows it on its next refresh.";
+    });
+
+    private async Task SetActiveAsync(CalendarExceptionDto x, bool active) => await RunAsync(async _ =>
+    {
+        await Api.UpdateCalendarExceptionAsync(x.Id, new UpdateCalendarExceptionRequest
+        {
+            Version = x.Version,
+            Kind = x.Kind,
+            StartsAt = x.StartsAt,
+            EndsAt = x.EndsAt,
+            Note = x.Note,
+            IsActive = active,
+        });
+        return active ? "Put the calendar exception back." : "Removed the calendar exception; planning uses that time again.";
+    });
+
+    private async Task RunAsync(Func<Guid, Task<string>> action)
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        _message = null;
+        try
+        {
+            _message = await action(site);
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            if (ex.IsConflict)
+            {
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Edit(CalendarExceptionDto x)
+    {
+        _form.Id = x.Id;
+        _form.Version = x.Version;
+        _form.ScopeId = x.ScopeEquipmentId;
+        _form.Kind = x.Kind;
+        _form.From = Display.ToSite(x.StartsAt, SiteZone).DateTime;
+        _form.To = Display.ToSite(x.EndsAt, SiteZone).DateTime;
+        _form.Note = x.Note;
+    }
+
+    // A new one starts as tomorrow, a whole day in site time, on the site.
+    private void ResetForm()
+    {
+        var today = Display.ToSite(Clock.GetUtcNow(), SiteZone).Date;
+        _form.Id = null;
+        _form.Version = 0;
+        _form.ScopeId = Sites.SiteId ?? Guid.Empty;
+        _form.Kind = "holiday";
+        _form.From = today.AddDays(1);
+        _form.To = today.AddDays(2);
+        _form.Note = null;
+    }
+
+    private sealed class ExceptionForm
+    {
+        public Guid? Id { get; set; }
+
+        public long Version { get; set; }
+
+        public Guid ScopeId { get; set; }
+
+        public string Kind { get; set; } = "holiday";
+
+        public DateTime From { get; set; }
+
+        public DateTime To { get; set; }
+
+        public string? Note { get; set; }
+    }
+}

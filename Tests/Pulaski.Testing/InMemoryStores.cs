@@ -61,6 +61,14 @@ public sealed class InMemoryStores
 
     public InMemoryShifts Shifts { get; } = new();
 
+    public InMemoryCalendarExceptions CalendarExceptions { get; } = new();
+
+    public InMemoryProductionReports ProductionReports { get; } = new();
+
+    private InMemoryRunHistory? _runHistory;
+
+    public InMemoryRunHistory RunHistory => _runHistory ??= new(Scheduling);
+
     public InMemoryLabor Labor { get; } = new();
 
     public InMemoryMachineData MachineData { get; } = new();
@@ -70,6 +78,8 @@ public sealed class InMemoryStores
     public InMemoryStops Stops { get; } = new();
 
     public InMemoryOee Oee { get; } = new();
+
+    public InMemoryTerminals Terminals { get; } = new();
 
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
@@ -103,6 +113,10 @@ public sealed class InMemoryStores
         services.RemoveAll<IPasswordHasher>();
         services.RemoveAll<IShiftReadStore>();
         services.RemoveAll<IShiftRepository>();
+        services.RemoveAll<ICalendarExceptionReadStore>();
+        services.RemoveAll<ICalendarExceptionRepository>();
+        services.RemoveAll<IProductionReportReadStore>();
+        services.RemoveAll<IRunHistoryReadStore>();
         services.RemoveAll<ILaborReadStore>();
         services.RemoveAll<ILaborRepository>();
         services.RemoveAll<IMachineDataReadStore>();
@@ -112,6 +126,11 @@ public sealed class InMemoryStores
         services.RemoveAll<IStopReadStore>();
         services.RemoveAll<IStopRepository>();
         services.RemoveAll<IOeeReadStore>();
+        services.RemoveAll<IQualificationRepository>();
+        services.RemoveAll<ITerminalRepository>();
+        services.RemoveAll<ITerminalReadStore>();
+        services.RemoveAll<IBadgeHasher>();
+        services.RemoveAll<IQualificationReadStore>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -142,6 +161,10 @@ public sealed class InMemoryStores
         services.AddSingleton<IPasswordHasher>(new PlainPasswordHasher());
         services.AddSingleton<IShiftReadStore>(Shifts);
         services.AddSingleton<IShiftRepository>(Shifts);
+        services.AddSingleton<ICalendarExceptionReadStore>(CalendarExceptions);
+        services.AddSingleton<ICalendarExceptionRepository>(CalendarExceptions);
+        services.AddSingleton<IProductionReportReadStore>(ProductionReports);
+        services.AddSingleton<IRunHistoryReadStore>(RunHistory);
         services.AddSingleton<ILaborReadStore>(Labor);
         services.AddSingleton<ILaborRepository>(Labor);
         services.AddSingleton<IMachineDataReadStore>(MachineData);
@@ -151,6 +174,11 @@ public sealed class InMemoryStores
         services.AddSingleton<IStopReadStore>(Stops);
         services.AddSingleton<IStopRepository>(Stops);
         services.AddSingleton<IOeeReadStore>(Oee);
+        services.AddSingleton<IQualificationRepository>(Labor);
+        services.AddSingleton<IQualificationReadStore>(Labor);
+        services.AddSingleton<ITerminalRepository>(Terminals);
+        services.AddSingleton<ITerminalReadStore>(Terminals);
+        services.AddSingleton<IBadgeHasher>(new ReversingBadgeHasher());
         return services;
     }
 }

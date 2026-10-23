@@ -4,7 +4,7 @@
 @inject Downloads Downloads
 @inject TimeProvider Clock
 
-@* Utilization and OEE between two production days (D-043): by equipment, shift and product, and where the time went; each exportable as CSV. *@
+@* Utilization and OEE between two production days (D-052): by equipment, shift and product, and where the time went; each exportable as CSV. *@
 <div class="inv-toolbar flex-wrap">
     <label class="small text-muted" for="oee-from">From</label>
     <input id="oee-from" type="date" class="form-control w-auto" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="e => SetDay(e, true)" />

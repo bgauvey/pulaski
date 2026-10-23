@@ -47,7 +47,7 @@ public sealed record SetProfileReasonsRequest
     public IReadOnlyList<Guid> ReasonCodeIds { get; init; } = [];
 }
 
-/// <summary>An equipment's machine data (D-041): its profile, where its state comes from, and its micro-stop threshold.</summary>
+/// <summary>An equipment's machine data (D-050): its profile, where its state comes from, and its micro-stop threshold.</summary>
 public sealed record SetEquipmentMachineDataRequest
 {
     public long Version { get; init; }

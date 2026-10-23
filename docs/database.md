@@ -32,13 +32,13 @@ Equipment model            Material & capability          Calendar
             ├─ tag                     bom ─ bom_version ─ bom_item shift_instance
             ├─ stop_reason_map         equipment_capability (D-020) calendar_exception
             ├─ oee_state_category
-            └─ machine_profile ─ _state, _code, _reason (D-041)
+            └─ machine_profile ─ _state, _code, _reason (D-050)
 
 Orders & scheduling                       Execution & inventory
  manufacturing_order                       job_run ─── ts.production_count, ts.downtime
   └─ work_order                            lot ─ material_load, lot_genealogy, ts.lot_event,
                                                 stock_count ─ stock_count_line
-      └─ job ── job_material               labor_session
+      └─ job ── job_material               labor_session, labor_break, labor_approval
           └─ job_run                       quality_characteristic ─ spec_limit, control_limit,
  scheduling_policy, run_standard,             characteristic_rule, spc_alert,
  changeover_rule                              ts.quality_sample, ts.spc_violation
@@ -46,7 +46,8 @@ Orders & scheduling                       Execution & inventory
 People & access                            History & events
  sec.app_user, role, permission,           ts.* (state, downtime, alarms, counts,
  role_assignment, terminal, badge            process values, job status, lots, quality, OEE)
- core.person, qualification                evt.event, evt.sink_checkpoint
+ core.person, qualification,               evt.event, evt.sink_checkpoint
+ person_qualification, equipment_qualification
 ```
 
 ---
@@ -99,10 +100,10 @@ One self-referencing table holds enterprise, sites, areas, work centers (lines),
 | `holds_inventory` | boolean | no | Lots can be located here (storage, feed point). |
 | `single_material` | boolean | no | Takes one material at a time (D-032): another material can arrive only when the quantity of the one there is zero. Needs `holds_inventory`. |
 | `commingles_lots` | boolean | no | Lots here mix and can't be told apart, like a silo or tank (D-031): every arrival joins one balance per material. Needs `holds_inventory`. |
-| `state_derivation` | text | no | Where its state comes from (D-041): `own_tags` (default, its own state tag), `series` (the worst state of its machines), `parallel` (the best) or `constraint_machine`. Set on the Equipment screen; nothing reads it until machine data is collected. |
+| `state_derivation` | text | no | Where its state comes from (D-050): `own_tags` (default, its own state tag), `series` (the worst state of its machines), `parallel` (the best) or `constraint_machine`. Set on the Equipment screen; nothing reads it until machine data is collected. |
 | `constraint_equipment_id` | uuid → equipment | yes | The constraint machine: set exactly when `state_derivation = 'constraint_machine'` (`equipment_derivation_ck`), and equipment below this one that tracks state. |
-| `micro_stop_threshold` | interval | no | Stops shorter than this are micro-stops (D-041): logged, not queued for coding, not availability loss. 0 to 60 minutes (`equipment_micro_stop_ck`), default 5. |
-| `machine_profile_id` | uuid → machine_profile | yes | The machine profile its state and stop codes are read with (D-041). Only equipment that tracks state takes one, of its own site. |
+| `micro_stop_threshold` | interval | no | Stops shorter than this are micro-stops (D-050): logged, not queued for coding, not availability loss. 0 to 60 minutes (`equipment_micro_stop_ck`), default 5. |
+| `machine_profile_id` | uuid → machine_profile | yes | The machine profile its state and stop codes are read with (D-050). Only equipment that tracks state takes one, of its own site. |
 | `time_zone` | text | yes | IANA zone, required on sites. Shift times and reports use it. |
 | `is_active` | boolean | no | False when retired. |
 | `calendar_mode` | text | no | Which working time it follows for planning (D-038): `inherit` (default, its parent's; at the top with nothing set, around the clock), `schedule` (its own) or `around_the_clock`. |
@@ -144,7 +145,7 @@ How long material takes to travel a link, for time-window genealogy. Optionally 
 | `ref_residence` | interval | no | The residence time, at `ref_speed` when speed-scaled. |
 | `ref_speed` | numeric(18,6) | yes | Reference line speed; required and positive for `speed_scaled`. |
 
-### core.edge_node — Pulaski Edge nodes · *In use (D-041)*
+### core.edge_node — Pulaski Edge nodes · *In use (D-050)*
 
 A worker on plant hardware that reads machines through its connections, buffers what it reads and forwards it. It signs in as a local user holding the Edge node role (`edge.ingest`) at the site. Maintained on Configure → Edge nodes (`equipment.manage`).
 
@@ -161,7 +162,7 @@ A worker on plant hardware that reads machines through its connections, buffers 
 | `agent_version` | text | yes | The version of Pulaski Edge it runs. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
-### core.edge_connection — what an edge node reads · *In use (D-041)*
+### core.edge_connection — what an edge node reads · *In use (D-050)*
 
 One data source, read through one connector. Secrets such as broker passwords live in the edge's own configuration, never here.
 
@@ -176,7 +177,7 @@ One data source, read through one connector. Secrets such as broker passwords li
 | `is_active` | boolean | no | Off: the edge stops reading it. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
-### core.edge_metric — addresses a connection has seen · *In use (D-041)*
+### core.edge_metric — addresses a connection has seen · *In use (D-050)*
 
 What the edge reported seeing (Sparkplug birth certificates and data), so tags can be bound by picking them. Upserted by the edge.
 
@@ -188,7 +189,7 @@ What the edge reported seeing (Sparkplug birth certificates and data), so tags c
 | `last_value` | text | yes | The last value seen, as text. |
 | `last_seen_at` | timestamptz | no | When it was last seen. |
 
-### core.equipment_tag — machine signal bindings · *In use (D-041)*
+### core.equipment_tag — machine signal bindings · *In use (D-050)*
 
 One signal an edge reads for a piece of equipment, and what it means. One active tag per role on a piece of equipment, process values aside (`equipment_tag_role_uq`), and one per address on a connection (`equipment_tag_source_uq`). A tag may be physically deleted by equipment maintainers; any quality-characteristic source binding is cleared first. The deletion event and time-series history remain.
 
@@ -206,7 +207,7 @@ One signal an edge reads for a piece of equipment, and what it means. One active
 | `is_active` | boolean | no | Off: its signals are skipped. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
-### core.equipment_live_state — each machine's current state · *In use (D-041)*
+### core.equipment_live_state — each machine's current state · *In use (D-050)*
 
 As its signals last left it. Written by machine data ingest only.
 
@@ -224,7 +225,7 @@ As its signals last left it. Written by machine data ingest only.
 | `open_downtime_id`, `open_downtime_started_at` | uuid, timestamptz | yes | Its stop in progress in `ts.downtime` (no foreign key into history); both null while it executes (`equipment_live_downtime_ck`). |
 | `updated_at` | timestamptz | no | When it was written. |
 
-### core.equipment_counter — last counter readings · *In use (D-041)*
+### core.equipment_counter — last counter readings · *In use (D-050)*
 
 The last raw reading of each machine counter, so the next reading becomes a count.
 
@@ -466,7 +467,7 @@ Planned production time comes from the shifts of the schedule each line follows 
 
 ### core.shift_schedule — a site's shift schedule · *In use (D-038)*
 
-Shifts that repeat every `cycle_days` from `cycle_start`, in the site's time zone. Shift times aren't stored: planning works them out from the schedule the line follows (its own, or the nearest ancestor's). Switched off, not deleted.
+Shifts that repeat every `cycle_days` from `cycle_start`, in the site's time zone, with one-off changes to single days. Shift times aren't stored: planning, labor and reports work them out from the schedule the line follows (its own, or the nearest ancestor's), overrides applied. Switched off, not deleted.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -478,6 +479,7 @@ Shifts that repeat every `cycle_days` from `cycle_start`, in the site's time zon
 | `cycle_days` | integer | no | Length of the cycle, 1 to 56: 7 for weekly, 28 for a four-week rotation. |
 | `cycle_start` | date | no | The cycle's first day (site-local). |
 | `shifts` | jsonb | no | The shifts, saved whole: an array of `{code, name, start "HH:mm", minutes, days [0…cycle_days − 1], crew}` (`crew`, D-040, is the code of an active crew of the site, or null). They don't overlap, also across the end of the cycle; each belongs to the day it starts on. |
+| `overrides` | jsonb | no | One-off changes to single production days (D-042), saved whole: an array of `{date, code, isWorking, name, start "HH:mm", minutes, crew, note}`, at most one per date and code. A code the cycle runs that day is replaced (or, with `isWorking` false, taken off); another code is an extra shift. They don't overlap the shifts around them. At most 1000. |
 | `is_active` | boolean | no | False when switched off: it can't be chosen. One that equipment follows can't be switched off. |
 | `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
@@ -507,29 +509,33 @@ For recording shifts as worked (reporting by shift, crews), which isn't built. P
 | `starts_at`, `ends_at` | timestamptz | no | The shift window; end after start. |
 | `is_scheduled` | boolean | no | False when the shift exists but is not staffed, so no work is planned in it. |
 
-### core.calendar_exception — time taken out of the calendar · *In use (read)*
+### core.calendar_exception — time taken out of the calendar · *In use (D-043)*
+
+Holidays, shutdowns and weeks without demand, maintained on Configure → Site settings. The projection takes the active ones on the line and every equipment above it out of the line's working time, whatever schedule it follows. Removed ones are switched off, never deleted.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `scope_equipment_id` | uuid → equipment | no | Applies to this equipment and everything below it. |
-| `kind` | text | no | `holiday`, `no_demand`, `planned_shutdown` or `other`. |
-| `starts_at`, `ends_at` | timestamptz | no | The window removed; end after start. |
-| `note` | text | yes | Free text. |
+| `scope_equipment_id` | uuid → equipment | no | Applies to this equipment and everything below it: a site or anything in one (not the enterprise), active when saved. |
+| `kind` | text | no | `holiday`, `no_demand`, `planned_shutdown` or `other`; a label only, every kind takes the time out alike. |
+| `starts_at`, `ends_at` | timestamptz | no | The window removed; end after start, at most 366 days. |
+| `note` | text | yes | Free text, up to 500 characters. |
+| `is_active` | boolean | no | False once removed: it takes no time out. It can be put back. |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
 ## 5. Reason codes
 
 ### core.reason_code — reason trees · *In use*
 
-One tree per kind of reason. Branches group; leaves are selected. Inventory uses the `inventory_adjustment` and `hold` kinds (D-027); machine time uses `utilization` (D-041); `db/seed-reasons.sql` loads a starter set, and the Reasons screen adds and changes them (D-030). A code and its kind never change once created; the name, `requires_comment`, `sort_order`, `is_active` and a utilization reason's class can. The tree (`parent_id`) isn't edited yet.
+One tree per kind of reason. Branches group; leaves are selected. Inventory uses the `inventory_adjustment` and `hold` kinds (D-027); machine time uses `utilization` (D-050); `db/seed-reasons.sql` loads a starter set, and the Reasons screen adds and changes them (D-030). A code and its kind never change once created; the name, `requires_comment`, `sort_order`, `is_active` and a utilization reason's class can. The tree (`parent_id`) isn't edited yet.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
 | `site_id` | uuid → equipment | yes | Null for enterprise-wide codes. |
 | `parent_id` | uuid → reason_code | yes | Parent node in the tree. |
-| `reason_kind` | text | no | `utilization`, `scrap`, `hold`, `inventory_adjustment`, `indirect_labor`, `run_end`, `spc_cause` or `sample_exclusion`. `utilization` replaced the planned `downtime` kind (0015). |
-| `utilization_class` | text | yes | For a utilization reason, and only for one (`reason_code_utilization_ck`): `runtime` (run time), `downtime` (availability loss) or `planned` (left out of planned time) (D-041). |
+| `reason_kind` | text | no | `utilization`, `scrap`, `hold`, `inventory_adjustment`, `indirect_labor`, `run_end`, `spc_cause` or `sample_exclusion`. `utilization` replaced the planned `downtime` kind (0019). |
+| `utilization_class` | text | yes | For a utilization reason, and only for one (`reason_code_utilization_ck`): `runtime` (run time), `downtime` (availability loss) or `planned` (left out of planned time) (D-050). |
 | `code` | text | no | Unique per site and kind. |
 | `name` | text | no | Display name. |
 | `oee_impact` | text | no | Which OEE factor it lowers: `availability`, `performance`, `quality`, `planned` (excluded from OEE) or `none`. |
@@ -538,7 +544,7 @@ One tree per kind of reason. Branches group; leaves are selected. Inventory uses
 | `sort_order` | integer | no | Display order among siblings. |
 | `is_active` | boolean | no | False when retired. |
 
-### core.machine_profile — one kind of machine · *In use (D-041)*
+### core.machine_profile — one kind of machine · *In use (D-050)*
 
 How a kind of machine reports itself: its state values and its own stop, alarm and warning codes. Identical machines share one; a machine of another vendor or model gets its own. Kept per site, like the reasons it maps to. Maintained on Configure → Machine profiles (`equipment.manage`). Every change to its lists also updates the row, so its version (`xmin`) guards the lists too.
 
@@ -553,7 +559,7 @@ How a kind of machine reports itself: its state values and its own stop, alarm a
 | `is_active` | boolean | no | Switched off rather than deleted; not while active equipment uses it. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
-### core.machine_profile_state — a profile's state values · *In use (D-041)*
+### core.machine_profile_state — a profile's state values · *In use (D-050)*
 
 The values the machine's state tag takes, each with the PackML state it means. A new profile gets PackML's own 18 numbers. Switched off, never deleted.
 
@@ -566,7 +572,7 @@ The values the machine's state tag takes, each with the PackML state it means. A
 | `reason_code_id` | uuid → reason_code | yes | Utilization reason for time in this state when the machine gives no stop code, e.g. Suspended = starved. |
 | `is_active` | boolean | no | False when an import left it out or someone switched it off. |
 
-### core.machine_profile_code — a profile's stop, alarm and warning codes · *In use (D-041)*
+### core.machine_profile_code — a profile's stop, alarm and warning codes · *In use (D-050)*
 
 The machine's own codes (PackML `Admin.StopReason`, `Admin.Alarm`, `Admin.Warning` ids), each mapped to a utilization reason. An unmapped stop code shows as uncoded.
 
@@ -580,7 +586,7 @@ The machine's own codes (PackML `Admin.StopReason`, `Admin.Alarm`, `Admin.Warnin
 | `reason_code_id` | uuid → reason_code | yes | The utilization reason it counts as. |
 | `is_active` | boolean | no | False when an import left it out or someone switched it off. |
 
-### core.machine_profile_reason — reasons offered on a profile's machines · *In use (D-041)*
+### core.machine_profile_reason — reasons offered on a profile's machines · *In use (D-050)*
 
 The utilization reasons operators may choose on the profile's machines, besides the ones its codes and states map to.
 
@@ -590,7 +596,7 @@ The utilization reasons operators may choose on the profile's machines, besides 
 | `reason_code_id` | uuid → reason_code | no | Part of the primary key. |
 | `is_offered` | boolean | no | False once unticked (rows aren't deleted). |
 
-### core.equipment_stop_reason_map — one machine's own stop reasons · *In use (D-041)*
+### core.equipment_stop_reason_map — one machine's own stop reasons · *In use (D-050)*
 
 Where one machine's stop code means something other than on the rest of its profile's machines. Changing it updates the equipment row, so the equipment's version guards it.
 
@@ -679,29 +685,40 @@ A role granted to one user (or, later, to an identity-provider group) at a site.
 | `granted_by_user_id` | uuid → app_user | yes | Who granted it; null for the first administrator. |
 | `ended_by_user_id` | uuid → app_user | yes | Who took it away. |
 
-### sec.terminal — shop-floor devices · *Planned*
+### sec.terminal — shop-floor devices · *In use (D-049)*
+
+A shared tablet or panel PC where people badge to clock on and off and take breaks. Registered on Configure → Terminals and enrolled on the device with a one-time code, which gives it a random secret it sends as `Authorization: Terminal <secret>`. Only SHA-256 hashes of the code and the secret are kept. Switched off, not deleted; a switched-off terminal is refused at once.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `code` | text | no | Unique code. |
-| `name` | text | no | Display name. |
-| `scope_equipment_id` | uuid → equipment | no | What the terminal can see; an operator badging in sees only this. |
-| `default_equipment_id` | uuid → equipment | yes | The line it opens on. |
-| `auth_mode` | text | no | `user_login`, `badge` or `badge_plus_pin`. |
-| `is_active` | boolean | no | False when retired. |
-| `last_seen_at` | timestamptz | yes | Last contact. |
+| `site_id` | uuid → equipment | no | The site, from its scope; fixed. |
+| `code` | text | no | Unique per site, upper case; fixed once created. It is the actor of what the terminal records (`terminal:<code>`). |
+| `name` | text | no | Display name, such as where it hangs. |
+| `scope_equipment_id` | uuid → equipment | no | A site, area or line: the terminal offers the active lines that run jobs at or below it. |
+| `default_equipment_id` | uuid → equipment | yes | The line it offers first; one of those it offers. |
+| `auth_mode` | text | no | `badge` or `badge_plus_pin`. |
+| `is_active` | boolean | no | False when switched off. |
+| `secret_hash` | bytea | yes | SHA-256 of the device secret; null until enrolled. Unique. Enrolling again replaces it. |
+| `enrolled_at` | timestamptz | yes | When last enrolled. |
+| `enrolment_code_hash` | bytea | yes | SHA-256 of a waiting one-time code; cleared when used. |
+| `enrolment_expires_at` | timestamptz | yes | Until when the code works (15 minutes); set exactly with the code. |
+| `last_seen_at` | timestamptz | yes | When someone last badged there. |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
-### sec.badge — badge credentials · *Planned*
+### sec.badge — badge credentials · *In use (D-049)*
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `person_id` | uuid → person | no | Whose badge. |
-| `badge_hash` | bytea | no | Keyed hash (HMAC) of the badge value; the raw value is never stored. Unique. |
-| `pin_hash` | bytea | yes | Hash of the PIN, for `badge_plus_pin`. |
-| `issued_at` | timestamptz | no | When issued. |
-| `revoked_at` | timestamptz | yes | When revoked. |
+| `person_id` | uuid → person | no | Whose badge. At most one active badge per person (`badge_active_person_uq`): a new one revokes the old. |
+| `badge_hash` | bytea | no | HMAC-SHA256 of the badge value (trimmed, upper case) with a key derived from the API's signing key; the raw value is never stored. Unique among active badges (`badge_active_value_uq`). |
+| `pin_hash` | text | yes | The PIN (4 to 8 digits), hashed like a password, for `badge_plus_pin` terminals. |
+| `issued_at`, `issued_by` | timestamptz, text | no | When and by whom. |
+| `revoked_at`, `revoked_by` | timestamptz, text | yes | When revoked; revoked badges are kept. |
+| `failed_pins` | integer | no | Wrong PINs in a row; reset by a right one. |
+| `locked_until` | timestamptz | yes | Five wrong PINs lock the badge for 5 minutes. |
+| `last_used_at` | timestamptz | yes | When it last identified its person. |
 
 ## 7. Personnel
 
@@ -721,32 +738,49 @@ A person is not necessarily a user: many operators only badge in.
 | `is_active` | boolean | no | False when they leave; refused while they are clocked on. |
 | `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
-### core.qualification — skills and certifications · *Planned*
+### core.qualification — skills and certifications · *In use (D-048)*
+
+A site's qualifications, maintained on Configure → People → Qualifications. Switched off, not deleted: a switched-off one can't be granted or required, and its requirements stop applying.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `site_id` | uuid → equipment | yes | Null for enterprise-wide. |
-| `code` | text | no | Unique per site. |
+| `site_id` | uuid → equipment | no | The site. |
+| `code` | text | no | Unique per site, upper case; fixed once created. |
 | `name` | text | no | Display name. |
+| `description` | text | yes | Up to 500 characters. |
+| `validity_months` | integer | yes | How long a new grant lasts by default, 1 to 120 months; null: it doesn't expire. |
+| `is_active` | boolean | no | False when switched off. |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
-### core.person_qualification — who holds what · *Planned*
+### core.person_qualification — who holds what, for which days · *In use (D-048)*
 
-| Column | Type | Null | Description |
-| --- | --- | --- | --- |
-| `person_id` | uuid → person | no | The person. Part of the primary key. |
-| `qualification_id` | uuid → qualification | no | The qualification. Part of the primary key. |
-| `granted_at` | timestamptz | no | When granted. |
-| `expires_at` | timestamptz | yes | When it lapses. |
-
-### core.equipment_qualification — what equipment requires · *Planned*
-
-Requirements are inherited down the equipment hierarchy.
+A grant. A renewal is a new grant, so a person may have several of one qualification; they hold it on a day when any grant is valid then. Revoked, never deleted.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `equipment_id` | uuid → equipment | no | The equipment. Part of the primary key. |
-| `qualification_id` | uuid → qualification | no | Required to run it. Part of the primary key. |
+| `id` | uuid | no | Primary key. |
+| `person_id` | uuid → person | no | The person. |
+| `qualification_id` | uuid → qualification | no | A qualification of the person's site. |
+| `valid_from` | date | no | The first valid day (site-local). |
+| `expires_on` | date | yes | The last valid day, inclusive; null: no expiry. Not before `valid_from`. |
+| `note` | text | yes | Such as a certificate number. |
+| `granted_by` | text | no | Who recorded it (actor). |
+| `revoked_at` | timestamptz | yes | From when it no longer counts. |
+| `revoked_by` | text | yes | Who revoked it; set exactly when `revoked_at` is. |
+| `revoke_reason` | text | yes | Why. |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
+
+### core.equipment_qualification — what equipment requires · *In use (D-048)*
+
+Requirements apply to the equipment and everything below it (through `equipment_closure`). Set on Configure → Equipment. Pulaski warns, never refuses, when someone without one is put on a line.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `equipment_id` | uuid → equipment | no | The equipment, in the qualification's site. Part of the primary key. |
+| `qualification_id` | uuid → qualification | no | Required to work on it. Part of the primary key. |
+| `is_required` | boolean | no | False once no longer required (rows are never deleted). |
+| `updated_at` | timestamptz | no | Last change. |
 
 ## 8. Orders and scheduling
 
@@ -871,6 +905,8 @@ A site without a row uses the defaults.
 | `consumption_tolerance_pct` | numeric(6,1) | no | Consumption beyond the planned components × this percent is recorded with a warning. 100 to 1000; default 110. |
 | `updated_at` | timestamptz | no | Last change. |
 
+Maintained on Configure → Site settings (D-043). Its `xmin` is the version a change must name; a site without a row is at version 0.
+
 ### core.scheduling_policy — per-site scheduling settings (D-015) · *In use*
 
 A site without a row uses the defaults.
@@ -891,8 +927,8 @@ The rate the projection uses: runtime = remaining quantity ÷ effective rate. Hi
 | `equipment_id` | uuid → equipment | no | The line. Unique with the material. |
 | `material_id` | uuid → material | no | The material. |
 | `uom_id` | uuid → uom | no | The rate is this unit per hour. Follows the capability's rate unit while the basis is `ideal_rate` and no modified rate is set. |
-| `calculated_rate_per_hour` | numeric(18,6) | no | Written only by Pulaski: from the capability's ideal rate, recalculated when that changes while the basis is `ideal_rate` (D-034); later from run history. Positive. |
-| `calculation_basis` | text | no | `ideal_rate` or `run_history`. |
+| `calculated_rate_per_hour` | numeric(18,6) | no | Written only by Pulaski: from the capability's ideal rate, recalculated when that changes while the basis is `ideal_rate` (D-034); or the rate from run history a planner reviewed and accepted (D-045). Positive. |
+| `calculation_basis` | text | no | `ideal_rate` or `run_history`. A `run_history` rate doesn't follow the ideal rate until it is put back to `ideal_rate`. |
 | `calculated_at` | timestamptz | no | When it was last calculated. |
 | `modified_rate_per_hour` | numeric(18,6) | yes | Set by a person. While set it is the gold standard; recalculation never overwrites it. |
 | `modified_at` | timestamptz | yes | When modified. Set together with the rate. |
@@ -1034,7 +1070,7 @@ Low volume and reviewed after the fact, so it is relational. Direct time on a li
 | `production_date` | date | no | The day of the shift it belongs to, or the site-local day for equipment with no shifts. |
 | `shift_schedule_id` | uuid → shift_schedule | yes | The schedule of that shift; null for equipment with no shifts. |
 | `shift_code` | text | yes | The shift; set exactly when the schedule is (`labor_shift_ck`). |
-| `source` | text | no | `self` (clocked on), `supervisor`, `crew` (check-in) or `correction`. |
+| `source` | text | no | `self` (clocked on), `supervisor`, `crew` (check-in), `terminal` (badged at a terminal; `recorded_by` is `terminal:<code>`, D-049) or `correction`. |
 | `corrects_session_id` | uuid → labor_session | yes | For a correction, the session it replaces; set exactly for corrections (`labor_correction_ck`). A session is corrected at most once (`labor_corrected_once`). |
 | `is_void` | boolean | no | A correction that removes the session it corrects. |
 | `note` | text | yes | Free text; required for corrections (by the application). |
@@ -1056,6 +1092,25 @@ One row per site, production day and shift (`labor_approval_uq`, nulls equal, so
 | `approved_by_user_id` | uuid → app_user | yes | Their user. |
 | `approved_at` | timestamptz | no | When. |
 | `note` | text | yes | Free text. |
+
+### core.labor_break — a person's break · *In use (D-047)*
+
+A break's time comes out of the worked hours of every session of the person it overlaps, whatever their share; the sessions themselves never change. It is reported on its own, paid or unpaid, and counts only while the person was on. It must start inside one of their sessions and belongs to that session's shift, so it locks with the shift's approval; after that a correction replaces it or, with `is_void`, removes it. At most one open break per person (`labor_break_one_open_per_person`); a person's breaks don't overlap. An open break ends when the person leaves their last line, or with the shift's approval.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The person's site. |
+| `person_id` | uuid → person | no | Who. |
+| `started_at`, `ended_at` | timestamptz | no / yes | The break; open while `ended_at` is null; end after start, at most 4 hours. |
+| `is_paid` | boolean | no | Paid breaks are reported apart from unpaid ones; both are left out of worked time. |
+| `production_date`, `shift_schedule_id`, `shift_code` | date, uuid, text | no / yes / yes | The shift of the session it started in, as on `labor_session`. |
+| `source` | text | no | `self`, `supervisor`, `terminal` (D-049) or `correction`. |
+| `corrects_break_id` | uuid → labor_break | yes | The break a correction replaces; set exactly when `source` is `correction`. A break is corrected at most once. |
+| `is_void` | boolean | no | A correction that removes the break it corrects. |
+| `note` | text | yes | Free text, up to 500 characters. |
+| `recorded_by` | text | no | Who recorded it (actor). |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 
 ## 11. Quality and SPC
 
@@ -1148,7 +1203,7 @@ The alert's current state; the violation itself is history in `ts.spc_violation`
 
 All tables here are partitioned by their time column, with that column in the primary key. Columns named `run_id` hold a `core.job_run` id without an FK.
 
-### ts.equipment_state_change — PackML state transitions · *In use (D-041)*
+### ts.equipment_state_change — PackML state transitions · *In use (D-050)*
 
 Each row is a change of the (state, mode) pair and carries when the previous pair began, so every row closes one complete interval and the table stays insert-only.
 
@@ -1165,11 +1220,11 @@ Each row is a change of the (state, mode) pair and carries when the previous pai
 | `run_id` | uuid | yes | The run at the time. |
 | `source` | text | no | `packtags`, `synthesized`, `manual` or `edge_gap` (no signal). |
 | `edge_sequence` | bigint | yes | Edge sequence number, for store-and-forward ordering and deduplication. |
-| `raw_state` | integer | yes | The value the machine sent; `packml_state` is its meaning. Null with no signal (D-041). |
-| `stop_reason` | integer | yes | The first-out stop code latched when the state changed (D-041). |
+| `raw_state` | integer | yes | The value the machine sent; `packml_state` is its meaning. Null with no signal (D-050). |
+| `stop_reason` | integer | yes | The first-out stop code latched when the state changed (D-050). |
 | `recorded_at` | timestamptz | no | When Pulaski received it; later than `occurred_at` when the edge buffered through an outage. |
 
-### ts.downtime — machine stops · *In use (D-041)*
+### ts.downtime — machine stops · *In use (D-050)*
 
 Time a machine isn't executing: opened by machine data ingest when it leaves Execute (or loses its signal), closed when it executes again, and coded by operators. Updated while open and when coded (the app may update this table, never delete); coding is also an event (`pulaski.downtime.coded.v1`). The machine's open stop is pointed at from `core.equipment_live_state`.
 
@@ -1220,7 +1275,7 @@ Deltas calculated at the edge, with rollover handled there; the raw counter is k
 | `raw_counter` | bigint | yes | The counter value read. |
 | `uom_id` | uuid → uom | yes | Unit. |
 | `scrap_reason_code_id` | uuid → reason_code | yes | Why, for defective counts. |
-| `source` | text | no | `machine` (from an edge, D-041: not a production report, and changes no run's quantities yet), `operator` or `correction`. |
+| `source` | text | no | `machine` (from an edge, D-050: not a production report, and changes no run's quantities yet), `operator` or `correction`. |
 | `corrects_id` | uuid | yes | For corrections: the row being offset. |
 | `job_id` | uuid | yes | The run's job. No FK, as for `run_id`. |
 | `recorded_at` | timestamptz | no | When it was entered. Later than the run's end for a late report. |

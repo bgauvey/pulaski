@@ -4,7 +4,7 @@ using Pulaski.Infrastructure.Persistence;
 
 namespace Pulaski.Infrastructure.MachineData;
 
-/// <summary>Write side for machine profiles and equipment machine data (D-041). Every statement runs in the command's transaction.</summary>
+/// <summary>Write side for machine profiles and equipment machine data (D-050). Every statement runs in the command's transaction.</summary>
 internal sealed class MachineDataRepository(DbSession session) : IMachineDataRepository
 {
     private const string IsSite = "SELECT EXISTS (SELECT 1 FROM core.equipment WHERE id = @Id AND level = 'site')";

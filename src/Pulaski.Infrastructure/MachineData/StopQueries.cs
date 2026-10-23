@@ -7,7 +7,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Infrastructure.MachineData;
 
-/// <summary>Read side for machine status and stops (D-041).</summary>
+/// <summary>Read side for machine status and stops (D-050).</summary>
 internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
 {
     // Tree order; each row's parent is the nearest equipment above it that tracks state.
@@ -239,7 +239,7 @@ internal static class StopSql
         """;
 }
 
-/// <summary>Write side for coding stops (D-041).</summary>
+/// <summary>Write side for coding stops (D-050).</summary>
 internal sealed class StopRepository(Persistence.DbSession session) : IStopRepository
 {
     private const string GetStop = """

@@ -150,6 +150,57 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<LaborResponse> ApproveShiftAsync(Guid siteId, ApproveShiftRequest request, CancellationToken ct = default) =>
         SendAsync<LaborResponse>(HttpMethod.Post, $"api/labor/sites/{siteId}/approvals", request, ct);
 
+    // Breaks (D-047)
+
+    public Task<LaborResponse> StartMyBreakAsync(StartBreakRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, "api/labor/me/breaks", request, ct);
+
+    public Task<LaborResponse> EndMyBreakAsync(Guid breakId, EndBreakRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, $"api/labor/me/breaks/{breakId}/end", request, ct);
+
+    public Task<LaborResponse> StartBreakAsync(StartBreakRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, "api/labor/breaks", request, ct);
+
+    public Task<LaborResponse> EndBreakAsync(Guid breakId, EndBreakRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, $"api/labor/breaks/{breakId}/end", request, ct);
+
+    public Task<LaborResponse> UpdateBreakAsync(Guid breakId, UpdateBreakRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Put, $"api/labor/breaks/{breakId}", request, ct);
+
+    public Task<LaborResponse> CorrectBreakAsync(Guid breakId, CorrectBreakRequest request, CancellationToken ct = default) =>
+        SendAsync<LaborResponse>(HttpMethod.Post, $"api/labor/breaks/{breakId}/correct", request, ct);
+
+    // Qualifications (D-048)
+
+    public Task<IReadOnlyList<QualificationDto>> ListQualificationsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<QualificationDto>>($"api/qualifications?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> CreateQualificationAsync(CreateQualificationRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/qualifications", request, ct);
+
+    public Task<VersionResponse> UpdateQualificationAsync(Guid id, UpdateQualificationRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/qualifications/{id}", request, ct);
+
+    public Task<IReadOnlyList<QualificationGrantDto>> ListQualificationGrantsAsync(Guid siteId, Guid? personId = null, Guid? qualificationId = null, int? expiringWithinDays = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<QualificationGrantDto>>(
+            $"api/qualifications/grants?siteId={siteId}" + (personId is { } p ? $"&personId={p}" : "") + (qualificationId is { } q ? $"&qualificationId={q}" : "")
+            + (expiringWithinDays is { } d ? $"&expiringWithinDays={d}" : ""), ct);
+
+    public Task<CreatedResponse> GrantQualificationAsync(GrantQualificationRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/qualifications/grants", request, ct);
+
+    public Task<VersionResponse> UpdateQualificationGrantAsync(Guid grantId, UpdateQualificationGrantRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/qualifications/grants/{grantId}", request, ct);
+
+    public Task<VersionResponse> RevokeQualificationGrantAsync(Guid grantId, RevokeQualificationGrantRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/qualifications/grants/{grantId}/revoke", request, ct);
+
+    public Task<EquipmentQualificationsDto> GetEquipmentQualificationsAsync(Guid equipmentId, CancellationToken ct = default) =>
+        GetAsync<EquipmentQualificationsDto>($"api/equipment/{equipmentId}/qualifications", ct);
+
+    public Task<VersionResponse> SetEquipmentQualificationAsync(Guid equipmentId, SetEquipmentQualificationRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{equipmentId}/qualifications", request, ct);
+
     public Task<LaborReportDto> GetLaborReportAsync(Guid siteId, DateOnly from, DateOnly to, CancellationToken ct = default) =>
         GetAsync<LaborReportDto>($"api/labor/sites/{siteId}/report?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}", ct);
 
@@ -164,13 +215,23 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> UpdateShiftScheduleAsync(Guid id, UpdateShiftScheduleRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/shift-schedules/{id}", request, ct);
 
+    public Task<VersionResponse> SetShiftOverrideAsync(Guid scheduleId, SetShiftOverrideRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/shift-schedules/{scheduleId}/overrides", request, ct);
+
+    public async Task<VersionResponse> RemoveShiftOverrideAsync(Guid scheduleId, DateOnly date, string code, long version, CancellationToken ct = default)
+    {
+        using var response = await SendCoreAsync(new HttpRequestMessage(
+            HttpMethod.Delete, $"api/shift-schedules/{scheduleId}/overrides/{date:yyyy-MM-dd}/{Uri.EscapeDataString(code)}?version={version}"), ct);
+        return await ReadAsync<VersionResponse>(response, ct);
+    }
+
     public Task<ShiftPreviewDto> PreviewShiftScheduleAsync(PreviewShiftScheduleRequest request, CancellationToken ct = default) =>
         SendAsync<ShiftPreviewDto>(HttpMethod.Post, "api/shift-schedules/preview", request, ct);
 
     public Task<VersionResponse> SetEquipmentCalendarAsync(Guid equipmentId, SetEquipmentCalendarRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{equipmentId}/calendar", request, ct);
 
-    // Machine data (D-041)
+    // Machine data (D-050)
 
     public Task<VersionResponse> SetEquipmentMachineDataAsync(Guid equipmentId, SetEquipmentMachineDataRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{equipmentId}/machine-data", request, ct);
@@ -199,7 +260,7 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> SetProfileReasonsAsync(Guid id, SetProfileReasonsRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/machine-profiles/{id}/reasons", request, ct);
 
-    // Machines: status, stops and OEE (D-041, D-043)
+    // Machines: status, stops and OEE (D-050, D-052)
 
     public Task<IReadOnlyList<MachineStatusDto>> GetMachineStatusAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<MachineStatusDto>>($"api/machines/status?siteId={siteId}", ct);
@@ -221,7 +282,7 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<IReadOnlyList<ReasonCodeDto>> ListCodingReasonsAsync(Guid equipmentId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<ReasonCodeDto>>($"api/equipment/{equipmentId}/coding-reasons", ct);
 
-    // Edge nodes, connections and tags (D-041)
+    // Edge nodes, connections and tags (D-050)
 
     public Task<IReadOnlyList<EdgeNodeDto>> ListEdgeNodesAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<EdgeNodeDto>>($"api/edge-nodes?siteId={siteId}", ct);
@@ -253,7 +314,7 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task DeleteEquipmentTagAsync(Guid id, CancellationToken ct = default) =>
         DeleteAsync($"api/equipment-tags/{id}", ct);
 
-    /// <summary>Checks (<paramref name="dryRun"/>) or imports a machine's definitions from CSV into a profile, all or nothing (D-041).</summary>
+    /// <summary>Checks (<paramref name="dryRun"/>) or imports a machine's definitions from CSV into a profile, all or nothing (D-050).</summary>
     public async Task<ProfileImportResponse> ImportMachineProfileCsvAsync(Guid id, long version, string csv, bool dryRun, CancellationToken ct = default)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"api/machine-profiles/{id}/import/csv?version={version}&dryRun={(dryRun ? "true" : "false")}")
@@ -737,11 +798,94 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ReportProductionResponse> ReportProductionAsync(Guid jobId, ReportProductionRequest request, CancellationToken ct = default) =>
         SendAsync<ReportProductionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/production", request, ct);
 
+    // Planning rates from run history (D-045)
+
+    public Task<RunHistoryRateDto> GetRunHistoryRateAsync(Guid runStandardId, int days, CancellationToken ct = default) =>
+        GetAsync<RunHistoryRateDto>($"api/scheduling/run-standards/{runStandardId}/history-rate?days={days}", ct);
+
+    public Task<VersionResponse> AdoptHistoryRateAsync(Guid runStandardId, AdoptHistoryRateRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/scheduling/run-standards/{runStandardId}/history-rate", request, ct);
+
+    public Task<VersionResponse> UseIdealRateAsync(Guid runStandardId, UseIdealRateRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/scheduling/run-standards/{runStandardId}/ideal-rate", request, ct);
+
+    // Site settings (D-043): changeover mode, reporting tolerances and calendar exceptions
+
+    public Task<SchedulingPolicyDto> GetSchedulingPolicyAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<SchedulingPolicyDto>($"api/scheduling/sites/{siteId}/policy", ct);
+
+    public Task<VersionResponse> SetSchedulingPolicyAsync(Guid siteId, SetSchedulingPolicyRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/scheduling/sites/{siteId}/policy", request, ct);
+
+    public Task<IReadOnlyList<CalendarExceptionDto>> ListCalendarExceptionsAsync(Guid siteId, DateTimeOffset? from, bool includeRemoved, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<CalendarExceptionDto>>(
+            $"api/calendar-exceptions?siteId={siteId}&includeRemoved={(includeRemoved ? "true" : "false")}"
+            + (from is { } f ? $"&from={Uri.EscapeDataString(f.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}" : ""), ct);
+
+    public Task<CreatedResponse> CreateCalendarExceptionAsync(CreateCalendarExceptionRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/calendar-exceptions", request, ct);
+
+    public Task<VersionResponse> UpdateCalendarExceptionAsync(Guid id, UpdateCalendarExceptionRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/calendar-exceptions/{id}", request, ct);
+
+    public Task<ProductionByShiftDto> GetProductionByShiftAsync(Guid siteId, DateOnly from, DateOnly to, CancellationToken ct = default) =>
+        GetAsync<ProductionByShiftDto>($"api/execution/sites/{siteId}/production-by-shift?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}", ct);
+
     public Task<ExecutionPolicyDto> GetExecutionPolicyAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<ExecutionPolicyDto>($"api/execution/sites/{siteId}/policy", ct);
 
     public Task<ExecutionPolicyDto> SetExecutionPolicyAsync(Guid siteId, SetExecutionPolicyRequest request, CancellationToken ct = default) =>
         SendAsync<ExecutionPolicyDto>(HttpMethod.Put, $"api/execution/sites/{siteId}/policy", request, ct);
+
+    // Terminals and badges (D-049): managing them as a signed-in user
+
+    public Task<IReadOnlyList<TerminalDto>> ListTerminalsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<TerminalDto>>($"api/terminals?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> CreateTerminalAsync(CreateTerminalRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/terminals", request, ct);
+
+    public Task<VersionResponse> UpdateTerminalAsync(Guid id, UpdateTerminalRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/terminals/{id}", request, ct);
+
+    public Task<EnrolmentCodeResponse> IssueEnrolmentCodeAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<EnrolmentCodeResponse>(HttpMethod.Post, $"api/terminals/{id}/enrolment-code", new { }, ct);
+
+    public Task<IReadOnlyList<BadgeDto>> ListBadgesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<BadgeDto>>($"api/badges?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> IssueBadgeAsync(IssueBadgeRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/badges", request, ct);
+
+    public Task<VersionResponse> RevokeBadgeAsync(Guid badgeId, RevokeBadgeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/badges/{badgeId}/revoke", request, ct);
+
+    // At a terminal (D-049): no user signs in; the terminal's secret, from its cookie, is its credential.
+
+    public Task<TerminalEnrolledResponse> EnrolTerminalAsync(EnrolTerminalRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<TerminalEnrolledResponse>(null, HttpMethod.Post, "api/terminal/enrol", request, ct);
+
+    public Task<TerminalStatusDto> GetTerminalStatusAsync(string secret, CancellationToken ct = default) =>
+        TerminalSendAsync<TerminalStatusDto>(secret, HttpMethod.Get, "api/terminal", null, ct);
+
+    public Task<BadgeIdentityResponse> IdentifyBadgeAsync(string secret, IdentifyBadgeRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<BadgeIdentityResponse>(secret, HttpMethod.Post, "api/terminal/identify", request, ct);
+
+    /// <summary>One of <c>clock-on</c>, <c>clock-off</c>, <c>breaks/start</c> or <c>breaks/end</c> for the person the ticket names.</summary>
+    public Task<LaborResponse> TerminalActAsync(string secret, string action, TerminalActionRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<LaborResponse>(secret, HttpMethod.Post, $"api/terminal/{action}", request, ct);
+
+    private async Task<T> TerminalSendAsync<T>(string? secret, HttpMethod method, string uri, object? body, CancellationToken ct)
+    {
+        var request = new HttpRequestMessage(method, uri) { Content = body is null ? null : JsonContent.Create(body) };
+        if (secret is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Terminal", secret);
+        }
+
+        using var response = await SendCoreAsync(request, ct, signedIn: false);
+        return await ReadAsync<T>(response, ct);
+    }
 
     private async Task<T> GetAsync<T>(string uri, CancellationToken ct)
     {

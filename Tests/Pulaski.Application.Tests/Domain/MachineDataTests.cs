@@ -4,7 +4,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Application.Tests.Domain;
 
-/// <summary>PackML states, utilization classes and profile rules (D-041).</summary>
+/// <summary>PackML states, utilization classes and profile rules (D-050).</summary>
 public class MachineDataTests
 {
     [Theory]

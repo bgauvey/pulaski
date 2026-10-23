@@ -8,7 +8,7 @@ using Pulaski.Connectors.Sparkplug;
 
 namespace Pulaski.Edge.Tests;
 
-/// <summary>The Sparkplug B connector against a real (in-process) MQTT broker (D-041).</summary>
+/// <summary>The Sparkplug B connector against a real (in-process) MQTT broker (D-050).</summary>
 public sealed class SparkplugConnectorTests : IAsyncLifetime
 {
     private readonly int _port = 18830 + Random.Shared.Next(1000);

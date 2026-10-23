@@ -5,7 +5,7 @@ using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Testing;
 
-/// <summary>In-memory edge nodes, connections, tags and machine data (D-041). Sites, equipment, profiles and runs are added by the test.</summary>
+/// <summary>In-memory edge nodes, connections, tags and machine data (D-050). Sites, equipment, profiles and runs are added by the test.</summary>
 public sealed class InMemoryEdge : IEdgeRepository, IEdgeReadStore
 {
     private readonly Lock _lock = new();

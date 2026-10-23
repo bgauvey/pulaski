@@ -18,6 +18,16 @@ public sealed record SessionRecord(
     public ShiftKey Shift => new(SiteId, ProductionDate, ShiftScheduleId, ShiftCode);
 }
 
+/// <summary>A break as the commands see it (D-047).</summary>
+public sealed record BreakRecord(
+    Guid Id, Guid SiteId, Guid PersonId, DateTimeOffset StartedAt, DateTimeOffset? EndedAt, bool IsPaid, DateOnly ProductionDate,
+    Guid? ShiftScheduleId, string? ShiftCode, string Source, Guid? CorrectsBreakId, bool IsVoid, string? Note, string RecordedBy)
+{
+    public ShiftKey Shift => new(SiteId, ProductionDate, ShiftScheduleId, ShiftCode);
+
+    public BreakSpan ToSpan() => new(PersonId, StartedAt, EndedAt, IsPaid);
+}
+
 /// <summary>Which shift labor belongs to (D-040): a schedule's shift on a production day, or a day for lines without shifts.</summary>
 public sealed record ShiftKey(Guid SiteId, DateOnly ProductionDate, Guid? ShiftScheduleId, string? ShiftCode);
 
@@ -95,6 +105,35 @@ public interface ILaborRepository
     Task<bool> IsApprovedAsync(ShiftKey shift, CancellationToken cancellationToken);
 
     Task InsertApprovalAsync(Guid id, ShiftKey shift, string approvedBy, Guid? approvedByUserId, DateTimeOffset at, string? note, CancellationToken cancellationToken);
+
+    // ---- Breaks (D-047) ----
+
+    Task<Versioned<BreakRecord>?> GetBreakForUpdateAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>The person's open break, locked; null when they aren't on one.</summary>
+    Task<Versioned<BreakRecord>?> GetOpenBreakForUpdateAsync(Guid personId, CancellationToken cancellationToken);
+
+    /// <summary>The person's breaks that count (not replaced or voided) overlapping <c>[windowStart, windowEnd)</c>, open ones too.</summary>
+    Task<IReadOnlyList<BreakRecord>> ListBreaksOfPersonAsync(Guid personId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken);
+
+    /// <summary>The person's sessions that count and cover <paramref name="at"/>, earliest first.</summary>
+    Task<IReadOnlyList<SessionRecord>> ListSessionsOfPersonAtAsync(Guid personId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Every break of a shift, locked, so approval and edits serialize.</summary>
+    Task<IReadOnlyList<BreakRecord>> ListShiftBreaksForUpdateAsync(ShiftKey shift, CancellationToken cancellationToken);
+
+    Task<bool> IsBreakCorrectedAsync(Guid breakId, CancellationToken cancellationToken);
+
+    Task<long> InsertBreakAsync(BreakRecord record, DateTimeOffset at, CancellationToken cancellationToken);
+
+    Task<long> UpdateBreakAsync(BreakRecord record, DateTimeOffset at, CancellationToken cancellationToken);
+
+    // ---- Qualifications, as labor checks them (D-048) ----
+
+    /// <summary>What the equipment and everything above it require: active qualifications, requirements switched on.</summary>
+    Task<IReadOnlyList<RequiredQualification>> ListRequiredQualificationsAsync(Guid equipmentId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<QualificationGrant>> ListGrantsOfPersonAsync(Guid personId, CancellationToken cancellationToken);
 }
 
 /// <summary>A labor session as reports read it: the record with names, and whether a correction replaced it.</summary>
@@ -119,6 +158,23 @@ public sealed record RunRow(Guid RunId, Guid JobId, string JobNumber, string? Ma
 public sealed record LaborLineRow(Guid Id, string Code, string Name, Guid? RunningJobId, string? RunningJobNumber, decimal? StandardCrewSize);
 
 public sealed record ApprovalRow(ShiftKey Shift, string ApprovedBy, DateTimeOffset ApprovedAt);
+
+/// <summary>A break as the screens read it (D-047): the record with the person, and whether a correction replaced it.</summary>
+public sealed record BreakRow
+{
+    public required BreakRecord Break { get; init; }
+    public required string PersonName { get; init; }
+    public required string EmployeeNumber { get; init; }
+    public bool IsSuperseded { get; init; }
+    public bool IsApproved { get; init; }
+    public long Version { get; init; }
+}
+
+/// <summary>A qualification a line requires, directly or through the equipment above it (D-048).</summary>
+public sealed record LineRequirement(Guid LineId, RequiredQualification Qualification);
+
+/// <summary>A person's grant, for checking who is qualified where.</summary>
+public sealed record PersonGrant(Guid PersonId, QualificationGrant Grant);
 
 /// <summary>Read side for labor (D-040).</summary>
 public interface ILaborReadStore
@@ -149,4 +205,12 @@ public interface ILaborReadStore
     Task<IReadOnlyList<(Guid Id, string Code, ShiftSchedule Schedule)>> ListSchedulesAsync(Guid siteId, CancellationToken cancellationToken);
 
     Task<IReadOnlyDictionary<string, string>> CrewNamesAsync(Guid siteId, CancellationToken cancellationToken);
+
+    /// <summary>The site's breaks overlapping <c>[windowStart, windowEnd)</c>, of one person or everyone; corrections and replaced ones too (D-047).</summary>
+    Task<IReadOnlyList<BreakRow>> ListBreaksAsync(Guid siteId, Guid? personId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken);
+
+    /// <summary>What each line of the site requires, including what it inherits (D-048).</summary>
+    Task<IReadOnlyList<LineRequirement>> ListLineRequirementsAsync(Guid siteId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<PersonGrant>> ListSiteGrantsAsync(Guid siteId, CancellationToken cancellationToken);
 }
