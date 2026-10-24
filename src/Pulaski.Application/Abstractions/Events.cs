@@ -151,6 +151,11 @@ public static class EventTypes
     public const string LotWrittenUp = "pulaski.lot.written_up.v1";
     public const string LotWrittenOff = "pulaski.lot.written_off.v1";
     public const string LotMoved = "pulaski.lot.moved.v1";
+    public const string LotPacked = "pulaski.lot.packed.v1";
+    public const string LotUnpacked = "pulaski.lot.unpacked.v1";
+    public const string ContainerCreated = "pulaski.container.created.v1";
+    public const string ContainerMoved = "pulaski.container.moved.v1";
+    public const string ContainerRetired = "pulaski.container.retired.v1";
     public const string LotStatusChanged = "pulaski.lot.status_changed.v1";
     public const string LotConsumed = "pulaski.lot.consumed.v1";
     public const string LotProduced = "pulaski.lot.produced.v1";

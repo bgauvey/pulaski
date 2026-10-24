@@ -59,6 +59,7 @@ public static class DependencyInjection
         services.AddSingleton<IInventoryReadStore, InventoryQueries>();
         services.AddSingleton<ILotRecordsReadStore, LotRecordsQueries>();
         services.AddSingleton<IExpectedReceiptReadStore, ExpectedReceiptQueries>();
+        services.AddSingleton<IContainerReadStore, ContainerQueries>();
         services.AddSingleton<DatabaseMaintenance>();
         services.AddSingleton<IMaterialReadStore, MaterialQueries>();
         services.AddSingleton<IShiftReadStore, ShiftQueries>();
@@ -86,6 +87,7 @@ public static class DependencyInjection
         services.AddScoped<IInventoryRepository, InventoryRepository>();
         services.AddScoped<ILotRecordsRepository, LotRecordsRepository>();
         services.AddScoped<IExpectedReceiptRepository, ExpectedReceiptRepository>();
+        services.AddScoped<IContainerRepository, ContainerRepository>();
         services.AddScoped<IMaterialAdminRepository, MaterialAdminRepository>();
         services.AddScoped<ICapabilityRepository, CapabilityRepository>();
         services.AddScoped<IExecutionRepository, ExecutionRepository>();

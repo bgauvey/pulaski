@@ -4,6 +4,7 @@
 @inject SiteSelection Sites
 @inject TimeProvider Time
 @inject CurrentUser User
+@inject Downloads Downloads
 
 <PageTitle>@(Title) · Inventory · Pulaski</PageTitle>
 
@@ -73,6 +74,7 @@
                 {
                     <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Correct">Correct…</button>
                 }
+                <button type="button" class="btn btn-outline-secondary" @onclick="PrintLabelAsync">Print label</button>
             </div>
         }
     </Actions>
@@ -102,6 +104,11 @@
                 <dd><strong>@InventoryView.Qty(l.Quantity)</strong> @l.UomCode</dd>
                 <dt>Location</dt>
                 <dd>@(l.LocationCode is null ? "—" : $"{l.LocationCode} · {l.LocationName}")</dd>
+                @if (!l.IsBulk)
+                {
+                    <dt>Container</dt>
+                    <dd><LotContainerField Lot="l" OnChanged="LoadAsync" /></dd>
+                }
                 <dt>From</dt>
                 <dd>
                     @if (l.ProducedByJobId is { } jobId)
@@ -221,6 +228,10 @@
                             <td class="inv-num">@(e.QtyAfter is { } a ? InventoryView.Qty(a) : "") <span class="small text-muted">@e.UomCode</span></td>
                             <td class="small">
                                 @(e.Kind == "moved" ? $"{e.FromLocationCode} → {e.ToLocationCode}" : e.ToLocationCode ?? e.FromLocationCode)
+                                @if (e.ContainerCode is { } container)
+                                {
+                                    <div class="text-muted">@(e.Kind == "packed" ? "into" : e.Kind == "unpacked" ? "out of" : "with") @container</div>
+                                }
                                 @if (e.RelatedLotId is { } related)
                                 {
                                     <div><a href="inventory/lots/@related">@InventoryView.LotLabel(e.RelatedLotNumber, e.RelatedLotNumber is null, e.RelatedLotLocationCode)</a></div>
@@ -321,6 +332,20 @@ else if (_error is null)
         {
             _traceForward = forward;
             _trace = InventoryView.Tree(await Api.TraceLotAsync(LotId, forward));
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    // The label as a PDF (D-059): its barcode names this lot exactly, for scanning later.
+    private async Task PrintLabelAsync()
+    {
+        try
+        {
+            var (content, type, name) = await Api.GetLabelAsync("lot", LotId, _lot!.Lot.SiteId);
+            await Downloads.FileAsync(name, content, type);
         }
         catch (ApiException ex)
         {

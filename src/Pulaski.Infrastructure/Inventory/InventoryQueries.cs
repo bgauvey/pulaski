@@ -51,6 +51,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         l.status, l.quantity, l.uom_id, u.code AS uom_code,
         l.location_equipment_id AS location_id, loc.code AS location_code, loc.name AS location_name,
         l.origin, l.supplier_lot, l.expires_at, l.produced_by_job_id, pj.job_number AS produced_by_job_number,
+        l.container_id, ct.code AS container_code, l.label_no,
         l.created_at, l.updated_at, l.xmin::text::bigint AS version
         """;
 
@@ -60,6 +61,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         JOIN core.uom u ON u.id = l.uom_id
         LEFT JOIN core.equipment loc ON loc.id = l.location_equipment_id
         LEFT JOIN core.job pj ON pj.id = l.produced_by_job_id
+        LEFT JOIN core.container ct ON ct.id = l.container_id
         """;
 
     // Without a status, only lots with stock on hand.
@@ -69,6 +71,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         WHERE (@SiteId::uuid IS NULL OR l.site_id = @SiteId)
           AND (@MaterialId::uuid IS NULL OR l.material_id = @MaterialId)
           AND (@LocationId::uuid IS NULL OR l.location_equipment_id = @LocationId)
+          AND (@ContainerId::uuid IS NULL OR l.container_id = @ContainerId)
           AND (@Pattern::text IS NULL OR l.lot_number ILIKE @Pattern OR l.supplier_lot ILIKE @Pattern OR m.code ILIKE @Pattern)
           AND (@ExpiresBefore::timestamptz IS NULL OR l.expires_at < @ExpiresBefore)
           AND (CASE WHEN @Status::text IS NULL THEN l.status IN {OnHand} AND l.quantity > 0 ELSE l.status = @Status END)
@@ -117,7 +120,8 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         e.id, e.occurred_at, e.effective_at, e.event_kind AS kind, e.qty_delta, e.qty_after, eu.code AS uom_code,
         fl.code AS from_location_code, tl.code AS to_location_code, e.from_status, e.to_status,
         e.job_id, ej.job_number, r.code AS reason_code, r.name AS reason_name, e.comment, e.actor_id,
-        e.related_lot_id, rl.lot_number AS related_lot_number, rll.code AS related_lot_location_code, e.reference, e.reverses_event_id
+        e.related_lot_id, rl.lot_number AS related_lot_number, rll.code AS related_lot_location_code, e.reference, e.reverses_event_id,
+        e.container_id, ec.code AS container_code
         """;
 
     private const string EventJoins = """
@@ -128,6 +132,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         LEFT JOIN core.reason_code r ON r.id = e.reason_code_id
         LEFT JOIN core.lot rl ON rl.id = e.related_lot_id
         LEFT JOIN core.equipment rll ON rll.id = rl.location_equipment_id
+        LEFT JOIN core.container ec ON ec.id = e.container_id
         """;
 
     private const string HistorySql = $"""
@@ -757,6 +762,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         Pattern = Like(filter.Search),
         filter.Offset,
         filter.Limit,
+        filter.ContainerId,
         AttributeId = filter.Attribute?.AttributeId,
         AttributeText = filter.Attribute is { Text: { } text } a ? (a.TextContains ? Like(text) : Escape(text)) : null,
         filter.Attribute?.MinNumber,

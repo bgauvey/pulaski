@@ -25,7 +25,8 @@ public sealed record LotFilter(
     DateTimeOffset? ExpiresBefore = null,
     int Offset = 0,
     int Limit = 500,
-    LotAttributeMatch? Attribute = null);
+    LotAttributeMatch? Attribute = null,
+    Guid? ContainerId = null);
 
 /// <summary>
 /// Lots whose value of an attribute matches (D-056): text containing <see cref="Text"/> (a choice: equal to it), a number or date in
@@ -292,7 +293,8 @@ public sealed record LotEventRow(
     Guid? ReversesEventId = null,
     DateTimeOffset? ReversesOccurredAt = null,
     Guid? RunId = null,
-    DateTimeOffset? EffectiveAt = null);
+    DateTimeOffset? EffectiveAt = null,
+    Guid? ContainerId = null);
 
 /// <summary>A parent-to-child lot edge: <c>declared</c> by a job, or from a <c>split</c> or <c>merge</c> (D-030, no job).</summary>
 public sealed record GenealogyEdge(Guid Id, Guid ParentLotId, Guid ChildLotId, Guid? JobId, string Basis = GenealogyEdge.Declared)

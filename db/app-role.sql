@@ -32,6 +32,8 @@ REVOKE UPDATE ON core.lot_document_content FROM pulaski_app;
 GRANT SELECT, INSERT ON evt.event TO pulaski_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON evt.event FROM pulaski_app;
 GRANT USAGE ON SEQUENCE evt.event_position_seq TO pulaski_app;
+-- Lot and container label numbers (D-059).
+GRANT USAGE ON SEQUENCE core.label_seq TO pulaski_app;
 
 -- History the application appends to (D-010). Like evt.event, never updated or deleted.
 GRANT SELECT, INSERT ON ts.job_status_change TO pulaski_app;

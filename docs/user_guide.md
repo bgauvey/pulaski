@@ -1045,7 +1045,50 @@ When a receipt, consumption, production, write-up or write-off is entered late, 
 
 ### Locations
 
-The **Locations** tab lists every piece of equipment that holds inventory, with how many lots and materials are there. **Stock** and **Lots** open those lists for that location. To add a location, add equipment (for example a storage zone) on the [Equipment](#4-equipment) page and tick **Holds inventory**.
+The **Locations** tab lists every piece of equipment that holds inventory, with how many lots and materials are there. **Stock** and **Lots** open those lists for that location, and **Label** prints a label to stick at the location, so moving stock there is one scan. To add a location, add equipment (for example a storage zone) on the [Equipment](#4-equipment) page and tick **Holds inventory**.
+
+### Containers
+
+Pallets, totes, boxes and bins that hold lots. Each lot inside keeps its own number, history and genealogy; moving the container moves them all.
+
+1. Open **Inventory → Containers** and choose the **kind**, an optional **code** (blank makes one such as *PAL-1042*) and **where it is**. Click **Add container**.
+2. **Pack a lot** into it from the lot's page (**Container → Pack…**, then choose the container) or by [scanning](#scan-labels). A lot elsewhere is moved to the container's location as it is packed. To pack part of a lot, split it first.
+3. **Move…** a container to move it and every lot in it.
+4. Click a container to see its lots. **Label** prints its label.
+5. **Unpack** a lot on its page to take it out; it stays where it is. **Retire** a container once it is empty.
+
+**In detail**
+
+- **Leaving a container.** A lot moved on its own, split off, or used up (consumed, shipped or written off to zero) leaves its container. A part split off is loose.
+- **Where containers can be:** any location that holds inventory at the site, except one where lots mix into balances (a silo), since a container keeps its lots apart. A location that takes one material at a time only takes a container whose lots are that material.
+- **Mixed contents** are allowed: a container can hold lots of several materials. Balances of materials that aren't lot-tracked can't be packed. No containers inside containers.
+- **History.** Packing, unpacking and moving with a container are ordinary movements in each lot's history (*Packed into …*, *Unpacked out of …*, *Moved with …*), and `pulaski.lot.packed.v1`, `…unpacked.v1` and `pulaski.container.created.v1` / `…moved.v1` / `…retired.v1` in the event log. Genealogy isn't touched: a container isn't a lot.
+- **Who:** containers, packing and unpacking need permission to move lots.
+
+### Lot, container and location labels
+
+**Print label** on a lot's page, **Label** on a container or location, or on the Scan page, gives a PDF label 4 × 6 in (about A6) to print on any printer: the lot or container number, a barcode, the same code in text beneath it (to type if the barcode won't scan), and the material, quantity, supplier lot and expiry for a lot.
+
+- The barcode is Code 128 and holds a short Pulaski code: `PUL1L` and a number for a lot, `PUL1C` and a number for a container, `PUL1E:` and the code for a location. Each lot and container keeps its number for good, so a scan always names exactly that one.
+- A label shows the lot as it was when printed; print a new one after a change you want on it.
+
+### Scan labels
+
+The **Scan** tab is for a barcode scanner that types like a keyboard (most USB and Bluetooth scanners do), or for typing a code.
+
+1. Open **Inventory → Scan**; the box is ready for a scan. Scan a lot, container or location label, or type a lot, supplier lot or container number and press **Enter**.
+2. If more than one thing matches typed text (say a lot and a container with the same number), choose the one you mean. A Pulaski label always matches exactly one.
+3. Choose what to do:
+   - **A lot:** **Move** (then scan where it goes), **Pack** (then scan the container), **Unpack**, **Consume…** (into a job), or **Open lot**.
+   - **A container:** **Move with its lots** (then scan where), or **Open container**.
+   - **A location:** **Receive here…** (the receive form opens with the location filled in), or **What is here**.
+4. A green message confirms each movement; scan the next thing, or **Start again**.
+
+**In detail**
+
+- A scan that names nothing at this site says so: a Pulaski label from another site, or a lot used up, isn't found. Scanned typed text matches lots on hand by lot or supplier lot number, active containers by code, and locations by code, ignoring case.
+- When a second scan is asked for (where to move, or which container), only that kind counts; scanning something else says so.
+- Every movement made by scanning is the same as one made from the lot's or container's page, with the same rules, history and permissions.
 
 ### In detail
 
@@ -1881,7 +1924,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
 - **Batches:** the batch size is per material, not per line (a 50 kg mixer next to a 200 kg one isn't modelled). A replacement job is always rounded up to whole batches; to make fewer, cancel it. Orders from the ERP aren't imported yet, so there is no rule yet for an ERP order that isn't whole batches. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
-- **Not in inventory yet:** pallets or containers that hold several lots, lot labels and barcode scanning, setting stock aside for a job, and suggestions of which lot to use first. Moves, holds, splits, merges, shipments and counts can't be back-dated (only quantity movements can, by up to 31 days), and a lot's location and status on a past date aren't reconstructed. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
+- **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, scanning 2D codes or supplier barcodes beyond reading their text, setting stock aside for a job, and suggestions of which lot to use first. Moves, holds, splits, merges, shipments and counts can't be back-dated (only quantity movements can, by up to 31 days), and a lot's location and status on a past date aren't reconstructed. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
 - **Reversing is limited** to a lot's latest movement, and not consumption, production, splits, merges, transfers between balances or corrections: put those right with another movement.
 - **Reason trees** (a reason grouped under another) can't be edited.
 - **Where lots mix, genealogy is approximate:** every lot that ever joined a silo's balance counts as a parent of everything taken from it afterwards. Residence time and first-in, first-out through a silo come with machine data.

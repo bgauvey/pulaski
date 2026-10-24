@@ -312,6 +312,10 @@
     [Parameter]
     public Guid? MaterialId { get; set; }
 
+    /// <summary>Where a receipt goes, when the screen already knows (a scanned location, D-059).</summary>
+    [Parameter]
+    public Guid? LocationId { get; set; }
+
     /// <summary>The job to declare against, pre-selected.</summary>
     [Parameter]
     public DeclarableJobDto? Job { get; set; }
@@ -522,7 +526,7 @@
         _components = [];
         _lots = [];
         _materialId = Guid.Empty;
-        _locationId = Guid.Empty;
+        _locationId = LocationId ?? Guid.Empty;
         _jobId = Guid.Empty;
         _lotId = Guid.Empty;
         _reasonId = Guid.Empty;

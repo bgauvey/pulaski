@@ -196,6 +196,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Shortages (D-058, proposed): live timing by default (each line projected via `TimelineMapping.Project`, `TimeSource` per line);
   `core.expected_receipt` (screen + idempotent ERP import by system/key; receiving with `ExpectedReceiptId` closes it) counted by
   `ShortageCalculator` after stock, only when due by a job's time (past times count as now). Not MRP.
+- Containers and labels (D-059, proposed): `core.container` holds whole lots (`lot.container_id`, kept at the container's location by
+  `Lot.PackInto`/`MoveWithContainer`; moving alone, splitting or reaching zero clears it). Moving a container locks it, then its lots in
+  id order. `core.label_seq` numbers lots and containers; barcodes `PUL1L<n>`/`PUL1C<n>`/`PUL1E:<code>` (Code 128, `LabelPdfRenderer`,
+  `BarcodeDrawing`); `ScanCode.Parse` + `ResolveScanQuery` resolve a scan to one match or offer the ambiguous ones.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

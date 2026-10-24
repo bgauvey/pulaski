@@ -292,4 +292,19 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
         var unknown = await _client.PostAsync(new Uri($"/api/people/import/payroll?siteId={site}", UriKind.Relative), other);
         Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
     }
+
+    [Fact]
+    public async Task Labels_are_four_by_six_inch_pages_with_the_scan_code_and_a_scan_says_what_it_found()
+    {
+        var bytes = new Api.WorkOrders.LabelPdfRenderer().Render([
+            new("Lot", "R-24-0917", "PUL1L1042", ["PVC-K67 · PVC compound", "1,000 kg"]),
+            new("Pallet", "PAL-1043", "PUL1C1043", ["At RM-STORE"]),
+        ]);
+        using var pdf = PdfReader.Open(new MemoryStream(bytes), PdfDocumentOpenMode.Import);
+        Assert.Equal(2, pdf.PageCount);
+        Assert.Equal((288d, 432d), (pdf.Pages[0].Width.Point, pdf.Pages[0].Height.Point));
+
+        var scan = await _client.GetFromJsonAsync<Contracts.Inventory.ScanResultDto>($"/api/inventory/scan?siteId={Guid.CreateVersion7()}&code=PUL1L999");
+        Assert.Equal("not_found", scan!.Status);
+    }
 }

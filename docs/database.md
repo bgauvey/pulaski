@@ -964,6 +964,22 @@ Each side matches a material, a material class or anything. The most specific ac
 
 Lots are relational because they are referenced for years. Every movement is a `ts.lot_event`. Storage locations are equipment with `holds_inventory` (D-027). Quantities are kept in the material's base unit.
 
+### core.container — pallets, totes, boxes and bins (D-059) · *In use*
+
+Holds lots that keep their own identity (`core.lot.container_id`); moving it moves them. Label numbers for lots and containers come from one sequence, `core.label_seq`.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | Its site. |
+| `code` | text | no | Upper case, unique per site (`container_uq`); a blank one is made from the kind and label number, such as `PAL-1042`. |
+| `kind` | text | no | `pallet`, `tote`, `box`, `bin` or `other`. |
+| `location_equipment_id` | uuid → equipment | no | Where it is: a location that holds inventory and doesn't mix lots. |
+| `label_no` | bigint | no | Its label number, unique; the barcode carries `PUL1C` + this. |
+| `is_active` | boolean | no | False once retired, which needs it empty; never deleted. |
+| `created_at`, `created_by` | timestamptz, text | no | When and by whom. |
+| `updated_at` | timestamptz | no | Last change. |
+
 ### core.lot — current state of each lot · *In use*
 
 A balance (`is_bulk`) is the one quantity of a material at a location: for a material that isn't lot-tracked (D-027), or for any material at a location whose lots are indistinguishable (`commingles_lots`, D-031). It has no lot number, is unique per material and location, and stays `available` at zero.
@@ -984,6 +1000,8 @@ A balance (`is_bulk`) is the one quantity of a material at a location: for a mat
 | `origin` | text | no | `produced`, `received`, `erp`, `split` or `merge`. A lot split off another is `split` (D-030). |
 | `supplier_lot` | text | yes | Supplier's lot number, for received lots. |
 | `external_key` | text | yes | ERP key. |
+| `container_id` | uuid → container | yes | The container it is in (D-059), at the container's location; null when loose. Cleared when the lot moves alone, is split off or reaches zero. |
+| `label_no` | bigint | no | Its label number from `core.label_seq`, unique; the barcode carries `PUL1L` + this (D-059). |
 | `produced_from`, `produced_to` | timestamptz | yes | The production window, for output lots cut by time or quantity. |
 | `expires_at` | timestamptz | yes | Expiry. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
@@ -1418,12 +1436,13 @@ One row for every job status change, written in the same transaction as the chan
 | `occurred_at` | timestamptz | no | When it was recorded. Partition key. |
 | `effective_at` | timestamptz | no | When it counts in stock (D-057): `occurred_at`, or up to 31 days earlier for a back-dated receipt, consumption, production, write-up or write-off; a reversal counts when the movement it undoes did. Indexed with `lot_id`. |
 | `lot_id` | uuid → lot | no | The lot. |
-| `event_kind` | text | no | `created`, `received`, `moved`, `loaded`, `consumed`, `produced`, `split`, `merged`, `status_changed`, `adjusted`, `scrapped` or `shipped`. In use: `received`, `produced`, `adjusted` (write-up), `scrapped` (write-off), `consumed`, `moved`, `status_changed`, and (D-030) `split`, `merged`, `shipped`, `corrected` (details changed; no quantity) and `reversed`. A count posts `adjusted` and `scrapped` rows. |
+| `event_kind` | text | no | `created`, `received`, `moved`, `loaded`, `consumed`, `produced`, `split`, `merged`, `status_changed`, `adjusted`, `scrapped` or `shipped`. In use: `received`, `produced`, `adjusted` (write-up), `scrapped` (write-off), `consumed`, `moved`, `status_changed`, and (D-030) `split`, `merged`, `shipped`, `corrected` (details changed; no quantity) and `reversed`, and (D-059) `packed` and `unpacked`. A count posts `adjusted` and `scrapped` rows. |
 | `qty_delta` | qty | yes | Quantity change: positive in, negative out; null for a whole-lot move or a status change. |
 | `qty_after` | qty | yes | The lot's quantity once this row was recorded (in record order, so not the balance at `effective_at` for a back-dated row). |
 | `uom_id` | uuid → uom | yes | Its unit. |
 | `from_location_id`, `to_location_id` | uuid → equipment | yes | Where the stock left and arrived. |
 | `related_lot_id` | uuid → lot | yes | The other lot in a split or merge, or the other bulk lot in a transfer. |
+| `container_id` | uuid → container | yes | The container packed into, unpacked from, or moved with (D-059). |
 | `job_id` | uuid → job | yes | The job for declared consumption or production. |
 | `run_id` | uuid | yes | The run of the job a consumption or production went into (D-035); every one has one since execution. |
 | `from_status`, `to_status` | text | yes | For status changes, and when a lot is used up or comes back. |

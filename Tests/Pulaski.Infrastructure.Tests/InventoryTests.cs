@@ -321,6 +321,46 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Containers_hold_lots_move_them_together_and_every_scan_resolves_to_one_thing()
+    {
+        var plant = await CreatePlantAsync();
+        var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-CA-" + _suffix, 100m, plant.Kg));
+        var b = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Staging, "R-CB-" + _suffix, 50m, plant.Kg));
+        CreatedResponse pallet = await db.SendAsync(new CreateContainerCommand(plant.Site, null, "pallet", plant.Stores));
+        await db.SendAsync(new PackLotCommand(a.LotId, await VersionAsync(a.LotId), pallet.Id));
+        await db.SendAsync(new PackLotCommand(b.LotId, await VersionAsync(b.LotId), pallet.Id));
+
+        var container = await QueryAsync<GetContainerQuery, ContainerDto>(new GetContainerQuery(pallet.Id));
+        Assert.Equal((2, $"PAL-{container.LabelNo}", $"PUL1C{container.LabelNo}"), (container.Lots.Count, container.Code, container.Barcode));
+        Assert.All(container.Lots, l => Assert.Equal((plant.StoresCode, container.Code), (l.LocationCode, l.ContainerCode)));
+
+        await db.SendAsync(new MoveContainerCommand(pallet.Id, container.Version, plant.Staging, "To the line"));
+        var moved = await QueryAsync<GetContainerQuery, ContainerDto>(new GetContainerQuery(pallet.Id));
+        Assert.All(moved.Lots, l => Assert.Equal(plant.StagingCode, l.LocationCode));
+        var history = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(a.LotId))).History;
+        Assert.Equal([LotEventKind.Moved, LotEventKind.Packed, LotEventKind.Received], history.Select(h => h.Kind));
+
+        // A lot's own label, the container's label, and the lot number typed or read from a supplier's label.
+        var lotLabel = moved.Lots.Single(l => l.Id == a.LotId).LabelNo;
+        var byLabel = await QueryAsync<ResolveScanQuery, ScanResultDto>(new ResolveScanQuery(plant.Site, $"PUL1L{lotLabel}"));
+        Assert.Equal(("found", a.LotId, "label"), (byLabel.Status, Assert.Single(byLabel.Matches).Id, byLabel.Matches[0].MatchedBy));
+        var byContainer = await QueryAsync<ResolveScanQuery, ScanResultDto>(new ResolveScanQuery(plant.Site, moved.Barcode));
+        Assert.Equal(("container", pallet.Id), (Assert.Single(byContainer.Matches).Kind, byContainer.Matches[0].Id));
+        var byText = await QueryAsync<ResolveScanQuery, ScanResultDto>(new ResolveScanQuery(plant.Site, "r-cb-" + _suffix));
+        Assert.Equal(("found", b.LotId), (byText.Status, Assert.Single(byText.Matches).Id));
+        var location = await QueryAsync<ResolveScanQuery, ScanResultDto>(new ResolveScanQuery(plant.Site, "PUL1E:" + plant.StagingCode));
+        Assert.Equal("location", Assert.Single(location.Matches).Kind);
+
+        // Unpacked, a lot stays put; the emptied container can then be retired.
+        await db.SendAsync(new UnpackLotCommand(a.LotId, await VersionAsync(a.LotId)));
+        await db.SendAsync(new MoveLotCommand(b.LotId, await VersionAsync(b.LotId), plant.Stores));
+        Assert.Null((await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(b.LotId))).Lot.ContainerId);
+        var empty = await QueryAsync<GetContainerQuery, ContainerDto>(new GetContainerQuery(pallet.Id));
+        Assert.Equal(0, empty.LotCount);
+        await db.SendAsync(new RetireContainerCommand(pallet.Id, empty.Version));
+    }
+
+    [Fact]
     public async Task Back_dated_movements_change_the_past_the_same_whatever_order_they_were_entered_in()
     {
         var plant = await CreatePlantAsync();

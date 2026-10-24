@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Pulaski.Api.Security;
+using Pulaski.Api.WorkOrders;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Security;
 using Pulaski.Application.Inventory;
@@ -301,6 +302,108 @@ internal static class InventoryEndpoints
             TypedResults.Ok(await handler.HandleAsync(
                 new ReverseMovementCommand(id, request.Version, request.EventId, request.ReasonCodeId, request.Comment), ct)))
         .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
+
+        // ---- Containers, labels and scanning (D-059) ----
+        lots.MapPost("/{id:guid}/pack", async Task<Ok<LotTransactionResponse>> (
+            Guid id,
+            PackLotRequest request,
+            ICommandHandler<PackLotCommand, LotTransactionResponse> pack,
+            ICommandHandler<UnpackLotCommand, LotTransactionResponse> unpack,
+            CancellationToken ct) =>
+            TypedResults.Ok(request.ContainerId is { } containerId
+                ? await pack.HandleAsync(new PackLotCommand(id, request.Version, containerId, request.Comment), ct)
+                : await unpack.HandleAsync(new UnpackLotCommand(id, request.Version, request.Comment), ct)))
+        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Lot));
+
+        lots.MapGet("/{id:guid}/label.pdf", async Task<FileContentHttpResult> (
+            Guid id,
+            IQueryHandler<GetLotQuery, LotDto> handler,
+            LabelPdfRenderer renderer,
+            CancellationToken ct) =>
+        {
+            var detail = await handler.HandleAsync(new GetLotQuery(id), ct);
+            var lot = detail.Lot;
+            var title = InventoryLabels.LotTitle(lot);
+            return TypedResults.File(renderer.Render([InventoryLabels.ForLot(lot, detail.SiteTimeZone)]), "application/pdf", $"label-{InventoryLabels.FileName(title)}.pdf");
+        })
+        .RequireAny(Site.Of(SiteOf.Lot), Permissions.InventoryView);
+
+        var containers = inventory.MapGroup("/containers");
+
+        containers.MapGet("/", async Task<Ok<IReadOnlyList<ContainerDto>>> (
+            Guid siteId,
+            string? search,
+            bool? includeRetired,
+            IQueryHandler<ListContainersQuery, IReadOnlyList<ContainerDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListContainersQuery(siteId, search, includeRetired ?? false), ct)))
+        .RequireAny(Site.Query(), Permissions.InventoryView);
+
+        containers.MapGet("/{id:guid}", async Task<Ok<ContainerDto>> (
+            Guid id,
+            IQueryHandler<GetContainerQuery, ContainerDto> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetContainerQuery(id), ct)))
+        .RequireAny(Site.Of(SiteOf.Container), Permissions.InventoryView);
+
+        containers.MapPost("/", async Task<Created<CreatedResponse>> (
+            CreateContainerRequest request,
+            ICommandHandler<CreateContainerCommand, CreatedResponse> handler,
+            CancellationToken ct) =>
+        {
+            var created = await handler.HandleAsync(new CreateContainerCommand(request.SiteId, request.Code, request.Kind, request.LocationId), ct);
+            return TypedResults.Created($"/api/inventory/containers/{created.Id}", created);
+        })
+        .RequirePermission(Permissions.LotMove, Site.FromBody<CreateContainerRequest>(SiteOf.Equipment, r => r.SiteId));
+
+        containers.MapPost("/{id:guid}/move", async Task<Ok<VersionResponse>> (
+            Guid id,
+            MoveContainerRequest request,
+            ICommandHandler<MoveContainerCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new MoveContainerCommand(id, request.Version, request.ToLocationId, request.Comment), ct)))
+        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Container));
+
+        containers.MapPost("/{id:guid}/retire", async Task<Ok<VersionResponse>> (
+            Guid id,
+            RetireContainerRequest request,
+            ICommandHandler<RetireContainerCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RetireContainerCommand(id, request.Version), ct)))
+        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Container));
+
+        containers.MapGet("/{id:guid}/label.pdf", async Task<FileContentHttpResult> (
+            Guid id,
+            IQueryHandler<GetContainerQuery, ContainerDto> handler,
+            LabelPdfRenderer renderer,
+            CancellationToken ct) =>
+        {
+            var container = await handler.HandleAsync(new GetContainerQuery(id), ct);
+            return TypedResults.File(renderer.Render([InventoryLabels.ForContainer(container)]), "application/pdf", $"label-{InventoryLabels.FileName(container.Code)}.pdf");
+        })
+        .RequireAny(Site.Of(SiteOf.Container), Permissions.InventoryView);
+
+        inventory.MapGet("/locations/{id:guid}/label.pdf", async Task<FileContentHttpResult> (
+            Guid id,
+            Guid siteId,
+            IQueryHandler<ListInventoryLocationsQuery, IReadOnlyList<InventoryLocationDto>> handler,
+            LabelPdfRenderer renderer,
+            CancellationToken ct) =>
+        {
+            var location = (await handler.HandleAsync(new ListInventoryLocationsQuery(siteId), ct)).FirstOrDefault(l => l.Id == id)
+                ?? throw new Application.Errors.NotFoundException($"Location {id} not found at that site.");
+            return TypedResults.File(renderer.Render([InventoryLabels.ForLocation(location)]), "application/pdf", $"label-{InventoryLabels.FileName(location.Code)}.pdf");
+        })
+        .RequireAny(Site.Query(), Permissions.InventoryView);
+
+        // What a scanned code names at the site: one lot, container or location, a choice of several, or nothing (D-059).
+        inventory.MapGet("/scan", async Task<Ok<ScanResultDto>> (
+            Guid siteId,
+            string code,
+            IQueryHandler<ResolveScanQuery, ScanResultDto> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ResolveScanQuery(siteId, code), ct)))
+        .RequireAny(Site.Query(), Permissions.InventoryView);
 
         // ---- Lot attributes and documents (D-056) ----
         lots.MapGet("/{id:guid}/records", async Task<Ok<LotRecordsDto>> (

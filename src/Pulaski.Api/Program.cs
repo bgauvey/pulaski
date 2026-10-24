@@ -17,6 +17,7 @@ var connectionString = builder.Configuration.GetConnectionString("Pulaski")
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddSingleton<ShopOrderPdfRenderer>();
+builder.Services.AddSingleton<LabelPdfRenderer>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IRequestContext, HttpRequestContext>();

@@ -50,10 +50,13 @@ public sealed class InMemoryStores
     public InMemoryUnits Units { get; } = new();
 
     private InMemoryLotRecords? _lotRecords;
+    private InMemoryContainers? _containers;
 
     public InMemoryInventory Inventory { get; } = new();
 
     public InMemoryExpectedReceipts ExpectedReceipts { get; } = new();
+
+    public InMemoryContainers Containers => _containers ??= new InMemoryContainers(Inventory);
 
     public InMemoryLotRecords LotRecords => _lotRecords ??= new InMemoryLotRecords(Inventory);
 
@@ -108,6 +111,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IUnitRepository>();
         services.RemoveAll<IInventoryReadStore>();
         services.RemoveAll<IInventoryRepository>();
+        services.RemoveAll<IContainerRepository>();
+        services.RemoveAll<IContainerReadStore>();
         services.RemoveAll<IExpectedReceiptRepository>();
         services.RemoveAll<IExpectedReceiptReadStore>();
         services.RemoveAll<ILotRecordsReadStore>();
@@ -160,6 +165,8 @@ public sealed class InMemoryStores
         services.AddSingleton<IUnitRepository>(Units);
         services.AddSingleton<IInventoryReadStore>(Inventory);
         services.AddSingleton<IInventoryRepository>(Inventory);
+        services.AddSingleton<IContainerRepository>(Containers);
+        services.AddSingleton<IContainerReadStore>(Containers);
         services.AddSingleton<IExpectedReceiptRepository>(ExpectedReceipts);
         services.AddSingleton<IExpectedReceiptReadStore>(ExpectedReceipts);
         services.AddSingleton<ILotRecordsReadStore>(LotRecords);

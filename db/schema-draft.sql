@@ -1055,6 +1055,26 @@ CREATE UNIQUE INDEX changeover_rule_uq ON core.changeover_rule
 --    Quantities are in the material's base unit.
 -- =====================================================================
 
+
+-- The numbers lot and container labels carry (D-059): short, numeric and never reused, so a barcode stays compact.
+CREATE SEQUENCE core.label_seq;
+
+-- A pallet, tote, box or bin holding lots (D-059). Its lots keep their own number, history and genealogy; moving it moves them.
+-- One site, any mix of materials, no containers inside containers. Retired rather than deleted, and only when empty.
+CREATE TABLE core.container (
+    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
+    code                    text NOT NULL,                          -- upper case, unique in the site
+    kind                    text NOT NULL CHECK (kind IN ('pallet','tote','box','bin','other')),
+    location_equipment_id   uuid NOT NULL REFERENCES core.equipment(id),
+    label_no                bigint NOT NULL DEFAULT nextval('core.label_seq') UNIQUE,
+    is_active               boolean NOT NULL DEFAULT true,
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    created_by              text NOT NULL,
+    updated_at              timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT container_uq UNIQUE (site_id, code)
+);
+
 CREATE TABLE core.lot (
     id                      uuid PRIMARY KEY DEFAULT uuidv7(),
     site_id                 uuid NOT NULL REFERENCES core.equipment(id),
@@ -1072,6 +1092,8 @@ CREATE TABLE core.lot (
     origin                  text NOT NULL CHECK (origin IN ('produced','received','erp','split','merge')),
     supplier_lot            text,
     external_key            text,
+    container_id            uuid REFERENCES core.container(id),  -- the container it is in (D-059), at the container's location
+    label_no                bigint NOT NULL DEFAULT nextval('core.label_seq') UNIQUE,   -- what its label's barcode carries (D-059)
     produced_from           timestamptz,                        -- output lot boundaries (cut by time or quantity)
     produced_to             timestamptz,
     expires_at              timestamptz,
@@ -1082,6 +1104,7 @@ CREATE TABLE core.lot (
     CONSTRAINT lot_number_bulk_ck CHECK ((lot_number IS NULL) = is_bulk)
 );
 CREATE INDEX lot_location_ix ON core.lot (location_equipment_id) WHERE status IN ('available','on_hold','quarantine');
+CREATE INDEX lot_container_ix ON core.lot (container_id) WHERE container_id IS NOT NULL;
 CREATE INDEX lot_material_ix ON core.lot (material_id, site_id) WHERE status IN ('available','on_hold','quarantine');
 CREATE INDEX lot_run_ix ON core.lot (produced_by_run_id);
 CREATE INDEX lot_job_ix ON core.lot (produced_by_job_id) WHERE produced_by_job_id IS NOT NULL;
@@ -1644,13 +1667,14 @@ CREATE TABLE ts.lot_event (
     lot_id              uuid NOT NULL REFERENCES core.lot(id),
     event_kind          text NOT NULL CHECK (event_kind IN (
                             'created','received','moved','loaded','consumed','produced',
-                            'split','merged','status_changed','adjusted','scrapped','shipped','corrected','reversed')),
+                            'split','merged','status_changed','adjusted','scrapped','shipped','corrected','reversed','packed','unpacked')),
     qty_delta           core.qty,
     qty_after           core.qty,                               -- the lot's quantity once recorded; stock at a time sums qty_delta by effective_at
     uom_id              uuid REFERENCES core.uom(id),
     from_location_id    uuid REFERENCES core.equipment(id),
     to_location_id      uuid REFERENCES core.equipment(id),
     related_lot_id      uuid REFERENCES core.lot(id),           -- split/merge counterpart, or the other bulk lot in a transfer
+    container_id        uuid REFERENCES core.container(id),     -- packed into, unpacked from, or moved with (D-059)
     job_id              uuid REFERENCES core.job(id),           -- declared consumption into / production from a job
     run_id              uuid,
     from_status         text,
@@ -1937,7 +1961,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0023_person_import'),
     ('0024_lot_records'),
     ('0025_backdated_movements'),
-    ('0026_expected_receipts');
+    ('0026_expected_receipts'),
+    ('0027_containers_and_labels');
 
 -- =====================================================================
 -- 17. SEED DATA

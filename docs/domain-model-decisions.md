@@ -66,6 +66,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-056 | Lot attributes and certificates: typed attribute definitions per site (text, number, date, yes/no, choice), offered for every material or chosen classes, with values beside the lot (never changing `core.lot` or its movements) and every change an event. Certificates are stored files (PDF, PNG, JPEG ≤ 10 MB, recognised by content, written once) or references (number, URL), linked to lots and carried on by split and merge; never deleted, withdrawn with a reason. Two permissions: `lot_records.manage` and `lot_attributes.manage` | Proposed | 2026-10-24 |
 | D-057 | Back-dated inventory movements: a receipt, consumption, production, write-up or write-off may count from up to 31 days earlier (`effective_at`), with a comment and permission `inventory.backdate`; its record time (`occurred_at`) and append-only history stay. Stock at a time sums movements by effective time, so it is deterministic whatever the order of entry. A back-dated movement may not count before the lot had stock or before a posted count of it, nor take it below zero at any time; expiry and the run are taken at the effective time | Proposed | 2026-10-24 |
 | D-058 | Shortages with the live schedule and supply on its way: jobs are timed by the schedule's projection now by default (published times on request); `core.expected_receipt` records deliveries entered by people or sent by the ERP (idempotent by external key), counted beside stock only for jobs needing the material after they are due, and closed by receiving a lot against them. Still not MRP: no suggestions, lead times or ordering | Proposed | 2026-10-24 |
+| D-059 | Containers, labels and scanning: a container (pallet, tote, box, bin) holds whole lots that keep their own identity; packing, unpacking and moving with a container are ordinary lot movements linked to it, and a lot moved, split off or used up alone leaves it. Labels are 4 × 6 in PDFs with a Code 128 barcode of a short Pulaski code (`PUL1L`/`PUL1C` + a never-reused label number, `PUL1E:` + a location code); a scan resolves to exactly one thing at the site, or offers the matches when free text is ambiguous | Proposed | 2026-10-24 |
 
 ## Order hierarchy
 
@@ -484,7 +485,7 @@ What a plant needs to keep floor stock right without the ERP, beyond receiving a
 - **Aging:** on-hand stock by how long ago each lot was received or made: up to 30, 31–90, 91–180 and over 180 days, per material.
 - **Export:** stock, lots, the journal (up to 10,000 rows) and both reports download as CSV.
 
-**Deferred:** pallets or containers (with labeling), allocation and picking suggestions (with execution). Lot attributes and certificates are D-056.
+**Deferred:** allocation and picking suggestions (with execution). Containers and labels are D-059. Lot attributes and certificates are D-056.
 
 ## Indistinguishable lots (D-031, proposed)
 
@@ -1219,6 +1220,37 @@ People with `lot.receive` enter and change open ones on Inventory → Incoming. 
 - A receipt whose unit doesn't convert is left out with a problem note.
 
 **Not MRP.** Nothing is suggested, ordered, netted across sites or rescheduled, and there are no lead times. Expected receipts are only what someone said is coming.
+
+## Containers, labels and scanning (D-059, proposed)
+
+Issue #37.
+
+**Containers.** `core.container` (code unique per site, kind, location, `label_no`, active) holds lots through `core.lot.container_id`. A lot keeps its number, history and genealogy; a container isn't a lot and has no genealogy.
+
+- **Invariant:** a lot in a container is at the container's location. `Lot` keeps it:
+  - `PackInto` moves the lot there when needed.
+  - `MoveWithContainer` keeps the container.
+  - `MoveTo` (alone), `Split` (the part), `Take` to zero and a `Reverse` that changes location all clear it.
+- **Packing:** whole lots only, so to pack part of a lot, split it first. Balances of materials that aren't lot-tracked can't be packed.
+- **Mixing:** mixed materials are allowed. There are no nested containers, and containers can't sit at commingling locations (D-031). A single-material location (D-032) checks each material.
+- **Retiring** needs the container empty.
+
+**Movements.** New `ts.lot_event` kinds `packed` and `unpacked`, and `container_id` on the row (packed into, unpacked from, or moved with).
+
+- Moving a container locks the container, then its lots in id order (`LockLotsAsync`), then writes one `moved` row per lot plus a `pulaski.container.moved.v1` event listing them.
+- Packing locks the container before the lot, so the two orders agree.
+- Unpacking locks only the lot, since the container row doesn't change.
+- Events: `lot.packed/unpacked`, `container.created/moved/retired`.
+
+**Labels.** `core.label_seq` gives every lot (`core.lot.label_no`, default) and container a number that is never reused. Barcodes are Code 128 of `PUL1L<n>`, `PUL1C<n>` or `PUL1E:<location code>`, short enough for a compact barcode, with the same text printed beneath. `LabelPdfRenderer` draws 4 × 6 in pages through the API's existing PDF and barcode libraries (PdfSharp, ZXing, already used for shop orders, D-041), via the shared `BarcodeDrawing`. Endpoints: `GET /api/lots/{id}/label.pdf`, `…/containers/{id}/label.pdf`, `…/locations/{id}/label.pdf?siteId=`.
+
+**Scanning.** `ScanCode.Parse` reads a Pulaski code or treats the scan as free text. `GET /api/inventory/scan?siteId=&code=` (`ResolveScanQuery`) returns `found` with one match, `ambiguous` with the candidates (`MatchedBy` says how each matched), or `not_found` with why.
+
+- Label numbers resolve only within the site.
+- Free text matches on-hand lots by lot or supplier lot number, active containers by code, and locations by code, ignoring case.
+- The Scan screen is for keyboard-wedge scanners. A second scan for a move or pack is filtered to the kind it needs. Every action is an existing command, so rules, history and permissions are unchanged.
+
+**Not yet.** GS1 (SSCC, GTIN AIs) labels; direct label-printer output (ZPL); nested containers; reading structured supplier barcodes beyond their text; a mobile/offline scanning app.
 
 ## Application architecture
 

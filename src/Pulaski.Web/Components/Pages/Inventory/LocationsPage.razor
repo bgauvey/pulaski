@@ -2,6 +2,7 @@
 @attribute [RequiresView(PermissionCodes.InventoryView)]
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
+@inject Downloads Downloads
 
 <PageTitle>Locations · Inventory · Pulaski</PageTitle>
 
@@ -61,6 +62,7 @@ else
                         <td class="text-end text-nowrap">
                             <a class="btn btn-sm btn-outline-secondary" href="inventory?locationId=@l.Id">Stock</a>
                             <a class="btn btn-sm btn-outline-secondary" href="inventory/lots?locationId=@l.Id">Lots</a>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" title="A label to scan when moving stock here" @onclick="() => LabelAsync(l)">Label</button>
                         </td>
                     </tr>
                 }
@@ -74,6 +76,20 @@ else
     private ApiException? _error;
 
     protected override Task OnInitializedAsync() => LoadAsync();
+
+    // A location's label (D-059): scanned as where a move or receipt goes.
+    private async Task LabelAsync(InventoryLocationDto location)
+    {
+        try
+        {
+            var (content, type, name) = await Api.GetLabelAsync("location", location.Id, location.SiteId);
+            await Downloads.FileAsync(name, content, type);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
 
     private async Task LoadAsync()
     {

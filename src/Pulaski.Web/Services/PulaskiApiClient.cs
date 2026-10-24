@@ -613,6 +613,39 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<LotDto> GetLotAsync(Guid id, CancellationToken ct = default) =>
         GetAsync<LotDto>($"api/lots/{id}", ct);
 
+    // ---- Containers, labels and scanning (D-059) ----
+
+    public Task<IReadOnlyList<ContainerDto>> ListContainersAsync(Guid siteId, string? search = null, bool includeRetired = false, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ContainerDto>>(
+            Query("api/inventory/containers", ("siteId", siteId), ("search", search), ("includeRetired", includeRetired ? "true" : null)), ct);
+
+    public Task<ContainerDto> GetContainerAsync(Guid id, CancellationToken ct = default) => GetAsync<ContainerDto>($"api/inventory/containers/{id}", ct);
+
+    public Task<CreatedResponse> CreateContainerAsync(CreateContainerRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/inventory/containers", request, ct);
+
+    public Task<VersionResponse> MoveContainerAsync(Guid id, MoveContainerRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/containers/{id}/move", request, ct);
+
+    public Task<VersionResponse> RetireContainerAsync(Guid id, long version, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/containers/{id}/retire", new RetireContainerRequest { Version = version }, ct);
+
+    /// <summary>Packs the lot into <c>ContainerId</c>, or with none unpacks it.</summary>
+    public Task<LotTransactionResponse> PackLotAsync(Guid lotId, PackLotRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{lotId}/pack", request, ct);
+
+    public Task<ScanResultDto> ResolveScanAsync(Guid siteId, string code, CancellationToken ct = default) =>
+        GetAsync<ScanResultDto>(Query("api/inventory/scan", ("siteId", siteId), ("code", code)), ct);
+
+    /// <summary>A lot's, container's or location's label as a PDF, to hand to the browser.</summary>
+    public Task<(byte[] Content, string ContentType, string FileName)> GetLabelAsync(string kind, Guid id, Guid siteId, CancellationToken ct = default) =>
+        GetFileAsync(kind switch
+        {
+            "lot" => $"api/lots/{id}/label.pdf",
+            "container" => $"api/inventory/containers/{id}/label.pdf",
+            _ => $"api/inventory/locations/{id}/label.pdf?siteId={siteId}",
+        }, ct);
+
     // ---- Lot attributes and documents (D-056) ----
 
     public Task<IReadOnlyList<LotAttributeDto>> ListLotAttributesAsync(Guid siteId, CancellationToken ct = default) =>
@@ -663,9 +696,12 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     }
 
     /// <summary>A stored document's file, to hand to the browser.</summary>
-    public async Task<(byte[] Content, string ContentType, string FileName)> GetLotDocumentContentAsync(Guid documentId, CancellationToken ct = default)
+    public Task<(byte[] Content, string ContentType, string FileName)> GetLotDocumentContentAsync(Guid documentId, CancellationToken ct = default) =>
+        GetFileAsync($"api/lot-documents/{documentId}/content", ct);
+
+    private async Task<(byte[] Content, string ContentType, string FileName)> GetFileAsync(string uri, CancellationToken ct)
     {
-        using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Get, $"api/lot-documents/{documentId}/content"), ct);
+        using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Get, uri), ct);
         if (!response.IsSuccessStatusCode)
         {
             throw await ApiException.FromResponseAsync(response, ct);

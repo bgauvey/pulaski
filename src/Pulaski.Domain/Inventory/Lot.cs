@@ -36,6 +36,8 @@ public static class LotEventKind
     public const string Shipped = "shipped";
     public const string Corrected = "corrected";
     public const string Reversed = "reversed";
+    public const string Packed = "packed";
+    public const string Unpacked = "unpacked";
 
     /// <summary>The movements a reversal can undo (D-030): one lot, and nothing a job declared.</summary>
     public static IReadOnlyList<string> Reversible { get; } = [Received, Adjusted, Scrapped, Moved, StatusChanged, Shipped];
@@ -85,6 +87,12 @@ public sealed record Lot(
     DateTimeOffset? ExpiresAt = null,
     Guid? ProducedByJobId = null)
 {
+    /// <summary>
+    /// The container it is in (D-059), at the container's location; null when loose. A lot that moves, is split off or is used up
+    /// on its own leaves its container.
+    /// </summary>
+    public Guid? ContainerId { get; init; }
+
     /// <summary>True when its expiry is <paramref name="now"/> or past (D-032).</summary>
     public bool IsExpired(DateTimeOffset now) => ExpiresAt is { } expires && expires <= now;
 
@@ -179,7 +187,7 @@ public sealed record Lot(
                 _ => LotStatus.Consumed,
             }
             : Status;
-        var after = this with { Quantity = remaining, Status = status };
+        var after = this with { Quantity = remaining, Status = status, ContainerId = remaining == 0 && !IsBulk ? null : ContainerId };
         return (after, new LotMovement(kind, -quantity, remaining, FromLocationId: LocationId,
             FromStatus: status == Status ? null : Status, ToStatus: status == Status ? null : status));
     }
@@ -199,9 +207,43 @@ public sealed record Lot(
             throw new DomainRuleException($"{Name} is already there.");
         }
 
-        var after = this with { LocationId = locationId };
+        var after = this with { LocationId = locationId, ContainerId = null };
         return (after, new LotMovement(LotEventKind.Moved, null, Quantity, LocationId, locationId));
     }
+
+    /// <summary>Moves with its container (D-059) to the container's new location; it stays in the container.</summary>
+    public (Lot Lot, LotMovement Movement) MoveWithContainer(Guid locationId) =>
+        (this with { LocationId = locationId }, new LotMovement(LotEventKind.Moved, null, Quantity, LocationId, locationId));
+
+    /// <summary>
+    /// Puts the whole lot into a container (D-059), moving it to the container's location when it is elsewhere. To pack part of a
+    /// lot, split it first.
+    /// </summary>
+    /// <exception cref="DomainRuleException">A balance, a lot not on hand or empty, or one already in that container.</exception>
+    public (Lot Lot, LotMovement Movement) PackInto(Guid containerId, Guid containerLocationId)
+    {
+        EnsureWholeLot("packed");
+        EnsureOnHand("packed");
+        if (Quantity == 0)
+        {
+            throw new DomainRuleException($"{Name} is empty; there is nothing to pack.");
+        }
+
+        if (ContainerId == containerId)
+        {
+            throw new DomainRuleException($"{Name} is already in that container.");
+        }
+
+        var moves = containerLocationId != LocationId;
+        return (this with { ContainerId = containerId, LocationId = containerLocationId },
+            new LotMovement(LotEventKind.Packed, null, Quantity, moves ? LocationId : null, moves ? containerLocationId : null));
+    }
+
+    /// <summary>Takes the lot out of its container (D-059); it stays where it is.</summary>
+    /// <exception cref="DomainRuleException">It isn't in a container.</exception>
+    public (Lot Lot, LotMovement Movement) Unpack() => ContainerId is null
+        ? throw new DomainRuleException($"{Name} isn't in a container.")
+        : (this with { ContainerId = null }, new LotMovement(LotEventKind.Unpacked, null, Quantity));
 
     /// <summary>Takes <paramref name="quantity"/> out of a bulk balance to send to another location.</summary>
     /// <exception cref="DomainRuleException">The lot isn't a bulk balance, isn't on hand, or hasn't enough.</exception>
@@ -384,7 +426,7 @@ public sealed record Lot(
             status = LotStatus.Cancelled;
         }
 
-        var after = this with { Quantity = quantity, LocationId = location, Status = status };
+        var after = this with { Quantity = quantity, LocationId = location, Status = status, ContainerId = location == LocationId ? ContainerId : null };
         return (after, new LotMovement(
             LotEventKind.Reversed,
             delta == 0 ? null : -delta,

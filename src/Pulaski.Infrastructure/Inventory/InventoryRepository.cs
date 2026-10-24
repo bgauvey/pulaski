@@ -26,7 +26,7 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     private const string LotColumns = """
         id, site_id, material_id, lot_number, status, quantity, uom_id, location_equipment_id AS location_id,
-        is_bulk, origin, supplier_lot, expires_at, produced_by_job_id, xmin::text::bigint AS version
+        is_bulk, origin, supplier_lot, expires_at, produced_by_job_id, container_id, xmin::text::bigint AS version
         """;
 
     private const string GetLotForUpdate = $"SELECT {LotColumns} FROM core.lot WHERE id = @Id FOR UPDATE";
@@ -45,16 +45,16 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     private const string InsertLot = """
         INSERT INTO core.lot (id, site_id, lot_number, material_id, status, quantity, uom_id, location_equipment_id, is_bulk,
-                              produced_by_job_id, origin, supplier_lot, expires_at, created_at, updated_at)
+                              produced_by_job_id, origin, supplier_lot, expires_at, container_id, created_at, updated_at)
         VALUES (@Id, @SiteId, @LotNumber, @MaterialId, @Status, @Quantity, @UomId, @LocationId, @IsBulk,
-                @ProducedByJobId, @Origin, @SupplierLot, @ExpiresAt, @At, @At)
+                @ProducedByJobId, @Origin, @SupplierLot, @ExpiresAt, @ContainerId, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     private const string UpdateLot = """
         UPDATE core.lot
         SET lot_number = @LotNumber, status = @Status, quantity = @Quantity, location_equipment_id = @LocationId,
-            supplier_lot = @SupplierLot, expires_at = @ExpiresAt, updated_at = @At
+            supplier_lot = @SupplierLot, expires_at = @ExpiresAt, container_id = @ContainerId, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -63,11 +63,11 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         INSERT INTO ts.lot_event (id, occurred_at, lot_id, event_kind, qty_delta, qty_after, uom_id,
                                   from_location_id, to_location_id, related_lot_id, job_id,
                                   from_status, to_status, reason_code_id, comment, actor_id,
-                                  reference, reverses_event_id, reverses_occurred_at, run_id, effective_at)
+                                  reference, reverses_event_id, reverses_occurred_at, run_id, effective_at, container_id)
         VALUES (@Id, @At, @LotId, @Kind, @QtyDelta, @QtyAfter, @UomId,
                 @FromLocationId, @ToLocationId, @RelatedLotId, @JobId,
                 @FromStatus, @ToStatus, @ReasonCodeId, @Comment, @ActorId,
-                @Reference, @ReversesEventId, @ReversesOccurredAt, @RunId, coalesce(@EffectiveAt, @At))
+                @Reference, @ReversesEventId, @ReversesOccurredAt, @RunId, coalesce(@EffectiveAt, @At), @ContainerId)
         """;
 
     private const string GetLocation = """
@@ -264,13 +264,14 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
                 lot.Origin,
                 lot.SupplierLot,
                 lot.ExpiresAt,
+                lot.ContainerId,
                 At = at,
             },
             cancellationToken);
 
     public Task<long> UpdateLotAsync(Lot lot, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(
-            UpdateLot, new { lot.Id, lot.LotNumber, lot.Status, lot.Quantity, lot.LocationId, lot.SupplierLot, lot.ExpiresAt, At = at }, cancellationToken);
+            UpdateLot, new { lot.Id, lot.LotNumber, lot.Status, lot.Quantity, lot.LocationId, lot.SupplierLot, lot.ExpiresAt, lot.ContainerId, At = at }, cancellationToken);
 
     public Task InsertEventAsync(LotEventRow row, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteAsync(
@@ -296,6 +297,7 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
                 row.Reference,
                 row.ReversesEventId,
                 row.EffectiveAt,
+                row.ContainerId,
                 row.ReversesOccurredAt,
                 row.RunId,
             },
@@ -455,11 +457,15 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         public string? SupplierLot { get; init; }
         public DateTimeOffset? ExpiresAt { get; init; }
         public Guid? ProducedByJobId { get; init; }
+        public Guid? ContainerId { get; init; }
         public long Version { get; init; }
         public DateTimeOffset UpdatedAt { get; init; }
 
         public Versioned<Lot> ToVersioned() => new(
-            new Lot(Id, SiteId, MaterialId, LotNumber, Status, Quantity, UomId, LocationId, IsBulk, Origin, SupplierLot, ExpiresAt, ProducedByJobId),
+            new Lot(Id, SiteId, MaterialId, LotNumber, Status, Quantity, UomId, LocationId, IsBulk, Origin, SupplierLot, ExpiresAt, ProducedByJobId)
+            {
+                ContainerId = ContainerId,
+            },
             Version);
     }
 

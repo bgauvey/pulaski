@@ -65,6 +65,13 @@ public sealed record LotSummaryDto
     public DateTimeOffset? ExpiresAt { get; init; }
     public Guid? ProducedByJobId { get; init; }
     public string? ProducedByJobNumber { get; init; }
+
+    /// <summary>The container it is in (D-059); null when loose.</summary>
+    public Guid? ContainerId { get; init; }
+    public string? ContainerCode { get; init; }
+
+    /// <summary>What its label's barcode carries: <c>PUL1L</c> + this (D-059).</summary>
+    public long LabelNo { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
 
@@ -130,6 +137,10 @@ public sealed record LotEventDto
 
     /// <summary>For a reversal, the movement it undoes.</summary>
     public Guid? ReversesEventId { get; init; }
+
+    /// <summary>The container it was packed into, unpacked from, or moved with (D-059).</summary>
+    public Guid? ContainerId { get; init; }
+    public string? ContainerCode { get; init; }
 }
 
 /// <summary>A lot one genealogy step away: a parent it was made from, or a child made from it.</summary>

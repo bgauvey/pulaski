@@ -3,8 +3,6 @@ using PdfSharp.Drawing;
 using PdfSharp.Fonts;
 using PdfSharp.Pdf;
 using Pulaski.Contracts.WorkOrders;
-using ZXing;
-using ZXing.OneD;
 
 namespace Pulaski.Api.WorkOrders;
 
@@ -99,30 +97,8 @@ public sealed class ShopOrderPdfRenderer
         DrawLine(graphics, Margin, 235, PageWidth - Margin, 235, RuleColor);
     }
 
-    private static void DrawBarcode(XGraphics graphics, string value, double x, double y, double width, double height)
-    {
-        var matrix = new Code128Writer().encode(value, BarcodeFormat.CODE_128, 640, 80);
-        var moduleWidth = width / matrix.Width;
-        var moduleHeight = height / matrix.Height;
-        for (var row = 0; row < matrix.Height; row++)
-        {
-            var runStart = -1;
-            for (var column = 0; column <= matrix.Width; column++)
-            {
-                var black = column < matrix.Width && matrix[column, row];
-                if (black && runStart < 0)
-                {
-                    runStart = column;
-                }
-                else if (!black && runStart >= 0)
-                {
-                    graphics.DrawRectangle(XBrushes.Black, x + runStart * moduleWidth, y + row * moduleHeight,
-                        (column - runStart) * moduleWidth, moduleHeight);
-                    runStart = -1;
-                }
-            }
-        }
-    }
+    private static void DrawBarcode(XGraphics graphics, string value, double x, double y, double width, double height) =>
+        BarcodeDrawing.Code128(graphics, value, x, y, width, height);
 
     private static void DrawSectionTitle(XGraphics graphics, string title, double x, double y, double width)
     {
@@ -416,7 +392,7 @@ public sealed class ShopOrderPdfRenderer
 
     private sealed record Page(PdfPage PdfPage, XGraphics Graphics);
 
-    private sealed class RobotoFontResolver : IFontResolver
+    internal sealed class RobotoFontResolver : IFontResolver
     {
         private static readonly byte[] FontBytes = ReadFont();
 
