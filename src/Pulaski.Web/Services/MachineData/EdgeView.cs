@@ -17,6 +17,7 @@ public static class EdgeView
         ("defective_count", "Defective count"),
         ("consumed_count", "Consumed count"),
         ("machine_speed", "Machine speed"),
+        ("level", "Level (silo or tank; read later)"),
     ];
 
     public static string RoleLabel(string role) => Roles.FirstOrDefault(r => r.Role == role).Label ?? role;

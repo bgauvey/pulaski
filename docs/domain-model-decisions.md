@@ -67,6 +67,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-057 | Back-dated inventory movements: a receipt, consumption, production, write-up or write-off may count from up to 31 days earlier (`effective_at`), with a comment and permission `inventory.backdate`; its record time (`occurred_at`) and append-only history stay. Stock at a time sums movements by effective time, so it is deterministic whatever the order of entry. A back-dated movement may not count before the lot had stock or before a posted count of it, nor take it below zero at any time; expiry and the run are taken at the effective time | Proposed | 2026-10-24 |
 | D-058 | Shortages with the live schedule and supply on its way: jobs are timed by the schedule's projection now by default (published times on request); `core.expected_receipt` records deliveries entered by people or sent by the ERP (idempotent by external key), counted beside stock only for jobs needing the material after they are due, and closed by receiving a lot against them. Still not MRP: no suggestions, lead times or ordering | Proposed | 2026-10-24 |
 | D-059 | Containers, labels and scanning: a container (pallet, tote, box, bin) holds whole lots that keep their own identity; packing, unpacking and moving with a container are ordinary lot movements linked to it, and a lot moved, split off or used up alone leaves it. Labels are 4 × 6 in PDFs with a Code 128 barcode of a short Pulaski code (`PUL1L`/`PUL1C` + a never-reused label number, `PUL1E:` + a location code); a scan resolves to exactly one thing at the site, or offers the matches when free text is ambiguous | Proposed | 2026-10-24 |
+| D-060 | Genealogy through commingled balances: each location where lots mix has a flow model (`mixed`: a withdrawal takes every arrival's share; `fifo`: oldest first) and an optional minimum residence time. Which arrivals fed each withdrawal is worked out on read from the declared movements (by effective time) and narrows traces through the balance; every such link is exact (one arrival possible), estimated (by the model) or possible (quantities don't add up, residence not met), with the reason and the basis. A `level` tag role can be bound; reading it waits for process values | Proposed | 2026-10-24 |
 
 ## Order hierarchy
 
@@ -495,7 +496,7 @@ A resin silo or a tank can't keep lots apart: what goes in mixes with what is th
 - **One balance per material.** Stock there is held as a balance (`is_bulk`), exactly as a material that isn't lot-tracked is anywhere (D-027). A balance has no lot number: `lot_number` is NULL exactly when `is_bulk`. This replaces the `@<location code>` numbers D-027 gave balances; screens show *Balance at SILO-1*.
 - **Every arrival merges.** A receipt, a move, a split sent there and production into it all end in the balance, created on the first arrival. Only stock in the balance's status can join it (normally available): a held lot is released first, or the balance held too.
 - **Traceability kept.** A receipt with a lot number creates that lot, then merges it into the balance (`received`, then `merged` out of the lot and into the balance, genealogy `merge`), so a trace from a finished lot goes through the silo back to the supplier's lot. A lot moved or split there is merged the same way, and so is production with a lot number. A receipt or production with no number goes straight into the balance, the supplier lot kept only in the event. The balance takes the earliest expiry of everything in it.
-- **Genealogy over-links here too.** Every lot that ever joined a balance is a parent of everything taken from it afterwards: the silo has no first-in, first-out. Time-window genealogy with residence time narrows it with execution (charter slice step 4).
+- **Genealogy over-links here too.** Every lot that ever joined a balance is a parent of everything taken from it afterwards; since D-060 traces narrow this by the location's flow model, with a stated precision.
 - **Counting, writing off and shipping** a balance work as for any balance. Merging by hand, splitting and correcting the number don't apply to a balance.
 
 ## Location and expiry rules (D-032, proposed)
@@ -1251,6 +1252,47 @@ Issue #37.
 - The Scan screen is for keyboard-wedge scanners. A second scan for a move or pack is filtered to the kind it needs. Every action is an existing command, so rules, history and permissions are unchanged.
 
 **Not yet.** GS1 (SSCC, GTIN AIs) labels; direct label-printer output (ZPL); nested containers; reading structured supplier barcodes beyond their text; a mobile/offline scanning app.
+
+## Genealogy through commingled balances (D-060, proposed)
+
+Issue #38. Every arrival in a silo was a parent of everything taken after it (D-031).
+
+**Flow model.** `core.equipment.flow_model` and `min_residence` describe a location where lots mix:
+
+- `mixed` (the default) is a tank or mixed silo: a withdrawal takes from each arrival still there in proportion.
+- `fifo` is plug flow (mass-flow silos, bins): the oldest material leaves first.
+- `min_residence` is the least time material stays. In FIFO, material that hasn't stayed that long is taken only when nothing older is left, and is then only *possible*.
+
+`SetFlowCommand` (`PUT /api/inventory/locations/{id}/flow`, `equipment.manage`) sets it; the event is `pulaski.equipment.flow_set.v1`.
+
+**Allocation.** `BalanceAllocation.Allocate` (pure, in the domain) replays a balance's quantity movements in the order they count (`effective_at`, D-057):
+
+- Arrivals are positive rows: a lot merged in, or stock with no lot of its own (a receipt or production straight into the balance, a write-up).
+- Withdrawals are negative rows: consumption, transfers, write-offs and count corrections.
+
+Each withdrawal gets its contributing arrivals, quantities, a precision and a reason:
+
+| Precision | When |
+| --- | --- |
+| `exact` | Only one arrival was in the balance |
+| `estimated` | Worked out by the model from the declared quantities |
+| `possible` | More was taken than was put in (the unaccounted part has no source), or residence time not met |
+
+A balance emptied to zero starts afresh, so the next withdrawals can be exact. Nothing is stored: changing the model changes every answer at once, and back-dated movements fall into place.
+
+**Narrowed traces.** `TraceLotHandler` passes the SQL trace through `TraceNarrowing`:
+
+- **Back** from a lot made by job J, through balance B, keeps only B's arrivals that fed J's withdrawals from B.
+- **Forward** from arrival A, through B, keeps only lots made by jobs whose withdrawals A fed.
+- Lots reached only through a dropped lot go too.
+- Kept lots and B carry `Precision` and `PrecisionNote`, which states the basis: "worked out from the declared movements, not measured".
+- A balance reached through something no job made keeps every arrival, marked possible.
+- The starting lot, if itself a balance, isn't narrowed.
+- `GET /api/lots/{id}/allocation` gives a balance's withdrawals with their sources, which the balance's page shows.
+
+**Machine data.** Process values aren't recorded yet (D-050), so the model can't be confirmed by measurement and says so. A `level` tag role can be bound now (`TagRoles.Bindable`) and is ignored by ingest. Once level readings are kept, they can confirm a silo was empty (making links exact) or flag declared stock that disagrees with the level (making them possible).
+
+**Approximations.** The SQL trace keeps each lot once, by its nearest path, so a lot reachable both through a dropped arrival and another way may be dropped. A reversal into a balance is replayed as a withdrawal of the oldest stock.
 
 ## Application architecture
 

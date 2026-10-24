@@ -101,7 +101,9 @@ internal sealed class TraceLotHandler(IInventoryReadStore store) : IQueryHandler
     public async Task<IReadOnlyList<LotTraceNodeDto>> HandleAsync(TraceLotQuery query, CancellationToken cancellationToken)
     {
         var nodes = await store.TraceAsync(query.LotId, query.Forward, cancellationToken);
-        return nodes.Count == 0 ? throw new NotFoundException($"Lot {query.LotId} not found.") : nodes;
+        return nodes.Count == 0
+            ? throw new NotFoundException($"Lot {query.LotId} not found.")
+            : await TraceNarrowing.ApplyAsync(nodes, query.Forward, query.LotId, store, cancellationToken);
     }
 }
 

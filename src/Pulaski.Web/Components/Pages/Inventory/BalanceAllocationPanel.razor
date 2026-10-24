@@ -1,0 +1,100 @@
+@inject PulaskiApiClient Api
+
+@* Where a balance's withdrawals came from (D-060): which arrivals the location's flow model gives each one, and how sure that is.
+   Worked out from the declared movements, so it says so. *@
+<section class="inv-section" aria-labelledby="allocation-title">
+    <h2 id="allocation-title">Where what was taken came from</h2>
+    <ProblemAlert Error="_error" />
+    @if (_allocation is { } a)
+    {
+        <p class="small text-muted">@a.Basis Change how it flows on the <a href="inventory/locations">Locations</a> tab.</p>
+        @if (a.Withdrawals.Count == 0)
+        {
+            <p class="text-muted small">Nothing has been taken from it yet.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>When</th><th>What</th><th class="inv-num">Taken</th><th>From</th><th>How sure</th></tr></thead>
+                    <tbody>
+                        @foreach (var w in a.Withdrawals.Take(_shown))
+                        {
+                            <tr @key="w.EventId">
+                                <td class="small text-nowrap">@Display.SiteTime(w.At, TimeZone)</td>
+                                <td class="small">
+                                    @InventoryView.EventLabel(w.Kind)
+                                    @if (w.JobId is { } job)
+                                    {
+                                        <div><a href="inventory/jobs/@job">@w.JobNumber</a></div>
+                                    }
+                                </td>
+                                <td class="inv-num">@InventoryView.Qty(w.Quantity)</td>
+                                <td class="small">
+                                    @foreach (var source in w.Sources)
+                                    {
+                                        <div>
+                                            @if (source.LotId is { } lot)
+                                            {
+                                                <a href="inventory/lots/@lot">@source.LotNumber</a>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">no lot of its own</span>
+                                            }
+                                            · @InventoryView.Qty(source.Quantity)
+                                        </div>
+                                    }
+                                </td>
+                                <td class="small" title="@w.Reason"><span class="@PrecisionChip(w.Precision)">@PrecisionLabel(w.Precision)</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (a.Withdrawals.Count > _shown)
+            {
+                <button type="button" class="btn btn-sm btn-link" @onclick="() => _shown += 50">Show more</button>
+            }
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid LotId { get; set; }
+
+    [Parameter]
+    public string? TimeZone { get; set; }
+
+    private BalanceAllocationDto? _allocation;
+    private ApiException? _error;
+    private int _shown = 50;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _allocation = await Api.GetBalanceAllocationAsync(LotId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    public static string PrecisionLabel(string? precision) => precision switch
+    {
+        "exact" => "Exact",
+        "estimated" => "Estimated",
+        "possible" => "Possible",
+        _ => "",
+    };
+
+    public static string PrecisionChip(string? precision) => precision switch
+    {
+        "exact" => "chip chip-strong",
+        "possible" => "chip chip-warning",
+        _ => "chip",
+    };
+}

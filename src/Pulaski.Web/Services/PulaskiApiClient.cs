@@ -613,6 +613,14 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<LotDto> GetLotAsync(Guid id, CancellationToken ct = default) =>
         GetAsync<LotDto>($"api/lots/{id}", ct);
 
+    // ---- Genealogy through balances (D-060) ----
+
+    public Task<VersionResponse> SetFlowAsync(Guid locationId, SetFlowRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/inventory/locations/{locationId}/flow", request, ct);
+
+    public Task<BalanceAllocationDto> GetBalanceAllocationAsync(Guid lotId, CancellationToken ct = default) =>
+        GetAsync<BalanceAllocationDto>($"api/lots/{lotId}/allocation", ct);
+
     // ---- Containers, labels and scanning (D-059) ----
 
     public Task<IReadOnlyList<ContainerDto>> ListContainersAsync(Guid siteId, string? search = null, bool includeRetired = false, CancellationToken ct = default) =>

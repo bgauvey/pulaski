@@ -182,6 +182,14 @@ public sealed record LotTraceNodeDto
 {
     public required Guid LotId { get; init; }
     public Guid? ViaLotId { get; init; }
+    public Guid? ProducedByJobId { get; init; }
+
+    /// <summary>
+    /// For a link through a balance whose lots mix (D-060): <c>exact</c>, <c>estimated</c> or <c>possible</c>, with why; null for
+    /// an ordinary declared link.
+    /// </summary>
+    public string? Precision { get; init; }
+    public string? PrecisionNote { get; init; }
     public int Depth { get; init; }
     /// <summary>Null for a balance (D-031): show its location instead.</summary>
     public string? LotNumber { get; init; }
@@ -262,6 +270,13 @@ public sealed record InventoryLocationDto
 
     /// <summary>Takes one material at a time (D-032).</summary>
     public bool SingleMaterial { get; init; }
+
+    /// <summary>How a balance here flows (D-060): <c>mixed</c> or <c>fifo</c>; and the least time material stays, in minutes.</summary>
+    public string FlowModel { get; init; } = "mixed";
+    public int? MinResidenceMinutes { get; init; }
+
+    /// <summary>The equipment's version, to change its flow settings.</summary>
+    public long Version { get; init; }
     public int LotCount { get; init; }
     public int MaterialCount { get; init; }
 }
@@ -561,4 +576,48 @@ public sealed record ExpectedReceiptDto
     public DateTimeOffset CreatedAt { get; init; }
     public string CreatedBy { get; init; } = "";
     public long Version { get; init; }
+}
+
+/// <summary>Sets how a balance at a location flows (D-060).</summary>
+public sealed record SetFlowRequest
+{
+    public long Version { get; init; }
+    public string FlowModel { get; init; } = "mixed";
+    public int? MinResidenceMinutes { get; init; }
+}
+
+/// <summary>Where a balance's withdrawals came from (D-060), worked out from its declared movements by its location's flow model.</summary>
+public sealed record BalanceAllocationDto
+{
+    public required Guid LotId { get; init; }
+    public required string FlowModel { get; init; }
+    public int? MinResidenceMinutes { get; init; }
+
+    /// <summary>What the estimate rests on, said plainly: the declared movements, not measurements.</summary>
+    public required string Basis { get; init; }
+    public IReadOnlyList<WithdrawalAllocationDto> Withdrawals { get; init; } = [];
+}
+
+public sealed record WithdrawalAllocationDto
+{
+    public required Guid EventId { get; init; }
+    public DateTimeOffset At { get; init; }
+    public required string Kind { get; init; }
+    public decimal Quantity { get; init; }
+    public Guid? JobId { get; init; }
+    public string? JobNumber { get; init; }
+
+    /// <summary><c>exact</c>, <c>estimated</c> or <c>possible</c>.</summary>
+    public required string Precision { get; init; }
+    public required string Reason { get; init; }
+    public IReadOnlyList<AllocationSourceDto> Sources { get; init; } = [];
+}
+
+public sealed record AllocationSourceDto
+{
+    /// <summary>The lot it came from; null for stock that had no lot of its own (received or made straight into the balance, or written up).</summary>
+    public Guid? LotId { get; init; }
+    public string? LotNumber { get; init; }
+    public decimal Quantity { get; init; }
+    public required string Precision { get; init; }
 }

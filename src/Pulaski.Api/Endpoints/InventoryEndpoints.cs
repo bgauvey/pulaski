@@ -396,6 +396,23 @@ internal static class InventoryEndpoints
         })
         .RequireAny(Site.Query(), Permissions.InventoryView);
 
+        // How a balance at a location flows, for genealogy through it (D-060); an equipment setting.
+        inventory.MapPut("/locations/{id:guid}/flow", async Task<Ok<VersionResponse>> (
+            Guid id,
+            SetFlowRequest request,
+            ICommandHandler<SetFlowCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetFlowCommand(id, request.Version, request.FlowModel, request.MinResidenceMinutes), ct)))
+        .RequirePermission(Permissions.Equipment, Site.Of(SiteOf.Equipment));
+
+        // Where a balance's withdrawals came from, by its location's flow model (D-060).
+        lots.MapGet("/{id:guid}/allocation", async Task<Ok<BalanceAllocationDto>> (
+            Guid id,
+            IQueryHandler<GetBalanceAllocationQuery, BalanceAllocationDto> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetBalanceAllocationQuery(id), ct)))
+        .RequireAny(Site.Of(SiteOf.Lot), Permissions.InventoryView);
+
         // What a scanned code names at the site: one lot, container or location, a choice of several, or nothing (D-059).
         inventory.MapGet("/scan", async Task<Ok<ScanResultDto>> (
             Guid siteId,

@@ -3,6 +3,7 @@
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 @inject Downloads Downloads
+@inject CurrentUser User
 
 <PageTitle>Locations · Inventory · Pulaski</PageTitle>
 
@@ -50,6 +51,25 @@ else
                             @if (l.ComminglesLots)
                             {
                                 <span class="chip ms-1" title="Lots here mix into one balance per material">Mixes lots</span>
+                                <div class="small text-muted">
+                                    @(l.FlowModel == "fifo" ? "First in, first out" : "Mixed")@(l.MinResidenceMinutes is { } m ? $", at least {m} min" : "")
+                                    @if (User.Can(PermissionCodes.Equipment, l.SiteId))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link p-0 ms-1" @onclick="() => EditFlow(l)">Change</button>
+                                    }
+                                </div>
+                                @if (_flow?.Id == l.Id)
+                                {
+                                    <form class="d-flex flex-wrap gap-2 mt-1" @onsubmit="SaveFlowAsync" @onsubmit:preventDefault>
+                                        <select class="form-select form-select-sm w-auto" aria-label="How it flows" @bind="_flowModel">
+                                            <option value="mixed">Mixed: everything blends</option>
+                                            <option value="fifo">First in, first out</option>
+                                        </select>
+                                        <input type="number" min="0" class="form-control form-control-sm" style="width: 9rem" placeholder="Min. minutes" aria-label="Minimum residence in minutes" @bind="_residence" />
+                                        <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _flow = null">Cancel</button>
+                                    </form>
+                                }
                             }
                             @if (l.SingleMaterial)
                             {
@@ -88,6 +108,34 @@ else
         catch (ApiException ex)
         {
             _error = ex;
+        }
+    }
+
+    private InventoryLocationDto? _flow;
+    private string _flowModel = "mixed";
+    private int? _residence;
+    private bool _saving;
+
+    // How a silo or tank flows (D-060), for which arrivals a trace through it keeps.
+    private void EditFlow(InventoryLocationDto location) => (_flow, _flowModel, _residence) = (location, location.FlowModel, location.MinResidenceMinutes);
+
+    private async Task SaveFlowAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await Api.SetFlowAsync(_flow!.Id, new SetFlowRequest { Version = _flow.Version, FlowModel = _flowModel, MinResidenceMinutes = _residence });
+            _flow = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
         }
     }
 

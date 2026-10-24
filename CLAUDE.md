@@ -200,6 +200,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `Lot.PackInto`/`MoveWithContainer`; moving alone, splitting or reaching zero clears it). Moving a container locks it, then its lots in
   id order. `core.label_seq` numbers lots and containers; barcodes `PUL1L<n>`/`PUL1C<n>`/`PUL1E:<code>` (Code 128, `LabelPdfRenderer`,
   `BarcodeDrawing`); `ScanCode.Parse` + `ResolveScanQuery` resolve a scan to one match or offer the ambiguous ones.
+- Balance genealogy (D-060, proposed): `equipment.flow_model` (`mixed`/`fifo`) + `min_residence`; `BalanceAllocation.Allocate` replays a
+  balance's movements by effective time and gives each withdrawal its arrivals with precision exact/estimated/possible; `TraceNarrowing`
+  narrows traces through balances on read. Nothing stored. `level` tag role is bindable, not yet read.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

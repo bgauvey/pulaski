@@ -225,6 +225,17 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         RETURNING xmin::text::bigint
         """;
 
+    private const string GetFlow = """
+        SELECT id AS equipment_id, site_id, code, holds_inventory, flow_model, min_residence, xmin::text::bigint AS version
+        FROM core.equipment WHERE id = @Id FOR UPDATE
+        """;
+
+    private const string UpdateFlow = """
+        UPDATE core.equipment SET flow_model = @FlowModel, min_residence = @MinResidence, updated_at = @At
+        WHERE id = @EquipmentId
+        RETURNING xmin::text::bigint
+        """;
+
     private const string MaterialByCode = "SELECT id FROM core.material WHERE code = @Code";
 
     private const string UomByCode = "SELECT id FROM core.uom WHERE code = @Code";
@@ -429,6 +440,25 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     public Task<long> UpdateShelfLifeAsync(Guid materialId, int? shelfLifeDays, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(UpdateShelfLife, new { Id = materialId, Days = shelfLifeDays, At = at }, cancellationToken);
+
+    public async Task<Versioned<FlowSettings>?> GetFlowSettingsForUpdateAsync(Guid equipmentId, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<FlowRow>(GetFlow, new { Id = equipmentId }, cancellationToken) is { } r
+            ? new Versioned<FlowSettings>(new FlowSettings(r.EquipmentId, r.SiteId, r.Code, r.HoldsInventory, r.FlowModel, r.MinResidence), r.Version)
+            : null;
+
+    public Task<long> UpdateFlowSettingsAsync(FlowSettings settings, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(UpdateFlow, new { settings.EquipmentId, settings.FlowModel, settings.MinResidence, At = at }, cancellationToken);
+
+    private sealed class FlowRow
+    {
+        public Guid EquipmentId { get; init; }
+        public Guid? SiteId { get; init; }
+        public string Code { get; init; } = "";
+        public bool HoldsInventory { get; init; }
+        public string FlowModel { get; init; } = "mixed";
+        public TimeSpan? MinResidence { get; init; }
+        public long Version { get; init; }
+    }
 
     public Task<Guid?> FindMaterialIdByCodeAsync(string code, CancellationToken cancellationToken) =>
         session.QuerySingleOrDefaultAsync<Guid?>(MaterialByCode, new { Code = code }, cancellationToken);

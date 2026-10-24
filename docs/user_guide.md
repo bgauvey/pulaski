@@ -942,6 +942,24 @@ You can also consume from a lot's own page, and declare production from the Stoc
 
 On a lot's page, **Genealogy** first shows the lots it was **made from** and the lots made from it (**used in**). Click **Trace back** to see everything it was made from, all the way up, or **Trace forward** to see everything made from it, all the way down. Each lot is indented under the one it was reached from; click any lot to open it.
 
+**Through a silo or tank.** Where lots mix, a trace keeps only the lots that, by how the location [flows](#how-a-silo-flows), went into the withdrawals that matter: back from a lot a job made, the arrivals that fed that job's withdrawals; forward from an arrival, what was made from withdrawals it fed. Each such lot carries a chip saying how sure that is (point at it for why):
+
+- **Exact:** only one arrival could have been in the silo then.
+- **Estimated:** worked out from the declared quantities by the flow model; likely, not measured.
+- **Possible:** the declared movements don't settle it, for example more was taken than was put in (often after a count correction), or material would have left before the minimum residence time.
+
+A balance's own page shows **Where what was taken came from**: every withdrawal with the lots it came from, their quantities and how sure each is.
+
+#### How a silo flows
+
+On **Inventory → Locations**, a location where lots mix shows how it flows; click **Change** (needs permission to maintain equipment):
+
+- **Mixed** (the default): everything blends, as in a tank or a mixed silo. A withdrawal takes a share of every arrival still there, by quantity.
+- **First in, first out:** plug flow, as in a mass-flow silo or bin. A withdrawal takes the oldest material first.
+- **Minimum residence** (optional, in minutes): the least time material stays before it can leave. Material taken before then is only *possible*.
+
+Everything is worked out from the movements as recorded (by when they count, so [back-dated](#back-date-a-movement) ones fit in), not from measurements: a silo's level isn't read yet. Changing the flow changes every trace through the silo at once; nothing is stored.
+
 ### Check for shortages
 
 The **Shortages** tab answers *"will we have the material for the jobs coming up?"*.
@@ -1927,7 +1945,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, scanning 2D codes or supplier barcodes beyond reading their text, setting stock aside for a job, and suggestions of which lot to use first. Moves, holds, splits, merges, shipments and counts can't be back-dated (only quantity movements can, by up to 31 days), and a lot's location and status on a past date aren't reconstructed. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
 - **Reversing is limited** to a lot's latest movement, and not consumption, production, splits, merges, transfers between balances or corrections: put those right with another movement.
 - **Reason trees** (a reason grouped under another) can't be edited.
-- **Where lots mix, genealogy is approximate:** every lot that ever joined a silo's balance counts as a parent of everything taken from it afterwards. Residence time and first-in, first-out through a silo come with machine data.
+- **Genealogy through a silo is an estimate** from the declared movements: a level tag can be bound to a silo, but its readings aren't used yet to confirm when it was empty or how it flowed. Reversals into a silo are treated as withdrawals of its oldest stock.
 - **Inventory movements aren't sent to the ERP yet:** they are recorded as events, but the connection that delivers them isn't built.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP; there are no lead times, purchase suggestions or partial receipts against one delivery (receiving closes it). The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** still shows no live machine state, reported counts, good output, scrap, downtime, quality, lots or labor. OEE is available for the current shift from the machine/OEE report; its timeline strip remains a rolling 24 hours rather than the current shift.

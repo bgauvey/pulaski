@@ -59,6 +59,12 @@ public interface IInventoryReadStore
     /// <summary>Every lot downstream (forward) or upstream of the lot, the lot itself first, nearest first.</summary>
     Task<IReadOnlyList<LotTraceNodeDto>> TraceAsync(Guid lotId, bool forward, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// A balance's quantity movements in the order they count (D-057), with its location's flow settings (D-060); null when the lot
+    /// doesn't exist or isn't a balance.
+    /// </summary>
+    Task<BalanceHistory?> GetBalanceHistoryAsync(Guid lotId, CancellationToken cancellationToken);
+
     /// <summary>Released and draft BOMs listing the material, and open jobs planned to consume it; null when it doesn't exist.</summary>
     Task<WhereUsedDto?> WhereUsedAsync(Guid materialId, CancellationToken cancellationToken);
 
@@ -234,6 +240,11 @@ public interface IInventoryRepository
     /// <summary>The site row read <c>FOR SHARE</c>: true when it exists and is a site.</summary>
     Task<bool> IsSiteAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>The location's flow settings, locked; null when it doesn't exist (D-060).</summary>
+    Task<Versioned<FlowSettings>?> GetFlowSettingsForUpdateAsync(Guid equipmentId, CancellationToken cancellationToken);
+
+    Task<long> UpdateFlowSettingsAsync(FlowSettings settings, DateTimeOffset at, CancellationToken cancellationToken);
+
     /// <summary>The material with this code; null when none.</summary>
     Task<Guid?> FindMaterialIdByCodeAsync(string code, CancellationToken cancellationToken);
 
@@ -310,6 +321,25 @@ public sealed record LockedLot(Lot Lot, long Version, DateTimeOffset UpdatedAt);
 /// <summary>A movement as recorded, for reversing it.</summary>
 /// <summary>A lot movement as reversing it needs it; <c>EffectiveAt</c> is when it counts in stock (D-057), its record time unless back-dated.</summary>
 public sealed record LotEventRecord(Guid Id, DateTimeOffset OccurredAt, LotMovement Movement, Guid? RelatedLotId, DateTimeOffset? EffectiveAt = null);
+
+/// <summary>A balance's movements and how its location flows (D-060).</summary>
+public sealed record BalanceHistory(Guid LotId, string FlowModel, TimeSpan? MinResidence, IReadOnlyList<BalanceMovementRow> Movements);
+
+/// <summary>One movement of a balance, with the names screens show.</summary>
+public sealed record BalanceMovementRow
+{
+    public required Guid EventId { get; init; }
+    public DateTimeOffset At { get; init; }
+    public decimal Delta { get; init; }
+    public required string Kind { get; init; }
+    public Guid? SourceLotId { get; init; }
+    public string? SourceLotNumber { get; init; }
+    public Guid? JobId { get; init; }
+    public string? JobNumber { get; init; }
+}
+
+/// <summary>A location's flow settings (D-060), as changing them needs them.</summary>
+public sealed record FlowSettings(Guid EquipmentId, Guid? SiteId, string Code, bool HoldsInventory, string FlowModel, TimeSpan? MinResidence);
 
 /// <summary>One quantity movement of a lot, by when it counts and when it was recorded (D-057).</summary>
 public sealed record QuantityPoint(DateTimeOffset EffectiveAt, DateTimeOffset OccurredAt, decimal Delta);

@@ -101,6 +101,8 @@ One self-referencing table holds enterprise, sites, areas, work centers (lines),
 | `holds_inventory` | boolean | no | Lots can be located here (storage, feed point). |
 | `single_material` | boolean | no | Takes one material at a time (D-032): another material can arrive only when the quantity of the one there is zero. Needs `holds_inventory`. |
 | `commingles_lots` | boolean | no | Lots here mix and can't be told apart, like a silo or tank (D-031): every arrival joins one balance per material. Needs `holds_inventory`. |
+| `flow_model` | text | no | How a balance here flows, for genealogy (D-060): `mixed` (default; a withdrawal takes a share of every arrival still there) or `fifo` (plug flow, oldest first). |
+| `min_residence` | interval | yes | The least time material stays before it can leave (D-060); taken sooner, an arrival is only possible. |
 | `state_derivation` | text | no | Where its state comes from (D-050): `own_tags` (default, its own state tag), `series` (the worst state of its machines), `parallel` (the best) or `constraint_machine`. Set on the Equipment screen; nothing reads it until machine data is collected. |
 | `constraint_equipment_id` | uuid → equipment | yes | The constraint machine: set exactly when `state_derivation = 'constraint_machine'` (`equipment_derivation_ck`), and equipment below this one that tracks state. |
 | `micro_stop_threshold` | interval | no | Stops shorter than this are micro-stops (D-050): logged, not queued for coding, not availability loss. 0 to 60 minutes (`equipment_micro_stop_ck`), default 5. |
@@ -198,7 +200,7 @@ One signal an edge reads for a piece of equipment, and what it means. One active
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key; the edge's signals name it. |
 | `equipment_id` | uuid → equipment | no | Equipment of the node's site that tracks state. |
-| `tag_role` | text | no | `state`, `unit_mode`, `stop_reason`, `processed_count`, `defective_count`, `consumed_count` or `machine_speed`; `alarm`, `warning` and `process_value` aren't recorded yet. |
+| `tag_role` | text | no | `state`, `unit_mode`, `stop_reason`, `processed_count`, `defective_count`, `consumed_count` or `machine_speed`; `level` (a silo's or tank's, D-060) can be bound but isn't read yet; `alarm`, `warning` and `process_value` aren't recorded yet. |
 | `connection_id` | uuid → edge_connection | no | Where it is read. |
 | `source_address` | text | no | Sparkplug B: `group/node[/device]:metric`. |
 | `uom_id` | uuid → uom | yes | Unit of the value; not used yet. |

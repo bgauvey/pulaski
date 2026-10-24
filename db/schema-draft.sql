@@ -85,6 +85,8 @@ CREATE TABLE core.equipment (
     can_run_job             boolean NOT NULL DEFAULT false,         -- executes jobs; a schedulable row without it is a group whose runners do (D-022)
     holds_inventory         boolean NOT NULL DEFAULT false,         -- lots can be located here
     commingles_lots         boolean NOT NULL DEFAULT false,         -- lots here mix into one balance per material, like a silo (D-031)
+    flow_model              text NOT NULL DEFAULT 'mixed' CHECK (flow_model IN ('mixed','fifo')),   -- how a balance here flows, for genealogy (D-060)
+    min_residence           interval CHECK (min_residence IS NULL OR min_residence >= interval '0'), -- the least time material stays before it can leave
     single_material         boolean NOT NULL DEFAULT false,         -- takes one material at a time (D-032)
     -- machine data (D-050): where its state comes from, and how short a stop is a micro-stop
     state_derivation        text NOT NULL DEFAULT 'own_tags' CHECK (state_derivation IN ('own_tags','series','parallel','constraint_machine')),
@@ -208,7 +210,7 @@ CREATE TABLE core.equipment_tag (
     tag_role            text NOT NULL CHECK (tag_role IN (
                             'state','unit_mode','stop_reason','alarm','warning',
                             'processed_count','defective_count','consumed_count',
-                            'machine_speed','process_value')),
+                            'machine_speed','process_value','level')),
     connection_id       uuid NOT NULL REFERENCES core.edge_connection(id),
     source_address      text NOT NULL,                          -- Sparkplug: group/node[/device]:metric
     uom_id              uuid REFERENCES core.uom(id),
@@ -1962,7 +1964,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0024_lot_records'),
     ('0025_backdated_movements'),
     ('0026_expected_receipts'),
-    ('0027_containers_and_labels');
+    ('0027_containers_and_labels'),
+    ('0028_balance_flow');
 
 -- =====================================================================
 -- 17. SEED DATA

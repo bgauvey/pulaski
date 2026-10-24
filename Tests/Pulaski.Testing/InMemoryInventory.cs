@@ -320,7 +320,7 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
     public Task<LotDto?> GetLotAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult<LotDto?>(null);
 
     public Task<IReadOnlyList<LotTraceNodeDto>> TraceAsync(Guid lotId, bool forward, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<LotTraceNodeDto>>([]);
+        Task.FromResult(Traces.GetValueOrDefault((lotId, forward)) ?? []);
 
     public Task<WhereUsedDto?> WhereUsedAsync(Guid materialId, CancellationToken cancellationToken) => Task.FromResult<WhereUsedDto?>(null);
 
@@ -545,6 +545,27 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         {
             return _materials.GetValueOrDefault(id);
         }
+    }
+
+    /// <summary>Balance histories by lot, as a test sets them (D-060).</summary>
+    public Dictionary<Guid, BalanceHistory> BalanceHistories { get; } = [];
+
+    /// <summary>Trace results by lot and direction, as a test sets them.</summary>
+    public Dictionary<(Guid LotId, bool Forward), IReadOnlyList<LotTraceNodeDto>> Traces { get; } = [];
+
+    public Dictionary<Guid, Versioned<FlowSettings>> Flows { get; } = [];
+
+    public Task<BalanceHistory?> GetBalanceHistoryAsync(Guid lotId, CancellationToken cancellationToken) =>
+        Task.FromResult(BalanceHistories.GetValueOrDefault(lotId));
+
+    public Task<Versioned<FlowSettings>?> GetFlowSettingsForUpdateAsync(Guid equipmentId, CancellationToken cancellationToken) =>
+        Task.FromResult(Flows.GetValueOrDefault(equipmentId));
+
+    public Task<long> UpdateFlowSettingsAsync(FlowSettings settings, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var version = Flows[settings.EquipmentId].Version + 1;
+        Flows[settings.EquipmentId] = new(settings, version);
+        return Task.FromResult(version);
     }
 
     /// <summary>Unit codes the fake resolves, as a test sets them.</summary>

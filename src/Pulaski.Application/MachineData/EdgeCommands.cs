@@ -314,7 +314,7 @@ internal sealed class CreateEquipmentTagHandler(IUnitOfWork unitOfWork, IEdgeRep
     {
         var address = command.Address.Trim();
         new Validator()
-            .Require(TagRoles.Recorded.Contains(command.Role), "Role",
+            .Require(TagRoles.Bindable.Contains(command.Role), "Role",
                 TagRoles.All.Contains(command.Role) ? "Alarms, warnings and process values aren't recorded yet." : "Not a tag role.")
             .Require(TagRoles.CountKind(command.Role) is not null || command.CounterRollover is null, "CounterRollover", "Only a counter rolls over.")
             .ThrowIfInvalid();

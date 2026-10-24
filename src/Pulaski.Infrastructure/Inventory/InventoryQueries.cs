@@ -199,7 +199,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
     private const string TraceSelect = """
         SELECT x.* FROM (
             SELECT DISTINCT ON (t.lot_id)
-                   t.lot_id, t.via_lot_id, t.depth, l.lot_number, l.is_bulk, loc.code AS location_code,
+                   t.lot_id, t.via_lot_id, t.depth, l.lot_number, l.is_bulk, loc.code AS location_code, l.produced_by_job_id,
                    m.code AS material_code, m.name AS material_name, l.status, l.quantity, u.code AS uom_code
         """;
 
@@ -222,6 +222,25 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         {TraceSelect}
             FROM core.trace_backward(@Id) t
         {TraceRest}
+        """;
+
+    // A balance's quantity movements in the order they count (D-057), with its location's flow settings (D-060).
+    private const string BalanceSettingsSql = """
+        SELECT l.id AS lot_id, coalesce(loc.flow_model, 'mixed') AS flow_model, loc.min_residence
+        FROM core.lot l
+        LEFT JOIN core.equipment loc ON loc.id = l.location_equipment_id
+        WHERE l.id = @Id AND l.is_bulk
+        """;
+
+    private const string BalanceMovementsSql = """
+        SELECT e.id AS event_id, e.effective_at AS at, e.qty_delta AS delta, e.event_kind AS kind,
+               CASE WHEN e.qty_delta > 0 THEN e.related_lot_id END AS source_lot_id, rl.lot_number AS source_lot_number,
+               e.job_id, j.job_number
+        FROM ts.lot_event e
+        LEFT JOIN core.lot rl ON rl.id = e.related_lot_id AND e.qty_delta > 0
+        LEFT JOIN core.job j ON j.id = e.job_id
+        WHERE e.lot_id = @Id AND e.qty_delta IS NOT NULL AND e.qty_delta <> 0
+        ORDER BY e.effective_at, e.occurred_at, e.id
         """;
 
     private const string BaseUomCodeSql = """
@@ -282,6 +301,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
 
     private const string LocationsSql = $"""
         SELECT e.id, e.site_id, e.code, e.name, e.equipment_role, p.code AS parent_code, e.is_active, e.commingles_lots, e.single_material,
+               e.flow_model, (extract(epoch FROM e.min_residence) / 60)::int AS min_residence_minutes, e.xmin::text::bigint AS version,
                coalesce(s.lot_count, 0) AS lot_count, coalesce(s.material_count, 0) AS material_count
         FROM core.equipment e
         LEFT JOIN core.equipment p ON p.id = e.parent_id
@@ -552,6 +572,26 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         var rows = await connection.QueryAsync<LotTraceNodeDto>(
             new CommandDefinition(forward ? TraceForwardSql : TraceBackwardSql, new { Id = lotId }, cancellationToken: cancellationToken));
         return rows.AsList();
+    }
+
+    public async Task<BalanceHistory?> GetBalanceHistoryAsync(Guid lotId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var args = new { Id = lotId };
+        if (await connection.QuerySingleOrDefaultAsync<BalanceSettingsRow>(new CommandDefinition(BalanceSettingsSql, args, cancellationToken: cancellationToken)) is not { } settings)
+        {
+            return null;
+        }
+
+        var movements = await connection.QueryAsync<BalanceMovementRow>(new CommandDefinition(BalanceMovementsSql, args, cancellationToken: cancellationToken));
+        return new BalanceHistory(settings.LotId, settings.FlowModel, settings.MinResidence, movements.AsList());
+    }
+
+    private sealed class BalanceSettingsRow
+    {
+        public Guid LotId { get; init; }
+        public string FlowModel { get; init; } = "mixed";
+        public TimeSpan? MinResidence { get; init; }
     }
 
     public async Task<WhereUsedDto?> WhereUsedAsync(Guid materialId, CancellationToken cancellationToken)

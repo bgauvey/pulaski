@@ -257,6 +257,38 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_silos_flow_model_decides_which_arrivals_a_trace_back_through_it_keeps_and_says_how_sure_it_is()
+    {
+        var plant = await CreatePlantAsync();
+        CreatedResponse silo = await db.SendAsync(new CreateEquipmentCommand(
+            plant.Site, "SILO-F-" + _suffix, "Resin silo", null, "work_center", "storage_zone", false, false, true, null, ComminglesLots: true));
+        var balance = await db.SendAsync(new ReceiveLotCommand(plant.Resin, silo.Id, "R-FA-" + _suffix, 600m, plant.Kg));
+        await db.SendAsync(new ReceiveLotCommand(plant.Resin, silo.Id, "R-FB-" + _suffix, 300m, plant.Kg));
+        await db.SendAsync(new ConsumeLotCommand(balance.LotId, plant.Job, 500m, plant.Kg));
+        var made = await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 100m, plant.Metre));
+
+        async Task<IReadOnlyList<LotTraceNodeDto>> BackAsync() =>
+            await QueryAsync<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>(new TraceLotQuery(made.LotId, Forward: false));
+
+        // Mixed (the default): both arrivals were in the silo, each an estimated share.
+        var mixed = (await BackAsync()).Where(n => n.LotNumber?.StartsWith("R-F", StringComparison.Ordinal) == true).ToList();
+        Assert.Equal(2, mixed.Count);
+        Assert.All(mixed, n => Assert.Equal(GenealogyPrecision.Estimated, n.Precision));
+
+        // First in, first out: the 500 kg came from the first 600 kg alone.
+        var location = Assert.Single(await QueryAsync<ListInventoryLocationsQuery, IReadOnlyList<InventoryLocationDto>>(new ListInventoryLocationsQuery(plant.Site)), l => l.Id == silo.Id);
+        await db.SendAsync(new SetFlowCommand(silo.Id, location.Version, FlowModels.Fifo, null));
+        var fifo = Assert.Single(await BackAsync(), n => n.LotNumber?.StartsWith("R-F", StringComparison.Ordinal) == true);
+        Assert.Equal(("R-FA-" + _suffix, GenealogyPrecision.Estimated), (fifo.LotNumber, fifo.Precision));
+
+        var allocation = await QueryAsync<GetBalanceAllocationQuery, BalanceAllocationDto>(new GetBalanceAllocationQuery(balance.LotId));
+        var withdrawal = Assert.Single(allocation.Withdrawals);
+        Assert.Equal((500m, plant.JobNumber, "fifo"), (withdrawal.Quantity, withdrawal.JobNumber, allocation.FlowModel));
+        Assert.Equal(("R-FA-" + _suffix, 500m), (Assert.Single(withdrawal.Sources).LotNumber, withdrawal.Sources[0].Quantity));
+        Assert.Contains("not measured", allocation.Basis, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_silo_mixes_every_arrival_into_one_balance_that_traces_back_to_the_lots()
     {
         var plant = await CreatePlantAsync();
