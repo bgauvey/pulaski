@@ -26,6 +26,8 @@ GRANT USAGE ON SCHEMA core, evt, ts TO pulaski_app;
 
 GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA core TO pulaski_app;
 GRANT DELETE ON core.equipment_tag TO pulaski_app;
+-- A stored lot document is written once and kept (D-056).
+REVOKE UPDATE ON core.lot_document_content FROM pulaski_app;
 
 GRANT SELECT, INSERT ON evt.event TO pulaski_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON evt.event FROM pulaski_app;

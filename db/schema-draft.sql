@@ -1088,6 +1088,98 @@ CREATE INDEX lot_job_ix ON core.lot (produced_by_job_id) WHERE produced_by_job_i
 -- One bulk balance per material and location.
 CREATE UNIQUE INDEX lot_bulk_uq ON core.lot (material_id, location_equipment_id) WHERE is_bulk;
 
+-- Lot attributes (D-056): typed properties a site records on its lots, such as melt index or moisture, kept beside the lot so
+-- its identity and movement history never change. A definition is offered for every material, or only for materials in the
+-- classes it is applied to; its code and type are fixed once created, and it is switched off, never deleted.
+CREATE TABLE core.lot_attribute (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    code                text NOT NULL,                              -- upper case; fixed once created
+    name                text NOT NULL,
+    data_type           text NOT NULL CHECK (data_type IN ('text','number','date','boolean','choice')),
+    uom_id              uuid REFERENCES core.uom(id),               -- a number's unit, for display
+    choices             text[] NOT NULL DEFAULT '{}',               -- the values a choice may take
+    applies_to_all      boolean NOT NULL DEFAULT true,              -- false: only materials in the applied classes
+    sort_order          integer NOT NULL DEFAULT 0,
+    is_active           boolean NOT NULL DEFAULT true,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT lot_attribute_uq UNIQUE (site_id, code),
+    CONSTRAINT lot_attribute_uom_ck CHECK (uom_id IS NULL OR data_type = 'number'),
+    CONSTRAINT lot_attribute_choices_ck CHECK ((data_type = 'choice') = (cardinality(choices) > 0))
+);
+
+-- The material classes an attribute is offered for, when not for all; taken off with is_applied, never deleted.
+CREATE TABLE core.lot_attribute_class (
+    attribute_id        uuid NOT NULL REFERENCES core.lot_attribute(id),
+    material_class_id   uuid NOT NULL REFERENCES core.material_class(id),
+    is_applied          boolean NOT NULL DEFAULT true,
+    PRIMARY KEY (attribute_id, material_class_id)
+);
+
+-- A lot's value of an attribute, in the column of its type; all null once cleared. Every change is an event with before
+-- and after (D-007), so the row holds only the current value.
+CREATE TABLE core.lot_attribute_value (
+    lot_id              uuid NOT NULL REFERENCES core.lot(id),
+    attribute_id        uuid NOT NULL REFERENCES core.lot_attribute(id),
+    value_text          text,                                       -- text and choice
+    value_number        numeric,
+    value_date          date,
+    value_boolean       boolean,
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    updated_by          text NOT NULL,
+    PRIMARY KEY (lot_id, attribute_id),
+    CONSTRAINT lot_attribute_value_one_ck CHECK (num_nonnulls(value_text, value_number, value_date, value_boolean) <= 1)
+);
+CREATE INDEX lot_attribute_value_text_ix ON core.lot_attribute_value (attribute_id, value_text) WHERE value_text IS NOT NULL;
+CREATE INDEX lot_attribute_value_number_ix ON core.lot_attribute_value (attribute_id, value_number) WHERE value_number IS NOT NULL;
+CREATE INDEX lot_attribute_value_date_ix ON core.lot_attribute_value (attribute_id, value_date) WHERE value_date IS NOT NULL;
+
+-- Certificates and other lot documents (D-056): a stored file (PDF, PNG or JPEG), a reference to one kept elsewhere (a document
+-- number, a URL), or both. Never deleted: a wrong one is withdrawn with a reason and stays, file included.
+CREATE TABLE core.lot_document (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    kind                text NOT NULL CHECK (kind IN ('coa','coc','test_report','sds','other')),
+    title               text NOT NULL,
+    document_number     text,
+    issuer              text,                                       -- such as the supplier or lab
+    issued_on           date,
+    url                 text,
+    file_name           text,
+    content_type        text CHECK (content_type IN ('application/pdf','image/png','image/jpeg')),
+    size_bytes          integer CHECK (size_bytes > 0),
+    sha256              bytea,
+    status              text NOT NULL DEFAULT 'current' CHECK (status IN ('current','withdrawn')),
+    withdrawn_at        timestamptz,
+    withdrawn_by        text,
+    withdraw_reason     text,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    created_by          text NOT NULL,
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT lot_document_file_ck CHECK (num_nulls(file_name, content_type, size_bytes, sha256) IN (0, 4)),
+    CONSTRAINT lot_document_source_ck CHECK (file_name IS NOT NULL OR url IS NOT NULL OR document_number IS NOT NULL),
+    CONSTRAINT lot_document_withdrawn_ck CHECK ((status = 'withdrawn') = (withdrawn_at IS NOT NULL AND withdrawn_by IS NOT NULL AND withdraw_reason IS NOT NULL))
+);
+
+-- A stored document's bytes, apart so lists never read them. Written once: the application may insert, never update or delete.
+CREATE TABLE core.lot_document_content (
+    document_id         uuid PRIMARY KEY REFERENCES core.lot_document(id),
+    content             bytea NOT NULL
+);
+
+-- The lots a document applies to: the one it was attached to, and the lots split from or merged into it, which carry it on.
+CREATE TABLE core.lot_document_link (
+    document_id         uuid NOT NULL REFERENCES core.lot_document(id),
+    lot_id              uuid NOT NULL REFERENCES core.lot(id),
+    via                 text NOT NULL CHECK (via IN ('attached','split','merge')),
+    from_lot_id         uuid REFERENCES core.lot(id),               -- the lot it came from, for split and merge
+    linked_at           timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (document_id, lot_id),
+    CONSTRAINT lot_document_link_from_ck CHECK ((via = 'attached') = (from_lot_id IS NULL))
+);
+CREATE INDEX lot_document_link_lot_ix ON core.lot_document_link (lot_id);
+
 -- A lot present at a feed point or storage unit over a window. Overlap is
 -- allowed: a silo can hold several lots at once. Time-window consumption
 -- and genealogy are derived from these windows plus residence time.
@@ -1814,7 +1906,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0020_edge'),
     ('0021_stops'),
     ('0022_tag_deletion'),
-    ('0023_person_import');
+    ('0023_person_import'),
+    ('0024_lot_records');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -1854,6 +1947,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('lot.hold', 'Put lots on hold or in quarantine and release them'),
     ('inventory.correct', 'Correct inventory: write up, write off, correct, reverse, split and merge lots'),
     ('stock_count.manage', 'Start, enter, post and cancel stock counts'),
+    ('lot_records.manage', 'Record lot attributes and attach or withdraw certificates'),
     ('materials.manage', 'Maintain materials, classes, conversions, batching and shelf life; import materials'),
     ('processes.manage', 'Maintain processes, BOMs and capabilities'),
     ('units.manage', 'Maintain units of measure'),
@@ -1863,6 +1957,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('shifts.manage', 'Maintain shift schedules and choose which one equipment follows'),
     ('people.manage', 'Maintain people and crews'),
     ('terminals.manage', 'Register and enrol shop-floor terminals'),
+    ('lot_attributes.manage', 'Maintain lot attribute definitions'),
     ('security.manage', 'Maintain users, roles and what each role may do'),
     ('edge.ingest', 'Send machine data as a Pulaski Edge node: read its configuration and forward what it collects')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
@@ -1874,8 +1969,8 @@ INSERT INTO sec.role (code, name, description, is_system) VALUES
     ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes.', true),
     ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor; codes machine stops. Doesn''t correct inventory.', true),
     ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops.', true),
-    ('quality', 'Quality', 'Holds and releases lots, corrects inventory and decides on partial batches.', true),
-    ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people and the site''s settings.', true),
+    ('quality', 'Quality', 'Holds and releases lots, corrects inventory, decides on partial batches, and keeps lot attributes and certificates.', true),
+    ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people, lot attributes and the site''s settings.', true),
     ('auditor', 'Auditor', 'Views everything and corrects inventory; counts stock. Doesn''t plan or run jobs.', true),
     ('process_engineer', 'Process engineer', 'Maintains processes, BOMs and capabilities. Sees equipment, materials and units.', true),
     ('edge_node', 'Edge node', 'For the service user a Pulaski Edge node signs in as: reads its configuration and forwards machine data. Sees no screens.', true)
@@ -1935,6 +2030,8 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('quality', 'lot.hold'),
     ('quality', 'inventory.correct'),
     ('quality', 'partial_batch.decide'),
+    ('quality', 'lot_records.manage'),
+    ('quality', 'lot_attributes.manage'),
     ('manager', 'overview.view'),
     ('manager', 'work_orders.view'),
     ('manager', 'schedule.view'),
@@ -1956,6 +2053,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('manager', 'shifts.manage'),
     ('manager', 'people.manage'),
     ('manager', 'terminals.manage'),
+    ('manager', 'lot_attributes.manage'),
     ('manager', 'labor.approve'),
     ('auditor', 'overview.view'),
     ('auditor', 'work_orders.view'),

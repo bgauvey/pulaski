@@ -24,7 +24,22 @@ public sealed record LotFilter(
     string? Status = null,
     DateTimeOffset? ExpiresBefore = null,
     int Offset = 0,
-    int Limit = 500);
+    int Limit = 500,
+    LotAttributeMatch? Attribute = null);
+
+/// <summary>
+/// Lots whose value of an attribute matches (D-056): text containing <see cref="Text"/> (a choice: equal to it), a number or date in
+/// the inclusive range, or the yes/no given. Only lots with a value of the attribute match.
+/// </summary>
+public sealed record LotAttributeMatch(
+    Guid AttributeId,
+    string? Text = null,
+    bool TextContains = false,
+    decimal? MinNumber = null,
+    decimal? MaxNumber = null,
+    DateOnly? MinDate = null,
+    DateOnly? MaxDate = null,
+    bool? Boolean = null);
 
 /// <summary>Read side for inventory (D-027): DTOs straight from SQL, no locks.</summary>
 public interface IInventoryReadStore
@@ -230,6 +245,12 @@ public interface IInventoryRepository
 
     /// <summary>Adds declared edges; an edge already there is left alone.</summary>
     Task InsertGenealogyAsync(IReadOnlyList<GenealogyEdge> edges, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Carries a lot's documents to a lot made from it (D-056), linked <paramref name="via"/> <c>split</c> or <c>merge</c>; with
+    /// <paramref name="withAttributes"/> (a split: the same material) its attribute values too. What the other lot has stays.
+    /// </summary>
+    Task CarryLotRecordsAsync(Guid fromLotId, Guid toLotId, string via, bool withAttributes, string actor, DateTimeOffset at, CancellationToken cancellationToken);
 
     Task<InventoryReason?> GetReasonAsync(Guid id, CancellationToken cancellationToken);
 

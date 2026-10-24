@@ -38,6 +38,7 @@ public static class PermissionCodes
     public const string LotHold = "lot.hold";
     public const string InventoryCorrect = "inventory.correct";
     public const string StockCount = "stock_count.manage";
+    public const string LotRecords = "lot_records.manage";
     public const string PartialBatchDecide = "partial_batch.decide";
     public const string Materials = "materials.manage";
     public const string Processes = "processes.manage";
@@ -51,6 +52,7 @@ public static class PermissionCodes
     public const string LaborApprove = "labor.approve";
     public const string People = "people.manage";
     public const string Terminals = "terminals.manage";
+    public const string LotAttributes = "lot_attributes.manage";
     public const string Security = "security.manage";
     public const string EdgeIngest = "edge.ingest";
     public const string DowntimeCode = "downtime.code";

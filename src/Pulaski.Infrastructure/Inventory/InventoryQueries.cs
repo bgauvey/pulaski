@@ -72,6 +72,16 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
           AND (@Pattern::text IS NULL OR l.lot_number ILIKE @Pattern OR l.supplier_lot ILIKE @Pattern OR m.code ILIKE @Pattern)
           AND (@ExpiresBefore::timestamptz IS NULL OR l.expires_at < @ExpiresBefore)
           AND (CASE WHEN @Status::text IS NULL THEN l.status IN {OnHand} AND l.quantity > 0 ELSE l.status = @Status END)
+          AND (@AttributeId::uuid IS NULL OR EXISTS (
+                SELECT 1 FROM core.lot_attribute_value v
+                WHERE v.lot_id = l.id AND v.attribute_id = @AttributeId
+                  AND num_nonnulls(v.value_text, v.value_number, v.value_date, v.value_boolean) > 0
+                  AND (@AttributeText::text IS NULL OR v.value_text ILIKE @AttributeText)
+                  AND (@MinNumber::numeric IS NULL OR v.value_number >= @MinNumber)
+                  AND (@MaxNumber::numeric IS NULL OR v.value_number <= @MaxNumber)
+                  AND (@MinDate::date IS NULL OR v.value_date >= @MinDate)
+                  AND (@MaxDate::date IS NULL OR v.value_date <= @MaxDate)
+                  AND (@AttributeBoolean::boolean IS NULL OR v.value_boolean = @AttributeBoolean)))
         ORDER BY m.code, l.lot_number, l.id
         LIMIT @Limit OFFSET @Offset
         """;
@@ -743,7 +753,18 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         Pattern = Like(filter.Search),
         filter.Offset,
         filter.Limit,
+        AttributeId = filter.Attribute?.AttributeId,
+        AttributeText = filter.Attribute is { Text: { } text } a ? (a.TextContains ? Like(text) : Escape(text)) : null,
+        filter.Attribute?.MinNumber,
+        filter.Attribute?.MaxNumber,
+        filter.Attribute?.MinDate,
+        filter.Attribute?.MaxDate,
+        AttributeBoolean = filter.Attribute?.Boolean,
     };
+
+    /// <summary>An exact ILIKE pattern (any case) with the user's wildcards escaped.</summary>
+    private static string Escape(string value) =>
+        value.Trim().Replace(@"\", @"\\", StringComparison.Ordinal).Replace("%", @"\%", StringComparison.Ordinal).Replace("_", @"\_", StringComparison.Ordinal);
 
     /// <summary>A contains-pattern for ILIKE with the user's wildcards escaped; null for a blank search.</summary>
     internal static string? Like(string? search) =>

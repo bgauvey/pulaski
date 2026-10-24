@@ -1,0 +1,329 @@
+@page "/materials/lot-attributes"
+@attribute [RequiresView(PermissionCodes.MaterialsView, PermissionCodes.InventoryView)]
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+
+@* Lot attribute definitions (D-056): what a site records on its lots, for all materials or chosen classes. Code and type are fixed
+   once created; an attribute is switched off, never deleted. *@
+<PageTitle>Lot attributes · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Materials</h1>
+        <p class="text-muted mb-0">
+            Lot attributes are the properties recorded on each lot, such as melt index or moisture, on the lot's page. Each has a type, so values can be
+            searched by range on <ScreenLink Href="inventory/lots" Permission="@PermissionCodes.InventoryView">Find a lot</ScreenLink>. Offer one for every
+            material or only for some classes. Its code and type can't change; switch it off instead.
+        </p>
+    </div>
+    @if (Sites.Sites.Count > 1)
+    {
+        <div class="inv-head-tools">
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        </div>
+    }
+</div>
+
+<MaterialsTabs />
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.LotAttributes" What="maintain lot attributes" SiteId="Sites.SiteId" />
+
+@if (CanManage)
+{
+    <form class="inv-facts mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+        <h2 class="h6">@(_form.Id is null ? "Add a lot attribute" : $"Change {_form.Code}")</h2>
+        <div class="row g-2 align-items-end">
+            <div class="col-sm-2">
+                <label class="form-label small" for="la-code">Code</label>
+                <input id="la-code" class="form-control" maxlength="30" placeholder="e.g. MFI" disabled="@(_form.Id is not null)" @bind="_form.Code" @bind:event="oninput" />
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label small" for="la-name">Name</label>
+                <input id="la-name" class="form-control" maxlength="100" placeholder="e.g. Melt index" @bind="_form.Name" @bind:event="oninput" />
+            </div>
+            <div class="col-sm-2">
+                <label class="form-label small" for="la-type">Type</label>
+                <select id="la-type" class="form-select" disabled="@(_form.Id is not null)" @bind="_form.DataType">
+                    <option value="text">Text</option>
+                    <option value="number">Number</option>
+                    <option value="date">Date</option>
+                    <option value="boolean">Yes / no</option>
+                    <option value="choice">Choice</option>
+                </select>
+            </div>
+            @if (_form.DataType == "number")
+            {
+                <div class="col-sm-2">
+                    <label class="form-label small" for="la-unit">Unit</label>
+                    <select id="la-unit" class="form-select" @bind="_form.UomId">
+                        <option value="">None</option>
+                        @foreach (var u in _units)
+                        {
+                            <option value="@u.Id">@u.Code</option>
+                        }
+                    </select>
+                </div>
+            }
+            @if (_form.DataType == "choice")
+            {
+                <div class="col-sm-3">
+                    <label class="form-label small" for="la-choices">Choices, one per line</label>
+                    <textarea id="la-choices" class="form-control" rows="3" @bind="_form.Choices"></textarea>
+                </div>
+            }
+            <div class="col-sm-1">
+                <label class="form-label small" for="la-order">Order</label>
+                <input id="la-order" type="number" class="form-control" @bind="_form.SortOrder" />
+            </div>
+            <div class="col-12">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="la-all" @bind="_form.AppliesToAll" />
+                    <label class="form-check-label small" for="la-all">For every material</label>
+                </div>
+                @if (!_form.AppliesToAll)
+                {
+                    <span class="small text-muted me-2">Only for:</span>
+                    @foreach (var c in _classes.Where(c => c.IsActive || _form.ClassIds.Contains(c.Id)))
+                    {
+                        <div class="form-check form-check-inline" @key="c.Id">
+                            <input class="form-check-input" type="checkbox" id="la-class-@c.Id" checked="@_form.ClassIds.Contains(c.Id)"
+                                   @onchange="e => Toggle(c.Id, e.Value is true)" />
+                            <label class="form-check-label small" for="la-class-@c.Id">@c.Code</label>
+                        </div>
+                    }
+                }
+                @if (_form.Id is not null)
+                {
+                    <div class="form-check form-check-inline ms-3">
+                        <input class="form-check-input" type="checkbox" id="la-active" @bind="_form.IsActive" />
+                        <label class="form-check-label small" for="la-active">Active</label>
+                    </div>
+                }
+            </div>
+            <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_form.Code) || string.IsNullOrWhiteSpace(_form.Name))">
+                    @(_form.Id is null ? "Add attribute" : "Save attribute")
+                </button>
+                @if (_form.Id is not null)
+                {
+                    <button type="button" class="btn btn-outline-secondary" @onclick="() => _form = new()">Cancel</button>
+                }
+            </div>
+        </div>
+    </form>
+}
+
+@if (_attributes is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_attributes.Count == 0)
+{
+    <div class="empty-panel"><p class="text-muted mb-0">No lot attributes at @(Sites.Site?.Code ?? "this site") yet.</p></div>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>For</th><th class="inv-num">Lots with a value</th><th>Active</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var a in _attributes)
+                {
+                    <tr @key="a.Id" class="@(a.IsActive ? "" : "text-muted")">
+                        <td class="fw-semibold">@a.Code</td>
+                        <td>@a.Name</td>
+                        <td class="small">@TypeLabel(a)</td>
+                        <td class="small">@(a.AppliesToAll ? "Every material" : string.Join(", ", a.ClassCodes))</td>
+                        <td class="inv-num">@a.LotsWithValue</td>
+                        <td class="small">@(a.IsActive ? "Yes" : "Switched off")</td>
+                        <td class="text-end">
+                            @if (CanManage)
+                            {
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => Edit(a)">Change</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<LotAttributeDto>? _attributes;
+    private IReadOnlyList<MaterialClassDto> _classes = [];
+    private IReadOnlyList<UomDto> _units = [];
+    private AttributeForm _form = new();
+    private ApiException? _error;
+    private bool _saving;
+
+    private bool CanManage => User.Can(PermissionCodes.LotAttributes, Sites.SiteId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _classes = await Api.ListMaterialClassesAsync();
+            _units = await Api.ListUomsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            _attributes = [];
+            return;
+        }
+
+        try
+        {
+            _attributes = await Api.ListLotAttributesAsync(site);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _attributes = null;
+        _form = new();
+        await LoadAsync();
+    }
+
+    private void Toggle(Guid classId, bool on)
+    {
+        if (on)
+        {
+            _form.ClassIds.Add(classId);
+        }
+        else
+        {
+            _form.ClassIds.Remove(classId);
+        }
+    }
+
+    private void Edit(LotAttributeDto a) => _form = new AttributeForm
+    {
+        Id = a.Id,
+        Version = a.Version,
+        Code = a.Code,
+        Name = a.Name,
+        DataType = a.DataType,
+        UomId = a.UomId,
+        Choices = string.Join("\n", a.Choices),
+        AppliesToAll = a.AppliesToAll,
+        ClassIds = [.. a.ClassIds],
+        SortOrder = a.SortOrder,
+        IsActive = a.IsActive,
+    };
+
+    private async Task SaveAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        var choices = _form.DataType == "choice" ? _form.Choices.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) : [];
+        var uomId = _form.DataType == "number" ? _form.UomId : null;
+        try
+        {
+            if (_form.Id is { } id)
+            {
+                await Api.UpdateLotAttributeAsync(id, new UpdateLotAttributeRequest
+                {
+                    Version = _form.Version,
+                    Name = _form.Name,
+                    UomId = uomId,
+                    Choices = choices,
+                    AppliesToAll = _form.AppliesToAll,
+                    ClassIds = [.. _form.ClassIds],
+                    SortOrder = _form.SortOrder,
+                    IsActive = _form.IsActive,
+                });
+            }
+            else
+            {
+                await Api.CreateLotAttributeAsync(new CreateLotAttributeRequest
+                {
+                    SiteId = site,
+                    Code = _form.Code,
+                    Name = _form.Name,
+                    DataType = _form.DataType,
+                    UomId = uomId,
+                    Choices = choices,
+                    AppliesToAll = _form.AppliesToAll,
+                    ClassIds = [.. _form.ClassIds],
+                    SortOrder = _form.SortOrder,
+                });
+            }
+
+            _form = new();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static string TypeLabel(LotAttributeDto a) => a.DataType switch
+    {
+        "number" => a.UomCode is { } unit ? $"Number ({unit})" : "Number",
+        "boolean" => "Yes / no",
+        "choice" => $"Choice: {string.Join(", ", a.Choices)}",
+        "date" => "Date",
+        _ => "Text",
+    };
+
+    private sealed class AttributeForm
+    {
+        public Guid? Id { get; init; }
+
+        public long Version { get; init; }
+
+        public string Code { get; set; } = "";
+
+        public string Name { get; set; } = "";
+
+        public string DataType { get; set; } = "text";
+
+        public Guid? UomId { get; set; }
+
+        public string Choices { get; set; } = "";
+
+        public bool AppliesToAll { get; set; } = true;
+
+        public HashSet<Guid> ClassIds { get; init; } = [];
+
+        public int SortOrder { get; set; }
+
+        public bool IsActive { get; set; } = true;
+    }
+}

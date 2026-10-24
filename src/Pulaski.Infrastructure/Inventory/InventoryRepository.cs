@@ -8,6 +8,22 @@ namespace Pulaski.Infrastructure.Inventory;
 /// <summary>Write side for inventory (D-027). Every statement runs in the command's transaction.</summary>
 internal sealed class InventoryRepository(DbSession session) : IInventoryRepository
 {
+    // A lot made from another carries its documents (D-056); a link it already has stays as it was.
+    private const string CarryDocuments = """
+        INSERT INTO core.lot_document_link (document_id, lot_id, via, from_lot_id, linked_at)
+        SELECT document_id, @To, @Via, @From, @At FROM core.lot_document_link WHERE lot_id = @From
+        ON CONFLICT (document_id, lot_id) DO NOTHING
+        """;
+
+    // A part split off has the same attributes, unless it has its own already.
+    private const string CarryAttributes = """
+        INSERT INTO core.lot_attribute_value (lot_id, attribute_id, value_text, value_number, value_date, value_boolean, updated_at, updated_by)
+        SELECT @To, attribute_id, value_text, value_number, value_date, value_boolean, @At, @Actor
+        FROM core.lot_attribute_value
+        WHERE lot_id = @From AND num_nonnulls(value_text, value_number, value_date, value_boolean) > 0
+        ON CONFLICT (lot_id, attribute_id) DO NOTHING
+        """;
+
     private const string LotColumns = """
         id, site_id, material_id, lot_number, status, quantity, uom_id, location_equipment_id AS location_id,
         is_bulk, origin, supplier_lot, expires_at, produced_by_job_id, xmin::text::bigint AS version
@@ -286,6 +302,16 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         {
             await session.ExecuteAsync(
                 InsertGenealogy, new { edge.Id, edge.ParentLotId, edge.ChildLotId, edge.JobId, edge.Basis, At = at }, cancellationToken);
+        }
+    }
+
+    public async Task CarryLotRecordsAsync(Guid fromLotId, Guid toLotId, string via, bool withAttributes, string actor, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var args = new { From = fromLotId, To = toLotId, Via = via, Actor = actor, At = at };
+        await session.ExecuteAsync(CarryDocuments, args, cancellationToken);
+        if (withAttributes)
+        {
+            await session.ExecuteAsync(CarryAttributes, args, cancellationToken);
         }
     }
 

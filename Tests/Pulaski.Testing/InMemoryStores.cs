@@ -49,7 +49,11 @@ public sealed class InMemoryStores
 
     public InMemoryUnits Units { get; } = new();
 
+    private InMemoryLotRecords? _lotRecords;
+
     public InMemoryInventory Inventory { get; } = new();
+
+    public InMemoryLotRecords LotRecords => _lotRecords ??= new InMemoryLotRecords(Inventory);
 
     public InMemoryMaterialAdmin MaterialAdmin { get; } = new();
 
@@ -102,6 +106,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IUnitRepository>();
         services.RemoveAll<IInventoryReadStore>();
         services.RemoveAll<IInventoryRepository>();
+        services.RemoveAll<ILotRecordsReadStore>();
+        services.RemoveAll<ILotRecordsRepository>();
         services.RemoveAll<IMaterialReadStore>();
         services.RemoveAll<IMaterialAdminRepository>();
         services.RemoveAll<ICapabilityRepository>();
@@ -150,6 +156,8 @@ public sealed class InMemoryStores
         services.AddSingleton<IUnitRepository>(Units);
         services.AddSingleton<IInventoryReadStore>(Inventory);
         services.AddSingleton<IInventoryRepository>(Inventory);
+        services.AddSingleton<ILotRecordsReadStore>(LotRecords);
+        services.AddSingleton<ILotRecordsRepository>(LotRecords);
         services.AddSingleton<IMaterialReadStore>(MaterialAdmin);
         services.AddSingleton<IMaterialAdminRepository>(MaterialAdmin);
         services.AddSingleton<ICapabilityRepository>(Capabilities);

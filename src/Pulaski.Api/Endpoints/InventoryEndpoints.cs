@@ -108,10 +108,17 @@ internal static class InventoryEndpoints
             DateTimeOffset? expiresBefore,
             int? offset,
             int? limit,
+            Guid? attributeId,
+            string? attributeValue,
+            string? attributeMin,
+            string? attributeMax,
             IQueryHandler<SearchLotsQuery, IReadOnlyList<LotSummaryDto>> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new SearchLotsQuery(new LotFilter(siteId, search, materialId, locationId, status, expiresBefore, offset ?? 0, limit ?? 500)), ct)))
+                new SearchLotsQuery(
+                    new LotFilter(siteId, search, materialId, locationId, status, expiresBefore, offset ?? 0, limit ?? 500),
+                    attributeId is { } attribute ? new LotAttributeSearch(attribute, attributeValue, attributeMin, attributeMax) : null),
+                ct)))
         .RequireAnyAtSite(Site.Query(), Permissions.InventoryView);
 
         lots.MapGet("/{id:guid}", async Task<Ok<LotDto>> (
@@ -234,6 +241,123 @@ internal static class InventoryEndpoints
             TypedResults.Ok(await handler.HandleAsync(
                 new ReverseMovementCommand(id, request.Version, request.EventId, request.ReasonCodeId, request.Comment), ct)))
         .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
+
+        // ---- Lot attributes and documents (D-056) ----
+        lots.MapGet("/{id:guid}/records", async Task<Ok<LotRecordsDto>> (
+            Guid id,
+            IQueryHandler<GetLotRecordsQuery, LotRecordsDto> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetLotRecordsQuery(id), ct)))
+        .RequireAny(Site.Of(SiteOf.Lot), Permissions.InventoryView);
+
+        lots.MapPut("/{id:guid}/attributes/{attributeId:guid}", async Task<Ok<VersionResponse>> (
+            Guid id,
+            Guid attributeId,
+            SetLotAttributeRequest request,
+            ICommandHandler<SetLotAttributeCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetLotAttributeCommand(id, attributeId, request.Version, request.Value), ct)))
+        .RequirePermission(Permissions.LotRecords, Site.Of(SiteOf.Lot));
+
+        // A file (PDF, PNG or JPEG, at most 10 MB), a reference (document number or URL), or both; as multipart form fields.
+        lots.MapPost("/{id:guid}/documents", async Task<Created<CreatedResponse>> (
+            Guid id,
+            HttpRequest http,
+            ICommandHandler<AttachLotDocumentCommand, CreatedResponse> handler,
+            CancellationToken ct) =>
+        {
+            var form = await http.ReadFormAsync(ct);
+            byte[]? content = null;
+            string? fileName = null;
+            if (form.Files.Count > 0)
+            {
+                var file = form.Files[0];
+                if (file.Length > LotDocumentFormat.MaxBytes)
+                {
+                    throw new Application.Errors.ValidationException(new Dictionary<string, string[]>
+                    {
+                        ["file"] = [$"The file is larger than {LotDocumentFormat.MaxBytes / 1024 / 1024} MB."],
+                    });
+                }
+
+                using var buffer = new MemoryStream();
+                await file.CopyToAsync(buffer, ct);
+                content = buffer.ToArray();
+                fileName = file.FileName;
+            }
+
+            string? Field(string name) => form.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value) ? value.ToString() : null;
+            DateOnly? issuedOn = Field("issuedOn") is { } day
+                ? DateOnly.TryParseExact(day, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d)
+                    ? d
+                    : throw new Application.Errors.ValidationException(new Dictionary<string, string[]> { ["issuedOn"] = ["A date (yyyy-MM-dd)."] })
+                : null;
+            var created = await handler.HandleAsync(
+                new AttachLotDocumentCommand(id, Field("kind") ?? "", Field("title") ?? "", Field("documentNumber"), Field("issuer"), issuedOn,
+                    Field("url"), fileName, content),
+                ct);
+            return TypedResults.Created($"/api/lot-documents/{created.Id}", created);
+        })
+        .RequirePermission(Permissions.LotRecords, Site.Of(SiteOf.Lot))
+        .DisableAntiforgery()
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(LotDocumentFormat.MaxBytes + (1024 * 1024)))
+        .Accepts<IFormFile>("multipart/form-data");
+
+        var documents = routes.MapGroup("/lot-documents").WithTags("Inventory");
+
+        // The stored file, as an attachment and never sniffed by the browser.
+        documents.MapGet("/{id:guid}/content", async (
+            Guid id,
+            HttpResponse response,
+            IQueryHandler<GetLotDocumentContentQuery, LotDocumentContent> handler,
+            CancellationToken ct) =>
+        {
+            var file = await handler.HandleAsync(new GetLotDocumentContentQuery(id), ct);
+            response.Headers.XContentTypeOptions = "nosniff";
+            return TypedResults.File(file.Content, file.ContentType, file.FileName);
+        })
+        .RequireAny(Site.Of(SiteOf.LotDocument), Permissions.InventoryView);
+
+        documents.MapPost("/{id:guid}/withdraw", async Task<Ok<VersionResponse>> (
+            Guid id,
+            WithdrawLotDocumentRequest request,
+            ICommandHandler<WithdrawLotDocumentCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new WithdrawLotDocumentCommand(id, request.Version, request.Reason), ct)))
+        .RequirePermission(Permissions.LotRecords, Site.Of(SiteOf.LotDocument));
+
+        var attributes = routes.MapGroup("/lot-attributes").WithTags("Inventory");
+
+        attributes.MapGet("/", async Task<Ok<IReadOnlyList<LotAttributeDto>>> (
+            Guid siteId,
+            IQueryHandler<ListLotAttributesQuery, IReadOnlyList<LotAttributeDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListLotAttributesQuery(siteId), ct)))
+        .RequireAny(Site.Query(), Permissions.InventoryView, Permissions.LotAttributes);
+
+        attributes.MapPost("/", async Task<Created<CreatedResponse>> (
+            CreateLotAttributeRequest request,
+            ICommandHandler<CreateLotAttributeCommand, CreatedResponse> handler,
+            CancellationToken ct) =>
+        {
+            var created = await handler.HandleAsync(
+                new CreateLotAttributeCommand(request.SiteId, request.Code, request.Name, request.DataType, request.UomId, request.Choices,
+                    request.AppliesToAll, request.ClassIds, request.SortOrder),
+                ct);
+            return TypedResults.Created($"/api/lot-attributes/{created.Id}", created);
+        })
+        .RequirePermission(Permissions.LotAttributes, Site.FromBody<CreateLotAttributeRequest>(SiteOf.Equipment, r => r.SiteId));
+
+        attributes.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (
+            Guid id,
+            UpdateLotAttributeRequest request,
+            ICommandHandler<UpdateLotAttributeCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new UpdateLotAttributeCommand(id, request.Version, request.Name, request.UomId, request.Choices, request.AppliesToAll, request.ClassIds,
+                    request.SortOrder, request.IsActive),
+                ct)))
+        .RequirePermission(Permissions.LotAttributes, Site.Of(SiteOf.LotAttribute));
 
         var counts = inventory.MapGroup("/counts");
 

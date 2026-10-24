@@ -1,0 +1,360 @@
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+@inject Downloads Downloads
+
+@* A lot's attributes and certificates (D-056), kept beside the lot: recording them never changes the lot or its history. *@
+<section class="inv-section" aria-labelledby="records-title">
+    <h2 id="records-title">Attributes and certificates</h2>
+    <ProblemAlert Error="_error" />
+
+    @if (_records is null)
+    {
+        @if (_error is null)
+        {
+            <p class="text-muted">Loading…</p>
+        }
+    }
+    else
+    {
+        <div class="inv-layout">
+            <div class="inv-facts">
+                <h3 class="h6">Attributes</h3>
+                @if (_records.Attributes.Count == 0)
+                {
+                    <p class="text-muted small mb-0">
+                        No attributes are recorded for this material.
+                        <ScreenLink Href="materials/lot-attributes" Permission="@PermissionCodes.LotAttributes">Define lot attributes</ScreenLink>
+                    </p>
+                }
+                else
+                {
+                    <dl class="facts">
+                        @foreach (var a in _records.Attributes)
+                        {
+                            <dt @key="a.AttributeId">@a.Name @(a.UomCode is null ? "" : $"({a.UomCode})")</dt>
+                            <dd>
+                                @if (CanRecord && (a.CanSet || a.Value is not null))
+                                {
+                                    <div class="d-flex gap-2 align-items-center">
+                                        @switch (a.DataType)
+                                        {
+                                            case "choice":
+                                                <select class="form-select form-select-sm w-auto" aria-label="@a.Name" value="@Draft(a)" disabled="@(!a.CanSet)"
+                                                        @onchange="e => _drafts[a.AttributeId] = e.Value?.ToString()">
+                                                    <option value="">—</option>
+                                                    @foreach (var choice in a.Choices)
+                                                    {
+                                                        <option value="@choice">@choice</option>
+                                                    }
+                                                </select>
+                                                break;
+                                            case "boolean":
+                                                <select class="form-select form-select-sm w-auto" aria-label="@a.Name" value="@Draft(a)" disabled="@(!a.CanSet)"
+                                                        @onchange="e => _drafts[a.AttributeId] = e.Value?.ToString()">
+                                                    <option value="">—</option>
+                                                    <option value="yes">yes</option>
+                                                    <option value="no">no</option>
+                                                </select>
+                                                break;
+                                            default:
+                                                <input class="form-control form-control-sm" style="max-width: 14rem" aria-label="@a.Name"
+                                                       type="@(a.DataType == "date" ? "date" : "text")" inputmode="@(a.DataType == "number" ? "decimal" : "text")"
+                                                       value="@Draft(a)" disabled="@(!a.CanSet && a.Value is null)"
+                                                       @onchange="e => _drafts[a.AttributeId] = e.Value?.ToString()" />
+                                                break;
+                                        }
+                                        @if (_drafts.TryGetValue(a.AttributeId, out var draft) && (draft ?? "") != (a.Value ?? ""))
+                                        {
+                                            <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => SaveAsync(a)">Save</button>
+                                            <button type="button" class="btn btn-sm btn-link" @onclick="() => _drafts.Remove(a.AttributeId)">Undo</button>
+                                        }
+                                        @if (!a.CanSet && a.Value is not null)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => ClearAsync(a)" title="No longer offered for this material; it can only be cleared">Clear</button>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    @(a.Value ?? "—")
+                                }
+                                @if (a.UpdatedAt is { } at)
+                                {
+                                    <div class="small text-muted">@a.UpdatedBy · @Display.SiteTime(at, TimeZone)</div>
+                                }
+                            </dd>
+                        }
+                    </dl>
+                }
+            </div>
+
+            <div>
+                <h3 class="h6">Certificates and documents</h3>
+                @if (_records.Documents.Count == 0)
+                {
+                    <p class="text-muted small">None yet.</p>
+                }
+                else
+                {
+                    <div class="table-panel mb-2">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead><tr><th>Document</th><th>Issued</th><th>Added</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var d in _records.Documents)
+                                {
+                                    <tr @key="d.Id" class="@(d.Status == "withdrawn" ? "text-muted" : "")">
+                                        <td>
+                                            <span class="chip">@KindLabel(d.Kind)</span>
+                                            <span class="fw-semibold">@d.Title</span>
+                                            @if (d.DocumentNumber is { } number)
+                                            {
+                                                <span class="small">· @number</span>
+                                            }
+                                            @if (d.Via != "attached")
+                                            {
+                                                <div class="small text-muted">Carried from <a href="inventory/lots/@d.FromLotId">@d.FromLotNumber</a> by a @d.Via</div>
+                                            }
+                                            @if (d.Status == "withdrawn")
+                                            {
+                                                <div class="small">Withdrawn by @d.WithdrawnBy: @d.WithdrawReason</div>
+                                            }
+                                        </td>
+                                        <td class="small">@d.Issuer @(d.IssuedOn is { } on ? on.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) : "")</td>
+                                        <td class="small text-nowrap">@d.CreatedBy<div class="text-muted">@Display.SiteTime(d.CreatedAt, TimeZone)</div></td>
+                                        <td class="text-end text-nowrap">
+                                            @if (d.FileName is not null)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => DownloadAsync(d)">@d.FileName</button>
+                                            }
+                                            @if (d.Url is { } url)
+                                            {
+                                                <a class="btn btn-sm btn-link" href="@url" target="_blank" rel="noopener noreferrer">Open link</a>
+                                            }
+                                            @if (CanRecord && d.Status == "current")
+                                            {
+                                                <button type="button" class="btn btn-sm btn-link" @onclick="() => { _withdrawing = d; _reason = null; }">Withdraw…</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                @if (_withdrawing is { } w)
+                {
+                    <form class="d-flex gap-2 mb-2" @onsubmit="WithdrawAsync" @onsubmit:preventDefault>
+                        <input class="form-control form-control-sm" maxlength="500" placeholder="Why is @w.Title withdrawn?" aria-label="Reason" @bind="_reason" @bind:event="oninput" />
+                        <button type="submit" class="btn btn-sm btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_reason))">Withdraw</button>
+                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _withdrawing = null">Cancel</button>
+                    </form>
+                }
+
+                @if (CanRecord)
+                {
+                    <form class="row g-2 align-items-end" @onsubmit="AttachAsync" @onsubmit:preventDefault>
+                        <div class="col-sm-3">
+                            <label class="form-label small" for="doc-kind">Kind</label>
+                            <select id="doc-kind" class="form-select form-select-sm" @bind="_new.Kind">
+                                @foreach (var kind in Kinds)
+                                {
+                                    <option value="@kind">@KindLabel(kind)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-sm-5">
+                            <label class="form-label small" for="doc-title">Title</label>
+                            <input id="doc-title" class="form-control form-control-sm" maxlength="200" @bind="_new.Title" @bind:event="oninput" />
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small" for="doc-number">Document no.</label>
+                            <input id="doc-number" class="form-control form-control-sm" maxlength="100" @bind="_new.Number" />
+                        </div>
+                        <div class="col-sm-5">
+                            <label class="form-label small" for="doc-issuer">Issued by</label>
+                            <input id="doc-issuer" class="form-control form-control-sm" maxlength="200" placeholder="Supplier or lab" @bind="_new.Issuer" />
+                        </div>
+                        <div class="col-sm-3">
+                            <label class="form-label small" for="doc-issued">Issued on</label>
+                            <input id="doc-issued" type="date" class="form-control form-control-sm" @bind="_new.IssuedOn" />
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small" for="doc-url">Link</label>
+                            <input id="doc-url" class="form-control form-control-sm" maxlength="2000" placeholder="https://…" @bind="_new.Url" />
+                        </div>
+                        <div class="col-sm-8">
+                            <label class="form-label small" for="doc-file">File (PDF, PNG or JPEG, up to 10 MB)</label>
+                            <InputFile id="doc-file" @key="_fileKey" class="form-control form-control-sm" accept="@LotDocumentFormat.Accept" OnChange="PickAsync" />
+                        </div>
+                        <div class="col-sm-4">
+                            <button type="submit" class="btn btn-sm btn-primary"
+                                    disabled="@(_busy || string.IsNullOrWhiteSpace(_new.Title) || (_file is null && string.IsNullOrWhiteSpace(_new.Number) && string.IsNullOrWhiteSpace(_new.Url)))">
+                                Attach
+                            </button>
+                        </div>
+                        @if (_readProblem is not null)
+                        {
+                            <div class="col-12 small text-danger">@_readProblem</div>
+                        }
+                    </form>
+                }
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    private static readonly string[] Kinds = ["coa", "coc", "test_report", "sds", "other"];
+
+    [Parameter, EditorRequired]
+    public Guid LotId { get; set; }
+
+    [Parameter, EditorRequired]
+    public Guid SiteId { get; set; }
+
+    [Parameter]
+    public string? TimeZone { get; set; }
+
+    private LotRecordsDto? _records;
+    private readonly Dictionary<Guid, string?> _drafts = [];
+    private NewDocument _new = new();
+    private (string Name, byte[] Content)? _file;
+    private int _fileKey;
+    private string? _readProblem;
+    private LotDocumentDto? _withdrawing;
+    private string? _reason;
+    private ApiException? _error;
+    private bool _busy;
+
+    private bool CanRecord => User.Can(PermissionCodes.LotRecords, SiteId);
+
+    // Again whenever the lot page reloads, so a merge's carried certificates show; a new lot gets a new panel (@key).
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _records = await Api.GetLotRecordsAsync(LotId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private string? Draft(LotAttributeValueDto a) => _drafts.TryGetValue(a.AttributeId, out var draft) ? draft : a.Value;
+
+    private Task SaveAsync(LotAttributeValueDto a) => RunAsync(async () =>
+    {
+        await Api.SetLotAttributeAsync(LotId, a.AttributeId, new SetLotAttributeRequest { Version = a.Version, Value = _drafts[a.AttributeId] });
+        _drafts.Remove(a.AttributeId);
+    });
+
+    private Task ClearAsync(LotAttributeValueDto a) =>
+        RunAsync(() => Api.SetLotAttributeAsync(LotId, a.AttributeId, new SetLotAttributeRequest { Version = a.Version, Value = null }));
+
+    private async Task PickAsync(InputFileChangeEventArgs e)
+    {
+        _readProblem = null;
+        _file = null;
+        if (e.File.Size > LotDocumentFormat.MaxBytes)
+        {
+            _readProblem = $"{e.File.Name} is larger than 10 MB.";
+            return;
+        }
+
+        try
+        {
+            using var buffer = new MemoryStream();
+            await e.File.OpenReadStream(LotDocumentFormat.MaxBytes).CopyToAsync(buffer);
+            _file = (e.File.Name, buffer.ToArray());
+            if (string.IsNullOrWhiteSpace(_new.Title))
+            {
+                _new.Title = Path.GetFileNameWithoutExtension(e.File.Name);
+            }
+        }
+        catch (IOException ex)
+        {
+            _readProblem = $"{e.File.Name} couldn't be read: {ex.Message}";
+        }
+    }
+
+    private Task AttachAsync() => RunAsync(async () =>
+    {
+        await Api.AttachLotDocumentAsync(LotId, _new.Kind, _new.Title, _new.Number, _new.Issuer,
+            _new.IssuedOn is { } on ? DateOnly.FromDateTime(on) : null, _new.Url, _file?.Name, _file?.Content);
+        _new = new();
+        _file = null;
+        _fileKey++;
+    });
+
+    private Task WithdrawAsync() => RunAsync(async () =>
+    {
+        await Api.WithdrawLotDocumentAsync(_withdrawing!.Id, new WithdrawLotDocumentRequest { Version = _withdrawing.Version, Reason = _reason ?? "" });
+        _withdrawing = null;
+    });
+
+    private async Task DownloadAsync(LotDocumentDto d)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var (content, type, name) = await Api.GetLotDocumentContentAsync(d.Id);
+            await Downloads.FileAsync(name, content, type);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string KindLabel(string kind) => kind switch
+    {
+        "coa" => "CoA",
+        "coc" => "CoC",
+        "test_report" => "Test report",
+        "sds" => "SDS",
+        _ => "Other",
+    };
+
+    private sealed class NewDocument
+    {
+        public string Kind { get; set; } = "coa";
+
+        public string Title { get; set; } = "";
+
+        public string? Number { get; set; }
+
+        public string? Issuer { get; set; }
+
+        public DateTime? IssuedOn { get; set; }
+
+        public string? Url { get; set; }
+    }
+}

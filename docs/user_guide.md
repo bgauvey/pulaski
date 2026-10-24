@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-10-23 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-10-24 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#21-reference) tables give the exact rules.
 
@@ -877,7 +877,7 @@ The material page shows tiles for on hand, available, held, lots and locations, 
 
 ### Find a lot: the Lots tab
 
-1. Type a **lot number**, a **supplier lot** number or a material code, and/or choose a material, location, status or expiry window (*Expired*, *within 7, 30 or 90 days*).
+1. Type a **lot number**, a **supplier lot** number or a material code, and/or choose a material, location, status or expiry window (*Expired*, *within 7, 30 or 90 days*). To find lots by a [lot attribute](#lot-attributes-and-certificates), choose it and give a value: a range (**From**, **To**) for a number or date, a choice or yes/no, or text it contains.
 2. Click **Search**. Without a status, only lots with stock on hand are found; choose *Consumed* or *Scrapped* to find used-up lots.
 3. Click a lot to open it. At most 500 lots are listed; narrow the search if you hit that.
 
@@ -908,6 +908,24 @@ The lot page shows its facts (status, quantity, location, where it came from, su
 | **Reverse** (on the latest row of the history) | Undoes the lot's latest movement: a receipt, write-up, write-off, move, hold or release, or shipment. The lot goes back to how it was; a reversed receipt of a whole lot makes it *cancelled*. | An adjustment reason. Only the latest movement, once. |
 
 Some reasons ask for a comment; the form says *(required)* when they do.
+
+### Lot attributes and certificates
+
+Below the facts, **Attributes and certificates** keeps what quality knows about the lot: measured properties such as melt index, and certificates of analysis or other documents. Recording them never changes the lot or its history.
+
+1. **Record an attribute:** type or pick its value next to its name and click **Save**. Numbers use a decimal point (`11.2`, not `11,2`); dates are picked from the calendar. Clear the box and click **Save** to remove a value. The attributes offered are those defined for the material's class on [Configure → Materials → Lot attributes](#lot-attributes).
+2. **Attach a certificate:** choose its **Kind** (*CoA*, *CoC*, *Test report*, *SDS* or *Other*), give it a **Title**, and either pick a **File** (PDF, PNG or JPEG, up to 10 MB), or give its **Document no.** or a **Link** to where it is kept (a document system or supplier portal), or both. Add who issued it and when if you know. Click **Attach**.
+3. Click a file's name to download it, or **Open link** to open the reference.
+4. **Withdraw…** a certificate that was wrong or has been replaced: give the reason. It stays on the lot, marked withdrawn with who did it and why, and its file can still be downloaded.
+
+**In detail**
+
+- **Who:** anyone who can see inventory sees attributes and certificates; recording values and attaching or withdrawing documents needs permission to record lot attributes and certificates (the Quality role has it).
+- **Nothing is deleted.** A certificate is withdrawn, never removed, and a stored file can't be changed afterwards (the database refuses it). Pulaski keeps a fingerprint (SHA-256) of each file. A file is recognised by its contents, so a renamed file of another kind is refused.
+- **Split and merge.** A lot split off takes its parent's certificates and attribute values with it. A merged lot, or a balance a lot joins where lots mix, takes the certificates of every lot that went into it, marked *Carried from …*; its own attribute values stay as they are.
+- **An attribute no longer offered** for the material (switched off, or its classes changed) still shows a value already recorded, which can only be cleared.
+- **Concurrency.** If someone else changed the same value since you opened the page, you'll see *"changed by someone else"*: reload and try again.
+- **Audit.** Each change is an event: `pulaski.lot.attribute_set.v1` (with the value before and after), `pulaski.lot_document.attached.v1` and `…withdrawn.v1`.
 
 ### Record what a job used and made: the Jobs tab
 
@@ -1005,7 +1023,7 @@ The **Locations** tab lists every piece of equipment that holds inventory, with 
 
 ## 13. Materials
 
-**Configure → Materials.** Every item and part Pulaski knows about: what you make, what you make it from, and what you pack it in. The page has two tabs, **Materials** and **Classes**.
+**Configure → Materials.** Every item and part Pulaski knows about: what you make, what you make it from, and what you pack it in. The page has three tabs, **Materials**, **Classes** and **Lot attributes**.
 
 ### Ideas to know first
 
@@ -1222,6 +1240,19 @@ From then on orders and jobs must be whole batches and production is reported ba
 
 A class's code can't change and a class is never deleted: switch it off instead. An inactive class isn't offered for new materials, and a material can't be moved into one, but materials already in it stay there.
 
+### Lot attributes
+
+The properties a site records on its lots, such as melt index, moisture or colour grade, recorded on each [lot's page](#lot-attributes-and-certificates).
+
+1. Open the **Lot attributes** tab and, with more than one site, choose the site.
+2. Type a **Code** (up to 30 characters, unique in the site; it can't change later) and a **Name**.
+3. Pick its **Type**: *Text*, *Number* (with an optional **Unit**, for display), *Date*, *Yes / no* or *Choice* (type the choices, one per line). The type can't change later.
+4. Leave **For every material** ticked, or untick it and tick the material classes it is for.
+5. Set the **Order** it is listed in, and click **Add attribute**.
+6. To change one, click **Change**: its name, unit, choices, classes, order and whether it is **Active** can change. Click **Save attribute**.
+
+An attribute is never deleted: untick **Active** to stop it being recorded; values already recorded stay and can be searched. The list shows how many lots have a value of each. Removing a choice doesn't change values already recorded. Maintaining lot attributes needs permission to maintain lot attribute definitions (the Quality and Manager roles have it).
+
 ### In detail
 
 - **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, [import a CSV or B2MML file](#import-materials-from-a-file).
@@ -1262,8 +1293,8 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | **Planner** | The schedule (place, sequence, pin, assign and cancel jobs); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; materials. |
 | **Supervisor** | Start, pause, complete and reopen jobs; report production; record and approve labor; code machine stops; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches. |
 | **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off. |
-| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); approve or reject partial batches. |
-| **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; the site's settings. |
+| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions. |
+| **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; lot attribute definitions; the site's settings. |
 | **Auditor** | Correct inventory; stock counts. Can't plan or run jobs. |
 | **Process engineer** | Processes, BOMs and which lines can run each material. |
 | **Edge node** | Nothing on screen: it is for the user a Pulaski Edge node signs in as, to read its configuration and forward machine data. |
@@ -1813,7 +1844,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
 - **Batches:** the batch size is per material, not per line (a 50 kg mixer next to a 200 kg one isn't modelled). A replacement job is always rounded up to whole batches; to make fewer, cancel it. Orders from the ERP aren't imported yet, so there is no rule yet for an ERP order that isn't whole batches. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
-- **Not in inventory yet:** pallets or containers that hold several lots, lot labels and barcode scanning, lot attributes and certificates of analysis, setting stock aside for a job, and suggestions of which lot to use first. Movements can't be back-dated.
+- **Not in inventory yet:** pallets or containers that hold several lots, lot labels and barcode scanning, setting stock aside for a job, and suggestions of which lot to use first. Movements can't be back-dated. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
 - **Reversing is limited** to a lot's latest movement, and not consumption, production, splits, merges, transfers between balances or corrections: put those right with another movement.
 - **Reason trees** (a reason grouped under another) can't be edited.
 - **Where lots mix, genealogy is approximate:** every lot that ever joined a silo's balance counts as a parent of everything taken from it afterwards. Residence time and first-in, first-out through a silo come with machine data.
