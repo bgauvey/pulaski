@@ -19,6 +19,7 @@ public class DependencyInjectionTests
 
         var services = new ServiceCollection().AddApplication();
         services.AddSingleton<IRequestContext, FixedRequestContext>();
+        services.AddSingleton<Pulaski.Application.Integrations.IDeliveryTargets, Tests.Integrations.DeliveryTests.Targets>();
         new InMemoryStores().Register(services);
 
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });

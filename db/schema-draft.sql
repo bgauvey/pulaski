@@ -1842,6 +1842,35 @@ CREATE TABLE evt.sink_checkpoint (
     updated_at      timestamptz NOT NULL DEFAULT now()
 );
 
+-- Outbound deliveries (D-061): each event a sink takes, copied from evt.event in commit order, and how its delivery went. The relay
+-- holds an event's later ones for the same subject while it is undelivered, so a receiver never sees them out of order. Rows point
+-- into the partitioned log by (event_id, event_recorded_at), without a foreign key.
+CREATE TABLE evt.delivery (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    sink                text NOT NULL,                              -- 'webhook:erp'
+    event_id            uuid NOT NULL,
+    event_recorded_at   timestamptz NOT NULL,
+    tx_id               xid8 NOT NULL,
+    position            bigint NOT NULL,
+    event_type          text NOT NULL,
+    subject             uuid NOT NULL,
+    status              text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','delivered','failed','skipped')),
+    attempts            integer NOT NULL DEFAULT 0,
+    next_attempt_at     timestamptz NOT NULL DEFAULT now(),
+    last_attempt_at     timestamptz,
+    last_status_code    integer,
+    last_error          text,
+    delivered_at        timestamptz,
+    resolved_by         text,                                       -- who retried or skipped it
+    resolve_note        text,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT delivery_event_uq UNIQUE (sink, event_id)
+);
+CREATE INDEX delivery_due_ix ON evt.delivery (sink, next_attempt_at) WHERE status = 'pending';
+CREATE INDEX delivery_subject_ix ON evt.delivery (sink, subject, tx_id, position) WHERE status IN ('pending','failed');
+CREATE INDEX delivery_status_ix ON evt.delivery (sink, status, created_at);
+
 -- Grants (role names are deployment-specific):
 --   GRANT INSERT, SELECT ON evt.event TO pulaski_app;
 --   REVOKE UPDATE, DELETE, TRUNCATE ON evt.event FROM pulaski_app;
@@ -1965,7 +1994,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0025_backdated_movements'),
     ('0026_expected_receipts'),
     ('0027_containers_and_labels'),
-    ('0028_balance_flow');
+    ('0028_balance_flow'),
+    ('0029_deliveries');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -1986,6 +2016,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('shifts.view', 'See shift schedules'),
     ('labor.view', 'See labor: who is on, shift review and labor reports'),
     ('machines.view', 'See machines: their live state and their stops'),
+    ('integrations.view', 'See outbound deliveries to the ERP and how they went'),
     ('site_settings.view', 'See a site''s settings: changeover mode, reporting tolerances and calendar exceptions'),
     ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
     ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
@@ -2018,6 +2049,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('terminals.manage', 'Register and enrol shop-floor terminals'),
     ('lot_attributes.manage', 'Maintain lot attribute definitions'),
     ('security.manage', 'Maintain users, roles and what each role may do'),
+    ('integrations.manage', 'Retry or skip failed deliveries to the ERP'),
     ('edge.ingest', 'Send machine data as a Pulaski Edge node: read its configuration and forward what it collects')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
@@ -2106,6 +2138,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('manager', 'labor.view'),
     ('manager', 'machines.view'),
     ('manager', 'site_settings.view'),
+    ('manager', 'integrations.view'),
     ('manager', 'job.reopen'),
     ('manager', 'work_order.close'),
     ('manager', 'reasons.manage'),
@@ -2129,6 +2162,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('auditor', 'labor.view'),
     ('auditor', 'machines.view'),
     ('auditor', 'site_settings.view'),
+    ('auditor', 'integrations.view'),
     ('auditor', 'inventory.backdate'),
     ('auditor', 'inventory.correct'),
     ('auditor', 'stock_count.manage'),

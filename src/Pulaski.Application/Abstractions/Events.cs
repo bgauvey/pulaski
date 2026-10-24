@@ -157,6 +157,8 @@ public static class EventTypes
     public const string EquipmentFlowSet = "pulaski.equipment.flow_set.v1";
     public const string ContainerMoved = "pulaski.container.moved.v1";
     public const string ContainerRetired = "pulaski.container.retired.v1";
+    public const string DeliveryRetried = "pulaski.delivery.retried.v1";
+    public const string DeliverySkipped = "pulaski.delivery.skipped.v1";
     public const string LotStatusChanged = "pulaski.lot.status_changed.v1";
     public const string LotConsumed = "pulaski.lot.consumed.v1";
     public const string LotProduced = "pulaski.lot.produced.v1";

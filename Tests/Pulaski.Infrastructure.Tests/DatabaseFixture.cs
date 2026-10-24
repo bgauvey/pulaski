@@ -81,6 +81,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         services.AddApplication();
         services.AddInfrastructure(AppConnectionString);
         services.AddSingleton<IRequestContext>(_actor);
+        services.AddSingleton<Application.Integrations.IDeliveryTargets>(new TestDeliveryTargets());
 
         // The API keys badge hashes with its signing key (D-049); here a stand-in does.
         services.AddSingleton<Application.Labor.IBadgeHasher>(new ReversingBadgeHasher());
@@ -193,4 +194,12 @@ internal sealed class ActingAs : IRequestContext
     public Guid CorrelationId => (Current.Value ?? Default).CorrelationId;
 
     public Guid? UserId => (Current.Value ?? Default).UserId;
+}
+
+/// <summary>The ERP feed as the tests see it: on, to a test receiver, for lot events (D-061).</summary>
+internal sealed class TestDeliveryTargets : Application.Integrations.IDeliveryTargets
+{
+    public const string Sink = "webhook:test";
+
+    public Application.Integrations.DeliveryTarget Erp { get; } = new(Sink, true, "erp.test", ["pulaski.lot."]);
 }

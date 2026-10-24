@@ -5,6 +5,7 @@ using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Execution;
+using Pulaski.Contracts.Integrations;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.MachineData;
@@ -299,6 +300,23 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<IReadOnlyList<ReasonCodeDto>> ListCodingReasonsAsync(Guid equipmentId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<ReasonCodeDto>>($"api/equipment/{equipmentId}/coding-reasons", ct);
+
+    // Outbound deliveries to the ERP (D-061)
+
+    public Task<DeliveryStatusDto> GetErpDeliveryStatusAsync(CancellationToken ct = default) =>
+        GetAsync<DeliveryStatusDto>("api/integrations/erp", ct);
+
+    public Task<IReadOnlyList<DeliveryDto>> ListErpDeliveriesAsync(string? status, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<DeliveryDto>>(status is null ? "api/integrations/erp/deliveries" : $"api/integrations/erp/deliveries?status={status}", ct);
+
+    public Task<RetryDeliveriesResponse> RetryErpDeliveryAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/erp/deliveries/{id}/retry", new { }, ct);
+
+    public Task<RetryDeliveriesResponse> SkipErpDeliveryAsync(Guid id, SkipDeliveryRequest request, CancellationToken ct = default) =>
+        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/erp/deliveries/{id}/skip", request, ct);
+
+    public Task<RetryDeliveriesResponse> RetryFailedErpDeliveriesAsync(CancellationToken ct = default) =>
+        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, "api/integrations/erp/deliveries/retry-failed", new { }, ct);
 
     // Edge nodes, connections and tags (D-050)
 

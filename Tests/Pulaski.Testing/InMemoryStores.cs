@@ -4,6 +4,7 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.Boms;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Execution;
+using Pulaski.Application.Integrations;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.Labor;
 using Pulaski.Application.MachineData;
@@ -90,6 +91,8 @@ public sealed class InMemoryStores
 
     public InMemoryTerminals Terminals { get; } = new();
 
+    public InMemoryDeliveries Deliveries { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -146,6 +149,7 @@ public sealed class InMemoryStores
         services.RemoveAll<ITerminalReadStore>();
         services.RemoveAll<IBadgeHasher>();
         services.RemoveAll<IQualificationReadStore>();
+        services.RemoveAll<IDeliveryStore>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -200,6 +204,7 @@ public sealed class InMemoryStores
         services.AddSingleton<ITerminalRepository>(Terminals);
         services.AddSingleton<ITerminalReadStore>(Terminals);
         services.AddSingleton<IBadgeHasher>(new ReversingBadgeHasher());
+        services.AddSingleton<IDeliveryStore>(Deliveries);
         return services;
     }
 }

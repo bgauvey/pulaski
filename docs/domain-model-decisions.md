@@ -1294,6 +1294,39 @@ A balance emptied to zero starts afresh, so the next withdrawals can be exact. N
 
 **Approximations.** The SQL trace keeps each lot once, by its nearest path, so a lot reachable both through a dropped arrival and another way may be dropped. A reversal into a balance is replayed as a withdrawal of the oldest stock.
 
+## Delivering inventory events to the ERP (D-061, proposed)
+
+Issue #39. Inventory movements were events in `evt.event` (D-007) with nothing to send them anywhere.
+
+**Transport.** One outbound HTTPS webhook per Pulaski, configured in the API (`Integrations:Erp`: `Enabled`, `Url`, `Secret`, `EventTypes` prefixes, default `pulaski.lot.`; `MaxAttempts` 12, `TimeoutSeconds` 15, `PollSeconds` 5, `StartFromNow` true). The secret stays in configuration, never in the database; screens see only the host. Each event is POSTed as a CloudEvents 1.0 structured JSON message (`application/cloudevents+json`), with Pulaski's extra attributes as extensions (`pulaskisubjecttype`, `pulaskisequence`, `pulaskiactor`, `pulaskicorrelationid`, `pulaskireason`). Headers:
+
+- `Idempotency-Key` is the event id.
+- `X-Pulaski-Timestamp` is Unix seconds.
+- `X-Pulaski-Signature` is `sha256=` + hex HMAC-SHA256(secret, `"{timestamp}.{body}"`).
+
+**Capture.** `ErpDeliveryService` (a hosted service in the API) runs a round every few seconds under a session advisory lock per sink, so several API servers never send at once. Each round copies matching events into `evt.delivery` in `(tx_id, position)` order, only below `pg_snapshot_xmin(pg_current_snapshot())`, and moves `evt.sink_checkpoint` in the same statement. A slow commit is never skipped, and `UNIQUE (sink, event_id)` makes a repeat capture harmless. With `StartFromNow`, the first checkpoint is the latest event, so switching it on doesn't replay history.
+
+**Sending.** Due rows go in commit order. `DeliveryPolicy.AfterAttempt` (pure) decides the outcome:
+
+- 2xx delivers.
+- Any other 4xx except 408, 425 and 429 fails at once: retrying can't help.
+- Anything else (5xx, timeouts, no answer) waits 10 s × 2ⁿ⁻¹, capped at an hour, until `MaxAttempts`, then fails.
+
+An outage only delays: rows stay pending.
+
+**Order per subject.** A pending row is held while an earlier pending or failed row of the same sink and subject exists (`DeliverySql.HeldBy`), so a receiver sees each lot's movements in order. One stuck lot doesn't stop the others. Within a round, a subject that just failed isn't tried again.
+
+**Delivery guarantee.** At least once: a lost answer means a resend, with the same `Idempotency-Key`, and receivers dedupe on it. The sender records an outcome only on a row still pending, so an operator's skip during a send wins.
+
+**Operators.** Configure → Integrations (`integrations.view`; manager and auditor by default) shows the status (enabled, host, waiting, held, failed, delivered in 24 h) and the deliveries by status. With `integrations.manage` (administrator by default), operators can:
+
+- `RetryDeliveryCommand` / `RetryFailedDeliveriesCommand`: failed → pending, due now, attempts keep counting.
+- `SkipDeliveryCommand`: pending or failed → skipped, with a required reason, which releases held rows.
+
+Each appends `pulaski.delivery.retried.v1` or `pulaski.delivery.skipped.v1`. Routes: `GET /api/integrations/erp`, `GET /api/integrations/erp/deliveries?status=`, `POST …/deliveries/{id}/retry`, `…/{id}/skip`, `…/retry-failed`.
+
+**Not done.** No inbound acknowledgement or reconciliation from the ERP, one sink only (the table and checkpoint are keyed by sink, ready for more), no ERP-specific adapters or message brokers, no retention of delivered rows.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

@@ -1,0 +1,253 @@
+@page "/integrations"
+@attribute [RequiresView(PermissionCodes.IntegrationsView)]
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* Outbound deliveries to the ERP (D-061): how the feed is doing, what failed, and putting it right. *@
+<PageTitle>Integrations · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Integrations</h1>
+        <p class="text-muted mb-0">
+            Pulaski sends every inventory movement to the ERP's webhook as it happens, in order, and keeps trying while the ERP is
+            unreachable. A delivery the ERP refuses, or that runs out of attempts, stops here as failed, and holds back that lot's later
+            movements until someone retries it or skips it.
+        </p>
+    </div>
+    <div class="inv-head-tools">
+        <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="LoadAsync">Refresh</button>
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Integrations" What="retry or skip deliveries" />
+
+@if (_status is { } s)
+{
+    <div class="table-panel mb-3">
+        <table class="table align-middle mb-0">
+            <tbody>
+                <tr>
+                    <th style="width: 14rem">ERP webhook</th>
+                    <td>
+                        @if (s.Enabled)
+                        {
+                            <span class="chip chip-strong">On</span> <span class="ms-1">to @s.TargetHost</span>
+                        }
+                        else
+                        {
+                            <span class="chip chip-muted">Off</span>
+                            <span class="text-muted ms-1">Turned on in the API's configuration (Integrations:Erp); nothing is queued while it's off.</span>
+                        }
+                    </td>
+                </tr>
+                <tr><th>Events sent</th><td>@string.Join(", ", s.EventTypes.Select(t => t.TrimEnd('.') + "…"))</td></tr>
+                <tr>
+                    <th>Waiting</th>
+                    <td>
+                        @s.Pending queued or retrying@(s.Held > 0 ? $", {s.Held} of them held" : "")
+                        @if (s.OldestPendingAt is { } oldest)
+                        {
+                            <span class="text-muted">· oldest from @Display.SiteTime(oldest, null) UTC</span>
+                        }
+                    </td>
+                </tr>
+                <tr>
+                    <th>Failed</th>
+                    <td>
+                        <span class="@(s.Failed > 0 ? "chip chip-danger" : "")">@s.Failed</span>
+                        @if (s.Failed > 0 && CanManage)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-primary ms-2" disabled="@_busy" @onclick="RetryAllAsync">Retry all failed</button>
+                        }
+                    </td>
+                </tr>
+                <tr>
+                    <th>Delivered</th>
+                    <td>
+                        @s.DeliveredLastDay in the last 24 hours
+                        @if (s.LastDeliveredAt is { } last)
+                        {
+                            <span class="text-muted">· last at @Display.SiteTime(last, null) UTC</span>
+                        }
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (_message is not null)
+{
+    <p class="small text-muted">@_message</p>
+}
+
+<div class="inv-toolbar">
+    <select class="form-select w-auto" aria-label="Show" value="@(_filter ?? "")" @onchange="OnFilterChangedAsync">
+        <option value="failed">Failed</option>
+        <option value="pending">Queued, retrying or held</option>
+        <option value="delivered">Delivered</option>
+        <option value="skipped">Skipped</option>
+        <option value="">All</option>
+    </select>
+    <span class="text-muted small">Newest first, up to 200.</span>
+</div>
+
+@if (_deliveries is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_deliveries.Count == 0)
+{
+    <div class="empty-panel"><p class="text-muted mb-0">Nothing @(_filter is null ? "" : FilterText) to show.</p></div>
+}
+else
+{
+    var now = DateTimeOffset.UtcNow;
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead><tr><th>Happened (UTC)</th><th>Event</th><th>Lot</th><th>Status</th><th class="inv-num">Attempts</th><th>Last answer</th>@if (CanManage) { <th></th> }</tr></thead>
+            <tbody>
+                @foreach (var d in _deliveries)
+                {
+                    var (text, css) = DeliveryView.Status(d);
+                    <tr @key="d.Id">
+                        <td class="text-nowrap">@Display.SiteTime(d.OccurredAt, null)</td>
+                        <td>@DeliveryView.EventName(d.EventType)</td>
+                        <td><ScreenLink Href="@($"inventory/lots/{d.Subject}")" Permission="@PermissionCodes.InventoryView">@InventoryView.LotLabel(d.LotNumber, d.IsBulk, d.LocationCode)</ScreenLink></td>
+                        <td>
+                            <span class="@css">@text</span>
+                            <div class="small text-muted">@DeliveryView.Next(d, now)</div>
+                        </td>
+                        <td class="inv-num">@d.Attempts</td>
+                        <td class="small">
+                            @if (d.LastStatusCode is { } answer)
+                            {
+                                <span class="fw-semibold">@answer</span>
+                            }
+                            @d.LastError
+                        </td>
+                        @if (CanManage)
+                        {
+                            <td class="text-end text-nowrap">
+                                @if (d.Status == "failed")
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_busy" @onclick="() => RetryAsync(d)">Retry</button>
+                                }
+                                @if (d.Status is "failed" or "pending")
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-1" disabled="@_busy" @onclick="() => StartSkip(d)">Skip…</button>
+                                }
+                            </td>
+                        }
+                    </tr>
+                    @if (_skipping?.Id == d.Id)
+                    {
+                        <tr>
+                            <td colspan="7">
+                                <form class="inv-toolbar mb-0" @onsubmit="SkipAsync" @onsubmit:preventDefault>
+                                    <input class="form-control inv-grow" maxlength="500" placeholder="Why it won't be sent, e.g. booked by hand in the ERP" aria-label="Reason for skipping"
+                                           @bind="_skipReason" @bind:event="oninput" />
+                                    <button type="submit" class="btn btn-sm btn-danger" disabled="@(_busy || string.IsNullOrWhiteSpace(_skipReason))">Skip it</button>
+                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _skipping = null">Cancel</button>
+                                </form>
+                                <div class="form-text">The ERP won't get this movement. Put it right there by hand first; this lot's later movements are sent next.</div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private DeliveryStatusDto? _status;
+    private IReadOnlyList<DeliveryDto>? _deliveries;
+    private ApiException? _error;
+    private bool _busy;
+    private string? _filter = "failed";
+    private string? _message;
+    private DeliveryDto? _skipping;
+    private string? _skipReason;
+
+    private bool CanManage => User.Can(PermissionCodes.Integrations);
+
+    private string FilterText => _filter switch
+    {
+        "pending" => "waiting",
+        _ => _filter ?? "",
+    };
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            _status = await Api.GetErpDeliveryStatusAsync();
+            _deliveries = await Api.ListErpDeliveriesAsync(_filter);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnFilterChangedAsync(ChangeEventArgs e)
+    {
+        _filter = e.Value?.ToString() is { Length: > 0 } value ? value : null;
+        _deliveries = null;
+        await LoadAsync();
+    }
+
+    private void StartSkip(DeliveryDto d)
+    {
+        _skipping = d;
+        _skipReason = null;
+    }
+
+    private Task RetryAsync(DeliveryDto d) => RunAsync(async () =>
+    {
+        await Api.RetryErpDeliveryAsync(d.Id);
+        _message = $"{DeliveryView.EventName(d.EventType)} goes again on the next round.";
+    });
+
+    private Task RetryAllAsync() => RunAsync(async () =>
+    {
+        var result = await Api.RetryFailedErpDeliveriesAsync();
+        _message = result.Retried == 1 ? "1 delivery goes again on the next round." : $"{result.Retried} deliveries go again on the next round.";
+    });
+
+    private Task SkipAsync() => RunAsync(async () =>
+    {
+        await Api.SkipErpDeliveryAsync(_skipping!.Id, new SkipDeliveryRequest { Reason = _skipReason! });
+        _message = $"{DeliveryView.EventName(_skipping.EventType)} skipped.";
+        _skipping = null;
+    });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        _message = null;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

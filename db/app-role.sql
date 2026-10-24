@@ -32,6 +32,8 @@ REVOKE UPDATE ON core.lot_document_content FROM pulaski_app;
 GRANT SELECT, INSERT ON evt.event TO pulaski_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON evt.event FROM pulaski_app;
 GRANT USAGE ON SEQUENCE evt.event_position_seq TO pulaski_app;
+-- The outbound relay's queue and checkpoints (D-061): updated as deliveries go, never deleted.
+GRANT SELECT, INSERT, UPDATE ON evt.delivery, evt.sink_checkpoint TO pulaski_app;
 -- Lot and container label numbers (D-059).
 GRANT USAGE ON SEQUENCE core.label_seq TO pulaski_app;
 

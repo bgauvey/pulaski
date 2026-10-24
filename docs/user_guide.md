@@ -60,7 +60,7 @@ Pulaski asks you to **sign in** with the user name and password your administrat
 
 - **Menu (left).** Two groups of pages:
   - **Operate:** **Overview**, **Work orders**, **Schedule**, **Floor**, **Inventory**, **Labor**: the pages you use day to day.
-  - **Configure:** **Equipment**, **Materials**, **Processes**, **BOMs**, **Units**, **Reasons**, **Shifts**, **People** (and **Users**, for administrators, with tabs for users, roles and permissions): the setup you do once and change now and then.
+  - **Configure:** **Equipment**, **Materials**, **Processes**, **BOMs**, **Units**, **Reasons**, **Shifts**, **Site settings**, **Integrations**, **People** (and **Users**, for administrators, with tabs for users, roles and permissions): the setup you do once and change now and then.
   - The ☰ button at the top left collapses the menu to icons, to make room on small screens.
 - **You (top right).** Your name and roles; the padlock changes your password, and the door signs you out.
 - **Theme (top right).** The sun/moon button switches between light and dark.
@@ -1108,6 +1108,27 @@ The **Scan** tab is for a barcode scanner that types like a keyboard (most USB a
 - When a second scan is asked for (where to move, or which container), only that kind counts; scanning something else says so.
 - Every movement made by scanning is the same as one made from the lot's or container's page, with the same rules, history and permissions.
 
+### Send movements to the ERP
+
+Pulaski can send every inventory movement (received, moved, consumed, produced, written up or off, shipped, held and so on) to your ERP as it happens, so the ERP's stock follows the floor's. It is switched on in the API's configuration by whoever runs Pulaski (see *In detail*); **Configure → Integrations** shows how it is doing and is where failures are put right.
+
+1. Open **Configure → Integrations**. The top panel says whether the ERP webhook is **On** and where it sends, how many movements are waiting, how many have **failed**, and how many were delivered in the last 24 hours.
+2. The list starts on **Failed**. Each row shows the movement, the lot, how many attempts were made and the ERP's last answer (its status code and message).
+3. Put the cause right (the ERP rejected an unknown material, say, or a lot it doesn't know), then choose **Retry** on the row, or **Retry all failed** in the panel. It goes again within a few seconds.
+4. If it shouldn't be sent at all (you have booked it in the ERP by hand, for example), choose **Skip…**, give the reason and choose **Skip it**. The ERP won't get that movement.
+5. Choose **Refresh** to see the latest; switch the list to **Queued, retrying or held**, **Delivered**, **Skipped** or **All** to see the rest.
+
+**In detail**
+
+- **Nothing is lost in an outage.** Movements are queued in Pulaski's database in the order they were committed. While the ERP can't be reached, or answers with a server error, a timeout (408), *too early* (425) or *too many requests* (429), Pulaski keeps trying, waiting 10 s, then 20 s, 40 s and so on up to an hour between tries. After 12 attempts it stops and marks the delivery **failed**.
+- **A refusal fails at once.** Any other 4xx answer (400, 401, 404, 422 …) means trying again won't help until something is fixed, so the delivery is marked failed straight away.
+- **A lot's movements arrive in order.** While one of a lot's movements is waiting or failed, that lot's later movements are **held** behind it (shown as *Held*); other lots carry on. Retrying or skipping the failed one lets the held ones go.
+- **Sent twice is safe.** Pulaski may send a movement again if it didn't hear the ERP's answer (at least once). Every message carries the movement's event id as its `Idempotency-Key`; the receiver should ignore an id it has already booked.
+- **The message** is a CloudEvents 1.0 JSON document (`application/cloudevents+json`) holding the event as Pulaski recorded it: its type (`pulaski.lot.received.v1` …), the lot as its subject, the time, who did it, the reason and the movement's details. It is signed: `X-Pulaski-Signature` is `sha256=` and the hex HMAC-SHA256, with the shared secret, of the `X-Pulaski-Timestamp` value, a full stop, and the body. A receiver should check the signature and refuse old timestamps.
+- **Switching it on.** In the API's settings (or environment), section `Integrations:Erp`: `Enabled` true, `Url` (the HTTPS address to post to) and `Secret` (shared with the receiver; keep it in a secret store or environment variable, not in a file in source control). Optional: `EventTypes` (type prefixes to send, default `pulaski.lot.`), `MaxAttempts` (12), `TimeoutSeconds` (15), `PollSeconds` (5) and `StartFromNow` (true: the first time it is switched on, only movements from then on are sent; false sends the whole history). Restart the API after a change.
+- **Several API servers** share the work safely: only one sends at a time.
+- **Who.** Anyone who can see Integrations (Administrator, Manager and Auditor to start with) sees the status and the deliveries; retrying and skipping need *integrations.manage* (Administrator to start with). Each retry and skip is recorded as an event with who did it, and a skip keeps its reason on the delivery.
+
 ### In detail
 
 - **One site per lot.** Moves stay within the lot's site; consumption needs a job in the same site.
@@ -1115,7 +1136,7 @@ The **Scan** tab is for a barcode scanner that types like a keyboard (most USB a
 - **Substitutions.** Consuming a material the job has no planned component of is allowed, and recorded as a **substitution** (amber on the job page and in the confirmation).
 - **Genealogy is per job for now.** Every lot consumed into a job is recorded as a parent of every lot the job made, whichever came first. That can link more than really mixed (a resin lot used in the first hour shows as a parent of the last pallet). It narrows to time windows once Pulaski records production from the machines.
 - **Times** are the moment you click, unless the movement is [back-dated](#back-date-a-movement). A movement recorded into a run that has ended keeps the time you entered it and names the run it belongs to.
-- **What the ERP sees.** Each movement is an event in Pulaski's event log (`pulaski.lot.received.v1`, `…consumed.v1` and so on), ready to be sent to the ERP once the connection is built.
+- **What the ERP sees.** Each movement is an event in Pulaski's event log (`pulaski.lot.received.v1`, `…consumed.v1` and so on), sent to the ERP's webhook when that is switched on (see [Send movements to the ERP](#send-movements-to-the-erp)).
 
 ---
 
@@ -1397,7 +1418,7 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | **Process engineer** | Processes, BOMs and which lines can run each material. |
 | **Edge node** | Nothing on screen: it is for the user a Pulaski Edge node signs in as, to read its configuration and forward machine data. |
 
-Equipment (with machine profiles and edge nodes) and units belong to the Administrator. Someone with two roles can do what either allows.
+Equipment (with machine profiles and edge nodes), units and retrying or skipping deliveries to the ERP (**Integrations**) belong to the Administrator. Someone with two roles can do what either allows.
 
 When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator.
 
@@ -1946,7 +1967,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Reversing is limited** to a lot's latest movement, and not consumption, production, splits, merges, transfers between balances or corrections: put those right with another movement.
 - **Reason trees** (a reason grouped under another) can't be edited.
 - **Genealogy through a silo is an estimate** from the declared movements: a level tag can be bound to a silo, but its readings aren't used yet to confirm when it was empty or how it flowed. Reversals into a silo are treated as withdrawals of its oldest stock.
-- **Inventory movements aren't sent to the ERP yet:** they are recorded as events, but the connection that delivers them isn't built.
+- **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP; there are no lead times, purchase suggestions or partial receipts against one delivery (receiving closes it). The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** still shows no live machine state, reported counts, good output, scrap, downtime, quality, lots or labor. OEE is available for the current shift from the machine/OEE report; its timeline strip remains a rolling 24 hours rather than the current shift.
 - **Notes** can only be written when the order is created.

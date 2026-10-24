@@ -47,7 +47,7 @@ Orders & scheduling                       Execution & inventory
 People & access                            History & events
  sec.app_user, role, permission,           ts.* (state, downtime, alarms, counts,
  role_assignment, terminal, badge            process values, job status, lots, quality, OEE)
- core.person, qualification,               evt.event, evt.sink_checkpoint
+ core.person, qualification,               evt.event, evt.sink_checkpoint, evt.delivery
  person_qualification, equipment_qualification
 ```
 
@@ -1550,14 +1550,42 @@ Every command appends its CloudEvents event here in the same transaction as the 
 | `data` | jsonb | no | Payload; changes carry `before` and `after`. |
 | `prev_hash`, `hash` | bytea | yes | Optional per-site hash chain for tamper evidence. |
 
-### evt.sink_checkpoint — outbox progress per adapter · *Planned*
+### evt.sink_checkpoint — outbox progress per adapter (D-061) · *In use*
+
+How far an adapter has read `evt.event`. The ERP webhook (`webhook:erp`) moves it as it copies matching events into `evt.delivery`, in the same statement, so a crash never loses or repeats a capture. Its first row starts at the latest event when `StartFromNow` is on (the default), else at the beginning.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `sink_name` | text | no | Primary key: `kafka-main`, `mqtt-uns`, `webhook:erp`. |
-| `last_tx_id` | xid8 | no | Last transaction delivered. |
-| `last_position` | bigint | no | Last position delivered within it. |
+| `sink_name` | text | no | Primary key: `webhook:erp`; later `kafka-main`, `mqtt-uns`. |
+| `last_tx_id` | xid8 | no | Last transaction read. |
+| `last_position` | bigint | no | Last position read within it. |
 | `updated_at` | timestamptz | no | Last progress. |
+
+### evt.delivery — one event's delivery to an adapter (D-061) · *In use*
+
+The queue and record of what was sent where. A row is added for each matching event when it is captured (once: unique per sink and event), and changed only by the sender (attempts, outcome) and by operators (retry, skip) on **Configure → Integrations**. Ordered like `evt.event`, by `(tx_id, position)`. A `pending` row waits while an earlier `pending` or `failed` row of the same sink and subject exists (it is *held*), so the receiver sees each lot's events in order. The app role has SELECT, INSERT and UPDATE; rows aren't deleted.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `sink` | text | no | The adapter: `webhook:erp`. |
+| `event_id` | uuid | no | The event (`evt.event.id`; no FK, it is partitioned). Also the message's `Idempotency-Key`. Unique with `sink`. |
+| `event_recorded_at` | timestamptz | no | The event's `recorded_at`, to find it in its partition. |
+| `tx_id`, `position` | xid8, bigint | no | The event's order, copied so the queue sorts and holds without the join. |
+| `event_type` | text | no | The event's type: `pulaski.lot.received.v1`. |
+| `subject` | uuid | no | The event's subject (a lot); what later deliveries are held behind. |
+| `status` | text | no | `pending` (to send, or retrying), `delivered`, `failed` (gave up: refused, or attempts ran out) or `skipped` (an operator decided it won't go). |
+| `attempts` | integer | no | Attempts so far. A retry carries on counting. |
+| `next_attempt_at` | timestamptz | no | When a pending row is next due; growing waits after each failure, now after a retry. |
+| `last_attempt_at` | timestamptz | yes | When it was last tried. |
+| `last_status_code` | integer | yes | The receiver's last HTTP status; null when there was no answer. |
+| `last_error` | text | yes | What went wrong, up to 300 characters of the receiver's answer. |
+| `delivered_at` | timestamptz | yes | When the receiver accepted it. |
+| `resolved_by` | text | yes | Who last retried or skipped it. |
+| `resolve_note` | text | yes | The reason given for a skip. |
+| `created_at`, `updated_at` | timestamptz | no | Captured; last changed. |
+
+Indexes: due rows per sink (`next_attempt_at`, pending only), undelivered rows per subject in order (for holding), and per sink and status (for the screen).
 
 ## 15. View and helper
 

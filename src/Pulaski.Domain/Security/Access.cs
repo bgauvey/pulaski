@@ -22,6 +22,7 @@ public static class Permissions
     public const string LaborView = "labor.view";
     public const string MachinesView = "machines.view";
     public const string SiteSettingsView = "site_settings.view";
+    public const string IntegrationsView = "integrations.view";
 
     // Changing (D-037).
     public const string SchedulePlan = "schedule.plan";
@@ -55,6 +56,7 @@ public static class Permissions
     public const string Terminals = "terminals.manage";
     public const string LotAttributes = "lot_attributes.manage";
     public const string Security = "security.manage";
+    public const string Integrations = "integrations.manage";
 
     // Machine data (D-050): what a Pulaski Edge node's service user holds.
     public const string EdgeIngest = "edge.ingest";
@@ -76,6 +78,7 @@ public static class Permissions
         new(LaborView, "Viewing", "See labor: who is on, shift review and labor reports"),
         new(MachinesView, "Viewing", "See machines: their live state and their stops"),
         new(SiteSettingsView, "Viewing", "See a site's settings: changeover mode, reporting tolerances and calendar exceptions"),
+        new(IntegrationsView, "Viewing", "See outbound deliveries to the ERP and how they went"),
         new(SchedulePlan, "Planning", "Plan jobs: create, sequence, pin, assign to lines and cancel them"),
         new(WorkOrderManage, "Planning", "Create work orders, dispatch, un-dispatch and firm them"),
         new(WorkOrderClose, "Planning", "Cancel and close work orders"),
@@ -107,6 +110,7 @@ public static class Permissions
         new(Terminals, "Configuration", "Register and enrol shop-floor terminals"),
         new(LotAttributes, "Configuration", "Maintain lot attribute definitions"),
         new(Security, "Administration", "Maintain users, roles and what each role may do"),
+        new(Integrations, "Administration", "Retry or skip failed deliveries to the ERP"),
         new(EdgeIngest, "Machine data", "Send machine data as a Pulaski Edge node: read its configuration and forward what it collects"),
     ];
 
@@ -158,6 +162,7 @@ public static class Permissions
         [DowntimeCode] = [MachinesView],
         // Terminals are placed on lines; their screen lists the site's equipment.
         [Terminals] = [EquipmentView],
+        [Integrations] = [IntegrationsView],
     };
 }
 
