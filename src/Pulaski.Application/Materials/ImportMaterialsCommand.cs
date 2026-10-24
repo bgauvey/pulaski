@@ -14,7 +14,8 @@ namespace Pulaski.Application.Materials;
 /// <param name="Rows">The rows, and any problem with their source as a whole.</param>
 /// <param name="DryRun">True to check the rows and report what would happen, saving nothing.</param>
 /// <param name="Source">What the rows came from, such as "CSV import"; recorded as each event's reason.</param>
-public sealed record ImportMaterialsCommand(MaterialImportSource Rows, bool DryRun, string Source) : ICommand<ImportMaterialsResponse>;
+/// <param name="CreateClasses">True to create a class a row names that doesn't exist yet, instead of an error (D-055).</param>
+public sealed record ImportMaterialsCommand(MaterialImportSource Rows, bool DryRun, string Source, bool CreateClasses = false) : ICommand<ImportMaterialsResponse>;
 
 internal sealed class ImportMaterialsHandler(
     IUnitOfWork unitOfWork,
@@ -38,6 +39,7 @@ internal sealed class ImportMaterialsHandler(
         var results = new List<ImportRowResultDto>();
         var codes = new HashSet<string>(StringComparer.Ordinal);
         var keys = new HashSet<(string, string)>();
+        var createdClasses = new List<string>();
 
         // One transaction: the rows see each other's changes, and an error anywhere leaves nothing saved.
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -62,7 +64,7 @@ internal sealed class ImportMaterialsHandler(
                     throw new DomainRuleException($"{system} key {key} appears earlier in the file.");
                 }
 
-                results.Add(await ImportRowAsync(row, code, command.Source, cancellationToken));
+                results.Add(await ImportRowAsync(row, code, command, createdClasses, cancellationToken));
             }
             catch (Exception ex) when (ex is DomainRuleException or ValidationException)
             {
@@ -84,12 +86,15 @@ internal sealed class ImportMaterialsHandler(
             Updated = results.Count(r => r.Action == Update),
             Unchanged = results.Count(r => r.Action == Unchanged),
             Errors = errors,
+            CreatedClasses = createdClasses,
             Rows = results,
         };
     }
 
-    private async Task<ImportRowResultDto> ImportRowAsync(MaterialImportRow row, string code, string source, CancellationToken cancellationToken)
+    private async Task<ImportRowResultDto> ImportRowAsync(
+        MaterialImportRow row, string code, ImportMaterialsCommand command, List<string> createdClasses, CancellationToken cancellationToken)
     {
+        var source = command.Source;
         var name = row.Name.Trim();
         var description = row.Description is { } d ? MaterialRules.Text(d.Value) : null;
         new Validator()
@@ -107,7 +112,7 @@ internal sealed class ImportMaterialsHandler(
 
         var unit = await materials.FindUomAsync(row.BaseUomCode.Trim(), cancellationToken)
             ?? throw new DomainRuleException($"There is no unit '{row.BaseUomCode.Trim()}' in Pulaski; add it on the Units page or use another.");
-        var materialClass = await ClassAsync(row, cancellationToken);
+        var materialClass = await ClassAsync(row, command, createdClasses, cancellationToken);
         var classId = materialClass?.Id;
 
         Versioned<Material>? existing;
@@ -187,12 +192,38 @@ internal sealed class ImportMaterialsHandler(
             row.ShelfLifeDays is { } days ? days.Value : current?.ShelfLifeDays,
             row.IsActive?.Value ?? current?.IsActive ?? true);
 
-    /// <summary>The class the row names; an inactive one is allowed only for a material already in it.</summary>
-    private async Task<MaterialClass?> ClassAsync(MaterialImportRow row, CancellationToken cancellationToken) =>
-        row.ClassCode?.Value is not { } classCode
-            ? null
-            : await materials.FindClassByCodeAsync(classCode.Trim().ToUpperInvariant(), cancellationToken)
-                ?? throw new DomainRuleException($"There is no class '{classCode.Trim()}'; add it on the Classes tab first.");
+    /// <summary>
+    /// The class the row names; an inactive one is allowed only for a material already in it. A missing one is created when the import
+    /// says so (D-055), named from the row's class_name or its code, and recorded with its own event.
+    /// </summary>
+    private async Task<MaterialClass?> ClassAsync(
+        MaterialImportRow row, ImportMaterialsCommand command, List<string> createdClasses, CancellationToken cancellationToken)
+    {
+        if (row.ClassCode?.Value is not { } classCode)
+        {
+            return null;
+        }
+
+        var code = classCode.Trim().ToUpperInvariant();
+        if (await materials.FindClassByCodeAsync(code, cancellationToken) is { } existing)
+        {
+            return existing;
+        }
+
+        if (!command.CreateClasses)
+        {
+            throw new DomainRuleException($"There is no class '{classCode.Trim()}'; add it on the Classes tab first, or let the import create missing classes.");
+        }
+
+        var name = row.ClassName?.Trim() is { Length: > 0 } given ? given : code;
+        new Validator().RequireText(code, "class", 30).RequireText(name, "class_name", 100).ThrowIfInvalid();
+        var created = new MaterialClass(ids.NewId(), code, name, IsActive: true);
+        var envelope = events.Create(EventTypes.MaterialClassCreated, "material_class", created.Id, new { After = created }, command.Source);
+        await materials.InsertClassAsync(created, envelope.OccurredAt, cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
+        createdClasses.Add(code);
+        return created;
+    }
 
     /// <summary>A code another material already has would break the unique key, and with it the whole import's transaction.</summary>
     private async Task EnsureCodeFreeAsync(string code, Guid? materialId, CancellationToken cancellationToken)

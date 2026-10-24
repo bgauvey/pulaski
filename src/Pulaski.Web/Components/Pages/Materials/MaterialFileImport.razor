@@ -1,20 +1,34 @@
 @inject PulaskiApiClient Api
+@inject CurrentUser User
 
-@* Bulk load from a file (D-034, D-053): pick its format and the file, check it, then import it all or nothing. Each format is
-   a source adapter on the API; they all feed the same import. *@
+@* Bulk load from a file (D-034, D-053, D-055): materials in any source adapter's format, or capabilities from CSV. Pick what and
+   the file, check it, then import it all or nothing. *@
 <section class="inv-facts mb-3" aria-labelledby="import-title">
-    <h2 class="h6" id="import-title">Import materials from a file</h2>
-    <div class="row g-2 mb-2">
-        <div class="col-sm-3">
-            <label class="form-label small" for="import-format">Format</label>
-            <select id="import-format" class="form-select" disabled="@_busy" @bind="_sourceName" @bind:after="RecheckAsync">
-                @foreach (var source in _sources)
+    <h2 class="h6" id="import-title">Import from a file</h2>
+    <div class="row g-2 mb-2 align-items-end">
+        <div class="col-sm-2">
+            <label class="form-label small" for="import-kind">Import</label>
+            <select id="import-kind" class="form-select" disabled="@_busy" @bind="_kind" @bind:after="RecheckAsync">
+                <option value="@Materials">Materials</option>
+                @if (User.Can(PermissionCodes.Processes))
                 {
-                    <option value="@source.Name">@source.DisplayName</option>
+                    <option value="@Capabilities">Capabilities</option>
                 }
             </select>
         </div>
-        @if (Source.TakesExternalSystem)
+        @if (_kind == Materials)
+        {
+            <div class="col-sm-2">
+                <label class="form-label small" for="import-format">Format</label>
+                <select id="import-format" class="form-select" disabled="@_busy" @bind="_sourceName" @bind:after="RecheckAsync">
+                    @foreach (var source in _sources)
+                    {
+                        <option value="@source.Name">@source.DisplayName</option>
+                    }
+                </select>
+            </div>
+        }
+        @if (_kind == Materials && Source.TakesExternalSystem)
         {
             <div class="col-sm-3">
                 <label class="form-label small" for="import-system">External system <span class="text-muted">(optional)</span></label>
@@ -22,14 +36,36 @@
                        @bind="_externalSystem" @bind:after="RecheckAsync" />
             </div>
         }
+        @if (_kind == Materials)
+        {
+            <div class="col-sm-3">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="import-classes" disabled="@_busy" @bind="_createClasses" @bind:after="RecheckAsync" />
+                    <label class="form-check-label small" for="import-classes">Create missing classes</label>
+                </div>
+            </div>
+        }
+        <div class="col-sm-auto">
+            <a class="btn btn-link btn-sm px-0 mb-1" href="@TemplateHref" download="@Source.TemplateFileName">Download a template</a>
+        </div>
     </div>
 
-    @if (Source.Name == Csv)
+    @if (_kind == Capabilities)
+    {
+        <p class="small text-muted mb-2">
+            One row per material and line; material, line, ideal_rate (per hour) and rate_unit are required, and site only when the line
+            code is used at more than one site. A row changes the capability in effect now, or adds one from now; active = no ends it.
+            The planning rate follows the ideal rate as on the material page. Nothing is saved until every row is valid.
+        </p>
+        <p class="small mb-2"><span class="text-muted">All columns:</span> <code>@CapabilityCsvFormat.Header</code></p>
+    }
+    else if (Source.Name == Csv)
     {
         <p class="small text-muted mb-2">
             The first line names the columns; code, name, type and base_unit are required. A column left out keeps what each material
-            already has. Rows with external_system and external_key are the ERP's items; the others are matched on their code.
-            Nothing is saved until every row is valid.
+            already has. Rows with external_system and external_key are the ERP's items; the others are matched on their code. A class
+            that doesn't exist is an error unless <em>Create missing classes</em> is ticked (class_name names it). Nothing is saved until
+            every row is valid.
         </p>
         <p class="small mb-2"><span class="text-muted">All columns:</span> <code>@MaterialCsvFormat.Header</code></p>
     }
@@ -90,6 +126,10 @@
                 {
                     @($"{_fileName} is ready: {r.Created} to create, {r.Updated} to update, {r.Unchanged} unchanged.")
                 }
+                @if (r.CreatedClasses.Count > 0)
+                {
+                    @($" {(r.Applied ? "Created" : "Creates")} {Count(r.CreatedClasses.Count, "class", "classes")}: {string.Join(", ", r.CreatedClasses)}.")
+                }
             </span>
         </div>
 
@@ -114,7 +154,13 @@
                                 <td class="inv-num">@row.Line</td>
                                 <td class="fw-semibold">@row.Code</td>
                                 <td>@ActionLabel(row.Action, r.Applied)</td>
-                                <td class="small">@(row.Message ?? (row.Changes.Count > 0 ? (r.Applied ? "Changed " : "Changes ") + string.Join(", ", row.Changes) : ""))</td>
+                                <td class="small">
+                                    @(row.Message ?? (row.Changes.Count > 0 ? (r.Applied ? "Changed " : "Changes ") + string.Join(", ", row.Changes) : ""))
+                                    @foreach (var note in row.Notes)
+                                    {
+                                        <div class="text-muted">@note</div>
+                                    }
+                                </td>
                             </tr>
                         }
                     </tbody>
@@ -129,10 +175,29 @@
     private const long MaxBytes = 5 * 1024 * 1024;
 
     private const string Csv = "csv";
+    private const string Materials = "materials";
+    private const string Capabilities = "capabilities";
     private const string B2mml = "b2mml";
 
     // Offered until the API's list arrives, or if it can't be read.
-    private static readonly MaterialSourceDto CsvSource = new() { Name = Csv, DisplayName = "CSV", FileTypes = [".csv", "text/csv", "text/plain"] };
+    private static readonly MaterialSourceDto CsvSource = new()
+    {
+        Name = Csv,
+        DisplayName = "CSV",
+        FileTypes = [".csv", "text/csv", "text/plain"],
+        Template = MaterialCsvFormat.Header + "\r\n",
+        TemplateFileName = "materials.csv",
+    };
+
+    // Capabilities come only from CSV (D-055), through their own import.
+    private static readonly MaterialSourceDto CapabilitySource = new()
+    {
+        Name = Capabilities,
+        DisplayName = "CSV",
+        FileTypes = [".csv", "text/csv", "text/plain"],
+        Template = CapabilityCsvFormat.Header + "\r\n",
+        TemplateFileName = "capabilities.csv",
+    };
 
     [Parameter]
     public EventCallback OnImported { get; set; }
@@ -141,7 +206,9 @@
     public EventCallback OnClose { get; set; }
 
     private IReadOnlyList<MaterialSourceDto> _sources = [CsvSource];
+    private string _kind = Materials;
     private string _sourceName = Csv;
+    private bool _createClasses;
     private string? _externalSystem;
     private string? _text;
     private string? _fileName;
@@ -151,7 +218,9 @@
     private bool _busy;
     private bool _errorsOnly;
 
-    private MaterialSourceDto Source => _sources.FirstOrDefault(s => s.Name == _sourceName) ?? CsvSource;
+    private MaterialSourceDto Source => _kind == Capabilities ? CapabilitySource : _sources.FirstOrDefault(s => s.Name == _sourceName) ?? CsvSource;
+
+    private string TemplateHref => $"data:{MediaType};charset=utf-8,{Uri.EscapeDataString(Source.Template)}";
 
     private string MediaType => Source.FileTypes.FirstOrDefault(t => t.Contains('/')) ?? "text/plain";
 
@@ -171,7 +240,7 @@
     }
 
     private string ImportLabel => _result is { Errors: 0, Applied: false } r && r.Created + r.Updated > 0
-        ? $"Import {Count(r.Created + r.Updated, "material")}"
+        ? $"Import {Count(r.Created + r.Updated, _kind == Capabilities ? "capability" : "material", _kind == Capabilities ? "capabilities" : null)}"
         : "Import";
 
     private async Task PickAsync(InputFileChangeEventArgs e)
@@ -236,9 +305,13 @@
 
     private async Task CheckAsync()
     {
-        _result = await Api.ImportMaterialsAsync(Source.Name, _text!, Source.TakesExternalSystem ? _externalSystem : null, dryRun: true, MediaType);
+        _result = await SendAsync(dryRun: true);
         _errorsOnly = _result.Errors > 0;
     }
+
+    private Task<ImportMaterialsResponse> SendAsync(bool dryRun) => _kind == Capabilities
+        ? Api.ImportCapabilitiesCsvAsync(_text!, dryRun)
+        : Api.ImportMaterialsAsync(Source.Name, _text!, Source.TakesExternalSystem ? _externalSystem : null, dryRun, MediaType, _createClasses);
 
     private async Task ImportAsync()
     {
@@ -251,7 +324,7 @@
         _error = null;
         try
         {
-            _result = await Api.ImportMaterialsAsync(Source.Name, _text, Source.TakesExternalSystem ? _externalSystem : null, dryRun: false, MediaType);
+            _result = await SendAsync(dryRun: false);
             _errorsOnly = _result.Errors > 0;
             if (_result.Applied)
             {
@@ -279,5 +352,5 @@
         _ => "Error",
     };
 
-    private static string Count(int n, string what) => $"{n} {what}{(n == 1 ? "" : "s")}";
+    private static string Count(int n, string what, string? plural = null) => $"{n} {(n == 1 ? what : plural ?? what + "s")}";
 }

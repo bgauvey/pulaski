@@ -259,6 +259,23 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
     }
 
     [Fact]
+    public async Task Import_templates_download_in_the_accepted_format_and_capabilities_import_by_csv()
+    {
+        var materials = await _client.GetAsync(new Uri("/api/materials/import/csv/template", UriKind.Relative));
+        Assert.Equal(("text/csv", "materials.csv"), (materials.Content.Headers.ContentType?.MediaType, materials.Content.Headers.ContentDisposition?.FileName));
+        Assert.Equal(MaterialCsvFormat.Header, (await materials.Content.ReadAsStringAsync()).TrimEnd());
+        var xml = await _client.GetStringAsync(new Uri("/api/materials/import/b2mml/template", UriKind.Relative));
+        Assert.Contains("<MaterialDefinition>", xml, StringComparison.Ordinal);
+        var capabilities = await _client.GetStringAsync(new Uri("/api/capabilities/import/template", UriKind.Relative));
+        Assert.Equal(CapabilityCsvFormat.Header, capabilities.TrimEnd());
+
+        using var csv = new StringContent(CapabilityCsvFormat.Header + "\nNOPE,,NOPE,1,kg,,,,\n", System.Text.Encoding.UTF8, "text/csv");
+        var check = await _client.PostAsync(new Uri("/api/capabilities/import/csv?dryRun=true", UriKind.Relative), csv);
+        Assert.Equal(HttpStatusCode.OK, check.StatusCode);
+        Assert.Equal("error", Assert.Single((await check.Content.ReadFromJsonAsync<ImportMaterialsResponse>())!.Rows).Action);
+    }
+
+    [Fact]
     public async Task People_files_import_into_a_site_through_the_named_source()
     {
         var site = Guid.CreateVersion7();

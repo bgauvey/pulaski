@@ -22,6 +22,9 @@ public sealed record MaterialImportRow
 
     /// <summary>A class code; a blank value removes the class.</summary>
     public Supplied<string?>? ClassCode { get; init; }
+
+    /// <summary>The name for the class when the import creates it (D-055); the code when blank. Ignored for a class that exists.</summary>
+    public string? ClassName { get; init; }
     public Supplied<string?>? Description { get; init; }
     public Supplied<bool>? IsLotTracked { get; init; }
     public Supplied<int?>? ShelfLifeDays { get; init; }

@@ -1099,23 +1099,25 @@ What the line really makes, rather than its ideal rate.
 Load many materials at once, for example when setting up a new site, from a spreadsheet saved as CSV or from an ERP's ISA-95 export in B2MML XML.
 
 1. On the Materials tab, click **Import file**.
-2. Pick the **Format**: **CSV** or **B2MML** (see [B2MML files](#b2mml-files) below). For B2MML, type the **External system** the items come from, such as `ERP1`, if they are the ERP's items.
-3. Prepare the file. For CSV, its first line names the columns; the panel shows them all. **code**, **name**, **type** and **base_unit** are required; the rest are optional:
+2. Leave **Import** on **Materials** and pick the **Format**: **CSV** or **B2MML** (see [B2MML files](#b2mml-files) below). For B2MML, type the **External system** the items come from, such as `ERP1`, if they are the ERP's items.
+3. Tick **Create missing classes** if the file may name classes that aren't on the Classes tab yet. Left unticked, such a row is an error, so a misspelt class can't slip in.
+4. Prepare the file: click **Download a template** for an empty one in the chosen format. For CSV, its first line names the columns; the panel shows them all. **code**, **name**, **type** and **base_unit** are required; the rest are optional:
 
    | Column | Holds |
    | --- | --- |
    | `code`, `name` | Item number and name. |
    | `type` | `raw`, `intermediate`, `finished`, `packaging`, `consumable` or `rework`. |
    | `base_unit` | A unit code Pulaski has, such as `kg`, `m` or `ea`. |
-   | `class` | A class code from the Classes tab. |
+   | `class` | A class code from the Classes tab (or a new one, with **Create missing classes**). |
+   | `class_name` | The name for a class the import creates; the code when blank. Ignored for a class that exists. |
    | `description` | Notes. |
    | `lot_tracked`, `active` | `yes` or `no` (also `true`/`false`, `1`/`0`). |
    | `shelf_life_days` | A whole number of days. |
    | `external_system`, `external_key`, `external_version` | For items from the ERP: its name, the item's key there, and an optional version. |
 
-4. Click **Choose File** and pick the file. Pulaski checks it straight away and saves nothing yet. Each row shows what would happen: **Create**, **Update** (with the fields that change), **Unchanged**, or **Error** with the reason.
-5. If there are errors, fix the file and pick it again. Tick **Only rows with errors** to see just those. Changing the format or the external system checks the same file again.
-6. When every row is fine, click **Import N materials**. The list below updates.
+5. Click **Choose File** and pick the file. Pulaski checks it straight away and saves nothing yet. Each row shows what would happen: **Create**, **Update** (with the fields that change), **Unchanged**, or **Error** with the reason. The summary names any classes the import would create.
+6. If there are errors, fix the file and pick it again. Tick **Only rows with errors** to see just those. Changing the format, the external system or **Create missing classes** checks the same file again.
+7. When every row is fine, click **Import N materials**. The list below updates.
 
 **In detail**
 
@@ -1123,8 +1125,9 @@ Load many materials at once, for example when setting up a new site, from a spre
 - **Which material a row is.** A row with `external_system` and `external_key` is the ERP's item: matched on them, created if new, and its code, name, base unit and type updated (as in the [ERP import](#in-detail-6)). A row without them is a Pulaski material, matched on its code. A row whose code belongs to an ERP material is an error: give its external columns or change it in the ERP.
 - **Left out or blank.** A column the file doesn't have keeps what each material already has (or the default for a new one: lot-tracked, active, no class). A blank cell in `class`, `description` or `shelf_life_days` clears it; a blank `lot_tracked` or `active` keeps it.
 - **The rules are the same as on the material page:** a base unit that is in use can't change, lot tracking can't change while stock is on hand, an inactive class can't be given to a material, and a code or ERP key can appear only once in a file.
+- **New classes.** With **Create missing classes**, a class code the file names that doesn't exist is created once (active, named from `class_name` or its code) and used by every row that names it; each is recorded as `pulaski.material_class.created.v1` with the import as its reason. An inactive class is never switched back on by an import. In B2MML, a `ClassName` property gives the name.
 - **A CSV file:** comma or semicolon separators, quotes around a value that contains them (or line breaks), column names in any order and case (`Base unit` and `base-unit` both work, as do `item_code` and `uom`). An unknown column stops the import, so a misspelt name isn't ignored. At most 5 MB and 5,000 rows per file.
-- Each imported row is recorded in the event log as usual, with the reason *CSV import* or *B2MML import*. The same import is `POST /api/materials/import/csv` or `…/import/b2mml` (`?dryRun=true` to check, `&externalSystem=ERP1` for B2MML), for scripts; `GET /api/materials/import/sources` lists the formats.
+- Each imported row is recorded in the event log as usual, with the reason *CSV import* or *B2MML import*. The same import is `POST /api/materials/import/csv` or `…/import/b2mml` (`?dryRun=true` to check, `&externalSystem=ERP1` for B2MML, `&createClasses=true`), for scripts; `GET /api/materials/import/sources` lists the formats and `GET /api/materials/import/{csv|b2mml}/template` downloads a template.
 
 #### B2MML files
 
@@ -1155,6 +1158,34 @@ For example:
 - **Other properties are skipped.** Properties Pulaski has no field for (density, colour…) are ignored, unlike an unknown CSV column. Property IDs are compared ignoring case, spaces and underscores, so `Shelf life days` and `shelf_life_days` work too. Giving a field twice, such as a class by `MaterialClassID` and by a property, is an error on that material.
 - **Left out or blank** works as in CSV: a property that isn't there keeps what the material has, and one with an empty value clears an optional field.
 - Any B2MML namespace version (or none) works, inside `MaterialInformation`, a wrapper such as `SyncMaterialInformation`, or as a bare `MaterialDefinition`. The *Line* is where the material's `MaterialDefinition` starts. Further class IDs and descriptions (other languages) are ignored. Files with a `DOCTYPE` are refused. At most 5 MB and 5,000 materials per file.
+
+### Import capabilities from a CSV file
+
+Set up which lines can run which materials, and how fast, for many materials at once.
+
+1. On the Materials tab, click **Import file** and set **Import** to **Capabilities**. (You need permission to maintain processes at the lines' sites.)
+2. Click **Download a template**, and fill in one row per material and line:
+
+   | Column | Holds |
+   | --- | --- |
+   | `material`, `line` | The material's code and the line's code. Required. |
+   | `site` | The line's site code; needed only when two sites use the same line code. |
+   | `ideal_rate`, `rate_unit` | The ideal rate per hour and its unit, such as `900` and `m`. Required, except on a row that ends a capability. |
+   | `changeover_minutes`, `crew_size` | The standard changeover in minutes and the standard crew. |
+   | `preferred` | `yes` if it is the preferred line for the material. |
+   | `active` | `no` ends the capability now. |
+
+3. Click **Choose File** and pick the file. Each row shows **Create** (a new capability from now), **Update** (with what changes), **Unchanged** or **Error**, with what happens to the line's planning rate.
+4. When every row is fine, click **Import N capabilities**.
+
+**In detail**
+
+- **Which capability a row is.** The one for that material and line in effect now. If there is one, its values change in place and its period stays. If there is none, a new one starts now with no end. `active` = `no` ends the one in effect now. Capabilities that start later or ended earlier are left alone, and nothing is ever deleted. To plan a future period, use the material page.
+- **The planning rate follows** as on the material page: a new capability sets it from the ideal rate when the line has none, and a new ideal rate recalculates it while it is still based on the ideal rate. A modified rate stays in force.
+- **Left out or blank.** A column the file doesn't have keeps what the capability has. A blank `changeover_minutes` or `crew_size` clears it.
+- **The rules are the material page's:** the line must be active and run jobs, the material active, and the rate's unit must convert to the material's base unit. A material and line can appear only once in a file. Every line must be at a site where you may maintain processes.
+- **Numbers** use a decimal point and no thousands separator (`1500.5`), so `1,5` from a spreadsheet in another language is an error rather than 15.
+- **All or nothing**, with a check first, as for materials. Each change is recorded as `pulaski.capability.added.v1`, `…changed.v1` or `…ended.v1` with the reason *CSV import*. For scripts: `POST /api/capabilities/import/csv` (`?dryRun=true` to check) and `GET /api/capabilities/import/template`.
 
 ### Batches
 
@@ -1776,7 +1807,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 
 - **No screen yet for the changeover rules** (how long each material change takes): they are set up in the database.
 - **Labor:** people come from HR or the ERP only as a file you import: nothing fetches them on a timer, someone missing from a file isn't switched off (send them with `active` = no), and qualifications aren't imported. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
-- **Materials import from files only:** CSV or B2MML on the screen, or the ERP one item at a time through the API. Nothing fetches items from an ERP on a timer, and there are no adapters for label printing. Imports don't take capabilities, don't create missing classes, and there is no template file to download (the panel shows the CSV header line). B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
+- **Materials import from files only:** CSV or B2MML on the screen, or the ERP one item at a time through the API. Nothing fetches items from an ERP on a timer, and there are no adapters for label printing. Capabilities import from CSV only, and only for now: a future or past period is set on the material page. B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** stops can't be split, merged or entered by hand. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
