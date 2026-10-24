@@ -31,7 +31,8 @@ public sealed record ListMovementsQuery(
     Guid? BeforeId = null) : IQuery<JournalPageDto>;
 
 internal sealed class GetShortagesHandler(
-    IInventoryReadStore store, IUnitReadStore units, TimeProvider time, Scheduling.ISchedulingReadStore? scheduling = null, IExpectedReceiptReadStore? receipts = null)
+    IInventoryReadStore store, IUnitReadStore units, TimeProvider time, Scheduling.ISchedulingReadStore? scheduling = null, IExpectedReceiptReadStore? receipts = null,
+    IAllocationReadStore? allocations = null)
     : IQueryHandler<GetShortagesQuery, ShortageReportDto>
 {
     public async Task<ShortageReportDto> HandleAsync(GetShortagesQuery query, CancellationToken cancellationToken)
@@ -58,6 +59,11 @@ internal sealed class GetShortagesHandler(
         var allUnits = await units.GetUnitsAsync(cancellationToken);
         var conversions = await units.GetConversionsAsync(materialIds, cancellationToken);
 
+        // Stock set aside for a job (D-064) covers that job first: it is taken off the job's need and out of what every job shares.
+        var allocated = allocations is null || materialIds.Count == 0
+            ? []
+            : (await allocations.ListAllocatedAsync(query.SiteId, materialIds, cancellationToken)).ToDictionary(a => (a.JobId, a.MaterialId), a => a.Quantity);
+
         // A job may plan one component in several units: convert each to the base unit, then take what was consumed off once.
         List<InventoryWarningDto> problems = [];
         List<ComponentDemand> demand = [];
@@ -79,7 +85,8 @@ internal sealed class GetShortagesHandler(
                 }
             }
 
-            demand.Add(new ComponentDemand(first.JobId, first.JobNumber, first.MaterialId, NeededFrom(first), Math.Max(0m, planned - first.ConsumedQty)));
+            demand.Add(new ComponentDemand(first.JobId, first.JobNumber, first.MaterialId, NeededFrom(first),
+                Math.Max(0m, planned - first.ConsumedQty - allocated.GetValueOrDefault((first.JobId, first.MaterialId)))));
         }
 
         // Supply on its way, in the base unit; one whose unit doesn't convert is left out and said so.
@@ -102,7 +109,9 @@ internal sealed class GetShortagesHandler(
         var stock = (await store.ListAvailabilityAsync(query.SiteId, materialIds, cancellationToken)).ToDictionary(a => a.MaterialId);
         var jobs = rows.GroupBy(r => r.JobId).ToDictionary(g => g.Key, g => g.First());
         var materials = rows.GroupBy(r => r.MaterialId).ToDictionary(g => g.Key, g => g.First());
-        var results = ShortageCalculator.Calculate(demand, stock.ToDictionary(s => s.Key, s => s.Value.Available), incoming, now);
+        var setAside = allocated.GroupBy(a => a.Key.MaterialId).ToDictionary(g => g.Key, g => g.Sum(a => a.Value));
+        var results = ShortageCalculator.Calculate(
+            demand, stock.ToDictionary(s => s.Key, s => Math.Max(0m, s.Value.Available - setAside.GetValueOrDefault(s.Key))), incoming, now);
         var nextIncoming = incoming.GroupBy(i => i.MaterialId).ToDictionary(g => g.Key, g => g.Min(i => i.ExpectedAt));
 
         return new ShortageReportDto

@@ -2,6 +2,7 @@
 @attribute [RequiresView(PermissionCodes.InventoryView)]
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
+@inject CurrentUser User
 
 <PageTitle>Shortages · Inventory · Pulaski</PageTitle>
 
@@ -9,10 +10,22 @@
     <Description>
         What the open jobs still need of each component, against the stock available now and the
         <a href="inventory/incoming">deliveries expected</a>. Jobs take stock in the order they are needed, then what is due by then, so a shortfall shows on the first job it reaches.
+        Stock allocated to a job covers that job first and isn't free for the others.
     </Description>
+    <Actions>
+        @if (Sites.SiteId is { } site && User.Can(PermissionCodes.LotAllocate, site))
+        {
+            <button type="button" class="btn btn-outline-secondary" disabled="@_refreshing" @onclick="RefreshAllocationsAsync"
+                    title="For every open job: release allocations that are no longer usable and allocate what is still needed, earliest job first">Refresh allocations</button>
+        }
+    </Actions>
 </InventoryHeader>
 
 <ProblemAlert Error="_error" />
+@foreach (var note in _allocationNotes)
+{
+    <p class="small text-muted mb-1">@note</p>
+}
 
 <div class="inv-toolbar">
     <EquipmentPicker Equipment="_equipment" Value="_equipmentId" ValueChanged="OnEquipmentChangedAsync" />
@@ -219,6 +232,29 @@ else
         catch (ApiException ex)
         {
             _error = ex;
+        }
+    }
+
+    private bool _refreshing;
+    private IReadOnlyList<string> _allocationNotes = [];
+
+    private async Task RefreshAllocationsAsync()
+    {
+        _refreshing = true;
+        _error = null;
+        try
+        {
+            var result = await Api.RefreshSiteAllocationsAsync(Sites.SiteId!.Value);
+            _allocationNotes = [AllocationView.Summary(result), .. result.Notes];
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _refreshing = false;
         }
     }
 

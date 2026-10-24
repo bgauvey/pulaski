@@ -37,6 +37,7 @@ public static class Permissions
     public const string LotShip = "lot.ship";
     public const string LotHold = "lot.hold";
     public const string InventoryCorrect = "inventory.correct";
+    public const string LotAllocate = "lot.allocate";
     public const string StockCount = "stock_count.manage";
     public const string LotRecords = "lot_records.manage";
     public const string InventoryBackdate = "inventory.backdate";
@@ -98,6 +99,7 @@ public static class Permissions
         new(LotShip, "Inventory", "Ship lots"),
         new(LotHold, "Inventory", "Put lots on hold or in quarantine and release them"),
         new(InventoryCorrect, "Inventory", "Correct inventory: write up, write off, correct, reverse, split and merge lots"),
+        new(LotAllocate, "Inventory", "Allocate lots to jobs, release allocations and refresh them"),
         new(StockCount, "Inventory", "Start, enter, post and cancel stock counts"),
         new(LotRecords, "Inventory", "Record lot attributes and attach or withdraw certificates"),
         new(InventoryBackdate, "Inventory", "Back-date receipts, consumption, production, write-ups and write-offs by up to 31 days"),
@@ -144,6 +146,7 @@ public static class Permissions
         [LotShip] = [InventoryView],
         [LotHold] = [InventoryView],
         [InventoryCorrect] = [InventoryView],
+        [LotAllocate] = [InventoryView],
         [StockCount] = [InventoryView],
         [LotRecords] = [InventoryView],
         [InventoryBackdate] = [InventoryView],
@@ -201,13 +204,14 @@ public static class Roles
         new(Planner, "Planner", false,
             [Permissions.OverviewView, Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.FloorView, Permissions.InventoryView,
              Permissions.MaterialsView, Permissions.ProcessesView, Permissions.MachinesView, Permissions.SiteSettingsView,
-             Permissions.SchedulePlan, Permissions.WorkOrderManage, Permissions.WorkOrderClose, Permissions.RateModify, Permissions.Materials],
+             Permissions.SchedulePlan, Permissions.WorkOrderManage, Permissions.WorkOrderClose, Permissions.RateModify, Permissions.Materials,
+             Permissions.LotAllocate],
             "Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes."),
         new(Supervisor, "Supervisor", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView, Permissions.SiteSettingsView,
              Permissions.JobExecute, Permissions.JobReopen, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove,
              Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide, Permissions.ProductionCorrect,
-             Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode],
+             Permissions.LotAllocate, Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode],
             "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes machine stops. Doesn't correct inventory."),
         new(Operator, "Operator", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
@@ -217,7 +221,7 @@ public static class Roles
         new(Quality, "Quality", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView, Permissions.MachinesView,
              Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide, Permissions.LotRecords, Permissions.LotAttributes,
-             Permissions.InventoryBackdate],
+             Permissions.InventoryBackdate, Permissions.LotAllocate],
             "Holds and releases lots, corrects inventory, decides on partial batches, and keeps lot attributes and certificates."),
         new(Manager, "Manager", false,
             [.. Permissions.Views, Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts,

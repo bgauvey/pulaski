@@ -450,7 +450,8 @@ internal sealed class ConsumeLotHandler(
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    TimeProvider timeProvider) : ICommandHandler<ConsumeLotCommand, LotTransactionResponse>
+    TimeProvider timeProvider,
+    IAllocationRepository? allocations = null) : ICommandHandler<ConsumeLotCommand, LotTransactionResponse>
 {
     public async Task<LotTransactionResponse> HandleAsync(ConsumeLotCommand command, CancellationToken cancellationToken)
     {
@@ -511,6 +512,13 @@ internal sealed class ConsumeLotHandler(
                 EffectiveAt = MovementTime.Backdated(effective, now),
                 Comment = comment,
             });
+        // Consumption into the job uses its allocation of the lot up; taking what other jobs have set aside is allowed, with a warning (D-064).
+        if (allocations is not null
+            && (await AllocationUse.ConsumeAsync(allocations, lot, job.Id, quantity, envelope.ActorId, envelope.OccurredAt, material.BaseUomCode, cancellationToken)).Warning is { } allocationWarning)
+        {
+            warnings.Add(allocationWarning);
+        }
+
         var version = await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
             new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, JobId: job.Id, Comment: comment, RunId: run.Id, EffectiveAt: MovementTime.Backdated(effective, now)),

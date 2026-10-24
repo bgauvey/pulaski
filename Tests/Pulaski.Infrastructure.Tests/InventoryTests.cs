@@ -608,6 +608,56 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal(balance.Quantity - 300m, silo.Quantity);
     }
 
+    [Fact]
+    public async Task Allocations_set_stock_aside_first_expiry_first_are_used_up_by_consumption_and_refresh_as_stock_changes()
+    {
+        var plant = await CreatePlantAsync();
+        var count = await ReasonAsync("inventory_adjustment", "COUNT");
+        var hold = await ReasonAsync("hold", "QA-HOLD");
+        var now = DateTimeOffset.UtcNow;
+        var old = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "AL-OLD-" + _suffix, 1000m, plant.Kg));
+        var soon = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "AL-SOON-" + _suffix, 300m, plant.Kg, ExpiresAt: now.AddDays(10)));
+        var held = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "AL-HELD-" + _suffix, 500m, plant.Kg));
+        await db.SendAsync(new ChangeLotStatusCommand(held.LotId, held.Version, LotStatus.OnHold, hold, "Melt flow"));
+
+        // The job needs 1450 kg: the lot that expires first comes first, then the oldest; the held lot is left out and says why.
+        var view = await QueryAsync<GetJobAllocationsQuery, JobAllocationsDto>(new GetJobAllocationsQuery(plant.Job));
+        var resin = Assert.Single(view.Components);
+        Assert.Equal((1450m, 1450m), (resin.NeedQty!.Value, resin.RemainingQty));
+        Assert.Equal([(soon.LotId, 300m), (old.LotId, 1000m)], resin.Recommendations.Select(r => (r.LotId, r.Quantity)));
+        Assert.StartsWith("Expires", resin.Recommendations[0].Reason, StringComparison.Ordinal);
+        Assert.Contains("on hold", resin.Excluded.Single(e => e.LotId == held.LotId).Reason, StringComparison.Ordinal);
+
+        var added = await db.SendAsync(new AllocateRecommendedCommand(plant.Job));
+        Assert.Equal(2, added.Allocated);
+        Assert.Contains(added.Notes, n => n.Contains("still 150 kg", StringComparison.Ordinal));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new AllocateLotCommand(plant.Job, held.LotId, 10m, plant.Kg)));
+        Assert.Equal(1000m, Assert.Single((await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(old.LotId))).Allocations).Quantity);
+
+        // Consuming into the job uses its allocation up.
+        await db.SendAsync(new ConsumeLotCommand(soon.LotId, plant.Job, 100m, plant.Kg));
+        view = await QueryAsync<GetJobAllocationsQuery, JobAllocationsDto>(new GetJobAllocationsQuery(plant.Job));
+        Assert.Equal((100m, 1200m), (view.Components[0].ConsumedQty, view.Components[0].AllocatedQty));
+
+        // Stock written off below what is allocated shows as a problem until a refresh trims it; a release gives the rest back.
+        await db.SendAsync(new WriteOffLotCommand(old.LotId, await VersionAsync(old.LotId), 400m, plant.Kg, count));
+        view = await QueryAsync<GetJobAllocationsQuery, JobAllocationsDto>(new GetJobAllocationsQuery(plant.Job));
+        Assert.Contains("only 600 kg", view.Components[0].Allocations.Single(a => a.LotId == old.LotId).Problem, StringComparison.Ordinal);
+        var refreshed = await db.SendAsync(new RefreshAllocationsCommand(plant.Job));
+        Assert.Equal(1, refreshed.Trimmed);
+        view = await QueryAsync<GetJobAllocationsQuery, JobAllocationsDto>(new GetJobAllocationsQuery(plant.Job));
+        Assert.All(view.Components[0].Allocations, a => Assert.Null(a.Problem));
+        Assert.Equal(600m, view.Components[0].Allocations.Single(a => a.LotId == old.LotId).Quantity);
+
+        var release = view.Components[0].Allocations.Single(a => a.LotId == soon.LotId);
+        await db.SendAsync(new ReleaseAllocationCommand(plant.Job, release.Id, "Saving it for the trial"));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new ReleaseAllocationCommand(plant.Job, release.Id)));
+        Assert.Empty((await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(soon.LotId))).Allocations);
+
+        var site = await db.SendAsync(new RefreshSiteAllocationsCommand(plant.Site));
+        Assert.Equal(1, site.Jobs);
+    }
+
     private async Task<Plant> CreatePlantAsync()
     {
         CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(

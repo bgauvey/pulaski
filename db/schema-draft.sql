@@ -1255,6 +1255,31 @@ CREATE INDEX lot_document_link_lot_ix ON core.lot_document_link (lot_id);
 -- and genealogy are derived from these windows plus residence time.
 -- A batch cut short when a line stopped (D-036), in its own lot. One of an exact-batch material waits on
 -- hold for approval ('pending'); approving releases the lot, rejecting writes it off as scrap.
+-- Stock set aside for a job (D-064): a quantity of one lot, in its base unit, for one of the job's components. Active ones are left
+-- out of what other jobs see as free; consuming the lot into the job uses its allocation up. Released or used up, never deleted.
+CREATE TABLE core.lot_allocation (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    job_id              uuid NOT NULL REFERENCES core.job(id),
+    material_id         uuid NOT NULL REFERENCES core.material(id),
+    lot_id              uuid NOT NULL REFERENCES core.lot(id),
+    quantity            core.qty NOT NULL CHECK (quantity >= 0),    -- still set aside; 0 once used up
+    allocated_qty       core.qty NOT NULL CHECK (allocated_qty > 0), -- as first set aside, plus any top-ups
+    status              text NOT NULL CHECK (status IN ('active','consumed','released')),
+    basis               text NOT NULL CHECK (basis IN ('chosen','recommended')),  -- picked by a person, or taken from the recommendation
+    note                text CHECK (length(note) <= 500),           -- why it was released, or the recommendation's reason
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    created_by          text,
+    ended_at            timestamptz,
+    ended_by            text,
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT lot_allocation_ended_ck CHECK ((status = 'active') = (ended_at IS NULL))
+);
+-- One active allocation of a lot per job; more is a top-up of it.
+CREATE UNIQUE INDEX lot_allocation_active_uq ON core.lot_allocation (job_id, lot_id) WHERE status = 'active';
+CREATE INDEX lot_allocation_lot_ix ON core.lot_allocation (lot_id) WHERE status = 'active';
+CREATE INDEX lot_allocation_site_ix ON core.lot_allocation (site_id, material_id) WHERE status = 'active';
+
 CREATE TABLE core.partial_batch (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     job_id              uuid NOT NULL REFERENCES core.job(id),
@@ -2025,7 +2050,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0028_balance_flow'),
     ('0029_deliveries'),
     ('0030_reason_trees'),
-    ('0031_declaration_reversals');
+    ('0031_declaration_reversals'),
+    ('0032_lot_allocations');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2057,6 +2083,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('production.report', 'Report production and consumption into a job''s runs'),
     ('partial_batch.decide', 'Approve or reject partial batches (not one''s own)'),
     ('production.correct', 'Reverse production reports: their counts, the run''s totals and the lots they made'),
+    ('lot.allocate', 'Allocate lots to jobs, release allocations and refresh them'),
     ('labor.record_own', 'Clock yourself on and off lines and jobs'),
     ('labor.record', 'Record labor for others and check crews onto lines'),
     ('labor.approve', 'Approve a shift''s labor and correct approved labor'),
@@ -2114,6 +2141,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('planner', 'work_order.close'),
     ('planner', 'rate.modify'),
     ('planner', 'materials.manage'),
+    ('planner', 'lot.allocate'),
     ('supervisor', 'overview.view'),
     ('supervisor', 'floor.view'),
     ('supervisor', 'site_settings.view'),
@@ -2129,6 +2157,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('supervisor', 'stock_count.manage'),
     ('supervisor', 'partial_batch.decide'),
     ('supervisor', 'production.correct'),
+    ('supervisor', 'lot.allocate'),
     ('supervisor', 'labor.view'),
     ('supervisor', 'labor.record'),
     ('supervisor', 'labor.approve'),
@@ -2153,6 +2182,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('quality', 'lot.hold'),
     ('quality', 'inventory.correct'),
     ('quality', 'partial_batch.decide'),
+    ('quality', 'lot.allocate'),
     ('quality', 'lot_records.manage'),
     ('quality', 'inventory.backdate'),
     ('quality', 'lot_attributes.manage'),

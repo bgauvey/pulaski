@@ -651,6 +651,43 @@ internal static class InventoryEndpoints
             .WithTags("Inventory")
         .RequireAny(Site.Of(SiteOf.Job), Permissions.InventoryView, Permissions.FloorView);
 
+        // Allocations and lot recommendations (D-064).
+        routes.MapGet("/jobs/{id:guid}/allocations", async Task<Ok<JobAllocationsDto>> (
+            Guid id, IQueryHandler<GetJobAllocationsQuery, JobAllocationsDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetJobAllocationsQuery(id), ct)))
+            .WithTags("Inventory")
+        .RequireAny(Site.Of(SiteOf.Job), Permissions.InventoryView, Permissions.FloorView);
+
+        routes.MapPost("/jobs/{id:guid}/allocations", async Task<Ok<AllocationChangeResponse>> (
+            Guid id, AllocateLotRequest request, ICommandHandler<AllocateLotCommand, AllocationChangeResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new AllocateLotCommand(id, request.LotId, request.Quantity, request.UomId, request.Note), ct)))
+            .WithTags("Inventory")
+        .RequirePermission(Permissions.LotAllocate, Site.Of(SiteOf.Job));
+
+        routes.MapPost("/jobs/{id:guid}/allocations/recommended", async Task<Ok<AllocationChangeResponse>> (
+            Guid id, AllocateRecommendedRequest request, ICommandHandler<AllocateRecommendedCommand, AllocationChangeResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new AllocateRecommendedCommand(id, request.MaterialId), ct)))
+            .WithTags("Inventory")
+        .RequirePermission(Permissions.LotAllocate, Site.Of(SiteOf.Job));
+
+        routes.MapPost("/jobs/{id:guid}/allocations/refresh", async Task<Ok<AllocationChangeResponse>> (
+            Guid id, ICommandHandler<RefreshAllocationsCommand, AllocationChangeResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RefreshAllocationsCommand(id), ct)))
+            .WithTags("Inventory")
+        .RequirePermission(Permissions.LotAllocate, Site.Of(SiteOf.Job));
+
+        routes.MapPost("/jobs/{id:guid}/allocations/{allocationId:guid}/release", async Task<Ok<AllocationChangeResponse>> (
+            Guid id, Guid allocationId, ReleaseAllocationRequest request, ICommandHandler<ReleaseAllocationCommand, AllocationChangeResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ReleaseAllocationCommand(id, allocationId, request.Note), ct)))
+            .WithTags("Inventory")
+        .RequirePermission(Permissions.LotAllocate, Site.Of(SiteOf.Job));
+
+        routes.MapPost("/inventory/allocations/refresh", async Task<Ok<AllocationChangeResponse>> (
+            Guid siteId, ICommandHandler<RefreshSiteAllocationsCommand, AllocationChangeResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RefreshSiteAllocationsCommand(siteId), ct)))
+            .WithTags("Inventory")
+        .RequirePermission(Permissions.LotAllocate, Site.Query());
+
         routes.MapPost("/jobs/{id:guid}/produce", async Task<Created<LotTransactionResponse>> (
             Guid id,
             ProduceLotRequest request,

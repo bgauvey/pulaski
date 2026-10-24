@@ -90,10 +90,13 @@ internal sealed class SearchLotsHandler(IInventoryReadStore store, ILotRecordsRe
     }
 }
 
-internal sealed class GetLotHandler(IInventoryReadStore store) : IQueryHandler<GetLotQuery, LotDto>
+internal sealed class GetLotHandler(IInventoryReadStore store, IAllocationReadStore? allocations = null) : IQueryHandler<GetLotQuery, LotDto>
 {
-    public async Task<LotDto> HandleAsync(GetLotQuery query, CancellationToken cancellationToken) =>
-        await store.GetLotAsync(query.Id, cancellationToken) ?? throw new NotFoundException($"Lot {query.Id} not found.");
+    public async Task<LotDto> HandleAsync(GetLotQuery query, CancellationToken cancellationToken)
+    {
+        var lot = await store.GetLotAsync(query.Id, cancellationToken) ?? throw new NotFoundException($"Lot {query.Id} not found.");
+        return allocations is null ? lot : lot with { Allocations = await allocations.ListOfLotAsync(query.Id, cancellationToken) };
+    }
 }
 
 internal sealed class TraceLotHandler(IInventoryReadStore store) : IQueryHandler<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>

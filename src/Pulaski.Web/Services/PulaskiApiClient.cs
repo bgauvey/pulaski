@@ -988,6 +988,26 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ReportProductionResponse> ReportProductionAsync(Guid jobId, ReportProductionRequest request, CancellationToken ct = default) =>
         SendAsync<ReportProductionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/production", request, ct);
 
+    // Allocations and lot recommendations (D-064)
+
+    public Task<JobAllocationsDto> GetJobAllocationsAsync(Guid jobId, CancellationToken ct = default) =>
+        GetAsync<JobAllocationsDto>($"api/jobs/{jobId}/allocations", ct);
+
+    public Task<AllocationChangeResponse> AllocateLotAsync(Guid jobId, AllocateLotRequest request, CancellationToken ct = default) =>
+        SendAsync<AllocationChangeResponse>(HttpMethod.Post, $"api/jobs/{jobId}/allocations", request, ct);
+
+    public Task<AllocationChangeResponse> AllocateRecommendedAsync(Guid jobId, Guid? materialId, CancellationToken ct = default) =>
+        SendAsync<AllocationChangeResponse>(HttpMethod.Post, $"api/jobs/{jobId}/allocations/recommended", new AllocateRecommendedRequest { MaterialId = materialId }, ct);
+
+    public Task<AllocationChangeResponse> RefreshAllocationsAsync(Guid jobId, CancellationToken ct = default) =>
+        SendAsync<AllocationChangeResponse>(HttpMethod.Post, $"api/jobs/{jobId}/allocations/refresh", new { }, ct);
+
+    public Task<AllocationChangeResponse> ReleaseAllocationAsync(Guid jobId, Guid allocationId, string? note, CancellationToken ct = default) =>
+        SendAsync<AllocationChangeResponse>(HttpMethod.Post, $"api/jobs/{jobId}/allocations/{allocationId}/release", new ReleaseAllocationRequest { Note = note }, ct);
+
+    public Task<AllocationChangeResponse> RefreshSiteAllocationsAsync(Guid siteId, CancellationToken ct = default) =>
+        SendAsync<AllocationChangeResponse>(HttpMethod.Post, $"api/inventory/allocations/refresh?siteId={siteId}", new { }, ct);
+
     public Task<ReverseProductionResponse> ReverseProductionReportAsync(Guid jobId, Guid reportId, ReverseProductionRequest request, CancellationToken ct = default) =>
         SendAsync<ReverseProductionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/production/{reportId}/reverse", request, ct);
 

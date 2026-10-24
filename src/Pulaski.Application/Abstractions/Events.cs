@@ -168,6 +168,9 @@ public static class EventTypes
     public const string LotShipped = "pulaski.lot.shipped.v1";
     public const string LotCorrected = "pulaski.lot.corrected.v1";
     public const string LotReversed = "pulaski.lot.reversed.v1";
+    public const string LotAllocated = "pulaski.lot.allocated.v1";
+    public const string LotAllocationReleased = "pulaski.lot.allocation_released.v1";
+    public const string LotAllocationChanged = "pulaski.lot.allocation_changed.v1";
     public const string LotCountAdjusted = "pulaski.lot.count_adjusted.v1";
     public const string LotAttributeSet = "pulaski.lot.attribute_set.v1";
     public const string ExpectedReceiptCreated = "pulaski.expected_receipt.created.v1";

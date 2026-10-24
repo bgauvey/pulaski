@@ -181,6 +181,9 @@ public sealed record LotDto
     public IReadOnlyList<LotEventDto> History { get; init; } = [];
     public IReadOnlyList<LotLinkDto> Parents { get; init; } = [];
     public IReadOnlyList<LotLinkDto> Children { get; init; } = [];
+
+    /// <summary>Stock of it set aside for jobs (D-064).</summary>
+    public IReadOnlyList<LotAllocationDto> Allocations { get; init; } = [];
 }
 
 /// <summary>A lot found by a trace, <see cref="Depth"/> steps from the start, reached from <see cref="ViaLotId"/>.</summary>

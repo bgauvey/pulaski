@@ -134,4 +134,41 @@ public class ExpectedReceiptTests
         Assert.Equal(("published", 150m), (line.TimeSource, line.FromStock));
         Assert.False(report.LiveTiming);
     }
+
+    [Fact]
+    public async Task Stock_allocated_to_a_later_job_covers_it_first_and_isnt_free_for_an_earlier_one()
+    {
+        ComponentDemandRow Need(string number, Guid job, double hours) => new()
+        {
+            JobId = job,
+            JobNumber = number,
+            JobStatus = "dispatched",
+            LineCode = "EXT-01",
+            NeededFrom = Now.AddHours(hours),
+            PlannedStart = Now.AddHours(hours),
+            MaterialId = _resin.Id,
+            MaterialCode = _resin.Code,
+            MaterialName = "PVC",
+            BaseUomId = _kg.Id,
+            BaseUomCode = "kg",
+            PlannedQty = 100m,
+            UomId = _kg.Id,
+            UomCode = "kg",
+        };
+        var early = Guid.CreateVersion7();
+        var late = Guid.CreateVersion7();
+        Inventory.Demand.Add(Need("WO-EARLY", early, 2));
+        Inventory.Demand.Add(Need("WO-LATE", late, 5));
+        Inventory.Availability.Add(new MaterialAvailabilityRow { MaterialId = _resin.Id, Available = 100m });
+        var allocations = new InMemoryAllocations();
+        await allocations.InsertAsync(new LotAllocation(Guid.CreateVersion7(), _site, late, _resin.Id, Guid.CreateVersion7(), 100m, 100m,
+            AllocationStatus.Active, AllocationBasis.Chosen), "x", Now, CancellationToken.None);
+
+        var report = await new GetShortagesHandler(Inventory, _f.Stores.Units, _f.Time, null, Receipts, allocations)
+            .HandleAsync(new GetShortagesQuery(_site, LiveTiming: false), CancellationToken.None);
+
+        var resin = Assert.Single(report.Materials);
+        Assert.Equal(100m, resin.Shortfall);
+        Assert.Equal(0m, resin.Lines.Single(l => l.JobId == early).FromStock);
+    }
 }

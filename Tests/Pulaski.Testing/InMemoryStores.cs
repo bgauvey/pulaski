@@ -93,6 +93,8 @@ public sealed class InMemoryStores
 
     public InMemoryDeliveries Deliveries { get; } = new();
 
+    public InMemoryAllocations Allocations { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -150,6 +152,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IBadgeHasher>();
         services.RemoveAll<IQualificationReadStore>();
         services.RemoveAll<IDeliveryStore>();
+        services.RemoveAll<IAllocationRepository>();
+        services.RemoveAll<IAllocationReadStore>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -205,6 +209,8 @@ public sealed class InMemoryStores
         services.AddSingleton<ITerminalReadStore>(Terminals);
         services.AddSingleton<IBadgeHasher>(new ReversingBadgeHasher());
         services.AddSingleton<IDeliveryStore>(Deliveries);
+        services.AddSingleton<IAllocationRepository>(Allocations);
+        services.AddSingleton<IAllocationReadStore>(Allocations);
         return services;
     }
 }

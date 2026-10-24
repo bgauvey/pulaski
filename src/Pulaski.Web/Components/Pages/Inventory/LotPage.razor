@@ -198,6 +198,23 @@
         <BalanceAllocationPanel @key="l.Id" LotId="l.Id" TimeZone="@tz" />
     }
 
+    @if (detail.Allocations.Count > 0)
+    {
+        <section class="inv-section" aria-labelledby="allocations-title">
+            <h2 id="allocations-title">Allocated to jobs</h2>
+            <ul class="small mb-0">
+                @foreach (var a in detail.Allocations)
+                {
+                    <li @key="a.Id">
+                        <ScreenLink Href="@($"inventory/jobs/{a.JobId}")" Permission="@PermissionCodes.InventoryView">@a.JobNumber</ScreenLink>:
+                        @InventoryView.Qty(a.Quantity) @a.UomCode set aside
+                    </li>
+                }
+            </ul>
+            <p class="small text-muted mb-0">Other jobs can still consume it, with a warning; consuming it into its job uses the allocation up.</p>
+        </section>
+    }
+
     <section class="inv-section" aria-labelledby="history-title">
         <h2 id="history-title">History</h2>
         <div class="table-panel">

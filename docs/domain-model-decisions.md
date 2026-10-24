@@ -486,7 +486,7 @@ What a plant needs to keep floor stock right without the ERP, beyond receiving a
 - **Aging:** on-hand stock by how long ago each lot was received or made: up to 30, 31–90, 91–180 and over 180 days, per material.
 - **Export:** stock, lots, the journal (up to 10,000 rows) and both reports download as CSV.
 
-**Deferred:** allocation and picking suggestions (with execution). Containers and labels are D-059. Lot attributes and certificates are D-056.
+**Deferred:** picking lists. Allocation and lot suggestions are D-064. Containers and labels are D-059. Lot attributes and certificates are D-056.
 
 ## Indistinguishable lots (D-031, proposed)
 
@@ -1383,6 +1383,36 @@ The job page lists the report as reversed (correction rows aren't listed). Repor
 **Also fixed.** Production by shift (D-044) now leaves out machine counts, as D-050 intended.
 
 **Not done.** Reversing moves, holds and shipments that aren't the latest movement, lot corrections, packing; undoing a chain of dependent movements in one step; editing a report in place.
+
+## Lot allocations and recommendations (D-064, proposed)
+
+Issue #32. Stock couldn't be set aside for a job, and nothing suggested which lot to use.
+
+**Allocation.** `core.lot_allocation`: a quantity of one lot, in its base unit, for one of a job's planned components. There is one active row per job and lot (allocating more tops it up). It is released or used up, never deleted. It never changes the lot: final consumption stays under the inventory rules (D-027). Allocating needs `lot.allocate` (Planner, Supervisor, Quality).
+
+- **Reserve, warn others.** Active allocations are left out of what other jobs see as free: in recommendations, and in shortages, where a job's allocation is taken off its need and out of the shared pool (`GetShortagesHandler`, `ListAllocatedAsync`: at most what the lot holds, available stock only).
+- Consuming the lot into its job uses the allocation up (`AllocationUse.ConsumeAsync`, after the job and lot are locked). Consuming it into another job is allowed with an `allocated_elsewhere` warning.
+
+**Recommendation.** `LotRecommendation.Recommend` (pure, in the domain) suggests lots for what is still needed (need = planned in the base unit less consumed less allocated):
+
+- only available lots, unexpired at the job's need time (its planned start, or now), with free stock (quantity less what other jobs and this one hold);
+- ordered first expiry first out, then oldest receipt, then label;
+- each pick says why ("Expires 3 Nov 2026, the earliest; received …; 40 kg free"), and each lot left out says why (held, expires first, allocated elsewhere, not needed).
+
+`AllocationPlanner.Plan` works out every component from a `JobAllocationSource` (job, needs, active allocations, candidate lots). The screen and the commands share it.
+
+**Refresh, on demand.** There is no background service: an allocation shows its problem on read (`AllocationProblem`: on hold, expires before the need time, the lot holds less than is allocated). `RefreshAllocationsCommand` releases what can't be used, trims what a lot can partly give, then tops up from the recommendations. `RefreshSiteAllocationsCommand` locks every open job of the site in id order first, then refreshes the earliest need first, so the soonest jobs get the lots that expire soonest. `AllocateRecommendedCommand` only tops up.
+
+**Locking.** Job, then lots in id order, then their active allocations in id order, as declarations lock (D-027). A site refresh holds every job lock before any lot, so it can't deadlock with a declaration.
+
+**Routes.**
+- `GET /api/jobs/{id}/allocations`
+- `POST /api/jobs/{id}/allocations`, plus `/recommended`, `/refresh` and `/{allocationId}/release`
+- `POST /api/inventory/allocations/refresh?siteId=`
+
+Events: `pulaski.lot.allocated.v1`, `…allocation_released.v1`, `…allocation_changed.v1`.
+
+**Not done.** Automatic refresh on stock or schedule changes, preference for locations near the line or whole lots, picking lists, allocating substitutions, hard reservations.
 
 ## Application architecture
 

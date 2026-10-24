@@ -985,6 +985,25 @@ Until Pulaski records production from the machines, operators declare it here. M
 
 You can also consume from a lot's own page, and declare production from the Stock tab (choose the job there). Declaring production here is the same as reporting good output on the Floor, with the same rate check; report scrap on the Floor or the job's page.
 
+### Allocate lots to a job
+
+Allocating sets stock aside for a job before it runs, so the floor knows which lots to bring and other jobs don't count on them. It doesn't move or use anything: consumption is still recorded as above.
+
+1. Open the job's inventory page (from the **Jobs** tab, or a job on the **Shortages** tab, which lists jobs not started yet too).
+2. Under **Allocations and suggested lots**, each component shows what it needs, what has been consumed and allocated, and what is **still to allocate**.
+3. The **suggested lots** cover what is still needed, the one that expires first first, then the oldest; each says why (*Expires 3 Nov 2026, the earliest; received 12 Oct 2026; 40 kg free*).
+4. Click **Allocate** on a suggestion, or **Allocate all suggested** for every component.
+5. **Release** gives an allocation back. **Refresh** puts the job's allocations right after stock or the schedule has changed (see below).
+6. On the **Shortages** tab, **Refresh allocations** does the same for every open job of the site, the job needed soonest first.
+
+**In detail**
+
+- **What is suggested.** Only available lots of the component at the job's site, with stock not set aside for other jobs. Under **lots not suggested**, each other lot says why: on hold or in quarantine, expires before the job needs it, all allocated to other jobs, or not needed because the lots before it cover the need. *When the job needs it* is its planned start, or now once that has passed or it is running.
+- **What allocated means.** The stock stays where it is and can still be moved. Other jobs' suggestions and the **Shortages** tab treat it as taken: it covers its own job first. Consuming the lot into its job uses the allocation up. Consuming it into **another** job is allowed, with a warning naming the job it was allocated to; refresh that job afterwards.
+- **When an allocation goes wrong.** If the lot is put on hold, would expire before the job needs it, or no longer holds what is allocated (written off, shipped, consumed elsewhere), the allocation shows why in amber. Nothing changes until someone clicks **Refresh**. Refresh then releases what can't be used, trims what a lot can only partly give, and allocates what is still needed from the suggestions.
+- One allocation per lot and job: allocating more of the same lot adds to it. Only a job's planned components are allocated, in their base unit, and not to a job that is completed, closed or cancelled.
+- **Who.** Allocating, releasing and refreshing need *lot.allocate* (Planner, Supervisor and Quality to start with). Anyone who can see inventory sees allocations and suggestions, and a lot's page lists the jobs it is allocated to. Each change is recorded as an event.
+
 ### Trace a lot
 
 On a lot's page, **Genealogy** first shows the lots it was **made from** and the lots made from it (**used in**). Click **Trace back** to see everything it was made from, all the way up, or **Trace forward** to see everything made from it, all the way down. Each lot is indented under the one it was reached from; click any lot to open it.
@@ -1024,6 +1043,7 @@ Each row shows **Needed** (what the jobs still need: planned less consumed), **A
 
 - **Order.** Jobs take supply in the order they are needed, then job number; jobs with no time come last. With live timing a job's time is where the schedule projects it now, so a job that has slipped or moved up is ordered by its new time (point at *as scheduled now* to see its published start). Jobs planned to a department, and jobs not on the schedule, keep their published start or hold-until.
 - With a horizon, jobs needed after it, and jobs with no time at all, are left out; the horizon uses the same timing.
+- **Allocations.** Stock [allocated](#allocate-lots-to-a-job) to a job covers that job first and isn't free for the others.
 - **Supply.** Each job takes **available** stock first, then incoming deliveries due by the time it needs them. A delivery due after a job needs the material doesn't cover that job, however much arrives. A job already under way needs what it has left from now, and a late delivery counts as arriving now. Held stock isn't counted.
 - **Not purchasing.** Nothing is suggested, ordered or rescheduled: deliveries are only what the ERP or a person said is coming, and ordering stays in the ERP.
 - A component planned in a unit that doesn't convert to its base unit is left out, with an amber note naming the job.
@@ -1469,10 +1489,10 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | Role | Can change |
 | --- | --- |
 | **Administrator** | Everything, at every site, including users and roles. |
-| **Planner** | The schedule (place, sequence, pin, assign and cancel jobs); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; materials. |
-| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches. |
+| **Planner** | The schedule (place, sequence, pin, assign and cancel jobs); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; materials; allocating lots to jobs. |
+| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches. |
 | **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off. |
-| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements. |
+| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements. |
 | **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; lot attribute definitions; the site's settings. |
 | **Auditor** | Correct inventory, including reversing consumption, splits, merges and transfers; reverse production reports; stock counts; back-date inventory movements. Can't plan or run jobs. |
 | **Process engineer** | Processes, BOMs and which lines can run each material. |
@@ -2023,11 +2043,12 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
 - **Batches:** the batch size is per material, not per line (a 50 kg mixer next to a 200 kg one isn't modelled). A replacement job is always rounded up to whole batches; to make fewer, cancel it. Orders from the ERP aren't imported yet, so there is no rule yet for an ERP order that isn't whole batches. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
-- **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, scanning 2D codes or supplier barcodes beyond reading their text, setting stock aside for a job, and suggestions of which lot to use first. Moves, holds, splits, merges, shipments and counts can't be back-dated (only quantity movements can, by up to 31 days), and a lot's location and status on a past date aren't reconstructed. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
+- **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, and scanning 2D codes or supplier barcodes beyond reading their text. Moves, holds, splits, merges, shipments and counts can't be back-dated (only quantity movements can, by up to 31 days), and a lot's location and status on a past date aren't reconstructed. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
 - **Reversing:** moves, holds and shipments only when they are the lot's latest movement; corrections of lot details, packing and unpacking aren't reversed (put them right with another movement). A lot that joined a balance where lots mix can't be taken back out as itself. Reversal is one movement at a time: there is no undoing a chain of dependent movements in one step.
 - **Reason groups** only tidy the lists people choose from: reports (OEE *Where the time went*, stops, the journal) still list each reason, not totals by group. A reason can't be turned into a group, or a group into a reason.
 - **Genealogy through a silo is an estimate** from the declared movements: a level tag can be bound to a silo, but its readings aren't used yet to confirm when it was empty or how it flowed. A reversed movement and its reversal are left out of the estimate, as if neither happened.
 - **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
+- **Allocations are kept up to date by hand:** nothing refreshes them when stock moves or the schedule changes; click **Refresh**. Suggestions don't prefer lots near the line, lots already in a container, or whole lots, and there are no picking lists; a substitution (a material the job doesn't plan) isn't allocated. Allocating doesn't stop another job consuming the stock: it only warns.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP; there are no lead times, purchase suggestions or partial receipts against one delivery (receiving closes it). The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** still shows no live machine state, reported counts, good output, scrap, downtime, quality, lots or labor. OEE is available for the current shift from the machine/OEE report; its timeline strip remains a rolling 24 hours rather than the current shift.
 - **Notes** can only be written when the order is created.
@@ -2110,6 +2131,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 
 | Term | Meaning |
 | --- | --- |
+| **Allocation** | Stock of a lot set aside for a job's component. Other jobs see it as taken; consuming it into its job uses it up. |
 | **Balance** | The one quantity of a material at a location, with no lot number: for a material that isn't lot-tracked, or at a location where lots mix. |
 | **Base unit** | The unit a material is stocked in; also the base unit of a kind of unit (kg, m, ea…). |
 | **Baseline** | A job's times as published when its order was dispatched; the plan you're measured against. |

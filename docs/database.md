@@ -295,6 +295,26 @@ Groups materials (e.g. all resins), so processes and changeover rules can match 
 | `default_process_id` | uuid → process | yes | The process order creation pre-selects for it (D-023), among those whose scope covers it; the planner may pick another. Can only be set to a process that makes the material. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
+### core.lot_allocation — stock set aside for a job (D-064) · *In use*
+
+A quantity of one lot, in its base unit, kept for one of a job's planned components. Active rows are left out of what other jobs see as free (recommendations, shortages); consuming the lot into the job lowers its row (to `consumed` at zero). Released or used up, never deleted. Changes lock the job, then the lots in id order, then their active allocations (`FOR UPDATE`, id order), as declarations do (D-027).
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The job's site. |
+| `job_id` | uuid → job | no | The job it is for. |
+| `material_id` | uuid → material | no | The component (the lot's material). |
+| `lot_id` | uuid → lot | no | The lot. One active allocation per job and lot (`lot_allocation_active_uq`); more is a top-up. |
+| `quantity` | qty | no | Still set aside, in the lot's base unit; 0 once used up. |
+| `allocated_qty` | qty | no | As set aside, plus any top-ups. |
+| `status` | text | no | `active`, `consumed` (used up by consumption into its job) or `released`. |
+| `basis` | text | no | `chosen` by a person, or `recommended` (taken from the suggestion). |
+| `note` | text | yes | The suggestion's reason, or why it was released or trimmed; at most 500 characters. |
+| `created_at`, `created_by` | timestamptz, text | no, yes | When and by whom. |
+| `ended_at`, `ended_by` | timestamptz, text | yes | When and by whom it stopped being active; set exactly when not active (`lot_allocation_ended_ck`). |
+| `updated_at` | timestamptz | no | Last change. |
+
 ### core.partial_batch — batches cut short when a line stopped (D-036) · *In use*
 
 A partial batch is reported only as a run ends with a reason (or later, into a run that did), at most one per run (`partial_batch_run_uq`, a unique index that leaves out `reversed` rows), in a lot of its own. Under the `exact` rule it waits on hold for a decision. Reversing its report (D-063) marks it `reversed`, so the run can report another.

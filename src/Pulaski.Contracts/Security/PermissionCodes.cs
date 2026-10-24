@@ -38,6 +38,7 @@ public static class PermissionCodes
     public const string LotShip = "lot.ship";
     public const string LotHold = "lot.hold";
     public const string InventoryCorrect = "inventory.correct";
+    public const string LotAllocate = "lot.allocate";
     public const string StockCount = "stock_count.manage";
     public const string LotRecords = "lot_records.manage";
     public const string InventoryBackdate = "inventory.backdate";
