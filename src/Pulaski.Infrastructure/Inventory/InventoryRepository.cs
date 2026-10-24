@@ -207,20 +207,24 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         UPDATE core.stock_count_line SET counted_qty = @CountedQty, counted_at = @CountedAt, counted_by = @CountedBy WHERE id = @Id
         """;
 
-    private const string GetReasonCodeForUpdate = """
-        SELECT id, site_id, reason_kind AS kind, code, name, requires_comment, sort_order, is_active, utilization_class, xmin::text::bigint AS version
-        FROM core.reason_code WHERE id = @Id FOR UPDATE
+    private const string GetReasonKind = "SELECT reason_kind FROM core.reason_code WHERE id = @Id";
+
+    // The whole kind, in id order, so tree changes of a kind serialize without deadlocks (D-062).
+    private const string LockReasonTree = """
+        SELECT id, site_id, reason_kind AS kind, code, name, requires_comment, sort_order, is_active, utilization_class, parent_id,
+               NOT is_selectable AS is_group, xmin::text::bigint AS version
+        FROM core.reason_code WHERE reason_kind = @Kind ORDER BY id FOR UPDATE
         """;
 
     private const string InsertReasonCode = """
-        INSERT INTO core.reason_code (id, site_id, reason_kind, code, name, requires_comment, sort_order, is_active, utilization_class)
-        VALUES (@Id, @SiteId, @Kind, @Code, @Name, @RequiresComment, @SortOrder, @IsActive, @UtilizationClass)
+        INSERT INTO core.reason_code (id, site_id, reason_kind, code, name, requires_comment, sort_order, is_active, utilization_class, parent_id, is_selectable)
+        VALUES (@Id, @SiteId, @Kind, @Code, @Name, @RequiresComment, @SortOrder, @IsActive, @UtilizationClass, @ParentId, NOT @IsGroup)
         RETURNING xmin::text::bigint
         """;
 
     private const string UpdateReasonCode = """
         UPDATE core.reason_code SET name = @Name, requires_comment = @RequiresComment, sort_order = @SortOrder, is_active = @IsActive,
-            utilization_class = @UtilizationClass
+            utilization_class = @UtilizationClass, parent_id = @ParentId
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -407,10 +411,12 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
     public Task UpdateStockCountLineAsync(StockCountLine line, CancellationToken cancellationToken) =>
         session.ExecuteAsync(UpdateCountLine, new { line.Id, line.CountedQty, line.CountedAt, line.CountedBy }, cancellationToken);
 
-    public async Task<Versioned<ReasonCode>?> GetReasonCodeForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
-        await session.QuerySingleOrDefaultAsync<ReasonRow>(GetReasonCodeForUpdate, new { Id = id }, cancellationToken) is { } r
-            ? new(new ReasonCode(r.Id, r.SiteId, r.Kind, r.Code, r.Name, r.RequiresComment, r.SortOrder, r.IsActive, r.UtilizationClass), r.Version)
-            : null;
+    public Task<string?> GetReasonKindAsync(Guid id, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<string>(GetReasonKind, new { Id = id }, cancellationToken);
+
+    public async Task<IReadOnlyList<Versioned<ReasonCode>>> LockReasonTreeAsync(string kind, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<ReasonRow>(LockReasonTree, new { Kind = kind }, cancellationToken)).Select(r => new Versioned<ReasonCode>(
+            new ReasonCode(r.Id, r.SiteId, r.Kind, r.Code, r.Name, r.RequiresComment, r.SortOrder, r.IsActive, r.UtilizationClass, r.ParentId, r.IsGroup), r.Version))];
 
     public Task<long> InsertReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(InsertReasonCode, reason, cancellationToken);
@@ -560,6 +566,8 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         public int SortOrder { get; init; }
         public bool IsActive { get; init; }
         public string? UtilizationClass { get; init; }
+        public Guid? ParentId { get; init; }
+        public bool IsGroup { get; init; }
         public long Version { get; init; }
     }
 }

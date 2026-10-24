@@ -850,6 +850,9 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> UpdateReasonCodeAsync(Guid id, UpdateReasonCodeRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/reason-codes/{id}", request, ct);
 
+    public Task<VersionResponse> MoveReasonCodeAsync(Guid id, MoveReasonCodeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/reason-codes/{id}/parent", request, ct);
+
     public Task<IReadOnlyList<StockOnDateDto>> StockOnDateAsync(Guid siteId, DateTimeOffset at, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<StockOnDateDto>>(Query("api/inventory/reports/stock-on-date", ("siteId", siteId), ("at", Iso(at))), ct);
 

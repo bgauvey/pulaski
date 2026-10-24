@@ -450,13 +450,15 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         ORDER BY m.code, l.lot_number
         """;
 
+    // In tree order (D-062): each group followed by what is in it.
     private const string AllReasonCodesSql = """
         SELECT r.id, r.site_id, s.code AS site_code, r.reason_kind AS kind, r.code, r.name, r.requires_comment,
-               r.sort_order, r.is_active, r.is_selectable, r.utilization_class, r.xmin::text::bigint AS version
+               r.sort_order, r.is_active, r.is_selectable, r.utilization_class, r.parent_id, t.depth, t.group_path, r.xmin::text::bigint AS version
         FROM core.reason_code r
+        JOIN core.reason_tree() t ON t.id = r.id
         LEFT JOIN core.equipment s ON s.id = r.site_id
         WHERE @SiteId::uuid IS NULL OR r.site_id IS NULL OR r.site_id = @SiteId
-        ORDER BY r.reason_kind, r.sort_order, r.name
+        ORDER BY r.reason_kind, t.sort_key
         """;
 
     // Each lot's quantity at the time: its movements that count by then, by effective time, whenever they were recorded (D-057),
@@ -498,12 +500,14 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         ORDER BY min(l.created_at), m.code
         """;
 
+    // Only reasons that can be chosen, each with the groups above it (D-062), in tree order.
     private const string ReasonCodesSql = """
-        SELECT id, reason_kind AS kind, code, name, requires_comment, utilization_class
-        FROM core.reason_code
-        WHERE is_active AND is_selectable AND reason_kind = @Kind
-          AND (site_id IS NULL OR site_id = @SiteId)
-        ORDER BY sort_order, name
+        SELECT r.id, r.reason_kind AS kind, r.code, r.name, r.requires_comment, r.utilization_class, t.group_path
+        FROM core.reason_code r
+        JOIN core.reason_tree() t ON t.id = r.id
+        WHERE r.is_active AND r.is_selectable AND r.reason_kind = @Kind
+          AND (r.site_id IS NULL OR r.site_id = @SiteId)
+        ORDER BY t.sort_key
         """;
 
     public async Task<IReadOnlyList<MaterialStockDto>> ListStockAsync(StockFilter filter, CancellationToken cancellationToken)

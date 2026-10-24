@@ -198,8 +198,21 @@ public sealed record CreateReasonCodeRequest
     public bool RequiresComment { get; init; }
     public int SortOrder { get; init; }
 
-    /// <summary>Required for a utilization reason (D-050): <c>runtime</c>, <c>downtime</c> or <c>planned</c>.</summary>
+    /// <summary>Required for a utilization reason (D-050): <c>runtime</c>, <c>downtime</c> or <c>planned</c>; none for a group.</summary>
     public string? UtilizationClass { get; init; }
+
+    /// <summary>A group holds other reasons and is never chosen (D-062); fixed once created.</summary>
+    public bool IsGroup { get; init; }
+
+    /// <summary>The group to file it under; blank: at the top.</summary>
+    public Guid? ParentId { get; init; }
+}
+
+/// <summary>Files a reason under a group of its kind, or at the top when <see cref="ParentId"/> is blank (D-062).</summary>
+public sealed record MoveReasonCodeRequest
+{
+    public long Version { get; init; }
+    public Guid? ParentId { get; init; }
 }
 
 public sealed record UpdateReasonCodeRequest

@@ -204,7 +204,7 @@ else
                     <table class="table align-middle">
                         <thead><tr><th>Offered</th><th>Code</th><th>Name</th><th>Class</th></tr></thead>
                         <tbody>
-                            @foreach (var r in _reasons.OrderBy(r => r.UtilizationClass).ThenBy(r => r.Code))
+                            @foreach (var r in _reasons.OrderBy(r => r.UtilizationClass))
                             {
                                 var mapped = Mapped.Contains(r.Id);
                                 <tr @key="r.Id">
@@ -217,7 +217,7 @@ else
                                         }
                                     </td>
                                     <td class="fw-semibold">@r.Code</td>
-                                    <td>@r.Name</td>
+                                    <td>@Display.ReasonLabel(r)</td>
                                     <td>@MachineProfileView.ClassLabel(r.UtilizationClass)</td>
                                 </tr>
                             }

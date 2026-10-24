@@ -11,6 +11,8 @@
     <p class="text-muted mb-0">
         The reasons people choose when they write stock up or off, hold a lot, report scrap or end a run, and the utilization reasons a machine's
         time is coded with. A code and its kind can't change once created, because history refers to them; switch a reason off instead of reusing it.
+        File reasons under <strong>groups</strong> to keep long lists tidy: people choose from the reasons, listed under their groups, never a group itself.
+        Moving a reason doesn't change what history recorded.
     </p>
 </div>
 
@@ -38,7 +40,18 @@
             <option value="@site.Id">@site.Code only</option>
         }
     </select>
-    @if (_kind == Utilization)
+    <select class="form-select w-auto" aria-label="Under" @bind="_newParentId">
+        <option value="">At the top</option>
+        @foreach (var g in ReasonTreeView.Groups(_reasons ?? [], _kind, null, _newSiteId))
+        {
+            <option value="@g.Id">Under @ReasonTreeView.GroupLabel(g)</option>
+        }
+    </select>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="new-group" @bind="_newIsGroup" />
+        <label class="form-check-label" for="new-group">Group</label>
+    </div>
+    @if (_kind == Utilization && !_newIsGroup)
     {
         <select class="form-select w-auto" aria-label="Class" @bind="_newClass">
             @foreach (var c in Classes)
@@ -47,11 +60,16 @@
             }
         </select>
     }
-    <div class="form-check">
-        <input class="form-check-input" type="checkbox" id="new-comment" @bind="_newRequiresComment" />
-        <label class="form-check-label" for="new-comment">Needs a comment</label>
-    </div>
-    <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_newCode) || string.IsNullOrWhiteSpace(_newName))">Add @Display.Label(_kind).ToLowerInvariant() reason</button>
+    @if (!_newIsGroup)
+    {
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="new-comment" @bind="_newRequiresComment" />
+            <label class="form-check-label" for="new-comment">Needs a comment</label>
+        </div>
+    }
+    <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_newCode) || string.IsNullOrWhiteSpace(_newName))">
+        Add @Display.Label(_kind).ToLowerInvariant() @(_newIsGroup ? "group" : "reason")
+    </button>
 </form>
 }
 
@@ -86,6 +104,7 @@ else
                     <tr>
                         <th>Code</th>
                         <th>Name</th>
+                        <th>Under</th>
                         <th>Applies to</th>
                         @if (_kind == Utilization)
                         {
@@ -101,23 +120,52 @@ else
                     @foreach (var r in shown)
                     {
                         var edit = Edit(r);
+                        var isGroup = !r.IsSelectable;
                         <tr @key="r.Id" class="@(r.IsActive ? "" : "text-muted")">
-                            <td class="fw-semibold">@r.Code</td>
-                            <td><input class="form-control form-control-sm" maxlength="100" aria-label="Name of @r.Code" value="@edit.Name" @onchange="e => Change(r, x => x with { Name = Text(e) })" disabled="@(!r.IsSelectable)" /></td>
+                            <td class="fw-semibold text-nowrap" style="padding-left: @(0.5 + r.Depth * 1.25)rem">
+                                @r.Code
+                                @if (isGroup)
+                                {
+                                    <span class="chip chip-muted ms-1">group</span>
+                                }
+                            </td>
+                            <td><input class="form-control form-control-sm @(isGroup ? "fw-semibold" : "")" maxlength="100" aria-label="Name of @r.Code" value="@edit.Name" @onchange="e => Change(r, x => x with { Name = Text(e) })" /></td>
+                            <td>
+                                <select class="form-select form-select-sm" aria-label="Group of @r.Code" value="@(edit.ParentId?.ToString() ?? "")"
+                                        @onchange="e => Change(r, x => x with { ParentId = Guid.TryParse(Text(e), out var id) ? id : null })">
+                                    <option value="">At the top</option>
+                                    @foreach (var g in ReasonTreeView.Groups(_reasons, _kind, r, r.SiteId))
+                                    {
+                                        <option value="@g.Id">@ReasonTreeView.GroupLabel(g)</option>
+                                    }
+                                </select>
+                            </td>
                             <td>@(r.SiteCode ?? "Every site")</td>
                             @if (_kind == Utilization)
                             {
                                 <td>
-                                    <select class="form-select form-select-sm" aria-label="Class of @r.Code" value="@edit.UtilizationClass"
-                                            @onchange="e => Change(r, x => x with { UtilizationClass = Text(e) })">
-                                        @foreach (var c in Classes)
-                                        {
-                                            <option value="@c">@ClassLabel(c)</option>
-                                        }
-                                    </select>
+                                    @if (isGroup)
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                    else
+                                    {
+                                        <select class="form-select form-select-sm" aria-label="Class of @r.Code" value="@edit.UtilizationClass"
+                                                @onchange="e => Change(r, x => x with { UtilizationClass = Text(e) })">
+                                            @foreach (var c in Classes)
+                                            {
+                                                <option value="@c">@ClassLabel(c)</option>
+                                            }
+                                        </select>
+                                    }
                                 </td>
                             }
-                            <td><input class="form-check-input" type="checkbox" aria-label="@r.Code needs a comment" checked="@edit.RequiresComment" @onchange="e => Change(r, x => x with { RequiresComment = e.Value is true })" /></td>
+                            <td>
+                                @if (!isGroup)
+                                {
+                                    <input class="form-check-input" type="checkbox" aria-label="@r.Code needs a comment" checked="@edit.RequiresComment" @onchange="e => Change(r, x => x with { RequiresComment = e.Value is true })" />
+                                }
+                            </td>
                             <td class="inv-num"><input type="number" class="form-control form-control-sm text-end" style="width: 5rem" min="0" max="10000" aria-label="Order of @r.Code" value="@edit.SortOrder" @onchange="e => Change(r, x => x with { SortOrder = int.TryParse(Text(e), out var n) ? n : x.SortOrder })" /></td>
                             <td><input class="form-check-input" type="checkbox" aria-label="@r.Code active" checked="@edit.IsActive" @onchange="e => Change(r, x => x with { IsActive = e.Value is true })" /></td>
                             <td class="text-end">
@@ -148,6 +196,8 @@ else
     private string? _newCode;
     private string? _newName;
     private Guid? _newSiteId;
+    private Guid? _newParentId;
+    private bool _newIsGroup;
     private bool _newRequiresComment;
     private string _newClass = "downtime";
     private bool _saving;
@@ -211,34 +261,49 @@ else
     {
         await RunAsync(async () =>
         {
-            var nextOrder = (_reasons ?? []).Where(r => r.Kind == _kind).Select(r => r.SortOrder).DefaultIfEmpty(0).Max() + 10;
+            var nextOrder = (_reasons ?? []).Where(r => r.Kind == _kind && r.ParentId == _newParentId).Select(r => r.SortOrder).DefaultIfEmpty(0).Max() + 10;
             await Api.CreateReasonCodeAsync(new CreateReasonCodeRequest
             {
                 SiteId = _newSiteId,
                 Kind = _kind,
                 Code = _newCode!,
                 Name = _newName!,
-                RequiresComment = _newRequiresComment,
+                RequiresComment = !_newIsGroup && _newRequiresComment,
                 SortOrder = Math.Min(nextOrder, 10_000),
-                UtilizationClass = _kind == Utilization ? _newClass : null,
+                UtilizationClass = _kind == Utilization && !_newIsGroup ? _newClass : null,
+                IsGroup = _newIsGroup,
+                ParentId = _newParentId,
             });
             _newCode = _newName = null;
-            _newRequiresComment = false;
+            _newRequiresComment = _newIsGroup = false;
         });
     }
 
+    // A move and the other changes are separate calls: the move first, then the rest with the version it returns.
     private async Task SaveAsync(ReasonCodeAdminDto reason)
     {
         var edit = Edit(reason);
-        await RunAsync(() => Api.UpdateReasonCodeAsync(reason.Id, new UpdateReasonCodeRequest
+        await RunAsync(async () =>
         {
-            Version = reason.Version,
-            Name = edit.Name,
-            RequiresComment = edit.RequiresComment,
-            SortOrder = edit.SortOrder,
-            IsActive = edit.IsActive,
-            UtilizationClass = edit.UtilizationClass,
-        }));
+            var version = reason.Version;
+            if (edit.ParentId != reason.ParentId)
+            {
+                version = (await Api.MoveReasonCodeAsync(reason.Id, new MoveReasonCodeRequest { Version = version, ParentId = edit.ParentId })).Version;
+            }
+
+            if (edit with { ParentId = reason.ParentId } != reason)
+            {
+                await Api.UpdateReasonCodeAsync(reason.Id, new UpdateReasonCodeRequest
+                {
+                    Version = version,
+                    Name = edit.Name,
+                    RequiresComment = edit.RequiresComment,
+                    SortOrder = edit.SortOrder,
+                    IsActive = edit.IsActive,
+                    UtilizationClass = edit.UtilizationClass,
+                });
+            }
+        });
     }
 
     private async Task RunAsync(Func<Task> action)

@@ -208,6 +208,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   lock per sink), then POSTs CloudEvents JSON with `Idempotency-Key` = event id and an HMAC signature. `DeliveryPolicy.AfterAttempt`: 2xx
   delivered, 4xx (not 408/425/429) failed now, else backoff to `MaxAttempts`. A subject's later rows are held behind a pending/failed one.
   Configure → Integrations retries/skips (`integrations.view` / `integrations.manage`). At least once; receivers dedupe.
+- Reason trees (D-062, proposed): groups (`is_selectable` false, fixed at creation, no class) hold reasons of their kind; `ReasonTree`
+  checks placement (same kind, parent a group, no cycles, scope, ≤ 5 levels) and switching off. Tree changes lock the whole kind in id
+  order (`LockReasonTreeAsync`); `MoveReasonCodeCommand` / `PUT /reason-codes/{id}/parent`. `core.reason_tree()` gives depth, `group_path`,
+  `sort_key`; pickers show the path. History refers to reason ids, so moves never change it.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

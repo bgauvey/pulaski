@@ -854,7 +854,7 @@
                 <option value="@Guid.Empty">@(_reasons.Count == 0 ? "No reasons set up: load db/seed-reasons.sql" : "Choose a reason…")</option>
                 @foreach (var r in _reasons)
                 {
-                    <option value="@r.Id">@r.Name</option>
+                    <option value="@r.Id">@Display.ReasonLabel(r)</option>
                 }
             </select>
         </div>

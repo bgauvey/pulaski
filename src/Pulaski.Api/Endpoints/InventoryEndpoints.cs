@@ -620,7 +620,8 @@ internal static class InventoryEndpoints
             CancellationToken ct) =>
         {
             var created = await handler.HandleAsync(
-                new CreateReasonCodeCommand(request.SiteId, request.Kind, request.Code, request.Name, request.RequiresComment, request.SortOrder, request.UtilizationClass), ct);
+                new CreateReasonCodeCommand(request.SiteId, request.Kind, request.Code, request.Name, request.RequiresComment, request.SortOrder, request.UtilizationClass,
+                    request.IsGroup, request.ParentId), ct);
             return TypedResults.Created($"/api/reason-codes/{created.Id}", created);
         })
         .RequirePermission(Permissions.Reasons, Site.FromBody<CreateReasonCodeRequest>(SiteOf.Equipment, r => r.SiteId));
@@ -632,6 +633,14 @@ internal static class InventoryEndpoints
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
                 new UpdateReasonCodeCommand(id, request.Version, request.Name, request.RequiresComment, request.SortOrder, request.IsActive, request.UtilizationClass), ct)))
+        .RequirePermission(Permissions.Reasons, Site.Of(SiteOf.ReasonCode));
+
+        reasons.MapPut("/{id:guid}/parent", async Task<Ok<VersionResponse>> (
+            Guid id,
+            MoveReasonCodeRequest request,
+            ICommandHandler<MoveReasonCodeCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new MoveReasonCodeCommand(id, request.Version, request.ParentId), ct)))
         .RequirePermission(Permissions.Reasons, Site.Of(SiteOf.ReasonCode));
 
         routes.MapGet("/jobs/{id:guid}/materials", async Task<Ok<JobMaterialsDto>> (

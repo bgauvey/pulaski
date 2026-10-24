@@ -134,7 +134,7 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
 
     private const string FindReason = """
         SELECT id FROM core.reason_code
-        WHERE reason_kind = @Kind AND code = @Code AND is_active AND (site_id = @SiteId OR site_id IS NULL)
+        WHERE reason_kind = @Kind AND code = @Code AND is_active AND is_selectable AND (site_id = @SiteId OR site_id IS NULL)
         ORDER BY site_id NULLS LAST
         LIMIT 1
         """;

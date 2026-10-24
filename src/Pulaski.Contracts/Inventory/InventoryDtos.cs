@@ -342,6 +342,9 @@ public sealed record ReasonCodeDto
 
     /// <summary>For a utilization reason (D-050): <c>runtime</c>, <c>downtime</c> or <c>planned</c>.</summary>
     public string? UtilizationClass { get; init; }
+
+    /// <summary>The names of the groups it is filed under, top first, joined by " › " (D-062); null at the top.</summary>
+    public string? GroupPath { get; init; }
 }
 
 /// <summary>Something worth knowing about a movement that didn't stop it.</summary>
@@ -516,11 +519,20 @@ public sealed record ReasonCodeAdminDto
     public int SortOrder { get; init; }
     public bool IsActive { get; init; }
 
-    /// <summary>False for a branch of a reason tree, which only groups.</summary>
+    /// <summary>False for a group, which only holds other reasons and is never chosen (D-062).</summary>
     public bool IsSelectable { get; init; }
 
     /// <summary>For a utilization reason (D-050): <c>runtime</c>, <c>downtime</c> or <c>planned</c>.</summary>
     public string? UtilizationClass { get; init; }
+
+    /// <summary>The group it is filed under; null at the top (D-062).</summary>
+    public Guid? ParentId { get; init; }
+
+    /// <summary>Levels above it: 0 at the top.</summary>
+    public int Depth { get; init; }
+
+    /// <summary>The names of the groups above it, top first, joined by " › "; null at the top.</summary>
+    public string? GroupPath { get; init; }
     public long Version { get; init; }
 }
 

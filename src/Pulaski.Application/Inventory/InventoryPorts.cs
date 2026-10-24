@@ -216,12 +216,16 @@ public interface IInventoryRepository
     /// <summary>Writes a line's counted quantity, when and by whom.</summary>
     Task UpdateStockCountLineAsync(StockCountLine line, CancellationToken cancellationToken);
 
-    Task<Versioned<ReasonCode>?> GetReasonCodeForUpdateAsync(Guid id, CancellationToken cancellationToken);
+    /// <summary>A reason's kind, without locking; null when there is no such reason. The kind never changes.</summary>
+    Task<string?> GetReasonKindAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Locks every reason of a kind, in id order, and returns them (D-062): tree changes of a kind serialize.</summary>
+    Task<IReadOnlyList<Versioned<ReasonCode>>> LockReasonTreeAsync(string kind, CancellationToken cancellationToken);
 
     /// <returns>The new row version.</returns>
     Task<long> InsertReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken);
 
-    /// <summary>Writes the name, comment flag, order and active flag; the code and kind never change.</summary>
+    /// <summary>Writes the name, comment flag, order, active flag, class and group (parent); the code, kind and group flag never change.</summary>
     /// <returns>The new row version.</returns>
     Task<long> UpdateReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken);
 

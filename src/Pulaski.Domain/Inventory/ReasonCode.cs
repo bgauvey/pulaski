@@ -5,7 +5,8 @@ namespace Pulaski.Domain.Inventory;
 /// <summary>
 /// A reason people choose (D-030): for an adjustment, a hold, a machine's utilization and so on. The code and
 /// the kind never change once created, since history refers to them; the rest can. A utilization reason has a
-/// class (D-050), which may change: OEE is worked out from it on read.
+/// class (D-050), which may change: OEE is worked out from it on read. A group (D-062) only holds other reasons of
+/// its kind and is never chosen; whether a reason is a group is fixed once created, and it may move under another group.
 /// </summary>
 public sealed partial record ReasonCode(
     Guid Id,
@@ -16,7 +17,9 @@ public sealed partial record ReasonCode(
     bool RequiresComment,
     int SortOrder,
     bool IsActive,
-    string? UtilizationClass = null)
+    string? UtilizationClass = null,
+    Guid? ParentId = null,
+    bool IsGroup = false)
 {
     public const string Utilization = "utilization";
 
@@ -27,9 +30,9 @@ public sealed partial record ReasonCode(
     /// <summary>Letters, digits and '-', '_', '.', up to 30, as the seed's codes are.</summary>
     public static bool IsValidCode(string code) => CodePattern().IsMatch(code);
 
-    /// <summary>A utilization reason has a class (D-050); no other kind has one.</summary>
-    public static bool IsValidClass(string kind, string? utilizationClass) =>
-        kind == Utilization ? utilizationClass is not null && MachineData.UtilizationClasses.All.Contains(utilizationClass) : utilizationClass is null;
+    /// <summary>A utilization reason has a class (D-050); a group and every other kind have none.</summary>
+    public static bool IsValidClass(string kind, string? utilizationClass, bool isGroup = false) =>
+        kind == Utilization && !isGroup ? utilizationClass is not null && MachineData.UtilizationClasses.All.Contains(utilizationClass) : utilizationClass is null;
 
     [GeneratedRegex("^[A-Z0-9][A-Z0-9._-]{0,29}$")]
     private static partial Regex CodePattern();

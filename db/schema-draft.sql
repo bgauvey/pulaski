@@ -578,7 +578,7 @@ CREATE INDEX calendar_exception_scope_ix ON core.calendar_exception (scope_equip
 CREATE TABLE core.reason_code (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     site_id             uuid REFERENCES core.equipment(id),     -- null = enterprise-wide
-    parent_id           uuid REFERENCES core.reason_code(id),
+    parent_id           uuid REFERENCES core.reason_code(id),   -- the group it is filed under (D-062): same kind, a group, never itself below
     reason_kind         text NOT NULL CHECK (reason_kind IN (
                             'utilization','scrap','hold','inventory_adjustment',
                             'indirect_labor','run_end','spc_cause','sample_exclusion')),
@@ -586,13 +586,33 @@ CREATE TABLE core.reason_code (
     code                text NOT NULL,
     name                text NOT NULL,
     oee_impact          text NOT NULL DEFAULT 'none' CHECK (oee_impact IN ('availability','performance','quality','planned','none')),
-    is_selectable       boolean NOT NULL DEFAULT true,          -- false for tree branches
+    is_selectable       boolean NOT NULL DEFAULT true,          -- false for a group, which only holds others; fixed once created (D-062)
     requires_comment    boolean NOT NULL DEFAULT false,
     sort_order          integer NOT NULL DEFAULT 0,
     is_active           boolean NOT NULL DEFAULT true,
     CONSTRAINT reason_code_uq UNIQUE NULLS NOT DISTINCT (site_id, reason_kind, code),
-    CONSTRAINT reason_code_utilization_ck CHECK ((reason_kind = 'utilization') = (utilization_class IS NOT NULL))
+    -- A utilization reason has a class (D-050); a group (D-062) and every other kind have none.
+    CONSTRAINT reason_code_class_ck CHECK (CASE WHEN NOT is_selectable THEN utilization_class IS NULL
+                                                ELSE (reason_kind = 'utilization') = (utilization_class IS NOT NULL) END)
 );
+CREATE INDEX reason_code_parent_ix ON core.reason_code (parent_id) WHERE parent_id IS NOT NULL;
+
+-- Every reason with its place in its tree (D-062): how deep, the names of the groups above it (top first, joined by ' › ') and
+-- a key that sorts a kind's reasons in tree order (each level by sort order, then name). Small tables; worked out on read.
+CREATE FUNCTION core.reason_tree()
+RETURNS TABLE (id uuid, depth integer, group_path text, sort_key text[])
+LANGUAGE sql STABLE AS $$
+    WITH RECURSIVE t (id, name, depth, group_path, sort_key) AS (
+        SELECT r.id, r.name, 0, NULL::text, ARRAY[lpad(r.sort_order::text, 5, '0') || lower(r.name) || ' ' || r.code]
+        FROM core.reason_code r
+        WHERE r.parent_id IS NULL
+        UNION ALL
+        SELECT c.id, c.name, t.depth + 1, coalesce(t.group_path || ' › ', '') || t.name,
+               t.sort_key || (lpad(c.sort_order::text, 5, '0') || lower(c.name) || ' ' || c.code)
+        FROM t JOIN core.reason_code c ON c.parent_id = t.id
+    ) CYCLE id SET is_cycle USING visited
+    SELECT id, depth, group_path, sort_key FROM t WHERE NOT is_cycle
+$$;
 
 -- Machine profiles (D-050): one kind of machine, as its controller reports it. Identical machines share a
 -- profile; equipment names its profile and may override single stop codes. Kept per site, like its reasons.
@@ -1995,7 +2015,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0026_expected_receipts'),
     ('0027_containers_and_labels'),
     ('0028_balance_flow'),
-    ('0029_deliveries');
+    ('0029_deliveries'),
+    ('0030_reason_trees');
 
 -- =====================================================================
 -- 17. SEED DATA

@@ -478,7 +478,7 @@ What a plant needs to keep floor stock right without the ERP, beyond receiving a
 - **Posting** writes, for each counted lot whose count differs from its quantity now, a write-up (`adjusted`) or write-off (`scrapped`) for the chosen reason (normally *Count correction*), referencing the count number. Every line must be counted first (enter 0 for a lot that isn't there). A lot that moved after its line was counted is refused, named, until it is recounted; one that moved between the snapshot and the count is fine, because the count is what is there.
 - Stock found that isn't in the count is received separately. A count can be cancelled until posted. Count numbers are `CNT-<yyyyMMdd>-<n>` per site.
 
-**Reason codes.** A screen lists, adds and changes reasons for inventory (and the other kinds), enterprise-wide or for a site. A code and its kind never change once created, since history refers to them; the name, whether a comment is required, the order and the active flag can. Reason trees (`parent_id`) are not edited yet.
+**Reason codes.** A screen lists, adds and changes reasons for inventory (and the other kinds), enterprise-wide or for a site. A code and its kind never change once created, since history refers to them; the name, whether a comment is required, the order and the active flag can. Reason trees (`parent_id`) are edited since D-062.
 
 **Reports.**
 
@@ -1326,6 +1326,29 @@ An outage only delays: rows stay pending.
 Each appends `pulaski.delivery.retried.v1` or `pulaski.delivery.skipped.v1`. Routes: `GET /api/integrations/erp`, `GET /api/integrations/erp/deliveries?status=`, `POST …/deliveries/{id}/retry`, `…/{id}/skip`, `…/retry-failed`.
 
 **Not done.** No inbound acknowledgement or reconciliation from the ERP, one sink only (the table and checkpoint are keyed by sink, ready for more), no ERP-specific adapters or message brokers, no retention of delivered rows.
+
+## Reason trees (D-062, proposed)
+
+Issue #40. `core.reason_code.parent_id` and `is_selectable` existed but nothing edited them.
+
+**Groups.** A reason is either a reason (chosen; a leaf) or a group (`is_selectable` false: holds other reasons of its kind and is never chosen). Like code and kind, that is fixed at creation (`CreateReasonCodeCommand.IsGroup`), so a reason history already used never turns into a heading. A group has no utilization class and never needs a comment; `reason_code_class_ck` replaces `reason_code_utilization_ck` to allow a utilization group without a class.
+
+**Placement.** `ReasonTree` (pure, in the domain) checks where a reason may go:
+
+- under a group of the same kind, never itself or anything inside it (no cycles);
+- scope: a reason for every site only under a group for every site; a site's reason under a group for every site or for that site;
+- at most `MaxLevels` (5) levels, counting the moved branch's own depth;
+- nothing switched on goes under a group that is off; a group is switched off only when everything in it is (`WhyNotActive`).
+
+`MoveReasonCodeCommand` (`PUT /api/reason-codes/{id}/parent`, `reasons.manage`) moves a reason or a whole branch; creating with `ParentId` files it at once. The event is `pulaski.reason_code.moved.v1` (code, before, after).
+
+**Concurrency.** Every tree change (create into a group, move, update) reads the reason's kind without a lock, then locks every reason of that kind in id order (`LockReasonTreeAsync`) and checks the caller's version there. Kinds are small, and concurrent moves (A under B while B goes under A) serialize without deadlocks.
+
+**History.** Every table that refers to a reason refers to its `id`, and nothing about a reason that history shows (code, name) depends on the tree. Moves and group renames change nothing recorded, and reports keep listing each reason. Places that resolve a reason (inventory, labor indirect reasons, the partial-batch hold, stop coding) also require `is_selectable`, so a group is never recorded.
+
+**Reading.** `core.reason_tree()` (a `LANGUAGE sql STABLE` function, recursive with a cycle guard) gives depth, the group path ("Mechanical › Jam") and a tree-order sort key. The Reasons screen lists each kind in tree order with indentation and an **Under** choice. Pickers (`ReasonCodeDto.GroupPath`, `Display.ReasonLabel`) show the path and keep tree order.
+
+**Not done.** Report roll-up by group, and converting a reason to a group or back.
 
 ## Application architecture
 

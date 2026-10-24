@@ -1,3 +1,4 @@
+using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Inventory;
 using Pulaski.Contracts.Inventory;
@@ -191,5 +192,34 @@ public class LotOperationHandlerTests
         Assert.Equal(("THEFT", "Theft or loss", false, false), (after.Code, after.Name, after.RequiresComment, after.IsActive));
         await Assert.ThrowsAsync<ConflictException>(() => update.HandleAsync(
             new UpdateReasonCodeCommand(created.Id, created.Version, "X", false, 0, true), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Reasons_file_under_groups_that_are_never_chosen_and_each_move_is_recorded()
+    {
+        var create = new CreateReasonCodeHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events, _f.Ids);
+        var move = new MoveReasonCodeHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events);
+        var group = await create.HandleAsync(new CreateReasonCodeCommand(_site, "utilization", "MECH", "Mechanical", false, 10, IsGroup: true), CancellationToken.None);
+        var jam = await create.HandleAsync(new CreateReasonCodeCommand(_site, "utilization", "JAM", "Jam", false, 10, "downtime"), CancellationToken.None);
+
+        // A group has no class and needs no comment; a reason can be created straight into a group.
+        await Assert.ThrowsAsync<ValidationException>(() => create.HandleAsync(
+            new CreateReasonCodeCommand(_site, "utilization", "ELEC", "Electrical", false, 0, "downtime", IsGroup: true), CancellationToken.None));
+        await Assert.ThrowsAsync<ValidationException>(() => create.HandleAsync(
+            new CreateReasonCodeCommand(_site, "utilization", "ELEC", "Electrical", true, 0, IsGroup: true), CancellationToken.None));
+        var motor = await create.HandleAsync(new CreateReasonCodeCommand(_site, "utilization", "MOTOR", "Motor", false, 0, "downtime", ParentId: group.Id), CancellationToken.None);
+        Assert.Equal(group.Id, Inventory.FindReasonCode(motor.Id)!.Value.ParentId);
+        await Assert.ThrowsAsync<DomainRuleException>(() => create.HandleAsync(
+            new CreateReasonCodeCommand(_site, "utilization", "BELT", "Belt", false, 0, "downtime", ParentId: jam.Id), CancellationToken.None));
+
+        var moved = await move.HandleAsync(new MoveReasonCodeCommand(jam.Id, jam.Version, group.Id), CancellationToken.None);
+        Assert.Equal((group.Id, "JAM"), (Inventory.FindReasonCode(jam.Id)!.Value.ParentId!.Value, Inventory.FindReasonCode(jam.Id)!.Value.Code));
+        Assert.Equal(EventTypes.ReasonCodeMoved, _f.Stores.Events.Appended[^1].Type);
+
+        // Moving to where it already is changes nothing.
+        var events = _f.Stores.Events.Appended.Count;
+        Assert.Equal(moved.Version, (await move.HandleAsync(new MoveReasonCodeCommand(jam.Id, moved.Version, group.Id), CancellationToken.None)).Version);
+        Assert.Equal(events, _f.Stores.Events.Appended.Count);
+        await Assert.ThrowsAsync<NotFoundException>(() => move.HandleAsync(new MoveReasonCodeCommand(Guid.CreateVersion7(), 1, null), CancellationToken.None));
     }
 }

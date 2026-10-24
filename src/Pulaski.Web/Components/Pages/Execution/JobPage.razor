@@ -146,7 +146,7 @@
                                                     <option value="@Guid.Empty">Choose a reason…</option>
                                                     @foreach (var r in _scrapReasons)
                                                     {
-                                                        <option value="@r.Id">@r.Name</option>
+                                                        <option value="@r.Id">@Display.ReasonLabel(r)</option>
                                                     }
                                                 </select>
                                             </div>

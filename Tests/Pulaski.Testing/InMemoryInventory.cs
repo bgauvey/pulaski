@@ -483,7 +483,15 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
 
     public Task UpdateStockCountLineAsync(StockCountLine line, CancellationToken cancellationToken) => InsertStockCountLinesAsync([line], cancellationToken);
 
-    public Task<Versioned<ReasonCode>?> GetReasonCodeForUpdateAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(FindReasonCode(id));
+    public Task<string?> GetReasonKindAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(FindReasonCode(id)?.Value.Kind);
+
+    public Task<IReadOnlyList<Versioned<ReasonCode>>> LockReasonTreeAsync(string kind, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<Versioned<ReasonCode>>>([.. _reasonCodes.Values.Where(r => r.Value.Kind == kind)]);
+        }
+    }
 
     public Task<long> InsertReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken)
     {

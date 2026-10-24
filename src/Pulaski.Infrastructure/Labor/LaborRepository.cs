@@ -67,7 +67,7 @@ internal sealed class LaborRepository(DbSession session) : ILaborRepository
 
     private const string IndirectReason = """
         SELECT EXISTS (SELECT 1 FROM core.reason_code
-                       WHERE id = @Id AND reason_kind = 'indirect_labor' AND is_active AND (site_id IS NULL OR site_id = @SiteId))
+                       WHERE id = @Id AND reason_kind = 'indirect_labor' AND is_active AND is_selectable AND (site_id IS NULL OR site_id = @SiteId))
         """;
 
     private const string GetSession = $"SELECT {LaborSql.SessionColumns} FROM core.labor_session s WHERE s.id = @Id FOR UPDATE";

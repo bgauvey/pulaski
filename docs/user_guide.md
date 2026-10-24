@@ -1060,6 +1060,19 @@ When a receipt, consumption, production, write-up or write-off is entered late, 
 2. To change one, edit its name, comment setting, order or **Active** box, then click **Save** on its row (**Undo** throws the change away).
 3. A code and its kind can't change once created, because history refers to them. To stop using a reason, untick **Active**.
 4. A **utilization** reason also has a **Class**: *Runtime* (producing or running slow), *Downtime* (an unplanned stop, counted against availability) or *Planned (not in OEE)* (setup, teardown, cleaning, planned maintenance, breaks). Choose it when you add the reason; you can change it later on its row and **Save**.
+5. To keep a long list tidy, file reasons under **groups**. Add a group by ticking **Group** before you click **Add**: it holds reasons (and other groups) but is never chosen itself. Choose **Under** to add a reason or group straight into a group.
+6. To move a reason or group, choose another group in its row's **Under** list (or **At the top**) and click **Save**. Everything inside a group moves with it.
+
+**In detail**
+
+- **Where people see it.** Wherever a reason is chosen (writing stock up or off, holds, scrap, ending a run, indirect labor, coding a machine stop), it is listed with its groups, such as *Mechanical › Jam*, in the order of the tree. Groups aren't offered.
+- **History doesn't change.** Movements, stops, reports and labor keep pointing at the reason itself. Moving it to another group, or renaming a group, changes nothing they recorded; they go on showing the reason's code and name.
+- **Being a group is fixed.** Like the code and kind, whether a reason is a group can't change once it is created, so a reason history used never becomes a heading. To regroup, add a new group and move reasons into it.
+- **The rules.** A reason goes only under a group of its own kind, never inside itself, and at most five levels deep. A reason for every site goes only under a group for every site; a site's reason goes under a group for every site or for that site. The **Under** list offers only groups that fit.
+- **Switching off.** A group can be switched off only when everything in it is off. Nothing can be switched on, or moved, into a group that is off.
+- **Order** sorts a reason among the others in the same group; the tree is shown group by group.
+- A group has no class and never needs a comment: only the reasons in it are chosen.
+- Each move is recorded as an event (`pulaski.reason_code.moved.v1`) with where it was and where it went.
 
 ### Locations
 
@@ -1965,7 +1978,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
 - **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, scanning 2D codes or supplier barcodes beyond reading their text, setting stock aside for a job, and suggestions of which lot to use first. Moves, holds, splits, merges, shipments and counts can't be back-dated (only quantity movements can, by up to 31 days), and a lot's location and status on a past date aren't reconstructed. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
 - **Reversing is limited** to a lot's latest movement, and not consumption, production, splits, merges, transfers between balances or corrections: put those right with another movement.
-- **Reason trees** (a reason grouped under another) can't be edited.
+- **Reason groups** only tidy the lists people choose from: reports (OEE *Where the time went*, stops, the journal) still list each reason, not totals by group. A reason can't be turned into a group, or a group into a reason.
 - **Genealogy through a silo is an estimate** from the declared movements: a level tag can be bound to a silo, but its readings aren't used yet to confirm when it was empty or how it flowed. Reversals into a silo are treated as withdrawals of its oldest stock.
 - **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP; there are no lead times, purchase suggestions or partial receipts against one delivery (receiving closes it). The live timing is the schedule as projected now, not a forecast of slips.

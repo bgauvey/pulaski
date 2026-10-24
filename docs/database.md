@@ -530,19 +530,19 @@ Holidays, shutdowns and weeks without demand, maintained on Configure → Site s
 
 ### core.reason_code — reason trees · *In use*
 
-One tree per kind of reason. Branches group; leaves are selected. Inventory uses the `inventory_adjustment` and `hold` kinds (D-027); machine time uses `utilization` (D-050); `db/seed-reasons.sql` loads a starter set, and the Reasons screen adds and changes them (D-030). A code and its kind never change once created; the name, `requires_comment`, `sort_order`, `is_active` and a utilization reason's class can. The tree (`parent_id`) isn't edited yet.
+One tree per kind of reason. Groups (`is_selectable` false) hold others; reasons are chosen. Inventory uses the `inventory_adjustment` and `hold` kinds (D-027); machine time uses `utilization` (D-050); `db/seed-reasons.sql` loads a starter set, and the Reasons screen adds and changes them (D-030). A code, its kind and whether it is a group never change once created; the name, `requires_comment`, `sort_order`, `is_active`, a utilization reason's class and its group (`parent_id`, D-062) can. Rows that point at a reason point at its `id`, so moving it never changes what history recorded. The application keeps the tree sound (same kind, parent a group, no cycles, scope, at most 5 levels; `ReasonTree`), locking every reason of the kind in id order for each change.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
 | `site_id` | uuid → equipment | yes | Null for enterprise-wide codes. |
-| `parent_id` | uuid → reason_code | yes | Parent node in the tree. |
+| `parent_id` | uuid → reason_code | yes | The group it is filed under (D-062); null at the top. Same kind, a group, never itself or below itself; a reason for every site only under a group for every site. Indexed. |
 | `reason_kind` | text | no | `utilization`, `scrap`, `hold`, `inventory_adjustment`, `indirect_labor`, `run_end`, `spc_cause` or `sample_exclusion`. `utilization` replaced the planned `downtime` kind (0019). |
-| `utilization_class` | text | yes | For a utilization reason, and only for one (`reason_code_utilization_ck`): `runtime` (run time), `downtime` (availability loss) or `planned` (left out of planned time) (D-050). |
+| `utilization_class` | text | yes | For a utilization reason that isn't a group, and only for one (`reason_code_class_ck`, 0030): `runtime` (run time), `downtime` (availability loss) or `planned` (left out of planned time) (D-050). |
 | `code` | text | no | Unique per site and kind. |
 | `name` | text | no | Display name. |
 | `oee_impact` | text | no | Which OEE factor it lowers: `availability`, `performance`, `quality`, `planned` (excluded from OEE) or `none`. |
-| `is_selectable` | boolean | no | False for branches that only group. |
+| `is_selectable` | boolean | no | False for a group, which only holds others and is never chosen (D-062). Fixed once created. |
 | `requires_comment` | boolean | no | The operator must add a comment. |
 | `sort_order` | integer | no | Display order among siblings. |
 | `is_active` | boolean | no | False when retired. |
@@ -1136,6 +1136,10 @@ Derived edges can be recalculated when windows or residence times change; the ol
 | `derived_at` | timestamptz | no | When the edge was derived (recorded). |
 | `effective_at` | timestamptz | no | When the link took effect (D-057): `derived_at`, or the back-dated consumption's or production's effective time. |
 | `superseded_at` | timestamptz | yes | When a newer derivation replaced it. |
+
+### core.reason_tree() — every reason's place in its tree (D-062) · *In use*
+
+Returns `id`, `depth` (0 at the top), `group_path` (the names of the groups above it, top first, joined by ` › `; null at the top) and `sort_key` (a `text[]` that sorts a kind's reasons in tree order, each level by `sort_order`, then name and code). A recursive query with a cycle guard, read by the Reasons screen and the reason pickers (`JOIN core.reason_tree() t ON t.id = r.id`).
 
 ### core.trace_forward(lot), core.trace_backward(lot) — genealogy trace · *In use*
 

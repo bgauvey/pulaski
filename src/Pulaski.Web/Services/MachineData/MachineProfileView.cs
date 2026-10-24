@@ -38,7 +38,7 @@ public static class MachineProfileView
     };
 
     /// <summary>A reason as a choice shows it: <c>JAM · Jam (downtime)</c>.</summary>
-    public static string ReasonLabel(ReasonCodeDto reason) => $"{reason.Code} · {reason.Name} ({ClassLabel(reason.UtilizationClass).ToLowerInvariant()})";
+    public static string ReasonLabel(ReasonCodeDto reason) => $"{reason.Code} · {Display.ReasonLabel(reason)} ({ClassLabel(reason.UtilizationClass).ToLowerInvariant()})";
 
     /// <summary>The profile's active states and codes as a file the import reads back unchanged.</summary>
     public static string ExportCsv(MachineProfileDetailDto profile) =>
