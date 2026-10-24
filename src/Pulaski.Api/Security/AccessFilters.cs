@@ -110,6 +110,27 @@ internal sealed class PermissionFilter(IReadOnlyList<string> permissions, SiteRe
     }
 }
 
+/// <summary>
+/// A back-dated movement (D-057) needs <c>inventory.backdate</c> at the site as well as the movement's own permission; a movement
+/// that counts now needs nothing more.
+/// </summary>
+internal sealed class BackdateFilter(SiteResolver site) : IEndpointFilter
+{
+    public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        if (context.Arguments.OfType<Pulaski.Contracts.Inventory.IMayBackdate>().FirstOrDefault() is { EffectiveAt: not null })
+        {
+            var access = await CallerAccess.RequireAsync(context.HttpContext);
+            if (!access.CanAny([Permissions.InventoryBackdate], await site(context)))
+            {
+                throw new ForbiddenException("You may not back-date movements at this site: it needs permission to back-date inventory movements.");
+            }
+        }
+
+        return await next(context);
+    }
+}
+
 /// <summary>Lookups many screens need, such as units or the equipment tree (D-039): for whoever may see any screen.</summary>
 internal sealed class AnyViewFilter : IEndpointFilter
 {
@@ -129,6 +150,10 @@ internal static class PermissionEndpointExtensions
     /// <summary>The caller needs <paramref name="permission"/>; at the site <paramref name="site"/> finds, or (without one) at any site.</summary>
     public static RouteHandlerBuilder RequirePermission(this RouteHandlerBuilder builder, string permission, SiteResolver? site = null) =>
         builder.AddEndpointFilter(new PermissionFilter([permission], site));
+
+    /// <summary>A back-dated request (D-057) also needs <c>inventory.backdate</c> at the site <paramref name="site"/> finds.</summary>
+    public static RouteHandlerBuilder RequireToBackdate(this RouteHandlerBuilder builder, SiteResolver site) =>
+        builder.AddEndpointFilter(new BackdateFilter(site));
 
     /// <summary>The caller needs one of <paramref name="permissions"/>, at the site <paramref name="site"/> finds or at any site (D-039).</summary>
     public static RouteHandlerBuilder RequireAny(this RouteHandlerBuilder builder, SiteResolver? site, params string[] permissions) =>

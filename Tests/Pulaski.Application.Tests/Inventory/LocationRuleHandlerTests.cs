@@ -52,7 +52,7 @@ public class LocationRuleHandlerTests
         // The same material is welcome, and once the silo is empty anything can go in.
         await Receive(_resin.Id, "R-2", 20m, _silo.Id);
         var balance = Inventory.Find(resin.LotId)!;
-        await new WriteOffLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids)
+        await new WriteOffLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
             .HandleAsync(new WriteOffLotCommand(resin.LotId, balance.Version, null, null, _count.Id), CancellationToken.None);
         var moved = await move.HandleAsync(new MoveLotCommand(blend.LotId, Inventory.Find(blend.LotId)!.Version, _silo.Id), CancellationToken.None);
         Assert.Equal(50m, moved.Quantity);

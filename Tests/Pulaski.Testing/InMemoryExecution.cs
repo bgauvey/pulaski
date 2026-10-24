@@ -46,6 +46,14 @@ public sealed class InMemoryExecution : IExecutionRepository, IExecutionReadStor
     }
 
     /// <summary>Opens a run for a job, as a test's starting point.</summary>
+    public void EndRun(Guid runId, DateTimeOffset endedAt)
+    {
+        lock (_lock)
+        {
+            _runs[runId] = _runs[runId] with { EndedAt = endedAt };
+        }
+    }
+
     public JobRun OpenRun(Guid jobId, Guid lineId, DateTimeOffset startedAt, Guid? uomId = null)
     {
         var run = JobRun.Open(Guid.CreateVersion7(), jobId, lineId, RunsOf(jobId).Count + 1, startedAt, uomId);
@@ -91,6 +99,9 @@ public sealed class InMemoryExecution : IExecutionRepository, IExecutionReadStor
         Task.FromResult(RunsOf(jobId).FirstOrDefault(r => r.IsOpen));
 
     public Task<JobRun?> GetRunForUpdateAsync(Guid runId, CancellationToken cancellationToken) => Task.FromResult(FindRun(runId));
+
+    public Task<JobRun?> GetRunAtForUpdateAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        Task.FromResult(RunsOf(jobId).Where(r => r.StartedAt <= at && (r.EndedAt is null || r.EndedAt >= at)).MaxBy(r => r.StartedAt));
 
     public Task<string?> GetRunningJobOnLineAsync(Guid lineId, Guid exceptJobId, CancellationToken cancellationToken)
     {

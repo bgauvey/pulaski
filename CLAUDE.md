@@ -188,6 +188,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `LotAttributeDefinition.Parse` reads values. `lot_document` = file (bytes in `lot_document_content`, insert-only, sniffed PDF/PNG/JPEG
   ≤ 10 MB, SHA-256) and/or reference; withdrawn, never deleted; `lot_document_link` carries them on split/merge
   (`CarryLotRecordsAsync`, split also copies values). Permissions `lot_records.manage`, `lot_attributes.manage`.
+- Back-dated movements (D-057, proposed): `ts.lot_event.effective_at` (record time stays `occurred_at`, the partition key) and
+  `lot_genealogy.effective_at`. Stock at T = sum of `qty_delta` with `effective_at <= T`, never `qty_after`. Receipt, consumption,
+  production, write-up and write-off take `EffectiveAt` (`Backdating.EffectiveAt` / `EnsureFitsAsync`: ≤ 31 days, comment, not before the
+  lot's stock or a posted count, never negative in effective order); run and expiry at the effective time; endpoints add
+  `RequireToBackdate` (`inventory.backdate`). Reversals keep the original's effective time.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

@@ -18,6 +18,14 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
 
     private const string RunById = $"SELECT {ExecutionSql.RunColumns} FROM core.job_run WHERE id = @Id FOR UPDATE";
 
+    private const string RunAt = $"""
+        SELECT {ExecutionSql.RunColumns} FROM core.job_run
+        WHERE job_id = @JobId AND started_at <= @At AND (ended_at IS NULL OR ended_at >= @At)
+        ORDER BY started_at DESC
+        LIMIT 1
+        FOR UPDATE
+        """;
+
     private const string RunningOnLine = """
         SELECT j.job_number FROM core.job_run r JOIN core.job j ON j.id = r.job_id
         WHERE r.equipment_id = @LineId AND r.ended_at IS NULL AND r.job_id <> @JobId
@@ -164,6 +172,9 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
 
     public async Task<JobRun?> GetRunForUpdateAsync(Guid runId, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<RunRow>(RunById, new { Id = runId }, cancellationToken))?.ToDomain();
+
+    public async Task<JobRun?> GetRunAtForUpdateAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<RunRow>(RunAt, new { JobId = jobId, At = at }, cancellationToken))?.ToDomain();
 
     public Task<string?> GetRunningJobOnLineAsync(Guid lineId, Guid exceptJobId, CancellationToken cancellationToken) =>
         session.QuerySingleOrDefaultAsync<string?>(RunningOnLine, new { LineId = lineId, JobId = exceptJobId }, cancellationToken);

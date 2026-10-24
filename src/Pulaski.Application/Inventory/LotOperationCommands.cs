@@ -331,7 +331,9 @@ internal sealed class ReverseMovementHandler(
         await inventory.InsertEventAsync(
             new LotEventRow(
                 ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, ReasonCodeId: reason.Id, Comment: comment,
-                ReversesEventId: latest.Id, ReversesOccurredAt: latest.OccurredAt),
+                ReversesEventId: latest.Id, ReversesOccurredAt: latest.OccurredAt,
+                // Undoing a back-dated movement counts when it did, so stock at every time is as if it never happened (D-057).
+                EffectiveAt: latest.EffectiveAt is { } effective && effective < latest.OccurredAt ? effective : null),
             envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);

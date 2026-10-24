@@ -113,8 +113,8 @@ public class InventoryHandlerTests
     public async Task Write_up_and_write_off_need_a_reason_and_check_the_version()
     {
         var lot = (await Receive("R-1", 100m)).Value;
-        var writeUp = new WriteUpLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids);
-        var writeOff = new WriteOffLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids);
+        var writeUp = new WriteUpLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
+        var writeOff = new WriteOffLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
 
         var up = await writeUp.HandleAsync(new WriteUpLotCommand(lot.LotId, lot.Version, 5m, _kg.Id, _count.Id), CancellationToken.None);
         Assert.Equal(105m, up.Quantity);

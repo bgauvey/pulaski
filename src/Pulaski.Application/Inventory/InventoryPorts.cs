@@ -243,8 +243,14 @@ public interface IInventoryRepository
     /// <summary>The lots the job has consumed, each once.</summary>
     Task<IReadOnlyList<Guid>> ListLotsConsumedByJobAsync(Guid jobId, CancellationToken cancellationToken);
 
-    /// <summary>Adds declared edges; an edge already there is left alone.</summary>
-    Task InsertGenealogyAsync(IReadOnlyList<GenealogyEdge> edges, DateTimeOffset at, CancellationToken cancellationToken);
+    /// <summary>Adds declared edges, taking effect at <paramref name="effectiveAt"/> (else <paramref name="at"/>); an edge already there is left alone.</summary>
+    Task InsertGenealogyAsync(IReadOnlyList<GenealogyEdge> edges, DateTimeOffset at, CancellationToken cancellationToken, DateTimeOffset? effectiveAt = null);
+
+    /// <summary>The lot's quantity movements in the order they count: by effective time, then record time (D-057).</summary>
+    Task<IReadOnlyList<QuantityPoint>> ListQuantityTimelineAsync(Guid lotId, CancellationToken cancellationToken);
+
+    /// <summary>When the latest posted stock count that counted the lot was posted; null when none did.</summary>
+    Task<DateTimeOffset?> LatestCountOfLotAsync(Guid lotId, CancellationToken cancellationToken);
 
     /// <summary>
     /// Carries a lot's documents to a lot made from it (D-056), linked <paramref name="via"/> <c>split</c> or <c>merge</c>; with
@@ -272,7 +278,8 @@ public sealed record LotEventRow(
     string? Reference = null,
     Guid? ReversesEventId = null,
     DateTimeOffset? ReversesOccurredAt = null,
-    Guid? RunId = null);
+    Guid? RunId = null,
+    DateTimeOffset? EffectiveAt = null);
 
 /// <summary>A parent-to-child lot edge: <c>declared</c> by a job, or from a <c>split</c> or <c>merge</c> (D-030, no job).</summary>
 public sealed record GenealogyEdge(Guid Id, Guid ParentLotId, Guid ChildLotId, Guid? JobId, string Basis = GenealogyEdge.Declared)
@@ -286,7 +293,11 @@ public sealed record GenealogyEdge(Guid Id, Guid ParentLotId, Guid ChildLotId, G
 public sealed record LockedLot(Lot Lot, long Version, DateTimeOffset UpdatedAt);
 
 /// <summary>A movement as recorded, for reversing it.</summary>
-public sealed record LotEventRecord(Guid Id, DateTimeOffset OccurredAt, LotMovement Movement, Guid? RelatedLotId);
+/// <summary>A lot movement as reversing it needs it; <c>EffectiveAt</c> is when it counts in stock (D-057), its record time unless back-dated.</summary>
+public sealed record LotEventRecord(Guid Id, DateTimeOffset OccurredAt, LotMovement Movement, Guid? RelatedLotId, DateTimeOffset? EffectiveAt = null);
+
+/// <summary>One quantity movement of a lot, by when it counts and when it was recorded (D-057).</summary>
+public sealed record QuantityPoint(DateTimeOffset EffectiveAt, DateTimeOffset OccurredAt, decimal Delta);
 
 public sealed record InventoryLocation
 {

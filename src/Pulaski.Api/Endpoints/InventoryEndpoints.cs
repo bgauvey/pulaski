@@ -144,11 +144,12 @@ internal static class InventoryEndpoints
         {
             var received = await handler.HandleAsync(
                 new ReceiveLotCommand(request.MaterialId, request.LocationId, request.LotNumber, request.Quantity, request.UomId,
-                    request.SupplierLot, request.ExpiresAt, request.Comment),
+                    request.SupplierLot, request.ExpiresAt, request.Comment, EffectiveAt: request.EffectiveAt),
                 ct);
             return TypedResults.Created($"/api/lots/{received.LotId}", received);
         })
-        .RequirePermission(Permissions.LotReceive, Site.FromBody<ReceiveLotRequest>(SiteOf.Equipment, r => r.LocationId));
+        .RequirePermission(Permissions.LotReceive, Site.FromBody<ReceiveLotRequest>(SiteOf.Equipment, r => r.LocationId))
+        .RequireToBackdate(Site.FromBody<ReceiveLotRequest>(SiteOf.Equipment, r => r.LocationId));
 
         lots.MapPost("/{id:guid}/write-up", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -156,8 +157,9 @@ internal static class InventoryEndpoints
             ICommandHandler<WriteUpLotCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new WriteUpLotCommand(id, request.Version, request.Quantity ?? 0m, request.UomId ?? Guid.Empty, request.ReasonCodeId, request.Comment), ct)))
-        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
+                new WriteUpLotCommand(id, request.Version, request.Quantity ?? 0m, request.UomId ?? Guid.Empty, request.ReasonCodeId, request.Comment, request.EffectiveAt), ct)))
+        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot))
+        .RequireToBackdate(Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/write-off", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -165,8 +167,9 @@ internal static class InventoryEndpoints
             ICommandHandler<WriteOffLotCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new WriteOffLotCommand(id, request.Version, request.Quantity, request.UomId, request.ReasonCodeId, request.Comment), ct)))
-        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
+                new WriteOffLotCommand(id, request.Version, request.Quantity, request.UomId, request.ReasonCodeId, request.Comment, request.EffectiveAt), ct)))
+        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot))
+        .RequireToBackdate(Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/move", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -192,8 +195,9 @@ internal static class InventoryEndpoints
             ICommandHandler<ConsumeLotCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new ConsumeLotCommand(id, request.JobId, request.Quantity, request.UomId, request.Comment, request.RunId), ct)))
-        .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.Lot));
+                new ConsumeLotCommand(id, request.JobId, request.Quantity, request.UomId, request.Comment, request.RunId, request.EffectiveAt), ct)))
+        .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.Lot))
+        .RequireToBackdate(Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/split", async Task<Created<LotTransactionResponse>> (
             Guid id,
@@ -469,11 +473,13 @@ internal static class InventoryEndpoints
             CancellationToken ct) =>
         {
             var produced = await handler.HandleAsync(
-                new ProduceLotCommand(id, request.LocationId, request.Quantity, request.UomId, request.LotNumber, request.ExpiresAt, request.Comment, request.RunId),
+                new ProduceLotCommand(id, request.LocationId, request.Quantity, request.UomId, request.LotNumber, request.ExpiresAt, request.Comment, request.RunId,
+                    request.EffectiveAt),
                 ct);
             return TypedResults.Created($"/api/lots/{produced.LotId}", produced);
         })
         .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.Job))
+        .RequireToBackdate(Site.Of(SiteOf.Job))
             .WithTags("Inventory");
 
         routes.MapGet("/reason-codes", async Task<Ok<IReadOnlyList<ReasonCodeDto>>> (

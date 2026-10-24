@@ -114,7 +114,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
 
     // One movement as both a lot's history and the journal show it.
     private const string EventColumns = """
-        e.id, e.occurred_at, e.event_kind AS kind, e.qty_delta, e.qty_after, eu.code AS uom_code,
+        e.id, e.occurred_at, e.effective_at, e.event_kind AS kind, e.qty_delta, e.qty_after, eu.code AS uom_code,
         fl.code AS from_location_code, tl.code AS to_location_code, e.from_status, e.to_status,
         e.job_id, ej.job_number, r.code AS reason_code, r.name AS reason_name, e.comment, e.actor_id,
         e.related_lot_id, rl.lot_number AS related_lot_number, rll.code AS related_lot_location_code, e.reference, e.reverses_event_id
@@ -162,7 +162,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
 
     private const string LinkColumns = """
         o.id AS lot_id, o.lot_number, o.is_bulk, loc.code AS location_code, m.code AS material_code, m.name AS material_name,
-        o.status, o.quantity, u.code AS uom_code, g.link_basis, j.job_number
+        o.status, o.quantity, u.code AS uom_code, g.link_basis, j.job_number, g.effective_at, g.derived_at
         """;
 
     private const string LinkJoins = """
@@ -434,34 +434,38 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         ORDER BY r.reason_kind, r.sort_order, r.name
         """;
 
-    // Each lot's quantity after its latest movement up to the time; lots at zero then don't count.
+    // Each lot's quantity at the time: its movements that count by then, by effective time, whenever they were recorded (D-057),
+    // so a back-dated movement changes the past the same way whatever order things were entered in. Lots at zero then don't count.
     private const string StockOnDateSql = """
         SELECT m.id AS material_id, m.code, m.name, c.name AS material_class_name, u.code AS uom_code,
-               sum(x.qty_after) AS quantity, count(*)::int AS lot_count
+               sum(x.quantity) AS quantity, count(*)::int AS lot_count
         FROM (
-            SELECT DISTINCT ON (e.lot_id) e.lot_id, e.qty_after
+            SELECT e.lot_id, sum(e.qty_delta) AS quantity
             FROM ts.lot_event e
             JOIN core.lot l ON l.id = e.lot_id
-            WHERE l.site_id = @SiteId AND e.occurred_at <= @At AND e.qty_after IS NOT NULL
-            ORDER BY e.lot_id, e.occurred_at DESC, e.id DESC) x
+            WHERE l.site_id = @SiteId AND e.effective_at <= @At AND e.qty_delta IS NOT NULL
+            GROUP BY e.lot_id) x
         JOIN core.lot l ON l.id = x.lot_id
         JOIN core.material m ON m.id = l.material_id
         JOIN core.uom u ON u.id = m.base_uom_id
         LEFT JOIN core.material_class c ON c.id = m.material_class_id
-        WHERE x.qty_after > 0
+        WHERE x.quantity > 0
         GROUP BY m.id, m.code, m.name, c.name, u.code
         ORDER BY c.name NULLS LAST, m.code
         """;
 
-    // Balances aren't aged: a balance's creation is only its first receipt.
+    // Balances aren't aged: a balance's creation is only its first receipt. A lot is as old as its first movement counts (D-057),
+    // so a back-dated receipt ages from when it was received, not when it was entered.
     private const string AgingSql = $"""
         SELECT m.id AS material_id, m.code, m.name, u.code AS uom_code,
-               coalesce(sum(l.quantity) FILTER (WHERE l.created_at > @Now - interval '30 days'), 0) AS up_to_30_days,
-               coalesce(sum(l.quantity) FILTER (WHERE l.created_at <= @Now - interval '30 days' AND l.created_at > @Now - interval '90 days'), 0) AS up_to_90_days,
-               coalesce(sum(l.quantity) FILTER (WHERE l.created_at <= @Now - interval '90 days' AND l.created_at > @Now - interval '180 days'), 0) AS up_to_180_days,
-               coalesce(sum(l.quantity) FILTER (WHERE l.created_at <= @Now - interval '180 days'), 0) AS over_180_days,
-               sum(l.quantity) AS total, min(l.created_at) AS oldest_at
-        FROM core.lot l
+               coalesce(sum(l.quantity) FILTER (WHERE l.since > @Now - interval '30 days'), 0) AS up_to_30_days,
+               coalesce(sum(l.quantity) FILTER (WHERE l.since <= @Now - interval '30 days' AND l.since > @Now - interval '90 days'), 0) AS up_to_90_days,
+               coalesce(sum(l.quantity) FILTER (WHERE l.since <= @Now - interval '90 days' AND l.since > @Now - interval '180 days'), 0) AS up_to_180_days,
+               coalesce(sum(l.quantity) FILTER (WHERE l.since <= @Now - interval '180 days'), 0) AS over_180_days,
+               sum(l.quantity) AS total, min(l.since) AS oldest_at
+        FROM (
+            SELECT l.*, coalesce((SELECT min(e.effective_at) FROM ts.lot_event e WHERE e.lot_id = l.id), l.created_at) AS since
+            FROM core.lot l) l
         JOIN core.material m ON m.id = l.material_id
         JOIN core.uom u ON u.id = m.base_uom_id
         WHERE l.site_id = @SiteId AND l.status IN {OnHand} AND l.quantity > 0 AND NOT l.is_bulk

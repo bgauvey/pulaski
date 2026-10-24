@@ -22,16 +22,17 @@ public sealed record ReceiveLotCommand(
     string? SupplierLot = null,
     DateTimeOffset? ExpiresAt = null,
     string? Comment = null,
-    Guid? RunId = null) : ICommand<LotTransactionResponse>;
+    Guid? RunId = null,
+    DateTimeOffset? EffectiveAt = null) : ICommand<LotTransactionResponse>;
 
-/// <summary>Adds found or miscounted stock to a lot, for an adjustment reason.</summary>
+/// <summary>Adds found or miscounted stock to a lot, for an adjustment reason; back-dated to <see cref="EffectiveAt"/> when given (D-057).</summary>
 public sealed record WriteUpLotCommand(
-    Guid LotId, long ExpectedVersion, decimal Quantity, Guid UomId, Guid ReasonCodeId, string? Comment = null)
+    Guid LotId, long ExpectedVersion, decimal Quantity, Guid UomId, Guid ReasonCodeId, string? Comment = null, DateTimeOffset? EffectiveAt = null)
     : ICommand<LotTransactionResponse>;
 
-/// <summary>Removes stock from a lot for an adjustment reason; a null quantity takes all of it.</summary>
+/// <summary>Removes stock from a lot for an adjustment reason; a null quantity takes all of it. Back-dated when <see cref="EffectiveAt"/> is given.</summary>
 public sealed record WriteOffLotCommand(
-    Guid LotId, long ExpectedVersion, decimal? Quantity, Guid? UomId, Guid ReasonCodeId, string? Comment = null)
+    Guid LotId, long ExpectedVersion, decimal? Quantity, Guid? UomId, Guid ReasonCodeId, string? Comment = null, DateTimeOffset? EffectiveAt = null)
     : ICommand<LotTransactionResponse>;
 
 /// <summary>Moves a lot to another location; a bulk balance moves <see cref="Quantity"/> of itself.</summary>
@@ -48,7 +49,9 @@ public sealed record ChangeLotStatusCommand(
 /// Declares quantity of an available lot used by a production job, in its open run or in the run named
 /// (D-035): material is used while a job runs, so a job with no run open needs the run it belongs to.
 /// </summary>
-public sealed record ConsumeLotCommand(Guid LotId, Guid JobId, decimal Quantity, Guid UomId, string? Comment = null, Guid? RunId = null)
+/// <remarks>Back-dated to <see cref="EffectiveAt"/> (D-057), it goes into the run going on then.</remarks>
+public sealed record ConsumeLotCommand(
+    Guid LotId, Guid JobId, decimal Quantity, Guid UomId, string? Comment = null, Guid? RunId = null, DateTimeOffset? EffectiveAt = null)
     : ICommand<LotTransactionResponse>;
 
 /// <summary>Declares a production job's output into a lot at a location.</summary>
@@ -60,7 +63,15 @@ public sealed record ProduceLotCommand(
     string? LotNumber = null,
     DateTimeOffset? ExpiresAt = null,
     string? Comment = null,
-    Guid? RunId = null) : ICommand<LotTransactionResponse>;
+    Guid? RunId = null,
+    DateTimeOffset? EffectiveAt = null) : ICommand<LotTransactionResponse>;
+
+/// <summary>Shared by the movement handlers (D-057).</summary>
+internal static class MovementTime
+{
+    /// <summary>The effective time when the movement is back-dated; null when it counts as recorded.</summary>
+    public static DateTimeOffset? Backdated(DateTimeOffset effective, DateTimeOffset now) => effective < now ? effective : null;
+}
 
 internal sealed class ReceiveLotHandler(
     IUnitOfWork unitOfWork,
@@ -96,7 +107,8 @@ internal sealed class ReceiveLotHandler(
         var location = await InventoryRules.LocationAsync(inventory, command.LocationId, null, cancellationToken);
         await InventoryRules.EnsureAcceptsAsync(inventory, location, material.Id, cancellationToken);
         var now = timeProvider.GetUtcNow();
-        var expiresAt = Lot.ExpiryFor(command.ExpiresAt, material.ShelfLifeDays, now);
+        var effective = Backdating.EffectiveAt(command.EffectiveAt, now, comment);
+        var expiresAt = Lot.ExpiryFor(command.ExpiresAt, material.ShelfLifeDays, effective);
         new Validator()
             .Require(!material.IsLotTracked || location.ComminglesLots || lotNumber is not null, nameof(command.LotNumber), $"Required: {material.Code} is lot-tracked.")
             .Require(material.IsLotTracked || lotNumber is null, nameof(command.LotNumber), $"Leave blank: {material.Code} isn't lot-tracked, so it is kept as one balance per location.")
@@ -124,6 +136,11 @@ internal sealed class ReceiveLotHandler(
             lot = lot with { ExpiresAt = Commingling.Earliest(lot.ExpiresAt, expiresAt) };
         }
 
+        if (!isNew)
+        {
+            await Backdating.EnsureFitsAsync(inventory, lot, quantity, effective, now, material.BaseUomCode, cancellationToken);
+        }
+
         var (received, movement) = lot.Add(quantity, LotEventKind.Received);
         var envelope = events.Create(
             EventTypes.LotReceived,
@@ -140,12 +157,15 @@ internal sealed class ReceiveLotHandler(
                 QuantityAfter = received.Quantity,
                 received.SupplierLot,
                 received.ExpiresAt,
+                EffectiveAt = MovementTime.Backdated(effective, now),
                 Comment = comment,
             });
         var version = isNew
             ? await inventory.InsertLotAsync(received, envelope.OccurredAt, cancellationToken)
             : await inventory.UpdateLotAsync(received, envelope.OccurredAt, cancellationToken);
-        await inventory.InsertEventAsync(new LotEventRow(ids.NewId(), received.Id, movement, received.UomId, envelope.ActorId, Comment: comment), envelope.OccurredAt, cancellationToken);
+        await inventory.InsertEventAsync(
+            new LotEventRow(ids.NewId(), received.Id, movement, received.UomId, envelope.ActorId, Comment: comment, EffectiveAt: MovementTime.Backdated(effective, now)),
+            envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
 
         // A numbered receipt where lots mix is kept, for its genealogy, then joins the balance (D-031).
@@ -167,7 +187,8 @@ internal sealed class WriteUpLotHandler(
     IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events,
-    IIdGenerator ids) : ICommandHandler<WriteUpLotCommand, LotTransactionResponse>
+    IIdGenerator ids,
+    TimeProvider timeProvider) : ICommandHandler<WriteUpLotCommand, LotTransactionResponse>
 {
     public async Task<LotTransactionResponse> HandleAsync(WriteUpLotCommand command, CancellationToken cancellationToken)
     {
@@ -184,17 +205,29 @@ internal sealed class WriteUpLotHandler(
         var reason = await InventoryRules.ReasonAsync(inventory, command.ReasonCodeId, ReasonKinds.InventoryAdjustment, lot.SiteId, comment, cancellationToken);
         var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
         var quantity = await InventoryRules.ToBaseAsync(units, material, command.Quantity, command.UomId, cancellationToken);
+        var now = timeProvider.GetUtcNow();
+        var effective = Backdating.EffectiveAt(command.EffectiveAt, now, comment);
+        await Backdating.EnsureFitsAsync(inventory, lot, quantity, effective, now, material.BaseUomCode, cancellationToken);
 
         var (after, movement) = lot.Add(quantity, LotEventKind.Adjusted);
         var envelope = events.Create(
             EventTypes.LotWrittenUp,
             "lot",
             lot.Id,
-            new { lot.LotNumber, Entered = new { command.Quantity, command.UomId }, Quantity = quantity, QuantityAfter = after.Quantity, ReasonCodeId = reason.Id, Comment = comment },
+            new
+            {
+                lot.LotNumber,
+                Entered = new { command.Quantity, command.UomId },
+                Quantity = quantity,
+                QuantityAfter = after.Quantity,
+                ReasonCodeId = reason.Id,
+                EffectiveAt = MovementTime.Backdated(effective, now),
+                Comment = comment,
+            },
             reason.Code);
         var version = await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
-            new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, ReasonCodeId: reason.Id, Comment: comment),
+            new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, ReasonCodeId: reason.Id, Comment: comment, EffectiveAt: MovementTime.Backdated(effective, now)),
             envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -209,7 +242,8 @@ internal sealed class WriteOffLotHandler(
     IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events,
-    IIdGenerator ids) : ICommandHandler<WriteOffLotCommand, LotTransactionResponse>
+    IIdGenerator ids,
+    TimeProvider timeProvider) : ICommandHandler<WriteOffLotCommand, LotTransactionResponse>
 {
     public async Task<LotTransactionResponse> HandleAsync(WriteOffLotCommand command, CancellationToken cancellationToken)
     {
@@ -233,16 +267,28 @@ internal sealed class WriteOffLotHandler(
             throw new DomainRuleException($"{lot.Name} is empty; there is nothing to write off.");
         }
 
+        var now = timeProvider.GetUtcNow();
+        var effective = Backdating.EffectiveAt(command.EffectiveAt, now, comment);
+        await Backdating.EnsureFitsAsync(inventory, lot, -quantity, effective, now, material.BaseUomCode, cancellationToken);
         var (after, movement) = lot.Take(quantity, LotEventKind.Scrapped, material.BaseUomCode);
         var envelope = events.Create(
             EventTypes.LotWrittenOff,
             "lot",
             lot.Id,
-            new { lot.LotNumber, Entered = new { command.Quantity, command.UomId }, Quantity = quantity, QuantityAfter = after.Quantity, ReasonCodeId = reason.Id, Comment = comment },
+            new
+            {
+                lot.LotNumber,
+                Entered = new { command.Quantity, command.UomId },
+                Quantity = quantity,
+                QuantityAfter = after.Quantity,
+                ReasonCodeId = reason.Id,
+                EffectiveAt = MovementTime.Backdated(effective, now),
+                Comment = comment,
+            },
             reason.Code);
         var version = await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
-            new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, ReasonCodeId: reason.Id, Comment: comment),
+            new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, ReasonCodeId: reason.Id, Comment: comment, EffectiveAt: MovementTime.Backdated(effective, now)),
             envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -412,17 +458,21 @@ internal sealed class ConsumeLotHandler(
 
         // The job first, then the lot (D-027): declarations on one job serialize, so consumption
         // and production on it see each other's genealogy.
+        var now = timeProvider.GetUtcNow();
+        var effective = Backdating.EffectiveAt(command.EffectiveAt, now, comment);
         var job = await InventoryRules.JobAsync(inventory, command.JobId, null, cancellationToken);
-        var run = await RunReporting.RunForAsync(execution, job, command.RunId, "consumption", cancellationToken);
+        var run = await RunReporting.RunForAsync(execution, job, command.RunId, "consumption", cancellationToken, effective < now ? effective : null);
         var lot = await InventoryRules.LotAsync(inventory, command.LotId, null, cancellationToken);
         if (lot.SiteId != job.SiteId)
         {
             throw new DomainRuleException($"{lot.Name} is in another site than {job.JobNumber}.");
         }
 
-        InventoryRules.EnsureNotExpired(lot, timeProvider.GetUtcNow(), "consumed");
+        // Usable then, not necessarily now: a back-dated consumption is checked at the time it counts (D-057).
+        InventoryRules.EnsureNotExpired(lot, effective, "consumed");
         var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
         var quantity = await InventoryRules.ToBaseAsync(units, material, command.Quantity, command.UomId, cancellationToken);
+        await Backdating.EnsureFitsAsync(inventory, lot, -quantity, effective, now, material.BaseUomCode, cancellationToken);
         var (after, movement) = lot.Take(quantity, LotEventKind.Consumed, material.BaseUomCode);
 
         List<InventoryWarningDto> warnings = [];
@@ -449,13 +499,15 @@ internal sealed class ConsumeLotHandler(
                 Quantity = quantity,
                 QuantityAfter = after.Quantity,
                 ChildLotIds = edges.Select(e => e.ChildLotId),
+                RunId = run.Id,
+                EffectiveAt = MovementTime.Backdated(effective, now),
                 Comment = comment,
             });
         var version = await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
-            new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, JobId: job.Id, Comment: comment, RunId: run.Id),
+            new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, JobId: job.Id, Comment: comment, RunId: run.Id, EffectiveAt: MovementTime.Backdated(effective, now)),
             envelope.OccurredAt, cancellationToken);
-        await inventory.InsertGenealogyAsync(edges, envelope.OccurredAt, cancellationToken);
+        await inventory.InsertGenealogyAsync(edges, envelope.OccurredAt, cancellationToken, MovementTime.Backdated(effective, now));
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -508,7 +560,10 @@ internal sealed class ProduceLotHandler(
     {
         var report = await new ReportProductionHandler(unitOfWork, inventory, units, execution, eventLog, events, ids, timeProvider).HandleAsync(
             new ReportProductionCommand(
-                command.JobId, command.RunId, command.Quantity, 0m, command.UomId, null, command.LocationId, command.LotNumber, command.ExpiresAt, command.Comment),
+                command.JobId, command.RunId, command.Quantity, 0m, command.UomId, null, command.LocationId, command.LotNumber, command.ExpiresAt, command.Comment)
+            {
+                EffectiveAt = command.EffectiveAt,
+            },
             cancellationToken);
         return report.Lot!;
     }
@@ -533,12 +588,14 @@ internal static class ProductionOutput
         string? comment,
         Guid? runId,
         DateTimeOffset now,
+        DateTimeOffset? effectiveAt,
         CancellationToken cancellationToken)
     {
         var location = await InventoryRules.LocationAsync(inventory, locationId, job.SiteId, cancellationToken);
         var material = await InventoryRules.MaterialAsync(inventory, job.MaterialId!.Value, cancellationToken);
         await InventoryRules.EnsureAcceptsAsync(inventory, location, material.Id, cancellationToken);
-        var expiresAt = Lot.ExpiryFor(expiresAtEntered, material.ShelfLifeDays, now);
+        var effective = effectiveAt ?? now;
+        var expiresAt = Lot.ExpiryFor(expiresAtEntered, material.ShelfLifeDays, effective);
         var quantity = await InventoryRules.ToBaseAsync(units, material, enteredQuantity, enteredUomId, cancellationToken);
         var produced = await inventory.ListLotsProducedByJobAsync(job.Id, cancellationToken);
         // Where lots mix, a blank number goes straight into the balance; a number makes a lot that then joins it (D-031).
@@ -587,6 +644,11 @@ internal static class ProductionOutput
             lot = balance with { ExpiresAt = Commingling.Earliest(balance.ExpiresAt, expiresAt) };
         }
 
+        if (existing is not null)
+        {
+            await Backdating.EnsureFitsAsync(inventory, lot, quantity, effective, now, material.BaseUomCode, cancellationToken);
+        }
+
         var (after, movement) = lot.Add(quantity, LotEventKind.Produced);
         var edges = InventoryRules.Edges(ids, await inventory.ListLotsConsumedByJobAsync(job.Id, cancellationToken), [after.Id], job.Id);
         var envelope = events.Create(
@@ -605,15 +667,16 @@ internal static class ProductionOutput
                 QuantityAfter = after.Quantity,
                 ParentLotIds = edges.Select(e => e.ParentLotId),
                 RunId = runId,
+                EffectiveAt = MovementTime.Backdated(effective, now),
                 Comment = comment,
             });
         var version = existing is null
             ? await inventory.InsertLotAsync(after, envelope.OccurredAt, cancellationToken)
             : await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
-            new LotEventRow(ids.NewId(), after.Id, movement, after.UomId, envelope.ActorId, JobId: job.Id, Comment: comment, RunId: runId),
+            new LotEventRow(ids.NewId(), after.Id, movement, after.UomId, envelope.ActorId, JobId: job.Id, Comment: comment, RunId: runId, EffectiveAt: MovementTime.Backdated(effective, now)),
             envelope.OccurredAt, cancellationToken);
-        await inventory.InsertGenealogyAsync(edges, envelope.OccurredAt, cancellationToken);
+        await inventory.InsertGenealogyAsync(edges, envelope.OccurredAt, cancellationToken, MovementTime.Backdated(effective, now));
         await eventLog.AppendAsync(envelope, cancellationToken);
 
         if (location.ComminglesLots && !after.IsBulk)

@@ -174,8 +174,8 @@
             }
             else
             {
-                @LinkTable("Made from", detail.Parents, "Not made from other lots.")
-                @LinkTable("Used in", detail.Children, "Nothing made from it yet.")
+                @LinkTable("Made from", detail.Parents, "Not made from other lots.", tz)
+                @LinkTable("Used in", detail.Children, "Nothing made from it yet.", tz)
             }
         </section>
     </div>
@@ -203,7 +203,13 @@
                     @foreach (var e in detail.History)
                     {
                         <tr @key="e.Id">
-                            <td class="small text-nowrap">@Display.SiteTime(e.OccurredAt, tz)</td>
+                            <td class="small text-nowrap">
+                                @Display.SiteTime(e.IsBackdated ? e.EffectiveAt : e.OccurredAt, tz)
+                                @if (e.IsBackdated)
+                                {
+                                    <div class="text-muted" title="Back-dated: it counts from the time above">recorded @Display.SiteTime(e.OccurredAt, tz)</div>
+                                }
+                            </td>
                             <td>
                                 @InventoryView.EventLabel(e.Kind)
                                 @if (e.ToStatus is { } to)
@@ -330,7 +336,7 @@ else if (_error is null)
         await LoadAsync();
     }
 
-    private static RenderFragment LinkTable(string title, IReadOnlyList<LotLinkDto> links, string empty) => __builder =>
+    private static RenderFragment LinkTable(string title, IReadOnlyList<LotLinkDto> links, string empty, string? tz) => __builder =>
     {
         <h3 class="h6 mt-2">@title</h3>
         @if (links.Count == 0)
@@ -348,7 +354,12 @@ else if (_error is null)
                                 <td><a class="fw-semibold" href="inventory/lots/@link.LotId">@InventoryView.LotLabel(link.LotNumber, link.IsBulk, link.LocationCode)</a></td>
                                 <td>@link.MaterialCode <div class="small text-muted">@link.MaterialName</div></td>
                                 <td><span class="@InventoryView.StatusChip(link.Status)">@Display.Label(link.Status)</span></td>
-                                <td class="small">@(link.JobNumber is null ? Display.Label(link.LinkBasis) : $"via {link.JobNumber}")</td>
+                                <td class="small">
+                                    @(link.JobNumber is null ? Display.Label(link.LinkBasis) : $"via {link.JobNumber}")
+                                    <div class="text-muted" title="@(link.EffectiveAt < link.DerivedAt.AddMinutes(-1) ? $"Back-dated; recorded {Display.SiteTime(link.DerivedAt, tz)}" : null)">
+                                        since @Display.SiteTime(link.EffectiveAt, tz)@(link.EffectiveAt < link.DerivedAt.AddMinutes(-1) ? " (back-dated)" : "")
+                                    </div>
+                                </td>
                             </tr>
                         }
                     </tbody>
