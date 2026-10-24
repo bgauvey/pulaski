@@ -61,6 +61,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-051 | Deleting an edge node deactivates it and its connections and tags atomically. Deleting a tag physically removes its configuration row whether active or inactive, first clearing any quality-characteristic source reference; append a deletion event, retain time-series history, and grant the app role DELETE only on `core.equipment_tag` | Decided | 2026-10-18 |
 | D-052 | Utilization and OEE reports: worked out on read from state changes, stops, runs and production reports, between production days (at most 31), by equipment, shift and product with a breakdown of time by use and reason. Time is classified by unit mode, then by the stop's reason class, else by Execute; lines take their time from their machines like their state. Performance and quality weigh output by the ideal rate; machine counts aren't used. Nothing is stored yet | Proposed | 2026-10-19 |
 | D-053 | Material source adapters: an adapter only turns a file in its format into source-neutral import rows; the bulk import applies the same rules to rows from any source, all or nothing. Adapters are registered services named in the URL (`POST /api/materials/import/{source}`). CSV and ISA-95 B2MML material information (`MaterialDefinition`) ship first; the external system a B2MML file's items belong to is named on import, and its `ID` is their key. Label printing and pushed ERP feeds stay later | Proposed | 2026-10-23 |
+| D-054 | People from HR and ERP sources: an imported person keeps its source system and key (unique together) and is matched on them by every import, so importing again never duplicates anyone; the first import links a hand-kept person with the same employee number. The source owns employee number, name and active; Pulaski owns crew, sign-in, badges and qualifications. Imports are files, all or nothing, through people source adapters (CSV, SCIM 2.0 users); every change is the usual person event with the source as its reason | Proposed | 2026-10-23 |
 
 ## Order hierarchy
 
@@ -765,7 +766,7 @@ Sharing out by overlap means nobody re-clocks when the job on a line changes. Ru
 
 **Events:** `pulaski.crew.created.v1`, `…updated.v1`, `pulaski.person.created.v1`, `…updated.v1`, `pulaski.labor.started.v1`, `…ended.v1`, `…changed.v1`, `…corrected.v1`, `…shift_approved.v1`.
 
-**Not yet:** people from HR or the ERP; labor by shift on the Overview; a person working at another site than their own; editing a session's job or type on the review screen (only times and share). Breaks are D-047, qualifications D-048, badges and terminals D-049.
+**Not yet:** labor by shift on the Overview; a person working at another site than their own; editing a session's job or type on the review screen (only times and share). Breaks are D-047, qualifications D-048, badges and terminals D-049, people from HR and the ERP D-054.
 
 ## Shift overrides (D-042, proposed)
 
@@ -1013,6 +1014,44 @@ Closes the D-033 / D-034 next step: material master data from sources other than
 **Screen.** Configure → Materials → **Import file** picks the format from the API's list and shows an *External system* field for B2MML. Changing either checks the picked file again.
 
 **Not yet.** Label printing (BarTender and the like), ERP feeds pushed or pulled on a timer, B2MML material lots and classes as their own records, and exporting B2MML.
+
+## People from HR and ERP sources (D-054, proposed)
+
+Issue #19. Until now people were kept by hand on Configure → People (D-040); `core.person.origin` already allowed `hr` and `erp`.
+
+**Identity and ownership.** `core.person` gains `external_system`, `external_key` and `external_version`. `person_external_ck`: a `local` person has no system or key, and an `hr` / `erp` person has both. `person_external_uq` makes system + key unique across all sites. For an imported person the source owns the **employee number, name and `is_active`** (employment), and `UpdatePersonCommand` refuses changes to the name or active flag ("change them there and import again"). Pulaski owns the crew, the user link, badges, PINs and qualifications, as for materials (D-033). Labor already recorded is untouched by any import.
+
+**The import.** `ImportPeopleCommand(SiteId, PersonImportSource, DryRun, Source)` runs in one transaction and is all or nothing with a dry run, like the materials import (D-034). For each row:
+
+| Row | Matched on | Notes |
+| --- | --- | --- |
+| With system + key | `FindPersonByExternalKeyForUpdateAsync` | The key at another site is an error (a person works at one site). Not found: a **local** person at the site with the same employee number is **linked** (keeps id, history, crew, badge); an imported one with that number is an error; otherwise created (`origin` from the row, else `hr`). |
+| Without | Employee number at the site | An imported person with that number is an error: give the key or change it at the source. |
+
+- A row may change the employee number (it is the key that identifies them), provided no one else at the site has the new one.
+- A field the row doesn't supply keeps what the person has (`Supplied<T>`, now in `Application.Abstractions` and shared with materials). A blank crew or user name clears it.
+- Crew codes must be active crews of the site (`PeopleRules`). User names go through the same check as the screen.
+- Switching someone off is refused while they are clocked on, as on the screen.
+- A number or key twice in a file is an error.
+- Results: create, update (with the fields that change, `external_key` meaning linked), unchanged (no event, no new version), or error.
+- **Audit:** each change is `pulaski.person.created.v1` / `…updated.v1` with before and after, and the reason `"{adapter} import"`.
+
+**Adapters.** `IPeopleSourceAdapter` mirrors D-053. It only translates a file into `PersonImportRow`s through `PersonImportFields.ToRow`, and never looks anyone up. The external system is always named on import, because neither format reliably carries it.
+
+- **CSV** (`csv`, `PeopleCsv`): columns `employee_number`, `name` (required), `active`, `crew`, `username`, `origin`, `external_system`, `external_key`, `external_version`, with a few aliases. An unknown column is a file problem. The system named on import applies to rows with an `external_key` and no `external_system`. This is what an HR system's custom report exports.
+- **SCIM 2.0** (`scim`, `PeopleScim`, RFC 7643): a `ListResponse`, an array of users, or one user. The fields map as follows:
+  - Employee number: the enterprise extension's `employeeNumber`.
+  - Name: `displayName`, else `name.formatted`, else given + family name.
+  - `active` as given.
+  - Key: `externalId`, else `id`.
+  - Version: `meta.version`.
+  - Origin: `hr`.
+
+  Attribute names are matched without case, as SCIM specifies, and other attributes are skipped. A resource whose `schemas` lacks the core User schema is a problem on its row. SCIM was chosen because it is the public standard HR systems and identity providers use to hand people on; nothing vendor-specific is built (clean-room).
+
+**API and screen.** `GET /api/people/import/sources` (any view) lists the adapters. `POST /api/people/import/{source}?siteId=&dryRun=&externalSystem=` (`people.manage` at the site, at most 5 MB and 5,000 rows) runs an import. Configure → People has **Import file** (`PeopleFileImport`). Imported people show their system as a chip, and their name and active box are read-only. Migration `0023_person_import`.
+
+**Not yet.** A live SCIM endpoint (`/scim/v2/Users`) that HR or an identity provider pushes to; fetching from a source on a timer; switching off people a full file leaves out; moving a person between sites; qualifications from HR.
 
 ## Application architecture
 

@@ -24,13 +24,20 @@ internal sealed class LaborRepository(DbSession session) : ILaborRepository
 
     private const string UpdateCrew = "UPDATE core.crew SET name = @Name, is_active = @IsActive, updated_at = @At WHERE id = @Id RETURNING xmin::text::bigint";
 
-    private const string PersonColumns = "id, site_id, employee_number, display_name, crew_id, app_user_id, is_active, xmin::text::bigint AS version";
+    private const string PersonColumns =
+        "id, site_id, employee_number, display_name, crew_id, app_user_id, is_active, origin, external_system, external_key, external_version, xmin::text::bigint AS version";
 
     private const string GetPerson = $"SELECT {PersonColumns} FROM core.person WHERE id = @Id FOR UPDATE";
 
     private const string GetPeople = $"SELECT {PersonColumns} FROM core.person WHERE id = ANY(@Ids) ORDER BY id FOR UPDATE";
 
     private const string GetPersonOfUser = $"SELECT {PersonColumns} FROM core.person WHERE app_user_id = @UserId FOR UPDATE";
+
+    private const string PersonByKey = $"SELECT {PersonColumns} FROM core.person WHERE external_system = @System AND external_key = @Key FOR UPDATE";
+
+    private const string PersonByNumber = $"SELECT {PersonColumns} FROM core.person WHERE site_id = @SiteId AND employee_number = @Number FOR UPDATE";
+
+    private const string CrewByCode = "SELECT id, site_id, code, name, is_active FROM core.crew WHERE site_id = @SiteId AND code = @Code";
 
     private const string NumberExists = "SELECT EXISTS (SELECT 1 FROM core.person WHERE site_id = @SiteId AND employee_number = @Number)";
 
@@ -39,13 +46,15 @@ internal sealed class LaborRepository(DbSession session) : ILaborRepository
     private const string UserElsewhere = "SELECT EXISTS (SELECT 1 FROM core.person WHERE app_user_id = @UserId AND id <> @PersonId)";
 
     private const string InsertPerson = """
-        INSERT INTO core.person (id, site_id, employee_number, display_name, crew_id, app_user_id, origin, is_active, created_at, updated_at)
-        VALUES (@Id, @SiteId, @EmployeeNumber, @DisplayName, @CrewId, @AppUserId, 'local', @IsActive, @At, @At)
+        INSERT INTO core.person (id, site_id, employee_number, display_name, crew_id, app_user_id, origin, external_system, external_key, external_version,
+                                 is_active, created_at, updated_at)
+        VALUES (@Id, @SiteId, @EmployeeNumber, @DisplayName, @CrewId, @AppUserId, @Origin, @ExternalSystem, @ExternalKey, @ExternalVersion, @IsActive, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     private const string UpdatePerson = """
-        UPDATE core.person SET display_name = @DisplayName, crew_id = @CrewId, app_user_id = @AppUserId, is_active = @IsActive, updated_at = @At
+        UPDATE core.person SET employee_number = @EmployeeNumber, display_name = @DisplayName, crew_id = @CrewId, app_user_id = @AppUserId, is_active = @IsActive,
+            origin = @Origin, external_system = @ExternalSystem, external_key = @ExternalKey, external_version = @ExternalVersion, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -228,6 +237,17 @@ internal sealed class LaborRepository(DbSession session) : ILaborRepository
     public async Task<Versioned<PersonRecord>?> GetPersonOfUserForUpdateAsync(Guid userId, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<PersonRow>(GetPersonOfUser, new { UserId = userId }, cancellationToken))?.ToVersioned();
 
+    public async Task<Versioned<PersonRecord>?> FindPersonByExternalKeyForUpdateAsync(string externalSystem, string externalKey, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<PersonRow>(PersonByKey, new { System = externalSystem, Key = externalKey }, cancellationToken))?.ToVersioned();
+
+    public async Task<Versioned<PersonRecord>?> FindPersonByNumberForUpdateAsync(Guid siteId, string employeeNumber, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<PersonRow>(PersonByNumber, new { SiteId = siteId, Number = employeeNumber }, cancellationToken))?.ToVersioned();
+
+    public async Task<CrewRecord?> FindCrewByCodeAsync(Guid siteId, string code, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<CrewRow>(CrewByCode, new { SiteId = siteId, Code = code }, cancellationToken) is { } r
+            ? new CrewRecord(r.Id, r.SiteId, r.Code, r.Name, r.IsActive)
+            : null;
+
     public Task<bool> EmployeeNumberExistsAsync(Guid siteId, string employeeNumber, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(NumberExists, new { SiteId = siteId, Number = employeeNumber }, cancellationToken);
 
@@ -306,7 +326,7 @@ internal sealed class LaborRepository(DbSession session) : ILaborRepository
     private static object KeyArgs(ShiftKey k) => new { k.SiteId, Date = k.ProductionDate, ScheduleId = k.ShiftScheduleId, Code = k.ShiftCode };
 
     private static object PersonArgs(PersonRecord p, DateTimeOffset at) =>
-        new { p.Id, p.SiteId, p.EmployeeNumber, p.DisplayName, p.CrewId, p.AppUserId, p.IsActive, At = at };
+        new { p.Id, p.SiteId, p.EmployeeNumber, p.DisplayName, p.CrewId, p.AppUserId, p.IsActive, p.Origin, p.ExternalSystem, p.ExternalKey, p.ExternalVersion, At = at };
 
     private static object SessionArgs(SessionRecord s, DateTimeOffset at) => new
     {
@@ -350,9 +370,14 @@ internal sealed class LaborRepository(DbSession session) : ILaborRepository
         public Guid? CrewId { get; init; }
         public Guid? AppUserId { get; init; }
         public bool IsActive { get; init; }
+        public string Origin { get; init; } = "";
+        public string? ExternalSystem { get; init; }
+        public string? ExternalKey { get; init; }
+        public string? ExternalVersion { get; init; }
         public long Version { get; init; }
 
-        public Versioned<PersonRecord> ToVersioned() => new(new PersonRecord(Id, SiteId, EmployeeNumber, DisplayName, CrewId, AppUserId, IsActive), Version);
+        public Versioned<PersonRecord> ToVersioned() =>
+            new(new PersonRecord(Id, SiteId, EmployeeNumber, DisplayName, CrewId, AppUserId, IsActive, Origin, ExternalSystem, ExternalKey, ExternalVersion), Version);
     }
 
     private sealed class ScheduleRow

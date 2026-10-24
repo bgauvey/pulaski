@@ -111,6 +111,24 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> UpdatePersonAsync(Guid id, UpdatePersonRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/people/{id}", request, ct);
 
+    /// <summary>The formats people can be imported from (D-054).</summary>
+    public Task<IReadOnlyList<PeopleSourceDto>> ListPeopleSourcesAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<PeopleSourceDto>>("api/people/import/sources", ct);
+
+    /// <summary>Checks (<paramref name="dryRun"/>) or imports a people file into a site, read by the named source adapter (D-054).</summary>
+    public async Task<ImportPeopleResponse> ImportPeopleAsync(
+        Guid siteId, string source, string text, string? externalSystem, bool dryRun, string mediaType, CancellationToken ct = default)
+    {
+        var query = $"siteId={siteId}&dryRun={(dryRun ? "true" : "false")}"
+            + (string.IsNullOrWhiteSpace(externalSystem) ? "" : $"&externalSystem={Uri.EscapeDataString(externalSystem.Trim())}");
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/people/import/{Uri.EscapeDataString(source)}?{query}")
+        {
+            Content = new StringContent(text, System.Text.Encoding.UTF8, mediaType),
+        };
+        using var response = await SendCoreAsync(request, ct);
+        return await ReadAsync<ImportPeopleResponse>(response, ct);
+    }
+
     public Task<MyLaborDto> GetMyLaborAsync(CancellationToken ct = default) => GetAsync<MyLaborDto>("api/labor/me", ct);
 
     public Task<LaborResponse> ClockMeOnAsync(ClockOnRequest request, CancellationToken ct = default) =>

@@ -1,7 +1,6 @@
-namespace Pulaski.Application.Materials;
+using Pulaski.Application.Abstractions;
 
-/// <summary>A value an import source supplied; a field left out of the source is null instead, and keeps what the material has.</summary>
-public sealed record Supplied<T>(T Value);
+namespace Pulaski.Application.Materials;
 
 /// <summary>
 /// One item for a bulk import (D-034), whatever it came from: a CSV file today, an adapter for

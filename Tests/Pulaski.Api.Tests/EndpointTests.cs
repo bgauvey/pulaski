@@ -6,6 +6,7 @@ using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Common;
 using Pulaski.Application.Scheduling;
 using Pulaski.Contracts.EquipmentModel;
+using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.Materials;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Contracts.WorkOrders;
@@ -254,6 +255,24 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
 
         using var other = new StringContent("x", System.Text.Encoding.UTF8, "text/plain");
         var unknown = await _client.PostAsync(new Uri("/api/materials/import/idoc", UriKind.Relative), other);
+        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+    }
+
+    [Fact]
+    public async Task People_files_import_into_a_site_through_the_named_source()
+    {
+        var site = Guid.CreateVersion7();
+        factory.Stores.Labor.AddSite(site);
+        var sources = await _client.GetFromJsonAsync<IReadOnlyList<PeopleSourceDto>>("/api/people/import/sources");
+        Assert.Equal(["csv", "scim"], sources!.Select(s => s.Name));
+
+        using var csv = new StringContent("employee_number,name,external_key\nAPI-1,Ann,W-1\n", System.Text.Encoding.UTF8, "text/csv");
+        var check = await _client.PostAsync(new Uri($"/api/people/import/csv?siteId={site}&dryRun=true&externalSystem=HR1", UriKind.Relative), csv);
+        Assert.Equal(HttpStatusCode.OK, check.StatusCode);
+        Assert.Equal(1, (await check.Content.ReadFromJsonAsync<ImportPeopleResponse>())!.Created);
+
+        using var other = new StringContent("x", System.Text.Encoding.UTF8, "text/plain");
+        var unknown = await _client.PostAsync(new Uri($"/api/people/import/payroll?siteId={site}", UriKind.Relative), other);
         Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
     }
 }

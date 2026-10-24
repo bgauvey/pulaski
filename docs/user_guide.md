@@ -1384,6 +1384,30 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 3. On **People**, fill in **Employee no.**, **Name**, the **Crew** and, if they will clock themselves on, the Pulaski **User name** they sign in as. Click **Add person**.
 4. In **Configure → Shifts**, set the **Crew** of each shift.
 
+### Import people from HR or the ERP
+
+Load everyone at once, and keep them up to date, from a file your HR system or ERP produces: a report saved as CSV, or SCIM 2.0 users in JSON (the standard format HR and identity systems use to share people).
+
+1. On **Configure → People**, choose the site, then click **Import file** next to **Add person**.
+2. Pick the **Format**: **CSV** or **SCIM**.
+3. Type the **External system** the people come from, such as `HR1`. Leave it blank only for a list of people kept in Pulaski.
+4. Prepare the file. For CSV, the first line names the columns; **employee_number** and **name** are required:
+
+   | Column | Holds |
+   | --- | --- |
+   | `employee_number`, `name` | Their employee number and name. |
+   | `external_key` | Their key in the HR system or ERP, such as a worker ID. Every later import finds them by it. |
+   | `active` | `yes` or `no`: whether they work here. |
+   | `crew`, `username` | A crew code on the Crews tab, and the Pulaski user they sign in as. |
+   | `origin` | `hr` (the default) or `erp`. |
+   | `external_system`, `external_version` | The system, if the file names it per row, and the source's version for reference. |
+
+   For SCIM, each user's `employeeNumber` (from the enterprise extension) is the employee number, `displayName` (or the parts of `name`) the name, `active` whether they work here, and `externalId` (or `id`) their key.
+5. Click **Choose File** and pick the file. Pulaski checks it straight away and saves nothing yet: each row shows **Create**, **Update** (with what changes), **Unchanged** or **Error** with the reason.
+6. Fix any errors and pick the file again, then click **Import N people**. The list updates, and imported people show their system's name next to their employee number.
+
+Import the same file, or next week's, as often as you like: people are matched on their key, so nobody is added twice.
+
 ### Check a crew onto a line
 
 1. Open **Operate → Labor**. **On now** shows each line with its shift, crew, the job running and who is on (with the standard crew, when there is one).
@@ -1453,6 +1477,11 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 - **One line at a time per person**, and their open time at most 100% of their time in total.
 - **Times can't be ahead of now.** Setup needs a job (the job running on the line, when added from **On now**); indirect needs an indirect labor reason.
 - **Switching someone off** is refused while they are clocked on.
+- **Imported people.** For someone imported with an external system and key, that system owns their **employee number, name and whether they are active**: those can't be changed on the People tab (change them there and import again). Pulaski keeps their crew, sign-in, badge and qualifications; a file may set the crew and user name too, and a column it leaves out keeps what they have.
+- **Which person a row is.** A row with an external key is found by its system and key, even when their employee number or name has changed. The first time, a person already on the People tab with the same employee number is linked to the system instead of added again, and keeps their history, crew and badge. A row without a key is a Pulaski person found by employee number; a row whose employee number belongs to an imported person is an error. A key already used by someone at another site is an error: a person works at one site.
+- **All or nothing.** If any row has an error, nothing is imported; a check never saves anything. Switching someone off from a file is refused while they are clocked on, like on the screen. An employee number or key can appear only once in a file. At most 5 MB and 5,000 people per file.
+- **The file:** CSV columns in any order and case, with a few other names accepted (`Employee No`, `Full name`, `crew_code`). In CSV, the external system typed on the panel is used for rows that have an `external_key` but no `external_system` of their own. In SCIM, attribute names are matched without case, other attributes (department, e-mail…) are skipped, and the file may be a `ListResponse`, an array of users or a single user.
+- **Audit.** Every created or changed person is recorded in the event log as `pulaski.person.created.v1` or `…updated.v1`, with them before and after and the reason *CSV import* or *SCIM import*. The same import is `POST /api/people/import/csv` or `…/scim` with `?siteId=` (and `&dryRun=true` to check, `&externalSystem=HR1`); `GET /api/people/import/sources` lists the formats.
 - **Nothing runs on its own.** Time stays open until someone ends it, checks the line out, or approves the shift.
 - **Hours** are worked time: elapsed time outside the person's breaks × share; an open session counts until now. Someone on two lines at 50% who takes a 30-minute break loses 15 minutes on each, and has 30 minutes of break.
 - **Breaks:** a break must start while the person is on a line, belongs to that line's shift, lasts at most 4 hours and can't overlap another of theirs. Paid and unpaid breaks both come out of worked hours; paid ones are reported for payroll to add back. Breaks lock with their shift's approval, like time on a line.
@@ -1746,7 +1775,7 @@ Between two production jobs on different materials, a line needs a changeover. P
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
 - **No screen yet for the changeover rules** (how long each material change takes): they are set up in the database.
-- **Labor:** no import of people from HR or the ERP. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
+- **Labor:** people come from HR or the ERP only as a file you import: nothing fetches them on a timer, someone missing from a file isn't switched off (send them with `active` = no), and qualifications aren't imported. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
 - **Materials import from files only:** CSV or B2MML on the screen, or the ERP one item at a time through the API. Nothing fetches items from an ERP on a timer, and there are no adapters for label printing. Imports don't take capabilities, don't create missing classes, and there is no template file to download (the panel shows the CSV header line). B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** stops can't be split, merged or entered by hand. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.

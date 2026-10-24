@@ -1,0 +1,282 @@
+@inject PulaskiApiClient Api
+
+@* People from an HR or ERP system, or a list kept elsewhere (D-054): pick the format and the file, check it, then import it
+   into the site all or nothing. Each format is a source adapter on the API; they all feed the same import. *@
+<section class="inv-facts mb-3" aria-labelledby="people-import-title">
+    <h2 class="h6" id="people-import-title">Import people from a file</h2>
+    <div class="row g-2 mb-2">
+        <div class="col-sm-3">
+            <label class="form-label small" for="people-import-format">Format</label>
+            <select id="people-import-format" class="form-select" disabled="@_busy" @bind="_sourceName" @bind:after="RecheckAsync">
+                @foreach (var source in _sources)
+                {
+                    <option value="@source.Name">@source.DisplayName</option>
+                }
+            </select>
+        </div>
+        <div class="col-sm-3">
+            <label class="form-label small" for="people-import-system">External system <span class="text-muted">(optional)</span></label>
+            <input id="people-import-system" class="form-control" maxlength="100" placeholder="e.g. HR1" disabled="@_busy"
+                   @bind="_externalSystem" @bind:after="RecheckAsync" />
+        </div>
+    </div>
+
+    @if (Source.Name == Csv)
+    {
+        <p class="small text-muted mb-2">
+            The first line names the columns; employee_number and name are required. A column left out keeps what each person already has.
+            Rows with an external_key are people from the external system (named above, or in an external_system column), matched on that
+            key; the others are matched on their employee number. Nothing is saved until every row is valid.
+        </p>
+        <p class="small mb-2"><span class="text-muted">All columns:</span> <code>@PeopleCsvFormat.Header</code></p>
+    }
+    else if (Source.Name == Scim)
+    {
+        <p class="small text-muted mb-2">
+            @Source.Description Each user is one person: the enterprise extension's <code>employeeNumber</code> is the employee number,
+            <code>displayName</code> the name and <code>active</code> whether they work here. With an external system, the people are that
+            system's, matched on their <code>externalId</code> (or <code>id</code>); without one, on their employee number.
+            Nothing is saved until every person is valid.
+        </p>
+    }
+    else
+    {
+        <p class="small text-muted mb-2">@Source.Description Nothing is saved until every person is valid.</p>
+    }
+
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+        <InputFile OnChange="PickAsync" accept="@string.Join(",", Source.FileTypes)" class="form-control" style="max-width: 28rem"
+                   aria-label="@($"{Source.DisplayName} file")" disabled="@_busy" />
+        <button type="button" class="btn btn-primary" disabled="@(_busy || _result is not { Errors: 0, Applied: false } || _result.Created + _result.Updated == 0)"
+                @onclick="ImportAsync">
+            @ImportLabel
+        </button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="OnClose">Close</button>
+    </div>
+
+    <ProblemAlert Error="_error" />
+    @if (_readProblem is not null)
+    {
+        <div class="drawer-alert is-warning mt-3" role="alert"><Icon Name="alert" Size="18" /><span>@_readProblem</span></div>
+    }
+
+    @if (_busy)
+    {
+        <p class="text-muted small mt-3 mb-0">Checking @_fileName…</p>
+    }
+    else if (_result is { } r)
+    {
+        <div class="drawer-alert @(r.Errors > 0 ? "is-warning" : "") mt-3" role="status">
+            <Icon Name="@(r.Errors > 0 ? "alert" : "info")" Size="18" />
+            <span>
+                @if (r.Applied)
+                {
+                    @($"Imported {_fileName}: {r.Created} created, {r.Updated} updated, {r.Unchanged} unchanged.")
+                }
+                else if (r.FileProblems.Count > 0)
+                {
+                    @($"{_fileName} can't be imported: {string.Join(" ", r.FileProblems)}")
+                }
+                else if (r.Errors > 0)
+                {
+                    @($"{_fileName}: {Count(r.Errors, "row")} with errors, so nothing can be imported yet. Fix them and pick the file again." +
+                        (r.Rows.Count > r.Errors ? $" The other rows would give {r.Created} created, {r.Updated} updated, {r.Unchanged} unchanged." : ""))
+                }
+                else
+                {
+                    @($"{_fileName} is ready: {r.Created} to create, {r.Updated} to update, {r.Unchanged} unchanged.")
+                }
+            </span>
+        </div>
+
+        @if (r.Rows.Count > 0)
+        {
+            <div class="d-flex align-items-center gap-2 mt-2">
+                @if (r.Errors > 0 && r.Rows.Count > r.Errors)
+                {
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="people-import-errors" @bind="_errorsOnly" />
+                        <label class="form-check-label small" for="people-import-errors">Only rows with errors</label>
+                    </div>
+                }
+            </div>
+            <div class="table-panel mt-2" style="max-height: 24rem; overflow: auto">
+                <table class="table table-sm align-middle mb-0 import-table">
+                    <thead><tr><th class="inv-num">Line</th><th>Code</th><th>@(r.Applied ? "Done" : "Would")</th><th>Details</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in r.Rows.Where(x => !_errorsOnly || x.Action == "error"))
+                        {
+                            <tr @key="row.Line" class="@(row.Action == "error" ? "is-error" : row.Action == "unchanged" ? "text-muted" : "")">
+                                <td class="inv-num">@row.Line</td>
+                                <td class="fw-semibold">@row.Code</td>
+                                <td>@ActionLabel(row.Action, r.Applied)</td>
+                                <td class="small">@(row.Message ?? (row.Changes.Count > 0 ? (r.Applied ? "Changed " : "Changes ") + string.Join(", ", row.Changes) : ""))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</section>
+
+@code {
+    /// <summary>Largest file read, matching the API's limit.</summary>
+    private const long MaxBytes = 5 * 1024 * 1024;
+
+    private const string Csv = "csv";
+    private const string Scim = "scim";
+
+    // Offered until the API's list arrives, or if it can't be read.
+    private static readonly PeopleSourceDto CsvSource = new() { Name = Csv, DisplayName = "CSV", FileTypes = [".csv", "text/csv", "text/plain"] };
+
+    [Parameter, EditorRequired]
+    public Guid SiteId { get; set; }
+
+    [Parameter]
+    public EventCallback OnImported { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private IReadOnlyList<PeopleSourceDto> _sources = [CsvSource];
+    private string _sourceName = Csv;
+    private string? _externalSystem;
+    private string? _text;
+    private string? _fileName;
+    private string? _readProblem;
+    private ImportPeopleResponse? _result;
+    private ApiException? _error;
+    private bool _busy;
+    private bool _errorsOnly;
+
+    private PeopleSourceDto Source => _sources.FirstOrDefault(s => s.Name == _sourceName) ?? CsvSource;
+
+    private string MediaType => Source.FileTypes.FirstOrDefault(t => t.Contains('/')) ?? "text/plain";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (await Api.ListPeopleSourcesAsync() is { Count: > 0 } sources)
+            {
+                _sources = sources;
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private string ImportLabel => _result is { Errors: 0, Applied: false } r && r.Created + r.Updated > 0
+        ? $"Import {Count(r.Created + r.Updated, "person", "people")}"
+        : "Import";
+
+    private async Task PickAsync(InputFileChangeEventArgs e)
+    {
+        _result = null;
+        _error = null;
+        _readProblem = null;
+        _text = null;
+        _fileName = e.File.Name;
+        if (e.File.Size > MaxBytes)
+        {
+            _readProblem = $"{e.File.Name} is larger than 5 MB; split it into smaller files.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(MaxBytes));
+            _text = await reader.ReadToEndAsync();
+            await CheckAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        catch (IOException ex)
+        {
+            _readProblem = $"{e.File.Name} couldn't be read: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>A file already picked is checked again when its format or external system changes.</summary>
+    private async Task RecheckAsync()
+    {
+        if (_text is null)
+        {
+            _result = null;
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            await CheckAsync();
+        }
+        catch (ApiException ex)
+        {
+            _result = null;
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CheckAsync()
+    {
+        _result = await Api.ImportPeopleAsync(SiteId, Source.Name, _text!, _externalSystem, dryRun: true, MediaType);
+        _errorsOnly = _result.Errors > 0;
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_text is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            _result = await Api.ImportPeopleAsync(SiteId, Source.Name, _text, _externalSystem, dryRun: false, MediaType);
+            _errorsOnly = _result.Errors > 0;
+            if (_result.Applied)
+            {
+                _text = null;
+                await OnImported.InvokeAsync();
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string ActionLabel(string action, bool applied) => (action, applied) switch
+    {
+        ("create", false) => "Create",
+        ("create", true) => "Created",
+        ("update", false) => "Update",
+        ("update", true) => "Updated",
+        ("unchanged", _) => "Unchanged",
+        _ => "Error",
+    };
+
+    private static string Count(int n, string what, string? plural = null) => $"{n} {(n == 1 ? what : plural ?? what + "s")}";
+}

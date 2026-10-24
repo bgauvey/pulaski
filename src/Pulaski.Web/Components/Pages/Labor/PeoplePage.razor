@@ -13,7 +13,8 @@
         <h1 class="mb-1">People and crews</h1>
         <p class="text-muted mb-0">
             Everyone whose time is recorded, the crews they work in and the qualifications they hold. A shift schedule names the crew on each shift, so a supervisor can check the
-            whole crew onto a line at once. People don't need a Pulaski sign-in; link one to let them clock themselves on.
+            whole crew onto a line at once. People don't need a Pulaski sign-in; link one to let them clock themselves on. People from an HR or ERP
+            system are imported from a file; their name and whether they are active change there.
         </p>
     </div>
     @if (Sites.Sites.Count > 1)
@@ -61,7 +62,13 @@ else if (_tab == "people")
             </select>
             <input class="form-control" style="width: 11rem" maxlength="100" placeholder="User name (optional)" aria-label="Pulaski user name" @bind="_newUsername" />
             <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_newNumber) || string.IsNullOrWhiteSpace(_newName))">Add person</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _importing = !_importing">Import file</button>
         </form>
+
+        @if (_importing && Sites.SiteId is { } importSite)
+        {
+            <PeopleFileImport SiteId="importSite" OnImported="LoadAsync" OnClose="() => _importing = false" />
+        }
     }
 
     @if (_people.Count == 0)
@@ -79,8 +86,14 @@ else if (_tab == "people")
                         {
                             var edit = PersonEdit(p);
                             <tr @key="p.Id" class="@(p.IsActive ? "" : "text-muted")">
-                                <td class="fw-semibold">@p.EmployeeNumber</td>
-                                <td><input class="form-control form-control-sm" maxlength="200" aria-label="Name of @p.EmployeeNumber" value="@edit.DisplayName" @onchange="e => ChangePerson(p, x => x with { DisplayName = Text(e) })" /></td>
+                                <td class="fw-semibold text-nowrap">
+                                    @p.EmployeeNumber
+                                    @if (p.Origin != "local")
+                                    {
+                                        <span class="chip" title="@($"From {p.ExternalSystem}, key {p.ExternalKey}: its name and whether they are active change there")">@p.ExternalSystem</span>
+                                    }
+                                </td>
+                                <td><input class="form-control form-control-sm" maxlength="200" aria-label="Name of @p.EmployeeNumber" value="@edit.DisplayName" disabled="@(p.Origin != "local")" @onchange="e => ChangePerson(p, x => x with { DisplayName = Text(e) })" /></td>
                                 <td>
                                     <select class="form-select form-select-sm" aria-label="Crew of @p.DisplayName" value="@(edit.CrewId?.ToString() ?? "")"
                                             @onchange="e => ChangePerson(p, x => x with { CrewId = Guid.TryParse(Text(e), out var id) ? id : null })">
@@ -93,7 +106,7 @@ else if (_tab == "people")
                                 </td>
                                 <td><input class="form-control form-control-sm" maxlength="100" placeholder="No sign-in" aria-label="User name of @p.DisplayName" value="@edit.Username" @onchange="e => ChangePerson(p, x => x with { Username = NullIfBlank(Text(e)) })" /></td>
                                 <td class="text-nowrap"><BadgeCell Person="p" Badge="@_badges.FirstOrDefault(b => b.PersonId == p.Id && b.RevokedAt is null)" CanManage="CanManage" OnChanged="LoadAsync" /></td>
-                                <td><input class="form-check-input" type="checkbox" aria-label="@p.DisplayName active" checked="@edit.IsActive" @onchange="e => ChangePerson(p, x => x with { IsActive = e.Value is true })" /></td>
+                                <td><input class="form-check-input" type="checkbox" aria-label="@p.DisplayName active" checked="@edit.IsActive" disabled="@(p.Origin != "local")" @onchange="e => ChangePerson(p, x => x with { IsActive = e.Value is true })" /></td>
                                 <td class="text-end">
                                     @if (_personEdits.ContainsKey(p.Id))
                                     {
@@ -168,6 +181,7 @@ else
     private readonly Dictionary<Guid, CrewDto> _crewEdits = [];
     private ApiException? _error;
     private bool _saving;
+    private bool _importing;
     private string? _newNumber;
     private string? _newName;
     private Guid? _newCrewId;

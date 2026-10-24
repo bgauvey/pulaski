@@ -43,6 +43,12 @@ public sealed record PersonDto
     /// <summary>The Pulaski user they sign in as, so they can clock themselves on; null for none.</summary>
     public string? Username { get; init; }
     public bool IsActive { get; init; }
+
+    /// <summary><c>local</c>, or <c>hr</c> / <c>erp</c> when imported (D-054): the source then owns the employee number, name and active.</summary>
+    public string Origin { get; init; } = "local";
+    public string? ExternalSystem { get; init; }
+    public string? ExternalKey { get; init; }
+    public string? ExternalVersion { get; init; }
     public long Version { get; init; }
 }
 
@@ -489,4 +495,39 @@ public sealed record SetEquipmentQualificationRequest
 {
     public Guid QualificationId { get; init; }
     public bool IsRequired { get; init; } = true;
+}
+
+/// <summary>A format people can be imported from (D-054), at <c>POST /api/people/import/{Name}?siteId=</c>.</summary>
+public sealed record PeopleSourceDto
+{
+    /// <summary>Lower-case name used in the URL, such as <c>csv</c> or <c>scim</c>.</summary>
+    public string Name { get; init; } = "";
+    public string DisplayName { get; init; } = "";
+    public string Description { get; init; } = "";
+
+    /// <summary>File extensions and media types it reads, for a file picker's <c>accept</c>.</summary>
+    public IReadOnlyList<string> FileTypes { get; init; } = [];
+}
+
+/// <summary>
+/// A people import's outcome (D-054), all or nothing like the materials import: <see cref="Applied"/> is true only when every row
+/// was valid and it wasn't a check run. Each row's <c>Code</c> is the employee number.
+/// </summary>
+public sealed record ImportPeopleResponse
+{
+    public bool Applied { get; init; }
+    public int Created { get; init; }
+    public int Updated { get; init; }
+    public int Unchanged { get; init; }
+    public int Errors { get; init; }
+
+    /// <summary>Problems with the file as a whole, such as a missing or unknown column.</summary>
+    public IReadOnlyList<string> FileProblems { get; init; } = [];
+    public IReadOnlyList<Materials.ImportRowResultDto> Rows { get; init; } = [];
+}
+
+/// <summary>The people CSV file (D-054): its header line with every column, for a template.</summary>
+public static class PeopleCsvFormat
+{
+    public const string Header = "employee_number,name,active,crew,username,origin,external_system,external_key,external_version";
 }

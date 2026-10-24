@@ -734,7 +734,10 @@ A person is not necessarily a user: many operators only badge in.
 | `display_name` | text | no | Display name. |
 | `crew_id` | uuid → crew | yes | Their crew, an active crew of the site. |
 | `app_user_id` | uuid → app_user | yes | The Pulaski user they sign in as, so they can clock themselves on. Unique. |
-| `origin` | text | no | `local` (kept in Pulaski); `hr` and `erp` are for imports, not built. |
+| `origin` | text | no | `local` (kept in Pulaski), or `hr` / `erp` for a person imported from that kind of system (D-054). The source then owns the employee number, name and whether they are active. |
+| `external_system` | text | yes | The HR or ERP system that masters them, such as `HR1`; set with `external_key` exactly when `origin` isn't `local` (`person_external_ck`). |
+| `external_key` | text | yes | Their key in that system. With the system it is unique (`person_external_uq`) and is what every later import matches on, so a changed employee number or name still finds them. |
+| `external_version` | text | yes | The source's version or change stamp from the last import, kept for reference. |
 | `is_active` | boolean | no | False when they leave; refused while they are clocked on. |
 | `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
 

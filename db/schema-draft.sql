@@ -746,11 +746,16 @@ CREATE TABLE core.person (
     crew_id             uuid REFERENCES core.crew(id),
     app_user_id         uuid UNIQUE REFERENCES sec.app_user(id),
     origin              text NOT NULL DEFAULT 'local' CHECK (origin IN ('hr','erp','local')),
+    external_system     text,                                       -- the HR or ERP system that masters them (D-054)
+    external_key        text,                                       -- their key there; with the system, matched by every import
+    external_version    text,                                       -- the source's version or change stamp, for reference
     is_active           boolean NOT NULL DEFAULT true,
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT person_uq UNIQUE (site_id, employee_number)
+    CONSTRAINT person_uq UNIQUE (site_id, employee_number),
+    CONSTRAINT person_external_ck CHECK ((origin = 'local') = (external_key IS NULL) AND (external_system IS NULL) = (external_key IS NULL))
 );
+CREATE UNIQUE INDEX person_external_uq ON core.person (external_system, external_key) WHERE external_key IS NOT NULL;
 
 -- Shop-floor terminals (D-049): shared tablets and panel PCs where people badge to record their labor. A terminal is
 -- registered for a site, area or line (its scope: the lines it offers) and enrolled once with a one-time code, which
@@ -1808,7 +1813,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0019_machine_profiles'),
     ('0020_edge'),
     ('0021_stops'),
-    ('0022_tag_deletion');
+    ('0022_tag_deletion'),
+    ('0023_person_import');
 
 -- =====================================================================
 -- 17. SEED DATA

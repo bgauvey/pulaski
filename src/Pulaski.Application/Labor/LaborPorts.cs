@@ -7,7 +7,24 @@ namespace Pulaski.Application.Labor;
 
 public sealed record CrewRecord(Guid Id, Guid SiteId, string Code, string Name, bool IsActive);
 
-public sealed record PersonRecord(Guid Id, Guid SiteId, string EmployeeNumber, string DisplayName, Guid? CrewId, Guid? AppUserId, bool IsActive);
+/// <summary>
+/// A person (D-040). <paramref name="Origin"/> is <c>local</c>, or <c>hr</c> / <c>erp</c> for one imported from that system, which then owns
+/// the employee number, name and whether they are active (D-054).
+/// </summary>
+public sealed record PersonRecord(
+    Guid Id, Guid SiteId, string EmployeeNumber, string DisplayName, Guid? CrewId, Guid? AppUserId, bool IsActive,
+    string Origin = PersonOrigins.Local, string? ExternalSystem = null, string? ExternalKey = null, string? ExternalVersion = null)
+{
+    public bool IsImported => Origin != PersonOrigins.Local;
+}
+
+/// <summary>Where a person is maintained (D-054).</summary>
+public static class PersonOrigins
+{
+    public const string Local = "local";
+    public const string Hr = "hr";
+    public const string Erp = "erp";
+}
 
 /// <summary>A labor session as the commands see it (D-040).</summary>
 public sealed record SessionRecord(
@@ -71,6 +88,15 @@ public interface ILaborRepository
     Task<Guid?> FindLocalUserIdAsync(string username, CancellationToken cancellationToken);
 
     Task<bool> UserIsAnotherPersonAsync(Guid userId, Guid exceptPersonId, CancellationToken cancellationToken);
+
+    /// <summary>The person with this external system and key, locked; null when none (D-054).</summary>
+    Task<Versioned<PersonRecord>?> FindPersonByExternalKeyForUpdateAsync(string externalSystem, string externalKey, CancellationToken cancellationToken);
+
+    /// <summary>The site's person with this employee number, locked; null when none.</summary>
+    Task<Versioned<PersonRecord>?> FindPersonByNumberForUpdateAsync(Guid siteId, string employeeNumber, CancellationToken cancellationToken);
+
+    /// <summary>The site's crew with this code (upper case); null when none.</summary>
+    Task<CrewRecord?> FindCrewByCodeAsync(Guid siteId, string code, CancellationToken cancellationToken);
 
     Task<long> InsertPersonAsync(PersonRecord person, DateTimeOffset at, CancellationToken cancellationToken);
 

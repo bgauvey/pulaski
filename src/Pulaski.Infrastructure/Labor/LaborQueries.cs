@@ -22,7 +22,7 @@ internal sealed class LaborQueries(NpgsqlDataSource dataSource) : ILaborReadStor
 
     private const string PersonSelect = """
         SELECT p.id, p.site_id, p.employee_number, p.display_name, p.crew_id, c.code AS crew_code, u.username, p.is_active,
-               p.xmin::text::bigint AS version
+               p.origin, p.external_system, p.external_key, p.external_version, p.xmin::text::bigint AS version
         FROM core.person p
         LEFT JOIN core.crew c ON c.id = p.crew_id
         LEFT JOIN sec.app_user u ON u.id = p.app_user_id
