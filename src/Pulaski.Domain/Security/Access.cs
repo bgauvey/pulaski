@@ -38,6 +38,7 @@ public static class Permissions
     public const string InventoryCorrect = "inventory.correct";
     public const string StockCount = "stock_count.manage";
     public const string LotRecords = "lot_records.manage";
+    public const string InventoryBackdate = "inventory.backdate";
     public const string PartialBatchDecide = "partial_batch.decide";
     public const string Materials = "materials.manage";
     public const string Processes = "processes.manage";
@@ -94,6 +95,7 @@ public static class Permissions
         new(InventoryCorrect, "Inventory", "Correct inventory: write up, write off, correct, reverse, split and merge lots"),
         new(StockCount, "Inventory", "Start, enter, post and cancel stock counts"),
         new(LotRecords, "Inventory", "Record lot attributes and attach or withdraw certificates"),
+        new(InventoryBackdate, "Inventory", "Back-date receipts, consumption, production, write-ups and write-offs by up to 31 days"),
         new(Materials, "Configuration", "Maintain materials, classes, conversions, batching and shelf life; import materials"),
         new(Processes, "Configuration", "Maintain processes, BOMs and capabilities"),
         new(Units, "Configuration", "Maintain units of measure"),
@@ -137,6 +139,7 @@ public static class Permissions
         [InventoryCorrect] = [InventoryView],
         [StockCount] = [InventoryView],
         [LotRecords] = [InventoryView],
+        [InventoryBackdate] = [InventoryView],
         // Attribute definitions sit beside the material classes they apply to.
         [LotAttributes] = [InventoryView, MaterialsView],
         [Materials] = [MaterialsView],
@@ -205,14 +208,15 @@ public static class Roles
             "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops."),
         new(Quality, "Quality", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView, Permissions.MachinesView,
-             Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide, Permissions.LotRecords, Permissions.LotAttributes],
+             Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide, Permissions.LotRecords, Permissions.LotAttributes,
+             Permissions.InventoryBackdate],
             "Holds and releases lots, corrects inventory, decides on partial batches, and keeps lot attributes and certificates."),
         new(Manager, "Manager", false,
             [.. Permissions.Views, Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts,
              Permissions.People, Permissions.Terminals, Permissions.LaborApprove, Permissions.LotAttributes],
             "Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people, lot attributes and the site's settings."),
         new(Auditor, "Auditor", false,
-            [.. Permissions.Views, Permissions.InventoryCorrect, Permissions.StockCount],
+            [.. Permissions.Views, Permissions.InventoryCorrect, Permissions.StockCount, Permissions.InventoryBackdate],
             "Views everything and corrects inventory; counts stock. Doesn't plan or run jobs."),
         new(ProcessEngineer, "Process engineer", false,
             [Permissions.EquipmentView, Permissions.MaterialsView, Permissions.ProcessesView, Permissions.UnitsView, Permissions.Processes],

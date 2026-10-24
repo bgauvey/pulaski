@@ -3,6 +3,7 @@
    lot, the material or the job) and reloads when it reports a result. *@
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
+@inject CurrentUser User
 
 @if (Action is { } action)
 {
@@ -259,8 +260,20 @@
                         break;
                 }
 
+                @if (CanBackdate)
+                {
+                    <div class="mb-3">
+                        <label class="form-label" for="lot-effective">Counts from <span class="text-muted">(optional)</span></label>
+                        <input id="lot-effective" type="datetime-local" class="form-control" @bind="_effective" />
+                        <div class="form-text">
+                            To back-date it, up to 31 days, to when it was really done; it is recorded now as well. A comment saying why is required.
+                            @(Action is LotAction.Consume or LotAction.Produce ? "It goes into the run going on then." : "")
+                        </div>
+                    </div>
+                }
+
                 <div class="mb-3">
-                    <label class="form-label" for="lot-comment">Comment@(SelectedReason?.RequiresComment == true ? " (required)" : "")</label>
+                    <label class="form-label" for="lot-comment">Comment@(SelectedReason?.RequiresComment == true || _effective is not null ? " (required)" : "")</label>
                     <textarea id="lot-comment" class="form-control" rows="2" maxlength="1000" @bind="_comment"></textarea>
                 </div>
 
@@ -327,6 +340,14 @@
     private string? _supplierLot;
     private DateTime? _expires;
     private string? _comment;
+    private DateTime? _effective;
+
+    // Back-dating (D-057) is for quantity movements, and only for those allowed it at the site.
+    private bool CanBackdate =>
+        Action is LotAction.Receive or LotAction.Produce or LotAction.Consume or LotAction.WriteUp or LotAction.WriteOff
+        && User.Can(PermissionCodes.InventoryBackdate, Sites.SiteId);
+
+    private DateTimeOffset? EffectiveAt => CanBackdate ? Display.FromSiteLocal(_effective, Sites.Site?.TimeZone) : null;
     private string _holdStatus = "on_hold";
     private string? _reference;
     private readonly HashSet<Guid> _mergeIds = [];
@@ -495,6 +516,7 @@
         _supplierLot = null;
         _expires = null;
         _comment = null;
+        _effective = null;
         _holdStatus = "on_hold";
         _producedTracked = true;
         _reference = null;
@@ -650,6 +672,7 @@
             SupplierLot = _supplierLot,
             ExpiresAt = Display.FromSiteLocal(_expires, Sites.Site?.TimeZone),
             Comment = comment,
+            EffectiveAt = EffectiveAt,
         });
         return (response, $"{QtyText} of {ReceivingMaterial?.Code} received into {LocationCode(_locationId)}");
     }
@@ -666,6 +689,7 @@
             ExpiresAt = Display.FromSiteLocal(_expires, Sites.Site?.TimeZone),
             Comment = comment,
             RunId = RunId,
+            EffectiveAt = EffectiveAt,
         });
         return (response, $"{QtyText} of {job.MaterialCode} produced by {job.JobNumber}");
     }
@@ -681,6 +705,7 @@
             UomId = _uomId,
             Comment = comment,
             RunId = RunId,
+            EffectiveAt = EffectiveAt,
         });
         return (response, $"{QtyText} of {InventoryView.LotLabel(lot.LotNumber, lot.IsBulk, lot.LocationCode)} consumed by {job.JobNumber}");
     }
@@ -721,6 +746,7 @@
         UomId = _quantity is null ? null : _uomId,
         ReasonCodeId = _reasonId,
         Comment = comment,
+        EffectiveAt = EffectiveAt,
     };
 
     private string QtyText => _quantity is { } q ? $"{InventoryView.Qty(q)} {_uoms.FirstOrDefault(u => u.Id == _uomId)?.Code}" : "";

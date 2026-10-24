@@ -316,4 +316,38 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
         Assert.Equal(HttpStatusCode.Forbidden, (await planner.GetAsync(new Uri($"/api/people?siteId={site}", UriKind.Relative))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await planner.PostAsJsonAsync("/api/crews", new Pulaski.Contracts.Labor.CreateCrewRequest { SiteId = site, Code = "R", Name = "Red" })).StatusCode);
     }
+
+    [Fact]
+    public async Task Back_dating_a_movement_needs_its_own_permission_at_the_site()
+    {
+        var site = Guid.CreateVersion7();
+        var lot = Guid.CreateVersion7();
+        factory.Stores.Security.SetSite(SiteOf.Lot, lot, site);
+        var supervisor = await factory.CreateClientAsAsync(Roles.Supervisor, site);
+        var quality = await factory.CreateClientAsAsync(Roles.Quality, site);
+        var request = new Contracts.Inventory.AdjustLotRequest { Version = 1, Quantity = 1m, UomId = Guid.CreateVersion7(), ReasonCodeId = Guid.CreateVersion7(), Comment = "Late" };
+        var uri = new Uri($"/api/lots/{lot}/write-off", UriKind.Relative);
+
+        // Quality may correct inventory and back-date; a supervisor may do neither.
+        var backdated = request with { EffectiveAt = DateTimeOffset.UtcNow.AddDays(-1) };
+        Assert.Equal(HttpStatusCode.Forbidden, (await supervisor.PostAsJsonAsync(uri, backdated)).StatusCode);
+        Assert.NotEqual(HttpStatusCode.Forbidden, (await quality.PostAsJsonAsync(uri, backdated)).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_role_that_may_correct_but_not_back_date_is_refused_only_the_back_dating()
+    {
+        var site = Guid.CreateVersion7();
+        var lot = Guid.CreateVersion7();
+        factory.Stores.Security.SetSite(SiteOf.Lot, lot, site);
+        factory.Stores.Security.AddRole("corrector", "Corrector", [Permissions.InventoryCorrect]);
+        var corrector = await factory.CreateClientAsAsync("corrector", site);
+        var request = new Contracts.Inventory.AdjustLotRequest { Version = 1, Quantity = 1m, UomId = Guid.CreateVersion7(), ReasonCodeId = Guid.CreateVersion7(), Comment = "Late" };
+        var uri = new Uri($"/api/lots/{lot}/write-off", UriKind.Relative);
+
+        Assert.NotEqual(HttpStatusCode.Forbidden, (await corrector.PostAsJsonAsync(uri, request)).StatusCode);
+        var refused = await corrector.PostAsJsonAsync(uri, request with { EffectiveAt = DateTimeOffset.UtcNow.AddDays(-1) });
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.Contains("back-date", await refused.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
 }

@@ -312,6 +312,45 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Back_dated_movements_change_the_past_the_same_whatever_order_they_were_entered_in()
+    {
+        var plant = await CreatePlantAsync();
+        var now = DateTimeOffset.UtcNow;
+        var count = await ReasonAsync("inventory_adjustment", "COUNT");
+        DateTimeOffset Ago(double hours) => now.AddHours(-hours);
+
+        // Received ten hours ago; ten written off two hours ago, then (entered last) twenty written off five hours ago.
+        var lot = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-BD-" + _suffix, 50m, plant.Kg, Comment: "Delivery note found", EffectiveAt: Ago(10)));
+        await db.SendAsync(new WriteOffLotCommand(lot.LotId, await VersionAsync(lot.LotId), 10m, plant.Kg, count, "Spill", Ago(2)));
+        await db.SendAsync(new WriteOffLotCommand(lot.LotId, await VersionAsync(lot.LotId), 20m, plant.Kg, count, "Earlier spill", Ago(5)));
+        await Assert.ThrowsAsync<DomainRuleException>(() => VersionThenAsync(v => new WriteOffLotCommand(lot.LotId, v, 21m, plant.Kg, count, "Too much", Ago(3))));
+
+        async Task<decimal> ResinAt(DateTimeOffset at) =>
+            (await QueryAsync<StockOnDateQuery, IReadOnlyList<StockOnDateDto>>(new StockOnDateQuery(plant.Site, at)))
+                .SingleOrDefault(r => r.MaterialId == plant.Resin)?.Quantity ?? 0m;
+        Assert.Equal((0m, 50m, 30m, 20m), (await ResinAt(Ago(11)), await ResinAt(Ago(6)), await ResinAt(Ago(3)), await ResinAt(DateTimeOffset.UtcNow)));
+
+        // Aging runs from when it was received, not when it was entered.
+        var aging = Assert.Single(await QueryAsync<AgingQuery, IReadOnlyList<AgingRowDto>>(new AgingQuery(plant.Site)), r => r.MaterialId == plant.Resin);
+        Assert.InRange(aging.OldestAt!.Value, Ago(10).AddSeconds(-1), Ago(10).AddSeconds(1));
+
+        // Production and consumption go into the run going on then; their genealogy takes effect then too.
+        var made = await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 100m, plant.Metre, Comment: "Shift report", EffectiveAt: Ago(8)));
+        await db.SendAsync(new ConsumeLotCommand(lot.LotId, plant.Job, 5m, plant.Kg, "Shift report", EffectiveAt: Ago(7)));
+        var detail = await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(made.LotId));
+        var parent = Assert.Single(detail.Parents);
+        Assert.InRange(parent.EffectiveAt, Ago(7).AddSeconds(-1), Ago(7).AddSeconds(1));
+        Assert.True(parent.DerivedAt > parent.EffectiveAt);
+
+        var history = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId))).History;
+        Assert.All(history, h => Assert.True(h.IsBackdated));
+        Assert.Equal(15m, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId))).Lot.Quantity);
+    }
+
+    private async Task VersionThenAsync(Func<long, WriteOffLotCommand> command) =>
+        await db.SendAsync(command(await VersionAsync(command(0).LotId)));
+
+    [Fact]
     public async Task Lots_keep_searchable_attributes_and_certificates_beside_them_and_split_lots_carry_them()
     {
         var plant = await CreatePlantAsync();

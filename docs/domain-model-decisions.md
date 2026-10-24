@@ -64,6 +64,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-054 | People from HR and ERP sources: an imported person keeps its source system and key (unique together) and is matched on them by every import, so importing again never duplicates anyone; the first import links a hand-kept person with the same employee number. The source owns employee number, name and active; Pulaski owns crew, sign-in, badges and qualifications. Imports are files, all or nothing, through people source adapters (CSV, SCIM 2.0 users); every change is the usual person event with the source as its reason | Proposed | 2026-10-23 |
 | D-055 | Completing the materials import: capabilities load from their own CSV file (one row per material and line), changing the capability in effect now in place, adding one from now, or ending it, with the run standard following as on the material page; all lines are locked by code in id order first, and each line must be at a site where the caller may maintain processes. A missing class is created only when the import asks (`createClasses`), named from `class_name`. Every import format has a template to download | Proposed | 2026-10-23 |
 | D-056 | Lot attributes and certificates: typed attribute definitions per site (text, number, date, yes/no, choice), offered for every material or chosen classes, with values beside the lot (never changing `core.lot` or its movements) and every change an event. Certificates are stored files (PDF, PNG, JPEG ≤ 10 MB, recognised by content, written once) or references (number, URL), linked to lots and carried on by split and merge; never deleted, withdrawn with a reason. Two permissions: `lot_records.manage` and `lot_attributes.manage` | Proposed | 2026-10-24 |
+| D-057 | Back-dated inventory movements: a receipt, consumption, production, write-up or write-off may count from up to 31 days earlier (`effective_at`), with a comment and permission `inventory.backdate`; its record time (`occurred_at`) and append-only history stay. Stock at a time sums movements by effective time, so it is deterministic whatever the order of entry. A back-dated movement may not count before the lot had stock or before a posted count of it, nor take it below zero at any time; expiry and the run are taken at the effective time | Proposed | 2026-10-24 |
 
 ## Order hierarchy
 
@@ -1160,6 +1161,34 @@ The handler parses the bounds in the attribute's type, so `1,5` is a validation 
 Screens: the lot page's **Attributes and certificates** section (`LotRecordsPanel`), the attribute filter on Find a lot, and Configure → Materials → **Lot attributes**. Migration `0024_lot_records`.
 
 **Not yet.** Attributes in the lots CSV export or in imports; checking values against specification limits (with quality); certificates to or from the ERP or a document system; a retention job.
+
+## Back-dated inventory movements (D-057, proposed)
+
+Issue #35. Movements counted when they were entered (D-027), so a receipt or consumption entered late landed on the wrong day in stock on a date, production by shift and genealogy.
+
+**Two times.** `ts.lot_event.occurred_at` stays the record time and partition key; nothing already written changes. A new `effective_at` is when the movement counts: `occurred_at`, or earlier when back-dated. `core.lot_genealogy.effective_at` does the same for links, next to `derived_at`. The CloudEvent's `time` is the record time, and its data carries `EffectiveAt` when back-dated. Migration `0025_backdated_movements` fills `effective_at` from the record times.
+
+**Determinism.** `qty_after` is a running balance in record order, so it can't answer "how much at T" once rows arrive out of order. Stock on a date now sums `qty_delta` of the rows with `effective_at <= T`. Every quantity movement already carries its delta; the existing report tests pass unchanged against the new query. Aging runs from a lot's earliest `effective_at`. A reversal (D-030) takes the effective time of the movement it undoes, so it removes it from every past date.
+
+**Which movements.** Only those that change quantity on their own: receipt, consumption into a job, production from a job (including the report behind it), write-up and write-off. Moves, holds, splits, merges, shipments and counts always count when recorded, because a lot's location and status at a past time aren't reconstructed and allowing them would contradict later movements.
+
+**Rules** (`Backdating`, in Application):
+
+- An effective time is optional. None, or one at or after now (a minute of clock skew is allowed), counts now.
+- A back-dated movement may be at most 31 days back and needs a comment.
+- `EnsureFitsAsync` replays the lot's quantity movements in effective order (`ListQuantityTimelineAsync`, by `(lot_id, effective_at)`) with the new one in place. It refuses:
+  - a time before the lot's first movement (except a receipt into a balance),
+  - a time before the latest posted stock count that counted the lot (`LatestCountOfLotAsync`), since the count already fixed its quantity then,
+  - any point where the lot would be below zero. The message names when.
+- The current quantity is still checked by `Lot.Take`.
+- Expiry is checked at the effective time (`EnsureNotExpired`). A new lot's expiry from shelf life runs from it.
+- Consumption and production go into the job's run going on then (`GetRunAtForUpdateAsync`), or the named run if it was going on then. A back-dated production report's count occurs at the effective time, so production by shift (D-044) and OEE (D-052) place it there.
+
+**Access.** The movement's own permission still applies. The five endpoints add `RequireToBackdate`: a request carrying `EffectiveAt` (`IMayBackdate`) also needs `inventory.backdate` at the site. The Quality and Auditor roles get it.
+
+**Screens.** The lot drawer shows **Counts from** for those five movements to whoever may back-date. The lot history lists a back-dated row at its effective time with the record time beneath. The journal lists rows by record time (its range and cursor are record time, as before) with *counts from*, and its export has both columns. Genealogy links show *since …* and *(back-dated)*.
+
+**Not yet.** Back-dating moves, holds, splits, merges and shipments; reconstructing location and status on a past date; a site-set window (31 days is fixed).
 
 ## Application architecture
 

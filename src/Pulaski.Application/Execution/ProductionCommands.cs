@@ -30,6 +30,9 @@ public sealed record ReportProductionCommand(
     DateTimeOffset? ExpiresAt = null,
     string? Comment = null) : ICommand<ReportProductionResponse>
 {
+    /// <summary>When the output counts, when back-dated (D-057): it goes into the run going on then, and its lots count from then.</summary>
+    public DateTimeOffset? EffectiveAt { get; init; }
+
     /// <summary>For a material made in batches (D-036): each good batch's weight in the base unit, one lot each.</summary>
     public IReadOnlyList<decimal> GoodBatches { get; init; } = [];
 
@@ -47,20 +50,35 @@ internal static class RunReporting
     /// The job's open run, or the run named: it must be the job's. Consumption and production happen
     /// in a run (D-035), so a job with no run open needs the run they belong to.
     /// </summary>
-    public static async Task<JobRun> RunForAsync(IExecutionRepository execution, InventoryJob job, Guid? runId, string what, CancellationToken cancellationToken)
+    /// <remarks>With <c>at</c>, for a back-dated movement (D-057): the run must be going on then, and without a run named it is the one that was.</remarks>
+    public static async Task<JobRun> RunForAsync(
+        IExecutionRepository execution, InventoryJob job, Guid? runId, string what, CancellationToken cancellationToken, DateTimeOffset? at = null)
     {
         if (runId is { } id)
         {
             var run = await execution.GetRunForUpdateAsync(id, cancellationToken);
-            return run is not null && run.JobId == job.Id
+            if (run is null || run.JobId != job.Id)
+            {
+                throw new DomainRuleException($"That run isn't one of {job.JobNumber}'s.");
+            }
+
+            return at is not { } when || (run.StartedAt <= when && (run.EndedAt is null || run.EndedAt >= when))
                 ? run
-                : throw new DomainRuleException($"That run isn't one of {job.JobNumber}'s.");
+                : throw new DomainRuleException($"Run {run.RunNo} of {job.JobNumber} wasn't going on at {Backdated(when)}.");
+        }
+
+        if (at is { } then)
+        {
+            return await execution.GetRunAtForUpdateAsync(job.Id, then, cancellationToken)
+                ?? throw new DomainRuleException($"{job.JobNumber} wasn't running at {Backdated(then)}, so {what} can't count from then.");
         }
 
         return await execution.GetOpenRunForUpdateAsync(job.Id, cancellationToken)
             ?? throw new DomainRuleException(
                 $"{job.JobNumber} isn't running, so {what} can't be recorded now. Start the job, or choose the run it belongs to.");
     }
+
+    private static string Backdated(DateTimeOffset at) => at.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>When a report counts as made: now for an open run, the run's end for one entered afterwards.</summary>
     public static DateTimeOffset OccurredAt(JobRun run, DateTimeOffset now) => run.EndedAt ?? now;
@@ -143,8 +161,10 @@ internal sealed class ProductionReporter(
             .ThrowIfInvalid();
 
         // The job, then its run, then the lots (D-027): reports on one job serialize.
+        var effective = Backdating.EffectiveAt(command.EffectiveAt, now, comment);
+        var backdated = MovementTime.Backdated(effective, now);
         var job = await InventoryRules.JobAsync(inventory, command.JobId, null, cancellationToken);
-        var run = await RunReporting.RunForAsync(execution, job, command.RunId, "production", cancellationToken);
+        var run = await RunReporting.RunForAsync(execution, job, command.RunId, "production", cancellationToken, backdated);
         var material = await InventoryRules.MaterialAsync(inventory, job.MaterialId!.Value, cancellationToken);
         var jobUom = job.UomId ?? throw new DomainRuleException($"{job.JobNumber} has no unit.");
         var converter = await RunReporting.ConverterAsync(units, material.Id, cancellationToken);
@@ -197,7 +217,8 @@ internal sealed class ProductionReporter(
         }
 
         var after = run.Add(good, scrap);
-        var occurredAt = RunReporting.OccurredAt(run, now);
+        // A back-dated report counts when it says, so production by shift and OEE see it then (D-057).
+        var occurredAt = backdated ?? RunReporting.OccurredAt(run, now);
         var envelope = events.Create(
             EventTypes.ProductionReported, "job", job.Id,
             new
@@ -213,6 +234,7 @@ internal sealed class ProductionReporter(
                 command.ScrapReasonCodeId,
                 Late = !run.IsOpen,
                 OccurredAt = occurredAt,
+                EffectiveAt = backdated,
                 Comment = comment,
             });
         await execution.UpdateRunAsync(after, cancellationToken);
@@ -303,7 +325,8 @@ internal sealed class ProductionReporter(
     private Task<LotTransactionResponse> ProduceAsync(
         InventoryJob job, ReportProductionCommand command, decimal quantity, Guid unit, string? lotNumber, string? comment, JobRun run, DateTimeOffset now, CancellationToken cancellationToken) =>
         ProductionOutput.ProduceAsync(
-            inventory, units, eventLog, events, ids, job, command.LocationId!.Value, quantity, unit, lotNumber, command.ExpiresAt, comment, run.Id, now, cancellationToken);
+            inventory, units, eventLog, events, ids, job, command.LocationId!.Value, quantity, unit, lotNumber, command.ExpiresAt, comment, run.Id, now,
+            MovementTime.Backdated(Backdating.EffectiveAt(command.EffectiveAt, now, comment), now), cancellationToken);
 
     /// <summary>The partial batch's record; under the exact rule its lot goes on hold until someone approves it (D-036).</summary>
     private async Task<InventoryWarningDto> RecordPartialAsync(

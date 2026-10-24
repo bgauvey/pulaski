@@ -39,6 +39,7 @@ public static class PermissionCodes
     public const string InventoryCorrect = "inventory.correct";
     public const string StockCount = "stock_count.manage";
     public const string LotRecords = "lot_records.manage";
+    public const string InventoryBackdate = "inventory.backdate";
     public const string PartialBatchDecide = "partial_batch.decide";
     public const string Materials = "materials.manage";
     public const string Processes = "processes.manage";

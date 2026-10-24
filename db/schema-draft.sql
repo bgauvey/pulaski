@@ -1238,6 +1238,7 @@ CREATE TABLE core.lot_genealogy (
     window_start        timestamptz,
     window_end          timestamptz,
     derived_at          timestamptz NOT NULL DEFAULT now(),
+    effective_at        timestamptz NOT NULL DEFAULT now(),         -- when the link took effect (D-057): derived_at, or earlier when back-dated
     superseded_at       timestamptz,
     CONSTRAINT lot_genealogy_self_ck CHECK (parent_lot_id <> child_lot_id)
 );
@@ -1613,13 +1614,14 @@ CREATE INDEX ON ts.job_status_change (job_id, occurred_at);
 -- running result of these rows; qty_after is the lot's quantity once applied.
 CREATE TABLE ts.lot_event (
     id                  uuid NOT NULL DEFAULT uuidv7(),
-    occurred_at         timestamptz NOT NULL,
+    occurred_at         timestamptz NOT NULL,                       -- when it was recorded; the partition key
+    effective_at        timestamptz NOT NULL,                       -- when it counts in stock (D-057): occurred_at, or earlier when back-dated
     lot_id              uuid NOT NULL REFERENCES core.lot(id),
     event_kind          text NOT NULL CHECK (event_kind IN (
                             'created','received','moved','loaded','consumed','produced',
                             'split','merged','status_changed','adjusted','scrapped','shipped','corrected','reversed')),
     qty_delta           core.qty,
-    qty_after           core.qty,
+    qty_after           core.qty,                               -- the lot's quantity once recorded; stock at a time sums qty_delta by effective_at
     uom_id              uuid REFERENCES core.uom(id),
     from_location_id    uuid REFERENCES core.equipment(id),
     to_location_id      uuid REFERENCES core.equipment(id),
@@ -1638,6 +1640,7 @@ CREATE TABLE ts.lot_event (
     PRIMARY KEY (id, occurred_at)
 ) PARTITION BY RANGE (occurred_at);
 CREATE INDEX ON ts.lot_event (lot_id, occurred_at);
+CREATE INDEX lot_event_lot_effective_idx ON ts.lot_event (lot_id, effective_at);
 CREATE INDEX lot_event_job_id_idx ON ts.lot_event (job_id) WHERE job_id IS NOT NULL;
 CREATE INDEX lot_event_occurred_at_brin ON ts.lot_event USING brin (occurred_at);   -- the movement journal reads by time (D-029)
 
@@ -1907,7 +1910,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0021_stops'),
     ('0022_tag_deletion'),
     ('0023_person_import'),
-    ('0024_lot_records');
+    ('0024_lot_records'),
+    ('0025_backdated_movements');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -1948,6 +1952,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('inventory.correct', 'Correct inventory: write up, write off, correct, reverse, split and merge lots'),
     ('stock_count.manage', 'Start, enter, post and cancel stock counts'),
     ('lot_records.manage', 'Record lot attributes and attach or withdraw certificates'),
+    ('inventory.backdate', 'Back-date receipts, consumption, production, write-ups and write-offs by up to 31 days'),
     ('materials.manage', 'Maintain materials, classes, conversions, batching and shelf life; import materials'),
     ('processes.manage', 'Maintain processes, BOMs and capabilities'),
     ('units.manage', 'Maintain units of measure'),
@@ -2031,6 +2036,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('quality', 'inventory.correct'),
     ('quality', 'partial_batch.decide'),
     ('quality', 'lot_records.manage'),
+    ('quality', 'inventory.backdate'),
     ('quality', 'lot_attributes.manage'),
     ('manager', 'overview.view'),
     ('manager', 'work_orders.view'),
@@ -2069,6 +2075,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('auditor', 'labor.view'),
     ('auditor', 'machines.view'),
     ('auditor', 'site_settings.view'),
+    ('auditor', 'inventory.backdate'),
     ('auditor', 'inventory.correct'),
     ('auditor', 'stock_count.manage'),
     ('process_engineer', 'equipment.view'),

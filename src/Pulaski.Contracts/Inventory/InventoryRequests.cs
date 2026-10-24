@@ -4,8 +4,11 @@ namespace Pulaski.Contracts.Inventory;
 /// Receives a new lot at a location (D-027). The lot number is required for a lot-tracked
 /// material and left blank for one that isn't, which adds to the location's balance instead.
 /// </summary>
-public sealed record ReceiveLotRequest
+public sealed record ReceiveLotRequest : IMayBackdate
 {
+    /// <summary>When it counts, to back-date it (D-057): at most 31 days back, with a comment; needs <c>inventory.backdate</c>. Null: now.</summary>
+    public DateTimeOffset? EffectiveAt { get; init; }
+
     public Guid MaterialId { get; init; }
     public Guid LocationId { get; init; }
     public string? LotNumber { get; init; }
@@ -19,8 +22,11 @@ public sealed record ReceiveLotRequest
 }
 
 /// <summary>A write-up (quantity required) or write-off (blank quantity takes the whole lot).</summary>
-public sealed record AdjustLotRequest
+public sealed record AdjustLotRequest : IMayBackdate
 {
+    /// <summary>When it counts, to back-date it (D-057): at most 31 days back, with a comment; needs <c>inventory.backdate</c>. Null: now.</summary>
+    public DateTimeOffset? EffectiveAt { get; init; }
+
     public long Version { get; init; }
     public decimal? Quantity { get; init; }
     public Guid? UomId { get; init; }
@@ -55,8 +61,11 @@ public sealed record ChangeLotStatusRequest
 }
 
 /// <summary>Declares quantity of an available lot used by a production job.</summary>
-public sealed record ConsumeLotRequest
+public sealed record ConsumeLotRequest : IMayBackdate
 {
+    /// <summary>When it counts, to back-date it (D-057): at most 31 days back, with a comment; needs <c>inventory.backdate</c>. Null: now.</summary>
+    public DateTimeOffset? EffectiveAt { get; init; }
+
     public Guid JobId { get; init; }
     public decimal Quantity { get; init; }
     public Guid UomId { get; init; }
@@ -70,8 +79,11 @@ public sealed record ConsumeLotRequest
 /// Declares a job's output into a lot at a location. A blank lot number is generated from the
 /// job number; an existing number adds to it only when the same job made it there.
 /// </summary>
-public sealed record ProduceLotRequest
+public sealed record ProduceLotRequest : IMayBackdate
 {
+    /// <summary>When it counts, to back-date it (D-057): at most 31 days back, with a comment; needs <c>inventory.backdate</c>. Null: now.</summary>
+    public DateTimeOffset? EffectiveAt { get; init; }
+
     public Guid LocationId { get; init; }
     public decimal Quantity { get; init; }
     public Guid UomId { get; init; }
@@ -197,4 +209,10 @@ public sealed record UpdateReasonCodeRequest
 
     /// <summary>A utilization reason's class (D-050); left out, it stays.</summary>
     public string? UtilizationClass { get; init; }
+}
+
+/// <summary>A movement request that may be back-dated (D-057); the API requires <c>inventory.backdate</c> when it is.</summary>
+public interface IMayBackdate
+{
+    DateTimeOffset? EffectiveAt { get; }
 }

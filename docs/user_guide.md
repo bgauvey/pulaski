@@ -988,12 +988,30 @@ A **count** checks what is really at a location and puts the records right.
 - **Now** turns amber when a lot changed since the count started.
 - Stock you find that isn't in the count is received separately. Count numbers are *CNT-* and the date the count started (UTC), then a number.
 
+### Back-date a movement
+
+When a receipt, consumption, production, write-up or write-off is entered late, it can count from when it really happened.
+
+1. Open the movement as usual (**Receive**, **Consume**, **Write up**, **Write off**, or production on the Jobs tab).
+2. Fill in **Counts from** with the date and time it happened, in the site's time zone. The field shows only if you may back-date.
+3. Write a **comment** saying why it is late (required), and save.
+
+**In detail**
+
+- **Who:** back-dating needs permission to back-date inventory movements (the Quality and Auditor roles have it), as well as permission for the movement itself.
+- **Limits:** at most 31 days back, and never in the future. A movement can't count before the lot had any stock, before a posted stock count that counted the lot, or so that the lot would have been below zero at any time since. The message says when it would have gone short.
+- **Runs.** Back-dated consumption and production go into the run of the job that was going on then (or the run you choose, which must have been going on then); if the job wasn't running then, it is refused. Back-dated production counts in the shift it happened in, for production by shift and OEE.
+- **Expiry** is checked when the movement counts: a lot that was in date then can be consumed then, even if it has expired since. A back-dated receipt's or production's expiry runs from when it counts.
+- **Both times are kept.** The lot's history lists a back-dated movement at the time it counts, with *recorded …* beneath it; the journal lists it when it was recorded, with *counts from …*, and its export has both. Genealogy links made by back-dated consumption or production show *since …* with *(back-dated)*. The event log records it now, with `EffectiveAt` in its data.
+- **Reversing** a back-dated movement undoes it at the time it counted, so every past date comes out as if it had never happened.
+- **Only quantity movements** can be back-dated: moves, holds, splits, merges, shipments and counts always count when they are recorded.
+
 ### Reports and exports
 
 **Inventory → Reports** has two reports:
 
-- **Stock on a date:** each material's on-hand quantity at the end of the day you choose. It is worked out from every lot's last movement up to then, so older dates take longer. Held stock is included: a lot's status at that time isn't reconstructed.
-- **Aging:** on-hand stock by how long ago each lot was received or made: up to 30 days, 31–90, 91–180 and over 180 (in amber). Balances of materials that aren't lot-tracked aren't aged, and a split lot counts from the day it was split.
+- **Stock on a date:** each material's on-hand quantity at the end of the day you choose. It adds up every movement that counts by then, including [back-dated](#back-date-a-movement) ones entered later, so a past date can change after a correction, and gives the same answer whatever order movements were entered in. Older dates take longer. Held stock is included: a lot's status at that time isn't reconstructed.
+- **Aging:** on-hand stock by how long ago each lot was received or made (from when its first movement counts, so a back-dated receipt ages from its real day): up to 30 days, 31–90, 91–180 and over 180 (in amber). Balances of materials that aren't lot-tracked aren't aged, and a split lot counts from the day it was split.
 
 **Export CSV** downloads a spreadsheet file from the **Stock** tab (what is on screen, with its filters), the **Lots** tab (every matching lot, up to 10,000), the **Journal** (every matching movement, up to 10,000) and both reports. Lot search shows 200 at a time: click **Show more** for the next.
 
@@ -1016,7 +1034,7 @@ The **Locations** tab lists every piece of equipment that holds inventory, with 
 - **Concurrency.** Write up, write off, move, hold and release check that the lot hasn't changed since you opened it; if it has you'll see *"changed by someone else"*: reload and try again. Consumption and production don't check, so several people can declare against a busy line; the no-negative-stock rule still protects them.
 - **Substitutions.** Consuming a material the job has no planned component of is allowed, and recorded as a **substitution** (amber on the job page and in the confirmation).
 - **Genealogy is per job for now.** Every lot consumed into a job is recorded as a parent of every lot the job made, whichever came first. That can link more than really mixed (a resin lot used in the first hour shows as a parent of the last pallet). It narrows to time windows once Pulaski records production from the machines.
-- **Times** are the moment you click; you can't back-date a movement. A movement recorded into a run that has ended keeps the time you entered it and names the run it belongs to.
+- **Times** are the moment you click, unless the movement is [back-dated](#back-date-a-movement). A movement recorded into a run that has ended keeps the time you entered it and names the run it belongs to.
 - **What the ERP sees.** Each movement is an event in Pulaski's event log (`pulaski.lot.received.v1`, `…consumed.v1` and so on), ready to be sent to the ERP once the connection is built.
 
 ---
@@ -1293,9 +1311,9 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | **Planner** | The schedule (place, sequence, pin, assign and cancel jobs); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; materials. |
 | **Supervisor** | Start, pause, complete and reopen jobs; report production; record and approve labor; code machine stops; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches. |
 | **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off. |
-| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions. |
+| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements. |
 | **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; lot attribute definitions; the site's settings. |
-| **Auditor** | Correct inventory; stock counts. Can't plan or run jobs. |
+| **Auditor** | Correct inventory; stock counts; back-date inventory movements. Can't plan or run jobs. |
 | **Process engineer** | Processes, BOMs and which lines can run each material. |
 | **Edge node** | Nothing on screen: it is for the user a Pulaski Edge node signs in as, to read its configuration and forward machine data. |
 
@@ -1844,7 +1862,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
 - **Batches:** the batch size is per material, not per line (a 50 kg mixer next to a 200 kg one isn't modelled). A replacement job is always rounded up to whole batches; to make fewer, cancel it. Orders from the ERP aren't imported yet, so there is no rule yet for an ERP order that isn't whole batches. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
-- **Not in inventory yet:** pallets or containers that hold several lots, lot labels and barcode scanning, setting stock aside for a job, and suggestions of which lot to use first. Movements can't be back-dated. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
+- **Not in inventory yet:** pallets or containers that hold several lots, lot labels and barcode scanning, setting stock aside for a job, and suggestions of which lot to use first. Moves, holds, splits, merges, shipments and counts can't be back-dated (only quantity movements can, by up to 31 days), and a lot's location and status on a past date aren't reconstructed. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
 - **Reversing is limited** to a lot's latest movement, and not consumption, production, splits, merges, transfers between balances or corrections: put those right with another movement.
 - **Reason trees** (a reason grouped under another) can't be edited.
 - **Where lots mix, genealogy is approximate:** every lot that ever joined a silo's balance counts as a parent of everything taken from it afterwards. Residence time and first-in, first-out through a silo come with machine data.

@@ -95,7 +95,14 @@ public sealed record MaterialStockDetailDto
 public sealed record LotEventDto
 {
     public required Guid Id { get; init; }
+
+    /// <summary>When it was recorded.</summary>
     public DateTimeOffset OccurredAt { get; init; }
+
+    /// <summary>When it counts in stock (D-057): <see cref="OccurredAt"/>, or earlier when it was back-dated.</summary>
+    public DateTimeOffset EffectiveAt { get; init; }
+
+    public bool IsBackdated => EffectiveAt < OccurredAt;
 
     /// <summary><c>received</c>, <c>produced</c>, <c>adjusted</c>, <c>scrapped</c>, <c>consumed</c>, <c>moved</c> or <c>status_changed</c>.</summary>
     public required string Kind { get; init; }
@@ -142,6 +149,10 @@ public sealed record LotLinkDto
     /// <summary><c>declared</c> today; <c>time_window</c>, <c>split</c> and <c>merge</c> come with execution.</summary>
     public required string LinkBasis { get; init; }
     public string? JobNumber { get; init; }
+
+    /// <summary>When the link took effect (D-057), and when it was recorded; they differ for a back-dated movement.</summary>
+    public DateTimeOffset EffectiveAt { get; init; }
+    public DateTimeOffset DerivedAt { get; init; }
 }
 
 /// <summary>A lot with its history and its direct parents and children.</summary>

@@ -35,6 +35,9 @@ public interface IExecutionRepository
     /// <summary>A run, locked; null when it doesn't exist.</summary>
     Task<JobRun?> GetRunForUpdateAsync(Guid runId, CancellationToken cancellationToken);
 
+    /// <summary>The job's run going on at <paramref name="at"/> (started at or before it, not ended before it), locked; null when none (D-057).</summary>
+    Task<JobRun?> GetRunAtForUpdateAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken);
+
     /// <summary>The job number of whatever has an open run on the line, other than <paramref name="exceptJobId"/>; null when the line is free.</summary>
     Task<string?> GetRunningJobOnLineAsync(Guid lineId, Guid exceptJobId, CancellationToken cancellationToken);
 

@@ -247,8 +247,41 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         return Task.CompletedTask;
     }
 
-    public Task InsertGenealogyAsync(IReadOnlyList<GenealogyEdge> edges, DateTimeOffset at, CancellationToken cancellationToken)
+    /// <summary>Posted stock counts, by lot, as a test sets them.</summary>
+    public Dictionary<Guid, DateTimeOffset> CountedAt { get; } = [];
+
+    /// <summary>When each genealogy edge took effect, as the handlers asked (D-057).</summary>
+    public Dictionary<Guid, DateTimeOffset> EdgeEffectiveAt { get; } = [];
+
+    public Task<IReadOnlyList<QuantityPoint>> ListQuantityTimelineAsync(Guid lotId, CancellationToken cancellationToken)
     {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<QuantityPoint>>([.. _events
+                .Where(e => e.Row.LotId == lotId && e.Row.Movement.QtyDelta is not null)
+                .Select(e => new QuantityPoint(e.Row.EffectiveAt ?? e.At, e.At, e.Row.Movement.QtyDelta!.Value))
+                .OrderBy(p => p.EffectiveAt).ThenBy(p => p.OccurredAt)]);
+        }
+    }
+
+    public Task<DateTimeOffset?> LatestCountOfLotAsync(Guid lotId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(CountedAt.TryGetValue(lotId, out var at) ? at : (DateTimeOffset?)null);
+        }
+    }
+
+    public Task InsertGenealogyAsync(IReadOnlyList<GenealogyEdge> edges, DateTimeOffset at, CancellationToken cancellationToken, DateTimeOffset? effectiveAt = null)
+    {
+        lock (_lock)
+        {
+            foreach (var edge in edges)
+            {
+                EdgeEffectiveAt.TryAdd(edge.Id, effectiveAt ?? at);
+            }
+        }
+
         lock (_lock)
         {
             _edges.AddRange(edges.Where(e => !_edges.Any(x => x.ParentLotId == e.ParentLotId && x.ChildLotId == e.ChildLotId)));
@@ -397,7 +430,7 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         lock (_lock)
         {
             var latest = _events.LastOrDefault(e => e.Row.LotId == lotId);
-            return Task.FromResult(latest.Row is null ? null : new LotEventRecord(latest.Row.Id, latest.At, latest.Row.Movement, latest.Row.RelatedLotId));
+            return Task.FromResult(latest.Row is null ? null : new LotEventRecord(latest.Row.Id, latest.At, latest.Row.Movement, latest.Row.RelatedLotId, latest.Row.EffectiveAt ?? latest.At));
         }
     }
 

@@ -63,11 +63,11 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         INSERT INTO ts.lot_event (id, occurred_at, lot_id, event_kind, qty_delta, qty_after, uom_id,
                                   from_location_id, to_location_id, related_lot_id, job_id,
                                   from_status, to_status, reason_code_id, comment, actor_id,
-                                  reference, reverses_event_id, reverses_occurred_at, run_id)
+                                  reference, reverses_event_id, reverses_occurred_at, run_id, effective_at)
         VALUES (@Id, @At, @LotId, @Kind, @QtyDelta, @QtyAfter, @UomId,
                 @FromLocationId, @ToLocationId, @RelatedLotId, @JobId,
                 @FromStatus, @ToStatus, @ReasonCodeId, @Comment, @ActorId,
-                @Reference, @ReversesEventId, @ReversesOccurredAt, @RunId)
+                @Reference, @ReversesEventId, @ReversesOccurredAt, @RunId, coalesce(@EffectiveAt, @At))
         """;
 
     private const string GetLocation = """
@@ -122,8 +122,8 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         """;
 
     private const string InsertGenealogy = """
-        INSERT INTO core.lot_genealogy (id, parent_lot_id, child_lot_id, link_basis, job_id, derived_at)
-        VALUES (@Id, @ParentLotId, @ChildLotId, @Basis, @JobId, @At)
+        INSERT INTO core.lot_genealogy (id, parent_lot_id, child_lot_id, link_basis, job_id, derived_at, effective_at)
+        VALUES (@Id, @ParentLotId, @ChildLotId, @Basis, @JobId, @At, coalesce(@EffectiveAt, @At))
         ON CONFLICT (parent_lot_id, child_lot_id, link_basis) WHERE superseded_at IS NULL DO NOTHING
         """;
 
@@ -138,10 +138,25 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     private const string LatestEvent = """
         SELECT id, occurred_at, event_kind AS kind, qty_delta, qty_after, from_location_id, to_location_id,
-               from_status, to_status, related_lot_id
+               from_status, to_status, related_lot_id, effective_at
         FROM ts.lot_event
         WHERE lot_id = @LotId
         ORDER BY occurred_at DESC, id DESC
+        LIMIT 1
+        """;
+
+    private const string QuantityTimeline = """
+        SELECT effective_at AS effectiveat, occurred_at AS occurredat, qty_delta AS delta
+        FROM ts.lot_event
+        WHERE lot_id = @LotId AND qty_delta IS NOT NULL
+        ORDER BY effective_at, occurred_at, id
+        """;
+
+    private const string LatestCountOfLot = """
+        SELECT c.posted_at
+        FROM core.stock_count c JOIN core.stock_count_line x ON x.stock_count_id = c.id
+        WHERE x.lot_id = @LotId AND c.status = 'posted'
+        ORDER BY c.posted_at DESC
         LIMIT 1
         """;
 
@@ -276,6 +291,7 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
                 row.ActorId,
                 row.Reference,
                 row.ReversesEventId,
+                row.EffectiveAt,
                 row.ReversesOccurredAt,
                 row.RunId,
             },
@@ -296,14 +312,20 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
     public Task<IReadOnlyList<Guid>> ListLotsConsumedByJobAsync(Guid jobId, CancellationToken cancellationToken) =>
         session.QueryAsync<Guid>(LotsOfJob, new { JobId = jobId, Kind = LotEventKind.Consumed }, cancellationToken);
 
-    public async Task InsertGenealogyAsync(IReadOnlyList<GenealogyEdge> edges, DateTimeOffset at, CancellationToken cancellationToken)
+    public async Task InsertGenealogyAsync(IReadOnlyList<GenealogyEdge> edges, DateTimeOffset at, CancellationToken cancellationToken, DateTimeOffset? effectiveAt = null)
     {
         foreach (var edge in edges)
         {
             await session.ExecuteAsync(
-                InsertGenealogy, new { edge.Id, edge.ParentLotId, edge.ChildLotId, edge.JobId, edge.Basis, At = at }, cancellationToken);
+                InsertGenealogy, new { edge.Id, edge.ParentLotId, edge.ChildLotId, edge.JobId, edge.Basis, At = at, EffectiveAt = effectiveAt }, cancellationToken);
         }
     }
+
+    public Task<IReadOnlyList<QuantityPoint>> ListQuantityTimelineAsync(Guid lotId, CancellationToken cancellationToken) =>
+        session.QueryAsync<QuantityPoint>(QuantityTimeline, new { LotId = lotId }, cancellationToken);
+
+    public Task<DateTimeOffset?> LatestCountOfLotAsync(Guid lotId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<DateTimeOffset?>(LatestCountOfLot, new { LotId = lotId }, cancellationToken);
 
     public async Task CarryLotRecordsAsync(Guid fromLotId, Guid toLotId, string via, bool withAttributes, string actor, DateTimeOffset at, CancellationToken cancellationToken)
     {
@@ -328,7 +350,8 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
                 row.Id,
                 row.OccurredAt,
                 new LotMovement(row.Kind, row.QtyDelta, row.QtyAfter ?? 0m, row.FromLocationId, row.ToLocationId, row.FromStatus, row.ToStatus),
-                row.RelatedLotId)
+                row.RelatedLotId,
+                row.EffectiveAt)
             : null;
 
     public async Task<IReadOnlyList<Lot>> ListOnHandLotsAtAsync(Guid locationId, CancellationToken cancellationToken) =>
@@ -444,6 +467,8 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     private sealed class EventRow
     {
+        public DateTimeOffset? EffectiveAt { get; init; }
+
         public Guid Id { get; init; }
         public DateTimeOffset OccurredAt { get; init; }
         public string Kind { get; init; } = "";

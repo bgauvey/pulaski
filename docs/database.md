@@ -1094,7 +1094,8 @@ Derived edges can be recalculated when windows or residence times change; the ol
 | `job_id` | uuid → job | yes | The job that consumed the parent and made the child (declared edges). |
 | `run_id` | uuid → job_run | yes | The run that linked them. |
 | `window_start`, `window_end` | timestamptz | yes | The time window used. |
-| `derived_at` | timestamptz | no | When the edge was derived. |
+| `derived_at` | timestamptz | no | When the edge was derived (recorded). |
+| `effective_at` | timestamptz | no | When the link took effect (D-057): `derived_at`, or the back-dated consumption's or production's effective time. |
 | `superseded_at` | timestamptz | yes | When a newer derivation replaced it. |
 
 ### core.trace_forward(lot), core.trace_backward(lot) — genealogy trace · *In use*
@@ -1390,16 +1391,17 @@ One row for every job status change, written in the same transaction as the chan
 
 ### ts.lot_event — every inventory movement · *In use*
 
-`core.lot` quantity and location are the running result of these rows. The application appends one row per movement and lot (D-027), in the base unit; it never updates or deletes them. The movement journal (D-029) reads it by site and time range, helped by a BRIN index on `occurred_at`.
+`core.lot` quantity and location are the running result of these rows. The application appends one row per movement and lot (D-027), in the base unit; it never updates or deletes them. The movement journal (D-029) reads it by site and time range, helped by a BRIN index on `occurred_at`. A back-dated movement (D-057) is recorded now and counts from `effective_at`: stock at a time is the sum of `qty_delta` of the rows that count by then, so it is the same whatever order movements were entered in.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key with `occurred_at`. |
-| `occurred_at` | timestamptz | no | When. Partition key. |
+| `occurred_at` | timestamptz | no | When it was recorded. Partition key. |
+| `effective_at` | timestamptz | no | When it counts in stock (D-057): `occurred_at`, or up to 31 days earlier for a back-dated receipt, consumption, production, write-up or write-off; a reversal counts when the movement it undoes did. Indexed with `lot_id`. |
 | `lot_id` | uuid → lot | no | The lot. |
 | `event_kind` | text | no | `created`, `received`, `moved`, `loaded`, `consumed`, `produced`, `split`, `merged`, `status_changed`, `adjusted`, `scrapped` or `shipped`. In use: `received`, `produced`, `adjusted` (write-up), `scrapped` (write-off), `consumed`, `moved`, `status_changed`, and (D-030) `split`, `merged`, `shipped`, `corrected` (details changed; no quantity) and `reversed`. A count posts `adjusted` and `scrapped` rows. |
 | `qty_delta` | qty | yes | Quantity change: positive in, negative out; null for a whole-lot move or a status change. |
-| `qty_after` | qty | yes | The lot's quantity once this row is applied. |
+| `qty_after` | qty | yes | The lot's quantity once this row was recorded (in record order, so not the balance at `effective_at` for a back-dated row). |
 | `uom_id` | uuid → uom | yes | Its unit. |
 | `from_location_id`, `to_location_id` | uuid → equipment | yes | Where the stock left and arrived. |
 | `related_lot_id` | uuid → lot | yes | The other lot in a split or merge, or the other bulk lot in a transfer. |

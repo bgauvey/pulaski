@@ -80,7 +80,13 @@ else
                 {
                     var e = entry.Movement;
                     <tr @key="e.Id">
-                        <td class="small text-nowrap">@Display.SiteTime(e.OccurredAt, Sites.Site?.TimeZone)</td>
+                        <td class="small text-nowrap">
+                            @Display.SiteTime(e.OccurredAt, Sites.Site?.TimeZone)
+                            @if (e.IsBackdated)
+                            {
+                                <div class="text-muted" title="Back-dated: recorded at the time above, counts from this one">counts from @Display.SiteTime(e.EffectiveAt, Sites.Site?.TimeZone)</div>
+                            }
+                        </td>
                         <td>
                             @InventoryView.EventLabel(e.Kind)
                             @if (e.ToStatus is { } to)
@@ -211,12 +217,12 @@ else
             await Downloads.CsvAsync(
                 Csv.FileName("journal", Sites.Site?.Code, Time.GetUtcNow()),
                 Csv.Write(
-                    ["When", "What", "Lot", "Material", "Change", "After", "Unit", "From", "To", "Status from", "Status to", "Job", "Reference", "Reason", "Comment", "Who"],
+                    ["When", "Counts from", "What", "Lot", "Material", "Change", "After", "Unit", "From", "To", "Status from", "Status to", "Job", "Reference", "Reason", "Comment", "Who"],
                     all.Select(entry =>
                     {
                         var e = entry.Movement;
                         return (IReadOnlyList<object?>)[
-                            Display.SiteTime(e.OccurredAt, tz), InventoryView.EventLabel(e.Kind), InventoryView.LotLabel(entry.LotNumber, entry.IsBulk, entry.LocationCode), entry.MaterialCode, e.QtyDelta, e.QtyAfter, e.UomCode,
+                            Display.SiteTime(e.OccurredAt, tz), Display.SiteTime(e.EffectiveAt, tz), InventoryView.EventLabel(e.Kind), InventoryView.LotLabel(entry.LotNumber, entry.IsBulk, entry.LocationCode), entry.MaterialCode, e.QtyDelta, e.QtyAfter, e.UomCode,
                             e.FromLocationCode, e.ToLocationCode, e.FromStatus, e.ToStatus, e.JobNumber, e.Reference, e.ReasonName, e.Comment, e.ActorId];
                     })));
         }
