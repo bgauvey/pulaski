@@ -13,8 +13,8 @@ namespace Pulaski.Api.Endpoints;
 /// <summary>Materials management (D-033, D-034): materials, their import, capabilities and classes.</summary>
 internal static class MaterialEndpoints
 {
-    /// <summary>Largest CSV file accepted, in bytes (characters, once read).</summary>
-    private const int MaxCsvBytes = 5 * 1024 * 1024;
+    /// <summary>Largest import file accepted, in bytes (characters, once read).</summary>
+    private const int MaxFileBytes = 5 * 1024 * 1024;
 
     public static IEndpointRouteBuilder MapMaterialEndpoints(this IEndpointRouteBuilder routes)
     {
@@ -62,27 +62,37 @@ internal static class MaterialEndpoints
                 ct)))
         .RequirePermission(Permissions.Materials);
 
-        // Many materials from a CSV file, all or nothing; ?dryRun=true checks them and saves nothing (D-034).
-        materials.MapPost("/import/csv", async Task<Ok<ImportMaterialsResponse>> (
+        // The formats materials can be imported from (D-053).
+        materials.MapGet("/import/sources", async Task<Ok<IReadOnlyList<MaterialSourceDto>>> (
+            IQueryHandler<ListMaterialSourcesQuery, IReadOnlyList<MaterialSourceDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListMaterialSourcesQuery(), ct)))
+        .RequireAny(null, Permissions.MaterialsView);
+
+        // Many materials from a file read by a source adapter (csv, b2mml), all or nothing; ?dryRun=true checks them and saves
+        // nothing (D-034, D-053). ?externalSystem= names the system the items belong to, for a format that doesn't say.
+        materials.MapPost("/import/{source}", async Task<Ok<ImportMaterialsResponse>> (
+            string source,
             HttpRequest http,
             bool? dryRun,
-            ICommandHandler<ImportMaterialsCommand, ImportMaterialsResponse> handler,
+            string? externalSystem,
+            ICommandHandler<ImportMaterialFileCommand, ImportMaterialsResponse> handler,
             CancellationToken ct) =>
         {
             using var reader = new StreamReader(http.Body);
-            var text = http.ContentLength > MaxCsvBytes ? null : await reader.ReadToEndAsync(ct);
-            if (text is null || text.Length > MaxCsvBytes)
+            var text = http.ContentLength > MaxFileBytes ? null : await reader.ReadToEndAsync(ct);
+            if (text is null || text.Length > MaxFileBytes)
             {
                 throw new ValidationException(new Dictionary<string, string[]>
                 {
-                    ["file"] = [$"The file is larger than {MaxCsvBytes / 1024 / 1024} MB; split it."],
+                    ["file"] = [$"The file is larger than {MaxFileBytes / 1024 / 1024} MB; split it."],
                 });
             }
 
-            return TypedResults.Ok(await handler.HandleAsync(new ImportMaterialsCommand(MaterialCsv.Parse(text), dryRun ?? false, "CSV import"), ct));
+            return TypedResults.Ok(await handler.HandleAsync(new ImportMaterialFileCommand(source, text, externalSystem, dryRun ?? false), ct));
         })
         .RequirePermission(Permissions.Materials)
-        .Accepts<string>("text/csv", "text/plain");
+        .Accepts<string>("text/csv", "text/plain", "application/xml", "text/xml");
 
         // Made in batches, or continuously again with a blank size (D-036).
         materials.MapPut("/{id:guid}/batching", async Task<Ok<UpdateMaterialResponse>> (

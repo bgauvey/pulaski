@@ -180,7 +180,7 @@ If you are starting from an empty Pulaski, work through this list in order. Each
 | --- | --- | --- | --- |
 | 1 | The enterprise and at least one site, with its time zone | [Equipment](#4-equipment) | Everything else belongs to a site. |
 | 2 | Areas (departments) and lines under the site | [Equipment](#4-equipment) | Jobs are planned on lines and departments. |
-| 3 | Material classes, then materials (one by one, from a [CSV file](#import-materials-from-a-csv-file), or from the ERP) | [Materials](#13-materials) | Orders and BOMs need materials. |
+| 3 | Material classes, then materials (one by one, from a [CSV or B2MML file](#import-materials-from-a-file), or from the ERP) | [Materials](#13-materials) | Orders and BOMs need materials. |
 | 3a | Units, and conversions for materials you order or use in other units | [Units](#6-units-and-conversions) | So orders, BOMs and rates can use any unit that converts. |
 | 4 | Capabilities: which material runs on which line, and how fast | [The material's page](#where-it-can-run-capabilities-and-rates) | Without one, a line can't take a material's job. |
 | 5 | Shift schedules, and which one each site, area or line follows (optional) | [Shifts](#15-shift-schedules), then [Equipment](#4-equipment) | Without one, Pulaski assumes lines run around the clock and marks them **24/7**. |
@@ -1094,12 +1094,13 @@ What the line really makes, rather than its ideal rate.
 - **The planning rate** is one per line and material, whatever the capability periods. Pulaski calculates it from the ideal rate until you use a rate from run history (above); from then on the ideal rate no longer changes it, until you go back to it. You can't change a capability's rate unit while the planning rate has a modified rate in the old unit: clear the modified rate first.
 - **Events:** `pulaski.capability.added.v1`, `…changed.v1`, `…ended.v1`, `pulaski.run_standard.created.v1` and `…recalculated.v1`, besides the existing `…modified.v1` and `…modification_cleared.v1`.
 
-### Import materials from a CSV file
+### Import materials from a file
 
-Load many materials at once, for example when setting up a new site, from a spreadsheet saved as CSV.
+Load many materials at once, for example when setting up a new site, from a spreadsheet saved as CSV or from an ERP's ISA-95 export in B2MML XML.
 
-1. On the Materials tab, click **Import CSV**.
-2. Prepare the file. Its first line names the columns; the panel shows them all. **code**, **name**, **type** and **base_unit** are required; the rest are optional:
+1. On the Materials tab, click **Import file**.
+2. Pick the **Format**: **CSV** or **B2MML** (see [B2MML files](#b2mml-files) below). For B2MML, type the **External system** the items come from, such as `ERP1`, if they are the ERP's items.
+3. Prepare the file. For CSV, its first line names the columns; the panel shows them all. **code**, **name**, **type** and **base_unit** are required; the rest are optional:
 
    | Column | Holds |
    | --- | --- |
@@ -1112,9 +1113,9 @@ Load many materials at once, for example when setting up a new site, from a spre
    | `shelf_life_days` | A whole number of days. |
    | `external_system`, `external_key`, `external_version` | For items from the ERP: its name, the item's key there, and an optional version. |
 
-3. Click **Choose File** and pick the file. Pulaski checks it straight away and saves nothing yet. Each row shows what would happen: **Create**, **Update** (with the fields that change), **Unchanged**, or **Error** with the reason.
-4. If there are errors, fix the file and pick it again. Tick **Only rows with errors** to see just those.
-5. When every row is fine, click **Import N materials**. The list below updates.
+4. Click **Choose File** and pick the file. Pulaski checks it straight away and saves nothing yet. Each row shows what would happen: **Create**, **Update** (with the fields that change), **Unchanged**, or **Error** with the reason.
+5. If there are errors, fix the file and pick it again. Tick **Only rows with errors** to see just those. Changing the format or the external system checks the same file again.
+6. When every row is fine, click **Import N materials**. The list below updates.
 
 **In detail**
 
@@ -1122,8 +1123,38 @@ Load many materials at once, for example when setting up a new site, from a spre
 - **Which material a row is.** A row with `external_system` and `external_key` is the ERP's item: matched on them, created if new, and its code, name, base unit and type updated (as in the [ERP import](#in-detail-6)). A row without them is a Pulaski material, matched on its code. A row whose code belongs to an ERP material is an error: give its external columns or change it in the ERP.
 - **Left out or blank.** A column the file doesn't have keeps what each material already has (or the default for a new one: lot-tracked, active, no class). A blank cell in `class`, `description` or `shelf_life_days` clears it; a blank `lot_tracked` or `active` keeps it.
 - **The rules are the same as on the material page:** a base unit that is in use can't change, lot tracking can't change while stock is on hand, an inactive class can't be given to a material, and a code or ERP key can appear only once in a file.
-- **The file:** comma or semicolon separators, quotes around a value that contains them (or line breaks), column names in any order and case (`Base unit` and `base-unit` both work, as do `item_code` and `uom`). An unknown column stops the import, so a misspelt name isn't ignored. At most 5 MB and 5,000 rows per file.
-- Each imported row is recorded in the event log as usual, with the reason *CSV import*. The same import is `POST /api/materials/import/csv` (`?dryRun=true` to check), for scripts.
+- **A CSV file:** comma or semicolon separators, quotes around a value that contains them (or line breaks), column names in any order and case (`Base unit` and `base-unit` both work, as do `item_code` and `uom`). An unknown column stops the import, so a misspelt name isn't ignored. At most 5 MB and 5,000 rows per file.
+- Each imported row is recorded in the event log as usual, with the reason *CSV import* or *B2MML import*. The same import is `POST /api/materials/import/csv` or `…/import/b2mml` (`?dryRun=true` to check, `&externalSystem=ERP1` for B2MML), for scripts; `GET /api/materials/import/sources` lists the formats.
+
+#### B2MML files
+
+B2MML is the XML form of the ISA-95 standard that many ERPs and integration tools can export. Pulaski reads its material information: each `MaterialDefinition` is one material.
+
+| In the file | In Pulaski |
+| --- | --- |
+| `ID` | Code; with an external system, also the item's key there |
+| The first `Description` | Name (required) |
+| The first `MaterialClassID` | Class |
+| A `MaterialDefinitionProperty` with the `ID` `MaterialType`, `BaseUnit` (or `BaseUoM`), `LotTracked`, `ShelfLifeDays`, `Active`, `Description` or `ExternalVersion` | That field, from the property's `Value/ValueString` (for the base unit, its `UnitOfMeasure` also works) |
+
+For example:
+
+```xml
+<MaterialInformation xmlns="http://www.mesa.org/xml/B2MML">
+  <MaterialDefinition>
+    <ID>PP-1</ID>
+    <Description>Polypropylene</Description>
+    <MaterialClassID>RESIN</MaterialClassID>
+    <MaterialDefinitionProperty><ID>MaterialType</ID><Value><ValueString>raw</ValueString></Value></MaterialDefinitionProperty>
+    <MaterialDefinitionProperty><ID>BaseUnit</ID><Value><ValueString>kg</ValueString></Value></MaterialDefinitionProperty>
+  </MaterialDefinition>
+</MaterialInformation>
+```
+
+- **External system.** A B2MML file doesn't say which system its items belong to, so you name it on import. With it, each material is that system's item, matched on its `ID` exactly as a CSV row with `external_system` and `external_key` is. Without it, they are Pulaski materials matched on their code.
+- **Other properties are skipped.** Properties Pulaski has no field for (density, colour…) are ignored, unlike an unknown CSV column. Property IDs are compared ignoring case, spaces and underscores, so `Shelf life days` and `shelf_life_days` work too. Giving a field twice, such as a class by `MaterialClassID` and by a property, is an error on that material.
+- **Left out or blank** works as in CSV: a property that isn't there keeps what the material has, and one with an empty value clears an optional field.
+- Any B2MML namespace version (or none) works, inside `MaterialInformation`, a wrapper such as `SyncMaterialInformation`, or as a bare `MaterialDefinition`. The *Line* is where the material's `MaterialDefinition` starts. Further class IDs and descriptions (other languages) are ignored. Files with a `DOCTYPE` are refused. At most 5 MB and 5,000 materials per file.
 
 ### Batches
 
@@ -1162,7 +1193,7 @@ A class's code can't change and a class is never deleted: switch it off instead.
 
 ### In detail
 
-- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, use the [CSV import](#import-materials-from-a-csv-file). Adapters for other external sources are coming (see [What Pulaski doesn't do yet](#22-what-pulaski-doesnt-do-yet)).
+- **The ERP import** is `POST /api/materials/import`, one item at a time, with the ERP's name, the item's key in the ERP, an optional version, and the code, name, base unit code and type. The first import of a key creates the material; later ones update the code, name, base unit and type, and change nothing (no new version, no event) when nothing differs. The ERP may rename an item's code even while it is in use, since the ERP's key, not the code, identifies it. The base unit must be a unit Pulaski has. To load many at once, [import a CSV or B2MML file](#import-materials-from-a-file).
 - **Codes** are unique across all materials, whatever their origin; an import whose code is already used by another material is refused.
 - **Events.** Each change is recorded in the event log as `pulaski.material.created.v1`, `…updated.v1` or `…imported.v1` (and `pulaski.material_class.created.v1` / `…updated.v1`), with the material before and after.
 - **Concurrency.** As elsewhere, if someone else changed the material or class since you opened it, you'll see *"changed by someone else"*: reload and try again.
@@ -1716,7 +1747,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 
 - **No screen yet for the changeover rules** (how long each material change takes): they are set up in the database.
 - **Labor:** no import of people from HR or the ERP. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
-- **No adapters yet** for other external sources or for label printing: materials come from the screen, a CSV file, or the ERP one item at a time through the API. The CSV import doesn't take capabilities, doesn't create missing classes, and there is no template file to download (the panel shows the header line).
+- **Materials import from files only:** CSV or B2MML on the screen, or the ERP one item at a time through the API. Nothing fetches items from an ERP on a timer, and there are no adapters for label printing. Imports don't take capabilities, don't create missing classes, and there is no template file to download (the panel shows the CSV header line). B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** stops can't be split, merged or entered by hand. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.

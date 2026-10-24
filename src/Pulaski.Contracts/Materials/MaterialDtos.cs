@@ -181,7 +181,7 @@ public sealed record UpdateMaterialClassRequest
 /// <summary>What a bulk import did, or would do, with one row of the file (D-034).</summary>
 public sealed record ImportRowResultDto
 {
-    /// <summary>The row's line in the file, counting the header as line 1.</summary>
+    /// <summary>The row's line in the file: in CSV counting the header as line 1, in XML where its element starts.</summary>
     public int Line { get; init; }
     public string Code { get; init; } = "";
 
@@ -210,6 +210,21 @@ public sealed record ImportMaterialsResponse
     /// <summary>Problems with the file as a whole, such as a missing or unknown column.</summary>
     public IReadOnlyList<string> FileProblems { get; init; } = [];
     public IReadOnlyList<ImportRowResultDto> Rows { get; init; } = [];
+}
+
+/// <summary>A format materials can be imported from (D-053), at <c>POST /api/materials/import/{Name}</c>.</summary>
+public sealed record MaterialSourceDto
+{
+    /// <summary>Lower-case name used in the URL, such as <c>csv</c> or <c>b2mml</c>.</summary>
+    public string Name { get; init; } = "";
+    public string DisplayName { get; init; } = "";
+    public string Description { get; init; } = "";
+
+    /// <summary>File extensions and media types it reads, for a file picker's <c>accept</c>.</summary>
+    public IReadOnlyList<string> FileTypes { get; init; } = [];
+
+    /// <summary>Whether the import names the external system the file's items belong to (<c>?externalSystem=</c>).</summary>
+    public bool TakesExternalSystem { get; init; }
 }
 
 /// <summary>The materials CSV file (D-034): its header line with every column, for a template.</summary>

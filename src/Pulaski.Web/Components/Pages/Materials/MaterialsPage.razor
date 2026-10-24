@@ -16,7 +16,7 @@
     <div class="inv-head-tools">
         @if (User.Can(PermissionCodes.Materials))
         {
-            <button type="button" class="btn btn-outline-secondary" @onclick="() => _importing = !_importing">Import CSV</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _importing = !_importing">Import file</button>
             <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New material</button>
         }
     </div>
@@ -28,7 +28,7 @@
 
 @if (_importing)
 {
-    <MaterialCsvImport OnImported="ReloadAsync" OnClose="() => _importing = false" />
+    <MaterialFileImport OnImported="ReloadAsync" OnClose="() => _importing = false" />
 }
 
 @if (_adding)

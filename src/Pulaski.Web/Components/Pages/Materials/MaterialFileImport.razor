@@ -1,17 +1,56 @@
 @inject PulaskiApiClient Api
 
-@* Bulk load from a CSV file (D-034): pick a file, check it, then import it all or nothing. *@
-<section class="inv-facts mb-3" aria-labelledby="csv-title">
-    <h2 class="h6" id="csv-title">Import materials from a CSV file</h2>
-    <p class="small text-muted mb-2">
-        The first line names the columns; code, name, type and base_unit are required. A column left out keeps what each material
-        already has. Rows with external_system and external_key are the ERP's items; the others are matched on their code.
-        Nothing is saved until every row is valid.
-    </p>
-    <p class="small mb-2"><span class="text-muted">All columns:</span> <code>@MaterialCsvFormat.Header</code></p>
+@* Bulk load from a file (D-034, D-053): pick its format and the file, check it, then import it all or nothing. Each format is
+   a source adapter on the API; they all feed the same import. *@
+<section class="inv-facts mb-3" aria-labelledby="import-title">
+    <h2 class="h6" id="import-title">Import materials from a file</h2>
+    <div class="row g-2 mb-2">
+        <div class="col-sm-3">
+            <label class="form-label small" for="import-format">Format</label>
+            <select id="import-format" class="form-select" disabled="@_busy" @bind="_sourceName" @bind:after="RecheckAsync">
+                @foreach (var source in _sources)
+                {
+                    <option value="@source.Name">@source.DisplayName</option>
+                }
+            </select>
+        </div>
+        @if (Source.TakesExternalSystem)
+        {
+            <div class="col-sm-3">
+                <label class="form-label small" for="import-system">External system <span class="text-muted">(optional)</span></label>
+                <input id="import-system" class="form-control" maxlength="100" placeholder="e.g. ERP1" disabled="@_busy"
+                       @bind="_externalSystem" @bind:after="RecheckAsync" />
+            </div>
+        }
+    </div>
+
+    @if (Source.Name == Csv)
+    {
+        <p class="small text-muted mb-2">
+            The first line names the columns; code, name, type and base_unit are required. A column left out keeps what each material
+            already has. Rows with external_system and external_key are the ERP's items; the others are matched on their code.
+            Nothing is saved until every row is valid.
+        </p>
+        <p class="small mb-2"><span class="text-muted">All columns:</span> <code>@MaterialCsvFormat.Header</code></p>
+    }
+    else if (Source.Name == B2mml)
+    {
+        <p class="small text-muted mb-2">
+            @Source.Description Each <code>MaterialDefinition</code> is one material: its <code>ID</code> is the code, its
+            <code>Description</code> the name and its <code>MaterialClassID</code> the class. Type, base unit, lot tracking, shelf life
+            and active come from properties with those IDs, such as <code>MaterialType</code> and <code>BaseUnit</code>.
+            @(Source.TakesExternalSystem ? "With an external system, the materials are that system's items, matched on their ID; without one, they are Pulaski materials matched on their code. " : "")
+            Nothing is saved until every material is valid.
+        </p>
+    }
+    else
+    {
+        <p class="small text-muted mb-2">@Source.Description Nothing is saved until every material is valid.</p>
+    }
 
     <div class="d-flex flex-wrap gap-2 align-items-center">
-        <InputFile OnChange="PickAsync" accept=".csv,text/csv,text/plain" class="form-control" style="max-width: 28rem" aria-label="CSV file" disabled="@_busy" />
+        <InputFile OnChange="PickAsync" accept="@string.Join(",", Source.FileTypes)" class="form-control" style="max-width: 28rem"
+                   aria-label="@($"{Source.DisplayName} file")" disabled="@_busy" />
         <button type="button" class="btn btn-primary" disabled="@(_busy || _result is not { Errors: 0, Applied: false } || _result.Created + _result.Updated == 0)"
                 @onclick="ImportAsync">
             @ImportLabel
@@ -60,8 +99,8 @@
                 @if (r.Errors > 0 && r.Rows.Count > r.Errors)
                 {
                     <div class="form-check mb-0">
-                        <input class="form-check-input" type="checkbox" id="csv-errors" @bind="_errorsOnly" />
-                        <label class="form-check-label small" for="csv-errors">Only rows with errors</label>
+                        <input class="form-check-input" type="checkbox" id="import-errors" @bind="_errorsOnly" />
+                        <label class="form-check-label small" for="import-errors">Only rows with errors</label>
                     </div>
                 }
             </div>
@@ -89,19 +128,47 @@
     /// <summary>Largest file read, matching the API's limit.</summary>
     private const long MaxBytes = 5 * 1024 * 1024;
 
+    private const string Csv = "csv";
+    private const string B2mml = "b2mml";
+
+    // Offered until the API's list arrives, or if it can't be read.
+    private static readonly MaterialSourceDto CsvSource = new() { Name = Csv, DisplayName = "CSV", FileTypes = [".csv", "text/csv", "text/plain"] };
+
     [Parameter]
     public EventCallback OnImported { get; set; }
 
     [Parameter]
     public EventCallback OnClose { get; set; }
 
-    private string? _csv;
+    private IReadOnlyList<MaterialSourceDto> _sources = [CsvSource];
+    private string _sourceName = Csv;
+    private string? _externalSystem;
+    private string? _text;
     private string? _fileName;
     private string? _readProblem;
     private ImportMaterialsResponse? _result;
     private ApiException? _error;
     private bool _busy;
     private bool _errorsOnly;
+
+    private MaterialSourceDto Source => _sources.FirstOrDefault(s => s.Name == _sourceName) ?? CsvSource;
+
+    private string MediaType => Source.FileTypes.FirstOrDefault(t => t.Contains('/')) ?? "text/plain";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (await Api.ListMaterialSourcesAsync() is { Count: > 0 } sources)
+            {
+                _sources = sources;
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
 
     private string ImportLabel => _result is { Errors: 0, Applied: false } r && r.Created + r.Updated > 0
         ? $"Import {Count(r.Created + r.Updated, "material")}"
@@ -112,7 +179,7 @@
         _result = null;
         _error = null;
         _readProblem = null;
-        _csv = null;
+        _text = null;
         _fileName = e.File.Name;
         if (e.File.Size > MaxBytes)
         {
@@ -124,9 +191,8 @@
         try
         {
             using var reader = new StreamReader(e.File.OpenReadStream(MaxBytes));
-            _csv = await reader.ReadToEndAsync();
-            _result = await Api.ImportMaterialsCsvAsync(_csv, dryRun: true);
-            _errorsOnly = _result.Errors > 0;
+            _text = await reader.ReadToEndAsync();
+            await CheckAsync();
         }
         catch (ApiException ex)
         {
@@ -142,9 +208,41 @@
         }
     }
 
+    /// <summary>A file already picked is checked again when its format or external system changes.</summary>
+    private async Task RecheckAsync()
+    {
+        if (_text is null)
+        {
+            _result = null;
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            await CheckAsync();
+        }
+        catch (ApiException ex)
+        {
+            _result = null;
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CheckAsync()
+    {
+        _result = await Api.ImportMaterialsAsync(Source.Name, _text!, Source.TakesExternalSystem ? _externalSystem : null, dryRun: true, MediaType);
+        _errorsOnly = _result.Errors > 0;
+    }
+
     private async Task ImportAsync()
     {
-        if (_csv is null)
+        if (_text is null)
         {
             return;
         }
@@ -153,11 +251,11 @@
         _error = null;
         try
         {
-            _result = await Api.ImportMaterialsCsvAsync(_csv, dryRun: false);
+            _result = await Api.ImportMaterialsAsync(Source.Name, _text, Source.TakesExternalSystem ? _externalSystem : null, dryRun: false, MediaType);
             _errorsOnly = _result.Errors > 0;
             if (_result.Applied)
             {
-                _csv = null;
+                _text = null;
                 await OnImported.InvokeAsync();
             }
         }

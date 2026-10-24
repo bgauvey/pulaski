@@ -60,6 +60,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-050 | Machine data: connectors run in the Pulaski Edge worker, never the API (Sparkplug B first), turning samples into signals through tag bindings, buffered and forwarded in order; machine profiles map state values to PackML and stop codes to utilization reasons; ingest keeps each machine's live state, opens and closes stops for operators to code, and keeps counters. Raw state is always stored (D-005) | Proposed | 2026-10-18 |
 | D-051 | Deleting an edge node deactivates it and its connections and tags atomically. Deleting a tag physically removes its configuration row whether active or inactive, first clearing any quality-characteristic source reference; append a deletion event, retain time-series history, and grant the app role DELETE only on `core.equipment_tag` | Decided | 2026-10-18 |
 | D-052 | Utilization and OEE reports: worked out on read from state changes, stops, runs and production reports, between production days (at most 31), by equipment, shift and product with a breakdown of time by use and reason. Time is classified by unit mode, then by the stop's reason class, else by Execute; lines take their time from their machines like their state. Performance and quality weigh output by the ideal rate; machine counts aren't used. Nothing is stored yet | Proposed | 2026-10-19 |
+| D-053 | Material source adapters: an adapter only turns a file in its format into source-neutral import rows; the bulk import applies the same rules to rows from any source, all or nothing. Adapters are registered services named in the URL (`POST /api/materials/import/{source}`). CSV and ISA-95 B2MML material information (`MaterialDefinition`) ship first; the external system a B2MML file's items belong to is named on import, and its `ID` is their key. Label printing and pushed ERP feeds stay later | Proposed | 2026-10-23 |
 
 ## Order hierarchy
 
@@ -555,12 +556,12 @@ Materials are the items everything else refers to: BOMs, processes, capabilities
 
 The material page also sets and clears the modified rate, through the existing run-standard commands.
 
-**Bulk import.** `POST /api/materials/import/csv` takes a CSV file (`text/csv`, at most 5 MB and 5,000 rows); `?dryRun=true` checks it and saves nothing.
+**Bulk import.** `POST /api/materials/import/csv` (one of the D-053 source adapters) takes a CSV file (`text/csv`, at most 5 MB and 5,000 rows); `?dryRun=true` checks it and saves nothing.
 
 - **The file.** The header names the columns, in any order or case, with a few common alternative names; comma or semicolon separators; RFC 4180 quotes. `code`, `name`, `type` and `base_unit` are required. A column left out keeps what each material has; a blank cell clears an optional field (class, description, shelf life). An unknown column is a problem with the file, so a misspelt header can't be silently ignored.
 - **Matching.** A row with `external_system` and `external_key` is the ERP's item, matched on them as in the single import (D-033); its Pulaski-owned columns are applied too, because the person loading the file is a Pulaski user. A row without them is a Pulaski material matched on its code; a code that belongs to an ERP material is an error.
 - **All or nothing.** Every row goes through the same rules as a single change, in one transaction, so later rows see earlier ones. Any error, or a dry run, rolls the whole file back; the answer lists each row as *create*, *update* (with the fields that change), *unchanged* or *error* (with why). A code or key twice in a file is an error. Each saved row records its usual event, with the reason `CSV import`.
-- **The adapter seam.** `MaterialCsv` only turns text into `MaterialImportRow`s (source-neutral; a field the source didn't supply is null). `ImportMaterialsCommand` applies the rules to rows from any source. An adapter for another item master, or for label printing, will produce or consume the same rows; designing that interface is the next step.
+- **The adapter seam.** `MaterialCsv` only turns text into `MaterialImportRow`s (source-neutral; a field the source didn't supply is null). `ImportMaterialsCommand` applies the rules to rows from any source. The adapter interface is D-053.
 - **Not yet:** capabilities in the file, creating missing classes, and exporting a template file (the screen shows the header line).
 
 ## Job execution and production reporting (D-035, proposed)
@@ -983,6 +984,35 @@ Utilization and OEE by equipment, line, shift and product (charter v1 item 6), w
 **Rows.** By equipment (every active piece that tracks state, in tree order; equipment that runs no jobs has availability only); by shift (each equipment × working window); by product (material and job unit, over the time inside its runs, with good and scrap in the job's unit); and the time of each equipment by use and reason, with the stops that started in the period. A stop already going on when the period began isn't counted again.
 
 **Bounds.** Stops are read back 35 days before the period; one older than that still shows as down, uncoded. Rollups (`ts.oee_rollup`) stay for later, keyed on production date, schedule and shift code (D-050), once reading on demand is too slow.
+
+## Material source adapters (D-053, proposed)
+
+Closes the D-033 / D-034 next step: material master data from sources other than CSV, through the same import (issue #18).
+
+**The seam.** `IMaterialSourceAdapter` (`Pulaski.Application.Materials`) has a `Name` used in the URL, a display name (for screens, and the event reason "`{DisplayName} import`"), a description, the file types it reads, whether it `TakesExternalSystem`, and `Read(text, externalSystem)` → `MaterialImportSource`. An adapter only translates. It never looks materials up and never decides anything; problems go into the result, not exceptions. `ImportMaterialFileCommand(Source, Text, ExternalSystem, DryRun)` finds the adapter (an unknown name is 404), refuses an external system for an adapter that doesn't take one, and passes the rows to `ImportMaterialsCommand`. Matching, the ERP-owned fields, all-or-nothing, dry runs and events are therefore the same for every source (D-033, D-034). Adapters are singletons registered in `AddApplication`. A new source is one class plus one registration.
+
+**Shared reading.** `MaterialImportFields` holds the canonical field names and their aliases (formerly `MaterialCsv.Columns`), the 5,000-row limit, and `ToRow`, which turns field text into a row. Yes/no and whole-day values therefore read the same from any source: a field not supplied keeps what the material has, and a blank clears an optional field.
+
+**API.** `GET /api/materials/import/sources` (`materials.view`) lists the adapters. `POST /api/materials/import/{source}?dryRun=&externalSystem=` (`materials.manage`, at most 5 MB) imports a file. `/import/csv` is the same URL as before.
+
+**B2MML** (`b2mml`, `MaterialB2mml`). It reads the MESA B2MML XML of ISA-95 Part 2 material information:
+
+| B2MML | Import field |
+| --- | --- |
+| `MaterialDefinition/ID` | `code`; also `external_key` when an external system is named |
+| first `Description` | `name` (required, so a missing one is a problem on the row) |
+| first `MaterialClassID` | `class` |
+| `MaterialDefinitionProperty` whose `ID` names a field (`MaterialType`, `BaseUnit`/`BaseUoM`, `LotTracked`, `ShelfLifeDays`, `Active`, `Description`, `Class`, `ExternalVersion`, any alias) | that field, from `Value/ValueString`; for the base unit, `Value/UnitOfMeasure` when the string is empty |
+
+- Every `MaterialDefinition` in the document is one row, whatever the root (`MaterialInformation`, a verb wrapper such as `SyncMaterialInformation`, or a bare definition). Elements are matched by local name, so any B2MML namespace version, or none, works.
+- Property IDs are compared without case, spaces or punctuation. A property that names no field is the source's own (density, colour…) and is skipped; this differs from CSV, where an unknown column is an error, because B2MML files routinely carry properties Pulaski has no field for. A field given twice (say a class by `MaterialClassID` and by property) is a problem on the row. Code and name come only from `ID` and `Description`, and the external key and system never come from properties.
+- **External system.** The file doesn't say which system mastered its items, so the import names it (`?externalSystem=ERP1`). With it, every row is that system's item keyed by its `ID` (D-033 matching). Without it, the rows are Pulaski materials matched on their code.
+- A row's line is where its `MaterialDefinition` starts. DTDs are refused, so no entity expansion or external fetches happen. A file that isn't well-formed XML is a problem with the file.
+- Pulaski keeps one class per material, so further `MaterialClassID`s are ignored, as are further `Description`s (other languages).
+
+**Screen.** Configure → Materials → **Import file** picks the format from the API's list and shows an *External system* field for B2MML. Changing either checks the picked file again.
+
+**Not yet.** Label printing (BarTender and the like), ERP feeds pushed or pulled on a timer, B2MML material lots and classes as their own records, and exporting B2MML.
 
 ## Application architecture
 
