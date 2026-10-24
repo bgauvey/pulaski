@@ -99,6 +99,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   rate recalculates it while its basis is `ideal_rate` (`RunStandard.FollowIdealRate`). CSV import is all or nothing
   (`?dryRun=true` checks); `MaterialCsv` yields source-neutral `MaterialImportRow`s for `ImportMaterialsCommand`, the
   seam future adapters plug into.
+- Material sources (D-053, proposed): an `IMaterialSourceAdapter` (registered in `AddApplication`) only turns a file into
+  `MaterialImportRow`s, through `MaterialImportFields.ToRow`; `ImportMaterialFileCommand` hands them to `ImportMaterialsCommand`.
+  `POST /materials/import/{source}` (`csv`, `b2mml`; `?externalSystem=` for B2MML, whose `ID` is then the key). Adapters never
+  look materials up or decide anything.
 - Execution (D-035, proposed): start opens a `core.job_run`, pause/complete end it; one run per line. Starting firms a
   dispatched order; in progress/completed follow the jobs. Downstream jobs are *ready* when process links are met
   (`JobReadiness`), never auto-started. Reports go into a run (open, or an ended one until the order closes), capped by

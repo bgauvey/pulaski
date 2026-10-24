@@ -763,12 +763,22 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> ClearRunStandardAsync(Guid id, ClearRunStandardRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Post, $"api/scheduling/run-standards/{id}/clear", request, ct);
 
-    /// <summary>Checks (<paramref name="dryRun"/>) or imports a materials CSV file, all or nothing (D-034).</summary>
-    public async Task<ImportMaterialsResponse> ImportMaterialsCsvAsync(string csv, bool dryRun, CancellationToken ct = default)
+    /// <summary>The formats materials can be imported from (D-053).</summary>
+    public Task<IReadOnlyList<MaterialSourceDto>> ListMaterialSourcesAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MaterialSourceDto>>("api/materials/import/sources", ct);
+
+    /// <summary>
+    /// Checks (<paramref name="dryRun"/>) or imports a materials file read by the source adapter named <paramref name="source"/>,
+    /// all or nothing (D-034, D-053).
+    /// </summary>
+    public async Task<ImportMaterialsResponse> ImportMaterialsAsync(
+        string source, string text, string? externalSystem, bool dryRun, string mediaType, CancellationToken ct = default)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, $"api/materials/import/csv?dryRun={(dryRun ? "true" : "false")}")
+        var query = $"dryRun={(dryRun ? "true" : "false")}"
+            + (string.IsNullOrWhiteSpace(externalSystem) ? "" : $"&externalSystem={Uri.EscapeDataString(externalSystem.Trim())}");
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/materials/import/{Uri.EscapeDataString(source)}?{query}")
         {
-            Content = new StringContent(csv, System.Text.Encoding.UTF8, "text/csv"),
+            Content = new StringContent(text, System.Text.Encoding.UTF8, mediaType),
         };
         using var response = await SendCoreAsync(request, ct);
         return await ReadAsync<ImportMaterialsResponse>(response, ct);

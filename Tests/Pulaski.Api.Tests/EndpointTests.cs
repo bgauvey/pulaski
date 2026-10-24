@@ -6,6 +6,7 @@ using Pulaski.Application.WorkOrders;
 using Pulaski.Contracts.Common;
 using Pulaski.Application.Scheduling;
 using Pulaski.Contracts.EquipmentModel;
+using Pulaski.Contracts.Materials;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Contracts.WorkOrders;
 using Pulaski.Domain.Processes;
@@ -230,5 +231,29 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
 
         var missing = await _client.GetAsync(new Uri($"/api/scheduling/sites/{Guid.CreateVersion7()}/policy", UriKind.Relative));
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    [Fact]
+    public async Task Material_files_import_through_the_named_source()
+    {
+        factory.Stores.MaterialAdmin.AddUom("kg");
+        var sources = await _client.GetFromJsonAsync<IReadOnlyList<MaterialSourceDto>>("/api/materials/import/sources");
+        Assert.Equal(["csv", "b2mml"], sources!.Select(s => s.Name));
+
+        using var csv = new StringContent("code,name,type,base_unit\nAPI-CSV,A,raw,kg\n", System.Text.Encoding.UTF8, "text/csv");
+        var checkedCsv = await _client.PostAsync(new Uri("/api/materials/import/csv?dryRun=true", UriKind.Relative), csv);
+        Assert.Equal(1, (await checkedCsv.Content.ReadFromJsonAsync<ImportMaterialsResponse>())!.Created);
+
+        var xml = "<MaterialDefinition><ID>API-XML</ID><Description>X</Description>"
+            + "<MaterialDefinitionProperty><ID>MaterialType</ID><Value><ValueString>raw</ValueString></Value></MaterialDefinitionProperty>"
+            + "<MaterialDefinitionProperty><ID>BaseUnit</ID><Value><ValueString>kg</ValueString></Value></MaterialDefinitionProperty></MaterialDefinition>";
+        using var b2mml = new StringContent(xml, System.Text.Encoding.UTF8, "application/xml");
+        var checkedXml = await _client.PostAsync(new Uri("/api/materials/import/b2mml?dryRun=true&externalSystem=ERP1", UriKind.Relative), b2mml);
+        Assert.Equal(HttpStatusCode.OK, checkedXml.StatusCode);
+        Assert.Equal("create", Assert.Single((await checkedXml.Content.ReadFromJsonAsync<ImportMaterialsResponse>())!.Rows).Action);
+
+        using var other = new StringContent("x", System.Text.Encoding.UTF8, "text/plain");
+        var unknown = await _client.PostAsync(new Uri("/api/materials/import/idoc", UriKind.Relative), other);
+        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
     }
 }
