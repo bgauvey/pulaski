@@ -356,8 +356,8 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
 
     // One row per job, component and planned unit; consumption is the job's total of the component.
     private const string ComponentDemandSql = $"""
-        SELECT j.id AS job_id, j.job_number, j.status AS job_status, eq.code AS line_code, wo.order_number AS work_order_number,
-               coalesce(j.planned_start, j.earliest_start) AS needed_from,
+        SELECT j.id AS job_id, j.job_number, j.status AS job_status, eq.code AS line_code, eq.id AS line_id, NOT eq.can_run_job AS on_group,
+               wo.order_number AS work_order_number, coalesce(j.planned_start, j.earliest_start) AS needed_from, j.planned_start,
                m.id AS material_id, m.code AS material_code, m.name AS material_name, m.base_uom_id, bu.code AS base_uom_code,
                sum(jm.planned_qty) AS planned_qty, jm.uom_id, u.code AS uom_code,
                coalesce(c.consumed, 0) AS consumed_qty
@@ -377,7 +377,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
           AND (@EquipmentId::uuid IS NULL OR j.equipment_id IN (
                 SELECT descendant_id FROM core.equipment_closure WHERE ancestor_id = @EquipmentId))
           AND (@Before::timestamptz IS NULL OR coalesce(j.planned_start, j.earliest_start) < @Before)
-        GROUP BY j.id, j.job_number, j.status, eq.code, wo.order_number, m.id, m.code, m.name, m.base_uom_id, bu.code,
+        GROUP BY j.id, j.job_number, j.status, eq.code, eq.id, eq.can_run_job, wo.order_number, m.id, m.code, m.name, m.base_uom_id, bu.code,
                  jm.uom_id, u.code, c.consumed
         """;
 

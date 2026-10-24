@@ -342,8 +342,17 @@ public sealed record ShortageLineDto
     public required string LineCode { get; init; }
     public string? WorkOrderNumber { get; init; }
 
-    /// <summary>The job's published start, else its hold-until; null when it has neither.</summary>
+    /// <summary>When the job needs it, by <see cref="TimeSource"/>; null when it has no time.</summary>
     public DateTimeOffset? NeededFrom { get; init; }
+
+    /// <summary>
+    /// Where <see cref="NeededFrom"/> comes from (D-058): <c>live</c> (the schedule's projection now), <c>published</c> (the published
+    /// start), <c>window</c> (hold-until, or the window of a job planned to a department) or <c>none</c>.
+    /// </summary>
+    public string TimeSource { get; init; } = "published";
+
+    /// <summary>The published start, shown beside a live time.</summary>
+    public DateTimeOffset? PublishedStart { get; init; }
 
     /// <summary>Planned less consumed, in the component's base unit.</summary>
     public decimal Remaining { get; init; }
@@ -351,7 +360,9 @@ public sealed record ShortageLineDto
     /// <summary>What this job and every earlier one need in total.</summary>
     public decimal Cumulative { get; init; }
 
-    /// <summary>The part of this job's need that available stock doesn't cover.</summary>
+    /// <summary>Of this job's need: what available stock covers, what supply due by then covers (D-058), and what neither does.</summary>
+    public decimal FromStock { get; init; }
+    public decimal FromIncoming { get; init; }
     public decimal Uncovered { get; init; }
 }
 
@@ -367,6 +378,12 @@ public sealed record MaterialShortageDto
     /// <summary>On hold or in quarantine: not counted, shown because releasing it could cover a shortfall.</summary>
     public decimal Held { get; init; }
     public decimal Demand { get; init; }
+
+    /// <summary>Open expected receipts (D-058), in the base unit: not stock, counted only for jobs needing it after it is due.</summary>
+    public decimal Incoming { get; init; }
+
+    /// <summary>The next expected receipt's time; before now when one is overdue.</summary>
+    public DateTimeOffset? NextIncomingAt { get; init; }
     public decimal Shortfall { get; init; }
     public Guid? FirstShortJobId { get; init; }
     public string? FirstShortJobNumber { get; init; }
@@ -379,6 +396,9 @@ public sealed record ShortageReportDto
 {
     public required Guid SiteId { get; init; }
     public DateTimeOffset CalculatedAt { get; init; }
+
+    /// <summary>True when jobs were timed by the live schedule, false by their published times (D-058).</summary>
+    public bool LiveTiming { get; init; }
     public IReadOnlyList<MaterialShortageDto> Materials { get; init; } = [];
 
     /// <summary>Planned components left out because their unit doesn't convert to the component's base unit.</summary>
@@ -503,4 +523,31 @@ public sealed record AgingRowDto
     public decimal Over180Days { get; init; }
     public decimal Total { get; init; }
     public DateTimeOffset? OldestAt { get; init; }
+}
+
+/// <summary>Supply on its way (D-058). Quantities in the entered unit.</summary>
+public sealed record ExpectedReceiptDto
+{
+    public required Guid Id { get; init; }
+    public required Guid SiteId { get; init; }
+    public required Guid MaterialId { get; init; }
+    public required string MaterialCode { get; init; }
+    public required string MaterialName { get; init; }
+    public decimal Quantity { get; init; }
+    public required Guid UomId { get; init; }
+    public required string UomCode { get; init; }
+    public DateTimeOffset ExpectedAt { get; init; }
+    public string? Reference { get; init; }
+    public string? Supplier { get; init; }
+    public string? Note { get; init; }
+
+    /// <summary><c>open</c>, <c>received</c> or <c>cancelled</c>.</summary>
+    public required string Status { get; init; }
+    public Guid? ReceivedLotId { get; init; }
+    public string? ReceivedLotNumber { get; init; }
+    public string? ExternalSystem { get; init; }
+    public string? ExternalKey { get; init; }
+    public DateTimeOffset CreatedAt { get; init; }
+    public string CreatedBy { get; init; } = "";
+    public long Version { get; init; }
 }

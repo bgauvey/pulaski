@@ -32,7 +32,7 @@ public class LotOperationHandlerTests
     private InMemoryInventory Inventory => _f.Stores.Inventory;
 
     private async Task<LotTransactionResponse> Receive(string number, decimal qty, Guid? location = null) =>
-        await new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
+        await new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time, _f.Stores.ExpectedReceipts)
             .HandleAsync(new ReceiveLotCommand(_resin.Id, location ?? _stores.Id, number, qty, _kg.Id), CancellationToken.None);
 
     private long VersionOf(Guid lotId) => Inventory.Find(lotId)!.Version;

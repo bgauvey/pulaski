@@ -193,6 +193,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   production, write-up and write-off take `EffectiveAt` (`Backdating.EffectiveAt` / `EnsureFitsAsync`: ≤ 31 days, comment, not before the
   lot's stock or a posted count, never negative in effective order); run and expiry at the effective time; endpoints add
   `RequireToBackdate` (`inventory.backdate`). Reversals keep the original's effective time.
+- Shortages (D-058, proposed): live timing by default (each line projected via `TimelineMapping.Project`, `TimeSource` per line);
+  `core.expected_receipt` (screen + idempotent ERP import by system/key; receiving with `ExpectedReceiptId` closes it) counted by
+  `ShortageCalculator` after stock, only when due by a job's time (past times count as now). Not MRP.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

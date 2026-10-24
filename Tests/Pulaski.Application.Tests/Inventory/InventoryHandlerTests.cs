@@ -49,7 +49,7 @@ public class InventoryHandlerTests
     private InMemoryInventory Inventory => _f.Stores.Inventory;
 
     private Task<LotTransactionResponseOf> Receive(string? lot, decimal qty, Guid? uom = null, Guid? material = null, Guid? location = null) =>
-        Run(new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
+        Run(new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time, _f.Stores.ExpectedReceipts)
             .HandleAsync(new ReceiveLotCommand(material ?? _resin.Id, location ?? _stores.Id, lot, qty, uom ?? _kg.Id), CancellationToken.None));
 
     private Task<LotTransactionResponseOf> Consume(Guid lotId, decimal qty, Guid? job = null) =>

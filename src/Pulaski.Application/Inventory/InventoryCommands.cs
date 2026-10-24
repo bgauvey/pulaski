@@ -23,7 +23,8 @@ public sealed record ReceiveLotCommand(
     DateTimeOffset? ExpiresAt = null,
     string? Comment = null,
     Guid? RunId = null,
-    DateTimeOffset? EffectiveAt = null) : ICommand<LotTransactionResponse>;
+    DateTimeOffset? EffectiveAt = null,
+    Guid? ExpectedReceiptId = null) : ICommand<LotTransactionResponse>;
 
 /// <summary>Adds found or miscounted stock to a lot, for an adjustment reason; back-dated to <see cref="EffectiveAt"/> when given (D-057).</summary>
 public sealed record WriteUpLotCommand(
@@ -80,7 +81,8 @@ internal sealed class ReceiveLotHandler(
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    TimeProvider timeProvider) : ICommandHandler<ReceiveLotCommand, LotTransactionResponse>
+    TimeProvider timeProvider,
+    IExpectedReceiptRepository expectedReceipts) : ICommandHandler<ReceiveLotCommand, LotTransactionResponse>
 {
     public async Task<LotTransactionResponse> HandleAsync(ReceiveLotCommand command, CancellationToken cancellationToken)
     {
@@ -167,6 +169,12 @@ internal sealed class ReceiveLotHandler(
             new LotEventRow(ids.NewId(), received.Id, movement, received.UomId, envelope.ActorId, Comment: comment, EffectiveAt: MovementTime.Backdated(effective, now)),
             envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
+
+        // What was on its way is here: the expected receipt closes (D-058).
+        if (command.ExpectedReceiptId is { } expected)
+        {
+            await ExpectedReceiving.CloseAsync(expectedReceipts, eventLog, events, expected, received, cancellationToken);
+        }
 
         // A numbered receipt where lots mix is kept, for its genealogy, then joins the balance (D-031).
         if (location.ComminglesLots && !received.IsBulk)

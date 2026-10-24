@@ -1,0 +1,277 @@
+@page "/inventory/incoming"
+@attribute [RequiresView(PermissionCodes.InventoryView)]
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+
+@* Supply on its way (D-058): what the ERP or a person says will arrive, for the shortage check. Not purchasing: nothing is ordered
+   or priced here. Receiving a lot against one closes it. *@
+<PageTitle>Incoming · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="Incoming deliveries" SiteChanged="LoadAsync">
+    <Description>
+        Purchases and transfers expected to arrive, so the <a href="inventory/shortages">shortage check</a> can show them beside stock. Pulaski doesn't order anything:
+        the ERP sends these, or you enter them. Receiving a lot against one closes it.
+    </Description>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.LotReceive" What="record expected deliveries" SiteId="Sites.SiteId" />
+
+@if (CanManage)
+{
+    <form class="inv-facts mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+        <h2 class="h6">@(_form.Id is null ? "Expect a delivery" : $"Change {_form.Reference ?? "the delivery"}")</h2>
+        <div class="row g-2 align-items-end">
+            <div class="col-sm-4">
+                <label class="form-label small" for="in-material">Material</label>
+                @if (_form.Id is null)
+                {
+                    <MaterialPicker Id="in-material" Materials="_materials" Value="_form.MaterialId" ValueChanged="SelectMaterial" />
+                }
+                else
+                {
+                    <input id="in-material" class="form-control" value="@_form.MaterialCode" disabled />
+                }
+            </div>
+            <div class="col-sm-2">
+                <label class="form-label small" for="in-qty">Quantity</label>
+                <input id="in-qty" type="number" step="any" min="0" class="form-control" @bind="_form.Quantity" />
+            </div>
+            <div class="col-sm-2">
+                <label class="form-label small" for="in-unit">Unit</label>
+                <select id="in-unit" class="form-select" @bind="_form.UomId">
+                    @foreach (var u in _uoms)
+                    {
+                        <option value="@u.Id">@u.Code</option>
+                    }
+                </select>
+            </div>
+            <div class="col-sm-4">
+                <label class="form-label small" for="in-when">Expected</label>
+                <input id="in-when" type="datetime-local" class="form-control" @bind="_form.ExpectedAt" />
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label small" for="in-ref">Reference</label>
+                <input id="in-ref" class="form-control" maxlength="100" placeholder="PO or transfer number" @bind="_form.Reference" />
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label small" for="in-supplier">Supplier</label>
+                <input id="in-supplier" class="form-control" maxlength="200" @bind="_form.Supplier" />
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label small" for="in-note">Note</label>
+                <input id="in-note" class="form-control" maxlength="1000" @bind="_form.Note" />
+            </div>
+            <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary"
+                        disabled="@(_saving || _form.MaterialId is null || _form.Quantity is not > 0 || _form.UomId == Guid.Empty || _form.ExpectedAt is null)">
+                    @(_form.Id is null ? "Add delivery" : "Save delivery")
+                </button>
+                @if (_form.Id is not null)
+                {
+                    <button type="button" class="btn btn-outline-secondary" @onclick="() => _form = new()">Cancel</button>
+                }
+            </div>
+        </div>
+    </form>
+}
+
+<div class="inv-toolbar">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="in-closed" @bind="_includeClosed" @bind:after="LoadAsync" />
+        <label class="form-check-label" for="in-closed">Show received and cancelled</label>
+    </div>
+</div>
+
+@if (_receipts is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_receipts.Count == 0)
+{
+    <div class="empty-panel"><p class="text-muted mb-0">No deliveries expected at @(Sites.Site?.Code ?? "this site").</p></div>
+}
+else
+{
+    var now = DateTimeOffset.UtcNow;
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead><tr><th>Expected</th><th>Material</th><th class="inv-num">Quantity</th><th>Reference</th><th>Supplier</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in _receipts)
+                {
+                    <tr @key="r.Id" class="@(r.Status == "open" ? "" : "text-muted")">
+                        <td class="small text-nowrap @(r.Status == "open" && r.ExpectedAt < now ? "text-danger" : "")">
+                            @Display.SiteTime(r.ExpectedAt, Sites.Site?.TimeZone)@(r.Status == "open" && r.ExpectedAt < now ? " · late" : "")
+                        </td>
+                        <td><a href="inventory/materials/@r.MaterialId">@r.MaterialCode</a> <span class="small text-muted">@r.MaterialName</span></td>
+                        <td class="inv-num">@InventoryView.Qty(r.Quantity) <span class="small text-muted">@r.UomCode</span></td>
+                        <td class="small">@r.Reference @(r.ExternalSystem is null ? "" : $"· {r.ExternalSystem}")</td>
+                        <td class="small">@r.Supplier</td>
+                        <td class="small">
+                            @Display.Label(r.Status)
+                            @if (r.ReceivedLotId is { } lot)
+                            {
+                                <div><a href="inventory/lots/@lot">@r.ReceivedLotNumber</a></div>
+                            }
+                        </td>
+                        <td class="text-end text-nowrap">
+                            @if (CanManage && r.Status == "open")
+                            {
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => Edit(r)">Change</button>
+                                <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => CancelAsync(r)">Cancel</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<ExpectedReceiptDto>? _receipts;
+    private IReadOnlyList<MaterialDto> _materials = [];
+    private IReadOnlyList<UomDto> _uoms = [];
+    private ReceiptForm _form = new();
+    private ApiException? _error;
+    private bool _saving;
+    private bool _includeClosed;
+
+    private bool CanManage => User.Can(PermissionCodes.LotReceive, Sites.SiteId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _materials = await Api.ListMaterialsAsync();
+            _uoms = [.. (await Api.ListUomsAsync()).Where(u => u.IsActive)];
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            _receipts = [];
+            return;
+        }
+
+        try
+        {
+            _receipts = await Api.ListExpectedReceiptsAsync(site, _includeClosed);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private void SelectMaterial(Guid? id)
+    {
+        _form.MaterialId = id;
+        if (_materials.FirstOrDefault(m => m.Id == id) is { } material)
+        {
+            _form.UomId = material.BaseUomId;
+        }
+    }
+
+    private void Edit(ExpectedReceiptDto r) => _form = new ReceiptForm
+    {
+        Id = r.Id,
+        Version = r.Version,
+        MaterialId = r.MaterialId,
+        MaterialCode = r.MaterialCode,
+        Quantity = r.Quantity,
+        UomId = r.UomId,
+        ExpectedAt = Display.ToSite(r.ExpectedAt, Sites.Site?.TimeZone).DateTime,
+        Reference = r.Reference,
+        Supplier = r.Supplier,
+        Note = r.Note,
+    };
+
+    private async Task SaveAsync()
+    {
+        if (Sites.SiteId is not { } site || Display.FromSiteLocal(_form.ExpectedAt, Sites.Site?.TimeZone) is not { } at)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            if (_form.Id is { } id)
+            {
+                await Api.UpdateExpectedReceiptAsync(id, new UpdateExpectedReceiptRequest
+                {
+                    Version = _form.Version, Quantity = _form.Quantity!.Value, UomId = _form.UomId, ExpectedAt = at,
+                    Reference = _form.Reference, Supplier = _form.Supplier, Note = _form.Note,
+                });
+            }
+            else
+            {
+                await Api.CreateExpectedReceiptAsync(new CreateExpectedReceiptRequest
+                {
+                    SiteId = site, MaterialId = _form.MaterialId!.Value, Quantity = _form.Quantity!.Value, UomId = _form.UomId, ExpectedAt = at,
+                    Reference = _form.Reference, Supplier = _form.Supplier, Note = _form.Note,
+                });
+            }
+
+            _form = new();
+        });
+    }
+
+    private Task CancelAsync(ExpectedReceiptDto r) => RunAsync(() => Api.CancelExpectedReceiptAsync(r.Id, r.Version));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private sealed class ReceiptForm
+    {
+        public Guid? Id { get; init; }
+
+        public long Version { get; init; }
+
+        public Guid? MaterialId { get; set; }
+
+        public string? MaterialCode { get; init; }
+
+        public decimal? Quantity { get; set; }
+
+        public Guid UomId { get; set; }
+
+        public DateTime? ExpectedAt { get; set; }
+
+        public string? Reference { get; set; }
+
+        public string? Supplier { get; set; }
+
+        public string? Note { get; set; }
+    }
+}

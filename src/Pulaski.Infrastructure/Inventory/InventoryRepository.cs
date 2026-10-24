@@ -225,6 +225,10 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         RETURNING xmin::text::bigint
         """;
 
+    private const string MaterialByCode = "SELECT id FROM core.material WHERE code = @Code";
+
+    private const string UomByCode = "SELECT id FROM core.uom WHERE code = @Code";
+
     private const string IsSite = "SELECT EXISTS (SELECT 1 FROM core.equipment WHERE id = @Id AND level = 'site' FOR SHARE)";
 
     private const string PlansComponent = """
@@ -423,6 +427,12 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     public Task<long> UpdateShelfLifeAsync(Guid materialId, int? shelfLifeDays, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(UpdateShelfLife, new { Id = materialId, Days = shelfLifeDays, At = at }, cancellationToken);
+
+    public Task<Guid?> FindMaterialIdByCodeAsync(string code, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<Guid?>(MaterialByCode, new { Code = code }, cancellationToken);
+
+    public Task<Guid?> FindUomIdByCodeAsync(string code, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<Guid?>(UomByCode, new { Code = code }, cancellationToken);
 
     public Task<bool> IsSiteAsync(Guid id, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(IsSite, new { Id = id }, cancellationToken);

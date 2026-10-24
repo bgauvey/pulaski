@@ -988,6 +988,25 @@ A balance (`is_bulk`) is the one quantity of a material at a location: for a mat
 | `expires_at` | timestamptz | yes | Expiry. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
+### core.expected_receipt — supply on its way (D-058) · *In use*
+
+A purchase or transfer someone (or the ERP) says will arrive, for the shortage check. Not a purchase order: nothing is placed, priced or planned.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The receiving site. |
+| `material_id` | uuid → material | no | What is coming. |
+| `quantity` | qty | no | How much, positive, in `uom_id` (which must convert to the material's base unit). |
+| `uom_id` | uuid → uom | no | Its unit. |
+| `expected_at` | timestamptz | no | When it is due. Indexed with site and material for open ones (`expected_receipt_open_ix`). |
+| `reference`, `supplier`, `note` | text | yes | A PO, transfer or ASN number; the supplier; a note. |
+| `status` | text | no | `open`, `received` or `cancelled`. Only open ones count. |
+| `received_lot_id` | uuid → lot | yes | The lot received against it; set only when `received` (`expected_receipt_received_ck`). |
+| `external_system`, `external_key` | text | yes | The ERP that sent it and its key there; both or neither (`expected_receipt_external_ck`), unique together (`expected_receipt_external_uq`). |
+| `created_at`, `created_by` | timestamptz, text | no | When and by whom. |
+| `updated_at` | timestamptz | no | Last change. |
+
 ### core.lot_attribute — lot attribute definitions (D-056) · *In use*
 
 What a site records on its lots, such as melt index. Kept beside the lot, so recording values never changes `core.lot` or `ts.lot_event`.

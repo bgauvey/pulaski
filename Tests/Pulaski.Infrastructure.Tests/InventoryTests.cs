@@ -151,9 +151,18 @@ public sealed class InventoryTests(DatabaseFixture db)
         var elsewhere = await QueryAsync<GetShortagesQuery, ShortageReportDto>(new GetShortagesQuery(plant.Site, EquipmentId: plant.Stores));
         Assert.Empty(elsewhere.Materials);
 
-        // The job has no start or hold, so a horizon leaves it out.
-        var soon = await QueryAsync<GetShortagesQuery, ShortageReportDto>(new GetShortagesQuery(plant.Site, HorizonDays: 3));
-        Assert.Empty(soon.Materials);
+        // By published times the job has no start or hold, so a horizon leaves it out; the live schedule has it running now (D-058).
+        var published = await QueryAsync<GetShortagesQuery, ShortageReportDto>(new GetShortagesQuery(plant.Site, HorizonDays: 3, LiveTiming: false));
+        Assert.Empty(published.Materials);
+        var live = await QueryAsync<GetShortagesQuery, ShortageReportDto>(new GetShortagesQuery(plant.Site, HorizonDays: 3));
+        Assert.True(live.LiveTiming);
+        Assert.Equal("live", Assert.Single(Assert.Single(live.Materials).Lines).TimeSource);
+
+        // An expected receipt due now counts beside stock and covers the shortfall, without being stock.
+        await db.SendAsync(new CreateExpectedReceiptCommand(plant.Site, plant.Resin, 500m, plant.Kg, DateTimeOffset.UtcNow.AddMinutes(-5), "PO-" + _suffix, null, null));
+        var covered = Assert.Single((await QueryAsync<GetShortagesQuery, ShortageReportDto>(new GetShortagesQuery(plant.Site))).Materials);
+        Assert.Equal((800m, 500m, 0m), (covered.Available, covered.Incoming, covered.Shortfall));
+        Assert.Equal((800m, 450m), (covered.Lines[0].FromStock, covered.Lines[0].FromIncoming));
 
         var page = await QueryAsync<ListMovementsQuery, JournalPageDto>(new ListMovementsQuery(plant.Site));
         Assert.Equal([LotEventKind.Consumed, LotEventKind.Received], page.Entries.Select(e => e.Movement.Kind));

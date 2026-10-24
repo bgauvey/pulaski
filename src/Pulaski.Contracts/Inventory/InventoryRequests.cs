@@ -6,6 +6,9 @@ namespace Pulaski.Contracts.Inventory;
 /// </summary>
 public sealed record ReceiveLotRequest : IMayBackdate
 {
+    /// <summary>The expected receipt this receipt closes (D-058), when there is one.</summary>
+    public Guid? ExpectedReceiptId { get; init; }
+
     /// <summary>When it counts, to back-date it (D-057): at most 31 days back, with a comment; needs <c>inventory.backdate</c>. Null: now.</summary>
     public DateTimeOffset? EffectiveAt { get; init; }
 
@@ -216,3 +219,51 @@ public interface IMayBackdate
 {
     DateTimeOffset? EffectiveAt { get; }
 }
+
+public sealed record CreateExpectedReceiptRequest
+{
+    public Guid SiteId { get; init; }
+    public Guid MaterialId { get; init; }
+    public decimal Quantity { get; init; }
+    public Guid UomId { get; init; }
+    public DateTimeOffset ExpectedAt { get; init; }
+    public string? Reference { get; init; }
+    public string? Supplier { get; init; }
+    public string? Note { get; init; }
+}
+
+public sealed record UpdateExpectedReceiptRequest
+{
+    public long Version { get; init; }
+    public decimal Quantity { get; init; }
+    public Guid UomId { get; init; }
+    public DateTimeOffset ExpectedAt { get; init; }
+    public string? Reference { get; init; }
+    public string? Supplier { get; init; }
+    public string? Note { get; init; }
+}
+
+public sealed record CancelExpectedReceiptRequest
+{
+    public long Version { get; init; }
+}
+
+/// <summary>
+/// One expected receipt from the ERP (D-058), matched on its system and key: sending it again changes nothing, a change updates
+/// the open one, <see cref="Cancelled"/> cancels it. Material and unit by code, as the ERP knows them.
+/// </summary>
+public sealed record ImportExpectedReceiptRequest
+{
+    public Guid SiteId { get; init; }
+    public string ExternalSystem { get; init; } = "";
+    public string ExternalKey { get; init; } = "";
+    public string MaterialCode { get; init; } = "";
+    public decimal Quantity { get; init; }
+    public string UomCode { get; init; } = "";
+    public DateTimeOffset ExpectedAt { get; init; }
+    public string? Reference { get; init; }
+    public string? Supplier { get; init; }
+    public bool Cancelled { get; init; }
+}
+
+public sealed record ImportExpectedReceiptResponse(Guid Id, long Version, bool Created, bool Changed);

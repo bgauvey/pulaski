@@ -132,8 +132,15 @@ public sealed record ComponentDemandRow
     public required string JobNumber { get; init; }
     public required string JobStatus { get; init; }
     public required string LineCode { get; init; }
+
+    /// <summary>The line or department the job is on; <see cref="OnGroup"/> for a department, whose jobs aren't projected (D-022).</summary>
+    public Guid LineId { get; init; }
+    public bool OnGroup { get; init; }
     public string? WorkOrderNumber { get; init; }
+
+    /// <summary>The published start, else the hold-until (or a department job's window start).</summary>
     public DateTimeOffset? NeededFrom { get; init; }
+    public DateTimeOffset? PlannedStart { get; init; }
     public required Guid MaterialId { get; init; }
     public required string MaterialCode { get; init; }
     public required string MaterialName { get; init; }
@@ -225,6 +232,12 @@ public interface IInventoryRepository
 
     /// <summary>The site row read <c>FOR SHARE</c>: true when it exists and is a site.</summary>
     Task<bool> IsSiteAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>The material with this code; null when none.</summary>
+    Task<Guid?> FindMaterialIdByCodeAsync(string code, CancellationToken cancellationToken);
+
+    /// <summary>The unit with this code; null when none.</summary>
+    Task<Guid?> FindUomIdByCodeAsync(string code, CancellationToken cancellationToken);
 
     Task InsertEventAsync(LotEventRow row, DateTimeOffset at, CancellationToken cancellationToken);
 

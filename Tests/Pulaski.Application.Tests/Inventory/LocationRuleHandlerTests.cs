@@ -34,7 +34,7 @@ public class LocationRuleHandlerTests
     private InMemoryInventory Inventory => _f.Stores.Inventory;
 
     private Task<LotTransactionResponse> Receive(Guid material, string? number, decimal qty, Guid location, DateTimeOffset? expires = null) =>
-        new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
+        new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time, _f.Stores.ExpectedReceipts)
             .HandleAsync(new ReceiveLotCommand(material, location, number, qty, _kg.Id, ExpiresAt: expires), CancellationToken.None);
 
     [Fact]

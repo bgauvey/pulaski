@@ -948,18 +948,37 @@ The **Shortages** tab answers *"will we have the material for the jobs coming up
 
 1. Open **Inventory → Shortages**. It lists every component the site's open jobs still need, short ones first.
 2. Narrow it to a line or department (and everything under it) with the equipment picker, or to jobs needed soon: the next 24 hours, 3, 7 or 14 days.
-3. Clear **Short only** to see covered components too.
-4. Click a component to see each job that needs it, in the order they are needed: what it still needs, the running total, and whether it is **covered** or how much is short.
-5. Click a job to open it, or **stock** to open the component.
+3. Choose the timing: **Jobs as the schedule has them now** (the default, as the Schedule screen shows them) or **Jobs at their published times**.
+4. Clear **Short only** to see covered components too.
+5. Click a component to see each job that needs it, in the order they are needed: what it still needs, how much comes **from stock** and how much **incoming**, whether it is **covered** or how much is short, and when it is needed (*as scheduled now*, *published start*, or *hold-until or window*).
+6. Click a job to open it, or **stock** to open the component.
 
-Each row shows **Needed** (what the jobs still need: planned less consumed), **Available**, **Held** (on hold or quarantine, in amber: releasing it might cover the gap), **Short** (in red), and the **first short** job with when it is needed.
+Each row shows **Needed** (what the jobs still need: planned less consumed), **Available**, **Held** (on hold or quarantine, in amber: releasing it might cover the gap), **Incoming** (open [expected deliveries](#incoming-deliveries), with the next one's time, in red when late), **Short** (in red), and the **first short** job with when it is needed.
 
 **In detail**
 
-- Jobs take stock in the order they are needed: their published start, else their hold-until time, then job number; jobs with neither come last. The live projected time isn't used yet, so a job that has slipped is ordered by its published time.
-- With a horizon, jobs needed after it, and jobs with no time at all, are left out.
-- Only **available** stock counts. Incoming deliveries and purchase orders aren't counted, and nothing is suggested: ordering stays in the ERP.
+- **Order.** Jobs take supply in the order they are needed, then job number; jobs with no time come last. With live timing a job's time is where the schedule projects it now, so a job that has slipped or moved up is ordered by its new time (point at *as scheduled now* to see its published start). Jobs planned to a department, and jobs not on the schedule, keep their published start or hold-until.
+- With a horizon, jobs needed after it, and jobs with no time at all, are left out; the horizon uses the same timing.
+- **Supply.** Each job takes **available** stock first, then incoming deliveries due by the time it needs them. A delivery due after a job needs the material doesn't cover that job, however much arrives. A job already under way needs what it has left from now, and a late delivery counts as arriving now. Held stock isn't counted.
+- **Not purchasing.** Nothing is suggested, ordered or rescheduled: deliveries are only what the ERP or a person said is coming, and ordering stays in the ERP.
 - A component planned in a unit that doesn't convert to its base unit is left out, with an amber note naming the job.
+
+### Incoming deliveries
+
+The **Incoming** tab lists purchases and transfers expected to arrive, for the shortage check. Pulaski doesn't order anything; the ERP sends them, or you enter them.
+
+1. Open **Inventory → Incoming**. Open deliveries are listed by when they are expected; late ones in red.
+2. **Expect a delivery:** choose the **Material**, enter the **Quantity** and **Unit**, when it is **Expected**, and optionally the **Reference** (PO, transfer or ASN number), **Supplier** and a **Note**. Click **Add delivery**.
+3. **Change** an open one when the date or quantity changes, or **Cancel** it if it won't come.
+4. When it arrives, **Receive** the lot as usual and choose it under **Against expected receipt**: it closes, and its row links to the lot. Nothing more is expected of it, whatever quantity arrived; if more is still coming, add another.
+5. Tick **Show received and cancelled** to see closed ones.
+
+**In detail**
+
+- **Who:** anyone who can see inventory sees them; adding, changing and cancelling needs permission to receive lots.
+- **From the ERP:** `POST /api/inventory/expected-receipts/import` takes one delivery with the ERP's name and its key there, the site, the material and unit codes, the quantity and expected time, the reference and supplier, and whether it is cancelled. Sending the same one again changes nothing; a change updates it while it is open; once received or cancelled in Pulaski it stays so. It is listed with the ERP's name beside the reference.
+- The unit must convert to the material's base unit, so the shortage check can count it.
+- **Events:** `pulaski.expected_receipt.created.v1`, `…updated.v1`, `…cancelled.v1` and `…received.v1`.
 
 ### The movement journal
 
@@ -1867,7 +1886,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Reason trees** (a reason grouped under another) can't be edited.
 - **Where lots mix, genealogy is approximate:** every lot that ever joined a silo's balance counts as a parent of everything taken from it afterwards. Residence time and first-in, first-out through a silo come with machine data.
 - **Inventory movements aren't sent to the ERP yet:** they are recorded as events, but the connection that delivers them isn't built.
-- **Shortages use published times, not the live schedule,** and don't count incoming deliveries.
+- **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP; there are no lead times, purchase suggestions or partial receipts against one delivery (receiving closes it). The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** still shows no live machine state, reported counts, good output, scrap, downtime, quality, lots or labor. OEE is available for the current shift from the machine/OEE report; its timeline strip remains a rolling 24 hours rather than the current shift.
 - **Notes** can only be written when the order is created.
 - **Released product specifications** are not maintained in Pulaski yet. Shop-order sheets flag this gap and require operators to verify the approved specification elsewhere.

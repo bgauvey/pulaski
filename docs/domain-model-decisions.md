@@ -65,6 +65,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-055 | Completing the materials import: capabilities load from their own CSV file (one row per material and line), changing the capability in effect now in place, adding one from now, or ending it, with the run standard following as on the material page; all lines are locked by code in id order first, and each line must be at a site where the caller may maintain processes. A missing class is created only when the import asks (`createClasses`), named from `class_name`. Every import format has a template to download | Proposed | 2026-10-23 |
 | D-056 | Lot attributes and certificates: typed attribute definitions per site (text, number, date, yes/no, choice), offered for every material or chosen classes, with values beside the lot (never changing `core.lot` or its movements) and every change an event. Certificates are stored files (PDF, PNG, JPEG ≤ 10 MB, recognised by content, written once) or references (number, URL), linked to lots and carried on by split and merge; never deleted, withdrawn with a reason. Two permissions: `lot_records.manage` and `lot_attributes.manage` | Proposed | 2026-10-24 |
 | D-057 | Back-dated inventory movements: a receipt, consumption, production, write-up or write-off may count from up to 31 days earlier (`effective_at`), with a comment and permission `inventory.backdate`; its record time (`occurred_at`) and append-only history stay. Stock at a time sums movements by effective time, so it is deterministic whatever the order of entry. A back-dated movement may not count before the lot had stock or before a posted count of it, nor take it below zero at any time; expiry and the run are taken at the effective time | Proposed | 2026-10-24 |
+| D-058 | Shortages with the live schedule and supply on its way: jobs are timed by the schedule's projection now by default (published times on request); `core.expected_receipt` records deliveries entered by people or sent by the ERP (idempotent by external key), counted beside stock only for jobs needing the material after they are due, and closed by receiving a lot against them. Still not MRP: no suggestions, lead times or ordering | Proposed | 2026-10-24 |
 
 ## Order hierarchy
 
@@ -447,8 +448,8 @@ Two lookups on top of inventory (D-027): "will we have the material for the jobs
 - **Demand** is each open production job's planned components (`core.job_material`, `consume`) less what has been declared consumed into it, never below zero. Open means planned, dispatched, firmed, running or paused. Planned quantities are converted to the component's base unit (D-026); a line whose unit doesn't convert is left out and reported, never guessed.
 - **Supply** is the component's **available** stock in the site. Held and quarantined stock is shown beside it but not counted: it can't be consumed until released.
 - **Order.** Jobs take supply in the order they are needed: by the job's published start (`planned_start`), else its hold-until (`earliest_start`), then job number; jobs with neither come last. Each line shows the running total and how much of it is not covered, so the first job that comes up short is visible. A horizon (for example the next 3 days) leaves out jobs needed after it, and jobs with no time at all.
-- **The projected time is not used yet.** A job's live projection (D-014) is calculated per line on read; the check uses the baseline and hold times instead. A job that has slipped is therefore ordered by its published time.
-- **Not MRP (charter non-goal).** No purchase or transfer suggestions, no incoming receipts or open purchase orders netted in, no lead times, no multi-level explosion: an intermediate's own components show only on the jobs of its own orders (D-025). The calculation is a pure function (`ShortageCalculator`), redone on every read.
+- **Timing** is the live projection by default since D-058; the published time on request.
+- **Not MRP (charter non-goal).** No purchase or transfer suggestions, no lead times, no multi-level explosion (expected receipts are counted since D-058): an intermediate's own components show only on the jobs of its own orders (D-025). The calculation is a pure function (`ShortageCalculator`), redone on every read.
 
 **Movement journal.** Every `ts.lot_event` row of a site, newest first, filtered by a time range (required, the last 7 days by default, so only those partitions are read), movement kind, material, location (where the stock left or arrived), job, and the person who recorded it; and a lot or supplier lot number. Pages of 200 rows continue from the last row read (`occurred_at`, `id`), so a page never repeats or skips a row as new movements arrive. A BRIN index on `occurred_at` keeps a range read cheap (migration 0003).
 
@@ -1189,6 +1190,35 @@ Issue #35. Movements counted when they were entered (D-027), so a receipt or con
 **Screens.** The lot drawer shows **Counts from** for those five movements to whoever may back-date. The lot history lists a back-dated row at its effective time with the record time beneath. The journal lists rows by record time (its range and cursor are record time, as before) with *counts from*, and its export has both columns. Genealogy links show *since …* and *(back-dated)*.
 
 **Not yet.** Back-dating moves, holds, splits, merges and shipments; reconstructing location and status on a past date; a site-set window (31 days is fixed).
+
+## Shortages with the live schedule and incoming supply (D-058, proposed)
+
+Issue #36. The check (D-029) used published times and ignored deliveries.
+
+**Timing.** `GetShortagesQuery(…, LiveTiming = true)` projects each line its jobs are on, as the Schedule screen does (`TimelineMapping.Project`, with process links, D-046). A job's need time is the start of its `job` segment. Jobs planned to a department (D-022), and jobs the projection doesn't place, keep their published start or hold-until. With live timing the horizon is applied after projecting, not in SQL. Each line says where its time came from (`TimeSource`: live, published, window, none) and carries the published start. `LiveTiming = false` gives the D-029 behaviour.
+
+**Incoming supply.** `core.expected_receipt` holds:
+
+- **Fields:** material, quantity and unit, expected time, reference, supplier and note.
+- **Status:** open, received or cancelled.
+- **ERP identity:** an optional ERP system and key.
+
+People with `lot.receive` enter and change open ones on Inventory → Incoming. The ERP sends one at a time to `POST /api/inventory/expected-receipts/import`, matched on system and key:
+
+- Sending it again changes nothing.
+- A change updates the open one, and `Cancelled` cancels it.
+- Once closed in Pulaski it stays closed: a late update from the ERP is ignored.
+
+`ReceiveLotCommand.ExpectedReceiptId` closes one in the receipt's transaction (lot first, then the receipt) and links the lot. Whatever quantity arrived, nothing more is expected; there are no partial receipts. Events are `expected_receipt.created/updated/cancelled/received`.
+
+**The calculation.** `ShortageCalculator.Calculate(demand, available, incoming, now)` is still a pure function:
+
+- Jobs, in need order, take available stock first, then supply due by their time. Supply arriving later never backfills an earlier job.
+- Times before `now` count as now when setting supply against need: a running job needs its remainder from now, and a late delivery can still arrive from now. The job order isn't changed.
+- Each line reports `FromStock`, `FromIncoming` and `Uncovered`. The material reports `Incoming` (all open, in the base unit) and the next due time.
+- A receipt whose unit doesn't convert is left out with a problem note.
+
+**Not MRP.** Nothing is suggested, ordered, netted across sites or rescheduled, and there are no lead times. Expected receipts are only what someone said is coming.
 
 ## Application architecture
 

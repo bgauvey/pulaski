@@ -35,7 +35,7 @@ public class BackdatingTests
     private InMemoryInventory Inventory => _f.Stores.Inventory;
 
     private Task<Contracts.Inventory.LotTransactionResponse> ReceiveAsync(string lot, decimal qty, DateTimeOffset? at, string? comment = "Paperwork came late") =>
-        new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
+        new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time, _f.Stores.ExpectedReceipts)
             .HandleAsync(new ReceiveLotCommand(_resin.Id, _stores.Id, lot, qty, _kg.Id, Comment: comment, EffectiveAt: at), CancellationToken.None);
 
     private Task<Contracts.Inventory.LotTransactionResponse> ConsumeAsync(Guid lot, decimal qty, DateTimeOffset? at) =>

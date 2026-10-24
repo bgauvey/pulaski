@@ -547,6 +547,20 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         }
     }
 
+    /// <summary>Unit codes the fake resolves, as a test sets them.</summary>
+    public Dictionary<string, Guid> UomCodes { get; } = new(StringComparer.Ordinal);
+
+    public Task<Guid?> FindMaterialIdByCodeAsync(string code, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_materials.Values.FirstOrDefault(m => m.Code == code)?.Id);
+        }
+    }
+
+    public Task<Guid?> FindUomIdByCodeAsync(string code, CancellationToken cancellationToken) =>
+        Task.FromResult(UomCodes.TryGetValue(code, out var id) ? id : (Guid?)null);
+
     public Task<bool> IsSiteAsync(Guid id, CancellationToken cancellationToken)
     {
         lock (_lock)

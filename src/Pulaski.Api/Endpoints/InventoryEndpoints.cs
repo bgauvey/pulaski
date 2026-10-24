@@ -74,10 +74,65 @@ internal static class InventoryEndpoints
             Guid siteId,
             Guid? equipmentId,
             int? horizonDays,
+            bool? liveTiming,
             IQueryHandler<GetShortagesQuery, ShortageReportDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetShortagesQuery(siteId, equipmentId, horizonDays), ct)))
+            TypedResults.Ok(await handler.HandleAsync(new GetShortagesQuery(siteId, equipmentId, horizonDays, liveTiming ?? true), ct)))
         .RequireAnyAtSite(Site.Query(), Permissions.InventoryView);
+
+        // ---- Expected receipts (D-058): supply on its way, for the shortage check ----
+        var expected = inventory.MapGroup("/expected-receipts");
+
+        expected.MapGet("/", async Task<Ok<IReadOnlyList<ExpectedReceiptDto>>> (
+            Guid siteId,
+            bool? includeClosed,
+            Guid? materialId,
+            IQueryHandler<ListExpectedReceiptsQuery, IReadOnlyList<ExpectedReceiptDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListExpectedReceiptsQuery(siteId, includeClosed ?? false, materialId), ct)))
+        .RequireAny(Site.Query(), Permissions.InventoryView);
+
+        expected.MapPost("/", async Task<Created<CreatedResponse>> (
+            CreateExpectedReceiptRequest request,
+            ICommandHandler<CreateExpectedReceiptCommand, CreatedResponse> handler,
+            CancellationToken ct) =>
+        {
+            var created = await handler.HandleAsync(
+                new CreateExpectedReceiptCommand(request.SiteId, request.MaterialId, request.Quantity, request.UomId, request.ExpectedAt,
+                    request.Reference, request.Supplier, request.Note),
+                ct);
+            return TypedResults.Created($"/api/inventory/expected-receipts/{created.Id}", created);
+        })
+        .RequirePermission(Permissions.LotReceive, Site.FromBody<CreateExpectedReceiptRequest>(SiteOf.Equipment, r => r.SiteId));
+
+        // One from the ERP, matched on its system and key; safe to send again.
+        expected.MapPost("/import", async Task<Ok<ImportExpectedReceiptResponse>> (
+            ImportExpectedReceiptRequest request,
+            ICommandHandler<ImportExpectedReceiptCommand, ImportExpectedReceiptResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new ImportExpectedReceiptCommand(request.SiteId, request.ExternalSystem, request.ExternalKey, request.MaterialCode, request.Quantity,
+                    request.UomCode, request.ExpectedAt, request.Reference, request.Supplier, request.Cancelled),
+                ct)))
+        .RequirePermission(Permissions.LotReceive, Site.FromBody<ImportExpectedReceiptRequest>(SiteOf.Equipment, r => r.SiteId));
+
+        expected.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (
+            Guid id,
+            UpdateExpectedReceiptRequest request,
+            ICommandHandler<UpdateExpectedReceiptCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new UpdateExpectedReceiptCommand(id, request.Version, request.Quantity, request.UomId, request.ExpectedAt, request.Reference, request.Supplier, request.Note),
+                ct)))
+        .RequirePermission(Permissions.LotReceive, Site.Of(SiteOf.ExpectedReceipt));
+
+        expected.MapPost("/{id:guid}/cancel", async Task<Ok<VersionResponse>> (
+            Guid id,
+            CancelExpectedReceiptRequest request,
+            ICommandHandler<CancelExpectedReceiptCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CancelExpectedReceiptCommand(id, request.Version), ct)))
+        .RequirePermission(Permissions.LotReceive, Site.Of(SiteOf.ExpectedReceipt));
 
         inventory.MapGet("/movements", async Task<Ok<JournalPageDto>> (
             Guid siteId,
@@ -144,7 +199,8 @@ internal static class InventoryEndpoints
         {
             var received = await handler.HandleAsync(
                 new ReceiveLotCommand(request.MaterialId, request.LocationId, request.LotNumber, request.Quantity, request.UomId,
-                    request.SupplierLot, request.ExpiresAt, request.Comment, EffectiveAt: request.EffectiveAt),
+                    request.SupplierLot, request.ExpiresAt, request.Comment, EffectiveAt: request.EffectiveAt,
+                    ExpectedReceiptId: request.ExpectedReceiptId),
                 ct);
             return TypedResults.Created($"/api/lots/{received.LotId}", received);
         })

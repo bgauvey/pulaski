@@ -706,8 +706,25 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<IReadOnlyList<ReasonCodeDto>> ListReasonCodesAsync(string kind, Guid? siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<ReasonCodeDto>>(Query("api/reason-codes", ("kind", kind), ("siteId", siteId)), ct);
 
-    public Task<ShortageReportDto> GetShortagesAsync(Guid siteId, Guid? equipmentId = null, int? horizonDays = null, CancellationToken ct = default) =>
-        GetAsync<ShortageReportDto>(Query("api/inventory/shortages", ("siteId", siteId), ("equipmentId", equipmentId), ("horizonDays", horizonDays)), ct);
+    public Task<ShortageReportDto> GetShortagesAsync(
+        Guid siteId, Guid? equipmentId = null, int? horizonDays = null, bool liveTiming = true, CancellationToken ct = default) =>
+        GetAsync<ShortageReportDto>(
+            Query("api/inventory/shortages", ("siteId", siteId), ("equipmentId", equipmentId), ("horizonDays", horizonDays), ("liveTiming", liveTiming ? null : "false")), ct);
+
+    // ---- Expected receipts (D-058) ----
+
+    public Task<IReadOnlyList<ExpectedReceiptDto>> ListExpectedReceiptsAsync(Guid siteId, bool includeClosed = false, Guid? materialId = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ExpectedReceiptDto>>(
+            Query("api/inventory/expected-receipts", ("siteId", siteId), ("includeClosed", includeClosed ? "true" : null), ("materialId", materialId)), ct);
+
+    public Task<CreatedResponse> CreateExpectedReceiptAsync(CreateExpectedReceiptRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/inventory/expected-receipts", request, ct);
+
+    public Task<VersionResponse> UpdateExpectedReceiptAsync(Guid id, UpdateExpectedReceiptRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/inventory/expected-receipts/{id}", request, ct);
+
+    public Task<VersionResponse> CancelExpectedReceiptAsync(Guid id, long version, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/expected-receipts/{id}/cancel", new CancelExpectedReceiptRequest { Version = version }, ct);
 
     /// <summary>A page of the site's movements, newest first; pass the last entry to continue (D-029).</summary>
     public Task<JournalPageDto> ListMovementsAsync(

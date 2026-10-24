@@ -31,8 +31,22 @@
                         <div class="mb-3">
                             <label class="form-label" for="lot-material">Material</label>
                             <MaterialPicker Id="lot-material" Materials="_materials" Value="@(_materialId == Guid.Empty ? null : _materialId)"
-                                            ValueChanged="id => SelectMaterial(id ?? Guid.Empty)" />
+                                            ValueChanged="id => SelectMaterialAsync(id ?? Guid.Empty)" />
                         </div>
+                        @if (_expected.Count > 0)
+                        {
+                            <div class="mb-3">
+                                <label class="form-label" for="lot-expected">Against expected receipt <span class="text-muted">(optional)</span></label>
+                                <select id="lot-expected" class="form-select" @bind="_expectedId" @bind:after="ExpectedChosen">
+                                    <option value="@Guid.Empty">None</option>
+                                    @foreach (var e in _expected)
+                                    {
+                                        <option value="@e.Id">@(e.Reference ?? "No reference") · @InventoryView.Qty(e.Quantity) @e.UomCode · due @Display.SiteTime(e.ExpectedAt, Sites.Site?.TimeZone)</option>
+                                    }
+                                </select>
+                                <div class="form-text">Receiving against it closes it: nothing more is expected, whatever quantity arrives.</div>
+                            </div>
+                        }
                         @LocationField(null)
                         @if (ReceivingMaterial is { } received)
                         {
@@ -341,6 +355,8 @@
     private DateTime? _expires;
     private string? _comment;
     private DateTime? _effective;
+    private IReadOnlyList<ExpectedReceiptDto> _expected = [];
+    private Guid _expectedId;
 
     // Back-dating (D-057) is for quantity movements, and only for those allowed it at the site.
     private bool CanBackdate =>
@@ -457,7 +473,7 @@
             switch (action)
             {
                 case LotAction.Receive when MaterialId is { } materialId:
-                    SelectMaterial(materialId);
+                    await SelectMaterialAsync(materialId);
                     break;
                 case LotAction.Produce:
                     await OnJobChangedAsync(_jobId);
@@ -517,18 +533,44 @@
         _expires = null;
         _comment = null;
         _effective = null;
+        _expected = [];
+        _expectedId = Guid.Empty;
         _holdStatus = "on_hold";
         _producedTracked = true;
         _reference = null;
         _mergeIds.Clear();
     }
 
-    private void SelectMaterial(Guid id)
+    private async Task SelectMaterialAsync(Guid id)
     {
         _materialId = id;
+        _expectedId = Guid.Empty;
+        _expected = [];
         if (ReceivingMaterial is { } material)
         {
             _uomId = material.BaseUomId;
+        }
+
+        // What is on its way of it (D-058), to receive against.
+        if (id != Guid.Empty && Sites.SiteId is { } site)
+        {
+            try
+            {
+                _expected = await Api.ListExpectedReceiptsAsync(site, materialId: id);
+            }
+            catch (ApiException ex)
+            {
+                _error = ex;
+            }
+        }
+    }
+
+    private void ExpectedChosen()
+    {
+        if (_expected.FirstOrDefault(e => e.Id == _expectedId) is { } chosen)
+        {
+            _quantity ??= chosen.Quantity;
+            _uomId = chosen.UomId;
         }
     }
 
@@ -673,6 +715,7 @@
             ExpiresAt = Display.FromSiteLocal(_expires, Sites.Site?.TimeZone),
             Comment = comment,
             EffectiveAt = EffectiveAt,
+            ExpectedReceiptId = _expectedId == Guid.Empty ? null : _expectedId,
         });
         return (response, $"{QtyText} of {ReceivingMaterial?.Code} received into {LocationCode(_locationId)}");
     }
