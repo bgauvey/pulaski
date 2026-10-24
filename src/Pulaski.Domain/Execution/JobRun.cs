@@ -51,6 +51,10 @@ public sealed record JobRun(
     public JobRun Reclassify(decimal quantity) =>
         this with { GoodQty = Math.Max(0m, GoodQty - quantity), ScrapQty = ScrapQty + quantity };
 
+    /// <summary>Takes a reversed report's output back off the run (D-063).</summary>
+    public JobRun Remove(decimal good, decimal scrap) =>
+        this with { GoodQty = Math.Max(0m, GoodQty - good), ScrapQty = Math.Max(0m, ScrapQty - scrap) };
+
     /// <exception cref="DomainRuleException">A quantity is negative or both are zero.</exception>
     public JobRun Add(decimal good, decimal scrap)
     {

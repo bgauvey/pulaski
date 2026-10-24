@@ -297,7 +297,7 @@ Groups materials (e.g. all resins), so processes and changeover rules can match 
 
 ### core.partial_batch — batches cut short when a line stopped (D-036) · *In use*
 
-A partial batch is reported only as a run ends with a reason (or later, into a run that did), at most one per run, in a lot of its own. Under the `exact` rule it waits on hold for a decision.
+A partial batch is reported only as a run ends with a reason (or later, into a run that did), at most one per run (`partial_batch_run_uq`, a unique index that leaves out `reversed` rows), in a lot of its own. Under the `exact` rule it waits on hold for a decision. Reversing its report (D-063) marks it `reversed`, so the run can report another.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -308,10 +308,10 @@ A partial batch is reported only as a run ends with a reason (or later, into a r
 | `quantity` | qty | no | How much it held, in `uom_id`. |
 | `uom_id` | uuid → uom | no | The material's base unit. |
 | `batch_size`, `batch_rule` | numeric(18,6), text | no | The material's batch size and rule when it was reported. |
-| `status` | text | no | `accepted` (near rule), `pending`, `approved` or `rejected`. |
+| `status` | text | no | `accepted` (near rule), `pending`, `approved`, `rejected` or `reversed` (its report was reversed, D-063; a rejected one can't be). |
 | `occurred_at` | timestamptz | no | When it counts as made. |
 | `reported_by` | text | yes | Who reported it. |
-| `decided_at`, `decided_by` | timestamptz, text | yes | When and by whom it was approved or rejected; set exactly when decided (`partial_batch_decided_ck`). |
+| `decided_at`, `decided_by` | timestamptz, text | yes | When and by whom it was approved or rejected: set for a decision, empty while undecided, either for a reversed one (`partial_batch_decided_ck`). |
 | `decision_comment` | text | yes | Why, at most 1000 characters. |
 | `scrap_reason_code_id` | uuid → reason_code | yes | For a rejection, the scrap reason. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
@@ -1385,7 +1385,7 @@ Time a machine isn't executing: opened by machine data ingest when it leaves Exe
 
 ### ts.production_count — count deltas · *In use (operator reports)*
 
-Deltas calculated at the edge, with rollover handled there; the raw counter is kept for reconciliation. Operator reports (D-035) write a `processed` row for good plus scrap and, with scrap, a `defective` row for the scrap, in the job's unit; good is processed minus defective.
+Deltas calculated at the edge, with rollover handled there; the raw counter is kept for reconciliation. Operator reports (D-035) write a `processed` row for good plus scrap and, with scrap, a `defective` row for the scrap, in the job's unit; good is processed minus defective. A report's rows carry its `report_id` (the processed row's id, D-063); reversing it adds a `correction` row per row, at the same `occurred_at` with the opposite quantity, so every total that sums the rows sees it as never made. Reports recorded before 0031 have no `report_id` and aren't reversed whole.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1400,6 +1400,7 @@ Deltas calculated at the edge, with rollover handled there; the raw counter is k
 | `scrap_reason_code_id` | uuid → reason_code | yes | Why, for defective counts. |
 | `source` | text | no | `machine` (from an edge, D-050: not a production report, and changes no run's quantities yet), `operator` or `correction`. |
 | `corrects_id` | uuid | yes | For corrections: the row being offset. |
+| `report_id` | uuid | yes | The report the row belongs to (D-063): its processed row's id, on that row, its defective row and their corrections. Indexed. |
 | `job_id` | uuid | yes | The run's job. No FK, as for `run_id`. |
 | `recorded_at` | timestamptz | no | When it was entered. Later than the run's end for a late report. |
 | `actor_id` | text | yes | Who reported it (issuer\|subject, as on `evt.event`). |
@@ -1434,7 +1435,7 @@ One row for every job status change, written in the same transaction as the chan
 
 ### ts.lot_event — every inventory movement · *In use*
 
-`core.lot` quantity and location are the running result of these rows. The application appends one row per movement and lot (D-027), in the base unit; it never updates or deletes them. The movement journal (D-029) reads it by site and time range, helped by a BRIN index on `occurred_at`. A back-dated movement (D-057) is recorded now and counts from `effective_at`: stock at a time is the sum of `qty_delta` of the rows that count by then, so it is the same whatever order movements were entered in.
+`core.lot` quantity and location are the running result of these rows. The application appends one row per movement and lot (D-027), in the base unit; it never updates or deletes them. The movement journal (D-029) reads it by site and time range, helped by a BRIN index on `occurred_at`. A back-dated movement (D-057) is recorded now and counts from `effective_at`: stock at a time is the sum of `qty_delta` of the rows that count by then, so it is the same whatever order movements were entered in. A reversal (`reversed`, D-030, D-063) is a row of its own; a reversal of a declaration or of an earlier movement counts at the original's `effective_at`, and the two are then left out together when checking a lot's history never goes below zero.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1455,7 +1456,8 @@ One row for every job status change, written in the same transaction as the chan
 | `reason_code_id` | uuid → reason_code | yes | Why: required for write-ups, write-offs and holds. |
 | `comment` | text | yes | The person's note, at most 1000 characters. |
 | `reference` | text | yes | A shipment's delivery number, or the count a count adjustment came from (D-030). At most 100 characters. |
-| `reverses_event_id`, `reverses_occurred_at` | uuid, timestamptz | yes | For a reversal, the movement it undoes and that movement's time (no FK into history, D-010). |
+| `reverses_event_id`, `reverses_occurred_at` | uuid, timestamptz | yes | For a reversal, the movement it undoes and that movement's time (no FK into history, D-010). Indexed with `lot_id`. A movement some row reverses counts as never made wherever a job's consumption, produced lots or genealogy are read (D-063). |
+| `report_id` | uuid | yes | For production, and the reversals of a report: the production report (`ts.production_count.report_id`, D-063). Indexed. |
 | `actor_user_id` | uuid | yes | Who, once `sec.app_user` exists. |
 | `actor_id` | text | yes | Who, as on `evt.event` (`issuer\|subject`, `anonymous` until sign-in). |
 

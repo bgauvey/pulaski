@@ -121,7 +121,8 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         fl.code AS from_location_code, tl.code AS to_location_code, e.from_status, e.to_status,
         e.job_id, ej.job_number, r.code AS reason_code, r.name AS reason_name, e.comment, e.actor_id,
         e.related_lot_id, rl.lot_number AS related_lot_number, rll.code AS related_lot_location_code, e.reference, e.reverses_event_id,
-        e.container_id, ec.code AS container_code
+        e.container_id, ec.code AS container_code, e.report_id,
+        EXISTS (SELECT 1 FROM ts.lot_event rv WHERE rv.lot_id = e.lot_id AND rv.reverses_event_id = e.id) AS is_reversed
         """;
 
     private const string EventJoins = """
@@ -232,7 +233,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         WHERE l.id = @Id AND l.is_bulk
         """;
 
-    private const string BalanceMovementsSql = """
+    private const string BalanceMovementsSql = $"""
         SELECT e.id AS event_id, e.effective_at AS at, e.qty_delta AS delta, e.event_kind AS kind,
                CASE WHEN e.qty_delta > 0 THEN e.related_lot_id END AS source_lot_id, rl.lot_number AS source_lot_number,
                e.job_id, j.job_number
@@ -240,6 +241,8 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         LEFT JOIN core.lot rl ON rl.id = e.related_lot_id AND e.qty_delta > 0
         LEFT JOIN core.job j ON j.id = e.job_id
         WHERE e.lot_id = @Id AND e.qty_delta IS NOT NULL AND e.qty_delta <> 0
+          -- A reversed movement and its reversal count as neither having happened (D-063).
+          AND e.reverses_event_id IS NULL AND {LotEventSql.NotReversed}
         ORDER BY e.effective_at, e.occurred_at, e.id
         """;
 
@@ -287,7 +290,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
                eq.code AS line_code, om.code AS material_code, sum(jm.planned_qty) AS planned_qty, u.code AS uom_code,
                coalesce((SELECT sum(-e.qty_delta)
                          FROM ts.lot_event e JOIN core.lot l ON l.id = e.lot_id
-                         WHERE e.job_id = j.id AND e.event_kind = 'consumed' AND l.material_id = @MaterialId), 0) AS consumed_qty
+                         WHERE e.job_id = j.id AND e.event_kind = 'consumed' AND l.material_id = @MaterialId AND {LotEventSql.NotReversed}), 0) AS consumed_qty
         FROM core.job_material jm
         JOIN core.job j ON j.id = jm.job_id
         JOIN core.equipment eq ON eq.id = j.equipment_id
@@ -357,13 +360,13 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         ORDER BY m.code, u.code
         """;
 
-    private const string ConsumedSql = """
+    private const string ConsumedSql = $"""
         SELECT l.material_id, m.code AS material_code, m.name AS material_name, sum(-e.qty_delta) AS consumed_qty, bu.code AS base_uom_code
         FROM ts.lot_event e
         JOIN core.lot l ON l.id = e.lot_id
         JOIN core.material m ON m.id = l.material_id
         JOIN core.uom bu ON bu.id = m.base_uom_id
-        WHERE e.job_id = @Id AND e.event_kind = 'consumed'
+        WHERE e.job_id = @Id AND e.event_kind = 'consumed' AND {LotEventSql.NotReversed}
         GROUP BY l.material_id, m.code, m.name, bu.code
         ORDER BY m.code
         """;
@@ -371,12 +374,12 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
     private const string ProducedLotsSql = $"""
         SELECT {LotColumns}
         {LotFrom}
-        WHERE l.id IN (SELECT e.lot_id FROM ts.lot_event e WHERE e.job_id = @Id AND e.event_kind = 'produced')
+        WHERE l.id IN (SELECT e.lot_id FROM ts.lot_event e WHERE e.job_id = @Id AND e.event_kind = 'produced' AND {LotEventSql.NotReversed})
         ORDER BY l.lot_number
         """;
 
-    private const string ProducedQtySql = """
-        SELECT coalesce(sum(qty_delta), 0) FROM ts.lot_event WHERE job_id = @Id AND event_kind = 'produced'
+    private const string ProducedQtySql = $"""
+        SELECT coalesce(sum(e.qty_delta), 0) FROM ts.lot_event e WHERE e.job_id = @Id AND e.event_kind = 'produced' AND {LotEventSql.NotReversed}
         """;
 
     // One row per job, component and planned unit; consumption is the job's total of the component.
@@ -397,7 +400,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
             SELECT sum(-e.qty_delta) AS consumed
             FROM ts.lot_event e
             JOIN core.lot l ON l.id = e.lot_id
-            WHERE e.job_id = j.id AND e.event_kind = 'consumed' AND l.material_id = jm.material_id) c ON true
+            WHERE e.job_id = j.id AND e.event_kind = 'consumed' AND l.material_id = jm.material_id AND {LotEventSql.NotReversed}) c ON true
         WHERE jm.direction = 'consume' AND j.site_id = @SiteId AND {OpenJobs}
           AND (@EquipmentId::uuid IS NULL OR j.equipment_id IN (
                 SELECT descendant_id FROM core.equipment_closure WHERE ancestor_id = @EquipmentId))

@@ -138,6 +138,12 @@ public sealed record LotEventDto
     /// <summary>For a reversal, the movement it undoes.</summary>
     public Guid? ReversesEventId { get; init; }
 
+    /// <summary>True once a reversal has undone it (D-063).</summary>
+    public bool IsReversed { get; init; }
+
+    /// <summary>For production, the report that made it (D-063): reversed with the report, on the job's page.</summary>
+    public Guid? ReportId { get; init; }
+
     /// <summary>The container it was packed into, unpacked from, or moved with (D-059).</summary>
     public Guid? ContainerId { get; init; }
     public string? ContainerCode { get; init; }

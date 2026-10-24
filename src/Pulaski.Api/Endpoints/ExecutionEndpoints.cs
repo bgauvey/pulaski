@@ -56,6 +56,12 @@ internal static class ExecutionEndpoints
                 ct)))
         .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.Job));
 
+        // A report reversed whole, with its counts and lots (D-063).
+        jobs.MapPost("/{id:guid}/production/{reportId:guid}/reverse", async Task<Ok<ReverseProductionResponse>> (
+            Guid id, Guid reportId, ReverseProductionRequest request, ICommandHandler<ReverseProductionReportCommand, ReverseProductionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ReverseProductionReportCommand(id, reportId, request.ReasonCodeId, request.Comment), ct)))
+        .RequirePermission(Permissions.ProductionCorrect, Site.Of(SiteOf.Job));
+
         // Partial batches waiting for approval (D-036).
         var partials = routes.MapGroup("/partial-batches").WithTags("Execution");
 

@@ -41,6 +41,7 @@ public static class Permissions
     public const string LotRecords = "lot_records.manage";
     public const string InventoryBackdate = "inventory.backdate";
     public const string PartialBatchDecide = "partial_batch.decide";
+    public const string ProductionCorrect = "production.correct";
     public const string Materials = "materials.manage";
     public const string Processes = "processes.manage";
     public const string Units = "units.manage";
@@ -87,6 +88,7 @@ public static class Permissions
         new(JobReopen, "Floor", "Reopen a completed job"),
         new(ProductionReport, "Floor", "Report production and consumption into a job's runs"),
         new(PartialBatchDecide, "Floor", "Approve or reject partial batches (not one's own)"),
+        new(ProductionCorrect, "Floor", "Reverse production reports: their counts, the run's totals and the lots they made"),
         new(LaborRecordOwn, "Labor", "Clock yourself on and off lines and jobs"),
         new(LaborRecord, "Labor", "Record labor for others and check crews onto lines"),
         new(LaborApprove, "Labor", "Approve a shift's labor and correct approved labor"),
@@ -136,6 +138,7 @@ public static class Permissions
         [JobReopen] = [FloorView],
         [ProductionReport] = [FloorView],
         [PartialBatchDecide] = [FloorView],
+        [ProductionCorrect] = [FloorView],
         [LotReceive] = [InventoryView],
         [LotMove] = [InventoryView],
         [LotShip] = [InventoryView],
@@ -203,9 +206,9 @@ public static class Roles
         new(Supervisor, "Supervisor", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView, Permissions.SiteSettingsView,
              Permissions.JobExecute, Permissions.JobReopen, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove,
-             Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide,
+             Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide, Permissions.ProductionCorrect,
              Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode],
-            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor; codes machine stops. Doesn't correct inventory."),
+            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes machine stops. Doesn't correct inventory."),
         new(Operator, "Operator", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
              Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove, Permissions.LaborRecordOwn,
@@ -221,8 +224,8 @@ public static class Roles
              Permissions.People, Permissions.Terminals, Permissions.LaborApprove, Permissions.LotAttributes],
             "Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people, lot attributes and the site's settings."),
         new(Auditor, "Auditor", false,
-            [.. Permissions.Views, Permissions.InventoryCorrect, Permissions.StockCount, Permissions.InventoryBackdate],
-            "Views everything and corrects inventory; counts stock. Doesn't plan or run jobs."),
+            [.. Permissions.Views, Permissions.InventoryCorrect, Permissions.StockCount, Permissions.InventoryBackdate, Permissions.ProductionCorrect],
+            "Views everything, corrects inventory and reverses production reports; counts stock. Doesn't plan or run jobs."),
         new(ProcessEngineer, "Process engineer", false,
             [Permissions.EquipmentView, Permissions.MaterialsView, Permissions.ProcessesView, Permissions.UnitsView, Permissions.Processes],
             "Maintains processes, BOMs and capabilities. Sees equipment, materials and units."),

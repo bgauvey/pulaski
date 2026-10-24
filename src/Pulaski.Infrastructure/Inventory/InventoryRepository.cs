@@ -63,11 +63,54 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         INSERT INTO ts.lot_event (id, occurred_at, lot_id, event_kind, qty_delta, qty_after, uom_id,
                                   from_location_id, to_location_id, related_lot_id, job_id,
                                   from_status, to_status, reason_code_id, comment, actor_id,
-                                  reference, reverses_event_id, reverses_occurred_at, run_id, effective_at, container_id)
+                                  reference, reverses_event_id, reverses_occurred_at, run_id, effective_at, container_id, report_id)
         VALUES (@Id, @At, @LotId, @Kind, @QtyDelta, @QtyAfter, @UomId,
                 @FromLocationId, @ToLocationId, @RelatedLotId, @JobId,
                 @FromStatus, @ToStatus, @ReasonCodeId, @Comment, @ActorId,
-                @Reference, @ReversesEventId, @ReversesOccurredAt, @RunId, coalesce(@EffectiveAt, @At), @ContainerId)
+                @Reference, @ReversesEventId, @ReversesOccurredAt, @RunId, coalesce(@EffectiveAt, @At), @ContainerId, @ReportId)
+        """;
+
+    private const string DetailColumns = """
+        e.id, e.lot_id, e.occurred_at, e.effective_at, e.event_kind AS kind, e.qty_delta, e.qty_after, e.from_location_id, e.to_location_id,
+        e.from_status, e.to_status, e.related_lot_id, e.job_id, j.job_number, e.run_id, e.report_id, e.reason_code_id,
+        (SELECT r.id FROM ts.lot_event r WHERE r.lot_id = e.lot_id AND r.reverses_event_id = e.id LIMIT 1) AS reversed_by
+        """;
+
+    private const string GetEventDetail = $"""
+        SELECT {DetailColumns} FROM ts.lot_event e LEFT JOIN core.job j ON j.id = e.job_id WHERE e.lot_id = @LotId AND e.id = @Id
+        """;
+
+    private const string GetCounterpart = $"""
+        SELECT {DetailColumns} FROM ts.lot_event e LEFT JOIN core.job j ON j.id = e.job_id
+        WHERE e.lot_id = @OtherLotId AND e.related_lot_id = @LotId AND e.event_kind = @Kind AND e.qty_delta = -@Delta
+          AND e.occurred_at BETWEEN @OccurredAt - interval '1 minute' AND @OccurredAt + interval '1 minute'
+        ORDER BY abs(extract(epoch FROM e.occurred_at - @OccurredAt)), e.id
+        LIMIT 1
+        """;
+
+    private const string EventsAfter = $"""
+        SELECT {DetailColumns} FROM ts.lot_event e LEFT JOIN core.job j ON j.id = e.job_id
+        WHERE e.lot_id = @LotId AND (e.occurred_at, e.id) > (@OccurredAt, @Id)
+        ORDER BY e.occurred_at, e.id
+        """;
+
+    private const string ReportEvents = $"""
+        SELECT {DetailColumns} FROM ts.lot_event e LEFT JOIN core.job j ON j.id = e.job_id
+        WHERE e.report_id = @ReportId
+        ORDER BY e.occurred_at, e.id
+        """;
+
+    private const string HasDeclaration = $"""
+        SELECT EXISTS (SELECT 1 FROM ts.lot_event e WHERE e.lot_id = @LotId AND e.job_id = @JobId AND e.event_kind = @Kind AND {LotEventSql.NotReversed})
+        """;
+
+    private const string SupersedeGenealogy = """
+        UPDATE core.lot_genealogy
+        SET superseded_at = @At
+        WHERE superseded_at IS NULL AND link_basis = @Basis
+          AND (@ParentLotId::uuid IS NULL OR parent_lot_id = @ParentLotId)
+          AND (@ChildLotId::uuid IS NULL OR child_lot_id = @ChildLotId)
+          AND (@JobId::uuid IS NULL OR job_id = @JobId)
         """;
 
     private const string GetLocation = """
@@ -117,8 +160,9 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         FOR UPDATE OF j
         """;
 
-    private const string LotsOfJob = """
-        SELECT DISTINCT lot_id FROM ts.lot_event WHERE job_id = @JobId AND event_kind = @Kind
+    // A declaration that was reversed counts as never made (D-063).
+    private const string LotsOfJob = $"""
+        SELECT DISTINCT e.lot_id FROM ts.lot_event e WHERE e.job_id = @JobId AND e.event_kind = @Kind AND {LotEventSql.NotReversed}
         """;
 
     private const string InsertGenealogy = """
@@ -145,11 +189,18 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         LIMIT 1
         """;
 
+    // A movement and the reversal that counts at the same time (D-063) are left out together: as if neither happened, rather than
+    // a dip between them.
     private const string QuantityTimeline = """
-        SELECT effective_at AS effectiveat, occurred_at AS occurredat, qty_delta AS delta
-        FROM ts.lot_event
-        WHERE lot_id = @LotId AND qty_delta IS NOT NULL
-        ORDER BY effective_at, occurred_at, id
+        SELECT e.effective_at AS effectiveat, e.occurred_at AS occurredat, e.qty_delta AS delta
+        FROM ts.lot_event e
+        WHERE e.lot_id = @LotId AND e.qty_delta IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM ts.lot_event r
+                          WHERE r.lot_id = e.lot_id AND r.reverses_event_id = e.id AND r.effective_at = e.effective_at)
+          AND NOT EXISTS (SELECT 1 FROM ts.lot_event o
+                          WHERE o.lot_id = e.lot_id AND o.id = e.reverses_event_id AND o.occurred_at = e.reverses_occurred_at
+                            AND o.effective_at = e.effective_at)
+        ORDER BY e.effective_at, e.occurred_at, e.id
         """;
 
     private const string LatestCountOfLot = """
@@ -315,6 +366,7 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
                 row.ContainerId,
                 row.ReversesOccurredAt,
                 row.RunId,
+                row.ReportId,
             },
             cancellationToken);
 
@@ -374,6 +426,31 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
                 row.RelatedLotId,
                 row.EffectiveAt)
             : null;
+
+    public async Task<LotEventDetail?> GetEventAsync(Guid lotId, Guid eventId, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<DetailRow>(GetEventDetail, new { LotId = lotId, Id = eventId }, cancellationToken))?.ToDetail();
+
+    public async Task<LotEventDetail?> GetCounterpartAsync(LotEventDetail movement, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<DetailRow>(GetCounterpart, new
+        {
+            movement.LotId,
+            OtherLotId = movement.RelatedLotId,
+            movement.Movement.Kind,
+            Delta = movement.Movement.QtyDelta,
+            movement.OccurredAt,
+        }, cancellationToken))?.ToDetail();
+
+    public async Task<IReadOnlyList<LotEventDetail>> ListEventsAfterAsync(Guid lotId, LotEventDetail after, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<DetailRow>(EventsAfter, new { LotId = lotId, after.OccurredAt, after.Id }, cancellationToken)).Select(r => r.ToDetail())];
+
+    public async Task<IReadOnlyList<LotEventDetail>> ListReportEventsAsync(Guid reportId, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<DetailRow>(ReportEvents, new { ReportId = reportId }, cancellationToken)).Select(r => r.ToDetail())];
+
+    public Task<bool> HasDeclarationAsync(Guid lotId, Guid jobId, string kind, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(HasDeclaration, new { LotId = lotId, JobId = jobId, Kind = kind }, cancellationToken);
+
+    public Task SupersedeGenealogyAsync(Guid? parentLotId, Guid? childLotId, string basis, Guid? jobId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(SupersedeGenealogy, new { ParentLotId = parentLotId, ChildLotId = childLotId, Basis = basis, JobId = jobId, At = at }, cancellationToken);
 
     public async Task<IReadOnlyList<Lot>> ListOnHandLotsAtAsync(Guid locationId, CancellationToken cancellationToken) =>
         [.. (await session.QueryAsync<LotRow>(OnHandAt, new { LocationId = locationId }, cancellationToken)).Select(r => r.ToVersioned().Value)];
@@ -569,5 +646,43 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         public Guid? ParentId { get; init; }
         public bool IsGroup { get; init; }
         public long Version { get; init; }
+    }
+
+    private sealed class DetailRow
+    {
+        public Guid Id { get; init; }
+        public Guid LotId { get; init; }
+        public DateTimeOffset OccurredAt { get; init; }
+        public DateTimeOffset EffectiveAt { get; init; }
+        public string Kind { get; init; } = "";
+        public decimal? QtyDelta { get; init; }
+        public decimal? QtyAfter { get; init; }
+        public Guid? FromLocationId { get; init; }
+        public Guid? ToLocationId { get; init; }
+        public string? FromStatus { get; init; }
+        public string? ToStatus { get; init; }
+        public Guid? RelatedLotId { get; init; }
+        public Guid? JobId { get; init; }
+        public string? JobNumber { get; init; }
+        public Guid? RunId { get; init; }
+        public Guid? ReportId { get; init; }
+        public Guid? ReasonCodeId { get; init; }
+        public Guid? ReversedBy { get; init; }
+
+        public LotEventDetail ToDetail() => new()
+        {
+            Id = Id,
+            LotId = LotId,
+            OccurredAt = OccurredAt,
+            EffectiveAt = EffectiveAt,
+            Movement = new LotMovement(Kind, QtyDelta, QtyAfter ?? 0m, FromLocationId, ToLocationId, FromStatus, ToStatus),
+            RelatedLotId = RelatedLotId,
+            JobId = JobId,
+            JobNumber = JobNumber,
+            RunId = RunId,
+            ReportId = ReportId,
+            ReasonCodeId = ReasonCodeId,
+            ReversedBy = ReversedBy,
+        };
     }
 }

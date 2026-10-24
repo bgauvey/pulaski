@@ -57,10 +57,22 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
 
     private const string InsertCount = """
         INSERT INTO ts.production_count (id, occurred_at, equipment_id, run_id, job_id, count_kind, delta_qty, uom_id,
-                                         scrap_reason_code_id, source, actor_id, comment, recorded_at)
+                                         scrap_reason_code_id, source, actor_id, comment, recorded_at, report_id, corrects_id)
         VALUES (@Id, @OccurredAt, @EquipmentId, @RunId, @JobId, @CountKind, @DeltaQty, @UomId,
-                @ScrapReasonCodeId, 'operator', @ActorId, @Comment, @RecordedAt)
+                @ScrapReasonCodeId, @Source, @ActorId, @Comment, @RecordedAt, @ReportId, @CorrectsId)
         """;
+
+    // A report's own rows (D-063), and whether a correction already offsets them.
+    private const string ReportRows = """
+        SELECT c.id, c.occurred_at, c.equipment_id, c.run_id, c.job_id, c.count_kind, c.delta_qty, c.uom_id, c.scrap_reason_code_id,
+               c.actor_id, c.comment, c.recorded_at,
+               EXISTS (SELECT 1 FROM ts.production_count x WHERE x.report_id = @ReportId AND x.source = 'correction') AS is_reversed
+        FROM ts.production_count c
+        WHERE c.report_id = @ReportId AND c.source = 'operator'
+        ORDER BY c.count_kind DESC
+        """;
+
+    private const string PartialOfLotForUpdate = $"SELECT {PartialColumns} FROM core.partial_batch WHERE lot_id = @LotId AND status <> 'reversed' FOR UPDATE";
 
     private const string UpsertPolicy = """
         INSERT INTO core.execution_policy (site_id, rate_tolerance_pct, consumption_tolerance_pct, updated_at)
@@ -79,11 +91,11 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
         LIMIT 1
         """;
 
-    private const string Consumed = """
+    private const string Consumed = $"""
         SELECT coalesce(-sum(e.qty_delta), 0)
         FROM ts.lot_event e
         JOIN core.lot l ON l.id = e.lot_id
-        WHERE e.job_id = @JobId AND e.event_kind = 'consumed' AND l.material_id = @MaterialId
+        WHERE e.job_id = @JobId AND e.event_kind = 'consumed' AND l.material_id = @MaterialId AND {Inventory.LotEventSql.NotReversed}
         """;
 
     private const string Made = "SELECT coalesce(sum(good_qty + scrap_qty), 0) FROM core.job_run WHERE job_id = @JobId";
@@ -114,7 +126,7 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
         decided_at, decided_by, decision_comment, scrap_reason_code_id
         """;
 
-    private const string RunHasPartial = "SELECT EXISTS (SELECT 1 FROM core.partial_batch WHERE run_id = @RunId)";
+    private const string RunHasPartial = "SELECT EXISTS (SELECT 1 FROM core.partial_batch WHERE run_id = @RunId AND status <> 'reversed')";
 
     private const string InsertPartial = """
         INSERT INTO core.partial_batch (id, job_id, run_id, lot_id, quantity, uom_id, batch_size, batch_rule, status, occurred_at, reported_by,
@@ -144,6 +156,24 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
 
     public Task InsertPartialBatchAsync(PartialBatch batch, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteAsync(InsertPartial, PartialArgs(batch, at), cancellationToken);
+
+    public async Task<ProductionReportRecord?> GetReportAsync(Guid reportId, CancellationToken cancellationToken)
+    {
+        var rows = await session.QueryAsync<ReportRow>(ReportRows, new { ReportId = reportId }, cancellationToken);
+        if (rows.Count == 0)
+        {
+            return null;
+        }
+
+        return new ProductionReportRecord(reportId, rows[0].JobId, rows[0].RunId, [.. rows.Select(r => new ProductionCountRow(
+            r.Id, r.OccurredAt, r.EquipmentId, r.RunId, r.JobId, r.CountKind, r.DeltaQty, r.UomId, r.ScrapReasonCodeId, r.ActorId ?? "", r.Comment, r.RecordedAt)
+        {
+            ReportId = reportId,
+        })], rows[0].IsReversed);
+    }
+
+    public async Task<PartialBatch?> GetPartialBatchOfLotForUpdateAsync(Guid lotId, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<PartialRow>(PartialOfLotForUpdate, new { LotId = lotId }, cancellationToken))?.ToDomain();
 
     public async Task<PartialBatch?> GetPartialBatchForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<PartialRow>(PartialForUpdate, new { Id = id }, cancellationToken))?.ToDomain();
@@ -343,5 +373,22 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
     {
         public decimal Quantity { get; init; }
         public Guid UomId { get; init; }
+    }
+
+    private sealed class ReportRow
+    {
+        public Guid Id { get; init; }
+        public DateTimeOffset OccurredAt { get; init; }
+        public Guid EquipmentId { get; init; }
+        public Guid RunId { get; init; }
+        public Guid JobId { get; init; }
+        public string CountKind { get; init; } = "";
+        public decimal DeltaQty { get; init; }
+        public Guid UomId { get; init; }
+        public Guid? ScrapReasonCodeId { get; init; }
+        public string? ActorId { get; init; }
+        public string? Comment { get; init; }
+        public DateTimeOffset RecordedAt { get; init; }
+        public bool IsReversed { get; init; }
     }
 }

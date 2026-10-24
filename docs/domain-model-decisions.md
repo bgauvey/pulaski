@@ -470,7 +470,7 @@ What a plant needs to keep floor stock right without the ERP, beyond receiving a
 **Corrections.**
 
 - **Correct details.** A lot's number, supplier lot and expiry can be corrected, with a comment. The number stays unique per site and material; a bulk balance's number can't change. The event keeps before and after. Lot event `corrected`.
-- **Reverse a movement.** The lot's **latest** movement can be reversed, once, for an adjustment reason: a receipt, write-up, write-off, move, status change or shipment. The lot returns to its quantity, location and status before it, and the reversal names the movement it undoes (`reverses_event_id`, `reverses_occurred_at`; no FK into history, D-010). A reversed receipt that leaves a lot at zero makes it `cancelled`. Consumption and production (job declarations), splits, merges, bulk transfers and corrections aren't reversed: the first two wait for execution, the rest touch two lots or nothing countable, and are put right with another movement. Lot event `reversed`.
+- **Reverse a movement.** The lot's **latest** movement can be reversed, once, for an adjustment reason: a receipt, write-up, write-off, move, status change or shipment. The lot returns to its quantity, location and status before it, and the reversal names the movement it undoes (`reverses_event_id`, `reverses_occurred_at`; no FK into history, D-010). A reversed receipt that leaves a lot at zero makes it `cancelled`. Lot event `reversed`. D-063 extends reversal to earlier quantity movements, consumption, splits, merges, transfers between balances and production reports.
 
 **Stock counts.**
 
@@ -1349,6 +1349,40 @@ Issue #40. `core.reason_code.parent_id` and `is_selectable` existed but nothing 
 **Reading.** `core.reason_tree()` (a `LANGUAGE sql STABLE` function, recursive with a cycle guard) gives depth, the group path ("Mechanical › Jam") and a tree-order sort key. The Reasons screen lists each kind in tree order with indentation and an **Under** choice. Pickers (`ReasonCodeDto.GroupPath`, `Display.ReasonLabel`) show the path and keep tree order.
 
 **Not done.** Report roll-up by group, and converting a reason to a group or back.
+
+## Reversing declarations (D-063, proposed)
+
+Issue #41. Only a lot's latest single-lot movement could be reversed (D-030); consumption, production, splits, merges and transfers between balances couldn't be, and nor could production reports.
+
+**Principle.** A wrong record is reversed, never edited: compensating rows undo it, the original stays, and the right figures are then declared again. Every reversal needs an adjustment reason and a comment; the actor is recorded on each row and event. A reversed movement counts as never made: `LotEventSql.NotReversed` leaves it out of a job's consumption, produced lots and declared genealogy, and balance allocation (D-060) leaves out both it and its reversal.
+
+**On a lot (`ReverseMovementCommand`, `inventory.correct`).** The movement is read without a lock, then the handler locks what it touched in the usual order: the job, then lots (D-027), in id order for two lots. What is allowed:
+
+- **Latest single-lot movement:** as D-030.
+- **Earlier quantity-only movement** (received, adjusted, scrapped): its quantity is put back at its effective time, if the lot's history from then on stays at or above zero and no posted count follows (`Backdating.EnsureFitsAsync`).
+- **Consumption:** `Lot.Restore` gives the quantity back. The declared genealogy from the lot to the job's output is superseded once no consumption of it into the job stands.
+- **Split:** the new lot must be unchanged since. `Lot.TakeBack` cancels it, the source is restored, and the split edge is superseded.
+- **Merge:** the source must be unchanged since. It gets its quantity and earlier status back, the target gives it up, and the merge edge is superseded. A merge into a commingling balance is refused: the lot can't come out as itself.
+- **Transfer between balances:** the receiving balance gives the quantity back to the sender.
+- **Production with a report id:** refused; it is reversed with its report. Older production is reversed lot by lot, and the counts stay, which the response warns about.
+
+**Matching the two halves.** `GetCounterpartAsync` finds the other half of a two-lot movement: the row on the related lot that names this one, with the same kind and the opposite quantity, nearest in time within a minute. Split and transfer rows were recorded at slightly different times.
+
+**Timing.** Compensating rows count at the original's effective time, so history reads as if it never happened. A reversal and its original at the same effective time are left out of the replay together (`QuantityTimeline`), so no false dip appears between them. `TakeBack` and the replay refuse when the stock isn't there any more, and the message names what happened since ("Since then: consumed into WO-…").
+
+**Production reports (`ReverseProductionReportCommand`, `POST /api/jobs/{id}/production/{reportId}/reverse`, new `production.correct`: Supervisor, Auditor).** A report now has an id: its processed count row's id, stored as `report_id` on its counts and on the lot rows it produced (0031). Reversing it locks the job (refusing closed jobs), then the run, then the lots, and then:
+
+- each produced lot gives its quantity back; one that only held it is cancelled;
+- output that joined a commingling balance is taken out of the balance first: the balance gives it back, the lot is restored and then taken back, and the merge edge is superseded;
+- a partial batch from the report becomes `reversed` (a rejected one can't be, since its lot was written off), freeing the run's one partial batch (now a partial unique index);
+- each count row is offset by a `correction` row (`corrects_id`) at the same `occurred_at`;
+- `JobRun.Remove` takes the good and scrap off the run, and `pulaski.job.production_reversed.v1` is appended.
+
+The job page lists the report as reversed (correction rows aren't listed). Reports recorded before 0031 can't be reversed whole.
+
+**Also fixed.** Production by shift (D-044) now leaves out machine counts, as D-050 intended.
+
+**Not done.** Reversing moves, holds and shipments that aren't the latest movement, lot corrections, packing; undoing a chain of dependent movements in one step; editing a report in place.
 
 ## Application architecture
 

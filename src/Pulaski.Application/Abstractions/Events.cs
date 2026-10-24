@@ -125,6 +125,7 @@ public static class EventTypes
     public const string JobReopened = "pulaski.job.reopened.v1";
     public const string JobClosed = "pulaski.job.closed.v1";
     public const string ProductionReported = "pulaski.job.production_reported.v1";
+    public const string ProductionReversed = "pulaski.job.production_reversed.v1";
     public const string ExecutionPolicyChanged = "pulaski.execution_policy.changed.v1";
     public const string WorkOrderDispatched = "pulaski.work_order.dispatched.v1";
     public const string WorkOrderUndispatched = "pulaski.work_order.undispatched.v1";

@@ -298,6 +298,12 @@ else if (_error is null)
 
     private static readonly HashSet<string> Reversible = ["received", "adjusted", "scrapped", "moved", "status_changed", "shipped"];
 
+    // Changes of quantity alone, reversed even when later movements followed, if the stock allows (D-063).
+    private static readonly HashSet<string> QuantityOnly = ["received", "adjusted", "scrapped"];
+
+    // Declarations, reversed with every lot they touched; production only when it predates report ids (otherwise with its report).
+    private static readonly HashSet<string> Declarations = ["consumed", "split", "merged"];
+
     private string Title => _lot?.Lot is { } l ? InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode) : "Lot";
 
     protected override async Task OnParametersSetAsync()
@@ -326,7 +332,12 @@ else if (_error is null)
     private bool May(LotAction action) => User.Can(LotActions.Permission(action), Sites.SiteId);
 
     private static bool CanReverse(LotDto lot, LotEventDto e) =>
-        lot.History.Count > 0 && lot.History[0].Id == e.Id && Reversible.Contains(e.Kind) && !(e.Kind == "moved" && e.RelatedLotId is not null);
+        !e.IsReversed && e.Kind != "reversed" && (
+            (lot.History.Count > 0 && lot.History[0].Id == e.Id && Reversible.Contains(e.Kind))
+            || QuantityOnly.Contains(e.Kind)
+            || Declarations.Contains(e.Kind)
+            || (e.Kind == "moved" && e.RelatedLotId is not null)
+            || (e.Kind == "produced" && e.ReportId is null));
 
     private void Reverse(LotEventDto e)
     {

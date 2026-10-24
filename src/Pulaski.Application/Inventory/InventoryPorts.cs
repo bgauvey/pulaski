@@ -216,6 +216,30 @@ public interface IInventoryRepository
     /// <summary>Writes a line's counted quantity, when and by whom.</summary>
     Task UpdateStockCountLineAsync(StockCountLine line, CancellationToken cancellationToken);
 
+    /// <summary>One movement of a lot (D-063), without locking; null when the lot has no such movement.</summary>
+    Task<LotEventDetail?> GetEventAsync(Guid lotId, Guid eventId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The other half of a two-lot movement (split, merge, transfer): the row on the other lot that names this one, of the same kind and
+    /// the opposite quantity, recorded with it (the nearest in time, within a minute).
+    /// </summary>
+    Task<LotEventDetail?> GetCounterpartAsync(LotEventDetail movement, CancellationToken cancellationToken);
+
+    /// <summary>A lot's movements recorded after <paramref name="after"/>, oldest first: what has happened to it since.</summary>
+    Task<IReadOnlyList<LotEventDetail>> ListEventsAfterAsync(Guid lotId, LotEventDetail after, CancellationToken cancellationToken);
+
+    /// <summary>The lot movements a production report recorded (D-063), oldest first.</summary>
+    Task<IReadOnlyList<LotEventDetail>> ListReportEventsAsync(Guid reportId, CancellationToken cancellationToken);
+
+    /// <summary>Whether the lot still has a declaration of <paramref name="kind"/> against the job that hasn't been reversed.</summary>
+    Task<bool> HasDeclarationAsync(Guid lotId, Guid jobId, string kind, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Ends current genealogy edges (D-063) of a basis: between the two lots, or (with one of them null) every edge of the job to or from
+    /// the other. They stay as history with <c>superseded_at</c>.
+    /// </summary>
+    Task SupersedeGenealogyAsync(Guid? parentLotId, Guid? childLotId, string basis, Guid? jobId, DateTimeOffset at, CancellationToken cancellationToken);
+
     /// <summary>A reason's kind, without locking; null when there is no such reason. The kind never changes.</summary>
     Task<string?> GetReasonKindAsync(Guid id, CancellationToken cancellationToken);
 
@@ -309,7 +333,29 @@ public sealed record LotEventRow(
     DateTimeOffset? ReversesOccurredAt = null,
     Guid? RunId = null,
     DateTimeOffset? EffectiveAt = null,
-    Guid? ContainerId = null);
+    Guid? ContainerId = null,
+    Guid? ReportId = null);
+
+/// <summary>
+/// One movement of a lot as reversing it needs it (D-063): what it did, what it belonged to, and the reversal of it, if any.
+/// </summary>
+public sealed record LotEventDetail
+{
+    public required Guid Id { get; init; }
+    public required Guid LotId { get; init; }
+    public DateTimeOffset OccurredAt { get; init; }
+    public DateTimeOffset EffectiveAt { get; init; }
+    public required LotMovement Movement { get; init; }
+    public Guid? RelatedLotId { get; init; }
+    public Guid? JobId { get; init; }
+    public string? JobNumber { get; init; }
+    public Guid? RunId { get; init; }
+    public Guid? ReportId { get; init; }
+    public Guid? ReasonCodeId { get; init; }
+
+    /// <summary>The reversal that undid it; null while it stands.</summary>
+    public Guid? ReversedBy { get; init; }
+}
 
 /// <summary>A parent-to-child lot edge: <c>declared</c> by a job, or from a <c>split</c> or <c>merge</c> (D-030, no job).</summary>
 public sealed record GenealogyEdge(Guid Id, Guid ParentLotId, Guid ChildLotId, Guid? JobId, string Basis = GenealogyEdge.Declared)

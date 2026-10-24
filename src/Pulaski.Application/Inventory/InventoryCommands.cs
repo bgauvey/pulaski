@@ -597,6 +597,7 @@ internal static class ProductionOutput
         Guid? runId,
         DateTimeOffset now,
         DateTimeOffset? effectiveAt,
+        Guid? reportId,
         CancellationToken cancellationToken)
     {
         var location = await InventoryRules.LocationAsync(inventory, locationId, job.SiteId, cancellationToken);
@@ -682,7 +683,8 @@ internal static class ProductionOutput
             ? await inventory.InsertLotAsync(after, envelope.OccurredAt, cancellationToken)
             : await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
-            new LotEventRow(ids.NewId(), after.Id, movement, after.UomId, envelope.ActorId, JobId: job.Id, Comment: comment, RunId: runId, EffectiveAt: MovementTime.Backdated(effective, now)),
+            new LotEventRow(ids.NewId(), after.Id, movement, after.UomId, envelope.ActorId, JobId: job.Id, Comment: comment, RunId: runId, EffectiveAt: MovementTime.Backdated(effective, now),
+                ReportId: reportId),
             envelope.OccurredAt, cancellationToken);
         await inventory.InsertGenealogyAsync(edges, envelope.OccurredAt, cancellationToken, MovementTime.Backdated(effective, now));
         await eventLog.AppendAsync(envelope, cancellationToken);

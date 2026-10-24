@@ -350,4 +350,21 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
         Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
         Assert.Contains("back-date", await refused.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task Reversing_a_production_report_needs_production_correct_at_the_jobs_site()
+    {
+        var site = Guid.CreateVersion7();
+        var job = Guid.CreateVersion7();
+        factory.Stores.Security.SetSite(SiteOf.Job, job, site);
+        var request = new ReverseProductionRequest { ReasonCodeId = Guid.CreateVersion7(), Comment = "Wrong job" };
+        var uri = $"/api/jobs/{job}/production/{Guid.CreateVersion7()}/reverse";
+
+        var operatorClient = await factory.CreateClientAsAsync(Roles.Operator, site);
+        Assert.Equal(HttpStatusCode.Forbidden, (await operatorClient.PostAsJsonAsync(uri, request)).StatusCode);
+
+        // A supervisor gets through to the report, which doesn't exist here.
+        var supervisor = await factory.CreateClientAsAsync(Roles.Supervisor, site);
+        Assert.Equal(HttpStatusCode.NotFound, (await supervisor.PostAsJsonAsync(uri, request)).StatusCode);
+    }
 }

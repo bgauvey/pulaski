@@ -53,6 +53,12 @@ public interface IExecutionRepository
 
     Task InsertCountAsync(ProductionCountRow count, CancellationToken cancellationToken);
 
+    /// <summary>A report's count rows by its id (D-063); null when there is no such report, or it predates report ids.</summary>
+    Task<ProductionReportRecord?> GetReportAsync(Guid reportId, CancellationToken cancellationToken);
+
+    /// <summary>The partial batch in a lot, locked; null when it isn't one.</summary>
+    Task<PartialBatch?> GetPartialBatchOfLotForUpdateAsync(Guid lotId, CancellationToken cancellationToken);
+
     Task<ExecutionPolicy> GetPolicyAsync(Guid siteId, CancellationToken cancellationToken);
 
     /// <summary>The capability's ideal rate for the material on the line in effect at <paramref name="at"/>; null when there is none.</summary>
@@ -110,7 +116,25 @@ public sealed record ProductionCountRow(
     Guid? ScrapReasonCodeId,
     string ActorId,
     string? Comment,
-    DateTimeOffset RecordedAt);
+    DateTimeOffset RecordedAt)
+{
+    /// <summary>The report it belongs to (D-063): its processed row's id.</summary>
+    public Guid? ReportId { get; init; }
+
+    /// <summary>For a correction: the row it offsets.</summary>
+    public Guid? CorrectsId { get; init; }
+
+    /// <summary><c>operator</c>, or <c>correction</c> for a row that offsets another.</summary>
+    public string Source { get; init; } = "operator";
+}
+
+/// <summary>A production report's count rows (D-063), with whether it has been reversed.</summary>
+public sealed record ProductionReportRecord(Guid ReportId, Guid JobId, Guid RunId, IReadOnlyList<ProductionCountRow> Rows, bool IsReversed)
+{
+    public decimal Good => Rows.Where(r => r.CountKind == CountKind.Processed).Sum(r => r.DeltaQty) - Scrap;
+
+    public decimal Scrap => Rows.Where(r => r.CountKind == CountKind.Defective).Sum(r => r.DeltaQty);
+}
 
 /// <summary>A job waiting for another, with where it runs.</summary>
 public sealed record DownstreamJob(Guid JobId, string JobNumber, string LineCode, string Status);

@@ -1264,7 +1264,7 @@ CREATE TABLE core.partial_batch (
     uom_id              uuid NOT NULL REFERENCES core.uom(id),
     batch_size          numeric(18,6) NOT NULL CHECK (batch_size > 0),
     batch_rule          text NOT NULL CHECK (batch_rule IN ('exact','near')),
-    status              text NOT NULL CHECK (status IN ('accepted','pending','approved','rejected')),
+    status              text NOT NULL CHECK (status IN ('accepted','pending','approved','rejected','reversed')),  -- reversed: its report was (D-063)
     occurred_at         timestamptz NOT NULL,
     reported_by         text,
     decided_at          timestamptz,
@@ -1273,9 +1273,12 @@ CREATE TABLE core.partial_batch (
     scrap_reason_code_id uuid REFERENCES core.reason_code(id),
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT partial_batch_run_uq UNIQUE (run_id),
-    CONSTRAINT partial_batch_decided_ck CHECK ((status IN ('approved','rejected')) = (decided_at IS NOT NULL))
+    -- A decision has a time; a reversed one (D-063) keeps the time it was decided, if it was.
+    CONSTRAINT partial_batch_decided_ck CHECK (CASE WHEN status IN ('approved','rejected') THEN decided_at IS NOT NULL
+                                                    WHEN status = 'reversed' THEN true ELSE decided_at IS NULL END)
 );
+-- One partial batch per run (D-036), not counting one whose report was reversed (D-063).
+CREATE UNIQUE INDEX partial_batch_run_uq ON core.partial_batch (run_id) WHERE status <> 'reversed';
 CREATE INDEX partial_batch_pending_ix ON core.partial_batch (status) WHERE status = 'pending';
 CREATE INDEX partial_batch_job_ix ON core.partial_batch (job_id);
 
@@ -1646,6 +1649,7 @@ CREATE TABLE ts.production_count (
     source                  text NOT NULL CHECK (source IN ('machine','operator','correction')),
     corrects_id             uuid,                               -- for corrections: the row being offset
     job_id                  uuid,                               -- the run's job (D-035); no FK into history from here either
+    report_id               uuid,                               -- the report (D-063): its processed row's id, on its rows and their corrections
     recorded_at             timestamptz NOT NULL DEFAULT now(), -- when it was entered; occurred_at is inside the run it belongs to
     actor_id                text,                               -- issuer|subject, as on evt.event
     comment                 text CHECK (length(comment) <= 1000),
@@ -1654,6 +1658,7 @@ CREATE TABLE ts.production_count (
 CREATE INDEX ON ts.production_count (equipment_id, occurred_at);
 CREATE INDEX ON ts.production_count (run_id);
 CREATE INDEX production_count_job_ix ON ts.production_count (job_id) WHERE job_id IS NOT NULL;
+CREATE INDEX production_count_report_ix ON ts.production_count (report_id) WHERE report_id IS NOT NULL;
 
 -- High-rate telemetry. No surrogate id and no FKs: 16 bytes and an FK probe
 -- per row matter at this volume. Daily partitions, short retention.
@@ -1705,6 +1710,7 @@ CREATE TABLE ts.lot_event (
     comment             text CHECK (length(comment) <= 1000),
     reference           text CHECK (length(reference) <= 100),  -- a shipment or count number (D-030)
     reverses_event_id   uuid,                                   -- the movement a reversal undoes, with its time (no FK into history)
+    report_id           uuid,                                   -- the production report that made it (D-063): ts.production_count.report_id
     reverses_occurred_at timestamptz,
     actor_user_id       uuid,
     actor_id            text,                                   -- issuer|subject, as on evt.event, until sec.app_user exists
@@ -1713,6 +1719,8 @@ CREATE TABLE ts.lot_event (
 CREATE INDEX ON ts.lot_event (lot_id, occurred_at);
 CREATE INDEX lot_event_lot_effective_idx ON ts.lot_event (lot_id, effective_at);
 CREATE INDEX lot_event_job_id_idx ON ts.lot_event (job_id) WHERE job_id IS NOT NULL;
+CREATE INDEX lot_event_reverses_ix ON ts.lot_event (lot_id, reverses_event_id) WHERE reverses_event_id IS NOT NULL;
+CREATE INDEX lot_event_report_ix ON ts.lot_event (report_id) WHERE report_id IS NOT NULL;
 CREATE INDEX lot_event_occurred_at_brin ON ts.lot_event USING brin (occurred_at);   -- the movement journal reads by time (D-029)
 
 -- One row per subgroup. Variables: values[] plus computed statistics.
@@ -2016,7 +2024,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0027_containers_and_labels'),
     ('0028_balance_flow'),
     ('0029_deliveries'),
-    ('0030_reason_trees');
+    ('0030_reason_trees'),
+    ('0031_declaration_reversals');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2047,6 +2056,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('job.reopen', 'Reopen a completed job'),
     ('production.report', 'Report production and consumption into a job''s runs'),
     ('partial_batch.decide', 'Approve or reject partial batches (not one''s own)'),
+    ('production.correct', 'Reverse production reports: their counts, the run''s totals and the lots they made'),
     ('labor.record_own', 'Clock yourself on and off lines and jobs'),
     ('labor.record', 'Record labor for others and check crews onto lines'),
     ('labor.approve', 'Approve a shift''s labor and correct approved labor'),
@@ -2079,11 +2089,11 @@ ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 INSERT INTO sec.role (code, name, description, is_system) VALUES
     ('administrator', 'Administrator', 'Everything, everywhere, including users and roles.', true),
     ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes.', true),
-    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor; codes machine stops. Doesn''t correct inventory.', true),
+    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes machine stops. Doesn''t correct inventory.', true),
     ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops.', true),
     ('quality', 'Quality', 'Holds and releases lots, corrects inventory, decides on partial batches, and keeps lot attributes and certificates.', true),
     ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people, lot attributes and the site''s settings.', true),
-    ('auditor', 'Auditor', 'Views everything and corrects inventory; counts stock. Doesn''t plan or run jobs.', true),
+    ('auditor', 'Auditor', 'Views everything, corrects inventory and reverses production reports; counts stock. Doesn''t plan or run jobs.', true),
     ('process_engineer', 'Process engineer', 'Maintains processes, BOMs and capabilities. Sees equipment, materials and units.', true),
     ('edge_node', 'Edge node', 'For the service user a Pulaski Edge node signs in as: reads its configuration and forwards machine data. Sees no screens.', true)
 ON CONFLICT (code) DO NOTHING;
@@ -2118,6 +2128,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('supervisor', 'lot.hold'),
     ('supervisor', 'stock_count.manage'),
     ('supervisor', 'partial_batch.decide'),
+    ('supervisor', 'production.correct'),
     ('supervisor', 'labor.view'),
     ('supervisor', 'labor.record'),
     ('supervisor', 'labor.approve'),
@@ -2186,6 +2197,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('auditor', 'integrations.view'),
     ('auditor', 'inventory.backdate'),
     ('auditor', 'inventory.correct'),
+    ('auditor', 'production.correct'),
     ('auditor', 'stock_count.manage'),
     ('process_engineer', 'equipment.view'),
     ('process_engineer', 'materials.view'),

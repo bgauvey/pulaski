@@ -117,8 +117,8 @@ public class BackdatingTests
         await WriteOffAsync(lot.LotId, 30m, Now.AddMinutes(30));
         var latest = (await Inventory.GetLatestEventAsync(lot.LotId, CancellationToken.None))!;
 
-        await new ReverseMovementHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events, _f.Ids)
-            .HandleAsync(new ReverseMovementCommand(lot.LotId, Inventory.Find(lot.LotId)!.Version, latest.Id, _count.Id), CancellationToken.None);
+        await new ReverseMovementHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
+            .HandleAsync(new ReverseMovementCommand(lot.LotId, Inventory.Find(lot.LotId)!.Version, latest.Id, _count.Id, "Entered twice"), CancellationToken.None);
 
         Assert.Equal(Now.AddMinutes(30), Inventory.Events[^1].EffectiveAt);
         Assert.Equal(100m, Inventory.Find(lot.LotId)!.Value.Quantity);

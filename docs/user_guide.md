@@ -785,7 +785,24 @@ The run's rate check still applies: an hour-long run can't take more than an hou
 
 ### The job page
 
-`jobs/<job>` shows the job's status, planned, good and scrap quantities, its **runs** (line, start, end, length, good, scrap, the most the run can hold, and why it ended) and its **production reports** (when entered, which run, good, scrap, scrap reason, who and any comment). The buttons offer what the job's status allows: **Start** or **Resume**, **Pause**, **Complete**, **Reopen** for a completed job whose order isn't closed, and **Report production**. **Materials and lots** opens the job's inventory page.
+`jobs/<job>` shows the job's status, planned, good and scrap quantities, its **runs** (line, start, end, length, good, scrap, the most the run can hold, and why it ended) and its **production reports** (when entered, which run, good, scrap, scrap reason, who and any comment; a reversed report is marked *reversed*). The buttons offer what the job's status allows: **Start** or **Resume**, **Pause**, **Complete**, **Reopen** for a completed job whose order isn't closed, and **Report production**. **Materials and lots** opens the job's inventory page.
+
+### Reverse a production report
+
+A report entered on the wrong job, or with the wrong quantity, is reversed whole and then reported again correctly.
+
+1. Open the job's page and find the report under **Production reports**.
+2. Click **Reverse…** on its row.
+3. Choose an adjustment **Reason**, write a **Comment** saying why, and click **Reverse report**.
+4. The report is marked *reversed*. Its good and scrap come off the run, and every lot it made gives its quantity back (a lot that only held that is *cancelled*).
+
+**In detail**
+
+- **Nothing is deleted.** Each of the report's counts is offset by a correction at the same time, so production by shift and OEE see it as never made; the lots get reversal movements, and the report stays in the list.
+- **Its lots must still hold what it gave them.** If one has been consumed, split, shipped or written down since, Pulaski names what happened so that is reversed first. Output that went straight into a silo's balance is taken out of the balance, which must still hold it.
+- **Partial batches.** A partial batch the report made no longer counts, so the run can report another. A rejected partial batch was written off: reverse that first.
+- **Until the job is closed**, as with reporting. Needs *production.correct* (Supervisor and Auditor to start with).
+- Reports entered before this version can't be reversed whole; they show no **Reverse…** button.
 
 ### Production by shift
 
@@ -905,9 +922,39 @@ The lot page shows its facts (status, quantity, location, where it came from, su
 | **Hold…** / **Change hold…** | Puts the lot **on hold** or in **quarantine**, or switches between the two. | A hold reason. |
 | **Release** | Makes a held or quarantined lot available again. | — |
 | **Correct…** | Fixes the lot number, supplier lot or expiry, for example after a typo on receipt. | A comment saying why. A balance's number can't change. |
-| **Reverse** (on the latest row of the history) | Undoes the lot's latest movement: a receipt, write-up, write-off, move, hold or release, or shipment. The lot goes back to how it was; a reversed receipt of a whole lot makes it *cancelled*. | An adjustment reason. Only the latest movement, once. |
+| **Reverse** (on a row of the history) | Undoes a movement with a new one that puts it back, as if it never happened; nothing recorded is changed. See [Reverse a movement or a declaration](#reverse-a-movement-or-a-declaration). | An adjustment reason and a comment. Once per movement. |
 
 Some reasons ask for a comment; the form says *(required)* when they do.
+
+### Reverse a movement or a declaration
+
+Something recorded wrongly is put right by reversing it, then recording what really happened. A reversal is a new movement that undoes the old one; the old one stays in the history, marked as reversed, with who reversed it, the reason and the comment.
+
+1. Open the lot's page and find the movement in its **History**.
+2. Click **Reverse** on its row. Rows that can't be reversed (a reversal, or a movement reversed already) have no button.
+3. Read what the reversal will do, choose an adjustment **Reason** and write a **Comment** saying why. Both are required.
+4. Click **Reverse**. If something since depends on it, Pulaski says what (for example *Since then: consumed into WO-1001-10*) so you can reverse that first.
+5. If an amount was wrong rather than the whole movement, record the right amount again as usual.
+
+What can be reversed on a lot's page:
+
+| Movement | What the reversal does | When it can't |
+| --- | --- | --- |
+| The **latest** receipt, write-up, write-off, move, hold or release, or shipment | Puts the lot back as it was; a reversed receipt of a whole lot makes it *cancelled*. | Only the latest, for moves, holds and shipments. |
+| An **earlier** receipt, write-up or write-off | Puts back only the quantity, at the time it counted. | The lot's stock would go below zero at some time since, or a posted count came after it. |
+| **Consumption** into a job | The quantity goes back to the lot; it stops being a parent of what the job made unless more of it went into that job. | The job is closed or cancelled, or the lot was shipped since. |
+| A **split** | The new lot is cancelled and its quantity goes back to the lot it came from. | Anything has happened to the new lot since. |
+| A **merge** | The lot that was merged gets its quantity and status back; the lot it joined goes down by that much. | It joined a balance where lots mix (write the balance down instead), or the lot it joined no longer holds that much. |
+| A **transfer between balances** | The quantity goes back to the balance it came from. | The receiving balance no longer holds it. |
+| **Production** | Reversed with its production report, on the job's page (below). | — |
+
+**In detail**
+
+- **As if it never happened.** A reversal counts at the time the movement it undoes did, so stock on a past date, aging and a silo's genealogy come out as if the movement had never been made. That is also why it must fit the lot's history from then on.
+- **Genealogy.** Reversing consumption, a split or a merge ends the genealogy link it made; the link stays in the record as ended, and traces no longer follow it.
+- **Who.** Reversing on a lot's page needs *inventory.correct* (Quality and Auditor to start with).
+- **Production recorded before this version** has no report to reverse with: its row on the lot's page can be reversed on its own, which takes the quantity back but leaves the job's reported output as it was. Pulaski says so when you do it.
+
 
 ### Lot attributes and certificates
 
@@ -1423,11 +1470,11 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | --- | --- |
 | **Administrator** | Everything, at every site, including users and roles. |
 | **Planner** | The schedule (place, sequence, pin, assign and cancel jobs); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; materials. |
-| **Supervisor** | Start, pause, complete and reopen jobs; report production; record and approve labor; code machine stops; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches. |
+| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops; receive, move, ship, hold and release lots; stock counts; approve or reject partial batches. |
 | **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off. |
 | **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements. |
 | **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; lot attribute definitions; the site's settings. |
-| **Auditor** | Correct inventory; stock counts; back-date inventory movements. Can't plan or run jobs. |
+| **Auditor** | Correct inventory, including reversing consumption, splits, merges and transfers; reverse production reports; stock counts; back-date inventory movements. Can't plan or run jobs. |
 | **Process engineer** | Processes, BOMs and which lines can run each material. |
 | **Edge node** | Nothing on screen: it is for the user a Pulaski Edge node signs in as, to read its configuration and forward machine data. |
 
@@ -1973,20 +2020,19 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Materials import from files only:** CSV or B2MML on the screen, or the ERP one item at a time through the API. Nothing fetches items from an ERP on a timer, and there are no adapters for label printing. Capabilities import from CSV only, and only for now: a future or past period is set on the material page. B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** stops can't be split, merged or entered by hand. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
-- **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A report can't be corrected or reversed yet; a lot it made can be written off on its page.
+- **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
 - **Batches:** the batch size is per material, not per line (a 50 kg mixer next to a 200 kg one isn't modelled). A replacement job is always rounded up to whole batches; to make fewer, cancel it. Orders from the ERP aren't imported yet, so there is no rule yet for an ERP order that isn't whole batches. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
 - **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, scanning 2D codes or supplier barcodes beyond reading their text, setting stock aside for a job, and suggestions of which lot to use first. Moves, holds, splits, merges, shipments and counts can't be back-dated (only quantity movements can, by up to 31 days), and a lot's location and status on a past date aren't reconstructed. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
-- **Reversing is limited** to a lot's latest movement, and not consumption, production, splits, merges, transfers between balances or corrections: put those right with another movement.
+- **Reversing:** moves, holds and shipments only when they are the lot's latest movement; corrections of lot details, packing and unpacking aren't reversed (put them right with another movement). A lot that joined a balance where lots mix can't be taken back out as itself. Reversal is one movement at a time: there is no undoing a chain of dependent movements in one step.
 - **Reason groups** only tidy the lists people choose from: reports (OEE *Where the time went*, stops, the journal) still list each reason, not totals by group. A reason can't be turned into a group, or a group into a reason.
-- **Genealogy through a silo is an estimate** from the declared movements: a level tag can be bound to a silo, but its readings aren't used yet to confirm when it was empty or how it flowed. Reversals into a silo are treated as withdrawals of its oldest stock.
+- **Genealogy through a silo is an estimate** from the declared movements: a level tag can be bound to a silo, but its readings aren't used yet to confirm when it was empty or how it flowed. A reversed movement and its reversal are left out of the estimate, as if neither happened.
 - **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP; there are no lead times, purchase suggestions or partial receipts against one delivery (receiving closes it). The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** still shows no live machine state, reported counts, good output, scrap, downtime, quality, lots or labor. OEE is available for the current shift from the machine/OEE report; its timeline strip remains a rolling 24 hours rather than the current shift.
 - **Notes** can only be written when the order is created.
 - **Released product specifications** are not maintained in Pulaski yet. Shop-order sheets flag this gap and require operators to verify the approved specification elsewhere.
 - **Signing in through your company's identity provider** (Okta, Entra ID, AD FS, Keycloak) isn't built yet: users have Pulaski passwords, and an administrator resets forgotten ones (Pulaski sends no e-mail).
-- **Reported production and consumption can't be corrected** by anyone yet, so the Auditor role can't do that part of its job; write a lot off or up instead.
 - **The schedule shows its buttons to everyone who can see it;** someone who can see the schedule but not plan sees them, and a click explains that planning needs permission instead of changing anything. Switched-off buttons elsewhere can look like ordinary ones.
 - **Only Administrator is held everywhere;** every role you create is held at a site.
 - **The site picker** on a screen lists every site where you can see something, not only the sites where you can see that screen; choosing one where you can't gives a "may not see this at this site" message.
@@ -2046,8 +2092,8 @@ Only an **available** lot with stock can be consumed. Release a held lot first; 
 **"Choose an adjustment reason" with an empty list.**
 No reasons are set up: ask your administrator to load `db/seed-reasons.sql`.
 
-**"Only … latest movement can be reversed".**
-Someone recorded another movement on the lot since you opened it. Reload the lot: **Reverse** shows on the row that can be undone.
+**"Only the latest movement … can be reversed when it is a …".**
+A move, hold or shipment is reversed only while it is the lot's latest movement. Reverse the later movements first, newest first, or record a new movement instead.
 
 **I can't post a count.**
 Every lot must have a count (enter 0 if it isn't there), the counts must be saved, and a lot marked *changed since counted* must be counted again.
@@ -2101,7 +2147,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Projection** | Pulaski's calculation of when each job will run, redone on every read. |
 | **Rate check** | A run can't hold more than its length × the line's ideal rate × the site's tolerance. |
 | **Ready** | A job that can start: its order is on the floor and its process links are met. |
-| **Reverse** | Undo a lot's latest movement. |
+| **Reverse** | Undo a movement or declaration with a new movement that puts it back; the original stays in the history. |
 | **Permission** | One kind of change Pulaski lets people make, such as *Receive lots*. Roles hold permissions. |
 | **Role** | A set of permissions, such as Planner or Quality, that an administrator maintains and gives to users at a site (Administrator everywhere). See [Users, roles and signing in](#14-users-roles-and-signing-in). |
 | **Run** | One stretch of a job running on a line, from a start to a pause or completion. Production and consumption go into a run. |

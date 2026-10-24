@@ -3,8 +3,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Execution;
 using Pulaski.Application.Inventory;
 using Pulaski.Contracts.Common;
+using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Domain;
 using Pulaski.Domain.Inventory;
@@ -209,7 +211,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal((100m, LotStatus.Available), (reversed.Quantity, reversed.Status));
         var after = await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId));
         Assert.Equal((LotEventKind.Reversed, detail.History[0].Id), (after.History[0].Kind, after.History[0].ReversesEventId));
-        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new ReverseMovementCommand(lot.LotId, reversed.Version, after.History[0].Id, count)));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new ReverseMovementCommand(lot.LotId, reversed.Version, after.History[0].Id, count, "Again")));
     }
 
     [Fact]
@@ -514,6 +516,98 @@ public sealed class InventoryTests(DatabaseFixture db)
     /// fixture's unit) made from it by a released BOM and a draft one, end caps that aren't
     /// lot-tracked, and a planned job for the profile with resin as its component.
     /// </summary>
+    [Fact]
+    public async Task Declarations_are_reversed_with_compensating_movements_and_a_report_takes_back_its_lots_and_counts()
+    {
+        var plant = await CreatePlantAsync();
+        var count = await ReasonAsync("inventory_adjustment", "COUNT");
+        var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "RV-A-" + _suffix, 100m, plant.Kg));
+        var consumed = await db.SendAsync(new ConsumeLotCommand(a.LotId, plant.Job, 30m, plant.Kg));
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 200m, 0m, plant.Metre, null, plant.Staging, Comment: "First reel"));
+        var made = report.Lots.Single();
+
+        // Reversing the consumption gives the stock back and takes A out of what the job made from it.
+        var history = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(a.LotId))).History;
+        var consumption = history.Single(h => h.Kind == LotEventKind.Consumed);
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new ReverseMovementCommand(a.LotId, consumed.Version, consumption.Id, count)));
+        var restored = await db.SendAsync(new ReverseMovementCommand(a.LotId, consumed.Version, consumption.Id, count, "Wrong lot scanned"));
+        Assert.Equal(100m, restored.Quantity);
+        var backward = await QueryAsync<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>(new TraceLotQuery(made.LotId, Forward: false));
+        Assert.DoesNotContain(backward, n => n.LotId == a.LotId);
+        var materials = await QueryAsync<GetJobMaterialsQuery, JobMaterialsDto>(new GetJobMaterialsQuery(plant.Job));
+        Assert.All(materials.Components, c => Assert.Equal(0m, c.ConsumedQty));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new ReverseMovementCommand(a.LotId, restored.Version, consumption.Id, count, "Again")));
+
+        // The produced lot is reversed with its report, not on its own.
+        var produced = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(made.LotId))).History.Single(h => h.Kind == LotEventKind.Produced);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new ReverseMovementCommand(made.LotId, made.Version, produced.Id, count, "x")));
+
+        // While part of the reel has been used, the report can't take it back; once that is reversed, it can.
+        var split = await db.SendAsync(new SplitLotCommand(made.LotId, made.Version, 50m, plant.Metre));
+        var refused = await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(
+            new ReverseProductionReportCommand(plant.Job, report.ReportId, count, "Reported on the wrong job")));
+        Assert.Contains("split", refused.Message, StringComparison.Ordinal);
+        var splitRow = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(split.LotId))).History.Single(h => h.Kind == LotEventKind.Split);
+        await db.SendAsync(new ReverseMovementCommand(split.LotId, split.Version, splitRow.Id, count, "Split by mistake"));
+        Assert.Equal(LotStatus.Cancelled, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(split.LotId))).Lot.Status);
+
+        var reversed = await db.SendAsync(new ReverseProductionReportCommand(plant.Job, report.ReportId, count, "Reported on the wrong job"));
+        Assert.Equal((0m, LotStatus.Cancelled), (reversed.Lots.Single().Quantity, reversed.Lots.Single().Status));
+        var job = await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(plant.Job));
+        Assert.Equal(0m, job.Runs.Sum(r => r.GoodQty));
+        var listed = Assert.Single(job.Reports);
+        Assert.True(listed.IsReversed);
+        Assert.Equal(report.ReportId, listed.ReportId);
+        Assert.Equal(0m, (await QueryAsync<GetJobMaterialsQuery, JobMaterialsDto>(new GetJobMaterialsQuery(plant.Job))).ProducedQty);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new ReverseProductionReportCommand(plant.Job, report.ReportId, count, "Again")));
+
+        // An earlier write-up, not the latest movement, is reversed when the stock from then on allows it.
+        var up = await db.SendAsync(new WriteUpLotCommand(a.LotId, restored.Version, 5m, plant.Kg, count));
+        var moved = await db.SendAsync(new MoveLotCommand(a.LotId, up.Version, plant.Staging));
+        var writeUp = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(a.LotId))).History.Single(h => h.Kind == LotEventKind.Adjusted);
+        var undone = await db.SendAsync(new ReverseMovementCommand(a.LotId, moved.Version, writeUp.Id, count, "Counted twice"));
+        Assert.Equal(100m, undone.Quantity);
+    }
+
+    [Fact]
+    public async Task Merges_transfers_and_output_that_joined_a_silo_are_put_back_as_they_were()
+    {
+        var plant = await CreatePlantAsync();
+        var count = await ReasonAsync("inventory_adjustment", "COUNT");
+
+        // A merge comes apart: the source is back in its status with its quantity, the target down by it, the merge link ended.
+        var target = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "RV-T-" + _suffix, 40m, plant.Kg));
+        var source = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "RV-S-" + _suffix, 10m, plant.Kg));
+        var merged = await db.SendAsync(new MergeLotsCommand(target.LotId, target.Version, [source.LotId]));
+        var mergeRow = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(target.LotId))).History.First(h => h.Kind == LotEventKind.Merged);
+        var unmerged = await db.SendAsync(new ReverseMovementCommand(target.LotId, merged.Version, mergeRow.Id, count, "Different supplier lots"));
+        Assert.Equal(40m, unmerged.Quantity);
+        var back = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(source.LotId))).Lot;
+        Assert.Equal((10m, LotStatus.Available), (back.Quantity, back.Status));
+        Assert.DoesNotContain(
+            await QueryAsync<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>(new TraceLotQuery(source.LotId, Forward: true)), n => n.LotId == target.LotId);
+
+        // A transfer between two silos' balances goes back.
+        CreatedResponse siloA = await db.SendAsync(new CreateEquipmentCommand(
+            plant.Site, "SILO-RA-" + _suffix, "Silo A", null, "work_center", "storage_zone", false, false, true, null, ComminglesLots: true));
+        CreatedResponse siloB = await db.SendAsync(new CreateEquipmentCommand(
+            plant.Site, "SILO-RB-" + _suffix, "Silo B", null, "work_center", "storage_zone", false, false, true, null, ComminglesLots: true));
+        var inA = await db.SendAsync(new ReceiveLotCommand(plant.Resin, siloA.Id, null, 500m, plant.Kg));
+        var sent = await db.SendAsync(new MoveLotCommand(inA.LotId, inA.Version, siloB.Id, 120m, plant.Kg));
+        var outRow = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(inA.LotId))).History.First(h => h.Kind == LotEventKind.Moved);
+        var returned = await db.SendAsync(new ReverseMovementCommand(inA.LotId, sent.Version, outRow.Id, count, "Wrong silo"));
+        Assert.Equal(500m, returned.Quantity);
+        Assert.Equal(0m, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(outRow.RelatedLotId!.Value))).Lot.Quantity);
+
+        // Output reported into a silo joined its balance; reversing the report takes it out of the balance again.
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 300m, 0m, plant.Metre, null, siloB.Id, "RV-OUT-" + _suffix));
+        var balance = report.Lot!;
+        var reversed = await db.SendAsync(new ReverseProductionReportCommand(plant.Job, report.ReportId, count, "Wrong job"));
+        Assert.Equal(LotStatus.Cancelled, Assert.Single(reversed.Lots).Status);
+        var silo = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(balance.LotId))).Lot;
+        Assert.Equal(balance.Quantity - 300m, silo.Quantity);
+    }
+
     private async Task<Plant> CreatePlantAsync()
     {
         CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(

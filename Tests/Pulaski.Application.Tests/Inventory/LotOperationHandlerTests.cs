@@ -108,10 +108,10 @@ public class LotOperationHandlerTests
     }
 
     [Fact]
-    public async Task Only_the_latest_movement_is_reversed_and_a_reversed_receipt_cancels_the_lot()
+    public async Task A_reversed_receipt_cancels_the_lot_and_a_movement_is_reversed_only_once()
     {
         var lot = await Receive("R-1", 10m);
-        var reverse = new ReverseMovementHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events, _f.Ids);
+        var reverse = new ReverseMovementHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
         var receipt = Inventory.Events[^1];
 
         var undone = await reverse.HandleAsync(new ReverseMovementCommand(lot.LotId, lot.Version, receipt.Id, _count.Id, "Wrong material"), CancellationToken.None);
@@ -120,9 +120,13 @@ public class LotOperationHandlerTests
         var row = Inventory.Events[^1];
         Assert.Equal((LotEventKind.Reversed, receipt.Id, _count.Id), (row.Movement.Kind, row.ReversesEventId, row.ReasonCodeId));
         await Assert.ThrowsAsync<DomainRuleException>(() => reverse.HandleAsync(
-            new ReverseMovementCommand(lot.LotId, undone.Version, receipt.Id, _count.Id), CancellationToken.None));
+            new ReverseMovementCommand(lot.LotId, undone.Version, receipt.Id, _count.Id, "Again"), CancellationToken.None));
         await Assert.ThrowsAsync<DomainRuleException>(() => reverse.HandleAsync(
-            new ReverseMovementCommand(lot.LotId, undone.Version, row.Id, _count.Id), CancellationToken.None));
+            new ReverseMovementCommand(lot.LotId, undone.Version, row.Id, _count.Id, "Again"), CancellationToken.None));
+
+        // A reason and a comment are both required (D-063).
+        await Assert.ThrowsAsync<ValidationException>(() => reverse.HandleAsync(
+            new ReverseMovementCommand(lot.LotId, undone.Version, receipt.Id, _count.Id), CancellationToken.None));
     }
 
     [Fact]

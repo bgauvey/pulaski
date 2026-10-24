@@ -266,9 +266,7 @@
                                 <dt>When</dt>
                                 <dd>@Display.SiteTime(undo.OccurredAt, Sites.Site?.TimeZone)</dd>
                             </dl>
-                            <p class="small text-muted">
-                                The lot goes back to how it was before it@(undo.Kind == "received" && Lot!.Quantity == undo.QtyDelta && !Lot.IsBulk ? ": empty, so it is cancelled" : "").
-                            </p>
+                            <p class="small text-muted">@InventoryView.ReversalNote(undo, Lot!)</p>
                         }
                         @ReasonField()
                         break;
@@ -287,7 +285,7 @@
                 }
 
                 <div class="mb-3">
-                    <label class="form-label" for="lot-comment">Comment@(SelectedReason?.RequiresComment == true || _effective is not null ? " (required)" : "")</label>
+                    <label class="form-label" for="lot-comment">Comment@(SelectedReason?.RequiresComment == true || _effective is not null || Action == LotAction.Reverse ? " (required)" : "")</label>
                     <textarea id="lot-comment" class="form-control" rows="2" maxlength="1000" @bind="_comment"></textarea>
                 </div>
 
@@ -421,7 +419,7 @@
         LotAction.Merge => _mergeIds.Count > 0,
         LotAction.Ship => !string.IsNullOrWhiteSpace(_reference),
         LotAction.Correct => (Lot?.IsBulk == true || !string.IsNullOrWhiteSpace(_lotNumber)) && !string.IsNullOrWhiteSpace(_comment),
-        LotAction.Reverse => Movement is not null && _reasonId != Guid.Empty,
+        LotAction.Reverse => Movement is not null && _reasonId != Guid.Empty && !string.IsNullOrWhiteSpace(_comment),
         _ => true,
     };
 
