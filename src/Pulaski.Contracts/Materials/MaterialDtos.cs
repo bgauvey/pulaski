@@ -193,10 +193,13 @@ public sealed record ImportRowResultDto
 
     /// <summary>Why the row can't be imported, for an error.</summary>
     public string? Message { get; init; }
+
+    /// <summary>What else it did, such as setting a line's planning rate from a capability's ideal rate.</summary>
+    public IReadOnlyList<string> Notes { get; init; } = [];
 }
 
 /// <summary>
-/// A bulk import's outcome (D-034). It is all or nothing: <see cref="Applied"/> is true only when every
+/// A bulk import's outcome (D-034), of materials or of capabilities (D-055). It is all or nothing: <see cref="Applied"/> is true only when every
 /// row was valid and it wasn't a check run; otherwise nothing was saved.
 /// </summary>
 public sealed record ImportMaterialsResponse
@@ -209,6 +212,9 @@ public sealed record ImportMaterialsResponse
 
     /// <summary>Problems with the file as a whole, such as a missing or unknown column.</summary>
     public IReadOnlyList<string> FileProblems { get; init; } = [];
+
+    /// <summary>The codes of the classes the import created, or would create, because the file named them and they were missing (D-055).</summary>
+    public IReadOnlyList<string> CreatedClasses { get; init; } = [];
     public IReadOnlyList<ImportRowResultDto> Rows { get; init; } = [];
 }
 
@@ -225,12 +231,16 @@ public sealed record MaterialSourceDto
 
     /// <summary>Whether the import names the external system the file's items belong to (<c>?externalSystem=</c>).</summary>
     public bool TakesExternalSystem { get; init; }
+
+    /// <summary>A file to start from, in the accepted format (D-055); also at <c>GET /api/materials/import/{Name}/template</c>.</summary>
+    public string Template { get; init; } = "";
+    public string TemplateFileName { get; init; } = "";
 }
 
 /// <summary>The materials CSV file (D-034): its header line with every column, for a template.</summary>
 public static class MaterialCsvFormat
 {
-    public const string Header = "code,name,type,base_unit,class,description,lot_tracked,shelf_life_days,active,external_system,external_key,external_version";
+    public const string Header = "code,name,type,base_unit,class,class_name,description,lot_tracked,shelf_life_days,active,external_system,external_key,external_version";
 }
 
 /// <summary>A material's batch settings (D-036); a blank size makes it continuous again. The rule defaults from the type.</summary>
@@ -242,4 +252,10 @@ public sealed record SetBatchingRequest
 
     /// <summary><c>exact</c> or <c>near</c>; left out, it keeps the current rule or defaults from the material's type.</summary>
     public string? Rule { get; init; }
+}
+
+/// <summary>The capabilities CSV file (D-055): its header line with every column, for a template.</summary>
+public static class CapabilityCsvFormat
+{
+    public const string Header = "material,site,line,ideal_rate,rate_unit,changeover_minutes,crew_size,preferred,active";
 }

@@ -69,13 +69,24 @@ internal static class MaterialEndpoints
             TypedResults.Ok(await handler.HandleAsync(new ListMaterialSourcesQuery(), ct)))
         .RequireAny(null, Permissions.MaterialsView);
 
+        // A file to start from, in the source's format (D-055).
+        materials.MapGet("/import/{source}/template", (string source, IEnumerable<IMaterialSourceAdapter> adapters) =>
+        {
+            var adapter = adapters.FirstOrDefault(a => string.Equals(a.Name, source, StringComparison.OrdinalIgnoreCase))
+                ?? throw new NotFoundException($"No material source '{source}'.");
+            return TypedResults.File(System.Text.Encoding.UTF8.GetBytes(adapter.Template), adapter.FileTypes.First(t => t.Contains('/', StringComparison.Ordinal)), adapter.TemplateFileName);
+        })
+        .RequireAny(null, Permissions.MaterialsView);
+
         // Many materials from a file read by a source adapter (csv, b2mml), all or nothing; ?dryRun=true checks them and saves
-        // nothing (D-034, D-053). ?externalSystem= names the system the items belong to, for a format that doesn't say.
+        // nothing (D-034, D-053). ?externalSystem= names the system the items belong to, for a format that doesn't say;
+        // ?createClasses=true creates the classes it names that don't exist yet (D-055).
         materials.MapPost("/import/{source}", async Task<Ok<ImportMaterialsResponse>> (
             string source,
             HttpRequest http,
             bool? dryRun,
             string? externalSystem,
+            bool? createClasses,
             ICommandHandler<ImportMaterialFileCommand, ImportMaterialsResponse> handler,
             CancellationToken ct) =>
         {
@@ -89,7 +100,7 @@ internal static class MaterialEndpoints
                 });
             }
 
-            return TypedResults.Ok(await handler.HandleAsync(new ImportMaterialFileCommand(source, text, externalSystem, dryRun ?? false), ct));
+            return TypedResults.Ok(await handler.HandleAsync(new ImportMaterialFileCommand(source, text, externalSystem, dryRun ?? false, createClasses ?? false), ct));
         })
         .RequirePermission(Permissions.Materials)
         .Accepts<string>("text/csv", "text/plain", "application/xml", "text/xml");
@@ -118,6 +129,35 @@ internal static class MaterialEndpoints
         .RequirePermission(Permissions.Processes, Site.FromBody<AddCapabilityRequest>(SiteOf.Equipment, r => r.EquipmentId));
 
         var capabilities = routes.MapGroup("/capabilities").WithTags("Materials");
+
+        // A capabilities CSV file to start from (D-055).
+        capabilities.MapGet("/import/template", () =>
+            TypedResults.File(System.Text.Encoding.UTF8.GetBytes(CapabilityCsv.Template + "\r\n"), "text/csv", "capabilities.csv"))
+        .RequireAny(null, Permissions.MaterialsView);
+
+        // Capabilities in bulk from a CSV file, all or nothing; ?dryRun=true checks them and saves nothing (D-055). Each row's line
+        // must be at a site where the caller may maintain processes, as for a single capability.
+        capabilities.MapPost("/import/csv", async Task<Ok<ImportMaterialsResponse>> (
+            HttpContext http,
+            bool? dryRun,
+            ICommandHandler<ImportCapabilitiesCommand, ImportMaterialsResponse> handler,
+            CancellationToken ct) =>
+        {
+            using var reader = new StreamReader(http.Request.Body);
+            var text = http.Request.ContentLength > MaxFileBytes ? null : await reader.ReadToEndAsync(ct);
+            if (text is null || text.Length > MaxFileBytes)
+            {
+                throw new ValidationException(new Dictionary<string, string[]>
+                {
+                    ["file"] = [$"The file is larger than {MaxFileBytes / 1024 / 1024} MB; split it."],
+                });
+            }
+
+            var sites = await Visible.SitesAsync(http, Permissions.Processes);
+            return TypedResults.Ok(await handler.HandleAsync(new ImportCapabilitiesCommand(CapabilityCsv.Parse(text), dryRun ?? false, "CSV import", sites), ct));
+        })
+        .RequirePermission(Permissions.Processes)
+        .Accepts<string>("text/csv", "text/plain");
 
         capabilities.MapPut("/{id:guid}", async Task<Ok<CapabilityResponse>> (
             Guid id,

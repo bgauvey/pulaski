@@ -10,6 +10,7 @@ public sealed class InMemoryCapabilities : ICapabilityRepository
 {
     private readonly Lock _lock = new();
     private readonly Dictionary<Guid, CapabilityLine> _lines = [];
+    private readonly Dictionary<Guid, (Guid? SiteId, string? SiteCode)> _sites = [];
     private readonly Dictionary<Guid, Versioned<Capability>> _capabilities = [];
     private readonly Dictionary<(Guid, Guid), Versioned<RunStandard>> _standards = [];
     private long _next = 1;
@@ -17,12 +18,13 @@ public sealed class InMemoryCapabilities : ICapabilityRepository
     /// <summary>How many open jobs a test says each line has for each material.</summary>
     public Dictionary<(Guid Line, Guid Material), int> OpenJobs { get; } = [];
 
-    public CapabilityLine AddLine(string code, bool canRunJob = true, bool isActive = true)
+    public CapabilityLine AddLine(string code, bool canRunJob = true, bool isActive = true, Guid? siteId = null, string? siteCode = null)
     {
         var line = new CapabilityLine(Guid.CreateVersion7(), code, canRunJob, isActive);
         lock (_lock)
         {
             _lines[line.Id] = line;
+            _sites[line.Id] = (siteId, siteCode);
         }
 
         return line;
@@ -49,6 +51,25 @@ public sealed class InMemoryCapabilities : ICapabilityRepository
         lock (_lock)
         {
             return Task.FromResult(_lines.GetValueOrDefault(equipmentId));
+        }
+    }
+
+    /// <summary>The capabilities on a line for a material, oldest first.</summary>
+    public IReadOnlyList<Capability> On(Guid lineId, Guid materialId)
+    {
+        lock (_lock)
+        {
+            return [.. _capabilities.Values.Select(c => c.Value).Where(c => c.EquipmentId == lineId && c.MaterialId == materialId).OrderBy(c => c.EffectiveFrom)];
+        }
+    }
+
+    public Task<IReadOnlyList<SiteLine>> LockLinesByCodeAsync(IReadOnlyCollection<string> codes, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<SiteLine>>([.. _lines.Values
+                .Where(l => codes.Contains(l.Code.ToLowerInvariant()))
+                .Select(l => new SiteLine(l, _sites[l.Id].SiteId, _sites[l.Id].SiteCode))]);
         }
     }
 

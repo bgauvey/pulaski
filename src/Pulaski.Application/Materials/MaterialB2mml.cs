@@ -31,6 +31,26 @@ public static class MaterialB2mml
     // From the definition's own elements or the import, never from a property.
     private static readonly string[] NotFromProperties = ["code", "name", "external_system", "external_key"];
 
+    /// <summary>A document with one material and every property it reads, to start from (D-055).</summary>
+    public const string Template = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <MaterialInformation xmlns="http://www.mesa.org/xml/B2MML">
+          <MaterialDefinition>
+            <ID>PP-1</ID>
+            <Description>Polypropylene, natural</Description>
+            <MaterialClassID>RESIN</MaterialClassID>
+            <MaterialDefinitionProperty><ID>MaterialType</ID><Value><ValueString>raw</ValueString></Value></MaterialDefinitionProperty>
+            <MaterialDefinitionProperty><ID>BaseUnit</ID><Value><ValueString>kg</ValueString></Value></MaterialDefinitionProperty>
+            <MaterialDefinitionProperty><ID>LotTracked</ID><Value><ValueString>yes</ValueString></Value></MaterialDefinitionProperty>
+            <MaterialDefinitionProperty><ID>ShelfLifeDays</ID><Value><ValueString>365</ValueString></Value></MaterialDefinitionProperty>
+            <MaterialDefinitionProperty><ID>Active</ID><Value><ValueString>yes</ValueString></Value></MaterialDefinitionProperty>
+            <MaterialDefinitionProperty><ID>Description</ID><Value><ValueString>Notes about the material</ValueString></Value></MaterialDefinitionProperty>
+            <MaterialDefinitionProperty><ID>ClassName</ID><Value><ValueString>Resins</ValueString></Value></MaterialDefinitionProperty>
+          </MaterialDefinition>
+        </MaterialInformation>
+
+        """;
+
     public static MaterialImportSource Parse(string text, string? externalSystem)
     {
         if (string.IsNullOrWhiteSpace(text))

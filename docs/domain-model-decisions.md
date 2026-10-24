@@ -62,6 +62,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-052 | Utilization and OEE reports: worked out on read from state changes, stops, runs and production reports, between production days (at most 31), by equipment, shift and product with a breakdown of time by use and reason. Time is classified by unit mode, then by the stop's reason class, else by Execute; lines take their time from their machines like their state. Performance and quality weigh output by the ideal rate; machine counts aren't used. Nothing is stored yet | Proposed | 2026-10-19 |
 | D-053 | Material source adapters: an adapter only turns a file in its format into source-neutral import rows; the bulk import applies the same rules to rows from any source, all or nothing. Adapters are registered services named in the URL (`POST /api/materials/import/{source}`). CSV and ISA-95 B2MML material information (`MaterialDefinition`) ship first; the external system a B2MML file's items belong to is named on import, and its `ID` is their key. Label printing and pushed ERP feeds stay later | Proposed | 2026-10-23 |
 | D-054 | People from HR and ERP sources: an imported person keeps its source system and key (unique together) and is matched on them by every import, so importing again never duplicates anyone; the first import links a hand-kept person with the same employee number. The source owns employee number, name and active; Pulaski owns crew, sign-in, badges and qualifications. Imports are files, all or nothing, through people source adapters (CSV, SCIM 2.0 users); every change is the usual person event with the source as its reason | Proposed | 2026-10-23 |
+| D-055 | Completing the materials import: capabilities load from their own CSV file (one row per material and line), changing the capability in effect now in place, adding one from now, or ending it, with the run standard following as on the material page; all lines are locked by code in id order first, and each line must be at a site where the caller may maintain processes. A missing class is created only when the import asks (`createClasses`), named from `class_name`. Every import format has a template to download | Proposed | 2026-10-23 |
 
 ## Order hierarchy
 
@@ -563,7 +564,7 @@ The material page also sets and clears the modified rate, through the existing r
 - **Matching.** A row with `external_system` and `external_key` is the ERP's item, matched on them as in the single import (D-033); its Pulaski-owned columns are applied too, because the person loading the file is a Pulaski user. A row without them is a Pulaski material matched on its code; a code that belongs to an ERP material is an error.
 - **All or nothing.** Every row goes through the same rules as a single change, in one transaction, so later rows see earlier ones. Any error, or a dry run, rolls the whole file back; the answer lists each row as *create*, *update* (with the fields that change), *unchanged* or *error* (with why). A code or key twice in a file is an error. Each saved row records its usual event, with the reason `CSV import`.
 - **The adapter seam.** `MaterialCsv` only turns text into `MaterialImportRow`s (source-neutral; a field the source didn't supply is null). `ImportMaterialsCommand` applies the rules to rows from any source. The adapter interface is D-053.
-- **Not yet:** capabilities in the file, creating missing classes, and exporting a template file (the screen shows the header line).
+- **Since D-055:** capabilities have their own CSV file, missing classes can be created, and every format has a template to download.
 
 ## Job execution and production reporting (D-035, proposed)
 
@@ -1052,6 +1053,46 @@ Issue #19. Until now people were kept by hand on Configure → People (D-040); `
 **API and screen.** `GET /api/people/import/sources` (any view) lists the adapters. `POST /api/people/import/{source}?siteId=&dryRun=&externalSystem=` (`people.manage` at the site, at most 5 MB and 5,000 rows) runs an import. Configure → People has **Import file** (`PeopleFileImport`). Imported people show their system as a chip, and their name and active box are read-only. Migration `0023_person_import`.
 
 **Not yet.** A live SCIM endpoint (`/scim/v2/Users`) that HR or an identity provider pushes to; fetching from a source on a timer; switching off people a full file leaves out; moving a person between sites; qualifications from HR.
+
+## Completing the materials import (D-055, proposed)
+
+Issue #20: the CSV import (D-034) couldn't take capabilities, create classes, or offer a template.
+
+**Capabilities file.** `CapabilityCsv` reads one row per material and line.
+
+- Columns: `material`, `line`, `ideal_rate`, `rate_unit` (required columns), `site`, `changeover_minutes`, `crew_size`, `preferred` and `active`, with aliases.
+- Numbers take a decimal point only, so `1,5` is an error, not 15.
+- It is a separate file because a material has one capability per line. Repeating a material's row would make its own columns disagree.
+
+`ImportCapabilitiesCommand` handles a row like this:
+
+| Row | Effect |
+| --- | --- |
+| A capability for the pair is in effect now | `Edit` in place, keeping its period; unchanged values record nothing. A changed rate or unit follows the run standard (`CapabilityWrites.FollowIdealRateAsync`). |
+| None in effect | `Capability.Create` from now, open-ended; the overlap check still applies to future periods. |
+| `active = no` | `End(now)` the one in effect; none → unchanged with a note. |
+
+- Columns left out keep the capability's values, and blank changeover or crew clears them.
+- Periods are never set by the file; future and past periods stay on the material page.
+- All or nothing with a dry run, like D-034. Events are `capability.added` / `changed` / `ended` with the reason. Notes (planning rate, open jobs left) come back on each row (`ImportRowResultDto.Notes`).
+
+**Locking and access.** Equipment codes are unique only within a site, so the handler first locks every line the file names with `LockLinesByCodeAsync`: lower-case codes, `ORDER BY id FOR UPDATE OF e`. Materials are locked after that (D-017). A row's line is its code at the row's `site`, else at the only site that has it. An ambiguous code is an error asking for the site. The endpoint `POST /api/capabilities/import/csv` needs `processes.manage` somewhere, as a single capability does at its line. It passes the caller's sites (`Visible.SitesAsync`), and a line at any other site is an error on its row.
+
+**Classes.** `ImportMaterialsCommand(…, CreateClasses)` and `?createClasses=true`. Off, an unknown class is an error that says how to fix it. On, it is created once per import:
+
+- code upper case, name from the row's `class_name` (else the code), active
+- recorded with `material_class.created` and the import's reason
+- listed in `ImportMaterialsResponse.CreatedClasses`, also on a dry run
+
+It stays opt-in so a misspelt class can't create a new one unnoticed. An inactive class is never switched back on.
+
+**Templates.** Each `IMaterialSourceAdapter` has a `Template` and a `TemplateFileName`:
+
+- CSV gives its header line. B2MML gives a sample document with every property it reads, and it imports cleanly (tested).
+- `GET /api/materials/import/{source}/template` and `GET /api/capabilities/import/template` download them. The sources list carries them too, so the panel's **Download a template** link needs no extra call.
+- The contract constants `MaterialCsvFormat.Header` and `CapabilityCsvFormat.Header` are tested against the parsers, so a template always matches what is accepted.
+
+**Not yet.** Capability periods in the file; run standards (modified rates) in the file; capabilities from B2MML.
 
 ## Application architecture
 

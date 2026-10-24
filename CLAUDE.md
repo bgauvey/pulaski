@@ -99,6 +99,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   rate recalculates it while its basis is `ideal_rate` (`RunStandard.FollowIdealRate`). CSV import is all or nothing
   (`?dryRun=true` checks); `MaterialCsv` yields source-neutral `MaterialImportRow`s for `ImportMaterialsCommand`, the
   seam future adapters plug into.
+- Import completion (D-055, proposed): capabilities come from their own CSV (`CapabilityCsv` → `ImportCapabilitiesCommand`): the
+  capability in effect now is edited, else added from now, `active = no` ends it; lines locked by code first (`LockLinesByCodeAsync`,
+  id order), rows limited to the caller's process sites. `createClasses` opts in to creating missing classes (`class_name`). Every
+  adapter has a `Template`; header constants are tested against the parsers.
 - Material sources (D-053, proposed): an `IMaterialSourceAdapter` (registered in `AddApplication`) only turns a file into
   `MaterialImportRow`s, through `MaterialImportFields.ToRow`; `ImportMaterialFileCommand` hands them to `ImportMaterialsCommand`.
   `POST /materials/import/{source}` (`csv`, `b2mml`; `?externalSystem=` for B2MML, whose `ID` is then the key). Adapters never

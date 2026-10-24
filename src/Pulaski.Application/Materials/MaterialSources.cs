@@ -25,6 +25,11 @@ public interface IMaterialSourceAdapter
     /// <summary>Whether the import names the external system the items belong to, because the file doesn't.</summary>
     bool TakesExternalSystem { get; }
 
+    /// <summary>A file to start from, in the accepted format (D-055).</summary>
+    string Template { get; }
+
+    string TemplateFileName { get; }
+
     /// <summary>The rows in <paramref name="text"/>; problems are reported in the result, never thrown.</summary>
     MaterialImportSource Read(string text, string? externalSystem);
 }
@@ -42,6 +47,10 @@ internal sealed class CsvMaterialSource : IMaterialSourceAdapter
 
     public bool TakesExternalSystem => false;
 
+    public string Template => MaterialCsv.Template + "\r\n";
+
+    public string TemplateFileName => "materials.csv";
+
     public MaterialImportSource Read(string text, string? externalSystem) => MaterialCsv.Parse(text);
 }
 
@@ -58,6 +67,10 @@ internal sealed class B2mmlMaterialSource : IMaterialSourceAdapter
 
     public bool TakesExternalSystem => true;
 
+    public string Template => MaterialB2mml.Template;
+
+    public string TemplateFileName => "materials.xml";
+
     public MaterialImportSource Read(string text, string? externalSystem) => MaterialB2mml.Parse(text, externalSystem);
 }
 
@@ -71,7 +84,8 @@ public sealed record ListMaterialSourcesQuery : IQuery<IReadOnlyList<MaterialSou
 /// <param name="Text">The file's contents.</param>
 /// <param name="ExternalSystem">The system the file's items belong to, for an adapter that <see cref="IMaterialSourceAdapter.TakesExternalSystem"/>.</param>
 /// <param name="DryRun">True to check the file and report what would happen, saving nothing.</param>
-public sealed record ImportMaterialFileCommand(string Source, string Text, string? ExternalSystem, bool DryRun) : ICommand<ImportMaterialsResponse>;
+/// <param name="CreateClasses">True to create classes the file names that don't exist yet (D-055).</param>
+public sealed record ImportMaterialFileCommand(string Source, string Text, string? ExternalSystem, bool DryRun, bool CreateClasses = false) : ICommand<ImportMaterialsResponse>;
 
 internal sealed class ListMaterialSourcesHandler(IEnumerable<IMaterialSourceAdapter> adapters)
     : IQueryHandler<ListMaterialSourcesQuery, IReadOnlyList<MaterialSourceDto>>
@@ -84,6 +98,8 @@ internal sealed class ListMaterialSourcesHandler(IEnumerable<IMaterialSourceAdap
             Description = a.Description,
             FileTypes = a.FileTypes,
             TakesExternalSystem = a.TakesExternalSystem,
+            Template = a.Template,
+            TemplateFileName = a.TemplateFileName,
         })]);
 }
 
@@ -101,6 +117,6 @@ internal sealed class ImportMaterialFileHandler(
             .Require(system is null || system.Length <= 100, "externalSystem", "At most 100 characters.")
             .ThrowIfInvalid();
 
-        return import.HandleAsync(new ImportMaterialsCommand(adapter.Read(command.Text, system), command.DryRun, $"{adapter.DisplayName} import"), cancellationToken);
+        return import.HandleAsync(new ImportMaterialsCommand(adapter.Read(command.Text, system), command.DryRun, $"{adapter.DisplayName} import", command.CreateClasses), cancellationToken);
     }
 }

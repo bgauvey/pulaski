@@ -68,11 +68,20 @@ public interface IMaterialAdminRepository
 /// <summary>A line as a capability change sees it, locked <c>FOR UPDATE</c> like every scheduling write (D-017).</summary>
 public sealed record CapabilityLine(Guid Id, string Code, bool CanRunJob, bool IsActive);
 
+/// <summary>A line an import names by code, with its site (equipment codes are unique only within a site).</summary>
+public sealed record SiteLine(CapabilityLine Line, Guid? SiteId, string? SiteCode);
+
 /// <summary>Write side for capabilities and the run standards they seed (D-020, D-034); runs inside the current <see cref="IUnitOfWork"/>.</summary>
 public interface ICapabilityRepository
 {
     /// <summary>The line, locked <c>FOR UPDATE</c>; null when it doesn't exist.</summary>
     Task<CapabilityLine?> LockLineAsync(Guid equipmentId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The equipment with these codes (compared in lower case) at every site, locked <c>FOR UPDATE</c> in id order in SQL, so a
+    /// capability import takes its lines before any material, as every scheduling write does (D-017, D-055).
+    /// </summary>
+    Task<IReadOnlyList<SiteLine>> LockLinesByCodeAsync(IReadOnlyCollection<string> codes, CancellationToken cancellationToken);
 
     /// <summary>The capability's line, without locking; null when the capability doesn't exist.</summary>
     Task<Guid?> GetLineOfAsync(Guid capabilityId, CancellationToken cancellationToken);

@@ -82,4 +82,38 @@ public sealed class CapabilityAndImportTests(DatabaseFixture db)
             "SELECT count(*)::int FROM evt.event WHERE type = 'pulaski.material.created.v1' AND reason = 'CSV import' AND data->'after'->>'code' LIKE @P",
             new { P = "CSV_-" + _s }));
     }
+
+    [Fact]
+    public async Task Capabilities_and_new_classes_import_all_or_nothing_with_the_lines_locked_by_code()
+    {
+        var (line, _) = await PlantAsync();
+        var unit = await ScalarAsync<string>("SELECT code FROM core.uom WHERE id = @Id", new { Id = db.UomId });
+        var materials = $"code,name,type,base_unit,class,class_name\nCI-{_s},Profile,finished,{unit},CL-{_s},Profiles\n";
+
+        var check = await db.SendAsync(new ImportMaterialsCommand(MaterialCsv.Parse(materials), DryRun: true, "CSV import", CreateClasses: true));
+        Assert.Equal([$"CL-{_s}"], check.CreatedClasses);
+        Assert.Equal(0, await ScalarAsync<int>("SELECT count(*)::int FROM core.material_class WHERE code = @C", new { C = $"CL-{_s}" }));
+        var applied = await db.SendAsync(new ImportMaterialsCommand(MaterialCsv.Parse(materials), DryRun: false, "CSV import", CreateClasses: true));
+        Assert.True(applied.Applied);
+        Assert.Equal("Profiles", await ScalarAsync<string>("SELECT name FROM core.material_class WHERE code = @C", new { C = $"CL-{_s}" }));
+
+        var good = $"material,line,ideal_rate,rate_unit,crew_size\nCI-{_s},ln-{_s},480.5,{unit},2\n";
+        var bad = await db.SendAsync(new ImportCapabilitiesCommand(CapabilityCsv.Parse(good + $"CI-{_s},NOPE-{_s},1,{unit},\n"), false, "CSV import", null));
+        Assert.Equal((false, 1), (bad.Applied, bad.Errors));
+        Assert.Equal(0, await ScalarAsync<int>("SELECT count(*)::int FROM core.equipment_capability WHERE equipment_id = @Line", new { Line = line }));
+
+        var added = await db.SendAsync(new ImportCapabilitiesCommand(CapabilityCsv.Parse(good), false, "CSV import", null));
+        Assert.Equal((true, 1), (added.Applied, added.Created));
+        Assert.Equal(480.5m, await ScalarAsync<decimal>("SELECT calculated_rate_per_hour FROM core.run_standard WHERE equipment_id = @Line", new { Line = line }));
+
+        var changed = await db.SendAsync(new ImportCapabilitiesCommand(
+            CapabilityCsv.Parse($"material,line,ideal_rate,rate_unit\nCI-{_s},LN-{_s},500,{unit}\n"), false, "CSV import", null));
+        Assert.Equal(["ideal_rate"], Assert.Single(changed.Rows).Changes);
+        Assert.Equal((500m, 2m), (
+            await ScalarAsync<decimal>("SELECT ideal_rate_per_hour FROM core.equipment_capability WHERE equipment_id = @Line", new { Line = line }),
+            await ScalarAsync<decimal>("SELECT standard_crew_size FROM core.equipment_capability WHERE equipment_id = @Line", new { Line = line })));
+
+        var elsewhere = await db.SendAsync(new ImportCapabilitiesCommand(CapabilityCsv.Parse(good), true, "CSV import", [Guid.CreateVersion7()]));
+        Assert.Contains("can't change the capabilities", Assert.Single(elsewhere.Rows).Message, StringComparison.Ordinal);
+    }
 }

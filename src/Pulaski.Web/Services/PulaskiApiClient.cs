@@ -790,13 +790,25 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     /// all or nothing (D-034, D-053).
     /// </summary>
     public async Task<ImportMaterialsResponse> ImportMaterialsAsync(
-        string source, string text, string? externalSystem, bool dryRun, string mediaType, CancellationToken ct = default)
+        string source, string text, string? externalSystem, bool dryRun, string mediaType, bool createClasses = false, CancellationToken ct = default)
     {
         var query = $"dryRun={(dryRun ? "true" : "false")}"
-            + (string.IsNullOrWhiteSpace(externalSystem) ? "" : $"&externalSystem={Uri.EscapeDataString(externalSystem.Trim())}");
+            + (string.IsNullOrWhiteSpace(externalSystem) ? "" : $"&externalSystem={Uri.EscapeDataString(externalSystem.Trim())}")
+            + (createClasses ? "&createClasses=true" : "");
         var request = new HttpRequestMessage(HttpMethod.Post, $"api/materials/import/{Uri.EscapeDataString(source)}?{query}")
         {
             Content = new StringContent(text, System.Text.Encoding.UTF8, mediaType),
+        };
+        using var response = await SendCoreAsync(request, ct);
+        return await ReadAsync<ImportMaterialsResponse>(response, ct);
+    }
+
+    /// <summary>Checks (<paramref name="dryRun"/>) or imports a capabilities CSV file, all or nothing (D-055).</summary>
+    public async Task<ImportMaterialsResponse> ImportCapabilitiesCsvAsync(string csv, bool dryRun, CancellationToken ct = default)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/capabilities/import/csv?dryRun={(dryRun ? "true" : "false")}")
+        {
+            Content = new StringContent(csv, System.Text.Encoding.UTF8, "text/csv"),
         };
         using var response = await SendCoreAsync(request, ct);
         return await ReadAsync<ImportMaterialsResponse>(response, ct);

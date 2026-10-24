@@ -11,6 +11,15 @@ internal sealed class CapabilityRepository(DbSession session) : ICapabilityRepos
 {
     private const string LockLine = "SELECT id, code, can_run_job, is_active FROM core.equipment WHERE id = @Id FOR UPDATE";
 
+    private const string LockLinesByCode = """
+        SELECT e.id, e.code, e.can_run_job, e.is_active, e.site_id, s.code AS site_code
+        FROM core.equipment e
+        LEFT JOIN core.equipment s ON s.id = e.site_id
+        WHERE lower(e.code) = ANY(@Codes)
+        ORDER BY e.id
+        FOR UPDATE OF e
+        """;
+
     private const string LineOf = "SELECT equipment_id FROM core.equipment_capability WHERE id = @Id";
 
     private const string Columns = """
@@ -75,6 +84,10 @@ internal sealed class CapabilityRepository(DbSession session) : ICapabilityRepos
             ? new CapabilityLine(r.Id, r.Code, r.CanRunJob, r.IsActive)
             : null;
 
+    public async Task<IReadOnlyList<SiteLine>> LockLinesByCodeAsync(IReadOnlyCollection<string> codes, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<LineRow>(LockLinesByCode, new { Codes = codes.ToArray() }, cancellationToken))
+            .Select(r => new SiteLine(new CapabilityLine(r.Id, r.Code, r.CanRunJob, r.IsActive), r.SiteId, r.SiteCode))];
+
     public Task<Guid?> GetLineOfAsync(Guid capabilityId, CancellationToken cancellationToken) =>
         session.QuerySingleOrDefaultAsync<Guid?>(LineOf, new { Id = capabilityId }, cancellationToken);
 
@@ -126,6 +139,8 @@ internal sealed class CapabilityRepository(DbSession session) : ICapabilityRepos
         public string Code { get; init; } = "";
         public bool CanRunJob { get; init; }
         public bool IsActive { get; init; }
+        public Guid? SiteId { get; init; }
+        public string? SiteCode { get; init; }
     }
 
     private sealed class CapabilityRow
