@@ -85,6 +85,25 @@ public sealed class InMemoryLabor : ILaborRepository, ILaborReadStore, IQualific
         return id;
     }
 
+    public Guid AddCrew(Guid siteId, string code, bool isActive = true)
+    {
+        var id = Guid.CreateVersion7();
+        lock (_lock)
+        {
+            _crews[id] = new(new CrewRecord(id, siteId, code, code, isActive), ++_next);
+        }
+
+        return id;
+    }
+
+    public Versioned<PersonRecord> Person(Guid id)
+    {
+        lock (_lock)
+        {
+            return _people[id];
+        }
+    }
+
     public void AddUser(string username, Guid userId)
     {
         lock (_lock)
@@ -157,6 +176,15 @@ public sealed class InMemoryLabor : ILaborRepository, ILaborReadStore, IQualific
 
     public Task<bool> UserIsAnotherPersonAsync(Guid userId, Guid exceptPersonId, CancellationToken cancellationToken) =>
         Locked(() => _people.Values.Any(p => p.Value.AppUserId == userId && p.Value.Id != exceptPersonId));
+
+    public Task<Versioned<PersonRecord>?> FindPersonByExternalKeyForUpdateAsync(string externalSystem, string externalKey, CancellationToken cancellationToken) =>
+        Locked(() => _people.Values.FirstOrDefault(p => p.Value.ExternalSystem == externalSystem && p.Value.ExternalKey == externalKey));
+
+    public Task<Versioned<PersonRecord>?> FindPersonByNumberForUpdateAsync(Guid siteId, string employeeNumber, CancellationToken cancellationToken) =>
+        Locked(() => _people.Values.FirstOrDefault(p => p.Value.SiteId == siteId && p.Value.EmployeeNumber == employeeNumber));
+
+    public Task<CrewRecord?> FindCrewByCodeAsync(Guid siteId, string code, CancellationToken cancellationToken) =>
+        Locked(() => _crews.Values.Select(c => c.Value).FirstOrDefault(c => c.SiteId == siteId && c.Code == code));
 
     public Task<long> InsertPersonAsync(PersonRecord person, DateTimeOffset at, CancellationToken cancellationToken) => Locked(() => Save(_people, person.Id, person));
 
@@ -433,6 +461,10 @@ public sealed class InMemoryLabor : ILaborRepository, ILaborReadStore, IQualific
         CrewCode = p.Value.CrewId is { } c && _crews.TryGetValue(c, out var crew) ? crew.Value.Code : null,
         Username = p.Value.AppUserId is { } u ? _users.FirstOrDefault(x => x.Value == u).Key : null,
         IsActive = p.Value.IsActive,
+        Origin = p.Value.Origin,
+        ExternalSystem = p.Value.ExternalSystem,
+        ExternalKey = p.Value.ExternalKey,
+        ExternalVersion = p.Value.ExternalVersion,
         Version = p.Version,
     };
 

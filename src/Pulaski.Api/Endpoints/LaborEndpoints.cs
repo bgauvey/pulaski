@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Errors;
 using Pulaski.Application.Labor;
 using Pulaski.Application.Security;
 using Pulaski.Contracts.Common;
@@ -12,6 +13,9 @@ namespace Pulaski.Api.Endpoints;
 /// <summary>Crews, people and labor (D-040).</summary>
 internal static class LaborEndpoints
 {
+    /// <summary>Largest people import file accepted, in bytes (characters, once read).</summary>
+    private const int MaxImportBytes = 5 * 1024 * 1024;
+
     public static IEndpointRouteBuilder MapLaborEndpoints(this IEndpointRouteBuilder routes)
     {
         // ---- Crews and people ----
@@ -49,6 +53,39 @@ internal static class LaborEndpoints
         people.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (Guid id, UpdatePersonRequest request, ICommandHandler<UpdatePersonCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new UpdatePersonCommand(id, request.Version, request.DisplayName, request.CrewId, request.Username, request.IsActive), ct)))
         .RequirePermission(Permissions.People, Site.Of(SiteOf.Person));
+
+        // The formats people can be imported from (D-054).
+        people.MapGet("/import/sources", async Task<Ok<IReadOnlyList<PeopleSourceDto>>> (
+            IQueryHandler<ListPeopleSourcesQuery, IReadOnlyList<PeopleSourceDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListPeopleSourcesQuery(), ct)))
+        .RequireAnyView();
+
+        // Many people into a site from a file read by a source adapter (csv, scim), all or nothing; ?dryRun=true checks them and
+        // saves nothing. ?externalSystem= names the HR or ERP system they belong to, so later imports match them on its key (D-054).
+        people.MapPost("/import/{source}", async Task<Ok<ImportPeopleResponse>> (
+            string source,
+            Guid siteId,
+            HttpRequest http,
+            bool? dryRun,
+            string? externalSystem,
+            ICommandHandler<ImportPeopleFileCommand, ImportPeopleResponse> handler,
+            CancellationToken ct) =>
+        {
+            using var reader = new StreamReader(http.Body);
+            var text = http.ContentLength > MaxImportBytes ? null : await reader.ReadToEndAsync(ct);
+            if (text is null || text.Length > MaxImportBytes)
+            {
+                throw new ValidationException(new Dictionary<string, string[]>
+                {
+                    ["file"] = [$"The file is larger than {MaxImportBytes / 1024 / 1024} MB; split it."],
+                });
+            }
+
+            return TypedResults.Ok(await handler.HandleAsync(new ImportPeopleFileCommand(siteId, source, text, externalSystem, dryRun ?? false), ct));
+        })
+        .RequirePermission(Permissions.People, Site.Query())
+        .Accepts<string>("text/csv", "text/plain", "application/scim+json", "application/json");
 
         // ---- Labor ----
         var labor = routes.MapGroup("/labor").WithTags("Labor");

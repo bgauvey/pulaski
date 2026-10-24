@@ -13,6 +13,7 @@ public sealed record UpdateCrewCommand(Guid Id, long ExpectedVersion, string Nam
 /// <summary>Someone whose time is recorded (D-040), optionally the Pulaski user they sign in as.</summary>
 public sealed record CreatePersonCommand(Guid SiteId, string EmployeeNumber, string DisplayName, Guid? CrewId, string? Username) : ICommand<CreatedResponse>;
 
+/// <summary>Changes a person; for an imported one (D-054) only the crew and sign-in, since the source owns the rest.</summary>
 public sealed record UpdatePersonCommand(Guid Id, long ExpectedVersion, string DisplayName, Guid? CrewId, string? Username, bool IsActive) : ICommand<VersionResponse>;
 
 internal static class PeopleRules
@@ -153,6 +154,13 @@ internal sealed class UpdatePersonHandler(IUnitOfWork unitOfWork, ILaborReposito
         if (current.Version != command.ExpectedVersion)
         {
             throw new ConflictException($"{current.Value.DisplayName} was changed by someone else. Reload and try again.");
+        }
+
+        // An imported person's name and employment come from their source (D-054); Pulaski keeps the rest.
+        if (current.Value.IsImported && (name != current.Value.DisplayName || command.IsActive != current.Value.IsActive))
+        {
+            throw new DomainRuleException(
+                $"{current.Value.DisplayName} comes from {current.Value.ExternalSystem}: change their name and whether they are active there, and import again.");
         }
 
         if (command.CrewId != current.Value.CrewId)

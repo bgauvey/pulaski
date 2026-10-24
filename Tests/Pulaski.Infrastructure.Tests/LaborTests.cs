@@ -182,4 +182,42 @@ public sealed class LaborTests(DatabaseFixture db)
         await using var scope = db.Services.CreateAsyncScope();
         return (await scope.ServiceProvider.GetRequiredService<ITerminalReadStore>().FindBySecretAsync(TerminalRules.Sha256(secret), CancellationToken.None))!;
     }
+
+    [Fact]
+    public async Task People_import_from_hr_links_a_hand_kept_person_and_matches_on_the_key_again()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "PENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "PS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        await db.SendAsync(new CreateCrewCommand(site.Id, "blue", "Blue crew"));
+        CreatedResponse ann = await db.SendAsync(new CreatePersonCommand(site.Id, "500-" + _s, "Ann", null, null));
+        var system = "HR-" + _s;
+
+        var csv = $"employee_number,name,crew,external_key\n500-{_s},Ann Berg,BLUE,W-1-{_s}\n501-{_s},Bob,,W-2-{_s}\n";
+        ImportPeopleResponse check = await db.SendAsync(new ImportPeopleFileCommand(site.Id, "csv", csv, system, DryRun: true));
+        Assert.Equal((false, 1, 1, 0), (check.Applied, check.Created, check.Updated, check.Errors));
+
+        ImportPeopleResponse applied = await db.SendAsync(new ImportPeopleFileCommand(site.Id, "csv", csv, system, DryRun: false));
+        Assert.True(applied.Applied);
+        var people = await QueryAsync<ListPeopleQuery, IReadOnlyList<PersonDto>>(new ListPeopleQuery(site.Id));
+        Assert.Equal(2, people.Count);
+        var linked = Assert.Single(people, p => p.Id == ann.Id);
+        Assert.Equal(("Ann Berg", "hr", system, $"W-1-{_s}", "BLUE"), (linked.DisplayName, linked.Origin, linked.ExternalSystem, linked.ExternalKey, linked.CrewCode));
+
+        // SCIM for the same system, with a new employee number: the key finds Bob, so nobody is duplicated.
+        var scim = $$"""
+            { "Resources": [{ "externalId": "W-2-{{_s}}", "displayName": "Bob", "active": false, "meta": { "version": "7" },
+              "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": { "employeeNumber": "601-{{_s}}" } }] }
+            """;
+        ImportPeopleResponse again = await db.SendAsync(new ImportPeopleFileCommand(site.Id, "scim", scim, system, DryRun: false));
+        Assert.Equal(["employee_number", "active", "external_version"], Assert.Single(again.Rows).Changes);
+        people = await QueryAsync<ListPeopleQuery, IReadOnlyList<PersonDto>>(new ListPeopleQuery(site.Id));
+        Assert.Equal(2, people.Count);
+        Assert.Contains(people, p => p.EmployeeNumber == "601-" + _s && !p.IsActive && p.ExternalVersion == "7");
+
+        await using var connection = await db.AdminDataSource.OpenConnectionAsync();
+        var reasons = await connection.QueryAsync<string>(
+            "SELECT reason FROM evt.event WHERE subject = ANY(@Ids) AND type = 'pulaski.person.updated.v1' ORDER BY position",
+            new { Ids = people.Select(p => p.Id).ToArray() });
+        Assert.Equal(["CSV import", "SCIM import"], reasons);
+    }
 }

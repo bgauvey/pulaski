@@ -143,6 +143,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Links in the projection (D-046, proposed): `LinePlanLoader` loads a line with the lines its jobs follow; every projection goes
   through `TimelineMapping.Project` → `LinkedProjection` (repeat until settled). Jobs wait for after-start/after-end plus lag;
   firmed jobs keep their time (`link_not_met`), circular waits warn `link_cycle`. Nothing is reordered.
+- People from HR/ERP (D-054, proposed): `core.person.external_system` + `external_key` (unique; set exactly when `origin` is
+  `hr`/`erp`). The source owns employee number, name and active (`UpdatePersonCommand` refuses them); Pulaski owns crew, user,
+  badges, qualifications. `ImportPeopleCommand` matches on the key, links a local person with the same number the first time;
+  `IPeopleSourceAdapter` (`csv`, `scim` = SCIM 2.0 users) → `PersonImportRow`s via `PersonImportFields.ToRow`;
+  `POST /people/import/{source}?siteId=&externalSystem=`.
 - Breaks (D-047, proposed): `core.labor_break` per person (paid/unpaid), never a change to sessions; worked hours =
   session time outside the person's breaks × share (`LaborRules.WorkedHours`, also in `Attribute`). A break starts inside a
   session, takes its shift, locks with approval (corrections like sessions) and ends when the person leaves their last line.
