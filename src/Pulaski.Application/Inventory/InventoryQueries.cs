@@ -1,6 +1,8 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Contracts.Inventory;
+using Pulaski.Domain;
+using Pulaski.Domain.Inventory;
 
 namespace Pulaski.Application.Inventory;
 
@@ -9,7 +11,11 @@ public sealed record ListStockQuery(StockFilter Filter) : IQuery<IReadOnlyList<M
 
 public sealed record GetMaterialStockQuery(Guid MaterialId, Guid? SiteId = null) : IQuery<MaterialStockDetailDto>;
 
-public sealed record SearchLotsQuery(LotFilter Filter) : IQuery<IReadOnlyList<LotSummaryDto>>;
+/// <summary>Lots by the filter and, when <paramref name="Attribute"/> is given, by an attribute's value (D-056).</summary>
+public sealed record SearchLotsQuery(LotFilter Filter, LotAttributeSearch? Attribute = null) : IQuery<IReadOnlyList<LotSummaryDto>>;
+
+/// <summary>An attribute search as typed: a value (text contains it, a choice, yes/no or exact number or date), or a range.</summary>
+public sealed record LotAttributeSearch(Guid AttributeId, string? Value, string? Min, string? Max);
 
 public sealed record GetLotQuery(Guid Id) : IQuery<LotDto>;
 
@@ -40,15 +46,47 @@ internal sealed class GetMaterialStockHandler(IInventoryReadStore store) : IQuer
             ?? throw new NotFoundException($"Material {query.MaterialId} not found.");
 }
 
-internal sealed class SearchLotsHandler(IInventoryReadStore store) : IQueryHandler<SearchLotsQuery, IReadOnlyList<LotSummaryDto>>
+internal sealed class SearchLotsHandler(IInventoryReadStore store, ILotRecordsReadStore records) : IQueryHandler<SearchLotsQuery, IReadOnlyList<LotSummaryDto>>
 {
-    public Task<IReadOnlyList<LotSummaryDto>> HandleAsync(SearchLotsQuery query, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<LotSummaryDto>> HandleAsync(SearchLotsQuery query, CancellationToken cancellationToken)
     {
         new Validator()
             .Require(query.Filter.Offset >= 0, "Offset", "Can't be negative.")
             .Require(query.Filter.Limit is > 0 and <= 500, "Limit", "Between 1 and 500.")
             .ThrowIfInvalid();
-        return store.SearchLotsAsync(query.Filter, cancellationToken);
+        var filter = query.Attribute is { } search ? query.Filter with { Attribute = await MatchAsync(search, cancellationToken) } : query.Filter;
+        return await store.SearchLotsAsync(filter, cancellationToken);
+    }
+
+    /// <summary>The search in the attribute's own type: an unparsable value is a validation error, not an empty list.</summary>
+    private async Task<LotAttributeMatch> MatchAsync(LotAttributeSearch search, CancellationToken cancellationToken)
+    {
+        var attribute = await records.GetAttributeAsync(search.AttributeId, cancellationToken)
+            ?? throw new NotFoundException($"Lot attribute {search.AttributeId} not found.");
+        LotAttributeValue Parse(string? text, string field)
+        {
+            try
+            {
+                return attribute.Parse(text);
+            }
+            catch (DomainRuleException ex)
+            {
+                throw new ValidationException(new Dictionary<string, string[]> { [field] = [ex.Message] });
+            }
+        }
+
+        var value = Parse(search.Value, "attributeValue");
+        var min = Parse(search.Min, "attributeMin");
+        var max = Parse(search.Max, "attributeMax");
+        return new LotAttributeMatch(
+            attribute.Id,
+            value.Text,
+            attribute.DataType == LotAttributeTypes.Text,
+            value.Number ?? min.Number,
+            value.Number ?? max.Number,
+            value.Date ?? min.Date,
+            value.Date ?? max.Date,
+            value.Boolean);
     }
 }
 

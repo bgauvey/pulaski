@@ -311,6 +311,67 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.True((await QueryAsync<GetEquipmentQuery, Contracts.EquipmentModel.EquipmentDto>(new GetEquipmentQuery(silo.Id))).SingleMaterial);
     }
 
+    [Fact]
+    public async Task Lots_keep_searchable_attributes_and_certificates_beside_them_and_split_lots_carry_them()
+    {
+        var plant = await CreatePlantAsync();
+        CreatedResponse mfi = await db.SendAsync(new CreateLotAttributeCommand(plant.Site, "mfi", "Melt index", "number", null, [], true, [], 1));
+        CreatedResponse grade = await db.SendAsync(new CreateLotAttributeCommand(plant.Site, "GRADE", "Grade", "choice", null, ["A", "B"], true, [], 2));
+        var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-A-" + _suffix, 100m, plant.Kg));
+        var b = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-B-" + _suffix, 100m, plant.Kg));
+        var lotVersion = await VersionAsync(a.LotId);
+
+        var set = await db.SendAsync(new SetLotAttributeCommand(a.LotId, mfi.Id, 0, "11.2"));
+        await db.SendAsync(new SetLotAttributeCommand(a.LotId, grade.Id, 0, "a"));
+        await db.SendAsync(new SetLotAttributeCommand(b.LotId, mfi.Id, 0, "14"));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new SetLotAttributeCommand(a.LotId, mfi.Id, 0, "12")));
+        var gradeVersion = await ValueVersionAsync(a.LotId, grade.Id);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new SetLotAttributeCommand(a.LotId, grade.Id, gradeVersion, "C")));
+        Assert.True(set.Version > 0);
+        Assert.Equal(lotVersion, await VersionAsync(a.LotId)); // the lot itself is untouched
+
+        var inRange = await QueryAsync<SearchLotsQuery, IReadOnlyList<LotSummaryDto>>(
+            new SearchLotsQuery(new LotFilter(SiteId: plant.Site), new LotAttributeSearch(mfi.Id, null, "10", "12")));
+        Assert.Equal([a.LotId], inRange.Select(l => l.Id));
+        var gradeA = await QueryAsync<SearchLotsQuery, IReadOnlyList<LotSummaryDto>>(
+            new SearchLotsQuery(new LotFilter(SiteId: plant.Site), new LotAttributeSearch(grade.Id, "A", null, null)));
+        Assert.Equal([a.LotId], gradeA.Select(l => l.Id));
+        await Assert.ThrowsAsync<ValidationException>(() => QueryAsync<SearchLotsQuery, IReadOnlyList<LotSummaryDto>>(
+            new SearchLotsQuery(new LotFilter(SiteId: plant.Site), new LotAttributeSearch(mfi.Id, null, "1,5", null))));
+
+        byte[] pdf = [.. "%PDF-1.4 certificate"u8];
+        CreatedResponse coa = await db.SendAsync(new AttachLotDocumentCommand(a.LotId, "coa", "CoA from supplier", "C-881", "Acme Resins", new DateOnly(2026, 10, 1), null, "coa.pdf", pdf));
+        CreatedResponse link = await db.SendAsync(new AttachLotDocumentCommand(a.LotId, "test_report", "Lab report", null, null, null, "https://lab.example/r/5", null, null));
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new AttachLotDocumentCommand(a.LotId, "coa", "Not a PDF", null, null, null, null, "x.pdf", [1, 2, 3])));
+
+        var part = await db.SendAsync(new SplitLotCommand(a.LotId, await VersionAsync(a.LotId), 30m, plant.Kg));
+        var carried = await QueryAsync<GetLotRecordsQuery, LotRecordsDto>(new GetLotRecordsQuery(part.LotId));
+        Assert.Equal(("11.2", "A"), (carried.Attributes.Single(x => x.Code == "MFI").Value, carried.Attributes.Single(x => x.Code == "GRADE").Value));
+        Assert.Equal(new HashSet<Guid> { coa.Id, link.Id }, carried.Documents.Select(d => d.Id).ToHashSet());
+        Assert.All(carried.Documents, d => Assert.Equal(("split", a.LotId), (d.Via, d.FromLotId!.Value)));
+
+        var file = await QueryAsync<GetLotDocumentContentQuery, LotDocumentContent>(new GetLotDocumentContentQuery(coa.Id));
+        Assert.Equal(("application/pdf", "coa.pdf"), (file.ContentType, file.FileName));
+        Assert.Equal(pdf, file.Content);
+
+        await db.SendAsync(new WithdrawLotDocumentCommand(link.Id, link.Version, "Wrong lot"));
+        var records = await QueryAsync<GetLotRecordsQuery, LotRecordsDto>(new GetLotRecordsQuery(a.LotId));
+        Assert.Equal(["current", "withdrawn"], records.Documents.Select(d => d.Status));
+        Assert.Equal(("Wrong lot", 64), (records.Documents[1].WithdrawReason, records.Documents[0].Sha256!.Length));
+
+        // A stored file is written once: the application can't change or delete it.
+        await using var app = new Npgsql.NpgsqlConnection(db.AppConnectionString);
+        await app.OpenAsync();
+        foreach (var sql in new[] { "UPDATE core.lot_document_content SET content = '\\x00'", "DELETE FROM core.lot_document_content" })
+        {
+            var ex = await Assert.ThrowsAsync<Npgsql.PostgresException>(() => app.ExecuteAsync(sql));
+            Assert.Equal(Npgsql.PostgresErrorCodes.InsufficientPrivilege, ex.SqlState);
+        }
+    }
+
+    private async Task<long> ValueVersionAsync(Guid lotId, Guid attributeId) =>
+        (await QueryAsync<GetLotRecordsQuery, LotRecordsDto>(new GetLotRecordsQuery(lotId))).Attributes.Single(a => a.AttributeId == attributeId).Version;
+
     private async Task<TResult> QueryAsync<TQuery, TResult>(TQuery query)
         where TQuery : IQuery<TResult>
     {

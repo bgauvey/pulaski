@@ -183,6 +183,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   production days). `Utilization.Classify` (unit mode, planned-downtime job, stop reason class, Execute; no signal = down), `Combine` for
   derived lines, `Windows`/`Slice` to shifts and runs, `OeeTally` for A × P × Q with output weighed by ideal rate (earned hours). Output is
   production reports only, never machine counts. Machines → Utilization and OEE tab; the Overview uses its current-shift rows.
+- Lot attributes and certificates (D-056, proposed): typed `core.lot_attribute` definitions per site (all materials or classes via
+  `lot_attribute_class.is_applied`), values in `lot_attribute_value` beside the lot (never touch `core.lot`/`ts.lot_event`);
+  `LotAttributeDefinition.Parse` reads values. `lot_document` = file (bytes in `lot_document_content`, insert-only, sniffed PDF/PNG/JPEG
+  ≤ 10 MB, SHA-256) and/or reference; withdrawn, never deleted; `lot_document_link` carries them on split/merge
+  (`CarryLotRecordsAsync`, split also copies values). Permissions `lot_records.manage`, `lot_attributes.manage`.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

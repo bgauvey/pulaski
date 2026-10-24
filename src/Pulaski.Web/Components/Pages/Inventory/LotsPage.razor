@@ -7,8 +7,8 @@
 
 <PageTitle>Lots · Inventory · Pulaski</PageTitle>
 
-<InventoryHeader Title="Find a lot" SiteChanged="SearchAsync">
-    <Description>By lot or supplier lot number, material, location, status or expiry. Without a status, only lots with stock on hand are found.</Description>
+<InventoryHeader Title="Find a lot" SiteChanged="SiteChangedAsync">
+    <Description>By lot or supplier lot number, material, location, status, expiry or an attribute's value. Without a status, only lots with stock on hand are found.</Description>
 </InventoryHeader>
 
 <ProblemAlert Error="_error" />
@@ -40,6 +40,38 @@
         <option value="30">Expiring within 30 days</option>
         <option value="90">Expiring within 90 days</option>
     </select>
+    @if (_attributes.Count > 0)
+    {
+        <select class="form-select" aria-label="Attribute" @bind="_attributeId" @bind:after="AttributeChanged">
+            <option value="">Any attribute</option>
+            @foreach (var a in _attributes)
+            {
+                <option value="@a.Id">@a.Name</option>
+            }
+        </select>
+        @if (Attribute is { } chosen)
+        {
+            @if (chosen.DataType is "number" or "date")
+            {
+                <input class="form-control" style="width: 8rem" type="@(chosen.DataType == "date" ? "date" : "text")" placeholder="From" aria-label="@chosen.Name from" @bind="_attributeMin" />
+                <input class="form-control" style="width: 8rem" type="@(chosen.DataType == "date" ? "date" : "text")" placeholder="To" aria-label="@chosen.Name to" @bind="_attributeMax" />
+            }
+            else if (chosen.DataType is "choice" or "boolean")
+            {
+                <select class="form-select" aria-label="@chosen.Name" @bind="_attributeValue">
+                    <option value="">Any value</option>
+                    @foreach (var choice in chosen.DataType == "boolean" ? ["yes", "no"] : chosen.Choices)
+                    {
+                        <option value="@choice">@choice</option>
+                    }
+                </select>
+            }
+            else
+            {
+                <input class="form-control" style="width: 10rem" placeholder="Contains" aria-label="@chosen.Name contains" @bind="_attributeValue" />
+            }
+        }
+    }
     <button type="submit" class="btn btn-primary">Search</button>
     <button type="button" class="btn btn-outline-secondary" disabled="@(_lots is not { Count: > 0 })" @onclick="ExportAsync">Export CSV</button>
 </form>
@@ -121,6 +153,13 @@ else
     private Guid? _locationId;
     private string _status = "";
     private int? _expiryDays;
+    private IReadOnlyList<LotAttributeDto> _attributes = [];
+    private Guid? _attributeId;
+    private string? _attributeValue;
+    private string? _attributeMin;
+    private string? _attributeMax;
+
+    private LotAttributeDto? Attribute => _attributes.FirstOrDefault(a => a.Id == _attributeId);
 
     protected override async Task OnInitializedAsync()
     {
@@ -132,6 +171,7 @@ else
             await Sites.EnsureAsync(Api);
             _materials = await Api.ListMaterialsAsync();
             _locations = await Api.ListInventoryLocationsAsync(Sites.SiteId);
+            await LoadAttributesAsync();
         }
         catch (ApiException ex)
         {
@@ -140,6 +180,32 @@ else
 
         await SearchAsync();
     }
+
+    // Attributes belong to a site (D-056), so the filter offers the chosen site's.
+    private async Task LoadAttributesAsync()
+    {
+        _attributes = Sites.SiteId is { } site ? [.. (await Api.ListLotAttributesAsync(site)).Where(a => a.IsActive || a.LotsWithValue > 0)] : [];
+        if (Attribute is null)
+        {
+            _attributeId = null;
+        }
+    }
+
+    private async Task SiteChangedAsync()
+    {
+        try
+        {
+            await LoadAttributesAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await SearchAsync();
+    }
+
+    private void AttributeChanged() => (_attributeValue, _attributeMin, _attributeMax) = (null, null, null);
 
     private Task SearchAsync() => LoadAsync(0);
 
@@ -169,7 +235,8 @@ else
     {
         var expiresBefore = _expiryDays is { } days ? Time.GetUtcNow().AddDays(days) : (DateTimeOffset?)null;
         return Api.SearchLotsAsync(
-            Sites.SiteId, _search, _materialId, _locationId, string.IsNullOrEmpty(_status) ? null : _status, expiresBefore, offset, limit);
+            Sites.SiteId, _search, _materialId, _locationId, string.IsNullOrEmpty(_status) ? null : _status, expiresBefore, offset, limit,
+            _attributeId is { } attribute ? (attribute, _attributeValue, _attributeMin, _attributeMax) : null);
     }
 
     // Every matching lot, not only the pages shown, up to 10,000.

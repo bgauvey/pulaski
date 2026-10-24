@@ -37,6 +37,7 @@ public static class Permissions
     public const string LotHold = "lot.hold";
     public const string InventoryCorrect = "inventory.correct";
     public const string StockCount = "stock_count.manage";
+    public const string LotRecords = "lot_records.manage";
     public const string PartialBatchDecide = "partial_batch.decide";
     public const string Materials = "materials.manage";
     public const string Processes = "processes.manage";
@@ -51,6 +52,7 @@ public static class Permissions
     public const string DowntimeCode = "downtime.code";
     public const string People = "people.manage";
     public const string Terminals = "terminals.manage";
+    public const string LotAttributes = "lot_attributes.manage";
     public const string Security = "security.manage";
 
     // Machine data (D-050): what a Pulaski Edge node's service user holds.
@@ -91,6 +93,7 @@ public static class Permissions
         new(LotHold, "Inventory", "Put lots on hold or in quarantine and release them"),
         new(InventoryCorrect, "Inventory", "Correct inventory: write up, write off, correct, reverse, split and merge lots"),
         new(StockCount, "Inventory", "Start, enter, post and cancel stock counts"),
+        new(LotRecords, "Inventory", "Record lot attributes and attach or withdraw certificates"),
         new(Materials, "Configuration", "Maintain materials, classes, conversions, batching and shelf life; import materials"),
         new(Processes, "Configuration", "Maintain processes, BOMs and capabilities"),
         new(Units, "Configuration", "Maintain units of measure"),
@@ -100,6 +103,7 @@ public static class Permissions
         new(Shifts, "Configuration", "Maintain shift schedules and choose which one equipment follows"),
         new(People, "Configuration", "Maintain people and crews"),
         new(Terminals, "Configuration", "Register and enrol shop-floor terminals"),
+        new(LotAttributes, "Configuration", "Maintain lot attribute definitions"),
         new(Security, "Administration", "Maintain users, roles and what each role may do"),
         new(EdgeIngest, "Machine data", "Send machine data as a Pulaski Edge node: read its configuration and forward what it collects"),
     ];
@@ -132,6 +136,9 @@ public static class Permissions
         [LotHold] = [InventoryView],
         [InventoryCorrect] = [InventoryView],
         [StockCount] = [InventoryView],
+        [LotRecords] = [InventoryView],
+        // Attribute definitions sit beside the material classes they apply to.
+        [LotAttributes] = [InventoryView, MaterialsView],
         [Materials] = [MaterialsView],
         // Capabilities are changed on the material page; which shifts equipment follows on the equipment page.
         [Processes] = [ProcessesView, MaterialsView],
@@ -198,12 +205,12 @@ public static class Roles
             "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops."),
         new(Quality, "Quality", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView, Permissions.MachinesView,
-             Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide],
-            "Holds and releases lots, corrects inventory and decides on partial batches."),
+             Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide, Permissions.LotRecords, Permissions.LotAttributes],
+            "Holds and releases lots, corrects inventory, decides on partial batches, and keeps lot attributes and certificates."),
         new(Manager, "Manager", false,
             [.. Permissions.Views, Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts,
-             Permissions.People, Permissions.Terminals, Permissions.LaborApprove],
-            "Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people and the site's settings."),
+             Permissions.People, Permissions.Terminals, Permissions.LaborApprove, Permissions.LotAttributes],
+            "Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people, lot attributes and the site's settings."),
         new(Auditor, "Auditor", false,
             [.. Permissions.Views, Permissions.InventoryCorrect, Permissions.StockCount],
             "Views everything and corrects inventory; counts stock. Doesn't plan or run jobs."),

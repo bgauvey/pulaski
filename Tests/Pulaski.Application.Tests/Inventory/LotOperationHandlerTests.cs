@@ -50,6 +50,7 @@ public class LotOperationHandlerTests
         Assert.Equal(75m, Inventory.Find(lot.LotId)!.Value.Quantity);
         var edge = Assert.Single(Inventory.Edges);
         Assert.Equal((lot.LotId, part.LotId, GenealogyEdge.Split, (Guid?)null), (edge.ParentLotId, edge.ChildLotId, edge.Basis, edge.JobId));
+        Assert.Equal((lot.LotId, part.LotId, "split", true), Assert.Single(Inventory.Carried)); // certificates and attributes go with it (D-056)
         await Assert.ThrowsAsync<ConflictException>(() => split.HandleAsync(
             new SplitLotCommand(lot.LotId, VersionOf(lot.LotId), 5m, _kg.Id, NewLotNumber: "R-1-1"), CancellationToken.None));
     }
@@ -70,6 +71,9 @@ public class LotOperationHandlerTests
         Assert.Equal(115m, merged.Quantity);
         Assert.All([a.LotId, b.LotId], id => Assert.Equal((0m, LotStatus.Consumed), (Inventory.Find(id)!.Value.Quantity, Inventory.Find(id)!.Value.Status)));
         Assert.Equal(2, Inventory.Edges.Count(e => e.ChildLotId == target.LotId && e.Basis == GenealogyEdge.Merge));
+        Assert.Equal(
+            new HashSet<(Guid, Guid, string, bool)> { (a.LotId, target.LotId, "merge", false), (b.LotId, target.LotId, "merge", false) },
+            Inventory.Carried.ToHashSet());
         await Assert.ThrowsAsync<ValidationException>(() => merge.HandleAsync(
             new MergeLotsCommand(target.LotId, merged.Version, [target.LotId]), CancellationToken.None));
     }

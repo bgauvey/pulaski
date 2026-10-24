@@ -95,6 +95,9 @@ internal sealed class SplitLotHandler(
         await inventory.InsertEventAsync(
             new LotEventRow(ids.NewId(), part.Id, incoming, lot.UomId, made.ActorId, Comment: comment, RelatedLotId: source.Id), made.OccurredAt, cancellationToken);
         await inventory.InsertGenealogyAsync([new GenealogyEdge(ids.NewId(), source.Id, part.Id, null, GenealogyEdge.Split)], made.OccurredAt, cancellationToken);
+
+        // A part of the lot is the same material: its certificates and attributes go with it (D-056).
+        await inventory.CarryLotRecordsAsync(source.Id, part.Id, "split", withAttributes: true, made.ActorId, made.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(sent, cancellationToken);
         await eventLog.AppendAsync(made, cancellationToken);
 
@@ -186,6 +189,12 @@ internal sealed class MergeLotsHandler(
         var version = await inventory.UpdateLotAsync(target, summary.OccurredAt, cancellationToken);
         await inventory.InsertGenealogyAsync(
             [.. merged.Select(m => new GenealogyEdge(ids.NewId(), m.Source.Id, target.Id, null, GenealogyEdge.Merge))], summary.OccurredAt, cancellationToken);
+
+        // The merged lot now holds what each lot was, so it carries their certificates; its own attributes stay (D-056).
+        foreach (var (source, _, _) in merged)
+        {
+            await inventory.CarryLotRecordsAsync(source.Id, target.Id, "merge", withAttributes: false, summary.ActorId, summary.OccurredAt, cancellationToken);
+        }
         await eventLog.AppendAsync(summary, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 

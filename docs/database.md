@@ -37,7 +37,8 @@ Equipment model            Material & capability          Calendar
 Orders & scheduling                       Execution & inventory
  manufacturing_order                       job_run ─── ts.production_count, ts.downtime
   └─ work_order                            lot ─ material_load, lot_genealogy, ts.lot_event,
-                                                stock_count ─ stock_count_line
+                                                stock_count ─ stock_count_line,
+                                                lot_attribute(_class, _value), lot_document(_content, _link)
       └─ job ── job_material               labor_session, labor_break, labor_approval
           └─ job_run                       quality_characteristic ─ spec_limit, control_limit,
  scheduling_policy, run_standard,             characteristic_rule, spc_alert,
@@ -986,6 +987,81 @@ A balance (`is_bulk`) is the one quantity of a material at a location: for a mat
 | `produced_from`, `produced_to` | timestamptz | yes | The production window, for output lots cut by time or quantity. |
 | `expires_at` | timestamptz | yes | Expiry. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.lot_attribute — lot attribute definitions (D-056) · *In use*
+
+What a site records on its lots, such as melt index. Kept beside the lot, so recording values never changes `core.lot` or `ts.lot_event`.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The site it belongs to. |
+| `code` | text | no | Upper case, unique per site (`lot_attribute_uq`); fixed once created. |
+| `name` | text | no | Display name. |
+| `data_type` | text | no | `text`, `number`, `date`, `boolean` or `choice`; fixed once created. |
+| `uom_id` | uuid → uom | yes | A number's unit, for display; only for `number` (`lot_attribute_uom_ck`). |
+| `choices` | text[] | no | The values a `choice` may take; non-empty exactly for `choice` (`lot_attribute_choices_ck`). |
+| `applies_to_all` | boolean | no | True: offered for every material; false: only for the classes in `core.lot_attribute_class`. |
+| `sort_order` | integer | no | Order on the lot page. |
+| `is_active` | boolean | no | Switched off rather than deleted: values stay and can be cleared, not set. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.lot_attribute_class — the classes an attribute is for (D-056) · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `attribute_id` | uuid → lot_attribute | no | Primary key with the class. |
+| `material_class_id` | uuid → material_class | no | A class whose materials' lots may have it. |
+| `is_applied` | boolean | no | False once taken off; rows are never deleted. |
+
+### core.lot_attribute_value — a lot's value of an attribute (D-056) · *In use*
+
+The current value only; every change is a `pulaski.lot.attribute_set.v1` event with before and after.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `lot_id` | uuid → lot | no | Primary key with the attribute. |
+| `attribute_id` | uuid → lot_attribute | no | |
+| `value_text`, `value_number`, `value_date`, `value_boolean` | text, numeric, date, boolean | yes | The value, in the column of its type (text and choice in `value_text`); at most one is set (`lot_attribute_value_one_ck`), none once cleared. Indexed per attribute for searching. |
+| `updated_at` | timestamptz | no | Last change. |
+| `updated_by` | text | no | Who made it. |
+
+### core.lot_document — certificates and other lot documents (D-056) · *In use*
+
+A stored file, a reference, or both (`lot_document_source_ck`). Never deleted: withdrawn with a reason.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The site of the lot it was attached to. |
+| `kind` | text | no | `coa`, `coc`, `test_report`, `sds` or `other`. |
+| `title` | text | no | |
+| `document_number` | text | yes | Its number, such as in a document system. |
+| `issuer` | text | yes | The supplier or lab. |
+| `issued_on` | date | yes | |
+| `url` | text | yes | An http(s) address where it is kept. |
+| `file_name`, `content_type`, `size_bytes`, `sha256` | text, text, integer, bytea | yes | A stored file: its name, type (`application/pdf`, `image/png` or `image/jpeg`, recognised from its contents), size and SHA-256; all set or none (`lot_document_file_ck`). |
+| `status` | text | no | `current` or `withdrawn`. |
+| `withdrawn_at`, `withdrawn_by`, `withdraw_reason` | timestamptz, text, text | yes | Set exactly when withdrawn (`lot_document_withdrawn_ck`). |
+| `created_at`, `created_by` | timestamptz, text | no | When and by whom it was attached. |
+| `updated_at` | timestamptz | no | Last change. |
+
+### core.lot_document_content — a stored document's bytes (D-056) · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `document_id` | uuid → lot_document | no | Primary key. |
+| `content` | bytea | no | The file, at most 10 MB. Written once: the app role may insert and read, never update or delete. |
+
+### core.lot_document_link — the lots a document applies to (D-056) · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `document_id` | uuid → lot_document | no | Primary key with the lot. |
+| `lot_id` | uuid → lot | no | Indexed. |
+| `via` | text | no | `attached` to this lot, or carried to it by a `split` or `merge`. |
+| `from_lot_id` | uuid → lot | yes | The lot it was carried from; set exactly when not `attached` (`lot_document_link_from_ck`). |
+| `linked_at` | timestamptz | no | |
 
 ### core.material_load — a lot present at a feed point · *Planned*
 

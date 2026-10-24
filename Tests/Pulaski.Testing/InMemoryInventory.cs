@@ -234,6 +234,19 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
     public Task<IReadOnlyList<Guid>> ListLotsConsumedByJobAsync(Guid jobId, CancellationToken cancellationToken) =>
         Task.FromResult(LotsOfJob(jobId, LotEventKind.Consumed));
 
+    /// <summary>Each carry of lot records a split or merge asked for (D-056), in order.</summary>
+    public List<(Guid From, Guid To, string Via, bool WithAttributes)> Carried { get; } = [];
+
+    public Task CarryLotRecordsAsync(Guid fromLotId, Guid toLotId, string via, bool withAttributes, string actor, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            Carried.Add((fromLotId, toLotId, via, withAttributes));
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task InsertGenealogyAsync(IReadOnlyList<GenealogyEdge> edges, DateTimeOffset at, CancellationToken cancellationToken)
     {
         lock (_lock)

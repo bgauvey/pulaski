@@ -63,6 +63,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-053 | Material source adapters: an adapter only turns a file in its format into source-neutral import rows; the bulk import applies the same rules to rows from any source, all or nothing. Adapters are registered services named in the URL (`POST /api/materials/import/{source}`). CSV and ISA-95 B2MML material information (`MaterialDefinition`) ship first; the external system a B2MML file's items belong to is named on import, and its `ID` is their key. Label printing and pushed ERP feeds stay later | Proposed | 2026-10-23 |
 | D-054 | People from HR and ERP sources: an imported person keeps its source system and key (unique together) and is matched on them by every import, so importing again never duplicates anyone; the first import links a hand-kept person with the same employee number. The source owns employee number, name and active; Pulaski owns crew, sign-in, badges and qualifications. Imports are files, all or nothing, through people source adapters (CSV, SCIM 2.0 users); every change is the usual person event with the source as its reason | Proposed | 2026-10-23 |
 | D-055 | Completing the materials import: capabilities load from their own CSV file (one row per material and line), changing the capability in effect now in place, adding one from now, or ending it, with the run standard following as on the material page; all lines are locked by code in id order first, and each line must be at a site where the caller may maintain processes. A missing class is created only when the import asks (`createClasses`), named from `class_name`. Every import format has a template to download | Proposed | 2026-10-23 |
+| D-056 | Lot attributes and certificates: typed attribute definitions per site (text, number, date, yes/no, choice), offered for every material or chosen classes, with values beside the lot (never changing `core.lot` or its movements) and every change an event. Certificates are stored files (PDF, PNG, JPEG ≤ 10 MB, recognised by content, written once) or references (number, URL), linked to lots and carried on by split and merge; never deleted, withdrawn with a reason. Two permissions: `lot_records.manage` and `lot_attributes.manage` | Proposed | 2026-10-24 |
 
 ## Order hierarchy
 
@@ -481,7 +482,7 @@ What a plant needs to keep floor stock right without the ERP, beyond receiving a
 - **Aging:** on-hand stock by how long ago each lot was received or made: up to 30, 31–90, 91–180 and over 180 days, per material.
 - **Export:** stock, lots, the journal (up to 10,000 rows) and both reports download as CSV.
 
-**Deferred:** pallets or containers (with labeling), lot attributes and certificates of analysis (with quality), allocation and picking suggestions (with execution).
+**Deferred:** pallets or containers (with labeling), allocation and picking suggestions (with execution). Lot attributes and certificates are D-056.
 
 ## Indistinguishable lots (D-031, proposed)
 
@@ -1093,6 +1094,72 @@ It stays opt-in so a misspelt class can't create a new one unnoticed. An inactiv
 - The contract constants `MaterialCsvFormat.Header` and `CapabilityCsvFormat.Header` are tested against the parsers, so a template always matches what is accepted.
 
 **Not yet.** Capability periods in the file; run standards (modified rates) in the file; capabilities from B2MML.
+
+## Lot attributes and certificates (D-056, proposed)
+
+Issue #34. Lots identify material and carry its movements (D-027); what quality knows about a lot goes beside it, so the lot's row and `ts.lot_event` never change for it.
+
+**Attributes.** A site defines them in `core.lot_attribute`:
+
+- Code (upper case, fixed) and name.
+- Type (`text`, `number`, `date`, `boolean`, `choice`; fixed, because stored values and search depend on it).
+- A unit for a number, choices for a choice, and a sort order.
+- Either every material, or the classes in `core.lot_attribute_class`. Those rows are taken off with `is_applied`, as the app never deletes.
+- Definitions are switched off, never deleted.
+
+`LotAttributeDefinition.Parse` reads a value:
+
+- Numbers with a decimal point and no thousands separator, as D-055.
+- Dates as `yyyy-MM-dd`, yes/no, and choices in any case.
+- Blank clears the value.
+
+`core.lot_attribute_value` holds the current value in the column of its type. Partial indexes per type serve search.
+
+`SetLotAttributeCommand` locks the lot first, as every lot change does (without changing it), then the value row. Concurrency uses the value's `xmin`, with 0 for none yet. A new value needs an active attribute offered for the material's class, but anything can be cleared. The event is `pulaski.lot.attribute_set.v1` on the lot, with before and after.
+
+**Search.** `GET /api/lots?attributeId=&attributeValue=&attributeMin=&attributeMax=` matches as follows:
+
+- Text: contains the value.
+- Choice and yes/no: equal to it.
+- Number and date: an inclusive range, or the exact value.
+
+The handler parses the bounds in the attribute's type, so `1,5` is a validation error, not an empty list. Only lots with a value match.
+
+**Documents.** A `core.lot_document` is a stored file, a reference (document number or http(s) URL), or both. It has a kind (`coa`, `coc`, `test_report`, `sds`, `other`), a title, an issuer and an issue date.
+
+- **Files:** PDF, PNG or JPEG of at most 10 MB, recognised by their first bytes (`LotDocumentFiles.Sniff`), never by name or declared type.
+  - The SHA-256 is stored.
+  - The bytes go in `core.lot_document_content`, apart, so lists never read them.
+  - `db/app-role.sql` revokes UPDATE on that table, and the app role has no DELETE: a stored file is written once.
+- **Downloads** go out as attachments with `X-Content-Type-Options: nosniff`.
+- **Retention:** nothing is deleted. A wrong or superseded document is withdrawn with a reason (`pulaski.lot_document.withdrawn.v1`) and stays, file included. A retention policy that purges by age can come later as a maintenance job.
+- **Links:** `core.lot_document_link` ties a document to its lots.
+  - **Split:** the part gets the parent's documents and attribute values. It is the same material, and values it already has stay.
+  - **Merge:** a merge, or a lot joining a commingled balance (D-031), gets the documents of every lot that went in (`via`, `from_lot_id`). Attributes aren't merged, since the sources may disagree.
+  - Both are set-based `INSERT … SELECT … ON CONFLICT DO NOTHING` in `IInventoryRepository.CarryLotRecordsAsync`. Carrying records no event of its own: the split or merge event is it.
+
+**Access.**
+
+- **Viewing:** `inventory.view` at the lot's site sees records and downloads files.
+- **`lot_records.manage`** (Inventory; Quality role) sets values and attaches or withdraws documents.
+- **`lot_attributes.manage`** (Configuration; Quality and Manager) maintains definitions. It brings `inventory.view` and `materials.view`.
+- `SiteOf.LotAttribute` and `SiteOf.LotDocument` resolve the site.
+
+**API and screens.**
+
+| Endpoint | Does |
+| --- | --- |
+| `GET /api/lot-attributes?siteId=` | Lists the definitions |
+| `POST /api/lot-attributes`, `PUT /api/lot-attributes/{id}` | Creates and changes a definition |
+| `GET /api/lots/{id}/records` | The lot's attributes and documents |
+| `PUT /api/lots/{id}/attributes/{attributeId}` | Sets or clears one value |
+| `POST /api/lots/{id}/documents` | Attaches a document (multipart) |
+| `GET /api/lot-documents/{id}/content` | Downloads a stored file |
+| `POST /api/lot-documents/{id}/withdraw` | Withdraws a document |
+
+Screens: the lot page's **Attributes and certificates** section (`LotRecordsPanel`), the attribute filter on Find a lot, and Configure → Materials → **Lot attributes**. Migration `0024_lot_records`.
+
+**Not yet.** Attributes in the lots CSV export or in imports; checking values against specification limits (with quality); certificates to or from the ERP or a document system; a retention job.
 
 ## Application architecture
 

@@ -70,6 +70,7 @@ internal static class Commingling
         await inventory.InsertEventAsync(
             new LotEventRow(ids.NewId(), merged.Id, incoming, merged.UomId, joined.ActorId, Comment: comment, RelatedLotId: emptied.Id), joined.OccurredAt, cancellationToken);
         await inventory.InsertGenealogyAsync([new GenealogyEdge(ids.NewId(), emptied.Id, merged.Id, null, GenealogyEdge.Merge)], joined.OccurredAt, cancellationToken);
+        await inventory.CarryLotRecordsAsync(emptied.Id, merged.Id, "merge", withAttributes: false, joined.ActorId, joined.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(left, cancellationToken);
         await eventLog.AppendAsync(joined, cancellationToken);
 

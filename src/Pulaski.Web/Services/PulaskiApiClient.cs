@@ -601,15 +601,83 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<JobMaterialsDto> GetJobMaterialsAsync(Guid jobId, CancellationToken ct = default) =>
         GetAsync<JobMaterialsDto>($"api/jobs/{jobId}/materials", ct);
 
+    /// <summary>Lots by the filters; with an attribute (D-056), only lots whose value of it matches: a value, or a min and max for a number or date.</summary>
     public Task<IReadOnlyList<LotSummaryDto>> SearchLotsAsync(
         Guid? siteId, string? search = null, Guid? materialId = null, Guid? locationId = null, string? status = null, DateTimeOffset? expiresBefore = null,
-        int offset = 0, int limit = 500, CancellationToken ct = default) =>
+        int offset = 0, int limit = 500, (Guid Id, string? Value, string? Min, string? Max)? attribute = null, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<LotSummaryDto>>(
             Query("api/lots", ("siteId", siteId), ("search", search), ("materialId", materialId), ("locationId", locationId), ("status", status),
-                ("expiresBefore", Iso(expiresBefore)), ("offset", offset == 0 ? null : offset), ("limit", limit == 500 ? null : limit)), ct);
+                ("expiresBefore", Iso(expiresBefore)), ("offset", offset == 0 ? null : offset), ("limit", limit == 500 ? null : limit),
+                ("attributeId", attribute?.Id), ("attributeValue", attribute?.Value), ("attributeMin", attribute?.Min), ("attributeMax", attribute?.Max)), ct);
 
     public Task<LotDto> GetLotAsync(Guid id, CancellationToken ct = default) =>
         GetAsync<LotDto>($"api/lots/{id}", ct);
+
+    // ---- Lot attributes and documents (D-056) ----
+
+    public Task<IReadOnlyList<LotAttributeDto>> ListLotAttributesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<LotAttributeDto>>($"api/lot-attributes?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> CreateLotAttributeAsync(CreateLotAttributeRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/lot-attributes", request, ct);
+
+    public Task<VersionResponse> UpdateLotAttributeAsync(Guid id, UpdateLotAttributeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/lot-attributes/{id}", request, ct);
+
+    public Task<LotRecordsDto> GetLotRecordsAsync(Guid lotId, CancellationToken ct = default) =>
+        GetAsync<LotRecordsDto>($"api/lots/{lotId}/records", ct);
+
+    public Task<VersionResponse> SetLotAttributeAsync(Guid lotId, Guid attributeId, SetLotAttributeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/lots/{lotId}/attributes/{attributeId}", request, ct);
+
+    /// <summary>Attaches a document to a lot: a file (<paramref name="content"/>), a reference, or both.</summary>
+    public async Task<CreatedResponse> AttachLotDocumentAsync(
+        Guid lotId, string kind, string title, string? documentNumber, string? issuer, DateOnly? issuedOn, string? url, string? fileName, byte[]? content,
+        CancellationToken ct = default)
+    {
+        // The form disposes its parts, and the request (disposed in SendCoreAsync) the form.
+#pragma warning disable CA2000
+        var form = new MultipartFormDataContent();
+        void Add(string name, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                form.Add(new StringContent(value), name);
+            }
+        }
+
+        Add("kind", kind);
+        Add("title", title);
+        Add("documentNumber", documentNumber);
+        Add("issuer", issuer);
+        Add("issuedOn", issuedOn?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+        Add("url", url);
+        if (content is not null)
+        {
+            form.Add(new ByteArrayContent(content), "file", fileName ?? "document");
+        }
+#pragma warning restore CA2000
+
+        using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Post, $"api/lots/{lotId}/documents") { Content = form }, ct);
+        return await ReadAsync<CreatedResponse>(response, ct);
+    }
+
+    /// <summary>A stored document's file, to hand to the browser.</summary>
+    public async Task<(byte[] Content, string ContentType, string FileName)> GetLotDocumentContentAsync(Guid documentId, CancellationToken ct = default)
+    {
+        using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Get, $"api/lot-documents/{documentId}/content"), ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await ApiException.FromResponseAsync(response, ct);
+        }
+
+        return (await response.Content.ReadAsByteArrayAsync(ct),
+            response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream",
+            response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? "document");
+    }
+
+    public Task<VersionResponse> WithdrawLotDocumentAsync(Guid documentId, WithdrawLotDocumentRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/lot-documents/{documentId}/withdraw", request, ct);
 
     public Task<IReadOnlyList<LotTraceNodeDto>> TraceLotAsync(Guid id, bool forward, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<LotTraceNodeDto>>($"api/lots/{id}/trace?direction={(forward ? "forward" : "backward")}", ct);
