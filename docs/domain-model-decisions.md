@@ -65,6 +65,9 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-055 | Completing the materials import: capabilities load from their own CSV file (one row per material and line), changing the capability in effect now in place, adding one from now, or ending it, with the run standard following as on the material page; all lines are locked by code in id order first, and each line must be at a site where the caller may maintain processes. A missing class is created only when the import asks (`createClasses`), named from `class_name`. Every import format has a template to download | Proposed | 2026-10-23 |
 | D-056 | Lot attributes and certificates: typed attribute definitions per site (text, number, date, yes/no, choice), offered for every material or chosen classes, with values beside the lot (never changing `core.lot` or its movements) and every change an event. Certificates are stored files (PDF, PNG, JPEG ≤ 10 MB, recognised by content, written once) or references (number, URL), linked to lots and carried on by split and merge; never deleted, withdrawn with a reason. Two permissions: `lot_records.manage` and `lot_attributes.manage` | Proposed | 2026-10-24 |
 | D-057 | Back-dated inventory movements: a receipt, consumption, production, write-up or write-off may count from up to 31 days earlier (`effective_at`), with a comment and permission `inventory.backdate`; its record time (`occurred_at`) and append-only history stay. Stock at a time sums movements by effective time, so it is deterministic whatever the order of entry. A back-dated movement may not count before the lot had stock or before a posted count of it, nor take it below zero at any time; expiry and the run are taken at the effective time | Proposed | 2026-10-24 |
+| D-058 | Shortages with the live schedule and supply on its way: jobs are timed by the schedule's projection now by default (published times on request); `core.expected_receipt` records deliveries entered by people or sent by the ERP (idempotent by external key), counted beside stock only for jobs needing the material after they are due, and closed by receiving a lot against them. Still not MRP: no suggestions, lead times or ordering | Proposed | 2026-10-24 |
+| D-059 | Containers, labels and scanning: a container (pallet, tote, box, bin) holds whole lots that keep their own identity; packing, unpacking and moving with a container are ordinary lot movements linked to it, and a lot moved, split off or used up alone leaves it. Labels are 4 × 6 in PDFs with a Code 128 barcode of a short Pulaski code (`PUL1L`/`PUL1C` + a never-reused label number, `PUL1E:` + a location code); a scan resolves to exactly one thing at the site, or offers the matches when free text is ambiguous | Proposed | 2026-10-24 |
+| D-060 | Genealogy through commingled balances: each location where lots mix has a flow model (`mixed`: a withdrawal takes every arrival's share; `fifo`: oldest first) and an optional minimum residence time. Which arrivals fed each withdrawal is worked out on read from the declared movements (by effective time) and narrows traces through the balance; every such link is exact (one arrival possible), estimated (by the model) or possible (quantities don't add up, residence not met), with the reason and the basis. A `level` tag role can be bound; reading it waits for process values | Proposed | 2026-10-24 |
 
 ## Order hierarchy
 
@@ -447,8 +450,8 @@ Two lookups on top of inventory (D-027): "will we have the material for the jobs
 - **Demand** is each open production job's planned components (`core.job_material`, `consume`) less what has been declared consumed into it, never below zero. Open means planned, dispatched, firmed, running or paused. Planned quantities are converted to the component's base unit (D-026); a line whose unit doesn't convert is left out and reported, never guessed.
 - **Supply** is the component's **available** stock in the site. Held and quarantined stock is shown beside it but not counted: it can't be consumed until released.
 - **Order.** Jobs take supply in the order they are needed: by the job's published start (`planned_start`), else its hold-until (`earliest_start`), then job number; jobs with neither come last. Each line shows the running total and how much of it is not covered, so the first job that comes up short is visible. A horizon (for example the next 3 days) leaves out jobs needed after it, and jobs with no time at all.
-- **The projected time is not used yet.** A job's live projection (D-014) is calculated per line on read; the check uses the baseline and hold times instead. A job that has slipped is therefore ordered by its published time.
-- **Not MRP (charter non-goal).** No purchase or transfer suggestions, no incoming receipts or open purchase orders netted in, no lead times, no multi-level explosion: an intermediate's own components show only on the jobs of its own orders (D-025). The calculation is a pure function (`ShortageCalculator`), redone on every read.
+- **Timing** is the live projection by default since D-058; the published time on request.
+- **Not MRP (charter non-goal).** No purchase or transfer suggestions, no lead times, no multi-level explosion (expected receipts are counted since D-058): an intermediate's own components show only on the jobs of its own orders (D-025). The calculation is a pure function (`ShortageCalculator`), redone on every read.
 
 **Movement journal.** Every `ts.lot_event` row of a site, newest first, filtered by a time range (required, the last 7 days by default, so only those partitions are read), movement kind, material, location (where the stock left or arrived), job, and the person who recorded it; and a lot or supplier lot number. Pages of 200 rows continue from the last row read (`occurred_at`, `id`), so a page never repeats or skips a row as new movements arrive. A BRIN index on `occurred_at` keeps a range read cheap (migration 0003).
 
@@ -467,7 +470,7 @@ What a plant needs to keep floor stock right without the ERP, beyond receiving a
 **Corrections.**
 
 - **Correct details.** A lot's number, supplier lot and expiry can be corrected, with a comment. The number stays unique per site and material; a bulk balance's number can't change. The event keeps before and after. Lot event `corrected`.
-- **Reverse a movement.** The lot's **latest** movement can be reversed, once, for an adjustment reason: a receipt, write-up, write-off, move, status change or shipment. The lot returns to its quantity, location and status before it, and the reversal names the movement it undoes (`reverses_event_id`, `reverses_occurred_at`; no FK into history, D-010). A reversed receipt that leaves a lot at zero makes it `cancelled`. Consumption and production (job declarations), splits, merges, bulk transfers and corrections aren't reversed: the first two wait for execution, the rest touch two lots or nothing countable, and are put right with another movement. Lot event `reversed`.
+- **Reverse a movement.** The lot's **latest** movement can be reversed, once, for an adjustment reason: a receipt, write-up, write-off, move, status change or shipment. The lot returns to its quantity, location and status before it, and the reversal names the movement it undoes (`reverses_event_id`, `reverses_occurred_at`; no FK into history, D-010). A reversed receipt that leaves a lot at zero makes it `cancelled`. Lot event `reversed`. D-063 extends reversal to earlier quantity movements, consumption, splits, merges, transfers between balances and production reports.
 
 **Stock counts.**
 
@@ -475,7 +478,7 @@ What a plant needs to keep floor stock right without the ERP, beyond receiving a
 - **Posting** writes, for each counted lot whose count differs from its quantity now, a write-up (`adjusted`) or write-off (`scrapped`) for the chosen reason (normally *Count correction*), referencing the count number. Every line must be counted first (enter 0 for a lot that isn't there). A lot that moved after its line was counted is refused, named, until it is recounted; one that moved between the snapshot and the count is fine, because the count is what is there.
 - Stock found that isn't in the count is received separately. A count can be cancelled until posted. Count numbers are `CNT-<yyyyMMdd>-<n>` per site.
 
-**Reason codes.** A screen lists, adds and changes reasons for inventory (and the other kinds), enterprise-wide or for a site. A code and its kind never change once created, since history refers to them; the name, whether a comment is required, the order and the active flag can. Reason trees (`parent_id`) are not edited yet.
+**Reason codes.** A screen lists, adds and changes reasons for inventory (and the other kinds), enterprise-wide or for a site. A code and its kind never change once created, since history refers to them; the name, whether a comment is required, the order and the active flag can. Reason trees (`parent_id`) are edited since D-062.
 
 **Reports.**
 
@@ -483,7 +486,7 @@ What a plant needs to keep floor stock right without the ERP, beyond receiving a
 - **Aging:** on-hand stock by how long ago each lot was received or made: up to 30, 31–90, 91–180 and over 180 days, per material.
 - **Export:** stock, lots, the journal (up to 10,000 rows) and both reports download as CSV.
 
-**Deferred:** pallets or containers (with labeling), allocation and picking suggestions (with execution). Lot attributes and certificates are D-056.
+**Deferred:** picking lists. Allocation and lot suggestions are D-064. Containers and labels are D-059. Lot attributes and certificates are D-056.
 
 ## Indistinguishable lots (D-031, proposed)
 
@@ -493,7 +496,7 @@ A resin silo or a tank can't keep lots apart: what goes in mixes with what is th
 - **One balance per material.** Stock there is held as a balance (`is_bulk`), exactly as a material that isn't lot-tracked is anywhere (D-027). A balance has no lot number: `lot_number` is NULL exactly when `is_bulk`. This replaces the `@<location code>` numbers D-027 gave balances; screens show *Balance at SILO-1*.
 - **Every arrival merges.** A receipt, a move, a split sent there and production into it all end in the balance, created on the first arrival. Only stock in the balance's status can join it (normally available): a held lot is released first, or the balance held too.
 - **Traceability kept.** A receipt with a lot number creates that lot, then merges it into the balance (`received`, then `merged` out of the lot and into the balance, genealogy `merge`), so a trace from a finished lot goes through the silo back to the supplier's lot. A lot moved or split there is merged the same way, and so is production with a lot number. A receipt or production with no number goes straight into the balance, the supplier lot kept only in the event. The balance takes the earliest expiry of everything in it.
-- **Genealogy over-links here too.** Every lot that ever joined a balance is a parent of everything taken from it afterwards: the silo has no first-in, first-out. Time-window genealogy with residence time narrows it with execution (charter slice step 4).
+- **Genealogy over-links here too.** Every lot that ever joined a balance is a parent of everything taken from it afterwards; since D-060 traces narrow this by the location's flow model, with a stated precision.
 - **Counting, writing off and shipping** a balance work as for any balance. Merging by hand, splitting and correcting the number don't apply to a balance.
 
 ## Location and expiry rules (D-032, proposed)
@@ -1189,6 +1192,227 @@ Issue #35. Movements counted when they were entered (D-027), so a receipt or con
 **Screens.** The lot drawer shows **Counts from** for those five movements to whoever may back-date. The lot history lists a back-dated row at its effective time with the record time beneath. The journal lists rows by record time (its range and cursor are record time, as before) with *counts from*, and its export has both columns. Genealogy links show *since …* and *(back-dated)*.
 
 **Not yet.** Back-dating moves, holds, splits, merges and shipments; reconstructing location and status on a past date; a site-set window (31 days is fixed).
+
+## Shortages with the live schedule and incoming supply (D-058, proposed)
+
+Issue #36. The check (D-029) used published times and ignored deliveries.
+
+**Timing.** `GetShortagesQuery(…, LiveTiming = true)` projects each line its jobs are on, as the Schedule screen does (`TimelineMapping.Project`, with process links, D-046). A job's need time is the start of its `job` segment. Jobs planned to a department (D-022), and jobs the projection doesn't place, keep their published start or hold-until. With live timing the horizon is applied after projecting, not in SQL. Each line says where its time came from (`TimeSource`: live, published, window, none) and carries the published start. `LiveTiming = false` gives the D-029 behaviour.
+
+**Incoming supply.** `core.expected_receipt` holds:
+
+- **Fields:** material, quantity and unit, expected time, reference, supplier and note.
+- **Status:** open, received or cancelled.
+- **ERP identity:** an optional ERP system and key.
+
+People with `lot.receive` enter and change open ones on Inventory → Incoming. The ERP sends one at a time to `POST /api/inventory/expected-receipts/import`, matched on system and key:
+
+- Sending it again changes nothing.
+- A change updates the open one, and `Cancelled` cancels it.
+- Once closed in Pulaski it stays closed: a late update from the ERP is ignored.
+
+`ReceiveLotCommand.ExpectedReceiptId` closes one in the receipt's transaction (lot first, then the receipt) and links the lot. Whatever quantity arrived, nothing more is expected; there are no partial receipts. Events are `expected_receipt.created/updated/cancelled/received`.
+
+**The calculation.** `ShortageCalculator.Calculate(demand, available, incoming, now)` is still a pure function:
+
+- Jobs, in need order, take available stock first, then supply due by their time. Supply arriving later never backfills an earlier job.
+- Times before `now` count as now when setting supply against need: a running job needs its remainder from now, and a late delivery can still arrive from now. The job order isn't changed.
+- Each line reports `FromStock`, `FromIncoming` and `Uncovered`. The material reports `Incoming` (all open, in the base unit) and the next due time.
+- A receipt whose unit doesn't convert is left out with a problem note.
+
+**Not MRP.** Nothing is suggested, ordered, netted across sites or rescheduled, and there are no lead times. Expected receipts are only what someone said is coming.
+
+## Containers, labels and scanning (D-059, proposed)
+
+Issue #37.
+
+**Containers.** `core.container` (code unique per site, kind, location, `label_no`, active) holds lots through `core.lot.container_id`. A lot keeps its number, history and genealogy; a container isn't a lot and has no genealogy.
+
+- **Invariant:** a lot in a container is at the container's location. `Lot` keeps it:
+  - `PackInto` moves the lot there when needed.
+  - `MoveWithContainer` keeps the container.
+  - `MoveTo` (alone), `Split` (the part), `Take` to zero and a `Reverse` that changes location all clear it.
+- **Packing:** whole lots only, so to pack part of a lot, split it first. Balances of materials that aren't lot-tracked can't be packed.
+- **Mixing:** mixed materials are allowed. There are no nested containers, and containers can't sit at commingling locations (D-031). A single-material location (D-032) checks each material.
+- **Retiring** needs the container empty.
+
+**Movements.** New `ts.lot_event` kinds `packed` and `unpacked`, and `container_id` on the row (packed into, unpacked from, or moved with).
+
+- Moving a container locks the container, then its lots in id order (`LockLotsAsync`), then writes one `moved` row per lot plus a `pulaski.container.moved.v1` event listing them.
+- Packing locks the container before the lot, so the two orders agree.
+- Unpacking locks only the lot, since the container row doesn't change.
+- Events: `lot.packed/unpacked`, `container.created/moved/retired`.
+
+**Labels.** `core.label_seq` gives every lot (`core.lot.label_no`, default) and container a number that is never reused. Barcodes are Code 128 of `PUL1L<n>`, `PUL1C<n>` or `PUL1E:<location code>`, short enough for a compact barcode, with the same text printed beneath. `LabelPdfRenderer` draws 4 × 6 in pages through the API's existing PDF and barcode libraries (PdfSharp, ZXing, already used for shop orders, D-041), via the shared `BarcodeDrawing`. Endpoints: `GET /api/lots/{id}/label.pdf`, `…/containers/{id}/label.pdf`, `…/locations/{id}/label.pdf?siteId=`.
+
+**Scanning.** `ScanCode.Parse` reads a Pulaski code or treats the scan as free text. `GET /api/inventory/scan?siteId=&code=` (`ResolveScanQuery`) returns `found` with one match, `ambiguous` with the candidates (`MatchedBy` says how each matched), or `not_found` with why.
+
+- Label numbers resolve only within the site.
+- Free text matches on-hand lots by lot or supplier lot number, active containers by code, and locations by code, ignoring case.
+- The Scan screen is for keyboard-wedge scanners. A second scan for a move or pack is filtered to the kind it needs. Every action is an existing command, so rules, history and permissions are unchanged.
+
+**Not yet.** GS1 (SSCC, GTIN AIs) labels; direct label-printer output (ZPL); nested containers; reading structured supplier barcodes beyond their text; a mobile/offline scanning app.
+
+## Genealogy through commingled balances (D-060, proposed)
+
+Issue #38. Every arrival in a silo was a parent of everything taken after it (D-031).
+
+**Flow model.** `core.equipment.flow_model` and `min_residence` describe a location where lots mix:
+
+- `mixed` (the default) is a tank or mixed silo: a withdrawal takes from each arrival still there in proportion.
+- `fifo` is plug flow (mass-flow silos, bins): the oldest material leaves first.
+- `min_residence` is the least time material stays. In FIFO, material that hasn't stayed that long is taken only when nothing older is left, and is then only *possible*.
+
+`SetFlowCommand` (`PUT /api/inventory/locations/{id}/flow`, `equipment.manage`) sets it; the event is `pulaski.equipment.flow_set.v1`.
+
+**Allocation.** `BalanceAllocation.Allocate` (pure, in the domain) replays a balance's quantity movements in the order they count (`effective_at`, D-057):
+
+- Arrivals are positive rows: a lot merged in, or stock with no lot of its own (a receipt or production straight into the balance, a write-up).
+- Withdrawals are negative rows: consumption, transfers, write-offs and count corrections.
+
+Each withdrawal gets its contributing arrivals, quantities, a precision and a reason:
+
+| Precision | When |
+| --- | --- |
+| `exact` | Only one arrival was in the balance |
+| `estimated` | Worked out by the model from the declared quantities |
+| `possible` | More was taken than was put in (the unaccounted part has no source), or residence time not met |
+
+A balance emptied to zero starts afresh, so the next withdrawals can be exact. Nothing is stored: changing the model changes every answer at once, and back-dated movements fall into place.
+
+**Narrowed traces.** `TraceLotHandler` passes the SQL trace through `TraceNarrowing`:
+
+- **Back** from a lot made by job J, through balance B, keeps only B's arrivals that fed J's withdrawals from B.
+- **Forward** from arrival A, through B, keeps only lots made by jobs whose withdrawals A fed.
+- Lots reached only through a dropped lot go too.
+- Kept lots and B carry `Precision` and `PrecisionNote`, which states the basis: "worked out from the declared movements, not measured".
+- A balance reached through something no job made keeps every arrival, marked possible.
+- The starting lot, if itself a balance, isn't narrowed.
+- `GET /api/lots/{id}/allocation` gives a balance's withdrawals with their sources, which the balance's page shows.
+
+**Machine data.** Process values aren't recorded yet (D-050), so the model can't be confirmed by measurement and says so. A `level` tag role can be bound now (`TagRoles.Bindable`) and is ignored by ingest. Once level readings are kept, they can confirm a silo was empty (making links exact) or flag declared stock that disagrees with the level (making them possible).
+
+**Approximations.** The SQL trace keeps each lot once, by its nearest path, so a lot reachable both through a dropped arrival and another way may be dropped. A reversal into a balance is replayed as a withdrawal of the oldest stock.
+
+## Delivering inventory events to the ERP (D-061, proposed)
+
+Issue #39. Inventory movements were events in `evt.event` (D-007) with nothing to send them anywhere.
+
+**Transport.** One outbound HTTPS webhook per Pulaski, configured in the API (`Integrations:Erp`: `Enabled`, `Url`, `Secret`, `EventTypes` prefixes, default `pulaski.lot.`; `MaxAttempts` 12, `TimeoutSeconds` 15, `PollSeconds` 5, `StartFromNow` true). The secret stays in configuration, never in the database; screens see only the host. Each event is POSTed as a CloudEvents 1.0 structured JSON message (`application/cloudevents+json`), with Pulaski's extra attributes as extensions (`pulaskisubjecttype`, `pulaskisequence`, `pulaskiactor`, `pulaskicorrelationid`, `pulaskireason`). Headers:
+
+- `Idempotency-Key` is the event id.
+- `X-Pulaski-Timestamp` is Unix seconds.
+- `X-Pulaski-Signature` is `sha256=` + hex HMAC-SHA256(secret, `"{timestamp}.{body}"`).
+
+**Capture.** `ErpDeliveryService` (a hosted service in the API) runs a round every few seconds under a session advisory lock per sink, so several API servers never send at once. Each round copies matching events into `evt.delivery` in `(tx_id, position)` order, only below `pg_snapshot_xmin(pg_current_snapshot())`, and moves `evt.sink_checkpoint` in the same statement. A slow commit is never skipped, and `UNIQUE (sink, event_id)` makes a repeat capture harmless. With `StartFromNow`, the first checkpoint is the latest event, so switching it on doesn't replay history.
+
+**Sending.** Due rows go in commit order. `DeliveryPolicy.AfterAttempt` (pure) decides the outcome:
+
+- 2xx delivers.
+- Any other 4xx except 408, 425 and 429 fails at once: retrying can't help.
+- Anything else (5xx, timeouts, no answer) waits 10 s × 2ⁿ⁻¹, capped at an hour, until `MaxAttempts`, then fails.
+
+An outage only delays: rows stay pending.
+
+**Order per subject.** A pending row is held while an earlier pending or failed row of the same sink and subject exists (`DeliverySql.HeldBy`), so a receiver sees each lot's movements in order. One stuck lot doesn't stop the others. Within a round, a subject that just failed isn't tried again.
+
+**Delivery guarantee.** At least once: a lost answer means a resend, with the same `Idempotency-Key`, and receivers dedupe on it. The sender records an outcome only on a row still pending, so an operator's skip during a send wins.
+
+**Operators.** Configure → Integrations (`integrations.view`; manager and auditor by default) shows the status (enabled, host, waiting, held, failed, delivered in 24 h) and the deliveries by status. With `integrations.manage` (administrator by default), operators can:
+
+- `RetryDeliveryCommand` / `RetryFailedDeliveriesCommand`: failed → pending, due now, attempts keep counting.
+- `SkipDeliveryCommand`: pending or failed → skipped, with a required reason, which releases held rows.
+
+Each appends `pulaski.delivery.retried.v1` or `pulaski.delivery.skipped.v1`. Routes: `GET /api/integrations/erp`, `GET /api/integrations/erp/deliveries?status=`, `POST …/deliveries/{id}/retry`, `…/{id}/skip`, `…/retry-failed`.
+
+**Not done.** No inbound acknowledgement or reconciliation from the ERP, one sink only (the table and checkpoint are keyed by sink, ready for more), no ERP-specific adapters or message brokers, no retention of delivered rows.
+
+## Reason trees (D-062, proposed)
+
+Issue #40. `core.reason_code.parent_id` and `is_selectable` existed but nothing edited them.
+
+**Groups.** A reason is either a reason (chosen; a leaf) or a group (`is_selectable` false: holds other reasons of its kind and is never chosen). Like code and kind, that is fixed at creation (`CreateReasonCodeCommand.IsGroup`), so a reason history already used never turns into a heading. A group has no utilization class and never needs a comment; `reason_code_class_ck` replaces `reason_code_utilization_ck` to allow a utilization group without a class.
+
+**Placement.** `ReasonTree` (pure, in the domain) checks where a reason may go:
+
+- under a group of the same kind, never itself or anything inside it (no cycles);
+- scope: a reason for every site only under a group for every site; a site's reason under a group for every site or for that site;
+- at most `MaxLevels` (5) levels, counting the moved branch's own depth;
+- nothing switched on goes under a group that is off; a group is switched off only when everything in it is (`WhyNotActive`).
+
+`MoveReasonCodeCommand` (`PUT /api/reason-codes/{id}/parent`, `reasons.manage`) moves a reason or a whole branch; creating with `ParentId` files it at once. The event is `pulaski.reason_code.moved.v1` (code, before, after).
+
+**Concurrency.** Every tree change (create into a group, move, update) reads the reason's kind without a lock, then locks every reason of that kind in id order (`LockReasonTreeAsync`) and checks the caller's version there. Kinds are small, and concurrent moves (A under B while B goes under A) serialize without deadlocks.
+
+**History.** Every table that refers to a reason refers to its `id`, and nothing about a reason that history shows (code, name) depends on the tree. Moves and group renames change nothing recorded, and reports keep listing each reason. Places that resolve a reason (inventory, labor indirect reasons, the partial-batch hold, stop coding) also require `is_selectable`, so a group is never recorded.
+
+**Reading.** `core.reason_tree()` (a `LANGUAGE sql STABLE` function, recursive with a cycle guard) gives depth, the group path ("Mechanical › Jam") and a tree-order sort key. The Reasons screen lists each kind in tree order with indentation and an **Under** choice. Pickers (`ReasonCodeDto.GroupPath`, `Display.ReasonLabel`) show the path and keep tree order.
+
+**Not done.** Report roll-up by group, and converting a reason to a group or back.
+
+## Reversing declarations (D-063, proposed)
+
+Issue #41. Only a lot's latest single-lot movement could be reversed (D-030); consumption, production, splits, merges and transfers between balances couldn't be, and nor could production reports.
+
+**Principle.** A wrong record is reversed, never edited: compensating rows undo it, the original stays, and the right figures are then declared again. Every reversal needs an adjustment reason and a comment; the actor is recorded on each row and event. A reversed movement counts as never made: `LotEventSql.NotReversed` leaves it out of a job's consumption, produced lots and declared genealogy, and balance allocation (D-060) leaves out both it and its reversal.
+
+**On a lot (`ReverseMovementCommand`, `inventory.correct`).** The movement is read without a lock, then the handler locks what it touched in the usual order: the job, then lots (D-027), in id order for two lots. What is allowed:
+
+- **Latest single-lot movement:** as D-030.
+- **Earlier quantity-only movement** (received, adjusted, scrapped): its quantity is put back at its effective time, if the lot's history from then on stays at or above zero and no posted count follows (`Backdating.EnsureFitsAsync`).
+- **Consumption:** `Lot.Restore` gives the quantity back. The declared genealogy from the lot to the job's output is superseded once no consumption of it into the job stands.
+- **Split:** the new lot must be unchanged since. `Lot.TakeBack` cancels it, the source is restored, and the split edge is superseded.
+- **Merge:** the source must be unchanged since. It gets its quantity and earlier status back, the target gives it up, and the merge edge is superseded. A merge into a commingling balance is refused: the lot can't come out as itself.
+- **Transfer between balances:** the receiving balance gives the quantity back to the sender.
+- **Production with a report id:** refused; it is reversed with its report. Older production is reversed lot by lot, and the counts stay, which the response warns about.
+
+**Matching the two halves.** `GetCounterpartAsync` finds the other half of a two-lot movement: the row on the related lot that names this one, with the same kind and the opposite quantity, nearest in time within a minute. Split and transfer rows were recorded at slightly different times.
+
+**Timing.** Compensating rows count at the original's effective time, so history reads as if it never happened. A reversal and its original at the same effective time are left out of the replay together (`QuantityTimeline`), so no false dip appears between them. `TakeBack` and the replay refuse when the stock isn't there any more, and the message names what happened since ("Since then: consumed into WO-…").
+
+**Production reports (`ReverseProductionReportCommand`, `POST /api/jobs/{id}/production/{reportId}/reverse`, new `production.correct`: Supervisor, Auditor).** A report now has an id: its processed count row's id, stored as `report_id` on its counts and on the lot rows it produced (0031). Reversing it locks the job (refusing closed jobs), then the run, then the lots, and then:
+
+- each produced lot gives its quantity back; one that only held it is cancelled;
+- output that joined a commingling balance is taken out of the balance first: the balance gives it back, the lot is restored and then taken back, and the merge edge is superseded;
+- a partial batch from the report becomes `reversed` (a rejected one can't be, since its lot was written off), freeing the run's one partial batch (now a partial unique index);
+- each count row is offset by a `correction` row (`corrects_id`) at the same `occurred_at`;
+- `JobRun.Remove` takes the good and scrap off the run, and `pulaski.job.production_reversed.v1` is appended.
+
+The job page lists the report as reversed (correction rows aren't listed). Reports recorded before 0031 can't be reversed whole.
+
+**Also fixed.** Production by shift (D-044) now leaves out machine counts, as D-050 intended.
+
+**Not done.** Reversing moves, holds and shipments that aren't the latest movement, lot corrections, packing; undoing a chain of dependent movements in one step; editing a report in place.
+
+## Lot allocations and recommendations (D-064, proposed)
+
+Issue #32. Stock couldn't be set aside for a job, and nothing suggested which lot to use.
+
+**Allocation.** `core.lot_allocation`: a quantity of one lot, in its base unit, for one of a job's planned components. There is one active row per job and lot (allocating more tops it up). It is released or used up, never deleted. It never changes the lot: final consumption stays under the inventory rules (D-027). Allocating needs `lot.allocate` (Planner, Supervisor, Quality).
+
+- **Reserve, warn others.** Active allocations are left out of what other jobs see as free: in recommendations, and in shortages, where a job's allocation is taken off its need and out of the shared pool (`GetShortagesHandler`, `ListAllocatedAsync`: at most what the lot holds, available stock only).
+- Consuming the lot into its job uses the allocation up (`AllocationUse.ConsumeAsync`, after the job and lot are locked). Consuming it into another job is allowed with an `allocated_elsewhere` warning.
+
+**Recommendation.** `LotRecommendation.Recommend` (pure, in the domain) suggests lots for what is still needed (need = planned in the base unit less consumed less allocated):
+
+- only available lots, unexpired at the job's need time (its planned start, or now), with free stock (quantity less what other jobs and this one hold);
+- ordered first expiry first out, then oldest receipt, then label;
+- each pick says why ("Expires 3 Nov 2026, the earliest; received …; 40 kg free"), and each lot left out says why (held, expires first, allocated elsewhere, not needed).
+
+`AllocationPlanner.Plan` works out every component from a `JobAllocationSource` (job, needs, active allocations, candidate lots). The screen and the commands share it.
+
+**Refresh, on demand.** There is no background service: an allocation shows its problem on read (`AllocationProblem`: on hold, expires before the need time, the lot holds less than is allocated). `RefreshAllocationsCommand` releases what can't be used, trims what a lot can partly give, then tops up from the recommendations. `RefreshSiteAllocationsCommand` locks every open job of the site in id order first, then refreshes the earliest need first, so the soonest jobs get the lots that expire soonest. `AllocateRecommendedCommand` only tops up.
+
+**Locking.** Job, then lots in id order, then their active allocations in id order, as declarations lock (D-027). A site refresh holds every job lock before any lot, so it can't deadlock with a declaration.
+
+**Routes.**
+- `GET /api/jobs/{id}/allocations`
+- `POST /api/jobs/{id}/allocations`, plus `/recommended`, `/refresh` and `/{allocationId}/release`
+- `POST /api/inventory/allocations/refresh?siteId=`
+
+Events: `pulaski.lot.allocated.v1`, `…allocation_released.v1`, `…allocation_changed.v1`.
+
+**Not done.** Automatic refresh on stock or schedule changes, preference for locations near the line or whole lots, picking lists, allocating substitutions, hard reservations.
 
 ## Application architecture
 

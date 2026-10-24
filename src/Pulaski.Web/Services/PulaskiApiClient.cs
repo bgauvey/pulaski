@@ -5,6 +5,7 @@ using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Execution;
+using Pulaski.Contracts.Integrations;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.MachineData;
@@ -299,6 +300,23 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<IReadOnlyList<ReasonCodeDto>> ListCodingReasonsAsync(Guid equipmentId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<ReasonCodeDto>>($"api/equipment/{equipmentId}/coding-reasons", ct);
+
+    // Outbound deliveries to the ERP (D-061)
+
+    public Task<DeliveryStatusDto> GetErpDeliveryStatusAsync(CancellationToken ct = default) =>
+        GetAsync<DeliveryStatusDto>("api/integrations/erp", ct);
+
+    public Task<IReadOnlyList<DeliveryDto>> ListErpDeliveriesAsync(string? status, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<DeliveryDto>>(status is null ? "api/integrations/erp/deliveries" : $"api/integrations/erp/deliveries?status={status}", ct);
+
+    public Task<RetryDeliveriesResponse> RetryErpDeliveryAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/erp/deliveries/{id}/retry", new { }, ct);
+
+    public Task<RetryDeliveriesResponse> SkipErpDeliveryAsync(Guid id, SkipDeliveryRequest request, CancellationToken ct = default) =>
+        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/erp/deliveries/{id}/skip", request, ct);
+
+    public Task<RetryDeliveriesResponse> RetryFailedErpDeliveriesAsync(CancellationToken ct = default) =>
+        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, "api/integrations/erp/deliveries/retry-failed", new { }, ct);
 
     // Edge nodes, connections and tags (D-050)
 
@@ -613,6 +631,47 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<LotDto> GetLotAsync(Guid id, CancellationToken ct = default) =>
         GetAsync<LotDto>($"api/lots/{id}", ct);
 
+    // ---- Genealogy through balances (D-060) ----
+
+    public Task<VersionResponse> SetFlowAsync(Guid locationId, SetFlowRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/inventory/locations/{locationId}/flow", request, ct);
+
+    public Task<BalanceAllocationDto> GetBalanceAllocationAsync(Guid lotId, CancellationToken ct = default) =>
+        GetAsync<BalanceAllocationDto>($"api/lots/{lotId}/allocation", ct);
+
+    // ---- Containers, labels and scanning (D-059) ----
+
+    public Task<IReadOnlyList<ContainerDto>> ListContainersAsync(Guid siteId, string? search = null, bool includeRetired = false, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ContainerDto>>(
+            Query("api/inventory/containers", ("siteId", siteId), ("search", search), ("includeRetired", includeRetired ? "true" : null)), ct);
+
+    public Task<ContainerDto> GetContainerAsync(Guid id, CancellationToken ct = default) => GetAsync<ContainerDto>($"api/inventory/containers/{id}", ct);
+
+    public Task<CreatedResponse> CreateContainerAsync(CreateContainerRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/inventory/containers", request, ct);
+
+    public Task<VersionResponse> MoveContainerAsync(Guid id, MoveContainerRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/containers/{id}/move", request, ct);
+
+    public Task<VersionResponse> RetireContainerAsync(Guid id, long version, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/containers/{id}/retire", new RetireContainerRequest { Version = version }, ct);
+
+    /// <summary>Packs the lot into <c>ContainerId</c>, or with none unpacks it.</summary>
+    public Task<LotTransactionResponse> PackLotAsync(Guid lotId, PackLotRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{lotId}/pack", request, ct);
+
+    public Task<ScanResultDto> ResolveScanAsync(Guid siteId, string code, CancellationToken ct = default) =>
+        GetAsync<ScanResultDto>(Query("api/inventory/scan", ("siteId", siteId), ("code", code)), ct);
+
+    /// <summary>A lot's, container's or location's label as a PDF, to hand to the browser.</summary>
+    public Task<(byte[] Content, string ContentType, string FileName)> GetLabelAsync(string kind, Guid id, Guid siteId, CancellationToken ct = default) =>
+        GetFileAsync(kind switch
+        {
+            "lot" => $"api/lots/{id}/label.pdf",
+            "container" => $"api/inventory/containers/{id}/label.pdf",
+            _ => $"api/inventory/locations/{id}/label.pdf?siteId={siteId}",
+        }, ct);
+
     // ---- Lot attributes and documents (D-056) ----
 
     public Task<IReadOnlyList<LotAttributeDto>> ListLotAttributesAsync(Guid siteId, CancellationToken ct = default) =>
@@ -663,9 +722,12 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     }
 
     /// <summary>A stored document's file, to hand to the browser.</summary>
-    public async Task<(byte[] Content, string ContentType, string FileName)> GetLotDocumentContentAsync(Guid documentId, CancellationToken ct = default)
+    public Task<(byte[] Content, string ContentType, string FileName)> GetLotDocumentContentAsync(Guid documentId, CancellationToken ct = default) =>
+        GetFileAsync($"api/lot-documents/{documentId}/content", ct);
+
+    private async Task<(byte[] Content, string ContentType, string FileName)> GetFileAsync(string uri, CancellationToken ct)
     {
-        using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Get, $"api/lot-documents/{documentId}/content"), ct);
+        using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Get, uri), ct);
         if (!response.IsSuccessStatusCode)
         {
             throw await ApiException.FromResponseAsync(response, ct);
@@ -706,8 +768,25 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<IReadOnlyList<ReasonCodeDto>> ListReasonCodesAsync(string kind, Guid? siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<ReasonCodeDto>>(Query("api/reason-codes", ("kind", kind), ("siteId", siteId)), ct);
 
-    public Task<ShortageReportDto> GetShortagesAsync(Guid siteId, Guid? equipmentId = null, int? horizonDays = null, CancellationToken ct = default) =>
-        GetAsync<ShortageReportDto>(Query("api/inventory/shortages", ("siteId", siteId), ("equipmentId", equipmentId), ("horizonDays", horizonDays)), ct);
+    public Task<ShortageReportDto> GetShortagesAsync(
+        Guid siteId, Guid? equipmentId = null, int? horizonDays = null, bool liveTiming = true, CancellationToken ct = default) =>
+        GetAsync<ShortageReportDto>(
+            Query("api/inventory/shortages", ("siteId", siteId), ("equipmentId", equipmentId), ("horizonDays", horizonDays), ("liveTiming", liveTiming ? null : "false")), ct);
+
+    // ---- Expected receipts (D-058) ----
+
+    public Task<IReadOnlyList<ExpectedReceiptDto>> ListExpectedReceiptsAsync(Guid siteId, bool includeClosed = false, Guid? materialId = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ExpectedReceiptDto>>(
+            Query("api/inventory/expected-receipts", ("siteId", siteId), ("includeClosed", includeClosed ? "true" : null), ("materialId", materialId)), ct);
+
+    public Task<CreatedResponse> CreateExpectedReceiptAsync(CreateExpectedReceiptRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/inventory/expected-receipts", request, ct);
+
+    public Task<VersionResponse> UpdateExpectedReceiptAsync(Guid id, UpdateExpectedReceiptRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/inventory/expected-receipts/{id}", request, ct);
+
+    public Task<VersionResponse> CancelExpectedReceiptAsync(Guid id, long version, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/expected-receipts/{id}/cancel", new CancelExpectedReceiptRequest { Version = version }, ct);
 
     /// <summary>A page of the site's movements, newest first; pass the last entry to continue (D-029).</summary>
     public Task<JournalPageDto> ListMovementsAsync(
@@ -770,6 +849,9 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<VersionResponse> UpdateReasonCodeAsync(Guid id, UpdateReasonCodeRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/reason-codes/{id}", request, ct);
+
+    public Task<VersionResponse> MoveReasonCodeAsync(Guid id, MoveReasonCodeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/reason-codes/{id}/parent", request, ct);
 
     public Task<IReadOnlyList<StockOnDateDto>> StockOnDateAsync(Guid siteId, DateTimeOffset at, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<StockOnDateDto>>(Query("api/inventory/reports/stock-on-date", ("siteId", siteId), ("at", Iso(at))), ct);
@@ -905,6 +987,29 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<ReportProductionResponse> ReportProductionAsync(Guid jobId, ReportProductionRequest request, CancellationToken ct = default) =>
         SendAsync<ReportProductionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/production", request, ct);
+
+    // Allocations and lot recommendations (D-064)
+
+    public Task<JobAllocationsDto> GetJobAllocationsAsync(Guid jobId, CancellationToken ct = default) =>
+        GetAsync<JobAllocationsDto>($"api/jobs/{jobId}/allocations", ct);
+
+    public Task<AllocationChangeResponse> AllocateLotAsync(Guid jobId, AllocateLotRequest request, CancellationToken ct = default) =>
+        SendAsync<AllocationChangeResponse>(HttpMethod.Post, $"api/jobs/{jobId}/allocations", request, ct);
+
+    public Task<AllocationChangeResponse> AllocateRecommendedAsync(Guid jobId, Guid? materialId, CancellationToken ct = default) =>
+        SendAsync<AllocationChangeResponse>(HttpMethod.Post, $"api/jobs/{jobId}/allocations/recommended", new AllocateRecommendedRequest { MaterialId = materialId }, ct);
+
+    public Task<AllocationChangeResponse> RefreshAllocationsAsync(Guid jobId, CancellationToken ct = default) =>
+        SendAsync<AllocationChangeResponse>(HttpMethod.Post, $"api/jobs/{jobId}/allocations/refresh", new { }, ct);
+
+    public Task<AllocationChangeResponse> ReleaseAllocationAsync(Guid jobId, Guid allocationId, string? note, CancellationToken ct = default) =>
+        SendAsync<AllocationChangeResponse>(HttpMethod.Post, $"api/jobs/{jobId}/allocations/{allocationId}/release", new ReleaseAllocationRequest { Note = note }, ct);
+
+    public Task<AllocationChangeResponse> RefreshSiteAllocationsAsync(Guid siteId, CancellationToken ct = default) =>
+        SendAsync<AllocationChangeResponse>(HttpMethod.Post, $"api/inventory/allocations/refresh?siteId={siteId}", new { }, ct);
+
+    public Task<ReverseProductionResponse> ReverseProductionReportAsync(Guid jobId, Guid reportId, ReverseProductionRequest request, CancellationToken ct = default) =>
+        SendAsync<ReverseProductionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/production/{reportId}/reverse", request, ct);
 
     // Planning rates from run history (D-045)
 

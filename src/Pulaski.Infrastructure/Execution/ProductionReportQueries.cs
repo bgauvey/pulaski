@@ -25,7 +25,7 @@ internal sealed class ProductionReportQueries(NpgsqlDataSource dataSource) : IPr
         LEFT JOIN core.work_order w ON w.id = j.work_order_id
         WHERE e.site_id = @SiteId
           AND c.occurred_at >= @From AND c.occurred_at < @To
-          AND c.count_kind IN ('processed', 'defective')
+          AND c.count_kind IN ('processed', 'defective') AND c.source <> 'machine'
         """;
 
     private const string RunTotals = """

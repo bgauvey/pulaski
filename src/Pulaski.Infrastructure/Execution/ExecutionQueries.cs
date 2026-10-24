@@ -75,9 +75,10 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
         """;
 
     // One report writes a processed row and, with scrap, a defective row in the same transaction, so they share recorded_at.
-    // Machine counts (D-050) aren't reports.
+    // Machine counts (D-050) aren't reports, and a reversal's correction rows (D-063) mark the report reversed instead of listing.
     private const string Reports = """
-        SELECT c.run_id, r.run_no, max(c.occurred_at) AS occurred_at, c.recorded_at,
+        SELECT c.run_id, r.run_no, max(c.occurred_at) AS occurred_at, c.recorded_at, c.report_id,
+               EXISTS (SELECT 1 FROM ts.production_count x WHERE x.report_id = c.report_id AND x.source = 'correction') AS is_reversed,
                coalesce(sum(c.delta_qty) FILTER (WHERE c.count_kind = 'processed'), 0)
                  - coalesce(sum(c.delta_qty) FILTER (WHERE c.count_kind = 'defective'), 0) AS good_qty,
                coalesce(sum(c.delta_qty) FILTER (WHERE c.count_kind = 'defective'), 0) AS scrap_qty,
@@ -86,8 +87,8 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
         FROM ts.production_count c
         JOIN core.job_run r ON r.id = c.run_id
         LEFT JOIN core.reason_code rc ON rc.id = c.scrap_reason_code_id
-        WHERE c.job_id = @JobId AND c.source <> 'machine'
-        GROUP BY c.run_id, r.run_no, c.recorded_at
+        WHERE c.job_id = @JobId AND c.source = 'operator'
+        GROUP BY c.run_id, r.run_no, c.recorded_at, c.report_id
         ORDER BY c.recorded_at DESC
         """;
 

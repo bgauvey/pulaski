@@ -23,7 +23,8 @@ public sealed record ReceiveLotCommand(
     DateTimeOffset? ExpiresAt = null,
     string? Comment = null,
     Guid? RunId = null,
-    DateTimeOffset? EffectiveAt = null) : ICommand<LotTransactionResponse>;
+    DateTimeOffset? EffectiveAt = null,
+    Guid? ExpectedReceiptId = null) : ICommand<LotTransactionResponse>;
 
 /// <summary>Adds found or miscounted stock to a lot, for an adjustment reason; back-dated to <see cref="EffectiveAt"/> when given (D-057).</summary>
 public sealed record WriteUpLotCommand(
@@ -80,7 +81,8 @@ internal sealed class ReceiveLotHandler(
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    TimeProvider timeProvider) : ICommandHandler<ReceiveLotCommand, LotTransactionResponse>
+    TimeProvider timeProvider,
+    IExpectedReceiptRepository expectedReceipts) : ICommandHandler<ReceiveLotCommand, LotTransactionResponse>
 {
     public async Task<LotTransactionResponse> HandleAsync(ReceiveLotCommand command, CancellationToken cancellationToken)
     {
@@ -167,6 +169,12 @@ internal sealed class ReceiveLotHandler(
             new LotEventRow(ids.NewId(), received.Id, movement, received.UomId, envelope.ActorId, Comment: comment, EffectiveAt: MovementTime.Backdated(effective, now)),
             envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
+
+        // What was on its way is here: the expected receipt closes (D-058).
+        if (command.ExpectedReceiptId is { } expected)
+        {
+            await ExpectedReceiving.CloseAsync(expectedReceipts, eventLog, events, expected, received, cancellationToken);
+        }
 
         // A numbered receipt where lots mix is kept, for its genealogy, then joins the balance (D-031).
         if (location.ComminglesLots && !received.IsBulk)
@@ -442,7 +450,8 @@ internal sealed class ConsumeLotHandler(
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    TimeProvider timeProvider) : ICommandHandler<ConsumeLotCommand, LotTransactionResponse>
+    TimeProvider timeProvider,
+    IAllocationRepository? allocations = null) : ICommandHandler<ConsumeLotCommand, LotTransactionResponse>
 {
     public async Task<LotTransactionResponse> HandleAsync(ConsumeLotCommand command, CancellationToken cancellationToken)
     {
@@ -503,6 +512,13 @@ internal sealed class ConsumeLotHandler(
                 EffectiveAt = MovementTime.Backdated(effective, now),
                 Comment = comment,
             });
+        // Consumption into the job uses its allocation of the lot up; taking what other jobs have set aside is allowed, with a warning (D-064).
+        if (allocations is not null
+            && (await AllocationUse.ConsumeAsync(allocations, lot, job.Id, quantity, envelope.ActorId, envelope.OccurredAt, material.BaseUomCode, cancellationToken)).Warning is { } allocationWarning)
+        {
+            warnings.Add(allocationWarning);
+        }
+
         var version = await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
             new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, JobId: job.Id, Comment: comment, RunId: run.Id, EffectiveAt: MovementTime.Backdated(effective, now)),
@@ -589,6 +605,7 @@ internal static class ProductionOutput
         Guid? runId,
         DateTimeOffset now,
         DateTimeOffset? effectiveAt,
+        Guid? reportId,
         CancellationToken cancellationToken)
     {
         var location = await InventoryRules.LocationAsync(inventory, locationId, job.SiteId, cancellationToken);
@@ -674,7 +691,8 @@ internal static class ProductionOutput
             ? await inventory.InsertLotAsync(after, envelope.OccurredAt, cancellationToken)
             : await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
-            new LotEventRow(ids.NewId(), after.Id, movement, after.UomId, envelope.ActorId, JobId: job.Id, Comment: comment, RunId: runId, EffectiveAt: MovementTime.Backdated(effective, now)),
+            new LotEventRow(ids.NewId(), after.Id, movement, after.UomId, envelope.ActorId, JobId: job.Id, Comment: comment, RunId: runId, EffectiveAt: MovementTime.Backdated(effective, now),
+                ReportId: reportId),
             envelope.OccurredAt, cancellationToken);
         await inventory.InsertGenealogyAsync(edges, envelope.OccurredAt, cancellationToken, MovementTime.Backdated(effective, now));
         await eventLog.AppendAsync(envelope, cancellationToken);

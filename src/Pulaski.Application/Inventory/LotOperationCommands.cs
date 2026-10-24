@@ -26,7 +26,10 @@ public sealed record CorrectLotCommand(
     Guid LotId, long ExpectedVersion, string? LotNumber, string? SupplierLot, DateTimeOffset? ExpiresAt, string Comment)
     : ICommand<LotTransactionResponse>;
 
-/// <summary>Reverses the lot's latest movement, for an adjustment reason.</summary>
+/// <summary>
+/// Reverses a movement of the lot, for an adjustment reason and a comment (D-030, D-063): its latest movement, an earlier change of
+/// quantity when the stock allows, or a declaration (consumption, split, merge, transfer) with every lot it touched.
+/// </summary>
 public sealed record ReverseMovementCommand(Guid LotId, long ExpectedVersion, Guid EventId, Guid ReasonCodeId, string? Comment = null)
     : ICommand<LotTransactionResponse>;
 
@@ -285,56 +288,6 @@ internal sealed class CorrectLotHandler(
             });
         var version = await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, Comment: comment), envelope.OccurredAt, cancellationToken);
-        await eventLog.AppendAsync(envelope, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-
-        return InventoryRules.Response(after, version);
-    }
-}
-
-internal sealed class ReverseMovementHandler(
-    IUnitOfWork unitOfWork,
-    IInventoryRepository inventory,
-    IEventLog eventLog,
-    IEventFactory events,
-    IIdGenerator ids) : ICommandHandler<ReverseMovementCommand, LotTransactionResponse>
-{
-    public async Task<LotTransactionResponse> HandleAsync(ReverseMovementCommand command, CancellationToken cancellationToken)
-    {
-        var comment = InventoryRules.Text(command.Comment);
-        new Validator()
-            .Require(command.EventId != Guid.Empty, nameof(command.EventId), "Required.")
-            .Require(command.ReasonCodeId != Guid.Empty, nameof(command.ReasonCodeId), "Choose a reason.")
-            .RequireComment(command.Comment)
-            .ThrowIfInvalid();
-
-        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
-        var lot = await InventoryRules.LotAsync(inventory, command.LotId, command.ExpectedVersion, cancellationToken);
-        var reason = await InventoryRules.ReasonAsync(inventory, command.ReasonCodeId, ReasonKinds.InventoryAdjustment, lot.SiteId, comment, cancellationToken);
-        var latest = await inventory.GetLatestEventAsync(lot.Id, cancellationToken);
-        if (latest is null || latest.Id != command.EventId)
-        {
-            throw new DomainRuleException($"Only the latest movement of {lot.Name.ToLowerInvariant()} can be reversed; reload to see it.");
-        }
-
-        if (latest.Movement.Kind == LotEventKind.Moved && latest.RelatedLotId is not null)
-        {
-            throw new DomainRuleException("A transfer between two balances can't be reversed; move the quantity back instead.");
-        }
-
-        var (after, movement) = lot.Reverse(latest.Movement);
-        var envelope = events.Create(
-            EventTypes.LotReversed, "lot", lot.Id,
-            new { lot.LotNumber, ReversesEventId = latest.Id, ReversedKind = latest.Movement.Kind, QuantityAfter = after.Quantity, after.Status, ReasonCodeId = reason.Id, Comment = comment },
-            reason.Code);
-        var version = await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
-        await inventory.InsertEventAsync(
-            new LotEventRow(
-                ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, ReasonCodeId: reason.Id, Comment: comment,
-                ReversesEventId: latest.Id, ReversesOccurredAt: latest.OccurredAt,
-                // Undoing a back-dated movement counts when it did, so stock at every time is as if it never happened (D-057).
-                EffectiveAt: latest.EffectiveAt is { } effective && effective < latest.OccurredAt ? effective : null),
-            envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 

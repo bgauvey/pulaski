@@ -12,7 +12,7 @@
                 <option value="@Guid.Empty">@(NeedsReason ? "Choose a reason…" : "No reason")</option>
                 @foreach (var reason in _reasons)
                 {
-                    <option value="@reason.Id">@reason.Name</option>
+                    <option value="@reason.Id">@Display.ReasonLabel(reason)</option>
                 }
             </select>
         </div>

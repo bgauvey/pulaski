@@ -1,0 +1,90 @@
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* The container a lot is in (D-059), with packing it into one or taking it out: a lot keeps its own identity either way. *@
+@if (Lot.ContainerId is { } containerId)
+{
+    <a href="inventory/containers?open=@containerId">@Lot.ContainerCode</a>
+    @if (CanPack)
+    {
+        <button type="button" class="btn btn-sm btn-link py-0" disabled="@_busy" @onclick="UnpackAsync">Unpack</button>
+    }
+}
+else
+{
+    <span class="text-muted">Loose</span>
+    @if (CanPack && !Lot.IsBulk && Lot.Quantity > 0 && Lot.Status is "available" or "on_hold" or "quarantine")
+    {
+        @if (_containers is null)
+        {
+            <button type="button" class="btn btn-sm btn-link py-0" @onclick="ChooseAsync">Pack…</button>
+        }
+        else
+        {
+            <div class="d-flex gap-2 mt-1">
+                <select class="form-select form-select-sm w-auto" aria-label="Container" @bind="_containerId">
+                    <option value="@Guid.Empty">Choose a container</option>
+                    @foreach (var c in _containers)
+                    {
+                        <option value="@c.Id">@c.Code · @c.LocationCode@(c.LocationId == Lot.LocationId ? "" : " (moves it there)")</option>
+                    }
+                </select>
+                <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || _containerId == Guid.Empty)" @onclick="PackAsync">Pack</button>
+                <button type="button" class="btn btn-sm btn-link" @onclick="() => _containers = null">Cancel</button>
+            </div>
+        }
+    }
+}
+<ProblemAlert Error="_error" />
+
+@code {
+    [Parameter, EditorRequired]
+    public LotSummaryDto Lot { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private IReadOnlyList<ContainerDto>? _containers;
+    private Guid _containerId;
+    private ApiException? _error;
+    private bool _busy;
+
+    private bool CanPack => User.Can(PermissionCodes.LotMove, Lot.SiteId);
+
+    private async Task ChooseAsync()
+    {
+        try
+        {
+            _containers = await Api.ListContainersAsync(Lot.SiteId);
+            _containerId = _containers.FirstOrDefault(c => c.LocationId == Lot.LocationId)?.Id ?? Guid.Empty;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private Task PackAsync() => RunAsync(() => Api.PackLotAsync(Lot.Id, new PackLotRequest { Version = Lot.Version, ContainerId = _containerId }));
+
+    private Task UnpackAsync() => RunAsync(() => Api.PackLotAsync(Lot.Id, new PackLotRequest { Version = Lot.Version }));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+            _containers = null;
+            await OnChanged.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -47,7 +47,7 @@ Orders & scheduling                       Execution & inventory
 People & access                            History & events
  sec.app_user, role, permission,           ts.* (state, downtime, alarms, counts,
  role_assignment, terminal, badge            process values, job status, lots, quality, OEE)
- core.person, qualification,               evt.event, evt.sink_checkpoint
+ core.person, qualification,               evt.event, evt.sink_checkpoint, evt.delivery
  person_qualification, equipment_qualification
 ```
 
@@ -101,6 +101,8 @@ One self-referencing table holds enterprise, sites, areas, work centers (lines),
 | `holds_inventory` | boolean | no | Lots can be located here (storage, feed point). |
 | `single_material` | boolean | no | Takes one material at a time (D-032): another material can arrive only when the quantity of the one there is zero. Needs `holds_inventory`. |
 | `commingles_lots` | boolean | no | Lots here mix and can't be told apart, like a silo or tank (D-031): every arrival joins one balance per material. Needs `holds_inventory`. |
+| `flow_model` | text | no | How a balance here flows, for genealogy (D-060): `mixed` (default; a withdrawal takes a share of every arrival still there) or `fifo` (plug flow, oldest first). |
+| `min_residence` | interval | yes | The least time material stays before it can leave (D-060); taken sooner, an arrival is only possible. |
 | `state_derivation` | text | no | Where its state comes from (D-050): `own_tags` (default, its own state tag), `series` (the worst state of its machines), `parallel` (the best) or `constraint_machine`. Set on the Equipment screen; nothing reads it until machine data is collected. |
 | `constraint_equipment_id` | uuid → equipment | yes | The constraint machine: set exactly when `state_derivation = 'constraint_machine'` (`equipment_derivation_ck`), and equipment below this one that tracks state. |
 | `micro_stop_threshold` | interval | no | Stops shorter than this are micro-stops (D-050): logged, not queued for coding, not availability loss. 0 to 60 minutes (`equipment_micro_stop_ck`), default 5. |
@@ -198,7 +200,7 @@ One signal an edge reads for a piece of equipment, and what it means. One active
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key; the edge's signals name it. |
 | `equipment_id` | uuid → equipment | no | Equipment of the node's site that tracks state. |
-| `tag_role` | text | no | `state`, `unit_mode`, `stop_reason`, `processed_count`, `defective_count`, `consumed_count` or `machine_speed`; `alarm`, `warning` and `process_value` aren't recorded yet. |
+| `tag_role` | text | no | `state`, `unit_mode`, `stop_reason`, `processed_count`, `defective_count`, `consumed_count` or `machine_speed`; `level` (a silo's or tank's, D-060) can be bound but isn't read yet; `alarm`, `warning` and `process_value` aren't recorded yet. |
 | `connection_id` | uuid → edge_connection | no | Where it is read. |
 | `source_address` | text | no | Sparkplug B: `group/node[/device]:metric`. |
 | `uom_id` | uuid → uom | yes | Unit of the value; not used yet. |
@@ -293,9 +295,29 @@ Groups materials (e.g. all resins), so processes and changeover rules can match 
 | `default_process_id` | uuid → process | yes | The process order creation pre-selects for it (D-023), among those whose scope covers it; the planner may pick another. Can only be set to a process that makes the material. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
+### core.lot_allocation — stock set aside for a job (D-064) · *In use*
+
+A quantity of one lot, in its base unit, kept for one of a job's planned components. Active rows are left out of what other jobs see as free (recommendations, shortages); consuming the lot into the job lowers its row (to `consumed` at zero). Released or used up, never deleted. Changes lock the job, then the lots in id order, then their active allocations (`FOR UPDATE`, id order), as declarations do (D-027).
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The job's site. |
+| `job_id` | uuid → job | no | The job it is for. |
+| `material_id` | uuid → material | no | The component (the lot's material). |
+| `lot_id` | uuid → lot | no | The lot. One active allocation per job and lot (`lot_allocation_active_uq`); more is a top-up. |
+| `quantity` | qty | no | Still set aside, in the lot's base unit; 0 once used up. |
+| `allocated_qty` | qty | no | As set aside, plus any top-ups. |
+| `status` | text | no | `active`, `consumed` (used up by consumption into its job) or `released`. |
+| `basis` | text | no | `chosen` by a person, or `recommended` (taken from the suggestion). |
+| `note` | text | yes | The suggestion's reason, or why it was released or trimmed; at most 500 characters. |
+| `created_at`, `created_by` | timestamptz, text | no, yes | When and by whom. |
+| `ended_at`, `ended_by` | timestamptz, text | yes | When and by whom it stopped being active; set exactly when not active (`lot_allocation_ended_ck`). |
+| `updated_at` | timestamptz | no | Last change. |
+
 ### core.partial_batch — batches cut short when a line stopped (D-036) · *In use*
 
-A partial batch is reported only as a run ends with a reason (or later, into a run that did), at most one per run, in a lot of its own. Under the `exact` rule it waits on hold for a decision.
+A partial batch is reported only as a run ends with a reason (or later, into a run that did), at most one per run (`partial_batch_run_uq`, a unique index that leaves out `reversed` rows), in a lot of its own. Under the `exact` rule it waits on hold for a decision. Reversing its report (D-063) marks it `reversed`, so the run can report another.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -306,10 +328,10 @@ A partial batch is reported only as a run ends with a reason (or later, into a r
 | `quantity` | qty | no | How much it held, in `uom_id`. |
 | `uom_id` | uuid → uom | no | The material's base unit. |
 | `batch_size`, `batch_rule` | numeric(18,6), text | no | The material's batch size and rule when it was reported. |
-| `status` | text | no | `accepted` (near rule), `pending`, `approved` or `rejected`. |
+| `status` | text | no | `accepted` (near rule), `pending`, `approved`, `rejected` or `reversed` (its report was reversed, D-063; a rejected one can't be). |
 | `occurred_at` | timestamptz | no | When it counts as made. |
 | `reported_by` | text | yes | Who reported it. |
-| `decided_at`, `decided_by` | timestamptz, text | yes | When and by whom it was approved or rejected; set exactly when decided (`partial_batch_decided_ck`). |
+| `decided_at`, `decided_by` | timestamptz, text | yes | When and by whom it was approved or rejected: set for a decision, empty while undecided, either for a reversed one (`partial_batch_decided_ck`). |
 | `decision_comment` | text | yes | Why, at most 1000 characters. |
 | `scrap_reason_code_id` | uuid → reason_code | yes | For a rejection, the scrap reason. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
@@ -528,19 +550,19 @@ Holidays, shutdowns and weeks without demand, maintained on Configure → Site s
 
 ### core.reason_code — reason trees · *In use*
 
-One tree per kind of reason. Branches group; leaves are selected. Inventory uses the `inventory_adjustment` and `hold` kinds (D-027); machine time uses `utilization` (D-050); `db/seed-reasons.sql` loads a starter set, and the Reasons screen adds and changes them (D-030). A code and its kind never change once created; the name, `requires_comment`, `sort_order`, `is_active` and a utilization reason's class can. The tree (`parent_id`) isn't edited yet.
+One tree per kind of reason. Groups (`is_selectable` false) hold others; reasons are chosen. Inventory uses the `inventory_adjustment` and `hold` kinds (D-027); machine time uses `utilization` (D-050); `db/seed-reasons.sql` loads a starter set, and the Reasons screen adds and changes them (D-030). A code, its kind and whether it is a group never change once created; the name, `requires_comment`, `sort_order`, `is_active`, a utilization reason's class and its group (`parent_id`, D-062) can. Rows that point at a reason point at its `id`, so moving it never changes what history recorded. The application keeps the tree sound (same kind, parent a group, no cycles, scope, at most 5 levels; `ReasonTree`), locking every reason of the kind in id order for each change.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
 | `site_id` | uuid → equipment | yes | Null for enterprise-wide codes. |
-| `parent_id` | uuid → reason_code | yes | Parent node in the tree. |
+| `parent_id` | uuid → reason_code | yes | The group it is filed under (D-062); null at the top. Same kind, a group, never itself or below itself; a reason for every site only under a group for every site. Indexed. |
 | `reason_kind` | text | no | `utilization`, `scrap`, `hold`, `inventory_adjustment`, `indirect_labor`, `run_end`, `spc_cause` or `sample_exclusion`. `utilization` replaced the planned `downtime` kind (0019). |
-| `utilization_class` | text | yes | For a utilization reason, and only for one (`reason_code_utilization_ck`): `runtime` (run time), `downtime` (availability loss) or `planned` (left out of planned time) (D-050). |
+| `utilization_class` | text | yes | For a utilization reason that isn't a group, and only for one (`reason_code_class_ck`, 0030): `runtime` (run time), `downtime` (availability loss) or `planned` (left out of planned time) (D-050). |
 | `code` | text | no | Unique per site and kind. |
 | `name` | text | no | Display name. |
 | `oee_impact` | text | no | Which OEE factor it lowers: `availability`, `performance`, `quality`, `planned` (excluded from OEE) or `none`. |
-| `is_selectable` | boolean | no | False for branches that only group. |
+| `is_selectable` | boolean | no | False for a group, which only holds others and is never chosen (D-062). Fixed once created. |
 | `requires_comment` | boolean | no | The operator must add a comment. |
 | `sort_order` | integer | no | Display order among siblings. |
 | `is_active` | boolean | no | False when retired. |
@@ -964,6 +986,22 @@ Each side matches a material, a material class or anything. The most specific ac
 
 Lots are relational because they are referenced for years. Every movement is a `ts.lot_event`. Storage locations are equipment with `holds_inventory` (D-027). Quantities are kept in the material's base unit.
 
+### core.container — pallets, totes, boxes and bins (D-059) · *In use*
+
+Holds lots that keep their own identity (`core.lot.container_id`); moving it moves them. Label numbers for lots and containers come from one sequence, `core.label_seq`.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | Its site. |
+| `code` | text | no | Upper case, unique per site (`container_uq`); a blank one is made from the kind and label number, such as `PAL-1042`. |
+| `kind` | text | no | `pallet`, `tote`, `box`, `bin` or `other`. |
+| `location_equipment_id` | uuid → equipment | no | Where it is: a location that holds inventory and doesn't mix lots. |
+| `label_no` | bigint | no | Its label number, unique; the barcode carries `PUL1C` + this. |
+| `is_active` | boolean | no | False once retired, which needs it empty; never deleted. |
+| `created_at`, `created_by` | timestamptz, text | no | When and by whom. |
+| `updated_at` | timestamptz | no | Last change. |
+
 ### core.lot — current state of each lot · *In use*
 
 A balance (`is_bulk`) is the one quantity of a material at a location: for a material that isn't lot-tracked (D-027), or for any material at a location whose lots are indistinguishable (`commingles_lots`, D-031). It has no lot number, is unique per material and location, and stays `available` at zero.
@@ -984,9 +1022,30 @@ A balance (`is_bulk`) is the one quantity of a material at a location: for a mat
 | `origin` | text | no | `produced`, `received`, `erp`, `split` or `merge`. A lot split off another is `split` (D-030). |
 | `supplier_lot` | text | yes | Supplier's lot number, for received lots. |
 | `external_key` | text | yes | ERP key. |
+| `container_id` | uuid → container | yes | The container it is in (D-059), at the container's location; null when loose. Cleared when the lot moves alone, is split off or reaches zero. |
+| `label_no` | bigint | no | Its label number from `core.label_seq`, unique; the barcode carries `PUL1L` + this (D-059). |
 | `produced_from`, `produced_to` | timestamptz | yes | The production window, for output lots cut by time or quantity. |
 | `expires_at` | timestamptz | yes | Expiry. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.expected_receipt — supply on its way (D-058) · *In use*
+
+A purchase or transfer someone (or the ERP) says will arrive, for the shortage check. Not a purchase order: nothing is placed, priced or planned.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The receiving site. |
+| `material_id` | uuid → material | no | What is coming. |
+| `quantity` | qty | no | How much, positive, in `uom_id` (which must convert to the material's base unit). |
+| `uom_id` | uuid → uom | no | Its unit. |
+| `expected_at` | timestamptz | no | When it is due. Indexed with site and material for open ones (`expected_receipt_open_ix`). |
+| `reference`, `supplier`, `note` | text | yes | A PO, transfer or ASN number; the supplier; a note. |
+| `status` | text | no | `open`, `received` or `cancelled`. Only open ones count. |
+| `received_lot_id` | uuid → lot | yes | The lot received against it; set only when `received` (`expected_receipt_received_ck`). |
+| `external_system`, `external_key` | text | yes | The ERP that sent it and its key there; both or neither (`expected_receipt_external_ck`), unique together (`expected_receipt_external_uq`). |
+| `created_at`, `created_by` | timestamptz, text | no | When and by whom. |
+| `updated_at` | timestamptz | no | Last change. |
 
 ### core.lot_attribute — lot attribute definitions (D-056) · *In use*
 
@@ -1097,6 +1156,10 @@ Derived edges can be recalculated when windows or residence times change; the ol
 | `derived_at` | timestamptz | no | When the edge was derived (recorded). |
 | `effective_at` | timestamptz | no | When the link took effect (D-057): `derived_at`, or the back-dated consumption's or production's effective time. |
 | `superseded_at` | timestamptz | yes | When a newer derivation replaced it. |
+
+### core.reason_tree() — every reason's place in its tree (D-062) · *In use*
+
+Returns `id`, `depth` (0 at the top), `group_path` (the names of the groups above it, top first, joined by ` › `; null at the top) and `sort_key` (a `text[]` that sorts a kind's reasons in tree order, each level by `sort_order`, then name and code). A recursive query with a cycle guard, read by the Reasons screen and the reason pickers (`JOIN core.reason_tree() t ON t.id = r.id`).
 
 ### core.trace_forward(lot), core.trace_backward(lot) — genealogy trace · *In use*
 
@@ -1342,7 +1405,7 @@ Time a machine isn't executing: opened by machine data ingest when it leaves Exe
 
 ### ts.production_count — count deltas · *In use (operator reports)*
 
-Deltas calculated at the edge, with rollover handled there; the raw counter is kept for reconciliation. Operator reports (D-035) write a `processed` row for good plus scrap and, with scrap, a `defective` row for the scrap, in the job's unit; good is processed minus defective.
+Deltas calculated at the edge, with rollover handled there; the raw counter is kept for reconciliation. Operator reports (D-035) write a `processed` row for good plus scrap and, with scrap, a `defective` row for the scrap, in the job's unit; good is processed minus defective. A report's rows carry its `report_id` (the processed row's id, D-063); reversing it adds a `correction` row per row, at the same `occurred_at` with the opposite quantity, so every total that sums the rows sees it as never made. Reports recorded before 0031 have no `report_id` and aren't reversed whole.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1357,6 +1420,7 @@ Deltas calculated at the edge, with rollover handled there; the raw counter is k
 | `scrap_reason_code_id` | uuid → reason_code | yes | Why, for defective counts. |
 | `source` | text | no | `machine` (from an edge, D-050: not a production report, and changes no run's quantities yet), `operator` or `correction`. |
 | `corrects_id` | uuid | yes | For corrections: the row being offset. |
+| `report_id` | uuid | yes | The report the row belongs to (D-063): its processed row's id, on that row, its defective row and their corrections. Indexed. |
 | `job_id` | uuid | yes | The run's job. No FK, as for `run_id`. |
 | `recorded_at` | timestamptz | no | When it was entered. Later than the run's end for a late report. |
 | `actor_id` | text | yes | Who reported it (issuer\|subject, as on `evt.event`). |
@@ -1391,7 +1455,7 @@ One row for every job status change, written in the same transaction as the chan
 
 ### ts.lot_event — every inventory movement · *In use*
 
-`core.lot` quantity and location are the running result of these rows. The application appends one row per movement and lot (D-027), in the base unit; it never updates or deletes them. The movement journal (D-029) reads it by site and time range, helped by a BRIN index on `occurred_at`. A back-dated movement (D-057) is recorded now and counts from `effective_at`: stock at a time is the sum of `qty_delta` of the rows that count by then, so it is the same whatever order movements were entered in.
+`core.lot` quantity and location are the running result of these rows. The application appends one row per movement and lot (D-027), in the base unit; it never updates or deletes them. The movement journal (D-029) reads it by site and time range, helped by a BRIN index on `occurred_at`. A back-dated movement (D-057) is recorded now and counts from `effective_at`: stock at a time is the sum of `qty_delta` of the rows that count by then, so it is the same whatever order movements were entered in. A reversal (`reversed`, D-030, D-063) is a row of its own; a reversal of a declaration or of an earlier movement counts at the original's `effective_at`, and the two are then left out together when checking a lot's history never goes below zero.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1399,19 +1463,21 @@ One row for every job status change, written in the same transaction as the chan
 | `occurred_at` | timestamptz | no | When it was recorded. Partition key. |
 | `effective_at` | timestamptz | no | When it counts in stock (D-057): `occurred_at`, or up to 31 days earlier for a back-dated receipt, consumption, production, write-up or write-off; a reversal counts when the movement it undoes did. Indexed with `lot_id`. |
 | `lot_id` | uuid → lot | no | The lot. |
-| `event_kind` | text | no | `created`, `received`, `moved`, `loaded`, `consumed`, `produced`, `split`, `merged`, `status_changed`, `adjusted`, `scrapped` or `shipped`. In use: `received`, `produced`, `adjusted` (write-up), `scrapped` (write-off), `consumed`, `moved`, `status_changed`, and (D-030) `split`, `merged`, `shipped`, `corrected` (details changed; no quantity) and `reversed`. A count posts `adjusted` and `scrapped` rows. |
+| `event_kind` | text | no | `created`, `received`, `moved`, `loaded`, `consumed`, `produced`, `split`, `merged`, `status_changed`, `adjusted`, `scrapped` or `shipped`. In use: `received`, `produced`, `adjusted` (write-up), `scrapped` (write-off), `consumed`, `moved`, `status_changed`, and (D-030) `split`, `merged`, `shipped`, `corrected` (details changed; no quantity) and `reversed`, and (D-059) `packed` and `unpacked`. A count posts `adjusted` and `scrapped` rows. |
 | `qty_delta` | qty | yes | Quantity change: positive in, negative out; null for a whole-lot move or a status change. |
 | `qty_after` | qty | yes | The lot's quantity once this row was recorded (in record order, so not the balance at `effective_at` for a back-dated row). |
 | `uom_id` | uuid → uom | yes | Its unit. |
 | `from_location_id`, `to_location_id` | uuid → equipment | yes | Where the stock left and arrived. |
 | `related_lot_id` | uuid → lot | yes | The other lot in a split or merge, or the other bulk lot in a transfer. |
+| `container_id` | uuid → container | yes | The container packed into, unpacked from, or moved with (D-059). |
 | `job_id` | uuid → job | yes | The job for declared consumption or production. |
 | `run_id` | uuid | yes | The run of the job a consumption or production went into (D-035); every one has one since execution. |
 | `from_status`, `to_status` | text | yes | For status changes, and when a lot is used up or comes back. |
 | `reason_code_id` | uuid → reason_code | yes | Why: required for write-ups, write-offs and holds. |
 | `comment` | text | yes | The person's note, at most 1000 characters. |
 | `reference` | text | yes | A shipment's delivery number, or the count a count adjustment came from (D-030). At most 100 characters. |
-| `reverses_event_id`, `reverses_occurred_at` | uuid, timestamptz | yes | For a reversal, the movement it undoes and that movement's time (no FK into history, D-010). |
+| `reverses_event_id`, `reverses_occurred_at` | uuid, timestamptz | yes | For a reversal, the movement it undoes and that movement's time (no FK into history, D-010). Indexed with `lot_id`. A movement some row reverses counts as never made wherever a job's consumption, produced lots or genealogy are read (D-063). |
+| `report_id` | uuid | yes | For production, and the reversals of a report: the production report (`ts.production_count.report_id`, D-063). Indexed. |
 | `actor_user_id` | uuid | yes | Who, once `sec.app_user` exists. |
 | `actor_id` | text | yes | Who, as on `evt.event` (`issuer\|subject`, `anonymous` until sign-in). |
 
@@ -1510,14 +1576,42 @@ Every command appends its CloudEvents event here in the same transaction as the 
 | `data` | jsonb | no | Payload; changes carry `before` and `after`. |
 | `prev_hash`, `hash` | bytea | yes | Optional per-site hash chain for tamper evidence. |
 
-### evt.sink_checkpoint — outbox progress per adapter · *Planned*
+### evt.sink_checkpoint — outbox progress per adapter (D-061) · *In use*
+
+How far an adapter has read `evt.event`. The ERP webhook (`webhook:erp`) moves it as it copies matching events into `evt.delivery`, in the same statement, so a crash never loses or repeats a capture. Its first row starts at the latest event when `StartFromNow` is on (the default), else at the beginning.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `sink_name` | text | no | Primary key: `kafka-main`, `mqtt-uns`, `webhook:erp`. |
-| `last_tx_id` | xid8 | no | Last transaction delivered. |
-| `last_position` | bigint | no | Last position delivered within it. |
+| `sink_name` | text | no | Primary key: `webhook:erp`; later `kafka-main`, `mqtt-uns`. |
+| `last_tx_id` | xid8 | no | Last transaction read. |
+| `last_position` | bigint | no | Last position read within it. |
 | `updated_at` | timestamptz | no | Last progress. |
+
+### evt.delivery — one event's delivery to an adapter (D-061) · *In use*
+
+The queue and record of what was sent where. A row is added for each matching event when it is captured (once: unique per sink and event), and changed only by the sender (attempts, outcome) and by operators (retry, skip) on **Configure → Integrations**. Ordered like `evt.event`, by `(tx_id, position)`. A `pending` row waits while an earlier `pending` or `failed` row of the same sink and subject exists (it is *held*), so the receiver sees each lot's events in order. The app role has SELECT, INSERT and UPDATE; rows aren't deleted.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `sink` | text | no | The adapter: `webhook:erp`. |
+| `event_id` | uuid | no | The event (`evt.event.id`; no FK, it is partitioned). Also the message's `Idempotency-Key`. Unique with `sink`. |
+| `event_recorded_at` | timestamptz | no | The event's `recorded_at`, to find it in its partition. |
+| `tx_id`, `position` | xid8, bigint | no | The event's order, copied so the queue sorts and holds without the join. |
+| `event_type` | text | no | The event's type: `pulaski.lot.received.v1`. |
+| `subject` | uuid | no | The event's subject (a lot); what later deliveries are held behind. |
+| `status` | text | no | `pending` (to send, or retrying), `delivered`, `failed` (gave up: refused, or attempts ran out) or `skipped` (an operator decided it won't go). |
+| `attempts` | integer | no | Attempts so far. A retry carries on counting. |
+| `next_attempt_at` | timestamptz | no | When a pending row is next due; growing waits after each failure, now after a retry. |
+| `last_attempt_at` | timestamptz | yes | When it was last tried. |
+| `last_status_code` | integer | yes | The receiver's last HTTP status; null when there was no answer. |
+| `last_error` | text | yes | What went wrong, up to 300 characters of the receiver's answer. |
+| `delivered_at` | timestamptz | yes | When the receiver accepted it. |
+| `resolved_by` | text | yes | Who last retried or skipped it. |
+| `resolve_note` | text | yes | The reason given for a skip. |
+| `created_at`, `updated_at` | timestamptz | no | Captured; last changed. |
+
+Indexes: due rows per sink (`next_attempt_at`, pending only), undelivered rows per subject in order (for holding), and per sink and status (for the screen).
 
 ## 15. View and helper
 

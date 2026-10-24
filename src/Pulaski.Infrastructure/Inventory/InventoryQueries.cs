@@ -51,6 +51,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         l.status, l.quantity, l.uom_id, u.code AS uom_code,
         l.location_equipment_id AS location_id, loc.code AS location_code, loc.name AS location_name,
         l.origin, l.supplier_lot, l.expires_at, l.produced_by_job_id, pj.job_number AS produced_by_job_number,
+        l.container_id, ct.code AS container_code, l.label_no,
         l.created_at, l.updated_at, l.xmin::text::bigint AS version
         """;
 
@@ -60,6 +61,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         JOIN core.uom u ON u.id = l.uom_id
         LEFT JOIN core.equipment loc ON loc.id = l.location_equipment_id
         LEFT JOIN core.job pj ON pj.id = l.produced_by_job_id
+        LEFT JOIN core.container ct ON ct.id = l.container_id
         """;
 
     // Without a status, only lots with stock on hand.
@@ -69,6 +71,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         WHERE (@SiteId::uuid IS NULL OR l.site_id = @SiteId)
           AND (@MaterialId::uuid IS NULL OR l.material_id = @MaterialId)
           AND (@LocationId::uuid IS NULL OR l.location_equipment_id = @LocationId)
+          AND (@ContainerId::uuid IS NULL OR l.container_id = @ContainerId)
           AND (@Pattern::text IS NULL OR l.lot_number ILIKE @Pattern OR l.supplier_lot ILIKE @Pattern OR m.code ILIKE @Pattern)
           AND (@ExpiresBefore::timestamptz IS NULL OR l.expires_at < @ExpiresBefore)
           AND (CASE WHEN @Status::text IS NULL THEN l.status IN {OnHand} AND l.quantity > 0 ELSE l.status = @Status END)
@@ -117,7 +120,9 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         e.id, e.occurred_at, e.effective_at, e.event_kind AS kind, e.qty_delta, e.qty_after, eu.code AS uom_code,
         fl.code AS from_location_code, tl.code AS to_location_code, e.from_status, e.to_status,
         e.job_id, ej.job_number, r.code AS reason_code, r.name AS reason_name, e.comment, e.actor_id,
-        e.related_lot_id, rl.lot_number AS related_lot_number, rll.code AS related_lot_location_code, e.reference, e.reverses_event_id
+        e.related_lot_id, rl.lot_number AS related_lot_number, rll.code AS related_lot_location_code, e.reference, e.reverses_event_id,
+        e.container_id, ec.code AS container_code, e.report_id,
+        EXISTS (SELECT 1 FROM ts.lot_event rv WHERE rv.lot_id = e.lot_id AND rv.reverses_event_id = e.id) AS is_reversed
         """;
 
     private const string EventJoins = """
@@ -128,6 +133,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         LEFT JOIN core.reason_code r ON r.id = e.reason_code_id
         LEFT JOIN core.lot rl ON rl.id = e.related_lot_id
         LEFT JOIN core.equipment rll ON rll.id = rl.location_equipment_id
+        LEFT JOIN core.container ec ON ec.id = e.container_id
         """;
 
     private const string HistorySql = $"""
@@ -194,7 +200,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
     private const string TraceSelect = """
         SELECT x.* FROM (
             SELECT DISTINCT ON (t.lot_id)
-                   t.lot_id, t.via_lot_id, t.depth, l.lot_number, l.is_bulk, loc.code AS location_code,
+                   t.lot_id, t.via_lot_id, t.depth, l.lot_number, l.is_bulk, loc.code AS location_code, l.produced_by_job_id,
                    m.code AS material_code, m.name AS material_name, l.status, l.quantity, u.code AS uom_code
         """;
 
@@ -217,6 +223,27 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         {TraceSelect}
             FROM core.trace_backward(@Id) t
         {TraceRest}
+        """;
+
+    // A balance's quantity movements in the order they count (D-057), with its location's flow settings (D-060).
+    private const string BalanceSettingsSql = """
+        SELECT l.id AS lot_id, coalesce(loc.flow_model, 'mixed') AS flow_model, loc.min_residence
+        FROM core.lot l
+        LEFT JOIN core.equipment loc ON loc.id = l.location_equipment_id
+        WHERE l.id = @Id AND l.is_bulk
+        """;
+
+    private const string BalanceMovementsSql = $"""
+        SELECT e.id AS event_id, e.effective_at AS at, e.qty_delta AS delta, e.event_kind AS kind,
+               CASE WHEN e.qty_delta > 0 THEN e.related_lot_id END AS source_lot_id, rl.lot_number AS source_lot_number,
+               e.job_id, j.job_number
+        FROM ts.lot_event e
+        LEFT JOIN core.lot rl ON rl.id = e.related_lot_id AND e.qty_delta > 0
+        LEFT JOIN core.job j ON j.id = e.job_id
+        WHERE e.lot_id = @Id AND e.qty_delta IS NOT NULL AND e.qty_delta <> 0
+          -- A reversed movement and its reversal count as neither having happened (D-063).
+          AND e.reverses_event_id IS NULL AND {LotEventSql.NotReversed}
+        ORDER BY e.effective_at, e.occurred_at, e.id
         """;
 
     private const string BaseUomCodeSql = """
@@ -263,7 +290,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
                eq.code AS line_code, om.code AS material_code, sum(jm.planned_qty) AS planned_qty, u.code AS uom_code,
                coalesce((SELECT sum(-e.qty_delta)
                          FROM ts.lot_event e JOIN core.lot l ON l.id = e.lot_id
-                         WHERE e.job_id = j.id AND e.event_kind = 'consumed' AND l.material_id = @MaterialId), 0) AS consumed_qty
+                         WHERE e.job_id = j.id AND e.event_kind = 'consumed' AND l.material_id = @MaterialId AND {LotEventSql.NotReversed}), 0) AS consumed_qty
         FROM core.job_material jm
         JOIN core.job j ON j.id = jm.job_id
         JOIN core.equipment eq ON eq.id = j.equipment_id
@@ -277,6 +304,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
 
     private const string LocationsSql = $"""
         SELECT e.id, e.site_id, e.code, e.name, e.equipment_role, p.code AS parent_code, e.is_active, e.commingles_lots, e.single_material,
+               e.flow_model, (extract(epoch FROM e.min_residence) / 60)::int AS min_residence_minutes, e.xmin::text::bigint AS version,
                coalesce(s.lot_count, 0) AS lot_count, coalesce(s.material_count, 0) AS material_count
         FROM core.equipment e
         LEFT JOIN core.equipment p ON p.id = e.parent_id
@@ -332,13 +360,13 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         ORDER BY m.code, u.code
         """;
 
-    private const string ConsumedSql = """
+    private const string ConsumedSql = $"""
         SELECT l.material_id, m.code AS material_code, m.name AS material_name, sum(-e.qty_delta) AS consumed_qty, bu.code AS base_uom_code
         FROM ts.lot_event e
         JOIN core.lot l ON l.id = e.lot_id
         JOIN core.material m ON m.id = l.material_id
         JOIN core.uom bu ON bu.id = m.base_uom_id
-        WHERE e.job_id = @Id AND e.event_kind = 'consumed'
+        WHERE e.job_id = @Id AND e.event_kind = 'consumed' AND {LotEventSql.NotReversed}
         GROUP BY l.material_id, m.code, m.name, bu.code
         ORDER BY m.code
         """;
@@ -346,18 +374,18 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
     private const string ProducedLotsSql = $"""
         SELECT {LotColumns}
         {LotFrom}
-        WHERE l.id IN (SELECT e.lot_id FROM ts.lot_event e WHERE e.job_id = @Id AND e.event_kind = 'produced')
+        WHERE l.id IN (SELECT e.lot_id FROM ts.lot_event e WHERE e.job_id = @Id AND e.event_kind = 'produced' AND {LotEventSql.NotReversed})
         ORDER BY l.lot_number
         """;
 
-    private const string ProducedQtySql = """
-        SELECT coalesce(sum(qty_delta), 0) FROM ts.lot_event WHERE job_id = @Id AND event_kind = 'produced'
+    private const string ProducedQtySql = $"""
+        SELECT coalesce(sum(e.qty_delta), 0) FROM ts.lot_event e WHERE e.job_id = @Id AND e.event_kind = 'produced' AND {LotEventSql.NotReversed}
         """;
 
     // One row per job, component and planned unit; consumption is the job's total of the component.
     private const string ComponentDemandSql = $"""
-        SELECT j.id AS job_id, j.job_number, j.status AS job_status, eq.code AS line_code, wo.order_number AS work_order_number,
-               coalesce(j.planned_start, j.earliest_start) AS needed_from,
+        SELECT j.id AS job_id, j.job_number, j.status AS job_status, eq.code AS line_code, eq.id AS line_id, NOT eq.can_run_job AS on_group,
+               wo.order_number AS work_order_number, coalesce(j.planned_start, j.earliest_start) AS needed_from, j.planned_start,
                m.id AS material_id, m.code AS material_code, m.name AS material_name, m.base_uom_id, bu.code AS base_uom_code,
                sum(jm.planned_qty) AS planned_qty, jm.uom_id, u.code AS uom_code,
                coalesce(c.consumed, 0) AS consumed_qty
@@ -372,12 +400,12 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
             SELECT sum(-e.qty_delta) AS consumed
             FROM ts.lot_event e
             JOIN core.lot l ON l.id = e.lot_id
-            WHERE e.job_id = j.id AND e.event_kind = 'consumed' AND l.material_id = jm.material_id) c ON true
+            WHERE e.job_id = j.id AND e.event_kind = 'consumed' AND l.material_id = jm.material_id AND {LotEventSql.NotReversed}) c ON true
         WHERE jm.direction = 'consume' AND j.site_id = @SiteId AND {OpenJobs}
           AND (@EquipmentId::uuid IS NULL OR j.equipment_id IN (
                 SELECT descendant_id FROM core.equipment_closure WHERE ancestor_id = @EquipmentId))
           AND (@Before::timestamptz IS NULL OR coalesce(j.planned_start, j.earliest_start) < @Before)
-        GROUP BY j.id, j.job_number, j.status, eq.code, wo.order_number, m.id, m.code, m.name, m.base_uom_id, bu.code,
+        GROUP BY j.id, j.job_number, j.status, eq.code, eq.id, eq.can_run_job, wo.order_number, m.id, m.code, m.name, m.base_uom_id, bu.code,
                  jm.uom_id, u.code, c.consumed
         """;
 
@@ -425,13 +453,15 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         ORDER BY m.code, l.lot_number
         """;
 
+    // In tree order (D-062): each group followed by what is in it.
     private const string AllReasonCodesSql = """
         SELECT r.id, r.site_id, s.code AS site_code, r.reason_kind AS kind, r.code, r.name, r.requires_comment,
-               r.sort_order, r.is_active, r.is_selectable, r.utilization_class, r.xmin::text::bigint AS version
+               r.sort_order, r.is_active, r.is_selectable, r.utilization_class, r.parent_id, t.depth, t.group_path, r.xmin::text::bigint AS version
         FROM core.reason_code r
+        JOIN core.reason_tree() t ON t.id = r.id
         LEFT JOIN core.equipment s ON s.id = r.site_id
         WHERE @SiteId::uuid IS NULL OR r.site_id IS NULL OR r.site_id = @SiteId
-        ORDER BY r.reason_kind, r.sort_order, r.name
+        ORDER BY r.reason_kind, t.sort_key
         """;
 
     // Each lot's quantity at the time: its movements that count by then, by effective time, whenever they were recorded (D-057),
@@ -473,12 +503,14 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         ORDER BY min(l.created_at), m.code
         """;
 
+    // Only reasons that can be chosen, each with the groups above it (D-062), in tree order.
     private const string ReasonCodesSql = """
-        SELECT id, reason_kind AS kind, code, name, requires_comment, utilization_class
-        FROM core.reason_code
-        WHERE is_active AND is_selectable AND reason_kind = @Kind
-          AND (site_id IS NULL OR site_id = @SiteId)
-        ORDER BY sort_order, name
+        SELECT r.id, r.reason_kind AS kind, r.code, r.name, r.requires_comment, r.utilization_class, t.group_path
+        FROM core.reason_code r
+        JOIN core.reason_tree() t ON t.id = r.id
+        WHERE r.is_active AND r.is_selectable AND r.reason_kind = @Kind
+          AND (r.site_id IS NULL OR r.site_id = @SiteId)
+        ORDER BY t.sort_key
         """;
 
     public async Task<IReadOnlyList<MaterialStockDto>> ListStockAsync(StockFilter filter, CancellationToken cancellationToken)
@@ -547,6 +579,26 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         var rows = await connection.QueryAsync<LotTraceNodeDto>(
             new CommandDefinition(forward ? TraceForwardSql : TraceBackwardSql, new { Id = lotId }, cancellationToken: cancellationToken));
         return rows.AsList();
+    }
+
+    public async Task<BalanceHistory?> GetBalanceHistoryAsync(Guid lotId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var args = new { Id = lotId };
+        if (await connection.QuerySingleOrDefaultAsync<BalanceSettingsRow>(new CommandDefinition(BalanceSettingsSql, args, cancellationToken: cancellationToken)) is not { } settings)
+        {
+            return null;
+        }
+
+        var movements = await connection.QueryAsync<BalanceMovementRow>(new CommandDefinition(BalanceMovementsSql, args, cancellationToken: cancellationToken));
+        return new BalanceHistory(settings.LotId, settings.FlowModel, settings.MinResidence, movements.AsList());
+    }
+
+    private sealed class BalanceSettingsRow
+    {
+        public Guid LotId { get; init; }
+        public string FlowModel { get; init; } = "mixed";
+        public TimeSpan? MinResidence { get; init; }
     }
 
     public async Task<WhereUsedDto?> WhereUsedAsync(Guid materialId, CancellationToken cancellationToken)
@@ -757,6 +809,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         Pattern = Like(filter.Search),
         filter.Offset,
         filter.Limit,
+        filter.ContainerId,
         AttributeId = filter.Attribute?.AttributeId,
         AttributeText = filter.Attribute is { Text: { } text } a ? (a.TextContains ? Like(text) : Escape(text)) : null,
         filter.Attribute?.MinNumber,

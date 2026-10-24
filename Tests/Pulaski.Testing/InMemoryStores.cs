@@ -4,6 +4,7 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.Boms;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Execution;
+using Pulaski.Application.Integrations;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.Labor;
 using Pulaski.Application.MachineData;
@@ -50,8 +51,13 @@ public sealed class InMemoryStores
     public InMemoryUnits Units { get; } = new();
 
     private InMemoryLotRecords? _lotRecords;
+    private InMemoryContainers? _containers;
 
     public InMemoryInventory Inventory { get; } = new();
+
+    public InMemoryExpectedReceipts ExpectedReceipts { get; } = new();
+
+    public InMemoryContainers Containers => _containers ??= new InMemoryContainers(Inventory);
 
     public InMemoryLotRecords LotRecords => _lotRecords ??= new InMemoryLotRecords(Inventory);
 
@@ -85,6 +91,10 @@ public sealed class InMemoryStores
 
     public InMemoryTerminals Terminals { get; } = new();
 
+    public InMemoryDeliveries Deliveries { get; } = new();
+
+    public InMemoryAllocations Allocations { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -106,6 +116,10 @@ public sealed class InMemoryStores
         services.RemoveAll<IUnitRepository>();
         services.RemoveAll<IInventoryReadStore>();
         services.RemoveAll<IInventoryRepository>();
+        services.RemoveAll<IContainerRepository>();
+        services.RemoveAll<IContainerReadStore>();
+        services.RemoveAll<IExpectedReceiptRepository>();
+        services.RemoveAll<IExpectedReceiptReadStore>();
         services.RemoveAll<ILotRecordsReadStore>();
         services.RemoveAll<ILotRecordsRepository>();
         services.RemoveAll<IMaterialReadStore>();
@@ -137,6 +151,9 @@ public sealed class InMemoryStores
         services.RemoveAll<ITerminalReadStore>();
         services.RemoveAll<IBadgeHasher>();
         services.RemoveAll<IQualificationReadStore>();
+        services.RemoveAll<IDeliveryStore>();
+        services.RemoveAll<IAllocationRepository>();
+        services.RemoveAll<IAllocationReadStore>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -156,6 +173,10 @@ public sealed class InMemoryStores
         services.AddSingleton<IUnitRepository>(Units);
         services.AddSingleton<IInventoryReadStore>(Inventory);
         services.AddSingleton<IInventoryRepository>(Inventory);
+        services.AddSingleton<IContainerRepository>(Containers);
+        services.AddSingleton<IContainerReadStore>(Containers);
+        services.AddSingleton<IExpectedReceiptRepository>(ExpectedReceipts);
+        services.AddSingleton<IExpectedReceiptReadStore>(ExpectedReceipts);
         services.AddSingleton<ILotRecordsReadStore>(LotRecords);
         services.AddSingleton<ILotRecordsRepository>(LotRecords);
         services.AddSingleton<IMaterialReadStore>(MaterialAdmin);
@@ -187,6 +208,9 @@ public sealed class InMemoryStores
         services.AddSingleton<ITerminalRepository>(Terminals);
         services.AddSingleton<ITerminalReadStore>(Terminals);
         services.AddSingleton<IBadgeHasher>(new ReversingBadgeHasher());
+        services.AddSingleton<IDeliveryStore>(Deliveries);
+        services.AddSingleton<IAllocationRepository>(Allocations);
+        services.AddSingleton<IAllocationReadStore>(Allocations);
         return services;
     }
 }

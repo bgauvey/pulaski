@@ -134,3 +134,83 @@ public static class LotDocumentFormat
     public const int MaxBytes = 10 * 1024 * 1024;
     public const string Accept = ".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg";
 }
+
+/// <summary>A container and what it holds (D-059).</summary>
+public sealed record ContainerDto
+{
+    public required Guid Id { get; init; }
+    public required Guid SiteId { get; init; }
+    public required string Code { get; init; }
+
+    /// <summary><c>pallet</c>, <c>tote</c>, <c>box</c>, <c>bin</c> or <c>other</c>.</summary>
+    public required string Kind { get; init; }
+    public required Guid LocationId { get; init; }
+    public required string LocationCode { get; init; }
+    public bool IsActive { get; init; }
+
+    /// <summary>What its label's barcode carries: <c>PUL1C</c> + this.</summary>
+    public long LabelNo { get; init; }
+    public string Barcode { get; init; } = "";
+    public int LotCount { get; init; }
+    public DateTimeOffset CreatedAt { get; init; }
+    public string CreatedBy { get; init; } = "";
+    public long Version { get; init; }
+
+    /// <summary>Its lots with stock, in a detail read; empty in a list.</summary>
+    public IReadOnlyList<LotSummaryDto> Lots { get; init; } = [];
+}
+
+public sealed record CreateContainerRequest
+{
+    public Guid SiteId { get; init; }
+
+    /// <summary>Blank: one is made from the kind and its label number, such as <c>PAL-1042</c>.</summary>
+    public string? Code { get; init; }
+    public string Kind { get; init; } = "pallet";
+    public Guid LocationId { get; init; }
+}
+
+public sealed record MoveContainerRequest
+{
+    public long Version { get; init; }
+    public Guid ToLocationId { get; init; }
+    public string? Comment { get; init; }
+}
+
+public sealed record RetireContainerRequest
+{
+    public long Version { get; init; }
+}
+
+/// <summary>Puts a whole lot into a container, or (with no container) takes it out (D-059).</summary>
+public sealed record PackLotRequest
+{
+    public long Version { get; init; }
+    public Guid? ContainerId { get; init; }
+    public string? Comment { get; init; }
+}
+
+/// <summary>What a scanned code names (D-059): exactly one thing, several to choose from, or nothing.</summary>
+public sealed record ScanResultDto
+{
+    public required string Code { get; init; }
+
+    /// <summary><c>found</c> (one match), <c>ambiguous</c> (choose one) or <c>not_found</c>.</summary>
+    public required string Status { get; init; }
+    public IReadOnlyList<ScanMatchDto> Matches { get; init; } = [];
+    public string? Message { get; init; }
+}
+
+public sealed record ScanMatchDto
+{
+    /// <summary><c>lot</c>, <c>container</c> or <c>location</c>.</summary>
+    public required string Kind { get; init; }
+    public required Guid Id { get; init; }
+    public required string Label { get; init; }
+
+    /// <summary>Material, quantity and where, for a lot; location and contents, for a container.</summary>
+    public string? Detail { get; init; }
+
+    /// <summary>How it matched: <c>label</c> (Pulaski's barcode) or the field the text matched.</summary>
+    public string MatchedBy { get; init; } = "label";
+}

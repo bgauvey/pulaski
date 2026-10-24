@@ -24,6 +24,9 @@ public static class PartialBatchStatus
     public const string Pending = "pending";
     public const string Approved = "approved";
     public const string Rejected = "rejected";
+
+    /// <summary>Its report was reversed (D-063): it no longer counts as the run's partial batch.</summary>
+    public const string Reversed = "reversed";
 }
 
 /// <summary>
@@ -198,6 +201,12 @@ public sealed record PartialBatch(
             ScrapReasonCodeId = scrapReasonCodeId,
         };
     }
+
+    /// <summary>Its report was reversed (D-063). A rejected one was written off, so its report can't be until that is reversed.</summary>
+    /// <exception cref="DomainRuleException">It was rejected or reversed already.</exception>
+    public PartialBatch Reverse() => Status is PartialBatchStatus.Rejected or PartialBatchStatus.Reversed
+        ? throw new DomainRuleException($"This partial batch was {Status}; its report can't be reversed while it is.")
+        : this with { Status = PartialBatchStatus.Reversed };
 
     private void EnsurePending()
     {

@@ -231,11 +231,13 @@ internal static class StopSql
             UNION SELECT s.reason_code_id FROM eq JOIN core.machine_profile_state s ON s.profile_id = eq.machine_profile_id AND s.is_active AND s.reason_code_id IS NOT NULL
             UNION SELECT o.reason_code_id FROM eq JOIN core.equipment_stop_reason_map o ON o.equipment_id = eq.id AND o.is_active AND o.reason_code_id IS NOT NULL
         )
-        SELECT r.id, r.reason_kind AS kind, r.code, r.name, r.requires_comment, r.utilization_class
-        FROM core.reason_code r, eq
+        SELECT r.id, r.reason_kind AS kind, r.code, r.name, r.requires_comment, r.utilization_class, t.group_path
+        FROM core.reason_code r
+        JOIN core.reason_tree() t ON t.id = r.id
+        CROSS JOIN eq
         WHERE r.reason_kind = 'utilization' AND r.is_active AND r.is_selectable AND (r.site_id IS NULL OR r.site_id = eq.site_id)
           AND (NOT EXISTS (SELECT 1 FROM offered) OR r.id IN (SELECT reason_code_id FROM named))
-        ORDER BY CASE r.utilization_class WHEN 'downtime' THEN 0 WHEN 'planned' THEN 1 ELSE 2 END, r.sort_order, r.code
+        ORDER BY CASE r.utilization_class WHEN 'downtime' THEN 0 WHEN 'planned' THEN 1 ELSE 2 END, t.sort_key
         """;
 }
 

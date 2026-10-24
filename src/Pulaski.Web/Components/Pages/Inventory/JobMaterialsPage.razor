@@ -111,6 +111,8 @@
             }
         </section>
     </div>
+
+    <JobAllocationsPanel @key="_loads" JobId="JobId" SiteId="j.SiteId" TimeZone="@Sites.Site?.TimeZone" />
 }
 else if (_error is null)
 {
@@ -128,6 +130,9 @@ else if (_error is null)
     private LotActionResult? _result;
     private LotAction? _action;
 
+    // Reloads the allocations panel after a declaration, which may use an allocation up.
+    private int _loads;
+
     protected override Task OnParametersSetAsync() => LoadAsync();
 
     private async Task LoadAsync()
@@ -137,6 +142,7 @@ else if (_error is null)
         {
             await Sites.EnsureAsync(Api);
             _job = await Api.GetJobMaterialsAsync(JobId);
+            _loads++;
         }
         catch (ApiException ex)
         {

@@ -108,7 +108,7 @@
                     <select id="count-reason" class="form-select" @bind="_reasonId">
                         @foreach (var r in _reasons)
                         {
-                            <option value="@r.Id">@r.Name</option>
+                            <option value="@r.Id">@Display.ReasonLabel(r)</option>
                         }
                     </select>
                 </div>

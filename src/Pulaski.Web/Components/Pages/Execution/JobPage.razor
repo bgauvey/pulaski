@@ -146,7 +146,7 @@
                                                     <option value="@Guid.Empty">Choose a reason…</option>
                                                     @foreach (var r in _scrapReasons)
                                                     {
-                                                        <option value="@r.Id">@r.Name</option>
+                                                        <option value="@r.Id">@Display.ReasonLabel(r)</option>
                                                     }
                                                 </select>
                                             </div>
@@ -216,16 +216,20 @@
         {
             <div class="table-panel">
                 <table class="table table-sm align-middle">
-                    <thead><tr><th>Entered</th><th>Run</th><th class="inv-num">Good</th><th class="inv-num">Scrap</th><th>Scrap reason</th><th>By</th><th>Comment</th></tr></thead>
+                    <thead><tr><th>Entered</th><th>Run</th><th class="inv-num">Good</th><th class="inv-num">Scrap</th><th>Scrap reason</th><th>By</th><th>Comment</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var r in job.Reports)
                         {
-                            <tr @key="(r.RunId, r.RecordedAt)">
+                            <tr @key="(r.RunId, r.RecordedAt)" class="@(r.IsReversed ? "text-muted" : "")">
                                 <td class="small">
                                     @Display.SiteTime(r.RecordedAt, job.SiteTimeZone)
                                     @if (r.IsLate)
                                     {
                                         <span class="chip ms-1" title="Entered after the run ended; counted at the run's end">late</span>
+                                    }
+                                    @if (r.IsReversed)
+                                    {
+                                        <span class="chip chip-muted ms-1" title="Reversed: its counts are offset and its lots taken back">reversed</span>
                                     }
                                 </td>
                                 <td>@r.RunNo</td>
@@ -234,7 +238,37 @@
                                 <td class="small">@r.ScrapReason</td>
                                 <td class="small">@r.ActorId</td>
                                 <td class="small">@r.Comment</td>
+                                <td class="text-end">
+                                    @if (r.ReportId is { } reportId && !r.IsReversed && May(PermissionCodes.ProductionCorrect))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link p-0" disabled="@_busy" @onclick="() => StartReverseAsync(reportId)">Reverse…</button>
+                                    }
+                                </td>
                             </tr>
+                            @if (r.ReportId is { } open && open == _reversing)
+                            {
+                                <tr>
+                                    <td colspan="8">
+                                        <form class="inv-toolbar mb-0" @onsubmit="ReverseAsync" @onsubmit:preventDefault>
+                                            <select class="form-select w-auto" aria-label="Reason" @bind="_reverseReason">
+                                                <option value="@Guid.Empty">Reason…</option>
+                                                @foreach (var reason in _adjustReasons)
+                                                {
+                                                    <option value="@reason.Id">@Display.ReasonLabel(reason)</option>
+                                                }
+                                            </select>
+                                            <input class="form-control inv-grow" maxlength="1000" placeholder="Why, e.g. reported on the wrong job (required)" aria-label="Comment"
+                                                   @bind="_reverseComment" @bind:event="oninput" />
+                                            <button type="submit" class="btn btn-sm btn-danger" disabled="@(_busy || _reverseReason == Guid.Empty || string.IsNullOrWhiteSpace(_reverseComment))">Reverse report</button>
+                                            <button type="button" class="btn btn-sm btn-link" @onclick="() => _reversing = null">Cancel</button>
+                                        </form>
+                                        <div class="form-text">
+                                            Its good and scrap come off the run, and every lot it made gives the quantity back. A lot that has been used, split or
+                                            moved into a silo since must be put right first; Pulaski says which.
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
                         }
                     </tbody>
                 </table>
@@ -264,6 +298,10 @@ else if (_error is null)
     private Guid _rejectReason;
     private string? _decisionComment;
     private IReadOnlyList<ReasonCodeDto> _scrapReasons = [];
+    private IReadOnlyList<ReasonCodeDto> _adjustReasons = [];
+    private Guid? _reversing;
+    private Guid _reverseReason;
+    private string? _reverseComment;
 
     private enum StopMode
     {
@@ -335,6 +373,46 @@ else if (_error is null)
         _stop = null;
         _notes = result.Notes;
         await LoadAsync();
+    }
+
+    private async Task StartReverseAsync(Guid reportId)
+    {
+        _error = null;
+        try
+        {
+            if (_adjustReasons.Count == 0)
+            {
+                _adjustReasons = await Api.ListReasonCodesAsync("inventory_adjustment", _job!.SiteId);
+            }
+
+            (_reversing, _reverseReason, _reverseComment) = (reportId, Guid.Empty, null);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task ReverseAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await Api.ReverseProductionReportAsync(JobId, _reversing!.Value,
+                new ReverseProductionRequest { ReasonCodeId = _reverseReason, Comment = _reverseComment!.Trim() });
+            _notes = [$"Reversed: run now has {FloorView.Qty(result.RunGoodQty)} good and {FloorView.Qty(result.RunScrapQty)} scrap; {result.Lots.Count} lot(s) took the output back."];
+            _reversing = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private Task ApproveAsync(PartialBatchDto partial) => DecideAsync(() => Api.ApprovePartialBatchAsync(partial.Id, null));

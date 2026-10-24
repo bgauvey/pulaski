@@ -87,6 +87,18 @@ public static class InventoryView
     public static string LotLabel(string? lotNumber, bool isBulk, string? locationCode) =>
         isBulk || lotNumber is null ? (locationCode is null ? "Balance" : $"Balance at {locationCode}") : lotNumber;
 
+    /// <summary>What reversing a movement does (D-063), for the drawer that asks for it.</summary>
+    public static string ReversalNote(LotEventDto movement, LotSummaryDto lot) => movement.Kind switch
+    {
+        "consumed" => $"The {Qty(-(movement.QtyDelta ?? 0m))} {movement.UomCode} goes back to the lot, and it stops being a parent of what {movement.JobNumber} made, unless more of it went into that job.",
+        "produced" => "This production was recorded before reports could be reversed whole: the lot gives the quantity back, but the job's reported output stays.",
+        "split" => "The split comes apart: the new lot is cancelled and its quantity goes back to the lot it came from. The new lot must be just as it was split off.",
+        "merged" => "The merge comes apart: the lot that was merged gets its quantity and status back, and the lot it joined goes down by that much.",
+        "moved" when movement.RelatedLotId is not null => "The quantity goes back to the balance it came from; the receiving balance must still hold it.",
+        _ when movement.Kind == "received" && lot.Quantity == movement.QtyDelta && !lot.IsBulk => "The lot goes back to how it was before it: empty, so it is cancelled.",
+        _ => "The lot goes back to how it was before it. A reversal counts when the movement did, so stock at every time is as if it never happened.",
+    };
+
     /// <summary>What a movement was, in words.</summary>
     public static string EventLabel(string kind) => kind switch
     {

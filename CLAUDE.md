@@ -193,6 +193,36 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   production, write-up and write-off take `EffectiveAt` (`Backdating.EffectiveAt` / `EnsureFitsAsync`: ≤ 31 days, comment, not before the
   lot's stock or a posted count, never negative in effective order); run and expiry at the effective time; endpoints add
   `RequireToBackdate` (`inventory.backdate`). Reversals keep the original's effective time.
+- Shortages (D-058, proposed): live timing by default (each line projected via `TimelineMapping.Project`, `TimeSource` per line);
+  `core.expected_receipt` (screen + idempotent ERP import by system/key; receiving with `ExpectedReceiptId` closes it) counted by
+  `ShortageCalculator` after stock, only when due by a job's time (past times count as now). Not MRP.
+- Containers and labels (D-059, proposed): `core.container` holds whole lots (`lot.container_id`, kept at the container's location by
+  `Lot.PackInto`/`MoveWithContainer`; moving alone, splitting or reaching zero clears it). Moving a container locks it, then its lots in
+  id order. `core.label_seq` numbers lots and containers; barcodes `PUL1L<n>`/`PUL1C<n>`/`PUL1E:<code>` (Code 128, `LabelPdfRenderer`,
+  `BarcodeDrawing`); `ScanCode.Parse` + `ResolveScanQuery` resolve a scan to one match or offer the ambiguous ones.
+- Balance genealogy (D-060, proposed): `equipment.flow_model` (`mixed`/`fifo`) + `min_residence`; `BalanceAllocation.Allocate` replays a
+  balance's movements by effective time and gives each withdrawal its arrivals with precision exact/estimated/possible; `TraceNarrowing`
+  narrows traces through balances on read. Nothing stored. `level` tag role is bindable, not yet read.
+- ERP delivery (D-061, proposed): `ErpDeliveryService` (API hosted service, `Integrations:Erp` config; secret never in the DB) captures
+  matching events into `evt.delivery` below the snapshot xmin and moves `evt.sink_checkpoint` in one statement (`DeliveryRelay`, advisory
+  lock per sink), then POSTs CloudEvents JSON with `Idempotency-Key` = event id and an HMAC signature. `DeliveryPolicy.AfterAttempt`: 2xx
+  delivered, 4xx (not 408/425/429) failed now, else backoff to `MaxAttempts`. A subject's later rows are held behind a pending/failed one.
+  Configure → Integrations retries/skips (`integrations.view` / `integrations.manage`). At least once; receivers dedupe.
+- Reason trees (D-062, proposed): groups (`is_selectable` false, fixed at creation, no class) hold reasons of their kind; `ReasonTree`
+  checks placement (same kind, parent a group, no cycles, scope, ≤ 5 levels) and switching off. Tree changes lock the whole kind in id
+  order (`LockReasonTreeAsync`); `MoveReasonCodeCommand` / `PUT /reason-codes/{id}/parent`. `core.reason_tree()` gives depth, `group_path`,
+  `sort_key`; pickers show the path. History refers to reason ids, so moves never change it.
+- Reversing declarations (D-063, proposed): never edit; compensating `reversed` rows (reason + comment required) at the original's
+  effective time. `ReverseMovementCommand` dispatches: latest single-lot (D-030), earlier quantity-only if `EnsureFitsAsync` allows,
+  consumption (`Lot.Restore`), split/merge/transfer (both lots, `GetCounterpartAsync`, `Lot.TakeBack`), genealogy superseded.
+  `LotEventSql.NotReversed` hides reversed declarations from job totals/lots/genealogy. Reports have `report_id` (processed row id, on
+  counts and produced lot rows); `ReverseProductionReportCommand` (`production.correct`) offsets counts with `correction` rows, `JobRun.Remove`,
+  takes back its lots (out of a commingled balance first), partial batch → `reversed`.
+- Lot allocations (D-064, proposed): `core.lot_allocation` (active / consumed / released; one active per job + lot) sets a lot's stock aside for a
+  job's planned component; other jobs (recommendations, shortages) see it as taken; consumption into its job uses it up
+  (`AllocationUse`), into another warns. `LotRecommendation` (FEFO, then FIFO; only available, unexpired at need time, free stock; every
+  pick and exclusion explained); `AllocationPlanner` shared by `GetJobAllocationsQuery` and the commands. Refresh is on demand (job or
+  site); locks job → lots → allocations in id order. Permission `lot.allocate`.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

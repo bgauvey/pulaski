@@ -22,6 +22,7 @@ public static class Permissions
     public const string LaborView = "labor.view";
     public const string MachinesView = "machines.view";
     public const string SiteSettingsView = "site_settings.view";
+    public const string IntegrationsView = "integrations.view";
 
     // Changing (D-037).
     public const string SchedulePlan = "schedule.plan";
@@ -36,10 +37,12 @@ public static class Permissions
     public const string LotShip = "lot.ship";
     public const string LotHold = "lot.hold";
     public const string InventoryCorrect = "inventory.correct";
+    public const string LotAllocate = "lot.allocate";
     public const string StockCount = "stock_count.manage";
     public const string LotRecords = "lot_records.manage";
     public const string InventoryBackdate = "inventory.backdate";
     public const string PartialBatchDecide = "partial_batch.decide";
+    public const string ProductionCorrect = "production.correct";
     public const string Materials = "materials.manage";
     public const string Processes = "processes.manage";
     public const string Units = "units.manage";
@@ -55,6 +58,7 @@ public static class Permissions
     public const string Terminals = "terminals.manage";
     public const string LotAttributes = "lot_attributes.manage";
     public const string Security = "security.manage";
+    public const string Integrations = "integrations.manage";
 
     // Machine data (D-050): what a Pulaski Edge node's service user holds.
     public const string EdgeIngest = "edge.ingest";
@@ -76,6 +80,7 @@ public static class Permissions
         new(LaborView, "Viewing", "See labor: who is on, shift review and labor reports"),
         new(MachinesView, "Viewing", "See machines: their live state and their stops"),
         new(SiteSettingsView, "Viewing", "See a site's settings: changeover mode, reporting tolerances and calendar exceptions"),
+        new(IntegrationsView, "Viewing", "See outbound deliveries to the ERP and how they went"),
         new(SchedulePlan, "Planning", "Plan jobs: create, sequence, pin, assign to lines and cancel them"),
         new(WorkOrderManage, "Planning", "Create work orders, dispatch, un-dispatch and firm them"),
         new(WorkOrderClose, "Planning", "Cancel and close work orders"),
@@ -84,6 +89,7 @@ public static class Permissions
         new(JobReopen, "Floor", "Reopen a completed job"),
         new(ProductionReport, "Floor", "Report production and consumption into a job's runs"),
         new(PartialBatchDecide, "Floor", "Approve or reject partial batches (not one's own)"),
+        new(ProductionCorrect, "Floor", "Reverse production reports: their counts, the run's totals and the lots they made"),
         new(LaborRecordOwn, "Labor", "Clock yourself on and off lines and jobs"),
         new(LaborRecord, "Labor", "Record labor for others and check crews onto lines"),
         new(LaborApprove, "Labor", "Approve a shift's labor and correct approved labor"),
@@ -93,6 +99,7 @@ public static class Permissions
         new(LotShip, "Inventory", "Ship lots"),
         new(LotHold, "Inventory", "Put lots on hold or in quarantine and release them"),
         new(InventoryCorrect, "Inventory", "Correct inventory: write up, write off, correct, reverse, split and merge lots"),
+        new(LotAllocate, "Inventory", "Allocate lots to jobs, release allocations and refresh them"),
         new(StockCount, "Inventory", "Start, enter, post and cancel stock counts"),
         new(LotRecords, "Inventory", "Record lot attributes and attach or withdraw certificates"),
         new(InventoryBackdate, "Inventory", "Back-date receipts, consumption, production, write-ups and write-offs by up to 31 days"),
@@ -107,6 +114,7 @@ public static class Permissions
         new(Terminals, "Configuration", "Register and enrol shop-floor terminals"),
         new(LotAttributes, "Configuration", "Maintain lot attribute definitions"),
         new(Security, "Administration", "Maintain users, roles and what each role may do"),
+        new(Integrations, "Administration", "Retry or skip failed deliveries to the ERP"),
         new(EdgeIngest, "Machine data", "Send machine data as a Pulaski Edge node: read its configuration and forward what it collects"),
     ];
 
@@ -132,11 +140,13 @@ public static class Permissions
         [JobReopen] = [FloorView],
         [ProductionReport] = [FloorView],
         [PartialBatchDecide] = [FloorView],
+        [ProductionCorrect] = [FloorView],
         [LotReceive] = [InventoryView],
         [LotMove] = [InventoryView],
         [LotShip] = [InventoryView],
         [LotHold] = [InventoryView],
         [InventoryCorrect] = [InventoryView],
+        [LotAllocate] = [InventoryView],
         [StockCount] = [InventoryView],
         [LotRecords] = [InventoryView],
         [InventoryBackdate] = [InventoryView],
@@ -158,6 +168,7 @@ public static class Permissions
         [DowntimeCode] = [MachinesView],
         // Terminals are placed on lines; their screen lists the site's equipment.
         [Terminals] = [EquipmentView],
+        [Integrations] = [IntegrationsView],
     };
 }
 
@@ -193,14 +204,15 @@ public static class Roles
         new(Planner, "Planner", false,
             [Permissions.OverviewView, Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.FloorView, Permissions.InventoryView,
              Permissions.MaterialsView, Permissions.ProcessesView, Permissions.MachinesView, Permissions.SiteSettingsView,
-             Permissions.SchedulePlan, Permissions.WorkOrderManage, Permissions.WorkOrderClose, Permissions.RateModify, Permissions.Materials],
+             Permissions.SchedulePlan, Permissions.WorkOrderManage, Permissions.WorkOrderClose, Permissions.RateModify, Permissions.Materials,
+             Permissions.LotAllocate],
             "Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes."),
         new(Supervisor, "Supervisor", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView, Permissions.SiteSettingsView,
              Permissions.JobExecute, Permissions.JobReopen, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove,
-             Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide,
-             Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode],
-            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor; codes machine stops. Doesn't correct inventory."),
+             Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide, Permissions.ProductionCorrect,
+             Permissions.LotAllocate, Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode],
+            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes machine stops. Doesn't correct inventory."),
         new(Operator, "Operator", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
              Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove, Permissions.LaborRecordOwn,
@@ -209,15 +221,15 @@ public static class Roles
         new(Quality, "Quality", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView, Permissions.MachinesView,
              Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide, Permissions.LotRecords, Permissions.LotAttributes,
-             Permissions.InventoryBackdate],
+             Permissions.InventoryBackdate, Permissions.LotAllocate],
             "Holds and releases lots, corrects inventory, decides on partial batches, and keeps lot attributes and certificates."),
         new(Manager, "Manager", false,
             [.. Permissions.Views, Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts,
              Permissions.People, Permissions.Terminals, Permissions.LaborApprove, Permissions.LotAttributes],
             "Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people, lot attributes and the site's settings."),
         new(Auditor, "Auditor", false,
-            [.. Permissions.Views, Permissions.InventoryCorrect, Permissions.StockCount, Permissions.InventoryBackdate],
-            "Views everything and corrects inventory; counts stock. Doesn't plan or run jobs."),
+            [.. Permissions.Views, Permissions.InventoryCorrect, Permissions.StockCount, Permissions.InventoryBackdate, Permissions.ProductionCorrect],
+            "Views everything, corrects inventory and reverses production reports; counts stock. Doesn't plan or run jobs."),
         new(ProcessEngineer, "Process engineer", false,
             [Permissions.EquipmentView, Permissions.MaterialsView, Permissions.ProcessesView, Permissions.UnitsView, Permissions.Processes],
             "Maintains processes, BOMs and capabilities. Sees equipment, materials and units."),

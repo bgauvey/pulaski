@@ -90,10 +90,13 @@ internal sealed class SearchLotsHandler(IInventoryReadStore store, ILotRecordsRe
     }
 }
 
-internal sealed class GetLotHandler(IInventoryReadStore store) : IQueryHandler<GetLotQuery, LotDto>
+internal sealed class GetLotHandler(IInventoryReadStore store, IAllocationReadStore? allocations = null) : IQueryHandler<GetLotQuery, LotDto>
 {
-    public async Task<LotDto> HandleAsync(GetLotQuery query, CancellationToken cancellationToken) =>
-        await store.GetLotAsync(query.Id, cancellationToken) ?? throw new NotFoundException($"Lot {query.Id} not found.");
+    public async Task<LotDto> HandleAsync(GetLotQuery query, CancellationToken cancellationToken)
+    {
+        var lot = await store.GetLotAsync(query.Id, cancellationToken) ?? throw new NotFoundException($"Lot {query.Id} not found.");
+        return allocations is null ? lot : lot with { Allocations = await allocations.ListOfLotAsync(query.Id, cancellationToken) };
+    }
 }
 
 internal sealed class TraceLotHandler(IInventoryReadStore store) : IQueryHandler<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>
@@ -101,7 +104,9 @@ internal sealed class TraceLotHandler(IInventoryReadStore store) : IQueryHandler
     public async Task<IReadOnlyList<LotTraceNodeDto>> HandleAsync(TraceLotQuery query, CancellationToken cancellationToken)
     {
         var nodes = await store.TraceAsync(query.LotId, query.Forward, cancellationToken);
-        return nodes.Count == 0 ? throw new NotFoundException($"Lot {query.LotId} not found.") : nodes;
+        return nodes.Count == 0
+            ? throw new NotFoundException($"Lot {query.LotId} not found.")
+            : await TraceNarrowing.ApplyAsync(nodes, query.Forward, query.LotId, store, cancellationToken);
     }
 }
 

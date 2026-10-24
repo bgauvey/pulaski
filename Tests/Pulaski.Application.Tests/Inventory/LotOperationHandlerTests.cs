@@ -1,3 +1,4 @@
+using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Inventory;
 using Pulaski.Contracts.Inventory;
@@ -32,7 +33,7 @@ public class LotOperationHandlerTests
     private InMemoryInventory Inventory => _f.Stores.Inventory;
 
     private async Task<LotTransactionResponse> Receive(string number, decimal qty, Guid? location = null) =>
-        await new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
+        await new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time, _f.Stores.ExpectedReceipts)
             .HandleAsync(new ReceiveLotCommand(_resin.Id, location ?? _stores.Id, number, qty, _kg.Id), CancellationToken.None);
 
     private long VersionOf(Guid lotId) => Inventory.Find(lotId)!.Version;
@@ -107,10 +108,10 @@ public class LotOperationHandlerTests
     }
 
     [Fact]
-    public async Task Only_the_latest_movement_is_reversed_and_a_reversed_receipt_cancels_the_lot()
+    public async Task A_reversed_receipt_cancels_the_lot_and_a_movement_is_reversed_only_once()
     {
         var lot = await Receive("R-1", 10m);
-        var reverse = new ReverseMovementHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events, _f.Ids);
+        var reverse = new ReverseMovementHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
         var receipt = Inventory.Events[^1];
 
         var undone = await reverse.HandleAsync(new ReverseMovementCommand(lot.LotId, lot.Version, receipt.Id, _count.Id, "Wrong material"), CancellationToken.None);
@@ -119,9 +120,13 @@ public class LotOperationHandlerTests
         var row = Inventory.Events[^1];
         Assert.Equal((LotEventKind.Reversed, receipt.Id, _count.Id), (row.Movement.Kind, row.ReversesEventId, row.ReasonCodeId));
         await Assert.ThrowsAsync<DomainRuleException>(() => reverse.HandleAsync(
-            new ReverseMovementCommand(lot.LotId, undone.Version, receipt.Id, _count.Id), CancellationToken.None));
+            new ReverseMovementCommand(lot.LotId, undone.Version, receipt.Id, _count.Id, "Again"), CancellationToken.None));
         await Assert.ThrowsAsync<DomainRuleException>(() => reverse.HandleAsync(
-            new ReverseMovementCommand(lot.LotId, undone.Version, row.Id, _count.Id), CancellationToken.None));
+            new ReverseMovementCommand(lot.LotId, undone.Version, row.Id, _count.Id, "Again"), CancellationToken.None));
+
+        // A reason and a comment are both required (D-063).
+        await Assert.ThrowsAsync<ValidationException>(() => reverse.HandleAsync(
+            new ReverseMovementCommand(lot.LotId, undone.Version, receipt.Id, _count.Id), CancellationToken.None));
     }
 
     [Fact]
@@ -191,5 +196,34 @@ public class LotOperationHandlerTests
         Assert.Equal(("THEFT", "Theft or loss", false, false), (after.Code, after.Name, after.RequiresComment, after.IsActive));
         await Assert.ThrowsAsync<ConflictException>(() => update.HandleAsync(
             new UpdateReasonCodeCommand(created.Id, created.Version, "X", false, 0, true), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Reasons_file_under_groups_that_are_never_chosen_and_each_move_is_recorded()
+    {
+        var create = new CreateReasonCodeHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events, _f.Ids);
+        var move = new MoveReasonCodeHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events);
+        var group = await create.HandleAsync(new CreateReasonCodeCommand(_site, "utilization", "MECH", "Mechanical", false, 10, IsGroup: true), CancellationToken.None);
+        var jam = await create.HandleAsync(new CreateReasonCodeCommand(_site, "utilization", "JAM", "Jam", false, 10, "downtime"), CancellationToken.None);
+
+        // A group has no class and needs no comment; a reason can be created straight into a group.
+        await Assert.ThrowsAsync<ValidationException>(() => create.HandleAsync(
+            new CreateReasonCodeCommand(_site, "utilization", "ELEC", "Electrical", false, 0, "downtime", IsGroup: true), CancellationToken.None));
+        await Assert.ThrowsAsync<ValidationException>(() => create.HandleAsync(
+            new CreateReasonCodeCommand(_site, "utilization", "ELEC", "Electrical", true, 0, IsGroup: true), CancellationToken.None));
+        var motor = await create.HandleAsync(new CreateReasonCodeCommand(_site, "utilization", "MOTOR", "Motor", false, 0, "downtime", ParentId: group.Id), CancellationToken.None);
+        Assert.Equal(group.Id, Inventory.FindReasonCode(motor.Id)!.Value.ParentId);
+        await Assert.ThrowsAsync<DomainRuleException>(() => create.HandleAsync(
+            new CreateReasonCodeCommand(_site, "utilization", "BELT", "Belt", false, 0, "downtime", ParentId: jam.Id), CancellationToken.None));
+
+        var moved = await move.HandleAsync(new MoveReasonCodeCommand(jam.Id, jam.Version, group.Id), CancellationToken.None);
+        Assert.Equal((group.Id, "JAM"), (Inventory.FindReasonCode(jam.Id)!.Value.ParentId!.Value, Inventory.FindReasonCode(jam.Id)!.Value.Code));
+        Assert.Equal(EventTypes.ReasonCodeMoved, _f.Stores.Events.Appended[^1].Type);
+
+        // Moving to where it already is changes nothing.
+        var events = _f.Stores.Events.Appended.Count;
+        Assert.Equal(moved.Version, (await move.HandleAsync(new MoveReasonCodeCommand(jam.Id, moved.Version, group.Id), CancellationToken.None)).Version);
+        Assert.Equal(events, _f.Stores.Events.Appended.Count);
+        await Assert.ThrowsAsync<NotFoundException>(() => move.HandleAsync(new MoveReasonCodeCommand(Guid.CreateVersion7(), 1, null), CancellationToken.None));
     }
 }

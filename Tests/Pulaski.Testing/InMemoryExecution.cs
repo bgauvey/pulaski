@@ -128,6 +128,25 @@ public sealed class InMemoryExecution : IExecutionRepository, IExecutionReadStor
         return Task.CompletedTask;
     }
 
+    public Task<ProductionReportRecord?> GetReportAsync(Guid reportId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var rows = _counts.Where(c => c.ReportId == reportId && c.Source == "operator").ToList();
+            return Task.FromResult(rows.Count == 0
+                ? null
+                : new ProductionReportRecord(reportId, rows[0].JobId, rows[0].RunId, rows, _counts.Any(c => c.ReportId == reportId && c.Source == "correction")));
+        }
+    }
+
+    public Task<PartialBatch?> GetPartialBatchOfLotForUpdateAsync(Guid lotId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_partials.Values.FirstOrDefault(p => p.LotId == lotId && p.Status != PartialBatchStatus.Reversed));
+        }
+    }
+
     public Task InsertCountAsync(ProductionCountRow count, CancellationToken cancellationToken)
     {
         lock (_lock)
@@ -203,7 +222,7 @@ public sealed class InMemoryExecution : IExecutionRepository, IExecutionReadStor
     {
         lock (_lock)
         {
-            return Task.FromResult(_partials.Values.Any(p => p.RunId == runId));
+            return Task.FromResult(_partials.Values.Any(p => p.RunId == runId && p.Status != PartialBatchStatus.Reversed));
         }
     }
 

@@ -23,6 +23,10 @@ public static class Display
         _ => Label(to),
     };
 
+    /// <summary>A reason as pickers list it: under its groups, "Mechanical › Jam" (D-062).</summary>
+    public static string ReasonLabel(Pulaski.Contracts.Inventory.ReasonCodeDto reason) =>
+        reason.GroupPath is { } path ? $"{path} › {reason.Name}" : reason.Name;
+
     /// <summary>'in_progress' → 'In progress'.</summary>
     public static string Label(string? code)
     {

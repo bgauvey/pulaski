@@ -30,7 +30,7 @@ public class ComminglingHandlerTests
     private InMemoryInventory Inventory => _f.Stores.Inventory;
 
     private Task<LotTransactionResponse> Receive(string? number, decimal qty, Guid location) =>
-        new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
+        new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time, _f.Stores.ExpectedReceipts)
             .HandleAsync(new ReceiveLotCommand(_resin.Id, location, number, qty, _kg.Id), CancellationToken.None);
 
     private Lot Balance() => Assert.Single(Inventory.Lots, l => l.IsBulk && l.LocationId == _silo.Id);

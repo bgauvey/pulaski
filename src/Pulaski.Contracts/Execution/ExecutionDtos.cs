@@ -183,6 +183,12 @@ public sealed record ProductionReportDto
 
     /// <summary>True when entered after its run ended.</summary>
     public bool IsLate { get; init; }
+
+    /// <summary>The report's id (D-063); null for one recorded before reports had ids, which can't be reversed whole.</summary>
+    public Guid? ReportId { get; init; }
+
+    /// <summary>True once it has been reversed.</summary>
+    public bool IsReversed { get; init; }
 }
 
 public sealed record StartJobRequest
@@ -279,8 +285,26 @@ public sealed record ReportProductionRequest
 public sealed record ExecutionResponse(Guid JobId, long Version, Guid? RunId, IReadOnlyList<string> Notes);
 
 /// <summary>A report's result: the run's totals and the lot the good output went into.</summary>
+/// <summary>Reverses a production report whole (D-063), for an adjustment reason and a comment.</summary>
+public sealed record ReverseProductionRequest
+{
+    public Guid ReasonCodeId { get; init; }
+    public string Comment { get; init; } = "";
+}
+
+/// <summary>A reversed report's run as it is now, and every lot it took back.</summary>
+public sealed record ReverseProductionResponse
+{
+    public required Guid RunId { get; init; }
+    public decimal RunGoodQty { get; init; }
+    public decimal RunScrapQty { get; init; }
+    public IReadOnlyList<LotTransactionResponse> Lots { get; init; } = [];
+}
+
 public sealed record ReportProductionResponse
 {
+    /// <summary>The report (D-063), to reverse it by.</summary>
+    public Guid ReportId { get; init; }
     public required Guid RunId { get; init; }
     public decimal RunGoodQty { get; init; }
     public decimal RunScrapQty { get; init; }

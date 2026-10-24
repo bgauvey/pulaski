@@ -36,9 +36,17 @@ public static class LotEventKind
     public const string Shipped = "shipped";
     public const string Corrected = "corrected";
     public const string Reversed = "reversed";
+    public const string Packed = "packed";
+    public const string Unpacked = "unpacked";
 
-    /// <summary>The movements a reversal can undo (D-030): one lot, and nothing a job declared.</summary>
+    /// <summary>The single-lot movements <see cref="Lot.Reverse"/> undoes (D-030).</summary>
     public static IReadOnlyList<string> Reversible { get; } = [Received, Adjusted, Scrapped, Moved, StatusChanged, Shipped];
+
+    /// <summary>Of those, the ones that change only the quantity, so an earlier one can be reversed too when the stock allows (D-063).</summary>
+    public static IReadOnlyList<string> QuantityOnly { get; } = [Received, Adjusted, Scrapped];
+
+    /// <summary>Declarations reversed with compensating movements on the lots they touched (D-063).</summary>
+    public static IReadOnlyList<string> Declarations { get; } = [Consumed, Produced, Split, Merged];
 }
 
 /// <summary>Where a lot came from. Values match <c>core.lot.origin</c>.</summary>
@@ -85,6 +93,12 @@ public sealed record Lot(
     DateTimeOffset? ExpiresAt = null,
     Guid? ProducedByJobId = null)
 {
+    /// <summary>
+    /// The container it is in (D-059), at the container's location; null when loose. A lot that moves, is split off or is used up
+    /// on its own leaves its container.
+    /// </summary>
+    public Guid? ContainerId { get; init; }
+
     /// <summary>True when its expiry is <paramref name="now"/> or past (D-032).</summary>
     public bool IsExpired(DateTimeOffset now) => ExpiresAt is { } expires && expires <= now;
 
@@ -179,7 +193,7 @@ public sealed record Lot(
                 _ => LotStatus.Consumed,
             }
             : Status;
-        var after = this with { Quantity = remaining, Status = status };
+        var after = this with { Quantity = remaining, Status = status, ContainerId = remaining == 0 && !IsBulk ? null : ContainerId };
         return (after, new LotMovement(kind, -quantity, remaining, FromLocationId: LocationId,
             FromStatus: status == Status ? null : Status, ToStatus: status == Status ? null : status));
     }
@@ -199,9 +213,43 @@ public sealed record Lot(
             throw new DomainRuleException($"{Name} is already there.");
         }
 
-        var after = this with { LocationId = locationId };
+        var after = this with { LocationId = locationId, ContainerId = null };
         return (after, new LotMovement(LotEventKind.Moved, null, Quantity, LocationId, locationId));
     }
+
+    /// <summary>Moves with its container (D-059) to the container's new location; it stays in the container.</summary>
+    public (Lot Lot, LotMovement Movement) MoveWithContainer(Guid locationId) =>
+        (this with { LocationId = locationId }, new LotMovement(LotEventKind.Moved, null, Quantity, LocationId, locationId));
+
+    /// <summary>
+    /// Puts the whole lot into a container (D-059), moving it to the container's location when it is elsewhere. To pack part of a
+    /// lot, split it first.
+    /// </summary>
+    /// <exception cref="DomainRuleException">A balance, a lot not on hand or empty, or one already in that container.</exception>
+    public (Lot Lot, LotMovement Movement) PackInto(Guid containerId, Guid containerLocationId)
+    {
+        EnsureWholeLot("packed");
+        EnsureOnHand("packed");
+        if (Quantity == 0)
+        {
+            throw new DomainRuleException($"{Name} is empty; there is nothing to pack.");
+        }
+
+        if (ContainerId == containerId)
+        {
+            throw new DomainRuleException($"{Name} is already in that container.");
+        }
+
+        var moves = containerLocationId != LocationId;
+        return (this with { ContainerId = containerId, LocationId = containerLocationId },
+            new LotMovement(LotEventKind.Packed, null, Quantity, moves ? LocationId : null, moves ? containerLocationId : null));
+    }
+
+    /// <summary>Takes the lot out of its container (D-059); it stays where it is.</summary>
+    /// <exception cref="DomainRuleException">It isn't in a container.</exception>
+    public (Lot Lot, LotMovement Movement) Unpack() => ContainerId is null
+        ? throw new DomainRuleException($"{Name} isn't in a container.")
+        : (this with { ContainerId = null }, new LotMovement(LotEventKind.Unpacked, null, Quantity));
 
     /// <summary>Takes <paramref name="quantity"/> out of a bulk balance to send to another location.</summary>
     /// <exception cref="DomainRuleException">The lot isn't a bulk balance, isn't on hand, or hasn't enough.</exception>
@@ -365,7 +413,7 @@ public sealed record Lot(
             throw new DomainRuleException(original.Kind switch
             {
                 LotEventKind.Reversed => "That movement is a reversal already.",
-                LotEventKind.Consumed or LotEventKind.Produced => "Consumption and production are corrected with the job, not reversed here.",
+                LotEventKind.Consumed or LotEventKind.Produced or LotEventKind.Split or LotEventKind.Merged => "That declaration is reversed with every lot it touched.",
                 _ => $"A {Label(original.Kind)} movement can't be reversed; put it right with another movement.",
             });
         }
@@ -384,7 +432,7 @@ public sealed record Lot(
             status = LotStatus.Cancelled;
         }
 
-        var after = this with { Quantity = quantity, LocationId = location, Status = status };
+        var after = this with { Quantity = quantity, LocationId = location, Status = status, ContainerId = location == LocationId ? ContainerId : null };
         return (after, new LotMovement(
             LotEventKind.Reversed,
             delta == 0 ? null : -delta,
@@ -393,6 +441,46 @@ public sealed record Lot(
             location == LocationId ? null : location,
             status == Status ? null : Status,
             status == Status ? null : status));
+    }
+
+    /// <summary>
+    /// Gives back stock a declaration took (D-063): reversing a consumption, a split or merge's source, or a transfer's sending balance.
+    /// A lot that went to consumed or scrapped is available again; <paramref name="status"/> puts back the status it had before
+    /// (a merge's source).
+    /// </summary>
+    /// <exception cref="DomainRuleException">The lot can't take stock back: shipped or cancelled.</exception>
+    public (Lot Lot, LotMovement Movement) Restore(decimal quantity, string? status = null)
+    {
+        var (after, movement) = Add(quantity, LotEventKind.Reversed);
+        if (status is null || status == after.Status)
+        {
+            return (after, movement);
+        }
+
+        return (after with { Status = status }, movement with { FromStatus = Status, ToStatus = status });
+    }
+
+    /// <summary>
+    /// Takes back stock a declaration gave (D-063): reversing a production, a split's new lot, a merge's target or a transfer's receiving
+    /// balance. It must still be on hand and hold all of it. At zero a lot is cancelled when <paramref name="cancelWhenEmpty"/> (it only
+    /// ever held what is taken back) and consumed otherwise; a balance stays available.
+    /// </summary>
+    /// <exception cref="DomainRuleException">It isn't on hand or no longer holds that much.</exception>
+    public (Lot Lot, LotMovement Movement) TakeBack(decimal quantity, bool cancelWhenEmpty, string unitCode)
+    {
+        EnsurePositive(quantity);
+        if (!LotStatus.IsOnHand(Status) || quantity > Quantity)
+        {
+            throw new DomainRuleException(
+                $"{Name} no longer holds the {Qty(quantity)} {unitCode} it was given (it has {Qty(Quantity)} {unitCode}, {Label(Status)}); " +
+                "reverse what used it first.");
+        }
+
+        var remaining = Quantity - quantity;
+        var status = remaining == 0 && !IsBulk ? cancelWhenEmpty ? LotStatus.Cancelled : LotStatus.Consumed : Status;
+        var after = this with { Quantity = remaining, Status = status, ContainerId = status == Status ? ContainerId : null };
+        return (after, new LotMovement(LotEventKind.Reversed, -quantity, remaining, FromLocationId: LocationId,
+            FromStatus: status == Status ? null : Status, ToStatus: status == Status ? null : status));
     }
 
     private void EnsureWholeLot(string action)

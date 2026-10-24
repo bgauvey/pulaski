@@ -65,6 +65,13 @@ public sealed record LotSummaryDto
     public DateTimeOffset? ExpiresAt { get; init; }
     public Guid? ProducedByJobId { get; init; }
     public string? ProducedByJobNumber { get; init; }
+
+    /// <summary>The container it is in (D-059); null when loose.</summary>
+    public Guid? ContainerId { get; init; }
+    public string? ContainerCode { get; init; }
+
+    /// <summary>What its label's barcode carries: <c>PUL1L</c> + this (D-059).</summary>
+    public long LabelNo { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
 
@@ -130,6 +137,16 @@ public sealed record LotEventDto
 
     /// <summary>For a reversal, the movement it undoes.</summary>
     public Guid? ReversesEventId { get; init; }
+
+    /// <summary>True once a reversal has undone it (D-063).</summary>
+    public bool IsReversed { get; init; }
+
+    /// <summary>For production, the report that made it (D-063): reversed with the report, on the job's page.</summary>
+    public Guid? ReportId { get; init; }
+
+    /// <summary>The container it was packed into, unpacked from, or moved with (D-059).</summary>
+    public Guid? ContainerId { get; init; }
+    public string? ContainerCode { get; init; }
 }
 
 /// <summary>A lot one genealogy step away: a parent it was made from, or a child made from it.</summary>
@@ -164,6 +181,9 @@ public sealed record LotDto
     public IReadOnlyList<LotEventDto> History { get; init; } = [];
     public IReadOnlyList<LotLinkDto> Parents { get; init; } = [];
     public IReadOnlyList<LotLinkDto> Children { get; init; } = [];
+
+    /// <summary>Stock of it set aside for jobs (D-064).</summary>
+    public IReadOnlyList<LotAllocationDto> Allocations { get; init; } = [];
 }
 
 /// <summary>A lot found by a trace, <see cref="Depth"/> steps from the start, reached from <see cref="ViaLotId"/>.</summary>
@@ -171,6 +191,14 @@ public sealed record LotTraceNodeDto
 {
     public required Guid LotId { get; init; }
     public Guid? ViaLotId { get; init; }
+    public Guid? ProducedByJobId { get; init; }
+
+    /// <summary>
+    /// For a link through a balance whose lots mix (D-060): <c>exact</c>, <c>estimated</c> or <c>possible</c>, with why; null for
+    /// an ordinary declared link.
+    /// </summary>
+    public string? Precision { get; init; }
+    public string? PrecisionNote { get; init; }
     public int Depth { get; init; }
     /// <summary>Null for a balance (D-031): show its location instead.</summary>
     public string? LotNumber { get; init; }
@@ -251,6 +279,13 @@ public sealed record InventoryLocationDto
 
     /// <summary>Takes one material at a time (D-032).</summary>
     public bool SingleMaterial { get; init; }
+
+    /// <summary>How a balance here flows (D-060): <c>mixed</c> or <c>fifo</c>; and the least time material stays, in minutes.</summary>
+    public string FlowModel { get; init; } = "mixed";
+    public int? MinResidenceMinutes { get; init; }
+
+    /// <summary>The equipment's version, to change its flow settings.</summary>
+    public long Version { get; init; }
     public int LotCount { get; init; }
     public int MaterialCount { get; init; }
 }
@@ -316,6 +351,9 @@ public sealed record ReasonCodeDto
 
     /// <summary>For a utilization reason (D-050): <c>runtime</c>, <c>downtime</c> or <c>planned</c>.</summary>
     public string? UtilizationClass { get; init; }
+
+    /// <summary>The names of the groups it is filed under, top first, joined by " › " (D-062); null at the top.</summary>
+    public string? GroupPath { get; init; }
 }
 
 /// <summary>Something worth knowing about a movement that didn't stop it.</summary>
@@ -342,8 +380,17 @@ public sealed record ShortageLineDto
     public required string LineCode { get; init; }
     public string? WorkOrderNumber { get; init; }
 
-    /// <summary>The job's published start, else its hold-until; null when it has neither.</summary>
+    /// <summary>When the job needs it, by <see cref="TimeSource"/>; null when it has no time.</summary>
     public DateTimeOffset? NeededFrom { get; init; }
+
+    /// <summary>
+    /// Where <see cref="NeededFrom"/> comes from (D-058): <c>live</c> (the schedule's projection now), <c>published</c> (the published
+    /// start), <c>window</c> (hold-until, or the window of a job planned to a department) or <c>none</c>.
+    /// </summary>
+    public string TimeSource { get; init; } = "published";
+
+    /// <summary>The published start, shown beside a live time.</summary>
+    public DateTimeOffset? PublishedStart { get; init; }
 
     /// <summary>Planned less consumed, in the component's base unit.</summary>
     public decimal Remaining { get; init; }
@@ -351,7 +398,9 @@ public sealed record ShortageLineDto
     /// <summary>What this job and every earlier one need in total.</summary>
     public decimal Cumulative { get; init; }
 
-    /// <summary>The part of this job's need that available stock doesn't cover.</summary>
+    /// <summary>Of this job's need: what available stock covers, what supply due by then covers (D-058), and what neither does.</summary>
+    public decimal FromStock { get; init; }
+    public decimal FromIncoming { get; init; }
     public decimal Uncovered { get; init; }
 }
 
@@ -367,6 +416,12 @@ public sealed record MaterialShortageDto
     /// <summary>On hold or in quarantine: not counted, shown because releasing it could cover a shortfall.</summary>
     public decimal Held { get; init; }
     public decimal Demand { get; init; }
+
+    /// <summary>Open expected receipts (D-058), in the base unit: not stock, counted only for jobs needing it after it is due.</summary>
+    public decimal Incoming { get; init; }
+
+    /// <summary>The next expected receipt's time; before now when one is overdue.</summary>
+    public DateTimeOffset? NextIncomingAt { get; init; }
     public decimal Shortfall { get; init; }
     public Guid? FirstShortJobId { get; init; }
     public string? FirstShortJobNumber { get; init; }
@@ -379,6 +434,9 @@ public sealed record ShortageReportDto
 {
     public required Guid SiteId { get; init; }
     public DateTimeOffset CalculatedAt { get; init; }
+
+    /// <summary>True when jobs were timed by the live schedule, false by their published times (D-058).</summary>
+    public bool LiveTiming { get; init; }
     public IReadOnlyList<MaterialShortageDto> Materials { get; init; } = [];
 
     /// <summary>Planned components left out because their unit doesn't convert to the component's base unit.</summary>
@@ -470,11 +528,20 @@ public sealed record ReasonCodeAdminDto
     public int SortOrder { get; init; }
     public bool IsActive { get; init; }
 
-    /// <summary>False for a branch of a reason tree, which only groups.</summary>
+    /// <summary>False for a group, which only holds other reasons and is never chosen (D-062).</summary>
     public bool IsSelectable { get; init; }
 
     /// <summary>For a utilization reason (D-050): <c>runtime</c>, <c>downtime</c> or <c>planned</c>.</summary>
     public string? UtilizationClass { get; init; }
+
+    /// <summary>The group it is filed under; null at the top (D-062).</summary>
+    public Guid? ParentId { get; init; }
+
+    /// <summary>Levels above it: 0 at the top.</summary>
+    public int Depth { get; init; }
+
+    /// <summary>The names of the groups above it, top first, joined by " › "; null at the top.</summary>
+    public string? GroupPath { get; init; }
     public long Version { get; init; }
 }
 
@@ -503,4 +570,75 @@ public sealed record AgingRowDto
     public decimal Over180Days { get; init; }
     public decimal Total { get; init; }
     public DateTimeOffset? OldestAt { get; init; }
+}
+
+/// <summary>Supply on its way (D-058). Quantities in the entered unit.</summary>
+public sealed record ExpectedReceiptDto
+{
+    public required Guid Id { get; init; }
+    public required Guid SiteId { get; init; }
+    public required Guid MaterialId { get; init; }
+    public required string MaterialCode { get; init; }
+    public required string MaterialName { get; init; }
+    public decimal Quantity { get; init; }
+    public required Guid UomId { get; init; }
+    public required string UomCode { get; init; }
+    public DateTimeOffset ExpectedAt { get; init; }
+    public string? Reference { get; init; }
+    public string? Supplier { get; init; }
+    public string? Note { get; init; }
+
+    /// <summary><c>open</c>, <c>received</c> or <c>cancelled</c>.</summary>
+    public required string Status { get; init; }
+    public Guid? ReceivedLotId { get; init; }
+    public string? ReceivedLotNumber { get; init; }
+    public string? ExternalSystem { get; init; }
+    public string? ExternalKey { get; init; }
+    public DateTimeOffset CreatedAt { get; init; }
+    public string CreatedBy { get; init; } = "";
+    public long Version { get; init; }
+}
+
+/// <summary>Sets how a balance at a location flows (D-060).</summary>
+public sealed record SetFlowRequest
+{
+    public long Version { get; init; }
+    public string FlowModel { get; init; } = "mixed";
+    public int? MinResidenceMinutes { get; init; }
+}
+
+/// <summary>Where a balance's withdrawals came from (D-060), worked out from its declared movements by its location's flow model.</summary>
+public sealed record BalanceAllocationDto
+{
+    public required Guid LotId { get; init; }
+    public required string FlowModel { get; init; }
+    public int? MinResidenceMinutes { get; init; }
+
+    /// <summary>What the estimate rests on, said plainly: the declared movements, not measurements.</summary>
+    public required string Basis { get; init; }
+    public IReadOnlyList<WithdrawalAllocationDto> Withdrawals { get; init; } = [];
+}
+
+public sealed record WithdrawalAllocationDto
+{
+    public required Guid EventId { get; init; }
+    public DateTimeOffset At { get; init; }
+    public required string Kind { get; init; }
+    public decimal Quantity { get; init; }
+    public Guid? JobId { get; init; }
+    public string? JobNumber { get; init; }
+
+    /// <summary><c>exact</c>, <c>estimated</c> or <c>possible</c>.</summary>
+    public required string Precision { get; init; }
+    public required string Reason { get; init; }
+    public IReadOnlyList<AllocationSourceDto> Sources { get; init; } = [];
+}
+
+public sealed record AllocationSourceDto
+{
+    /// <summary>The lot it came from; null for stock that had no lot of its own (received or made straight into the balance, or written up).</summary>
+    public Guid? LotId { get; init; }
+    public string? LotNumber { get; init; }
+    public decimal Quantity { get; init; }
+    public required string Precision { get; init; }
 }

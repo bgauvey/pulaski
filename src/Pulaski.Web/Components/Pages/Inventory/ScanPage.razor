@@ -1,0 +1,284 @@
+@page "/inventory/scan"
+@attribute [RequiresView(PermissionCodes.InventoryView)]
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+@inject Downloads Downloads
+
+@* Scanning (D-059): a barcode scanner types into the box and presses Enter, like a keyboard. Scan a lot, container or location, then
+   say what to do with it; a move or pack asks for a second scan of where it goes. Every movement is an ordinary one, with its
+   own history. *@
+<PageTitle>Scan · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="Scan" SiteChanged="Reset">
+    <Description>
+        Scan a lot, container or location label, or type a lot or container number. Then move it, pack it, consume it or receive into it; a move or pack asks you
+        to scan where it goes. A scanner that types like a keyboard works; click the box first.
+    </Description>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+
+<form class="mb-3" @onsubmit="ScanAsync" @onsubmit:preventDefault>
+    <label class="form-label" for="scan-box">@Prompt</label>
+    <div class="d-flex gap-2" style="max-width: 36rem">
+        <input id="scan-box" @ref="_box" class="form-control form-control-lg" autocomplete="off" @bind="_code" @bind:event="oninput" />
+        <button type="submit" class="btn btn-primary" disabled="@(string.IsNullOrWhiteSpace(_code) || _busy)">Go</button>
+        @if (_item is not null)
+        {
+            <button type="button" class="btn btn-outline-secondary" @onclick="Reset">Start again</button>
+        }
+    </div>
+</form>
+
+@if (_message is not null)
+{
+    <div class="drawer-alert @(_messageIsWarning ? "is-warning" : "") mb-3" role="status"><Icon Name="@(_messageIsWarning ? "alert" : "info")" Size="18" /><span>@_message</span></div>
+}
+
+@if (_choices.Count > 0)
+{
+    <div class="list-group mb-3" style="max-width: 36rem">
+        @foreach (var m in _choices)
+        {
+            <button type="button" class="list-group-item list-group-item-action" @onclick="() => ChooseAsync(m)">
+                <span class="chip">@Display.Label(m.Kind)</span> <span class="fw-semibold">@m.Label</span>
+                <span class="small text-muted">@m.Detail · by @m.MatchedBy</span>
+            </button>
+        }
+    </div>
+}
+
+@if (_item is { } item)
+{
+    <div class="inv-facts mb-3" style="max-width: 36rem">
+        <div class="d-flex justify-content-between">
+            <div>
+                <span class="chip">@Display.Label(item.Kind)</span>
+                <span class="fs-5 fw-semibold">@item.Label</span>
+                <div class="small text-muted">@item.Detail</div>
+            </div>
+            <button type="button" class="btn btn-sm btn-link" @onclick="LabelAsync">Label</button>
+        </div>
+
+        @if (_next is null)
+        {
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                @switch (item.Kind)
+                {
+                    case "lot":
+                        <a class="btn btn-outline-secondary" href="inventory/lots/@item.Id">Open lot</a>
+                        @if (CanMove)
+                        {
+                            <button type="button" class="btn btn-primary" @onclick='() => Await("location", "Scan where it goes")'>Move</button>
+                            <button type="button" class="btn btn-outline-secondary" @onclick='() => Await("container", "Scan the container")'>Pack</button>
+                            @if (_lot?.ContainerId is not null)
+                            {
+                                <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="UnpackAsync">Unpack from @_lot.ContainerCode</button>
+                            }
+                        }
+                        @if (User.Can(PermissionCodes.ProductionReport, Sites.SiteId))
+                        {
+                            <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Consume">Consume…</button>
+                        }
+                        break;
+                    case "container":
+                        <a class="btn btn-outline-secondary" href="inventory/containers?open=@item.Id">Open container</a>
+                        @if (CanMove)
+                        {
+                            <button type="button" class="btn btn-primary" @onclick='() => Await("location", "Scan where it goes")'>Move with its lots</button>
+                        }
+                        break;
+                    case "location":
+                        @if (User.Can(PermissionCodes.LotReceive, Sites.SiteId))
+                        {
+                            <button type="button" class="btn btn-primary" @onclick="() => _action = LotAction.Receive">Receive here…</button>
+                        }
+                        <a class="btn btn-outline-secondary" href="inventory/lots?locationId=@item.Id">What is here</a>
+                        break;
+                }
+            </div>
+        }
+    </div>
+}
+
+<LotActionDrawer Action="_action" Lot="_lot" LocationId="@(_item?.Kind == "location" ? _item.Id : null)" OnDone="OnDoneAsync" OnClose="() => _action = null" />
+
+@code {
+    private ElementReference _box;
+    private string? _code;
+    private ScanMatchDto? _item;
+    private LotSummaryDto? _lot;
+    private ContainerDto? _container;
+    private IReadOnlyList<ScanMatchDto> _choices = [];
+
+    // What the next scan is for: a location to move to, or a container to pack into; null when scanning the item.
+    private (string Kind, string Prompt)? _next;
+    private LotAction? _action;
+    private string? _message;
+    private bool _messageIsWarning;
+    private ApiException? _error;
+    private bool _busy;
+
+    private bool CanMove => User.Can(PermissionCodes.LotMove, Sites.SiteId);
+
+    private string Prompt => _next?.Prompt ?? (_item is null ? "Scan or type" : "Scan another, or choose what to do");
+
+    protected override async Task OnInitializedAsync() => await Sites.EnsureAsync(Api);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_action is null)
+        {
+            try
+            {
+                await _box.FocusAsync();
+            }
+            catch (InvalidOperationException)
+            {
+                // Not rendered yet.
+            }
+        }
+    }
+
+    private void Reset()
+    {
+        (_item, _lot, _container, _next, _choices, _message, _code) = (null, null, null, null, [], null, null);
+    }
+
+    private void Await(string kind, string prompt)
+    {
+        _next = (kind, prompt);
+        _message = null;
+    }
+
+    private async Task ScanAsync()
+    {
+        if (Sites.SiteId is not { } site || string.IsNullOrWhiteSpace(_code))
+        {
+            return;
+        }
+
+        var code = _code.Trim();
+        _code = null;
+        _choices = [];
+        _error = null;
+        try
+        {
+            var result = await Api.ResolveScanAsync(site, code);
+            var matches = _next is { } next ? [.. result.Matches.Where(m => m.Kind == next.Kind)] : result.Matches;
+            switch (matches.Count)
+            {
+                case 1:
+                    await ChooseAsync(matches[0]);
+                    break;
+                case 0:
+                    Say(_next is { } wanted && result.Matches.Count > 0 ? $"{code} isn't a {wanted.Kind}." : result.Message ?? $"Nothing matches {code}.", warning: true);
+                    break;
+                default:
+                    _choices = matches;
+                    Say($"{matches.Count} match {code}; choose one.", warning: true);
+                    break;
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task ChooseAsync(ScanMatchDto match)
+    {
+        _choices = [];
+        if (_next is { } next)
+        {
+            await CompleteAsync(next.Kind, match);
+            return;
+        }
+
+        _item = match;
+        _message = null;
+        _lot = match.Kind == "lot" ? (await Api.GetLotAsync(match.Id)).Lot : null;
+        _container = match.Kind == "container" ? await Api.GetContainerAsync(match.Id) : null;
+    }
+
+    // The second scan: where the lot or container goes, or the container it goes into.
+    private async Task CompleteAsync(string kind, ScanMatchDto target)
+    {
+        _busy = true;
+        try
+        {
+            if (kind == "container" && _lot is { } lot)
+            {
+                await Api.PackLotAsync(lot.Id, new PackLotRequest { Version = lot.Version, ContainerId = target.Id });
+                Say($"{_item!.Label} packed into {target.Label}.");
+            }
+            else if (kind == "location" && _container is { } container)
+            {
+                await Api.MoveContainerAsync(container.Id, new MoveContainerRequest { Version = container.Version, ToLocationId = target.Id });
+                Say($"{container.Code} and its {container.LotCount} {(container.LotCount == 1 ? "lot" : "lots")} moved to {target.Label}.");
+            }
+            else if (kind == "location" && _lot is { } moving)
+            {
+                await Api.MoveLotAsync(moving.Id, new MoveLotRequest { Version = moving.Version, ToLocationId = target.Id });
+                Say($"{_item!.Label} moved to {target.Label}{(moving.ContainerCode is { } from ? $", out of {from}" : "")}.");
+            }
+
+            _next = null;
+            await ChooseAsync(_item!);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            _next = null;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task UnpackAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Api.PackLotAsync(_lot!.Id, new PackLotRequest { Version = _lot.Version });
+            Say($"{_item!.Label} unpacked from {_lot.ContainerCode}.");
+            await ChooseAsync(_item);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task LabelAsync()
+    {
+        try
+        {
+            var (content, type, name) = await Api.GetLabelAsync(_item!.Kind, _item.Id, Sites.SiteId!.Value);
+            await Downloads.FileAsync(name, content, type);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnDoneAsync(LotActionResult result)
+    {
+        _action = null;
+        Say(result.Message);
+        if (_item is { Kind: "lot" } lot)
+        {
+            await ChooseAsync(lot);
+        }
+    }
+
+    private void Say(string message, bool warning = false) => (_message, _messageIsWarning) = (message, warning);
+}

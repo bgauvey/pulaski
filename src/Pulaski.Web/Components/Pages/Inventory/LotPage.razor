@@ -4,6 +4,7 @@
 @inject SiteSelection Sites
 @inject TimeProvider Time
 @inject CurrentUser User
+@inject Downloads Downloads
 
 <PageTitle>@(Title) · Inventory · Pulaski</PageTitle>
 
@@ -73,6 +74,7 @@
                 {
                     <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Correct">Correct…</button>
                 }
+                <button type="button" class="btn btn-outline-secondary" @onclick="PrintLabelAsync">Print label</button>
             </div>
         }
     </Actions>
@@ -102,6 +104,11 @@
                 <dd><strong>@InventoryView.Qty(l.Quantity)</strong> @l.UomCode</dd>
                 <dt>Location</dt>
                 <dd>@(l.LocationCode is null ? "—" : $"{l.LocationCode} · {l.LocationName}")</dd>
+                @if (!l.IsBulk)
+                {
+                    <dt>Container</dt>
+                    <dd><LotContainerField Lot="l" OnChanged="LoadAsync" /></dd>
+                }
                 <dt>From</dt>
                 <dd>
                     @if (l.ProducedByJobId is { } jobId)
@@ -167,6 +174,10 @@
                                 <span class="small">@row.Node.MaterialCode</span>
                                 <span class="@InventoryView.StatusChip(row.Node.Status)">@Display.Label(row.Node.Status)</span>
                                 <span class="small text-muted">@InventoryView.Qty(row.Node.Quantity) @row.Node.UomCode</span>
+                                @if (row.Node.Precision is { } precision)
+                                {
+                                    <span class="@BalanceAllocationPanel.PrecisionChip(precision)" title="@row.Node.PrecisionNote">@BalanceAllocationPanel.PrecisionLabel(precision)</span>
+                                }
                             </li>
                         }
                     </ul>
@@ -181,6 +192,28 @@
     </div>
 
     <LotRecordsPanel @key="l.Id" LotId="l.Id" SiteId="l.SiteId" TimeZone="@tz" />
+
+    @if (l.IsBulk)
+    {
+        <BalanceAllocationPanel @key="l.Id" LotId="l.Id" TimeZone="@tz" />
+    }
+
+    @if (detail.Allocations.Count > 0)
+    {
+        <section class="inv-section" aria-labelledby="allocations-title">
+            <h2 id="allocations-title">Allocated to jobs</h2>
+            <ul class="small mb-0">
+                @foreach (var a in detail.Allocations)
+                {
+                    <li @key="a.Id">
+                        <ScreenLink Href="@($"inventory/jobs/{a.JobId}")" Permission="@PermissionCodes.InventoryView">@a.JobNumber</ScreenLink>:
+                        @InventoryView.Qty(a.Quantity) @a.UomCode set aside
+                    </li>
+                }
+            </ul>
+            <p class="small text-muted mb-0">Other jobs can still consume it, with a warning; consuming it into its job uses the allocation up.</p>
+        </section>
+    }
 
     <section class="inv-section" aria-labelledby="history-title">
         <h2 id="history-title">History</h2>
@@ -221,6 +254,10 @@
                             <td class="inv-num">@(e.QtyAfter is { } a ? InventoryView.Qty(a) : "") <span class="small text-muted">@e.UomCode</span></td>
                             <td class="small">
                                 @(e.Kind == "moved" ? $"{e.FromLocationCode} → {e.ToLocationCode}" : e.ToLocationCode ?? e.FromLocationCode)
+                                @if (e.ContainerCode is { } container)
+                                {
+                                    <div class="text-muted">@(e.Kind == "packed" ? "into" : e.Kind == "unpacked" ? "out of" : "with") @container</div>
+                                }
                                 @if (e.RelatedLotId is { } related)
                                 {
                                     <div><a href="inventory/lots/@related">@InventoryView.LotLabel(e.RelatedLotNumber, e.RelatedLotNumber is null, e.RelatedLotLocationCode)</a></div>
@@ -278,6 +315,12 @@ else if (_error is null)
 
     private static readonly HashSet<string> Reversible = ["received", "adjusted", "scrapped", "moved", "status_changed", "shipped"];
 
+    // Changes of quantity alone, reversed even when later movements followed, if the stock allows (D-063).
+    private static readonly HashSet<string> QuantityOnly = ["received", "adjusted", "scrapped"];
+
+    // Declarations, reversed with every lot they touched; production only when it predates report ids (otherwise with its report).
+    private static readonly HashSet<string> Declarations = ["consumed", "split", "merged"];
+
     private string Title => _lot?.Lot is { } l ? InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode) : "Lot";
 
     protected override async Task OnParametersSetAsync()
@@ -306,7 +349,12 @@ else if (_error is null)
     private bool May(LotAction action) => User.Can(LotActions.Permission(action), Sites.SiteId);
 
     private static bool CanReverse(LotDto lot, LotEventDto e) =>
-        lot.History.Count > 0 && lot.History[0].Id == e.Id && Reversible.Contains(e.Kind) && !(e.Kind == "moved" && e.RelatedLotId is not null);
+        !e.IsReversed && e.Kind != "reversed" && (
+            (lot.History.Count > 0 && lot.History[0].Id == e.Id && Reversible.Contains(e.Kind))
+            || QuantityOnly.Contains(e.Kind)
+            || Declarations.Contains(e.Kind)
+            || (e.Kind == "moved" && e.RelatedLotId is not null)
+            || (e.Kind == "produced" && e.ReportId is null));
 
     private void Reverse(LotEventDto e)
     {
@@ -321,6 +369,20 @@ else if (_error is null)
         {
             _traceForward = forward;
             _trace = InventoryView.Tree(await Api.TraceLotAsync(LotId, forward));
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    // The label as a PDF (D-059): its barcode names this lot exactly, for scanning later.
+    private async Task PrintLabelAsync()
+    {
+        try
+        {
+            var (content, type, name) = await Api.GetLabelAsync("lot", LotId, _lot!.Lot.SiteId);
+            await Downloads.FileAsync(name, content, type);
         }
         catch (ApiException ex)
         {

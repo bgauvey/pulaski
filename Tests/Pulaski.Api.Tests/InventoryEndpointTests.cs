@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc;
 using Pulaski.Application.Inventory;
+using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Inventory;
 
 namespace Pulaski.Api.Tests;
@@ -74,5 +75,32 @@ public sealed class InventoryEndpointTests(ApiFactory factory) : IClassFixture<A
 
         var missing = await _client.GetAsync(new Uri($"/api/lots/{Guid.CreateVersion7()}", UriKind.Relative));
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_reason_moves_under_a_group_and_a_move_under_a_reason_is_refused()
+    {
+        var site = Guid.CreateVersion7();
+        factory.Stores.Inventory.AddSite(site);
+        var group = await (await _client.PostAsJsonAsync("/api/reason-codes", new CreateReasonCodeRequest
+        {
+            SiteId = site,
+            Kind = "hold",
+            Code = "QA-GROUP",
+            Name = "Quality",
+            IsGroup = true,
+        })).Content.ReadFromJsonAsync<CreatedResponse>();
+        var reason = await (await _client.PostAsJsonAsync("/api/reason-codes", new CreateReasonCodeRequest
+        {
+            SiteId = site,
+            Kind = "hold",
+            Code = "QA-LAB",
+            Name = "Waiting for the lab",
+        })).Content.ReadFromJsonAsync<CreatedResponse>();
+
+        var moved = await _client.PutAsJsonAsync($"/api/reason-codes/{reason!.Id}/parent", new MoveReasonCodeRequest { Version = reason.Version, ParentId = group!.Id });
+        Assert.Equal(HttpStatusCode.OK, moved.StatusCode);
+        var refused = await _client.PutAsJsonAsync($"/api/reason-codes/{group.Id}/parent", new MoveReasonCodeRequest { Version = group.Version, ParentId = reason.Id });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, refused.StatusCode);
     }
 }

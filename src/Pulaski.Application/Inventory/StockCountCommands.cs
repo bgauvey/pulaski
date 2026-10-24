@@ -18,9 +18,13 @@ public sealed record PostStockCountCommand(Guid CountId, long ExpectedVersion, G
 
 public sealed record CancelStockCountCommand(Guid CountId, long ExpectedVersion) : ICommand<VersionResponse>;
 
-/// <summary>A new reason, enterprise-wide or for one site (D-030).</summary>
-public sealed record CreateReasonCodeCommand(Guid? SiteId, string Kind, string Code, string Name, bool RequiresComment, int SortOrder, string? UtilizationClass = null)
+/// <summary>A new reason, enterprise-wide or for one site (D-030); a group holds others and is never chosen (D-062).</summary>
+public sealed record CreateReasonCodeCommand(
+    Guid? SiteId, string Kind, string Code, string Name, bool RequiresComment, int SortOrder, string? UtilizationClass = null, bool IsGroup = false, Guid? ParentId = null)
     : ICommand<CreatedResponse>;
+
+/// <summary>Files a reason under a group of its kind, or at the top (null) (D-062). History keeps pointing at the same reason.</summary>
+public sealed record MoveReasonCodeCommand(Guid Id, long ExpectedVersion, Guid? ParentId) : ICommand<VersionResponse>;
 
 /// <summary>Changes a reason's name, comment flag, order, active flag and utilization class (null keeps it); the code and kind stay.</summary>
 public sealed record UpdateReasonCodeCommand(Guid Id, long ExpectedVersion, string Name, bool RequiresComment, int SortOrder, bool IsActive, string? UtilizationClass = null)
@@ -197,8 +201,9 @@ internal sealed class CreateReasonCodeHandler(
             .Require(ReasonCode.IsValidCode(code), nameof(command.Code), "Letters, digits, '-', '_' or '.', up to 30.")
             .RequireText(name, nameof(command.Name), 100)
             .Require(command.SortOrder is >= 0 and <= 10_000, nameof(command.SortOrder), "Between 0 and 10000.")
-            .Require(!ReasonCode.Kinds.Contains(command.Kind) || ReasonCode.IsValidClass(command.Kind, command.UtilizationClass), nameof(command.UtilizationClass),
-                command.Kind == ReasonCode.Utilization ? "Runtime, downtime or planned." : "Only a utilization reason has a class.")
+            .Require(!ReasonCode.Kinds.Contains(command.Kind) || ReasonCode.IsValidClass(command.Kind, command.UtilizationClass, command.IsGroup), nameof(command.UtilizationClass),
+                ReasonCodeRules.ClassMessage(command.Kind, command.IsGroup))
+            .Require(!(command.IsGroup && command.RequiresComment), nameof(command.RequiresComment), "A group is never chosen, so it never needs a comment.")
             .ThrowIfInvalid();
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -207,7 +212,17 @@ internal sealed class CreateReasonCodeHandler(
             throw new DomainRuleException($"Site {siteId} not found.");
         }
 
-        var reason = new ReasonCode(ids.NewId(), command.SiteId, command.Kind, code, name, command.RequiresComment, command.SortOrder, IsActive: true, command.UtilizationClass);
+        var reason = new ReasonCode(ids.NewId(), command.SiteId, command.Kind, code, name, command.RequiresComment, command.SortOrder, IsActive: true,
+            command.UtilizationClass, command.ParentId, command.IsGroup);
+        if (command.ParentId is not null)
+        {
+            var tree = await ReasonCodeRules.TreeAsync(inventory, command.Kind, cancellationToken);
+            if (ReasonTree.WhyNotUnder(tree, reason, command.ParentId) is { } why)
+            {
+                throw new DomainRuleException(why);
+            }
+        }
+
         var envelope = events.Create(EventTypes.ReasonCodeCreated, "reason_code", reason.Id, new { After = reason });
         var version = await inventory.InsertReasonCodeAsync(reason, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
@@ -232,35 +247,98 @@ internal sealed class UpdateReasonCodeHandler(
             .ThrowIfInvalid();
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
-        var current = await inventory.GetReasonCodeForUpdateAsync(command.Id, cancellationToken)
-            ?? throw new NotFoundException($"Reason {command.Id} not found.");
-        if (current.Version != command.ExpectedVersion)
-        {
-            throw new ConflictException($"Reason {current.Value.Code} was changed by someone else. Reload and try again.");
-        }
-
-        var after = current.Value with
+        var (current, tree) = await ReasonCodeRules.LockAsync(inventory, command.Id, command.ExpectedVersion, cancellationToken);
+        var after = current with
         {
             Name = name,
             RequiresComment = command.RequiresComment,
             SortOrder = command.SortOrder,
             IsActive = command.IsActive,
-            UtilizationClass = command.UtilizationClass ?? current.Value.UtilizationClass,
+            UtilizationClass = current.IsGroup ? null : command.UtilizationClass ?? current.UtilizationClass,
         };
-        if (!ReasonCode.IsValidClass(after.Kind, after.UtilizationClass))
+        if (!ReasonCode.IsValidClass(after.Kind, after.UtilizationClass, after.IsGroup))
         {
             throw new ValidationException(new Dictionary<string, string[]>
             {
-                [nameof(command.UtilizationClass)] = [after.Kind == ReasonCode.Utilization ? "Runtime, downtime or planned." : "Only a utilization reason has a class."],
+                [nameof(command.UtilizationClass)] = [ReasonCodeRules.ClassMessage(after.Kind, after.IsGroup)],
             });
         }
 
-        var envelope = events.Create(EventTypes.ReasonCodeUpdated, "reason_code", after.Id, new { Before = current.Value, After = after });
+        if (after.IsGroup && after.RequiresComment)
+        {
+            throw new ValidationException(new Dictionary<string, string[]>
+            {
+                [nameof(command.RequiresComment)] = ["A group is never chosen, so it never needs a comment."],
+            });
+        }
+
+        if (ReasonTree.WhyNotActive(tree, current, after.IsActive) is { } why)
+        {
+            throw new DomainRuleException(why);
+        }
+
+        var envelope = events.Create(EventTypes.ReasonCodeUpdated, "reason_code", after.Id, new { Before = current, After = after });
         var version = await inventory.UpdateReasonCodeAsync(after, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return new VersionResponse(version);
+    }
+}
+
+internal sealed class MoveReasonCodeHandler(
+    IUnitOfWork unitOfWork,
+    IInventoryRepository inventory,
+    IEventLog eventLog,
+    IEventFactory events) : ICommandHandler<MoveReasonCodeCommand, VersionResponse>
+{
+    public async Task<VersionResponse> HandleAsync(MoveReasonCodeCommand command, CancellationToken cancellationToken)
+    {
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var (current, tree) = await ReasonCodeRules.LockAsync(inventory, command.Id, command.ExpectedVersion, cancellationToken);
+        if (current.ParentId == command.ParentId)
+        {
+            return new VersionResponse(command.ExpectedVersion);
+        }
+
+        if (ReasonTree.WhyNotUnder(tree, current, command.ParentId) is { } why)
+        {
+            throw new DomainRuleException(why);
+        }
+
+        var after = current with { ParentId = command.ParentId };
+        var envelope = events.Create(EventTypes.ReasonCodeMoved, "reason_code", after.Id, new { after.Code, Before = current.ParentId, After = after.ParentId });
+        var version = await inventory.UpdateReasonCodeAsync(after, cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return new VersionResponse(version);
+    }
+}
+
+internal static class ReasonCodeRules
+{
+    public static string ClassMessage(string kind, bool isGroup) =>
+        kind != ReasonCode.Utilization ? "Only a utilization reason has a class."
+        : isGroup ? "A group has no class: the reasons in it each have their own."
+        : "Runtime, downtime or planned.";
+
+    public static async Task<IReadOnlyList<ReasonCode>> TreeAsync(IInventoryRepository inventory, string kind, CancellationToken cancellationToken) =>
+        [.. (await inventory.LockReasonTreeAsync(kind, cancellationToken)).Select(r => r.Value)];
+
+    /// <summary>Locks the reason's whole kind (D-062), then checks the caller's version of the reason.</summary>
+    public static async Task<(ReasonCode Reason, IReadOnlyList<ReasonCode> Tree)> LockAsync(
+        IInventoryRepository inventory, Guid id, long expectedVersion, CancellationToken cancellationToken)
+    {
+        var kind = await inventory.GetReasonKindAsync(id, cancellationToken) ?? throw new NotFoundException($"Reason {id} not found.");
+        var locked = await inventory.LockReasonTreeAsync(kind, cancellationToken);
+        var current = locked.FirstOrDefault(r => r.Value.Id == id) ?? throw new NotFoundException($"Reason {id} not found.");
+        if (current.Version != expectedVersion)
+        {
+            throw new ConflictException($"Reason {current.Value.Code} was changed by someone else. Reload and try again.");
+        }
+
+        return (current.Value, [.. locked.Select(r => r.Value)]);
     }
 }
 

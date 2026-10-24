@@ -25,7 +25,8 @@ public sealed record LotFilter(
     DateTimeOffset? ExpiresBefore = null,
     int Offset = 0,
     int Limit = 500,
-    LotAttributeMatch? Attribute = null);
+    LotAttributeMatch? Attribute = null,
+    Guid? ContainerId = null);
 
 /// <summary>
 /// Lots whose value of an attribute matches (D-056): text containing <see cref="Text"/> (a choice: equal to it), a number or date in
@@ -57,6 +58,12 @@ public interface IInventoryReadStore
 
     /// <summary>Every lot downstream (forward) or upstream of the lot, the lot itself first, nearest first.</summary>
     Task<IReadOnlyList<LotTraceNodeDto>> TraceAsync(Guid lotId, bool forward, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// A balance's quantity movements in the order they count (D-057), with its location's flow settings (D-060); null when the lot
+    /// doesn't exist or isn't a balance.
+    /// </summary>
+    Task<BalanceHistory?> GetBalanceHistoryAsync(Guid lotId, CancellationToken cancellationToken);
 
     /// <summary>Released and draft BOMs listing the material, and open jobs planned to consume it; null when it doesn't exist.</summary>
     Task<WhereUsedDto?> WhereUsedAsync(Guid materialId, CancellationToken cancellationToken);
@@ -132,8 +139,15 @@ public sealed record ComponentDemandRow
     public required string JobNumber { get; init; }
     public required string JobStatus { get; init; }
     public required string LineCode { get; init; }
+
+    /// <summary>The line or department the job is on; <see cref="OnGroup"/> for a department, whose jobs aren't projected (D-022).</summary>
+    public Guid LineId { get; init; }
+    public bool OnGroup { get; init; }
     public string? WorkOrderNumber { get; init; }
+
+    /// <summary>The published start, else the hold-until (or a department job's window start).</summary>
     public DateTimeOffset? NeededFrom { get; init; }
+    public DateTimeOffset? PlannedStart { get; init; }
     public required Guid MaterialId { get; init; }
     public required string MaterialCode { get; init; }
     public required string MaterialName { get; init; }
@@ -202,12 +216,40 @@ public interface IInventoryRepository
     /// <summary>Writes a line's counted quantity, when and by whom.</summary>
     Task UpdateStockCountLineAsync(StockCountLine line, CancellationToken cancellationToken);
 
-    Task<Versioned<ReasonCode>?> GetReasonCodeForUpdateAsync(Guid id, CancellationToken cancellationToken);
+    /// <summary>One movement of a lot (D-063), without locking; null when the lot has no such movement.</summary>
+    Task<LotEventDetail?> GetEventAsync(Guid lotId, Guid eventId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The other half of a two-lot movement (split, merge, transfer): the row on the other lot that names this one, of the same kind and
+    /// the opposite quantity, recorded with it (the nearest in time, within a minute).
+    /// </summary>
+    Task<LotEventDetail?> GetCounterpartAsync(LotEventDetail movement, CancellationToken cancellationToken);
+
+    /// <summary>A lot's movements recorded after <paramref name="after"/>, oldest first: what has happened to it since.</summary>
+    Task<IReadOnlyList<LotEventDetail>> ListEventsAfterAsync(Guid lotId, LotEventDetail after, CancellationToken cancellationToken);
+
+    /// <summary>The lot movements a production report recorded (D-063), oldest first.</summary>
+    Task<IReadOnlyList<LotEventDetail>> ListReportEventsAsync(Guid reportId, CancellationToken cancellationToken);
+
+    /// <summary>Whether the lot still has a declaration of <paramref name="kind"/> against the job that hasn't been reversed.</summary>
+    Task<bool> HasDeclarationAsync(Guid lotId, Guid jobId, string kind, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Ends current genealogy edges (D-063) of a basis: between the two lots, or (with one of them null) every edge of the job to or from
+    /// the other. They stay as history with <c>superseded_at</c>.
+    /// </summary>
+    Task SupersedeGenealogyAsync(Guid? parentLotId, Guid? childLotId, string basis, Guid? jobId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>A reason's kind, without locking; null when there is no such reason. The kind never changes.</summary>
+    Task<string?> GetReasonKindAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Locks every reason of a kind, in id order, and returns them (D-062): tree changes of a kind serialize.</summary>
+    Task<IReadOnlyList<Versioned<ReasonCode>>> LockReasonTreeAsync(string kind, CancellationToken cancellationToken);
 
     /// <returns>The new row version.</returns>
     Task<long> InsertReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken);
 
-    /// <summary>Writes the name, comment flag, order and active flag; the code and kind never change.</summary>
+    /// <summary>Writes the name, comment flag, order, active flag, class and group (parent); the code, kind and group flag never change.</summary>
     /// <returns>The new row version.</returns>
     Task<long> UpdateReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken);
 
@@ -225,6 +267,17 @@ public interface IInventoryRepository
 
     /// <summary>The site row read <c>FOR SHARE</c>: true when it exists and is a site.</summary>
     Task<bool> IsSiteAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>The location's flow settings, locked; null when it doesn't exist (D-060).</summary>
+    Task<Versioned<FlowSettings>?> GetFlowSettingsForUpdateAsync(Guid equipmentId, CancellationToken cancellationToken);
+
+    Task<long> UpdateFlowSettingsAsync(FlowSettings settings, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>The material with this code; null when none.</summary>
+    Task<Guid?> FindMaterialIdByCodeAsync(string code, CancellationToken cancellationToken);
+
+    /// <summary>The unit with this code; null when none.</summary>
+    Task<Guid?> FindUomIdByCodeAsync(string code, CancellationToken cancellationToken);
 
     Task InsertEventAsync(LotEventRow row, DateTimeOffset at, CancellationToken cancellationToken);
 
@@ -279,7 +332,30 @@ public sealed record LotEventRow(
     Guid? ReversesEventId = null,
     DateTimeOffset? ReversesOccurredAt = null,
     Guid? RunId = null,
-    DateTimeOffset? EffectiveAt = null);
+    DateTimeOffset? EffectiveAt = null,
+    Guid? ContainerId = null,
+    Guid? ReportId = null);
+
+/// <summary>
+/// One movement of a lot as reversing it needs it (D-063): what it did, what it belonged to, and the reversal of it, if any.
+/// </summary>
+public sealed record LotEventDetail
+{
+    public required Guid Id { get; init; }
+    public required Guid LotId { get; init; }
+    public DateTimeOffset OccurredAt { get; init; }
+    public DateTimeOffset EffectiveAt { get; init; }
+    public required LotMovement Movement { get; init; }
+    public Guid? RelatedLotId { get; init; }
+    public Guid? JobId { get; init; }
+    public string? JobNumber { get; init; }
+    public Guid? RunId { get; init; }
+    public Guid? ReportId { get; init; }
+    public Guid? ReasonCodeId { get; init; }
+
+    /// <summary>The reversal that undid it; null while it stands.</summary>
+    public Guid? ReversedBy { get; init; }
+}
 
 /// <summary>A parent-to-child lot edge: <c>declared</c> by a job, or from a <c>split</c> or <c>merge</c> (D-030, no job).</summary>
 public sealed record GenealogyEdge(Guid Id, Guid ParentLotId, Guid ChildLotId, Guid? JobId, string Basis = GenealogyEdge.Declared)
@@ -295,6 +371,25 @@ public sealed record LockedLot(Lot Lot, long Version, DateTimeOffset UpdatedAt);
 /// <summary>A movement as recorded, for reversing it.</summary>
 /// <summary>A lot movement as reversing it needs it; <c>EffectiveAt</c> is when it counts in stock (D-057), its record time unless back-dated.</summary>
 public sealed record LotEventRecord(Guid Id, DateTimeOffset OccurredAt, LotMovement Movement, Guid? RelatedLotId, DateTimeOffset? EffectiveAt = null);
+
+/// <summary>A balance's movements and how its location flows (D-060).</summary>
+public sealed record BalanceHistory(Guid LotId, string FlowModel, TimeSpan? MinResidence, IReadOnlyList<BalanceMovementRow> Movements);
+
+/// <summary>One movement of a balance, with the names screens show.</summary>
+public sealed record BalanceMovementRow
+{
+    public required Guid EventId { get; init; }
+    public DateTimeOffset At { get; init; }
+    public decimal Delta { get; init; }
+    public required string Kind { get; init; }
+    public Guid? SourceLotId { get; init; }
+    public string? SourceLotNumber { get; init; }
+    public Guid? JobId { get; init; }
+    public string? JobNumber { get; init; }
+}
+
+/// <summary>A location's flow settings (D-060), as changing them needs them.</summary>
+public sealed record FlowSettings(Guid EquipmentId, Guid? SiteId, string Code, bool HoldsInventory, string FlowModel, TimeSpan? MinResidence);
 
 /// <summary>One quantity movement of a lot, by when it counts and when it was recorded (D-057).</summary>
 public sealed record QuantityPoint(DateTimeOffset EffectiveAt, DateTimeOffset OccurredAt, decimal Delta);

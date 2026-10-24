@@ -1,3 +1,5 @@
+using Pulaski.Api.Integrations;
+using Pulaski.Application.Integrations;
 using Pulaski.Api.Endpoints;
 using Pulaski.Api.WorkOrders;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -17,6 +19,7 @@ var connectionString = builder.Configuration.GetConnectionString("Pulaski")
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddSingleton<ShopOrderPdfRenderer>();
+builder.Services.AddSingleton<LabelPdfRenderer>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IRequestContext, HttpRequestContext>();
@@ -55,7 +58,13 @@ if (builder.Configuration.GetValue("Pulaski:DatabaseMaintenance", true))
     builder.Services.AddHostedService<SchemaVersionCheck>();
     builder.Services.AddHostedService<PartitionMaintenance>();
     builder.Services.AddHostedService<BootstrapAdministrator>();
+    builder.Services.AddHostedService<ErpDeliveryService>();
 }
+
+// The ERP feed (D-061): its settings for screens, and the HTTP client it sends with.
+builder.Services.AddSingleton<IDeliveryTargets, DeliveryTargets>();
+builder.Services.AddHttpClient(ErpWebhookSender.ClientName, (services, client) =>
+    client.Timeout = TimeSpan.FromSeconds(ErpDeliveryOptions.From(services.GetRequiredService<IConfiguration>()).TimeoutSeconds));
 
 var app = builder.Build();
 
@@ -80,6 +89,7 @@ api.MapProcessEndpoints();
 api.MapBomEndpoints();
 api.MapUnitEndpoints();
 api.MapInventoryEndpoints();
+api.MapIntegrationEndpoints();
 api.MapMaterialEndpoints();
 api.MapExecutionEndpoints();
 api.MapShiftEndpoints();

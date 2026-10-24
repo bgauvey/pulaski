@@ -237,14 +237,22 @@ internal sealed class ProductionReporter(
                 EffectiveAt = backdated,
                 Comment = comment,
             });
+        // The processed row's id names the report (D-063): its counts and the lot movements it makes carry it, so it can be reversed whole.
+        var reportId = ids.NewId();
         await execution.UpdateRunAsync(after, cancellationToken);
         await execution.InsertCountAsync(
-            new ProductionCountRow(ids.NewId(), occurredAt, run.EquipmentId, run.Id, job.Id, CountKind.Processed, good + scrap, jobUom, null, envelope.ActorId, comment, now),
+            new ProductionCountRow(reportId, occurredAt, run.EquipmentId, run.Id, job.Id, CountKind.Processed, good + scrap, jobUom, null, envelope.ActorId, comment, now)
+            {
+                ReportId = reportId,
+            },
             cancellationToken);
         if (scrap > 0)
         {
             await execution.InsertCountAsync(
-                new ProductionCountRow(ids.NewId(), occurredAt, run.EquipmentId, run.Id, job.Id, CountKind.Defective, scrap, jobUom, command.ScrapReasonCodeId, envelope.ActorId, comment, now),
+                new ProductionCountRow(ids.NewId(), occurredAt, run.EquipmentId, run.Id, job.Id, CountKind.Defective, scrap, jobUom, command.ScrapReasonCodeId, envelope.ActorId, comment, now)
+                {
+                    ReportId = reportId,
+                },
                 cancellationToken);
         }
 
@@ -257,12 +265,12 @@ internal sealed class ProductionReporter(
             : command.GoodBatches.ToList();
         foreach (var quantity in outputs)
         {
-            lots.Add(await ProduceAsync(job, command, quantity, unit, outputs.Count == 1 && command.PartialQty is null ? lotNumber : null, comment, run, now, cancellationToken));
+            lots.Add(await ProduceAsync(job, command, quantity, unit, outputs.Count == 1 && command.PartialQty is null ? lotNumber : null, comment, run, now, reportId, cancellationToken));
         }
 
         if (command.PartialQty is { } partialQty)
         {
-            var partialLot = await ProduceAsync(job, command, partialQty, unit, outputs.Count == 0 ? lotNumber : null, comment, run, now, cancellationToken);
+            var partialLot = await ProduceAsync(job, command, partialQty, unit, outputs.Count == 0 ? lotNumber : null, comment, run, now, reportId, cancellationToken);
             lots.Add(partialLot);
             warnings.Add(await RecordPartialAsync(job, material, run, partialLot, partialQty, occurredAt, envelope.ActorId, cancellationToken));
         }
@@ -270,6 +278,7 @@ internal sealed class ProductionReporter(
         warnings.AddRange(lots.SelectMany(l => l.Warnings));
         return new ReportProductionResponse
         {
+            ReportId = reportId,
             RunId = run.Id,
             RunGoodQty = after.GoodQty,
             RunScrapQty = after.ScrapQty,
@@ -323,10 +332,11 @@ internal sealed class ProductionReporter(
         (await InventoryRules.LocationAsync(inventory, locationId, siteId, cancellationToken)).ComminglesLots;
 
     private Task<LotTransactionResponse> ProduceAsync(
-        InventoryJob job, ReportProductionCommand command, decimal quantity, Guid unit, string? lotNumber, string? comment, JobRun run, DateTimeOffset now, CancellationToken cancellationToken) =>
+        InventoryJob job, ReportProductionCommand command, decimal quantity, Guid unit, string? lotNumber, string? comment, JobRun run, DateTimeOffset now, Guid reportId,
+        CancellationToken cancellationToken) =>
         ProductionOutput.ProduceAsync(
             inventory, units, eventLog, events, ids, job, command.LocationId!.Value, quantity, unit, lotNumber, command.ExpiresAt, comment, run.Id, now,
-            MovementTime.Backdated(Backdating.EffectiveAt(command.EffectiveAt, now, comment), now), cancellationToken);
+            MovementTime.Backdated(Backdating.EffectiveAt(command.EffectiveAt, now, comment), now), reportId, cancellationToken);
 
     /// <summary>The partial batch's record; under the exact rule its lot goes on hold until someone approves it (D-036).</summary>
     private async Task<InventoryWarningDto> RecordPartialAsync(

@@ -1,0 +1,250 @@
+@page "/inventory/containers"
+@attribute [RequiresView(PermissionCodes.InventoryView)]
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+@inject Downloads Downloads
+
+@* Pallets, totes, boxes and bins holding lots (D-059). Lots keep their own identity inside; moving a container moves them all. *@
+<PageTitle>Containers · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="Containers" SiteChanged="OnSiteChangedAsync">
+    <Description>
+        Pallets, totes, boxes and bins that hold lots. Each lot keeps its own number and history; moving a container moves every lot in it. Pack a lot from its page or by
+        <a href="inventory/scan">scanning</a>.
+    </Description>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.LotMove" What="manage containers" SiteId="Sites.SiteId" />
+
+@if (CanManage)
+{
+    <form class="inv-toolbar" @onsubmit="CreateAsync" @onsubmit:preventDefault>
+        <select class="form-select w-auto" aria-label="Kind" @bind="_kind">
+            <option value="pallet">Pallet</option>
+            <option value="tote">Tote</option>
+            <option value="box">Box</option>
+            <option value="bin">Bin</option>
+            <option value="other">Other</option>
+        </select>
+        <input class="form-control" style="width: 10rem" maxlength="30" placeholder="Code (optional)" aria-label="Code" @bind="_code" />
+        <select class="form-select w-auto" aria-label="Location" @bind="_locationId">
+            <option value="@Guid.Empty">Where it is</option>
+            @foreach (var l in _locations)
+            {
+                <option value="@l.Id">@l.Code · @l.Name</option>
+            }
+        </select>
+        <button type="submit" class="btn btn-primary" disabled="@(_busy || _locationId == Guid.Empty)">Add container</button>
+    </form>
+}
+
+<div class="inv-toolbar">
+    <input type="search" class="form-control" style="max-width: 16rem" placeholder="Container or location code" aria-label="Search" @bind="_search" @bind:after="LoadAsync" />
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="ct-retired" @bind="_includeRetired" @bind:after="LoadAsync" />
+        <label class="form-check-label" for="ct-retired">Show retired</label>
+    </div>
+</div>
+
+@if (_containers is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_containers.Count == 0)
+{
+    <div class="empty-panel"><p class="text-muted mb-0">No containers at @(Sites.Site?.Code ?? "this site") yet.</p></div>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead><tr><th>Container</th><th>Kind</th><th>Where</th><th class="inv-num">Lots</th><th></th></tr></thead>
+            @foreach (var c in _containers)
+            {
+                <tbody @key="c.Id">
+                    <tr class="@(c.IsActive ? "" : "text-muted")">
+                        <td>
+                            <button type="button" class="inv-group-toggle p-0" aria-expanded="@(_open?.Id == c.Id ? "true" : "false")" @onclick="() => ToggleAsync(c)">
+                                <Icon Name="chevron-right" Size="16" /><span class="fw-semibold">@c.Code</span>
+                            </button>
+                            @(c.IsActive ? "" : " · retired")
+                        </td>
+                        <td>@Display.Label(c.Kind)</td>
+                        <td>@c.LocationCode</td>
+                        <td class="inv-num">@c.LotCount</td>
+                        <td class="text-end text-nowrap">
+                            <button type="button" class="btn btn-sm btn-link" @onclick="() => LabelAsync(c)">Label</button>
+                            @if (CanManage && c.IsActive)
+                            {
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => { _moving = c; _toId = Guid.Empty; }">Move…</button>
+                                <button type="button" class="btn btn-sm btn-link" disabled="@(_busy || c.LotCount > 0)" title="@(c.LotCount > 0 ? "Empty it first" : null)" @onclick="() => RetireAsync(c)">Retire</button>
+                            }
+                        </td>
+                    </tr>
+                    @if (_moving?.Id == c.Id)
+                    {
+                        <tr>
+                            <td colspan="5">
+                                <form class="d-flex gap-2" @onsubmit="MoveAsync" @onsubmit:preventDefault>
+                                    <select class="form-select form-select-sm w-auto" aria-label="To" @bind="_toId">
+                                        <option value="@Guid.Empty">Move @c.Code and its @c.LotCount @(c.LotCount == 1 ? "lot" : "lots") to…</option>
+                                        @foreach (var l in _locations.Where(l => l.Id != c.LocationId))
+                                        {
+                                            <option value="@l.Id">@l.Code · @l.Name</option>
+                                        }
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-primary" disabled="@(_busy || _toId == Guid.Empty)">Move</button>
+                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _moving = null">Cancel</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    @if (_open?.Id == c.Id)
+                    {
+                        @if (_open.Lots.Count == 0)
+                        {
+                            <tr><td colspan="5" class="ps-5 small text-muted">Empty.</td></tr>
+                        }
+                        @foreach (var l in _open.Lots)
+                        {
+                            <tr @key="l.Id" class="small">
+                                <td class="ps-5"><a href="inventory/lots/@l.Id">@l.LotNumber</a></td>
+                                <td>@l.MaterialCode</td>
+                                <td><span class="@InventoryView.StatusChip(l.Status)">@Display.Label(l.Status)</span></td>
+                                <td class="inv-num">@InventoryView.Qty(l.Quantity) @l.UomCode</td>
+                                <td></td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            }
+        </table>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "open")]
+    public Guid? OpenQuery { get; set; }
+
+    private IReadOnlyList<ContainerDto>? _containers;
+    private IReadOnlyList<InventoryLocationDto> _locations = [];
+    private ContainerDto? _open;
+    private ContainerDto? _moving;
+    private Guid _toId;
+    private string _kind = "pallet";
+    private string? _code;
+    private Guid _locationId;
+    private string? _search;
+    private bool _includeRetired;
+    private ApiException? _error;
+    private bool _busy;
+
+    private bool CanManage => User.Can(PermissionCodes.LotMove, Sites.SiteId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await OnSiteChangedAsync();
+        if (OpenQuery is { } open)
+        {
+            _open = await Api.GetContainerAsync(open);
+        }
+    }
+
+    private async Task OnSiteChangedAsync()
+    {
+        try
+        {
+            _locations = [.. (await Api.ListInventoryLocationsAsync(Sites.SiteId)).Where(l => l.IsActive)];
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            _containers = [];
+            return;
+        }
+
+        try
+        {
+            _containers = await Api.ListContainersAsync(site, _search, _includeRetired);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task ToggleAsync(ContainerDto c)
+    {
+        _open = _open?.Id == c.Id ? null : await Api.GetContainerAsync(c.Id);
+    }
+
+    private Task CreateAsync() => RunAsync(async () =>
+    {
+        await Api.CreateContainerAsync(new CreateContainerRequest { SiteId = Sites.SiteId!.Value, Code = _code, Kind = _kind, LocationId = _locationId });
+        _code = null;
+    });
+
+    private Task MoveAsync() => RunAsync(async () =>
+    {
+        await Api.MoveContainerAsync(_moving!.Id, new MoveContainerRequest { Version = _moving.Version, ToLocationId = _toId });
+        _moving = null;
+        _open = null;
+    });
+
+    private Task RetireAsync(ContainerDto c) => RunAsync(() => Api.RetireContainerAsync(c.Id, c.Version));
+
+    private async Task LabelAsync(ContainerDto c)
+    {
+        try
+        {
+            var (content, type, name) = await Api.GetLabelAsync("container", c.Id, c.SiteId);
+            await Downloads.FileAsync(name, content, type);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

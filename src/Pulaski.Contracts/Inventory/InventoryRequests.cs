@@ -6,6 +6,9 @@ namespace Pulaski.Contracts.Inventory;
 /// </summary>
 public sealed record ReceiveLotRequest : IMayBackdate
 {
+    /// <summary>The expected receipt this receipt closes (D-058), when there is one.</summary>
+    public Guid? ExpectedReceiptId { get; init; }
+
     /// <summary>When it counts, to back-date it (D-057): at most 31 days back, with a comment; needs <c>inventory.backdate</c>. Null: now.</summary>
     public DateTimeOffset? EffectiveAt { get; init; }
 
@@ -195,8 +198,21 @@ public sealed record CreateReasonCodeRequest
     public bool RequiresComment { get; init; }
     public int SortOrder { get; init; }
 
-    /// <summary>Required for a utilization reason (D-050): <c>runtime</c>, <c>downtime</c> or <c>planned</c>.</summary>
+    /// <summary>Required for a utilization reason (D-050): <c>runtime</c>, <c>downtime</c> or <c>planned</c>; none for a group.</summary>
     public string? UtilizationClass { get; init; }
+
+    /// <summary>A group holds other reasons and is never chosen (D-062); fixed once created.</summary>
+    public bool IsGroup { get; init; }
+
+    /// <summary>The group to file it under; blank: at the top.</summary>
+    public Guid? ParentId { get; init; }
+}
+
+/// <summary>Files a reason under a group of its kind, or at the top when <see cref="ParentId"/> is blank (D-062).</summary>
+public sealed record MoveReasonCodeRequest
+{
+    public long Version { get; init; }
+    public Guid? ParentId { get; init; }
 }
 
 public sealed record UpdateReasonCodeRequest
@@ -216,3 +232,51 @@ public interface IMayBackdate
 {
     DateTimeOffset? EffectiveAt { get; }
 }
+
+public sealed record CreateExpectedReceiptRequest
+{
+    public Guid SiteId { get; init; }
+    public Guid MaterialId { get; init; }
+    public decimal Quantity { get; init; }
+    public Guid UomId { get; init; }
+    public DateTimeOffset ExpectedAt { get; init; }
+    public string? Reference { get; init; }
+    public string? Supplier { get; init; }
+    public string? Note { get; init; }
+}
+
+public sealed record UpdateExpectedReceiptRequest
+{
+    public long Version { get; init; }
+    public decimal Quantity { get; init; }
+    public Guid UomId { get; init; }
+    public DateTimeOffset ExpectedAt { get; init; }
+    public string? Reference { get; init; }
+    public string? Supplier { get; init; }
+    public string? Note { get; init; }
+}
+
+public sealed record CancelExpectedReceiptRequest
+{
+    public long Version { get; init; }
+}
+
+/// <summary>
+/// One expected receipt from the ERP (D-058), matched on its system and key: sending it again changes nothing, a change updates
+/// the open one, <see cref="Cancelled"/> cancels it. Material and unit by code, as the ERP knows them.
+/// </summary>
+public sealed record ImportExpectedReceiptRequest
+{
+    public Guid SiteId { get; init; }
+    public string ExternalSystem { get; init; } = "";
+    public string ExternalKey { get; init; } = "";
+    public string MaterialCode { get; init; } = "";
+    public decimal Quantity { get; init; }
+    public string UomCode { get; init; } = "";
+    public DateTimeOffset ExpectedAt { get; init; }
+    public string? Reference { get; init; }
+    public string? Supplier { get; init; }
+    public bool Cancelled { get; init; }
+}
+
+public sealed record ImportExpectedReceiptResponse(Guid Id, long Version, bool Created, bool Changed);

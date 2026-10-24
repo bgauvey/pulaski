@@ -2,16 +2,30 @@
 @attribute [RequiresView(PermissionCodes.InventoryView)]
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
+@inject CurrentUser User
 
 <PageTitle>Shortages · Inventory · Pulaski</PageTitle>
 
 <InventoryHeader Title="Material shortages" SiteChanged="OnSiteChangedAsync">
     <Description>
-        What the open jobs still need of each component, against the stock available now. Jobs take stock in the order they are needed, so a shortfall shows on the first job it reaches.
+        What the open jobs still need of each component, against the stock available now and the
+        <a href="inventory/incoming">deliveries expected</a>. Jobs take stock in the order they are needed, then what is due by then, so a shortfall shows on the first job it reaches.
+        Stock allocated to a job covers that job first and isn't free for the others.
     </Description>
+    <Actions>
+        @if (Sites.SiteId is { } site && User.Can(PermissionCodes.LotAllocate, site))
+        {
+            <button type="button" class="btn btn-outline-secondary" disabled="@_refreshing" @onclick="RefreshAllocationsAsync"
+                    title="For every open job: release allocations that are no longer usable and allocate what is still needed, earliest job first">Refresh allocations</button>
+        }
+    </Actions>
 </InventoryHeader>
 
 <ProblemAlert Error="_error" />
+@foreach (var note in _allocationNotes)
+{
+    <p class="small text-muted mb-1">@note</p>
+}
 
 <div class="inv-toolbar">
     <EquipmentPicker Equipment="_equipment" Value="_equipmentId" ValueChanged="OnEquipmentChangedAsync" />
@@ -21,6 +35,10 @@
         <option value="3">Next 3 days</option>
         <option value="7">Next 7 days</option>
         <option value="14">Next 14 days</option>
+    </select>
+    <select class="form-select" aria-label="Timing" value="@(_live ? "live" : "published")" @onchange="OnTimingChangedAsync">
+        <option value="live">Jobs as the schedule has them now</option>
+        <option value="published">Jobs at their published times</option>
     </select>
     <div class="form-check ms-1">
         <input class="form-check-input" type="checkbox" id="short-only" @bind="_shortOnly" />
@@ -47,7 +65,8 @@ else
 
     <p class="small text-muted">
         @(shortCount == 0 ? "Nothing is short." : $"{shortCount} of {_report.Materials.Count} components short.")
-        Calculated @Display.SiteTime(_report.CalculatedAt, Sites.Site?.TimeZone). Held stock isn't counted until it is released; incoming deliveries aren't counted at all.
+        Calculated @Display.SiteTime(_report.CalculatedAt, Sites.Site?.TimeZone), with jobs @(_report.LiveTiming ? "where the schedule has them now" : "at their published times").
+        Held stock isn't counted until it is released. Incoming deliveries aren't stock: they count only for jobs that need the material after they are due, and a late one counts as arriving now.
     </p>
 
     @foreach (var problem in _report.Problems)
@@ -76,6 +95,7 @@ else
                         <th class="inv-num">Needed</th>
                         <th class="inv-num">Available</th>
                         <th class="inv-num">Held</th>
+                        <th class="inv-num">Incoming</th>
                         <th class="inv-num">Short</th>
                         <th>First short</th>
                     </tr>
@@ -95,6 +115,19 @@ else
                             <td class="inv-num">@InventoryView.Qty(m.Demand) <span class="small text-muted">@m.BaseUomCode</span></td>
                             <td class="inv-num">@InventoryView.Qty(m.Available)</td>
                             <td class="inv-num @(m.Held > 0 ? "inv-held" : "")">@InventoryView.Qty(m.Held)</td>
+                            <td class="inv-num">
+                                @if (m.Incoming > 0)
+                                {
+                                    @InventoryView.Qty(m.Incoming)
+                                    <div class="small @(m.NextIncomingAt < _report.CalculatedAt ? "text-danger" : "text-muted")">
+                                        next @(m.NextIncomingAt is { } next ? Display.SiteTime(next, Sites.Site?.TimeZone) : "")@(m.NextIncomingAt < _report.CalculatedAt ? " (late)" : "")
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
                             <td class="inv-num">
                                 @if (m.Shortfall > 0)
                                 {
@@ -122,11 +155,15 @@ else
                                         <a href="inventory/jobs/@l.JobId">@l.JobNumber</a>
                                         <span class="text-muted">· @l.LineCode · @Display.Label(l.JobStatus)</span>
                                     </td>
-                                    <td class="inv-num">@InventoryView.Qty(l.Remaining)</td>
-                                    <td class="inv-num text-muted" title="Needed by this job and every one before it">@InventoryView.Qty(l.Cumulative) in total</td>
+                                    <td class="inv-num" title="@($"{InventoryView.Qty(l.Cumulative)} needed by this job and every one before it")">@InventoryView.Qty(l.Remaining)</td>
+                                    <td class="inv-num text-muted">@(l.FromStock > 0 ? $"{InventoryView.Qty(l.FromStock)} from stock" : "")</td>
                                     <td></td>
+                                    <td class="inv-num text-muted">@(l.FromIncoming > 0 ? $"{InventoryView.Qty(l.FromIncoming)} incoming" : "")</td>
                                     <td class="inv-num @(l.Uncovered > 0 ? "text-danger fw-semibold" : "text-muted")">@(l.Uncovered > 0 ? InventoryView.Qty(l.Uncovered) : "covered")</td>
-                                    <td class="text-muted">@(l.NeededFrom is null ? "no time yet" : Display.SiteTime(l.NeededFrom, Sites.Site?.TimeZone))</td>
+                                    <td class="text-muted">
+                                        @(l.NeededFrom is null ? "no time yet" : Display.SiteTime(l.NeededFrom, Sites.Site?.TimeZone))
+                                        <div title="@TimeHint(l)">@TimeLabel(l.TimeSource)</div>
+                                    </td>
                                 </tr>
                             }
                         }
@@ -145,6 +182,24 @@ else
     private Guid? _equipmentId;
     private string _horizon = "";
     private bool _shortOnly = true;
+    private bool _live = true;
+
+    private static string TimeLabel(string source) => source switch
+    {
+        "live" => "as scheduled now",
+        "published" => "published start",
+        "window" => "hold-until or window",
+        _ => "",
+    };
+
+    private string? TimeHint(ShortageLineDto l) =>
+        l.TimeSource == "live" && l.PublishedStart is { } published ? $"Published start {Display.SiteTime(published, Sites.Site?.TimeZone)}" : null;
+
+    private async Task OnTimingChangedAsync(ChangeEventArgs e)
+    {
+        _live = e.Value?.ToString() != "published";
+        await LoadAsync();
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -172,11 +227,34 @@ else
         _error = null;
         try
         {
-            _report = await Api.GetShortagesAsync(siteId, _equipmentId, int.TryParse(_horizon, out var days) ? days : null);
+            _report = await Api.GetShortagesAsync(siteId, _equipmentId, int.TryParse(_horizon, out var days) ? days : null, _live);
         }
         catch (ApiException ex)
         {
             _error = ex;
+        }
+    }
+
+    private bool _refreshing;
+    private IReadOnlyList<string> _allocationNotes = [];
+
+    private async Task RefreshAllocationsAsync()
+    {
+        _refreshing = true;
+        _error = null;
+        try
+        {
+            var result = await Api.RefreshSiteAllocationsAsync(Sites.SiteId!.Value);
+            _allocationNotes = [AllocationView.Summary(result), .. result.Notes];
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _refreshing = false;
         }
     }
 

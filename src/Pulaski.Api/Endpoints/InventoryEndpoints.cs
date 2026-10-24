@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Pulaski.Api.Security;
+using Pulaski.Api.WorkOrders;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Security;
 using Pulaski.Application.Inventory;
@@ -74,10 +75,65 @@ internal static class InventoryEndpoints
             Guid siteId,
             Guid? equipmentId,
             int? horizonDays,
+            bool? liveTiming,
             IQueryHandler<GetShortagesQuery, ShortageReportDto> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetShortagesQuery(siteId, equipmentId, horizonDays), ct)))
+            TypedResults.Ok(await handler.HandleAsync(new GetShortagesQuery(siteId, equipmentId, horizonDays, liveTiming ?? true), ct)))
         .RequireAnyAtSite(Site.Query(), Permissions.InventoryView);
+
+        // ---- Expected receipts (D-058): supply on its way, for the shortage check ----
+        var expected = inventory.MapGroup("/expected-receipts");
+
+        expected.MapGet("/", async Task<Ok<IReadOnlyList<ExpectedReceiptDto>>> (
+            Guid siteId,
+            bool? includeClosed,
+            Guid? materialId,
+            IQueryHandler<ListExpectedReceiptsQuery, IReadOnlyList<ExpectedReceiptDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListExpectedReceiptsQuery(siteId, includeClosed ?? false, materialId), ct)))
+        .RequireAny(Site.Query(), Permissions.InventoryView);
+
+        expected.MapPost("/", async Task<Created<CreatedResponse>> (
+            CreateExpectedReceiptRequest request,
+            ICommandHandler<CreateExpectedReceiptCommand, CreatedResponse> handler,
+            CancellationToken ct) =>
+        {
+            var created = await handler.HandleAsync(
+                new CreateExpectedReceiptCommand(request.SiteId, request.MaterialId, request.Quantity, request.UomId, request.ExpectedAt,
+                    request.Reference, request.Supplier, request.Note),
+                ct);
+            return TypedResults.Created($"/api/inventory/expected-receipts/{created.Id}", created);
+        })
+        .RequirePermission(Permissions.LotReceive, Site.FromBody<CreateExpectedReceiptRequest>(SiteOf.Equipment, r => r.SiteId));
+
+        // One from the ERP, matched on its system and key; safe to send again.
+        expected.MapPost("/import", async Task<Ok<ImportExpectedReceiptResponse>> (
+            ImportExpectedReceiptRequest request,
+            ICommandHandler<ImportExpectedReceiptCommand, ImportExpectedReceiptResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new ImportExpectedReceiptCommand(request.SiteId, request.ExternalSystem, request.ExternalKey, request.MaterialCode, request.Quantity,
+                    request.UomCode, request.ExpectedAt, request.Reference, request.Supplier, request.Cancelled),
+                ct)))
+        .RequirePermission(Permissions.LotReceive, Site.FromBody<ImportExpectedReceiptRequest>(SiteOf.Equipment, r => r.SiteId));
+
+        expected.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (
+            Guid id,
+            UpdateExpectedReceiptRequest request,
+            ICommandHandler<UpdateExpectedReceiptCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new UpdateExpectedReceiptCommand(id, request.Version, request.Quantity, request.UomId, request.ExpectedAt, request.Reference, request.Supplier, request.Note),
+                ct)))
+        .RequirePermission(Permissions.LotReceive, Site.Of(SiteOf.ExpectedReceipt));
+
+        expected.MapPost("/{id:guid}/cancel", async Task<Ok<VersionResponse>> (
+            Guid id,
+            CancelExpectedReceiptRequest request,
+            ICommandHandler<CancelExpectedReceiptCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CancelExpectedReceiptCommand(id, request.Version), ct)))
+        .RequirePermission(Permissions.LotReceive, Site.Of(SiteOf.ExpectedReceipt));
 
         inventory.MapGet("/movements", async Task<Ok<JournalPageDto>> (
             Guid siteId,
@@ -144,7 +200,8 @@ internal static class InventoryEndpoints
         {
             var received = await handler.HandleAsync(
                 new ReceiveLotCommand(request.MaterialId, request.LocationId, request.LotNumber, request.Quantity, request.UomId,
-                    request.SupplierLot, request.ExpiresAt, request.Comment, EffectiveAt: request.EffectiveAt),
+                    request.SupplierLot, request.ExpiresAt, request.Comment, EffectiveAt: request.EffectiveAt,
+                    ExpectedReceiptId: request.ExpectedReceiptId),
                 ct);
             return TypedResults.Created($"/api/lots/{received.LotId}", received);
         })
@@ -245,6 +302,125 @@ internal static class InventoryEndpoints
             TypedResults.Ok(await handler.HandleAsync(
                 new ReverseMovementCommand(id, request.Version, request.EventId, request.ReasonCodeId, request.Comment), ct)))
         .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
+
+        // ---- Containers, labels and scanning (D-059) ----
+        lots.MapPost("/{id:guid}/pack", async Task<Ok<LotTransactionResponse>> (
+            Guid id,
+            PackLotRequest request,
+            ICommandHandler<PackLotCommand, LotTransactionResponse> pack,
+            ICommandHandler<UnpackLotCommand, LotTransactionResponse> unpack,
+            CancellationToken ct) =>
+            TypedResults.Ok(request.ContainerId is { } containerId
+                ? await pack.HandleAsync(new PackLotCommand(id, request.Version, containerId, request.Comment), ct)
+                : await unpack.HandleAsync(new UnpackLotCommand(id, request.Version, request.Comment), ct)))
+        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Lot));
+
+        lots.MapGet("/{id:guid}/label.pdf", async Task<FileContentHttpResult> (
+            Guid id,
+            IQueryHandler<GetLotQuery, LotDto> handler,
+            LabelPdfRenderer renderer,
+            CancellationToken ct) =>
+        {
+            var detail = await handler.HandleAsync(new GetLotQuery(id), ct);
+            var lot = detail.Lot;
+            var title = InventoryLabels.LotTitle(lot);
+            return TypedResults.File(renderer.Render([InventoryLabels.ForLot(lot, detail.SiteTimeZone)]), "application/pdf", $"label-{InventoryLabels.FileName(title)}.pdf");
+        })
+        .RequireAny(Site.Of(SiteOf.Lot), Permissions.InventoryView);
+
+        var containers = inventory.MapGroup("/containers");
+
+        containers.MapGet("/", async Task<Ok<IReadOnlyList<ContainerDto>>> (
+            Guid siteId,
+            string? search,
+            bool? includeRetired,
+            IQueryHandler<ListContainersQuery, IReadOnlyList<ContainerDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListContainersQuery(siteId, search, includeRetired ?? false), ct)))
+        .RequireAny(Site.Query(), Permissions.InventoryView);
+
+        containers.MapGet("/{id:guid}", async Task<Ok<ContainerDto>> (
+            Guid id,
+            IQueryHandler<GetContainerQuery, ContainerDto> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetContainerQuery(id), ct)))
+        .RequireAny(Site.Of(SiteOf.Container), Permissions.InventoryView);
+
+        containers.MapPost("/", async Task<Created<CreatedResponse>> (
+            CreateContainerRequest request,
+            ICommandHandler<CreateContainerCommand, CreatedResponse> handler,
+            CancellationToken ct) =>
+        {
+            var created = await handler.HandleAsync(new CreateContainerCommand(request.SiteId, request.Code, request.Kind, request.LocationId), ct);
+            return TypedResults.Created($"/api/inventory/containers/{created.Id}", created);
+        })
+        .RequirePermission(Permissions.LotMove, Site.FromBody<CreateContainerRequest>(SiteOf.Equipment, r => r.SiteId));
+
+        containers.MapPost("/{id:guid}/move", async Task<Ok<VersionResponse>> (
+            Guid id,
+            MoveContainerRequest request,
+            ICommandHandler<MoveContainerCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new MoveContainerCommand(id, request.Version, request.ToLocationId, request.Comment), ct)))
+        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Container));
+
+        containers.MapPost("/{id:guid}/retire", async Task<Ok<VersionResponse>> (
+            Guid id,
+            RetireContainerRequest request,
+            ICommandHandler<RetireContainerCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RetireContainerCommand(id, request.Version), ct)))
+        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Container));
+
+        containers.MapGet("/{id:guid}/label.pdf", async Task<FileContentHttpResult> (
+            Guid id,
+            IQueryHandler<GetContainerQuery, ContainerDto> handler,
+            LabelPdfRenderer renderer,
+            CancellationToken ct) =>
+        {
+            var container = await handler.HandleAsync(new GetContainerQuery(id), ct);
+            return TypedResults.File(renderer.Render([InventoryLabels.ForContainer(container)]), "application/pdf", $"label-{InventoryLabels.FileName(container.Code)}.pdf");
+        })
+        .RequireAny(Site.Of(SiteOf.Container), Permissions.InventoryView);
+
+        inventory.MapGet("/locations/{id:guid}/label.pdf", async Task<FileContentHttpResult> (
+            Guid id,
+            Guid siteId,
+            IQueryHandler<ListInventoryLocationsQuery, IReadOnlyList<InventoryLocationDto>> handler,
+            LabelPdfRenderer renderer,
+            CancellationToken ct) =>
+        {
+            var location = (await handler.HandleAsync(new ListInventoryLocationsQuery(siteId), ct)).FirstOrDefault(l => l.Id == id)
+                ?? throw new Application.Errors.NotFoundException($"Location {id} not found at that site.");
+            return TypedResults.File(renderer.Render([InventoryLabels.ForLocation(location)]), "application/pdf", $"label-{InventoryLabels.FileName(location.Code)}.pdf");
+        })
+        .RequireAny(Site.Query(), Permissions.InventoryView);
+
+        // How a balance at a location flows, for genealogy through it (D-060); an equipment setting.
+        inventory.MapPut("/locations/{id:guid}/flow", async Task<Ok<VersionResponse>> (
+            Guid id,
+            SetFlowRequest request,
+            ICommandHandler<SetFlowCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetFlowCommand(id, request.Version, request.FlowModel, request.MinResidenceMinutes), ct)))
+        .RequirePermission(Permissions.Equipment, Site.Of(SiteOf.Equipment));
+
+        // Where a balance's withdrawals came from, by its location's flow model (D-060).
+        lots.MapGet("/{id:guid}/allocation", async Task<Ok<BalanceAllocationDto>> (
+            Guid id,
+            IQueryHandler<GetBalanceAllocationQuery, BalanceAllocationDto> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetBalanceAllocationQuery(id), ct)))
+        .RequireAny(Site.Of(SiteOf.Lot), Permissions.InventoryView);
+
+        // What a scanned code names at the site: one lot, container or location, a choice of several, or nothing (D-059).
+        inventory.MapGet("/scan", async Task<Ok<ScanResultDto>> (
+            Guid siteId,
+            string code,
+            IQueryHandler<ResolveScanQuery, ScanResultDto> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ResolveScanQuery(siteId, code), ct)))
+        .RequireAny(Site.Query(), Permissions.InventoryView);
 
         // ---- Lot attributes and documents (D-056) ----
         lots.MapGet("/{id:guid}/records", async Task<Ok<LotRecordsDto>> (
@@ -444,7 +620,8 @@ internal static class InventoryEndpoints
             CancellationToken ct) =>
         {
             var created = await handler.HandleAsync(
-                new CreateReasonCodeCommand(request.SiteId, request.Kind, request.Code, request.Name, request.RequiresComment, request.SortOrder, request.UtilizationClass), ct);
+                new CreateReasonCodeCommand(request.SiteId, request.Kind, request.Code, request.Name, request.RequiresComment, request.SortOrder, request.UtilizationClass,
+                    request.IsGroup, request.ParentId), ct);
             return TypedResults.Created($"/api/reason-codes/{created.Id}", created);
         })
         .RequirePermission(Permissions.Reasons, Site.FromBody<CreateReasonCodeRequest>(SiteOf.Equipment, r => r.SiteId));
@@ -458,6 +635,14 @@ internal static class InventoryEndpoints
                 new UpdateReasonCodeCommand(id, request.Version, request.Name, request.RequiresComment, request.SortOrder, request.IsActive, request.UtilizationClass), ct)))
         .RequirePermission(Permissions.Reasons, Site.Of(SiteOf.ReasonCode));
 
+        reasons.MapPut("/{id:guid}/parent", async Task<Ok<VersionResponse>> (
+            Guid id,
+            MoveReasonCodeRequest request,
+            ICommandHandler<MoveReasonCodeCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new MoveReasonCodeCommand(id, request.Version, request.ParentId), ct)))
+        .RequirePermission(Permissions.Reasons, Site.Of(SiteOf.ReasonCode));
+
         routes.MapGet("/jobs/{id:guid}/materials", async Task<Ok<JobMaterialsDto>> (
             Guid id,
             IQueryHandler<GetJobMaterialsQuery, JobMaterialsDto> handler,
@@ -465,6 +650,43 @@ internal static class InventoryEndpoints
             TypedResults.Ok(await handler.HandleAsync(new GetJobMaterialsQuery(id), ct)))
             .WithTags("Inventory")
         .RequireAny(Site.Of(SiteOf.Job), Permissions.InventoryView, Permissions.FloorView);
+
+        // Allocations and lot recommendations (D-064).
+        routes.MapGet("/jobs/{id:guid}/allocations", async Task<Ok<JobAllocationsDto>> (
+            Guid id, IQueryHandler<GetJobAllocationsQuery, JobAllocationsDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetJobAllocationsQuery(id), ct)))
+            .WithTags("Inventory")
+        .RequireAny(Site.Of(SiteOf.Job), Permissions.InventoryView, Permissions.FloorView);
+
+        routes.MapPost("/jobs/{id:guid}/allocations", async Task<Ok<AllocationChangeResponse>> (
+            Guid id, AllocateLotRequest request, ICommandHandler<AllocateLotCommand, AllocationChangeResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new AllocateLotCommand(id, request.LotId, request.Quantity, request.UomId, request.Note), ct)))
+            .WithTags("Inventory")
+        .RequirePermission(Permissions.LotAllocate, Site.Of(SiteOf.Job));
+
+        routes.MapPost("/jobs/{id:guid}/allocations/recommended", async Task<Ok<AllocationChangeResponse>> (
+            Guid id, AllocateRecommendedRequest request, ICommandHandler<AllocateRecommendedCommand, AllocationChangeResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new AllocateRecommendedCommand(id, request.MaterialId), ct)))
+            .WithTags("Inventory")
+        .RequirePermission(Permissions.LotAllocate, Site.Of(SiteOf.Job));
+
+        routes.MapPost("/jobs/{id:guid}/allocations/refresh", async Task<Ok<AllocationChangeResponse>> (
+            Guid id, ICommandHandler<RefreshAllocationsCommand, AllocationChangeResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RefreshAllocationsCommand(id), ct)))
+            .WithTags("Inventory")
+        .RequirePermission(Permissions.LotAllocate, Site.Of(SiteOf.Job));
+
+        routes.MapPost("/jobs/{id:guid}/allocations/{allocationId:guid}/release", async Task<Ok<AllocationChangeResponse>> (
+            Guid id, Guid allocationId, ReleaseAllocationRequest request, ICommandHandler<ReleaseAllocationCommand, AllocationChangeResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ReleaseAllocationCommand(id, allocationId, request.Note), ct)))
+            .WithTags("Inventory")
+        .RequirePermission(Permissions.LotAllocate, Site.Of(SiteOf.Job));
+
+        routes.MapPost("/inventory/allocations/refresh", async Task<Ok<AllocationChangeResponse>> (
+            Guid siteId, ICommandHandler<RefreshSiteAllocationsCommand, AllocationChangeResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RefreshSiteAllocationsCommand(siteId), ct)))
+            .WithTags("Inventory")
+        .RequirePermission(Permissions.LotAllocate, Site.Query());
 
         routes.MapPost("/jobs/{id:guid}/produce", async Task<Created<LotTransactionResponse>> (
             Guid id,

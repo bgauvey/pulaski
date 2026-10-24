@@ -1,0 +1,188 @@
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* A job's allocations and which lots to use next (D-064). Allocating sets stock aside; consumption is still declared as usual. *@
+<section class="inv-section" aria-labelledby="allocations-title">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h2 id="allocations-title" class="mb-0 me-auto">Allocations and suggested lots</h2>
+        @if (_view is { CanAllocate: true } && CanAllocate)
+        {
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="RefreshAsync"
+                    title="Release what is no longer usable, trim what a lot can no longer give, and allocate what is still needed">Refresh</button>
+            <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || !_view.Components.Any(c => c.Recommendations.Count > 0))"
+                    @onclick="() => AllocateSuggestedAsync(null)">Allocate all suggested</button>
+        }
+    </div>
+
+    <ProblemAlert Error="_error" />
+    @foreach (var note in _notes)
+    {
+        <p class="small text-muted mb-1">@note</p>
+    }
+
+    @if (_view is null)
+    {
+        @if (_error is null)
+        {
+            <p class="text-muted">Loading…</p>
+        }
+    }
+    else if (_view.Components.Count == 0)
+    {
+        <p class="text-muted">No components are planned for this job, so there is nothing to allocate.</p>
+    }
+    else
+    {
+        <p class="small text-muted">
+            Suggestions use the lot that expires first, then the oldest, leaving out stock that is held, would expire before
+            @Display.SiteTime(_view.NeededBy, TimeZone) (when the job needs it) or is allocated to other jobs. Allocated stock is kept for this
+            job: other jobs see it as taken.
+        </p>
+        @foreach (var c in _view.Components)
+        {
+            <div class="table-panel mb-3" @key="c.MaterialId">
+                <div class="d-flex flex-wrap gap-3 align-items-baseline px-3 pt-2">
+                    <a class="fw-semibold" href="inventory/materials/@c.MaterialId">@c.MaterialCode</a>
+                    <span class="small text-muted">@c.MaterialName</span>
+                    <span class="small">Need @(c.NeedQty is { } n ? InventoryView.Qty(n) : "—") · consumed @InventoryView.Qty(c.ConsumedQty) · allocated @InventoryView.Qty(c.AllocatedQty) · still to allocate <strong>@InventoryView.Qty(c.RemainingQty)</strong> @c.UomCode</span>
+                </div>
+                @if (c.Problem is { } problem)
+                {
+                    <p class="small text-warning-strong px-3 mb-1">@problem</p>
+                }
+
+                @if (c.Allocations.Count > 0)
+                {
+                    <table class="table table-sm align-middle mb-0">
+                        <thead><tr><th>Allocated lot</th><th>Location</th><th class="inv-num">Kept</th><th>How</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var a in c.Allocations)
+                            {
+                                <tr @key="a.Id">
+                                    <td>
+                                        <a href="inventory/lots/@a.LotId">@a.LotLabel</a>
+                                        @if (a.Problem is { } issue)
+                                        {
+                                            <div class="small text-warning-strong">@issue</div>
+                                        }
+                                    </td>
+                                    <td>@a.LocationCode</td>
+                                    <td class="inv-num">@InventoryView.Qty(a.Quantity) @a.UomCode</td>
+                                    <td class="small text-muted">@(a.Basis == "recommended" ? "Suggested" : "Chosen")@(a.CreatedBy is { } by ? $" · {by}" : "")</td>
+                                    <td class="text-end">
+                                        @if (CanAllocate)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-link p-0" disabled="@_busy" @onclick="() => ReleaseAsync(a)">Release</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+
+                @if (c.Recommendations.Count > 0)
+                {
+                    <table class="table table-sm align-middle mb-0">
+                        <thead><tr><th>Suggested lot</th><th>Location</th><th class="inv-num">Use</th><th>Why</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var r in c.Recommendations)
+                            {
+                                <tr @key="r.LotId">
+                                    <td><a href="inventory/lots/@r.LotId">@r.LotLabel</a></td>
+                                    <td>@r.LocationCode</td>
+                                    <td class="inv-num">@InventoryView.Qty(r.Quantity) @c.UomCode</td>
+                                    <td class="small">@r.Reason</td>
+                                    <td class="text-end">
+                                        @if (_view.CanAllocate && CanAllocate)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_busy" @onclick="() => AllocateAsync(c, r)">Allocate</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else if (c.RemainingQty > 0)
+                {
+                    <p class="small text-warning-strong px-3 mb-2">No free stock to suggest for the @InventoryView.Qty(c.RemainingQty) @c.UomCode still needed.</p>
+                }
+
+                @if (c.Excluded.Count > 0)
+                {
+                    <details class="px-3 pb-2">
+                        <summary class="small text-muted">@c.Excluded.Count lot(s) not suggested</summary>
+                        <ul class="small mb-0">
+                            @foreach (var x in c.Excluded)
+                            {
+                                <li @key="x.LotId"><a href="inventory/lots/@x.LotId">@x.LotLabel</a> (@InventoryView.Qty(x.Quantity) @c.UomCode): @x.Reason</li>
+                            }
+                        </ul>
+                    </details>
+                }
+            </div>
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid JobId { get; set; }
+
+    [Parameter]
+    public Guid? SiteId { get; set; }
+
+    [Parameter]
+    public string? TimeZone { get; set; }
+
+    private JobAllocationsDto? _view;
+    private ApiException? _error;
+    private bool _busy;
+    private IReadOnlyList<string> _notes = [];
+
+    private bool CanAllocate => User.Can(PermissionCodes.LotAllocate, SiteId);
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _view = await Api.GetJobAllocationsAsync(JobId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private Task AllocateAsync(ComponentAllocationDto component, LotRecommendationDto lot) => RunAsync(() =>
+        Api.AllocateLotAsync(JobId, new AllocateLotRequest { LotId = lot.LotId, Quantity = lot.Quantity, UomId = component.UomId, Note = lot.Reason }));
+
+    private Task AllocateSuggestedAsync(Guid? materialId) => RunAsync(() => Api.AllocateRecommendedAsync(JobId, materialId));
+
+    private Task RefreshAsync() => RunAsync(() => Api.RefreshAllocationsAsync(JobId));
+
+    private Task ReleaseAsync(LotAllocationDto allocation) => RunAsync(() => Api.ReleaseAllocationAsync(JobId, allocation.Id, null));
+
+    private async Task RunAsync(Func<Task<AllocationChangeResponse>> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await action();
+            _notes = [AllocationView.Summary(result), .. result.Notes];
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

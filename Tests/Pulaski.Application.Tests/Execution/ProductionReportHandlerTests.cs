@@ -126,7 +126,7 @@ public class ProductionReportHandlerTests
     [Fact]
     public async Task Consumption_needs_a_run_and_warns_beyond_the_planned_components()
     {
-        var lot = await new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
+        var lot = await new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time, _f.Stores.ExpectedReceipts)
             .HandleAsync(new ReceiveLotCommand(_resin.Id, _staging.Id, "R-1", 500m, _kg.Id), CancellationToken.None);
 
         Assert.Empty((await Consume(lot.LotId, 40m)).Warnings);

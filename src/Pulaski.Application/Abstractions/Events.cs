@@ -125,6 +125,7 @@ public static class EventTypes
     public const string JobReopened = "pulaski.job.reopened.v1";
     public const string JobClosed = "pulaski.job.closed.v1";
     public const string ProductionReported = "pulaski.job.production_reported.v1";
+    public const string ProductionReversed = "pulaski.job.production_reversed.v1";
     public const string ExecutionPolicyChanged = "pulaski.execution_policy.changed.v1";
     public const string WorkOrderDispatched = "pulaski.work_order.dispatched.v1";
     public const string WorkOrderUndispatched = "pulaski.work_order.undispatched.v1";
@@ -151,6 +152,14 @@ public static class EventTypes
     public const string LotWrittenUp = "pulaski.lot.written_up.v1";
     public const string LotWrittenOff = "pulaski.lot.written_off.v1";
     public const string LotMoved = "pulaski.lot.moved.v1";
+    public const string LotPacked = "pulaski.lot.packed.v1";
+    public const string LotUnpacked = "pulaski.lot.unpacked.v1";
+    public const string ContainerCreated = "pulaski.container.created.v1";
+    public const string EquipmentFlowSet = "pulaski.equipment.flow_set.v1";
+    public const string ContainerMoved = "pulaski.container.moved.v1";
+    public const string ContainerRetired = "pulaski.container.retired.v1";
+    public const string DeliveryRetried = "pulaski.delivery.retried.v1";
+    public const string DeliverySkipped = "pulaski.delivery.skipped.v1";
     public const string LotStatusChanged = "pulaski.lot.status_changed.v1";
     public const string LotConsumed = "pulaski.lot.consumed.v1";
     public const string LotProduced = "pulaski.lot.produced.v1";
@@ -159,8 +168,15 @@ public static class EventTypes
     public const string LotShipped = "pulaski.lot.shipped.v1";
     public const string LotCorrected = "pulaski.lot.corrected.v1";
     public const string LotReversed = "pulaski.lot.reversed.v1";
+    public const string LotAllocated = "pulaski.lot.allocated.v1";
+    public const string LotAllocationReleased = "pulaski.lot.allocation_released.v1";
+    public const string LotAllocationChanged = "pulaski.lot.allocation_changed.v1";
     public const string LotCountAdjusted = "pulaski.lot.count_adjusted.v1";
     public const string LotAttributeSet = "pulaski.lot.attribute_set.v1";
+    public const string ExpectedReceiptCreated = "pulaski.expected_receipt.created.v1";
+    public const string ExpectedReceiptUpdated = "pulaski.expected_receipt.updated.v1";
+    public const string ExpectedReceiptCancelled = "pulaski.expected_receipt.cancelled.v1";
+    public const string ExpectedReceiptReceived = "pulaski.expected_receipt.received.v1";
     public const string LotAttributeCreated = "pulaski.lot_attribute.created.v1";
     public const string LotAttributeUpdated = "pulaski.lot_attribute.updated.v1";
     public const string LotDocumentAttached = "pulaski.lot_document.attached.v1";
@@ -171,6 +187,7 @@ public static class EventTypes
     public const string StockCountCancelled = "pulaski.stock_count.cancelled.v1";
     public const string ReasonCodeCreated = "pulaski.reason_code.created.v1";
     public const string ReasonCodeUpdated = "pulaski.reason_code.updated.v1";
+    public const string ReasonCodeMoved = "pulaski.reason_code.moved.v1";
     public const string MaterialShelfLifeSet = "pulaski.material.shelf_life_set.v1";
     public const string MaterialCreated = "pulaski.material.created.v1";
     public const string MaterialUpdated = "pulaski.material.updated.v1";

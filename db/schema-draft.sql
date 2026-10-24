@@ -85,6 +85,8 @@ CREATE TABLE core.equipment (
     can_run_job             boolean NOT NULL DEFAULT false,         -- executes jobs; a schedulable row without it is a group whose runners do (D-022)
     holds_inventory         boolean NOT NULL DEFAULT false,         -- lots can be located here
     commingles_lots         boolean NOT NULL DEFAULT false,         -- lots here mix into one balance per material, like a silo (D-031)
+    flow_model              text NOT NULL DEFAULT 'mixed' CHECK (flow_model IN ('mixed','fifo')),   -- how a balance here flows, for genealogy (D-060)
+    min_residence           interval CHECK (min_residence IS NULL OR min_residence >= interval '0'), -- the least time material stays before it can leave
     single_material         boolean NOT NULL DEFAULT false,         -- takes one material at a time (D-032)
     -- machine data (D-050): where its state comes from, and how short a stop is a micro-stop
     state_derivation        text NOT NULL DEFAULT 'own_tags' CHECK (state_derivation IN ('own_tags','series','parallel','constraint_machine')),
@@ -208,7 +210,7 @@ CREATE TABLE core.equipment_tag (
     tag_role            text NOT NULL CHECK (tag_role IN (
                             'state','unit_mode','stop_reason','alarm','warning',
                             'processed_count','defective_count','consumed_count',
-                            'machine_speed','process_value')),
+                            'machine_speed','process_value','level')),
     connection_id       uuid NOT NULL REFERENCES core.edge_connection(id),
     source_address      text NOT NULL,                          -- Sparkplug: group/node[/device]:metric
     uom_id              uuid REFERENCES core.uom(id),
@@ -576,7 +578,7 @@ CREATE INDEX calendar_exception_scope_ix ON core.calendar_exception (scope_equip
 CREATE TABLE core.reason_code (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     site_id             uuid REFERENCES core.equipment(id),     -- null = enterprise-wide
-    parent_id           uuid REFERENCES core.reason_code(id),
+    parent_id           uuid REFERENCES core.reason_code(id),   -- the group it is filed under (D-062): same kind, a group, never itself below
     reason_kind         text NOT NULL CHECK (reason_kind IN (
                             'utilization','scrap','hold','inventory_adjustment',
                             'indirect_labor','run_end','spc_cause','sample_exclusion')),
@@ -584,13 +586,33 @@ CREATE TABLE core.reason_code (
     code                text NOT NULL,
     name                text NOT NULL,
     oee_impact          text NOT NULL DEFAULT 'none' CHECK (oee_impact IN ('availability','performance','quality','planned','none')),
-    is_selectable       boolean NOT NULL DEFAULT true,          -- false for tree branches
+    is_selectable       boolean NOT NULL DEFAULT true,          -- false for a group, which only holds others; fixed once created (D-062)
     requires_comment    boolean NOT NULL DEFAULT false,
     sort_order          integer NOT NULL DEFAULT 0,
     is_active           boolean NOT NULL DEFAULT true,
     CONSTRAINT reason_code_uq UNIQUE NULLS NOT DISTINCT (site_id, reason_kind, code),
-    CONSTRAINT reason_code_utilization_ck CHECK ((reason_kind = 'utilization') = (utilization_class IS NOT NULL))
+    -- A utilization reason has a class (D-050); a group (D-062) and every other kind have none.
+    CONSTRAINT reason_code_class_ck CHECK (CASE WHEN NOT is_selectable THEN utilization_class IS NULL
+                                                ELSE (reason_kind = 'utilization') = (utilization_class IS NOT NULL) END)
 );
+CREATE INDEX reason_code_parent_ix ON core.reason_code (parent_id) WHERE parent_id IS NOT NULL;
+
+-- Every reason with its place in its tree (D-062): how deep, the names of the groups above it (top first, joined by ' › ') and
+-- a key that sorts a kind's reasons in tree order (each level by sort order, then name). Small tables; worked out on read.
+CREATE FUNCTION core.reason_tree()
+RETURNS TABLE (id uuid, depth integer, group_path text, sort_key text[])
+LANGUAGE sql STABLE AS $$
+    WITH RECURSIVE t (id, name, depth, group_path, sort_key) AS (
+        SELECT r.id, r.name, 0, NULL::text, ARRAY[lpad(r.sort_order::text, 5, '0') || lower(r.name) || ' ' || r.code]
+        FROM core.reason_code r
+        WHERE r.parent_id IS NULL
+        UNION ALL
+        SELECT c.id, c.name, t.depth + 1, coalesce(t.group_path || ' › ', '') || t.name,
+               t.sort_key || (lpad(c.sort_order::text, 5, '0') || lower(c.name) || ' ' || c.code)
+        FROM t JOIN core.reason_code c ON c.parent_id = t.id
+    ) CYCLE id SET is_cycle USING visited
+    SELECT id, depth, group_path, sort_key FROM t WHERE NOT is_cycle
+$$;
 
 -- Machine profiles (D-050): one kind of machine, as its controller reports it. Identical machines share a
 -- profile; equipment names its profile and may override single stop codes. Kept per site, like its reasons.
@@ -1055,6 +1077,26 @@ CREATE UNIQUE INDEX changeover_rule_uq ON core.changeover_rule
 --    Quantities are in the material's base unit.
 -- =====================================================================
 
+
+-- The numbers lot and container labels carry (D-059): short, numeric and never reused, so a barcode stays compact.
+CREATE SEQUENCE core.label_seq;
+
+-- A pallet, tote, box or bin holding lots (D-059). Its lots keep their own number, history and genealogy; moving it moves them.
+-- One site, any mix of materials, no containers inside containers. Retired rather than deleted, and only when empty.
+CREATE TABLE core.container (
+    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
+    code                    text NOT NULL,                          -- upper case, unique in the site
+    kind                    text NOT NULL CHECK (kind IN ('pallet','tote','box','bin','other')),
+    location_equipment_id   uuid NOT NULL REFERENCES core.equipment(id),
+    label_no                bigint NOT NULL DEFAULT nextval('core.label_seq') UNIQUE,
+    is_active               boolean NOT NULL DEFAULT true,
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    created_by              text NOT NULL,
+    updated_at              timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT container_uq UNIQUE (site_id, code)
+);
+
 CREATE TABLE core.lot (
     id                      uuid PRIMARY KEY DEFAULT uuidv7(),
     site_id                 uuid NOT NULL REFERENCES core.equipment(id),
@@ -1072,6 +1114,8 @@ CREATE TABLE core.lot (
     origin                  text NOT NULL CHECK (origin IN ('produced','received','erp','split','merge')),
     supplier_lot            text,
     external_key            text,
+    container_id            uuid REFERENCES core.container(id),  -- the container it is in (D-059), at the container's location
+    label_no                bigint NOT NULL DEFAULT nextval('core.label_seq') UNIQUE,   -- what its label's barcode carries (D-059)
     produced_from           timestamptz,                        -- output lot boundaries (cut by time or quantity)
     produced_to             timestamptz,
     expires_at              timestamptz,
@@ -1082,11 +1126,37 @@ CREATE TABLE core.lot (
     CONSTRAINT lot_number_bulk_ck CHECK ((lot_number IS NULL) = is_bulk)
 );
 CREATE INDEX lot_location_ix ON core.lot (location_equipment_id) WHERE status IN ('available','on_hold','quarantine');
+CREATE INDEX lot_container_ix ON core.lot (container_id) WHERE container_id IS NOT NULL;
 CREATE INDEX lot_material_ix ON core.lot (material_id, site_id) WHERE status IN ('available','on_hold','quarantine');
 CREATE INDEX lot_run_ix ON core.lot (produced_by_run_id);
 CREATE INDEX lot_job_ix ON core.lot (produced_by_job_id) WHERE produced_by_job_id IS NOT NULL;
 -- One bulk balance per material and location.
 CREATE UNIQUE INDEX lot_bulk_uq ON core.lot (material_id, location_equipment_id) WHERE is_bulk;
+
+-- Supply known to be on its way (D-058): a purchase or transfer the ERP or a person says will arrive, so the shortage check can
+-- show it beside stock. Not a purchase order: Pulaski doesn't place, price or plan them. Receiving a lot against one closes it.
+CREATE TABLE core.expected_receipt (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    material_id         uuid NOT NULL REFERENCES core.material(id),
+    quantity            core.qty NOT NULL CHECK (quantity > 0),
+    uom_id              uuid NOT NULL REFERENCES core.uom(id),
+    expected_at         timestamptz NOT NULL,
+    reference           text,                                       -- a purchase order, transfer or ASN number
+    supplier            text,
+    note                text,
+    status              text NOT NULL DEFAULT 'open' CHECK (status IN ('open','received','cancelled')),
+    received_lot_id     uuid REFERENCES core.lot(id),               -- the lot received against it
+    external_system     text,                                       -- the ERP that sent it; with the key, matched by every import
+    external_key        text,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    created_by          text NOT NULL,
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT expected_receipt_external_ck CHECK ((external_system IS NULL) = (external_key IS NULL)),
+    CONSTRAINT expected_receipt_received_ck CHECK (received_lot_id IS NULL OR status = 'received')
+);
+CREATE UNIQUE INDEX expected_receipt_external_uq ON core.expected_receipt (external_system, external_key) WHERE external_key IS NOT NULL;
+CREATE INDEX expected_receipt_open_ix ON core.expected_receipt (site_id, material_id, expected_at) WHERE status = 'open';
 
 -- Lot attributes (D-056): typed properties a site records on its lots, such as melt index or moisture, kept beside the lot so
 -- its identity and movement history never change. A definition is offered for every material, or only for materials in the
@@ -1185,6 +1255,31 @@ CREATE INDEX lot_document_link_lot_ix ON core.lot_document_link (lot_id);
 -- and genealogy are derived from these windows plus residence time.
 -- A batch cut short when a line stopped (D-036), in its own lot. One of an exact-batch material waits on
 -- hold for approval ('pending'); approving releases the lot, rejecting writes it off as scrap.
+-- Stock set aside for a job (D-064): a quantity of one lot, in its base unit, for one of the job's components. Active ones are left
+-- out of what other jobs see as free; consuming the lot into the job uses its allocation up. Released or used up, never deleted.
+CREATE TABLE core.lot_allocation (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    job_id              uuid NOT NULL REFERENCES core.job(id),
+    material_id         uuid NOT NULL REFERENCES core.material(id),
+    lot_id              uuid NOT NULL REFERENCES core.lot(id),
+    quantity            core.qty NOT NULL CHECK (quantity >= 0),    -- still set aside; 0 once used up
+    allocated_qty       core.qty NOT NULL CHECK (allocated_qty > 0), -- as first set aside, plus any top-ups
+    status              text NOT NULL CHECK (status IN ('active','consumed','released')),
+    basis               text NOT NULL CHECK (basis IN ('chosen','recommended')),  -- picked by a person, or taken from the recommendation
+    note                text CHECK (length(note) <= 500),           -- why it was released, or the recommendation's reason
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    created_by          text,
+    ended_at            timestamptz,
+    ended_by            text,
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT lot_allocation_ended_ck CHECK ((status = 'active') = (ended_at IS NULL))
+);
+-- One active allocation of a lot per job; more is a top-up of it.
+CREATE UNIQUE INDEX lot_allocation_active_uq ON core.lot_allocation (job_id, lot_id) WHERE status = 'active';
+CREATE INDEX lot_allocation_lot_ix ON core.lot_allocation (lot_id) WHERE status = 'active';
+CREATE INDEX lot_allocation_site_ix ON core.lot_allocation (site_id, material_id) WHERE status = 'active';
+
 CREATE TABLE core.partial_batch (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     job_id              uuid NOT NULL REFERENCES core.job(id),
@@ -1194,7 +1289,7 @@ CREATE TABLE core.partial_batch (
     uom_id              uuid NOT NULL REFERENCES core.uom(id),
     batch_size          numeric(18,6) NOT NULL CHECK (batch_size > 0),
     batch_rule          text NOT NULL CHECK (batch_rule IN ('exact','near')),
-    status              text NOT NULL CHECK (status IN ('accepted','pending','approved','rejected')),
+    status              text NOT NULL CHECK (status IN ('accepted','pending','approved','rejected','reversed')),  -- reversed: its report was (D-063)
     occurred_at         timestamptz NOT NULL,
     reported_by         text,
     decided_at          timestamptz,
@@ -1203,9 +1298,12 @@ CREATE TABLE core.partial_batch (
     scrap_reason_code_id uuid REFERENCES core.reason_code(id),
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT partial_batch_run_uq UNIQUE (run_id),
-    CONSTRAINT partial_batch_decided_ck CHECK ((status IN ('approved','rejected')) = (decided_at IS NOT NULL))
+    -- A decision has a time; a reversed one (D-063) keeps the time it was decided, if it was.
+    CONSTRAINT partial_batch_decided_ck CHECK (CASE WHEN status IN ('approved','rejected') THEN decided_at IS NOT NULL
+                                                    WHEN status = 'reversed' THEN true ELSE decided_at IS NULL END)
 );
+-- One partial batch per run (D-036), not counting one whose report was reversed (D-063).
+CREATE UNIQUE INDEX partial_batch_run_uq ON core.partial_batch (run_id) WHERE status <> 'reversed';
 CREATE INDEX partial_batch_pending_ix ON core.partial_batch (status) WHERE status = 'pending';
 CREATE INDEX partial_batch_job_ix ON core.partial_batch (job_id);
 
@@ -1576,6 +1674,7 @@ CREATE TABLE ts.production_count (
     source                  text NOT NULL CHECK (source IN ('machine','operator','correction')),
     corrects_id             uuid,                               -- for corrections: the row being offset
     job_id                  uuid,                               -- the run's job (D-035); no FK into history from here either
+    report_id               uuid,                               -- the report (D-063): its processed row's id, on its rows and their corrections
     recorded_at             timestamptz NOT NULL DEFAULT now(), -- when it was entered; occurred_at is inside the run it belongs to
     actor_id                text,                               -- issuer|subject, as on evt.event
     comment                 text CHECK (length(comment) <= 1000),
@@ -1584,6 +1683,7 @@ CREATE TABLE ts.production_count (
 CREATE INDEX ON ts.production_count (equipment_id, occurred_at);
 CREATE INDEX ON ts.production_count (run_id);
 CREATE INDEX production_count_job_ix ON ts.production_count (job_id) WHERE job_id IS NOT NULL;
+CREATE INDEX production_count_report_ix ON ts.production_count (report_id) WHERE report_id IS NOT NULL;
 
 -- High-rate telemetry. No surrogate id and no FKs: 16 bytes and an FK probe
 -- per row matter at this volume. Daily partitions, short retention.
@@ -1619,13 +1719,14 @@ CREATE TABLE ts.lot_event (
     lot_id              uuid NOT NULL REFERENCES core.lot(id),
     event_kind          text NOT NULL CHECK (event_kind IN (
                             'created','received','moved','loaded','consumed','produced',
-                            'split','merged','status_changed','adjusted','scrapped','shipped','corrected','reversed')),
+                            'split','merged','status_changed','adjusted','scrapped','shipped','corrected','reversed','packed','unpacked')),
     qty_delta           core.qty,
     qty_after           core.qty,                               -- the lot's quantity once recorded; stock at a time sums qty_delta by effective_at
     uom_id              uuid REFERENCES core.uom(id),
     from_location_id    uuid REFERENCES core.equipment(id),
     to_location_id      uuid REFERENCES core.equipment(id),
     related_lot_id      uuid REFERENCES core.lot(id),           -- split/merge counterpart, or the other bulk lot in a transfer
+    container_id        uuid REFERENCES core.container(id),     -- packed into, unpacked from, or moved with (D-059)
     job_id              uuid REFERENCES core.job(id),           -- declared consumption into / production from a job
     run_id              uuid,
     from_status         text,
@@ -1634,6 +1735,7 @@ CREATE TABLE ts.lot_event (
     comment             text CHECK (length(comment) <= 1000),
     reference           text CHECK (length(reference) <= 100),  -- a shipment or count number (D-030)
     reverses_event_id   uuid,                                   -- the movement a reversal undoes, with its time (no FK into history)
+    report_id           uuid,                                   -- the production report that made it (D-063): ts.production_count.report_id
     reverses_occurred_at timestamptz,
     actor_user_id       uuid,
     actor_id            text,                                   -- issuer|subject, as on evt.event, until sec.app_user exists
@@ -1642,6 +1744,8 @@ CREATE TABLE ts.lot_event (
 CREATE INDEX ON ts.lot_event (lot_id, occurred_at);
 CREATE INDEX lot_event_lot_effective_idx ON ts.lot_event (lot_id, effective_at);
 CREATE INDEX lot_event_job_id_idx ON ts.lot_event (job_id) WHERE job_id IS NOT NULL;
+CREATE INDEX lot_event_reverses_ix ON ts.lot_event (lot_id, reverses_event_id) WHERE reverses_event_id IS NOT NULL;
+CREATE INDEX lot_event_report_ix ON ts.lot_event (report_id) WHERE report_id IS NOT NULL;
 CREATE INDEX lot_event_occurred_at_brin ON ts.lot_event USING brin (occurred_at);   -- the movement journal reads by time (D-029)
 
 -- One row per subgroup. Variables: values[] plus computed statistics.
@@ -1791,6 +1895,35 @@ CREATE TABLE evt.sink_checkpoint (
     updated_at      timestamptz NOT NULL DEFAULT now()
 );
 
+-- Outbound deliveries (D-061): each event a sink takes, copied from evt.event in commit order, and how its delivery went. The relay
+-- holds an event's later ones for the same subject while it is undelivered, so a receiver never sees them out of order. Rows point
+-- into the partitioned log by (event_id, event_recorded_at), without a foreign key.
+CREATE TABLE evt.delivery (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    sink                text NOT NULL,                              -- 'webhook:erp'
+    event_id            uuid NOT NULL,
+    event_recorded_at   timestamptz NOT NULL,
+    tx_id               xid8 NOT NULL,
+    position            bigint NOT NULL,
+    event_type          text NOT NULL,
+    subject             uuid NOT NULL,
+    status              text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','delivered','failed','skipped')),
+    attempts            integer NOT NULL DEFAULT 0,
+    next_attempt_at     timestamptz NOT NULL DEFAULT now(),
+    last_attempt_at     timestamptz,
+    last_status_code    integer,
+    last_error          text,
+    delivered_at        timestamptz,
+    resolved_by         text,                                       -- who retried or skipped it
+    resolve_note        text,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT delivery_event_uq UNIQUE (sink, event_id)
+);
+CREATE INDEX delivery_due_ix ON evt.delivery (sink, next_attempt_at) WHERE status = 'pending';
+CREATE INDEX delivery_subject_ix ON evt.delivery (sink, subject, tx_id, position) WHERE status IN ('pending','failed');
+CREATE INDEX delivery_status_ix ON evt.delivery (sink, status, created_at);
+
 -- Grants (role names are deployment-specific):
 --   GRANT INSERT, SELECT ON evt.event TO pulaski_app;
 --   REVOKE UPDATE, DELETE, TRUNCATE ON evt.event FROM pulaski_app;
@@ -1911,7 +2044,14 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0022_tag_deletion'),
     ('0023_person_import'),
     ('0024_lot_records'),
-    ('0025_backdated_movements');
+    ('0025_backdated_movements'),
+    ('0026_expected_receipts'),
+    ('0027_containers_and_labels'),
+    ('0028_balance_flow'),
+    ('0029_deliveries'),
+    ('0030_reason_trees'),
+    ('0031_declaration_reversals'),
+    ('0032_lot_allocations');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -1932,6 +2072,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('shifts.view', 'See shift schedules'),
     ('labor.view', 'See labor: who is on, shift review and labor reports'),
     ('machines.view', 'See machines: their live state and their stops'),
+    ('integrations.view', 'See outbound deliveries to the ERP and how they went'),
     ('site_settings.view', 'See a site''s settings: changeover mode, reporting tolerances and calendar exceptions'),
     ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
     ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
@@ -1941,6 +2082,8 @@ INSERT INTO sec.permission (code, description) VALUES
     ('job.reopen', 'Reopen a completed job'),
     ('production.report', 'Report production and consumption into a job''s runs'),
     ('partial_batch.decide', 'Approve or reject partial batches (not one''s own)'),
+    ('production.correct', 'Reverse production reports: their counts, the run''s totals and the lots they made'),
+    ('lot.allocate', 'Allocate lots to jobs, release allocations and refresh them'),
     ('labor.record_own', 'Clock yourself on and off lines and jobs'),
     ('labor.record', 'Record labor for others and check crews onto lines'),
     ('labor.approve', 'Approve a shift''s labor and correct approved labor'),
@@ -1964,6 +2107,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('terminals.manage', 'Register and enrol shop-floor terminals'),
     ('lot_attributes.manage', 'Maintain lot attribute definitions'),
     ('security.manage', 'Maintain users, roles and what each role may do'),
+    ('integrations.manage', 'Retry or skip failed deliveries to the ERP'),
     ('edge.ingest', 'Send machine data as a Pulaski Edge node: read its configuration and forward what it collects')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
@@ -1972,11 +2116,11 @@ ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 INSERT INTO sec.role (code, name, description, is_system) VALUES
     ('administrator', 'Administrator', 'Everything, everywhere, including users and roles.', true),
     ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes.', true),
-    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; records and approves labor; codes machine stops. Doesn''t correct inventory.', true),
+    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes machine stops. Doesn''t correct inventory.', true),
     ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops.', true),
     ('quality', 'Quality', 'Holds and releases lots, corrects inventory, decides on partial batches, and keeps lot attributes and certificates.', true),
     ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people, lot attributes and the site''s settings.', true),
-    ('auditor', 'Auditor', 'Views everything and corrects inventory; counts stock. Doesn''t plan or run jobs.', true),
+    ('auditor', 'Auditor', 'Views everything, corrects inventory and reverses production reports; counts stock. Doesn''t plan or run jobs.', true),
     ('process_engineer', 'Process engineer', 'Maintains processes, BOMs and capabilities. Sees equipment, materials and units.', true),
     ('edge_node', 'Edge node', 'For the service user a Pulaski Edge node signs in as: reads its configuration and forwards machine data. Sees no screens.', true)
 ON CONFLICT (code) DO NOTHING;
@@ -1997,6 +2141,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('planner', 'work_order.close'),
     ('planner', 'rate.modify'),
     ('planner', 'materials.manage'),
+    ('planner', 'lot.allocate'),
     ('supervisor', 'overview.view'),
     ('supervisor', 'floor.view'),
     ('supervisor', 'site_settings.view'),
@@ -2011,6 +2156,8 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('supervisor', 'lot.hold'),
     ('supervisor', 'stock_count.manage'),
     ('supervisor', 'partial_batch.decide'),
+    ('supervisor', 'production.correct'),
+    ('supervisor', 'lot.allocate'),
     ('supervisor', 'labor.view'),
     ('supervisor', 'labor.record'),
     ('supervisor', 'labor.approve'),
@@ -2035,6 +2182,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('quality', 'lot.hold'),
     ('quality', 'inventory.correct'),
     ('quality', 'partial_batch.decide'),
+    ('quality', 'lot.allocate'),
     ('quality', 'lot_records.manage'),
     ('quality', 'inventory.backdate'),
     ('quality', 'lot_attributes.manage'),
@@ -2052,6 +2200,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('manager', 'labor.view'),
     ('manager', 'machines.view'),
     ('manager', 'site_settings.view'),
+    ('manager', 'integrations.view'),
     ('manager', 'job.reopen'),
     ('manager', 'work_order.close'),
     ('manager', 'reasons.manage'),
@@ -2075,8 +2224,10 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('auditor', 'labor.view'),
     ('auditor', 'machines.view'),
     ('auditor', 'site_settings.view'),
+    ('auditor', 'integrations.view'),
     ('auditor', 'inventory.backdate'),
     ('auditor', 'inventory.correct'),
+    ('auditor', 'production.correct'),
     ('auditor', 'stock_count.manage'),
     ('process_engineer', 'equipment.view'),
     ('process_engineer', 'materials.view'),
