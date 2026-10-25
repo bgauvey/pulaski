@@ -4,7 +4,8 @@
 @inject Downloads Downloads
 @inject TimeProvider Clock
 
-@* Utilization and OEE between two production days (D-052): by equipment, shift and product, and where the time went; each exportable as CSV. *@
+@* Utilization and OEE between two production days (D-052), optionally one shift: by equipment, shift and product, the stop Pareto (#21) and
+   where the time went; each exportable as CSV. *@
 <div class="inv-toolbar flex-wrap">
     <label class="small text-muted" for="oee-from">From</label>
     <input id="oee-from" type="date" class="form-control w-auto" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="e => SetDay(e, true)" />
@@ -16,6 +17,13 @@
         @foreach (var m in Machines)
         {
             <option value="@m.EquipmentId">@m.Code · @m.Name</option>
+        }
+    </select>
+    <select class="form-select w-auto" aria-label="Shift" value="@(_shift ?? "")" @onchange="@(e => _shift = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString())">
+        <option value="">All shifts</option>
+        @foreach (var (shiftCode, shiftName) in _shiftChoices)
+        {
+            <option value="@shiftCode">Shift @shiftCode@(shiftName is null ? "" : $" · {shiftName}")</option>
         }
     </select>
     <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="LoadAsync">Show</button>
@@ -146,6 +154,57 @@
         }
     </section>
 
+    <section class="inv-section" aria-labelledby="oee-pareto">
+        <div class="inv-section-head">
+            <h2 id="oee-pareto">Stop Pareto</h2>
+            <div class="d-flex flex-wrap gap-3 align-items-center">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="pareto-planned" checked="@_paretoPlanned" @onchange="@(e => _paretoPlanned = e.Value is true)" />
+                    <label class="form-check-label small" for="pareto-planned">Planned stops</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="pareto-micro" checked="@_paretoMicro" @onchange="@(e => _paretoMicro = e.Value is true)" />
+                    <label class="form-check-label small" for="pareto-micro">Micro-stops</label>
+                </div>
+                <select class="form-select form-select-sm w-auto" aria-label="Rank by" value="@(_paretoByStops ? "stops" : "hours")" @onchange="@(e => _paretoByStops = e.Value?.ToString() == "stops")">
+                    <option value="hours">Rank by time</option>
+                    <option value="stops">Rank by number of stops</option>
+                </select>
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(ParetoRows.Count == 0)" @onclick="ExportParetoAsync">Export CSV</button>
+            </div>
+        </div>
+        @if (ParetoRows.Count == 0)
+        {
+            <p class="text-muted small">No down time in this period.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Reason</th><th>Use</th><th class="inv-num">Hours</th><th class="inv-num">Stops</th><th class="inv-num">Share</th><th class="inv-num">Cumulative</th><th>Equipment</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in ParetoRows)
+                        {
+                            <tr @key="(r.Use, r.ReasonCode, r.NoSignal)">
+                                <td>@if (r.ReasonCode is null && r.Use == "down") { <span class="chip chip-warning">@r.Label</span> } else { @r.Label }</td>
+                                <td class="small">@MachineView.UseLabel(r.Use)</td>
+                                <td class="inv-num">@Qty(r.Hours)</td>
+                                <td class="inv-num">@r.Stops</td>
+                                <td class="inv-num">@Qty(r.SharePct)%</td>
+                                <td class="inv-num @(r.CumulativePct - r.SharePct < 80m ? "fw-semibold" : "text-muted")">@Qty(r.CumulativePct)%</td>
+                                <td class="small text-muted">@string.Join(", ", r.EquipmentCodes)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="small text-muted">
+                Down time by reason across the top equipment shown (a line's time already includes its machines'), classified as in By equipment.
+                The reasons in bold make up the first 80% of the @(_paretoByStops ? "stops" : "time"). Code stops on the Stops tab to move time out of Uncoded.
+            </p>
+        }
+    </section>
+
     <section class="inv-section" aria-labelledby="oee-uses">
         <div class="inv-section-head">
             <h2 id="oee-uses">Where the time went</h2>
@@ -221,6 +280,11 @@ else if (_error is null)
     private DateOnly _to;
     private Guid? _equipment;
     private Guid? _usesOf;
+    private string? _shift;
+    private IReadOnlyList<(string Code, string? Name)> _shiftChoices = [];
+    private bool _paretoPlanned;
+    private bool _paretoMicro;
+    private bool _paretoByStops;
     private OeeReportDto? _report;
     private ApiException? _error;
     private bool _busy;
@@ -230,6 +294,8 @@ else if (_error is null)
     private Guid? UsesOf => _usesOf is { } id && _report?.Equipment.Any(e => e.EquipmentId == id) == true ? id : _report?.Equipment.FirstOrDefault()?.EquipmentId;
 
     private IReadOnlyList<UtilizationRowDto> UseRows => _report?.Utilization.Where(u => u.EquipmentId == UsesOf).ToList() ?? [];
+
+    private IReadOnlyList<ParetoRow> ParetoRows => _report is null ? [] : StopPareto.Rows(_report, _paretoPlanned, _paretoMicro, _paretoByStops);
 
     protected override async Task OnInitializedAsync()
     {
@@ -259,8 +325,13 @@ else if (_error is null)
         _error = null;
         try
         {
-            _report = await Api.GetOeeReportAsync(SiteId, _from, _to, _equipment);
+            _report = await Api.GetOeeReportAsync(SiteId, _from, _to, _equipment, _shift);
             (_from, _to) = (_report.From, _report.To);
+            if (_shift is null)
+            {
+                // The shifts worked, to choose from: kept while one is chosen, whose report names only it.
+                _shiftChoices = StopPareto.Shifts(_report);
+            }
         }
         catch (ApiException ex)
         {
@@ -325,6 +396,11 @@ else if (_error is null)
         ["Material", "Name", "Unit", "Good", "Scrap", "Runs", "Ran on", .. FigureHeaders],
         _report!.Products.Select(p => (IReadOnlyList<object?>)[p.MaterialCode, p.MaterialName, p.UomCode, p.GoodQty, p.ScrapQty, p.Runs, string.Join(" ", p.EquipmentCodes),
             .. FigureValues(p.Figures)]))).AsTask();
+
+    private Task ExportParetoAsync() => Downloads.CsvAsync(File(_shift is null ? "stop-pareto" : $"stop-pareto-shift-{_shift}"), Csv.Write(
+        ["Reason code", "Reason", "Use", "Hours", "Stops", "Share %", "Cumulative %", "Equipment"],
+        ParetoRows.Select(r => (IReadOnlyList<object?>)
+            [r.ReasonCode, r.ReasonCode is null ? r.Label : r.ReasonName, MachineView.UseLabel(r.Use), r.Hours, r.Stops, r.SharePct, r.CumulativePct, string.Join(" ", r.EquipmentCodes)]))).AsTask();
 
     private Task ExportUsesAsync() => Downloads.CsvAsync(File("utilization"), Csv.Write(
         ["Equipment", "Use", "Reason code", "Reason", "Hours", "Share %", "Stops"],

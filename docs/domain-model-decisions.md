@@ -994,6 +994,8 @@ Utilization and OEE by equipment, line, shift and product (charter v1 item 6), w
 
 **Bounds.** Stops are read back 35 days before the period; one older than that still shows as down, uncoded. Rollups (`ts.oee_rollup`) stay for later, keyed on production date, schedule and shift code (D-050), once reading on demand is too slow.
 
+**One shift, and the stop Pareto** (issue #21). `shiftCode` keeps only that shift's windows: their time and stops, and the output reported in them (a count belongs to the window it was made in, else the last one before it, so a count between two shifts goes with the earlier one). Equipment without shifts has none then. The stop Pareto is worked out on screen (`StopPareto`) from the report's own time-by-use-and-reason rows, so it shares their classification, period, equipment and shift by construction. It adds up the top equipment shown (a line's time already includes its machines', so they aren't counted again), ranks down time by reason (Uncoded and No signal named as such), optionally with planned stops and micro-stops, by time or by number of stops, with each reason's share and the running total. It is exported as CSV; there is no chart yet (#67).
+
 ## Material source adapters (D-053, proposed)
 
 Closes the D-033 / D-034 next step: material master data from sources other than CSV, through the same import (issue #18).

@@ -305,8 +305,8 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         GetAsync<IReadOnlyList<ProcessValueSeriesDto>>(Query("api/machines/process-values", ("equipmentId", equipmentId),
             ("from", from.ToString("O", System.Globalization.CultureInfo.InvariantCulture)), ("to", to.ToString("O", System.Globalization.CultureInfo.InvariantCulture)), ("tagId", tagId)), ct);
 
-    public Task<OeeReportDto> GetOeeReportAsync(Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId = null, CancellationToken ct = default) =>
-        GetAsync<OeeReportDto>(Query("api/machines/oee", ("siteId", siteId),
+    public Task<OeeReportDto> GetOeeReportAsync(Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId = null, string? shiftCode = null, CancellationToken ct = default) =>
+        GetAsync<OeeReportDto>(Query("api/machines/oee", ("siteId", siteId), ("shiftCode", shiftCode),
             ("from", from.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),
             ("to", to.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),
             ("equipmentId", equipmentId)), ct);

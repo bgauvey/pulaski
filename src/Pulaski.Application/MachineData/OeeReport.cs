@@ -8,9 +8,10 @@ namespace Pulaski.Application.MachineData;
 
 /// <summary>
 /// Utilization and OEE between two production days (D-052), for a piece of equipment and everything below it that tracks state,
-/// or the whole site: by equipment, shift and product, and where each one's time went.
+/// or the whole site: by equipment, shift and product, and where each one's time went. With <c>ShiftCode</c>, only the windows of that
+/// shift (#21): their time, stops and the output reported in them; equipment without shifts then has none.
 /// </summary>
-public sealed record GetOeeReportQuery(Guid SiteId, DateOnly From, DateOnly To, Guid? EquipmentId) : IQuery<OeeReportDto>;
+public sealed record GetOeeReportQuery(Guid SiteId, DateOnly From, DateOnly To, Guid? EquipmentId, string? ShiftCode = null) : IQuery<OeeReportDto>;
 
 internal sealed class GetOeeReportHandler(IOeeReadStore store, IUnitReadStore units, TimeProvider time) : IQueryHandler<GetOeeReportQuery, OeeReportDto>
 {
@@ -108,7 +109,8 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IUnitReadStore un
         {
             var e = shown[order];
             var calendar = calendars.GetValueOrDefault(e.Id);
-            var windows = Utilization.Windows(calendar?.Schedule, calendar?.Zone ?? zone, from, to, end);
+            var allWindows = Utilization.Windows(calendar?.Schedule, calendar?.Zone ?? zone, from, to, end);
+            var windows = allWindows.Where(w => query.ShiftCode is null || w.ShiftCode == query.ShiftCode).ToList();
             var slices = Utilization.Slice(uses.Of(e.Id), windows, [.. runsOn[e.Id].Select(r => new RunWindow(r.RunId, r.StartedAt, r.EndedAt))], now)
                 .Select(s => s.RunId is { } r && runsById[r].CountsAsPlannedDowntime ? Utilization.InPlannedJob(s) : s);
 
@@ -140,8 +142,15 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IUnitReadStore un
                 var run = runsById[count.RunId];
                 var uom = count.UomId ?? run.JobUomId;
                 var rate = RateIn(run, uom);
+                // A count belongs to the window it was made in (else the last one before it); with a shift chosen, only that shift's.
+                var made = Utilization.WindowOf(allWindows, count.OccurredAt);
+                if (query.ShiftCode is not null && (made < 0 || allWindows[made].ShiftCode != query.ShiftCode))
+                {
+                    continue;
+                }
+
                 total.AddCount(count.Processed, count.Defective, rate);
-                if (Utilization.WindowOf(windows, count.OccurredAt) is var w and >= 0)
+                if (made >= 0 && windows.IndexOf(allWindows[made]) is var w and >= 0)
                 {
                     perWindow[w].AddCount(count.Processed, count.Defective, rate);
                 }

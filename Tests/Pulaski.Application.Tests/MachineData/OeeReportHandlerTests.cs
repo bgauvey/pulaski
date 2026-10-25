@@ -132,6 +132,22 @@ public class OeeReportHandlerTests
     }
 
     [Fact]
+    public async Task One_shift_keeps_only_its_windows_their_stops_and_the_output_reported_in_them()
+    {
+        var all = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day, Day, null), CancellationToken.None);
+        var shiftA = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day, Day, null, "A"), CancellationToken.None);
+        var other = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day, Day, null, "N"), CancellationToken.None);
+
+        // Shift A is every window here, so it is the whole report; a shift not worked has nothing.
+        Assert.Equal(all.Equipment.Select(e => e.Figures), shiftA.Equipment.Select(e => e.Figures));
+        Assert.Equal(all.Utilization.Count, shiftA.Utilization.Count);
+        Assert.Equal((0m, 0, (decimal?)null), (other.Equipment[0].Figures.ScheduledHours, other.Equipment[0].Figures.Stops, other.Equipment[0].Figures.QualityPct));
+        Assert.Empty(other.Shifts);
+        Assert.Empty(other.Utilization);
+        Assert.Empty(other.Products);
+    }
+
+    [Fact]
     public async Task Days_still_to_come_are_left_out_and_the_range_is_at_most_31_days()
     {
         var report = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day.AddDays(40), Day.AddDays(-10), null), CancellationToken.None);

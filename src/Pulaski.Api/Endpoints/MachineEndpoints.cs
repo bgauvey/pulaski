@@ -30,10 +30,10 @@ internal static class MachineEndpoints
                 siteId, equipmentId, from, to, uncodedOnly ?? false, includeMicroStops ?? false, includeSuperseded ?? false), after, limit), ct)))
         .RequireAny(Site.Query(), Permissions.MachinesView);
 
-        // Utilization and OEE between two production days (D-052), for equipment and everything below it, or the whole site.
+        // Utilization and OEE between two production days (D-052), for equipment and everything below it, or the whole site; one shift with shiftCode (#21).
         machines.MapGet("/oee", async Task<Ok<OeeReportDto>> (
-            Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId, IQueryHandler<GetOeeReportQuery, OeeReportDto> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetOeeReportQuery(siteId, from, to, equipmentId), ct)))
+            Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId, string? shiftCode, IQueryHandler<GetOeeReportQuery, OeeReportDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetOeeReportQuery(siteId, from, to, equipmentId, string.IsNullOrWhiteSpace(shiftCode) ? null : shiftCode), ct)))
         .RequireAny(Site.Query(), Permissions.MachinesView, Permissions.OverviewView);
 
         // Alarms and warnings active in [from, to) (#26), active first; for equipment, its own and those below it.
