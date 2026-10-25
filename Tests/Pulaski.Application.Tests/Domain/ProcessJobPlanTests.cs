@@ -73,4 +73,26 @@ public class ProcessJobPlanTests
         var skewed = ProcessJobPlan.For(new ProcessDefinition([Op(10, 70m, 30m)], []), "WO-C", 250m, Start, batchQuantity: 50m);
         Assert.Equal([200m, 50m], skewed.Select(j => j.PlannedQty));
     }
+
+    [Fact]
+    public void Lines_with_their_own_batch_size_each_get_whole_batches_of_it_adding_up_exactly()
+    {
+        var op = Op(10, 50m, 50m);
+        var small = op.Equipment[0].EquipmentId;
+        var big = op.Equipment[1].EquipmentId;
+
+        // 1000 at 50/50: 10 batches of 50 on one line, 2.5 of 200 on the other won't do, so the nearest exact split is taken.
+        var jobs = ProcessJobPlan.For(new ProcessDefinition([op], []), "WO-L", 1000m, Start, batchQuantity: 50m,
+            lineBatchQuantities: new Dictionary<Guid, decimal> { [big] = 200m }, unitCode: "kg");
+        Assert.Equal(1000m, jobs.Sum(j => j.PlannedQty));
+        Assert.Equal(0m, jobs.Single(j => j.EquipmentId == big).PlannedQty % 200m);
+        Assert.Equal(0m, jobs.Single(j => j.EquipmentId == small).PlannedQty % 50m);
+
+        // Two lines of 200 and 300 can't make 450 at all: the message names quantities that work.
+        var odd = Op(10, 50m, 50m);
+        var ex = Assert.Throws<DomainRuleException>(() => ProcessJobPlan.For(new ProcessDefinition([odd], []), "WO-M", 450m, Start, batchQuantity: 100m,
+            lineBatchQuantities: new Dictionary<Guid, decimal> { [odd.Equipment[0].EquipmentId] = 200m, [odd.Equipment[1].EquipmentId] = 300m }, unitCode: "kg"));
+        Assert.Contains("Plan ", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("change the shares", ex.Message, StringComparison.Ordinal);
+    }
 }

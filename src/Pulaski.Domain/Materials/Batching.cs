@@ -148,6 +148,90 @@ public sealed record Batching(decimal Size, decimal TolerancePct, string Rule)
         return counts;
     }
 
+    /// <summary>
+    /// The batching on one line (D-065): the line's own batch size from its capability when it has one, else the material's. The rule
+    /// and tolerance are always the material's: they describe the product, not the equipment.
+    /// </summary>
+    public Batching OnLine(decimal? lineSize) => lineSize is { } size && size > 0 ? this with { Size = size } : this;
+
+    /// <summary>
+    /// Shares <paramref name="quantity"/> between equipment whose batch sizes may differ (D-065): each gets whole batches of its own
+    /// size, near its percentage and at least one, adding up to the quantity exactly. With one size for all it is <see cref="Share"/>.
+    /// </summary>
+    /// <param name="quantity">What every share together makes, in the unit the sizes are in.</param>
+    /// <param name="shares">Each equipment's percentage and batch size, in order.</param>
+    /// <param name="what">What is being planned, for the message.</param>
+    /// <param name="unitCode">The unit's code, for the message.</param>
+    /// <returns>Each share's number of batches.</returns>
+    /// <exception cref="DomainRuleException">No whole batches add up to the quantity; the message names the nearest quantities that do.</exception>
+    public static IReadOnlyList<int> ShareBySize(decimal quantity, IReadOnlyList<(decimal Percent, decimal Size)> shares, string what, string unitCode)
+    {
+        if (shares.Select(s => s.Size).Distinct().Count() == 1)
+        {
+            var size = shares[0].Size;
+            var batches = quantity / size;
+            var whole = Math.Round(batches, MidpointRounding.AwayFromZero);
+            if (whole <= 0 || Math.Abs(batches - whole) * size > Epsilon)
+            {
+                var under = Math.Max(Math.Floor(batches), shares.Count);
+                throw new DomainRuleException(
+                    $"{what}: {Qty(quantity)} {unitCode} isn't whole batches of {Qty(size)} {unitCode}. Plan {Qty(under * size)} or {Qty((under + 1) * size)} {unitCode}.");
+            }
+
+            return Share((int)whole, [.. shares.Select(s => s.Percent)]);
+        }
+
+        // Every combination near each share's target, a couple of batches either way: the one that adds up and stays closest to the shares.
+        var targets = shares.Select(s => quantity * s.Percent / 100m / s.Size).ToList();
+        var ranges = targets.Select(t => (From: Math.Max(1, (int)Math.Floor(t) - 2), To: Math.Max(1, (int)Math.Ceiling(t) + 2))).ToList();
+        int[]? best = null;
+        var bestDistance = decimal.MaxValue;
+        decimal? below = null, above = null;
+        var counts = new int[shares.Count];
+        void Search(int i, decimal total)
+        {
+            if (i == shares.Count)
+            {
+                if (Math.Abs(total - quantity) <= Epsilon)
+                {
+                    var distance = counts.Select((c, k) => Math.Abs(c - targets[k]) * shares[k].Size).Sum();
+                    if (distance < bestDistance)
+                    {
+                        (best, bestDistance) = ([.. counts], distance);
+                    }
+                }
+                else if (total < quantity)
+                {
+                    below = below is { } b && b >= total ? b : total;
+                }
+                else
+                {
+                    above = above is { } a && a <= total ? a : total;
+                }
+
+                return;
+            }
+
+            for (var c = ranges[i].From; c <= ranges[i].To; c++)
+            {
+                counts[i] = c;
+                Search(i + 1, total + c * shares[i].Size);
+            }
+        }
+
+        Search(0, 0m);
+        if (best is not null)
+        {
+            return best;
+        }
+
+        var sizes = string.Join(", ", shares.Select(s => $"{Qty(s.Size)}"));
+        var nearest = string.Join(" or ", new[] { below, above }.Where(q => q is not null).Select(q => Qty(q!.Value)));
+        throw new DomainRuleException(
+            $"{what}: {Qty(quantity)} {unitCode} can't be shared in whole batches of each line's size ({sizes} {unitCode}). " +
+            $"Plan {nearest} {unitCode}, or change the shares.");
+    }
+
     /// <summary>The fewest whole batches that hold <paramref name="quantity"/>.</summary>
     public decimal RoundUp(decimal quantity) => quantity <= 0 ? Size : Math.Ceiling(quantity / Size - Epsilon) * Size;
 

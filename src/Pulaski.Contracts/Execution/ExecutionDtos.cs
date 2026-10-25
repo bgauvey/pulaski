@@ -112,6 +112,9 @@ public sealed record JobExecutionDto
     public decimal? BatchSize { get; init; }
     public decimal BatchTolerancePct { get; init; }
     public string? BatchRule { get; init; }
+
+    /// <summary>Planned with a partial last batch (D-067): it is reported as it comes, without a stop reason.</summary>
+    public bool PartialBatchPlanned { get; init; }
     public Guid? BaseUomId { get; init; }
     public string? BaseUomCode { get; init; }
     public IReadOnlyList<JobRunDto> Runs { get; init; } = [];

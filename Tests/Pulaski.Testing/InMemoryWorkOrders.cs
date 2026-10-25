@@ -95,6 +95,77 @@ public sealed class InMemoryWorkOrders : IWorkOrderRepository, IWorkOrderReadSto
     public Task<ShopOrderJobsRow?> GetShopOrderJobsAsync(Guid workOrderId, CancellationToken cancellationToken) =>
         Task.FromResult(ShopOrderJobs(workOrderId));
 
+    // ERP import lookups (D-066): codes a test registers.
+    public Dictionary<string, Guid> Sites { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public Dictionary<string, Guid> MaterialCodes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public Dictionary<string, Guid> UomCodes { get; } = [];
+
+    /// <summary>Processes by site and material that an ERP order may be made from.</summary>
+    public Dictionary<(Guid SiteId, Guid MaterialId), List<(Guid Id, string Code)>> Processes { get; } = [];
+
+    public Dictionary<Guid, string> SiteErpBatchRules { get; } = [];
+
+    public Dictionary<Guid, string?> MaterialErpBatchRules { get; } = [];
+
+    public Task<Guid?> FindByExternalKeyAsync(string externalSystem, string externalKey, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_rows.Values.FirstOrDefault(r => r.Value.ExternalSystem == externalSystem && r.Value.ExternalKey == externalKey)?.Value.Id);
+        }
+    }
+
+    public Task<bool> NumberExistsAsync(Guid siteId, string orderNumber, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_rows.Values.Any(r => r.Value.SiteId == siteId && r.Value.OrderNumber == orderNumber));
+        }
+    }
+
+    public Task<long> UpdateFromErpAsync(WorkOrder workOrder, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var next = new Versioned<WorkOrder>(workOrder, _rows[workOrder.Id].Version + 1);
+            _rows[workOrder.Id] = next;
+            return Task.FromResult(next.Version);
+        }
+    }
+
+    public Task<string> GetErpBatchRuleAsync(Guid siteId, Guid materialId, CancellationToken cancellationToken) =>
+        Task.FromResult(MaterialErpBatchRules.GetValueOrDefault(materialId) ?? SiteErpBatchRules.GetValueOrDefault(siteId) ?? ErpBatchRule.Reject);
+
+    public Task SetSiteErpBatchRuleAsync(Guid siteId, string rule, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        SiteErpBatchRules[siteId] = rule;
+        return Task.CompletedTask;
+    }
+
+    public Task<long?> SetMaterialErpBatchRuleAsync(Guid materialId, string? rule, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        MaterialErpBatchRules[materialId] = rule;
+        return Task.FromResult<long?>(2);
+    }
+
+    public Task<Guid?> FindMaterialAsync(string code, CancellationToken cancellationToken) =>
+        Task.FromResult(MaterialCodes.TryGetValue(code, out var id) ? id : (Guid?)null);
+
+    public Task<Guid?> FindUomAsync(string code, CancellationToken cancellationToken) =>
+        Task.FromResult(UomCodes.TryGetValue(code, out var id) ? id : (Guid?)null);
+
+    public Task<string?> GetUomCodeAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult<string?>(UomCodes.FirstOrDefault(u => u.Value == id).Key);
+
+    public Task<Guid?> FindSiteAsync(string code, CancellationToken cancellationToken) =>
+        Task.FromResult(Sites.TryGetValue(code, out var id) ? id : (Guid?)null);
+
+    public Task<IReadOnlyList<(Guid Id, string Code)>> FindProcessesAsync(Guid siteId, Guid materialId, string? processCode, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<(Guid Id, string Code)>>([.. (Processes.GetValueOrDefault((siteId, materialId)) ?? [])
+            .Where(p => processCode is null || string.Equals(p.Code, processCode, StringComparison.OrdinalIgnoreCase))]);
+
     private static WorkOrderDto ToDto(Versioned<WorkOrder> row)
     {
         var w = row.Value;

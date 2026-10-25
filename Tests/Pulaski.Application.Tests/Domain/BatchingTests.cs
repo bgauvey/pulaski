@@ -78,4 +78,27 @@ public class BatchingTests
         Assert.Equal(PartialBatchStatus.Rejected, rejected.Status);
         Assert.Throws<DomainRuleException>(() => rejected.Approve(at, "qa", null));
     }
+
+    [Fact]
+    public void A_line_changes_only_the_size_and_shares_of_one_size_work_as_before()
+    {
+        var material = Batching.Create(50m, 2m, BatchRule.Near);
+        var line = material.OnLine(200m);
+        Assert.Equal((200m, 2m, BatchRule.Near), (line.Size, line.TolerancePct, line.Rule));
+        Assert.Same(material, material.OnLine(null));
+        Assert.Equal(4, line.WholeBatches(800m));
+        Assert.Null(line.WholeBatches(850m));
+
+        Assert.Equal([3, 2], Batching.ShareBySize(250m, [(60m, 50m), (40m, 50m)], "WO", "kg"));
+        Assert.Contains("Plan 200 or 250", Assert.Throws<DomainRuleException>(() => Batching.ShareBySize(225m, [(60m, 50m), (40m, 50m)], "WO", "kg")).Message, StringComparison.Ordinal);
+        Assert.Equal(1000m, Batching.ShareBySize(1000m, [(50m, 50m), (50m, 200m)], "WO", "kg").Zip([50m, 200m], (c, size) => c * size).Sum());
+    }
+
+    [Fact]
+    public void A_capabilitys_batch_size_must_be_positive()
+    {
+        var change = new CapabilityChange(100m, Guid.CreateVersion7(), null, null, false, DateTimeOffset.UnixEpoch, null, BatchSize: 0m);
+        Assert.Throws<DomainRuleException>(() => Capability.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), change));
+        Assert.Equal(200m, Capability.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), change with { BatchSize = 200m }).BatchSize);
+    }
 }

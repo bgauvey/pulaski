@@ -270,4 +270,106 @@ public sealed class ExecutionTests(DatabaseFixture db)
         var detail = await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(job));
         Assert.Equal(("approved", 50m, true), (Assert.Single(detail.PartialBatches).Status, detail.BatchSize!.Value, detail.Runs[0].HasPartialBatch));
     }
+
+    [Fact]
+    public async Task A_line_with_its_own_batch_size_reports_in_its_batches_and_takes_only_whole_ones()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "LE-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "LS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse big = await db.SendAsync(new CreateEquipmentCommand(site.Id, "BIG-" + _s, "Big mixer", null, "work_center", "production_line", true, true, false, null));
+        CreatedResponse staging = await db.SendAsync(new CreateEquipmentCommand(site.Id, "LST-" + _s, "Staging", null, "work_center", "storage_zone", false, false, true, null));
+        CreatedResponse material = await db.SendAsync(new CreateMaterialCommand("BL-" + _s, "Blend", null, "intermediate", null, db.UomId, true, null));
+
+        // Not made in batches yet: a line can't have a batch size of its own.
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(
+            new AddCapabilityCommand(material.Id, big.Id, 400m, db.UomId, null, null, false, DateTimeOffset.UtcNow.AddDays(-1), null, BatchSize: 200m)));
+        var materialVersion = await ScalarAsync<long>("SELECT xmin::text::bigint FROM core.material WHERE id = @Id", new { Id = material.Id });
+        await db.SendAsync(new SetBatchingCommand(material.Id, materialVersion, 50m, 2m, null));
+        var capability = await db.SendAsync(
+            new AddCapabilityCommand(material.Id, big.Id, 400m, db.UomId, null, null, false, DateTimeOffset.UtcNow.AddDays(-1), null, BatchSize: 200m));
+        Assert.Contains(capability.Notes, n => n.Contains("batches of 200", StringComparison.Ordinal));
+
+        Guid order = Guid.CreateVersion7(), job = Guid.CreateVersion7();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO core.work_order (id, site_id, order_number, material_id, planned_qty, uom_id, status)
+                VALUES (@order, @site, 'LWO-' || @s, @material, 400, @uom, 'firmed');
+                INSERT INTO core.job (id, site_id, work_order_id, job_number, job_type, equipment_id, material_id, planned_qty, uom_id, status)
+                VALUES (@job, @site, @order, 'LJ-' || @s, 'production', @big, @material, 400, @uom, 'firmed');
+                """,
+                new { s = _s, big = big.Id, material = material.Id, uom = db.UomId, order, site = site.Id, job });
+        }
+
+        var started = await db.SendAsync(new StartJobCommand(job, await VersionAsync(job)));
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE core.job_run SET started_at = started_at - interval '1 hour' WHERE id = @Id", new { Id = started.RunId });
+        }
+
+        // The material's 50 isn't a batch on this line; its 200 is.
+        await Assert.ThrowsAsync<DomainRuleException>(() =>
+            db.SendAsync(new ReportProductionCommand(job, null, 0m, 0m, null, null, staging.Id) { GoodBatches = [50m] }));
+        var reported = await db.SendAsync(new ReportProductionCommand(job, null, 0m, 0m, null, null, staging.Id) { GoodBatches = [200m] });
+        Assert.Single(reported.Lots);
+        Assert.Equal(200m, (await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(job))).BatchSize!.Value);
+    }
+
+    [Fact]
+    public async Task A_replacement_for_exactly_what_is_left_reports_its_partial_batch_and_the_order_adds_up()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "PE-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "PS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse mixer = await db.SendAsync(new CreateEquipmentCommand(site.Id, "PMIX-" + _s, "Mixer", null, "work_center", "production_line", true, true, false, null));
+        CreatedResponse staging = await db.SendAsync(new CreateEquipmentCommand(site.Id, "PST-" + _s, "Staging", null, "work_center", "storage_zone", false, false, true, null));
+        CreatedResponse material = await db.SendAsync(new CreateMaterialCommand("PB-" + _s, "Blend", null, "intermediate", null, db.UomId, true, null));
+        var materialVersion = await ScalarAsync<long>("SELECT xmin::text::bigint FROM core.material WHERE id = @Id", new { Id = material.Id });
+        await db.SendAsync(new SetBatchingCommand(material.Id, materialVersion, 50m, 2m, null));
+
+        Guid order = Guid.CreateVersion7(), job = Guid.CreateVersion7();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO core.equipment_capability (equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, effective_from)
+                VALUES (@mixer, @material, 400, @uom, now() - interval '1 day');
+                INSERT INTO core.work_order (id, site_id, order_number, material_id, planned_qty, uom_id, status)
+                VALUES (@order, @site, 'PWO-' || @s, @material, 175, @uom, 'firmed');
+                INSERT INTO core.job (id, site_id, work_order_id, job_number, job_type, equipment_id, material_id, planned_qty, uom_id, status)
+                VALUES (@job, @site, @order, 'PJ-' || @s, 'production', @mixer, @material, 175, @uom, 'firmed');
+                """,
+                new { s = _s, mixer = mixer.Id, material = material.Id, uom = db.UomId, order, site = site.Id, job });
+        }
+
+        async Task StartAndBackdateAsync(Guid id)
+        {
+            var started = await db.SendAsync(new StartJobCommand(id, await VersionAsync(id)));
+            await using var connection = await db.AdminDataSource.OpenConnectionAsync();
+            await connection.ExecuteAsync("UPDATE core.job_run SET started_at = started_at - interval '1 hour' WHERE id = @Id", new { Id = started.RunId });
+        }
+
+        await StartAndBackdateAsync(job);
+        await db.SendAsync(new ReportProductionCommand(job, null, 0m, 0m, null, null, staging.Id) { GoodBatches = [50m, 50m] });
+        var cancelled = await db.SendAsync(new CancelJobCommand(job, await VersionAsync(job), "Mixer down", Replace: true, ReplaceExact: true));
+        var replacement = cancelled.ReplacementJobId!.Value;
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            // The first run, ended by the cancel, moved earlier so the replacement's run can start an hour ago.
+            await connection.ExecuteAsync(
+                "UPDATE core.job_run SET started_at = now() - interval '3 hours', ended_at = now() - interval '2 hours' WHERE job_id = @Id", new { Id = job });
+        }
+
+        Assert.Equal((75m, true), (
+            await ScalarAsync<decimal>("SELECT planned_qty FROM core.job WHERE id = @Id", new { Id = replacement }),
+            await ScalarAsync<bool>("SELECT partial_batch_planned FROM core.job WHERE id = @Id", new { Id = replacement })));
+
+        // Its last batch is a partial, reported as it is made; the order's jobs add up to what it planned.
+        await StartAndBackdateAsync(replacement);
+        var reported = await db.SendAsync(new ReportProductionCommand(replacement, null, 0m, 0m, null, null, staging.Id) { GoodBatches = [50m], PartialQty = 25m });
+        Assert.Equal(2, reported.Lots.Count);
+        Assert.Equal(1, await ScalarAsync<int>("SELECT count(*)::int FROM core.partial_batch WHERE job_id = @Id", new { Id = replacement }));
+        Assert.Equal(175m, await ScalarAsync<decimal>(
+            "SELECT sum(r.good_qty) FROM core.job_run r JOIN core.job j ON j.id = r.job_id WHERE j.work_order_id = @Id", new { Id = order }));
+    }
 }

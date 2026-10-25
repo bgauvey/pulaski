@@ -55,6 +55,9 @@ public sealed record MaterialDto
     /// <summary><c>exact</c> or <c>near</c>; null when made continuously.</summary>
     public string? BatchRule { get; init; }
 
+    /// <summary>For ERP orders that aren't whole batches (D-066): <c>reject</c>, <c>round_up</c>, <c>round_down</c> or <c>hold</c>; null uses the site's.</summary>
+    public string? ErpBatchRule { get; init; }
+
     /// <summary><c>local</c>, or <c>erp</c> for one imported from an external item master.</summary>
     public string Origin { get; init; } = "local";
     public string? ExternalSystem { get; init; }

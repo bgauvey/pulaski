@@ -24,6 +24,28 @@ public sealed record WorkOrder(
     Guid? BomVersionId = null)
 {
     public const string LocalOrigin = "local";
+    public const string ErpOrigin = "erp";
+
+    /// <summary>For an ERP order (D-066): the system and its key for the order, and the version last applied.</summary>
+    public string? ExternalSystem { get; init; }
+    public string? ExternalKey { get; init; }
+    public string? ExternalVersion { get; init; }
+
+    /// <summary>The quantity and unit the ERP sent, when the plan differs from it (rounded or held).</summary>
+    public decimal? ErpQuantity { get; init; }
+    public Guid? ErpUomId { get; init; }
+
+    /// <summary>How the ERP's quantity was made whole batches: rounded up, rounded down or held.</summary>
+    public string? BatchAdjustment { get; init; }
+
+    /// <summary>Not whole batches: can't be dispatched until a planner sets a whole-batch quantity.</summary>
+    public bool QuantityHeld { get; init; }
+
+    /// <summary>A change from the ERP waiting for a planner to accept or reject, once the order is dispatched.</summary>
+    public ErpOrderChange? PendingChange { get; init; }
+    public DateTimeOffset? ImportedAt { get; init; }
+
+    public bool IsFromErp => Origin == ErpOrigin;
 
     /// <summary>A work order entered in Pulaski rather than imported from the ERP.</summary>
     /// <exception cref="DomainRuleException">The quantity or planned window is invalid.</exception>

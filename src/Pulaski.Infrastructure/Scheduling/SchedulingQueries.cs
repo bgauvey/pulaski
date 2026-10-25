@@ -24,6 +24,7 @@ internal sealed class SchedulingQueries(NpgsqlDataSource dataSource) : IScheduli
     private const string Policy = """
         SELECT e.id AS site_id,
                coalesce(p.changeover_mode, 'auto') AS changeover_mode,
+               coalesce(p.erp_batch_rule, 'reject') AS erp_batch_rule,
                p.site_id IS NULL AS is_default,
                coalesce(p.xmin::text::bigint, 0) AS version
         FROM core.equipment e

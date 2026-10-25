@@ -294,11 +294,11 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
         return Task.CompletedTask;
     }
 
-    public Task CancelJobAsync(BoardItem item, bool replace, string? reason) =>
+    public Task CancelJobAsync(BoardItem item, bool replace, string? reason, bool exact = false) =>
         RunAsync(
             item.Key,
-            replace ? $"{item.Segment.JobNumber} cancelled and replaced for the rest of its quantity." : $"{item.Segment.JobNumber} cancelled.",
-            () => api.CancelJobAsync(item.JobId, new CancelJobRequest { Version = item.Segment.Version ?? 0, Replace = replace, Reason = reason }));
+            replace ? $"{item.Segment.JobNumber} cancelled and replaced for {(exact ? "exactly" : "")} the rest of its quantity." : $"{item.Segment.JobNumber} cancelled.",
+            () => api.CancelJobAsync(item.JobId, new CancelJobRequest { Version = item.Segment.Version ?? 0, Replace = replace, ReplaceExact = exact, Reason = reason }));
 
     /// <summary>
     /// What placing the order's unplaced quantity on a line would do, projected by the API and

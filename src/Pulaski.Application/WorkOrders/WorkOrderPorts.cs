@@ -85,4 +85,42 @@ public interface IWorkOrderRepository
 
     /// <returns>The new row version.</returns>
     Task<long> UpdateStatusAsync(Guid id, string status, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>The order the ERP knows by this system and key (D-066), without locking; null when there is none.</summary>
+    Task<Guid?> FindByExternalKeyAsync(string externalSystem, string externalKey, CancellationToken cancellationToken);
+
+    /// <summary>Whether the site already has an order with this number.</summary>
+    Task<bool> NumberExistsAsync(Guid siteId, string orderNumber, CancellationToken cancellationToken);
+
+    /// <summary>Writes what the ERP owns and how Pulaski took it (D-066): quantity, unit, start, due date, priority and the ERP fields.</summary>
+    /// <returns>The new row version.</returns>
+    Task<long> UpdateFromErpAsync(WorkOrder workOrder, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>The rule for ERP quantities that aren't whole batches: the material's own, else the site's (D-066).</summary>
+    Task<string> GetErpBatchRuleAsync(Guid siteId, Guid materialId, CancellationToken cancellationToken);
+
+    /// <summary>Sets the site's rule for ERP quantities that aren't whole batches (D-066), making its scheduling policy row if needed.</summary>
+    Task SetSiteErpBatchRuleAsync(Guid siteId, string rule, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Sets a material's own rule, or clears it to use the site's (null).</summary>
+    /// <returns>The material's new row version; null when there is no such material.</returns>
+    Task<long?> SetMaterialErpBatchRuleAsync(Guid materialId, string? rule, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>An active material by its code, compared in lower case; null when there is none.</summary>
+    Task<Guid?> FindMaterialAsync(string code, CancellationToken cancellationToken);
+
+    /// <summary>An active unit by its code; null when there is none.</summary>
+    Task<Guid?> FindUomAsync(string code, CancellationToken cancellationToken);
+
+    /// <summary>A unit's code, for messages and the pending change shown on screen.</summary>
+    Task<string?> GetUomCodeAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>A site by its code, compared in lower case; null when there is none.</summary>
+    Task<Guid?> FindSiteAsync(string code, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The processes an ERP order of the material at the site could be made from (D-066): the one named by <paramref name="processCode"/>,
+    /// else the material's default process, else every active process at the site with a released version that covers the material.
+    /// </summary>
+    Task<IReadOnlyList<(Guid Id, string Code)>> FindProcessesAsync(Guid siteId, Guid materialId, string? processCode, CancellationToken cancellationToken);
 }

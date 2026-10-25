@@ -113,6 +113,14 @@ public static class EventTypes
     public const string BadgeRevoked = "pulaski.badge.revoked.v1";
     public const string BadgePinFailed = "pulaski.badge.pin_failed.v1";
     public const string WorkOrderCreated = "pulaski.work_order.created.v1";
+    public const string WorkOrderImported = "pulaski.work_order.imported.v1";
+    public const string WorkOrderErpChanged = "pulaski.work_order.erp_changed.v1";
+    public const string WorkOrderErpChangePending = "pulaski.work_order.erp_change_pending.v1";
+    public const string WorkOrderErpChangeAccepted = "pulaski.work_order.erp_change_accepted.v1";
+    public const string WorkOrderErpChangeRejected = "pulaski.work_order.erp_change_rejected.v1";
+    public const string WorkOrderQuantitySet = "pulaski.work_order.quantity_set.v1";
+    public const string ErpBatchRuleSet = "pulaski.erp_batch_rule.set.v1";
+    public const string JobReplanned = "pulaski.job.replanned.v1";
     public const string WorkOrderStatusChanged = "pulaski.work_order.status_changed.v1";
     public const string JobCreated = "pulaski.job.created.v1";
     public const string JobSequenced = "pulaski.job.sequenced.v1";

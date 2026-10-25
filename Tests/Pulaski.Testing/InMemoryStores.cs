@@ -95,6 +95,8 @@ public sealed class InMemoryStores
 
     public InMemoryAllocations Allocations { get; } = new();
 
+    public InMemoryLineBatchSizes LineBatchSizes { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -154,6 +156,7 @@ public sealed class InMemoryStores
         services.RemoveAll<IDeliveryStore>();
         services.RemoveAll<IAllocationRepository>();
         services.RemoveAll<IAllocationReadStore>();
+        services.RemoveAll<ILineBatchSizes>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -211,6 +214,7 @@ public sealed class InMemoryStores
         services.AddSingleton<IDeliveryStore>(Deliveries);
         services.AddSingleton<IAllocationRepository>(Allocations);
         services.AddSingleton<IAllocationReadStore>(Allocations);
+        services.AddSingleton<ILineBatchSizes>(LineBatchSizes);
         return services;
     }
 }

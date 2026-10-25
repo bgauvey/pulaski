@@ -41,6 +41,99 @@ public class BatchPlanningHandlerTests : SchedulingHandlerTestBase
     }
 }
 
+/// <summary>Replacing a job with exactly what is left, a partial batch included (D-067).</summary>
+public class PartialReplacementHandlerTests : SchedulingHandlerTestBase
+{
+    public PartialReplacementHandlerTests() => F.Stores.Boms.AddMaterial(White, Metre, batchSize: 50m);
+
+    private CancelJobHandler Cancel() => new(
+        F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Processes, F.Stores.Boms, F.Stores.Units, F.Stores.Events, F.Events, F.Ids, F.Time,
+        F.Stores.LineBatchSizes);
+
+    private async Task<global::Pulaski.Domain.Scheduling.Job> StartedAsync(SchedulingLine line, decimal planned, decimal made)
+    {
+        var wo = await WorkOrderAsync(White, WorkOrderStatus.InProgress);
+        var job = F.Stores.Scheduling.AddJob(global::Pulaski.Domain.Scheduling.Job.CreateProduction(
+            Guid.CreateVersion7(), Site, wo.Id, "J-" + Guid.NewGuid().ToString("N")[..4], line.Id, White, planned, Metre, 1m, null) with
+        { Status = JobStatus.Running });
+        F.Stores.Scheduling.SetGoodQty(job.Id, made);
+        return job;
+    }
+
+    [Fact]
+    public async Task Exactly_what_is_left_is_planned_with_a_partial_last_batch_and_may_move_to_any_line()
+    {
+        var line = Line();
+        var big = Line();
+        F.Stores.LineBatchSizes.Sizes[(big.Id, White)] = 200m;
+        var job = await StartedAsync(line, 200m, 125m);
+
+        var result = await Cancel().HandleAsync(new CancelJobCommand(job.Id, Version(job.Id), "Line down", Replace: true, ReplaceExact: true), CancellationToken.None);
+
+        var replacement = F.Stores.Scheduling.FindJob(result.ReplacementJobId!.Value)!.Value;
+        Assert.Equal((75m, true), (replacement.PlannedQty!.Value, replacement.PartialBatchPlanned));
+        Assert.StartsWith("1 batch of 50", result.Note, StringComparison.Ordinal);
+        Assert.Contains("and a partial batch of 25", result.Note, StringComparison.Ordinal);
+
+        // A whole remainder isn't a partial; and the planned partial moves to a line of another size.
+        var whole = await StartedAsync(line, 200m, 100m);
+        var wholeResult = await Cancel().HandleAsync(new CancelJobCommand(whole.Id, Version(whole.Id), null, Replace: true, ReplaceExact: true), CancellationToken.None);
+        Assert.False(F.Stores.Scheduling.FindJob(wholeResult.ReplacementJobId!.Value)!.Value.PartialBatchPlanned);
+        var sequence = new SequenceJobHandler(F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.Events, F.Events, F.Time, F.Stores.Boms, F.Stores.Units, F.Stores.LineBatchSizes);
+        await sequence.HandleAsync(new SequenceJobCommand(replacement.Id, Version(replacement.Id), big.Id, null), CancellationToken.None);
+        Assert.Equal(big.Id, F.Stores.Scheduling.FindJob(replacement.Id)!.Value.EquipmentId);
+    }
+}
+
+/// <summary>A line's own batch size (D-065) decides whole batches on that line.</summary>
+public class LineBatchSizeHandlerTests : SchedulingHandlerTestBase
+{
+    public LineBatchSizeHandlerTests() => F.Stores.Boms.AddMaterial(White, Metre, batchSize: 50m);
+
+    private CreateJobHandler CreateOnLines() => new(
+        F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Processes, F.Stores.Boms, F.Stores.Units, F.Stores.Events, F.Events, F.Ids, F.Time,
+        F.Stores.LineBatchSizes);
+
+    [Fact]
+    public async Task A_job_is_whole_batches_of_its_lines_size_and_moves_only_to_a_line_where_it_still_is()
+    {
+        var big = Line();
+        var small = Line();
+        F.Stores.LineBatchSizes.Sizes[(big.Id, White)] = 200m;
+        var wo = await WorkOrderAsync(White);
+
+        var ex = await Assert.ThrowsAsync<DomainRuleException>(() => CreateOnLines().HandleAsync(
+            new CreateJobCommand(big.Id, "J-1", JobType.Production, wo.Id, 150m, null, false, null, null), CancellationToken.None));
+        Assert.Contains("batches of 200", ex.Message, StringComparison.Ordinal);
+        var onSmall = (await CreateOnLines().HandleAsync(
+            new CreateJobCommand(small.Id, "J-2", JobType.Production, wo.Id, 150m, null, false, null, null), CancellationToken.None)).Id;
+
+        var sequence = new SequenceJobHandler(F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.Events, F.Events, F.Time, F.Stores.Boms, F.Stores.Units, F.Stores.LineBatchSizes);
+        var moved = await Assert.ThrowsAsync<DomainRuleException>(() => sequence.HandleAsync(new SequenceJobCommand(onSmall, Version(onSmall), big.Id, null), CancellationToken.None));
+        Assert.Contains("on " + big.Code, moved.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_replacement_rounds_up_to_whole_batches_of_its_lines_size()
+    {
+        var line = Line();
+        F.Stores.LineBatchSizes.Sizes[(line.Id, White)] = 200m;
+        var wo = await WorkOrderAsync(White, WorkOrderStatus.InProgress);
+        var job = F.Stores.Scheduling.AddJob(global::Pulaski.Domain.Scheduling.Job.CreateProduction(
+            Guid.CreateVersion7(), Site, wo.Id, "J-9", line.Id, White, 400m, Metre, 1m, null) with
+        { Status = JobStatus.Running });
+        F.Stores.Scheduling.SetGoodQty(job.Id, 150m);
+
+        var cancel = new CancelJobHandler(
+            F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Processes, F.Stores.Boms, F.Stores.Units, F.Stores.Events, F.Events, F.Ids, F.Time,
+            F.Stores.LineBatchSizes);
+        var result = await cancel.HandleAsync(new CancelJobCommand(job.Id, Version(job.Id), "Line down", Replace: true), CancellationToken.None);
+
+        // 250 left is 1.25 batches of 200 on this line: two batches, not five of the material's 50.
+        Assert.Equal(400m, F.Stores.Scheduling.FindJob(result.ReplacementJobId!.Value)!.Value.PlannedQty);
+    }
+}
+
 /// <summary>Setting a material's batching (D-036).</summary>
 public class SetBatchingHandlerTests
 {

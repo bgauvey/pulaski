@@ -5,6 +5,7 @@ using Pulaski.Application.Security;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Security;
+using Pulaski.Contracts.WorkOrders;
 using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Tests;
@@ -382,5 +383,29 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
         // A planner gets through to the job, which doesn't exist here.
         var planner = await factory.CreateClientAsAsync(Roles.Planner, site);
         Assert.Equal(HttpStatusCode.NotFound, (await planner.PostAsJsonAsync($"/api/jobs/{job}/allocations", request)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Importing_erp_orders_needs_work_order_manage_and_refuses_rows_at_other_sites()
+    {
+        var site = Guid.CreateVersion7();
+        factory.Stores.WorkOrders.Sites["ERP-SITE"] = site;
+        factory.Stores.WorkOrders.Sites["OTHER-SITE"] = Guid.CreateVersion7();
+        var request = new ImportWorkOrdersRequest
+        {
+            Orders =
+            [
+                new() { ExternalSystem = "ERP", ExternalKey = "1", SiteCode = "OTHER-SITE", OrderNumber = "E-1", MaterialCode = "M", Quantity = 1m, UomCode = "m", PlannedStart = DateTimeOffset.UtcNow },
+            ],
+        };
+
+        var operatorClient = await factory.CreateClientAsAsync(Roles.Operator, site);
+        Assert.Equal(HttpStatusCode.Forbidden, (await operatorClient.PostAsJsonAsync("/api/work-orders/import", request)).StatusCode);
+
+        var planner = await factory.CreateClientAsAsync(Roles.Planner, site);
+        var response = await planner.PostAsJsonAsync("/api/work-orders/import", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = Assert.Single((await response.Content.ReadFromJsonAsync<ImportWorkOrdersResponse>())!.Results);
+        Assert.Equal(("refused", true), (result.Action, result.Messages[0].Contains("OTHER-SITE", StringComparison.Ordinal)));
     }
 }

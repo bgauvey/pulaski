@@ -67,6 +67,9 @@ public interface IBomRepository
     Task<BomVersion?> GetReleasedForOrderAsync(Guid materialId, Guid processId, CancellationToken cancellationToken);
 
     Task InsertJobMaterialsAsync(IReadOnlyList<JobMaterial> rows, CancellationToken cancellationToken);
+
+    /// <summary>Scales a job's planned components by <paramref name="factor"/> (D-066): a BOM's quantities are linear in the job's quantity.</summary>
+    Task ScaleJobMaterialsAsync(Guid jobId, decimal factor, CancellationToken cancellationToken);
 }
 
 /// <summary>A BOM that names operations its process's released version no longer has.</summary>

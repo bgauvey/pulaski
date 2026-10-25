@@ -72,6 +72,15 @@ public sealed record CapabilityLine(Guid Id, string Code, bool CanRunJob, bool I
 public sealed record SiteLine(CapabilityLine Line, Guid? SiteId, string? SiteCode);
 
 /// <summary>Write side for capabilities and the run standards they seed (D-020, D-034); runs inside the current <see cref="IUnitOfWork"/>.</summary>
+/// <summary>
+/// The batch sizes lines have of their own for a material (D-065): from each line's capability in effect at a time, in the material's
+/// base unit. A line missing from the answer uses the material's size. Read in the command's transaction, after the lines are locked.
+/// </summary>
+public interface ILineBatchSizes
+{
+    Task<IReadOnlyDictionary<Guid, decimal>> GetAsync(Guid materialId, IReadOnlyCollection<Guid> equipmentIds, DateTimeOffset at, CancellationToken cancellationToken);
+}
+
 public interface ICapabilityRepository
 {
     /// <summary>The line, locked <c>FOR UPDATE</c>; null when it doesn't exist.</summary>

@@ -8,11 +8,13 @@ public sealed record CapabilityChange(
     decimal? StandardCrewSize,
     bool IsPreferred,
     DateTimeOffset EffectiveFrom,
-    DateTimeOffset? EffectiveTo);
+    DateTimeOffset? EffectiveTo,
+    decimal? BatchSize = null);
 
 /// <summary>
-/// A line's permission to run a material over a period, with its ideal rate (D-020). Capabilities
-/// are never deleted: one that no longer applies is ended, so history still says what could run where.
+/// A line's permission to run a material over a period, with its ideal rate (D-020) and, for a material made in batches, the line's
+/// own batch size when it differs from the material's (D-065). Capabilities are never deleted: one that no longer applies is ended,
+/// so history still says what could run where.
 /// </summary>
 public sealed record Capability(
     Guid Id,
@@ -24,7 +26,8 @@ public sealed record Capability(
     decimal? StandardCrewSize,
     bool IsPreferred,
     DateTimeOffset EffectiveFrom,
-    DateTimeOffset? EffectiveTo)
+    DateTimeOffset? EffectiveTo,
+    decimal? BatchSize = null)
 {
     /// <summary>Longest standard changeover accepted: a week.</summary>
     public static readonly TimeSpan MaxChangeover = TimeSpan.FromDays(7);
@@ -38,7 +41,7 @@ public sealed record Capability(
         Ensure(change);
         return new Capability(
             id, equipmentId, materialId, change.IdealRatePerHour, change.RateUomId, change.StandardChangeover, change.StandardCrewSize,
-            change.IsPreferred, change.EffectiveFrom, change.EffectiveTo);
+            change.IsPreferred, change.EffectiveFrom, change.EffectiveTo, change.BatchSize);
     }
 
     /// <exception cref="DomainRuleException">A value is out of range, or the period ends before it starts.</exception>
@@ -54,6 +57,7 @@ public sealed record Capability(
             IsPreferred = change.IsPreferred,
             EffectiveFrom = change.EffectiveFrom,
             EffectiveTo = change.EffectiveTo,
+            BatchSize = change.BatchSize,
         };
     }
 
@@ -95,6 +99,11 @@ public sealed record Capability(
         if (change.StandardCrewSize is { } crew && (crew <= 0 || crew > MaxCrewSize))
         {
             throw new DomainRuleException($"The crew size must be greater than 0 and at most {MaxCrewSize}.");
+        }
+
+        if (change.BatchSize is <= 0)
+        {
+            throw new DomainRuleException("The line's batch size must be greater than zero, or blank for the material's.");
         }
 
         if (change.EffectiveTo is { } to && to <= change.EffectiveFrom)

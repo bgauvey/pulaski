@@ -97,8 +97,10 @@ internal static class SchedulingEndpoints
             ICommandHandler<CancelJobCommand, CancelJobResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new CancelJobCommand(id, request.Version, request.Reason, request.Replace), ct)))
-        .RequirePermission(Permissions.SchedulePlan, Site.Of(SiteOf.Job));
+                new CancelJobCommand(id, request.Version, request.Reason, request.Replace, request.ReplaceExact), ct)))
+        .RequirePermission(Permissions.SchedulePlan, Site.Of(SiteOf.Job))
+        .RequireWhen<CancelJobRequest>(r => r.Replace && r.ReplaceExact, Permissions.SchedulePlanPartial, Site.Of(SiteOf.Job),
+            "You may not replace a job with a partial batch at this site: it needs permission to plan partial batches.");
 
         group.MapPost("/run-standards/{id:guid}/modify", async Task<Ok<VersionResponse>> (
             Guid id,

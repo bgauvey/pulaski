@@ -16,8 +16,17 @@ internal sealed class WorkOrderQueries(NpgsqlDataSource dataSource) : IWorkOrder
                w.process_version_id, pv.process_id, p.code AS process_code, p.name AS process_name,
                pv.version_number AS process_version_number, w.notes,
                w.bom_version_id, bv.version_number AS bom_version_number,
-               w.created_at, w.updated_at, w.xmin::text::bigint AS version
+               w.created_at, w.updated_at, w.xmin::text::bigint AS version,
+               w.external_system, w.external_key, w.external_version, w.erp_qty, eu.code AS erp_uom_code, w.batch_adjustment, w.quantity_held,
+               w.imported_at,
+               -- The ERP's pending change (D-066), split off by Dapper into its own record.
+               (w.erp_pending_change->>'Quantity')::numeric AS quantity, pu.code AS uom_code,
+               (w.erp_pending_change->>'PlannedStart')::timestamptz AS planned_start, (w.erp_pending_change->>'DueAt')::timestamptz AS due_at,
+               (w.erp_pending_change->>'Priority')::int AS priority, w.erp_pending_change->>'Version' AS version,
+               (w.erp_pending_change->>'Cancelled')::boolean AS cancelled, (w.erp_pending_change->>'ReceivedAt')::timestamptz AS received_at
         FROM core.work_order w
+        LEFT JOIN core.uom eu ON eu.id = w.erp_uom_id
+        LEFT JOIN core.uom pu ON pu.id = (w.erp_pending_change->>'UomId')::uuid
         JOIN core.equipment s ON s.id = w.site_id
         JOIN core.material m  ON m.id = w.material_id
         JOIN core.uom u       ON u.id = w.uom_id
@@ -101,19 +110,21 @@ internal sealed class WorkOrderQueries(NpgsqlDataSource dataSource) : IWorkOrder
         return rows.AsList();
     }
 
+    private static WorkOrderDto WithPending(WorkOrderDto order, ErpPendingChangeDto? pending) => pending is null ? order : order with { PendingChange = pending };
+
     public async Task<IReadOnlyList<WorkOrderDto>> ListAsync(Guid? siteId, string? status, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        var rows = await connection.QueryAsync<WorkOrderDto>(
-            new CommandDefinition(List, new { SiteId = siteId, Status = status }, cancellationToken: cancellationToken));
+        var rows = await connection.QueryAsync<WorkOrderDto, ErpPendingChangeDto?, WorkOrderDto>(
+            new CommandDefinition(List, new { SiteId = siteId, Status = status }, cancellationToken: cancellationToken), WithPending, splitOn: "quantity");
         return rows.AsList();
     }
 
     public async Task<WorkOrderDto?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        return await connection.QuerySingleOrDefaultAsync<WorkOrderDto>(
-            new CommandDefinition(Get, new { Id = id }, cancellationToken: cancellationToken));
+        return (await connection.QueryAsync<WorkOrderDto, ErpPendingChangeDto?, WorkOrderDto>(
+            new CommandDefinition(Get, new { Id = id }, cancellationToken: cancellationToken), WithPending, splitOn: "quantity")).SingleOrDefault();
     }
 
     public async Task<ShopOrderJobsRow?> GetShopOrderJobsAsync(Guid workOrderId, CancellationToken cancellationToken)

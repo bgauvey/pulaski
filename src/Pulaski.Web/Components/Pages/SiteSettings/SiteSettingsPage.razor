@@ -83,6 +83,31 @@ else
         }
     </section>
 
+    <section class="inv-facts mb-3" aria-labelledby="erp-batch-heading">
+        <h2 class="h6" id="erp-batch-heading">ERP orders that aren't whole batches</h2>
+        @if (_scheduling is null)
+        {
+            <p class="small text-muted mb-0">Loading…</p>
+        }
+        else
+        {
+            <p class="small text-muted">
+                When the ERP sends a work order for a material made in batches, and its quantity isn't whole batches. A material can have a
+                rule of its own on its page; this is the site's default.
+            </p>
+            <select class="form-select form-select-sm w-auto" aria-label="Rule for ERP quantities that aren't whole batches" disabled="@(!CanManage)" @bind="_erpBatchRule">
+                @foreach (var (rule, label) in SiteSettingsView.ErpBatchRules)
+                {
+                    <option value="@rule">@label</option>
+                }
+            </select>
+            @if (CanManage)
+            {
+                <button type="button" class="btn btn-sm btn-primary mt-2" disabled="@(_saving || _erpBatchRule == _scheduling.ErpBatchRule)" @onclick="SaveErpBatchRuleAsync">Save rule</button>
+            }
+        }
+    </section>
+
     <section class="inv-facts mb-3" aria-labelledby="tolerance-heading">
         <h2 class="h6" id="tolerance-heading">Reporting tolerances</h2>
         @if (_execution is null)
@@ -264,6 +289,7 @@ else
     private IReadOnlyList<CalendarExceptionDto>? _exceptions;
     private IReadOnlyList<EquipmentDto> _scopes = [];
     private string _changeoverMode = "auto";
+    private string _erpBatchRule = "reject";
     private decimal? _rateTolerance;
     private decimal? _consumptionTolerance;
     private bool _showAll;
@@ -314,6 +340,7 @@ else
         {
             _scheduling = await Api.GetSchedulingPolicyAsync(site);
             _changeoverMode = _scheduling.ChangeoverMode;
+            _erpBatchRule = _scheduling.ErpBatchRule;
             _execution = await Api.GetExecutionPolicyAsync(site);
             _rateTolerance = _execution.RateTolerancePct;
             _consumptionTolerance = _execution.ConsumptionTolerancePct;
@@ -345,6 +372,12 @@ else
             _error = ex;
         }
     }
+
+    private async Task SaveErpBatchRuleAsync() => await RunAsync(async site =>
+    {
+        await Api.SetSiteErpBatchRuleAsync(site, _erpBatchRule);
+        return $"ERP orders that aren't whole batches: {SiteSettingsView.ErpBatchRules.First(r => r.Rule == _erpBatchRule).Label.ToLowerInvariant()}.";
+    });
 
     private async Task SaveChangeoverAsync() => await RunAsync(async site =>
     {

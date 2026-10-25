@@ -131,6 +131,24 @@ internal sealed class BackdateFilter(SiteResolver site) : IEndpointFilter
     }
 }
 
+/// <summary>A request that asks for more also needs another permission: replacing a job with a partial batch (D-067), say.</summary>
+internal sealed class ConditionalPermissionFilter<TRequest>(Func<TRequest, bool> when, string permission, SiteResolver site, string message) : IEndpointFilter
+{
+    public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        if (context.Arguments.OfType<TRequest>().FirstOrDefault() is { } request && when(request))
+        {
+            var access = await CallerAccess.RequireAsync(context.HttpContext);
+            if (!access.CanAny([permission], await site(context)))
+            {
+                throw new ForbiddenException(message);
+            }
+        }
+
+        return await next(context);
+    }
+}
+
 /// <summary>Lookups many screens need, such as units or the equipment tree (D-039): for whoever may see any screen.</summary>
 internal sealed class AnyViewFilter : IEndpointFilter
 {
@@ -150,6 +168,11 @@ internal static class PermissionEndpointExtensions
     /// <summary>The caller needs <paramref name="permission"/>; at the site <paramref name="site"/> finds, or (without one) at any site.</summary>
     public static RouteHandlerBuilder RequirePermission(this RouteHandlerBuilder builder, string permission, SiteResolver? site = null) =>
         builder.AddEndpointFilter(new PermissionFilter([permission], site));
+
+    /// <summary>A request <paramref name="when"/> picks out also needs <paramref name="permission"/> at the site <paramref name="site"/> finds.</summary>
+    public static RouteHandlerBuilder RequireWhen<TRequest>(
+        this RouteHandlerBuilder builder, Func<TRequest, bool> when, string permission, SiteResolver site, string message) =>
+        builder.AddEndpointFilter(new ConditionalPermissionFilter<TRequest>(when, permission, site, message));
 
     /// <summary>A back-dated request (D-057) also needs <c>inventory.backdate</c> at the site <paramref name="site"/> finds.</summary>
     public static RouteHandlerBuilder RequireToBackdate(this RouteHandlerBuilder builder, SiteResolver site) =>

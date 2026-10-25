@@ -407,6 +407,97 @@ public sealed class ProcessTests(DatabaseFixture db)
         Assert.Contains("names operation 30", refused.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Erp_orders_are_made_once_follow_the_erp_while_planned_wait_for_a_planner_after_and_take_batches_by_rule()
+    {
+        var plant = await CreatePlantAsync();
+        await ReleasedExtrudeAndPackAsync(plant);
+        var suffix = Guid.NewGuid().ToString("N")[..6];
+        CreatedResponse material = await db.SendAsync(new Application.Materials.CreateMaterialCommand("ERPM-" + suffix, "Blend", null, "intermediate", null, db.UomId, true, null));
+        await using var connection = await db.AdminDataSource.OpenConnectionAsync();
+        var materialVersion = await connection.ExecuteScalarAsync<long>("SELECT xmin::text::bigint FROM core.material WHERE id = @Id", new { material.Id });
+        await db.SendAsync(new Application.Materials.SetBatchingCommand(material.Id, materialVersion, 50m, 2m, "near"));
+        foreach (var line in new[] { plant.Ext1, plant.Ext2, plant.Pack })
+        {
+            await db.ExecuteAsync(
+                $"""
+                INSERT INTO core.equipment_capability (equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, effective_from)
+                VALUES ('{line}', '{material.Id}', 1000, '{db.UomId}', now() - interval '1 day')
+                """);
+        }
+
+        var siteCode = await connection.ExecuteScalarAsync<string>("SELECT code FROM core.equipment WHERE id = @Id", new { Id = plant.Site });
+        var uomCode = await connection.ExecuteScalarAsync<string>("SELECT code FROM core.uom WHERE id = @Id", new { Id = db.UomId });
+        var start = DateTimeOffset.UtcNow.AddDays(2);
+        ErpWorkOrderRequest Order(string key, decimal qty, string? version = null, bool cancelled = false) => new()
+        {
+            ExternalSystem = "SAP-" + suffix,
+            ExternalKey = key,
+            ExternalVersion = version,
+            SiteCode = siteCode!,
+            OrderNumber = $"{key}-{suffix}",
+            MaterialCode = "ERPM-" + suffix,
+            Quantity = qty,
+            UomCode = uomCode!,
+            PlannedStart = start,
+            Cancelled = cancelled,
+        };
+        async Task<ErpOrderResultDto> ImportAsync(ErpWorkOrderRequest order) =>
+            Assert.Single((await db.SendAsync(new ImportWorkOrdersCommand([order], null))).Results);
+        var reads = db.Services.GetRequiredService<IWorkOrderReadStore>();
+        async Task<IReadOnlyList<decimal>> JobQuantitiesAsync(Guid id) =>
+            [.. await connection.QueryAsync<decimal>("SELECT planned_qty FROM core.job WHERE work_order_id = @Id AND status <> 'cancelled' ORDER BY job_number", new { Id = id })];
+
+        // Made once, from the only process that makes it, with jobs; the same version again changes nothing.
+        var a = await ImportAsync(Order("A", 1000m, "1"));
+        Assert.Equal(ErpOrderAction.Created, a.Action);
+        Assert.Equal([500m, 500m, 1000m], await JobQuantitiesAsync(a.WorkOrderId!.Value));
+        Assert.Equal(ErpOrderAction.Unchanged, (await ImportAsync(Order("A", 1000m, "1"))).Action);
+        var row = (await reads.GetAsync(a.WorkOrderId.Value, CancellationToken.None))!;
+        Assert.Equal(("erp", "SAP-" + suffix, "A", "1"), (row.Origin, row.ExternalSystem!, row.ExternalKey!, row.ExternalVersion!));
+
+        // While planned, the ERP's change applies and the jobs are re-planned.
+        Assert.Equal(ErpOrderAction.Updated, (await ImportAsync(Order("A", 1100m, "2"))).Action);
+        Assert.Equal([550m, 550m, 1100m], await JobQuantitiesAsync(a.WorkOrderId.Value));
+
+        // Not whole batches: refused by default; rounded up once the site says so; held where the material says so.
+        var refused = await ImportAsync(Order("B", 1025m));
+        Assert.Equal(ErpOrderAction.Refused, refused.Action);
+        Assert.Contains("Send 1,000 or 1,050", refused.Messages[0], StringComparison.Ordinal);
+        await db.SendAsync(new SetErpBatchRuleCommand(plant.Site, "round_up"));
+        var b = await ImportAsync(Order("B", 1025m));
+        row = (await reads.GetAsync(b.WorkOrderId!.Value, CancellationToken.None))!;
+        Assert.Equal((1050m, 1025m, "rounded_up"), (row.PlannedQty, row.ErpQty!.Value, row.BatchAdjustment!));
+
+        materialVersion = await connection.ExecuteScalarAsync<long>("SELECT xmin::text::bigint FROM core.material WHERE id = @Id", new { material.Id });
+        await db.SendAsync(new SetMaterialErpBatchRuleCommand(material.Id, materialVersion, "hold"));
+        var c = await ImportAsync(Order("C", 1025m));
+        row = (await reads.GetAsync(c.WorkOrderId!.Value, CancellationToken.None))!;
+        Assert.True(row.QuantityHeld);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new DispatchWorkOrderCommand(row.Id, row.Version)));
+        await db.SendAsync(new SetWorkOrderQuantityCommand(row.Id, row.Version, 1000m));
+        row = (await reads.GetAsync(c.WorkOrderId.Value, CancellationToken.None))!;
+        Assert.Equal((false, 1000m, "rounded_down"), (row.QuantityHeld, row.PlannedQty, row.BatchAdjustment!));
+
+        // Once dispatched, a change waits for a planner: accepted, it re-plans; rejected, it is dropped with a reason.
+        row = (await reads.GetAsync(a.WorkOrderId.Value, CancellationToken.None))!;
+        await db.SendAsync(new DispatchWorkOrderCommand(row.Id, row.Version));
+        Assert.Equal(ErpOrderAction.Pending, (await ImportAsync(Order("A", 1200m, "3"))).Action);
+        row = (await reads.GetAsync(a.WorkOrderId.Value, CancellationToken.None))!;
+        Assert.Equal((1100m, 1200m), (row.PlannedQty, row.PendingChange!.Quantity));
+        await db.SendAsync(new AcceptErpChangeCommand(row.Id, row.Version));
+        Assert.Equal([600m, 600m, 1200m], await JobQuantitiesAsync(a.WorkOrderId.Value));
+        Assert.Equal(ErpOrderAction.Pending, (await ImportAsync(Order("A", 1300m, "4"))).Action);
+        row = (await reads.GetAsync(a.WorkOrderId.Value, CancellationToken.None))!;
+        await db.SendAsync(new RejectErpChangeCommand(row.Id, row.Version, "Capacity is booked"));
+        row = (await reads.GetAsync(a.WorkOrderId.Value, CancellationToken.None))!;
+        Assert.Equal((1200m, (ErpPendingChangeDto?)null), (row.PlannedQty, row.PendingChange));
+
+        // Cancelled in the ERP while planned: cancelled here, with its jobs.
+        Assert.Equal(ErpOrderAction.Cancelled, (await ImportAsync(Order("B", 1025m, cancelled: true))).Action);
+        Assert.Equal("cancelled", (await reads.GetAsync(b.WorkOrderId.Value, CancellationToken.None))!.Status);
+    }
+
     /// <summary>Extrude and Pack, making every material, released as version 1.</summary>
     private async Task<Guid> ReleasedExtrudeAndPackAsync(Plant plant)
     {

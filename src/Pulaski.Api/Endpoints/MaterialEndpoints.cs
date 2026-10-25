@@ -122,7 +122,7 @@ internal static class MaterialEndpoints
         {
             var created = await handler.HandleAsync(
                 new AddCapabilityCommand(id, request.EquipmentId, request.IdealRatePerHour, request.RateUomId, request.StandardChangeoverMinutes,
-                    request.StandardCrewSize, request.IsPreferred, request.EffectiveFrom, request.EffectiveTo),
+                    request.StandardCrewSize, request.IsPreferred, request.EffectiveFrom, request.EffectiveTo, request.BatchSize),
                 ct);
             return TypedResults.Created($"/api/materials/{id}", created);
         })
@@ -166,7 +166,7 @@ internal static class MaterialEndpoints
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
                 new UpdateCapabilityCommand(id, request.Version, request.IdealRatePerHour, request.RateUomId, request.StandardChangeoverMinutes,
-                    request.StandardCrewSize, request.IsPreferred, request.EffectiveFrom, request.EffectiveTo),
+                    request.StandardCrewSize, request.IsPreferred, request.EffectiveFrom, request.EffectiveTo, request.BatchSize),
                 ct)))
         .RequirePermission(Permissions.Processes, Site.Of(SiteOf.Capability));
 

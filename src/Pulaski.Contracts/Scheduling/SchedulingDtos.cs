@@ -31,7 +31,10 @@ public sealed record JobPlacementPreviewDto
 public sealed record JobDelayDto(Guid JobId, string JobNumber, TimeSpan Delay);
 
 /// <summary>The cancelled job's new version, and its replacement if one was asked for.</summary>
-public sealed record CancelJobResponse(long Version, Guid? ReplacementJobId);
+/// <param name="Version">The cancelled job's new version.</param>
+/// <param name="ReplacementJobId">The replacement, when one was made.</param>
+/// <param name="Note">For a replacement with a partial last batch (D-067): its batches, and what happens when the partial is reported.</param>
+public sealed record CancelJobResponse(long Version, Guid? ReplacementJobId, string? Note = null);
 
 /// <summary>A line/material run standard (D-016).</summary>
 public sealed record RunStandardDto
@@ -62,6 +65,9 @@ public sealed record SchedulingPolicyDto
 {
     public required Guid SiteId { get; init; }
     public required string ChangeoverMode { get; init; }
+
+    /// <summary>For ERP orders that aren't whole batches (D-066): <c>reject</c> (the default), <c>round_up</c>, <c>round_down</c> or <c>hold</c>.</summary>
+    public string ErpBatchRule { get; init; } = "reject";
     public bool IsDefault { get; init; }
     public long Version { get; init; }
 }

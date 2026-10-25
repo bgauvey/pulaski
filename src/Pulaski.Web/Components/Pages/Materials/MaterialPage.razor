@@ -260,6 +260,28 @@ else if (_error is null)
 
     private async Task OnChangeAsync(PropertyChange change)
     {
+        if (_detail is not null && change.Key == MaterialProperties.ErpBatchRuleKey)
+        {
+            _saving = true;
+            _error = null;
+            try
+            {
+                await Api.SetMaterialErpBatchRuleAsync(MaterialId, _detail.Material.Version, string.IsNullOrWhiteSpace(change.Value) ? null : change.Value);
+                await LoadAsync();
+            }
+            catch (ApiException ex)
+            {
+                _error = ex;
+                _revision++;
+            }
+            finally
+            {
+                _saving = false;
+            }
+
+            return;
+        }
+
         if (_detail is not null && MaterialProperties.IsBatchingKey(change.Key))
         {
             await SetBatchingAsync(change);

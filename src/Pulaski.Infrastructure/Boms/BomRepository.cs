@@ -161,6 +161,11 @@ internal sealed class BomRepository(DbSession session) : IBomRepository
     public Task<IReadOnlyList<BomMaterialRow>> GetMaterialsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
         session.QueryAsync<BomMaterialRow>(Materials, new { Ids = ids.ToArray() }, cancellationToken);
 
+    public Task ScaleJobMaterialsAsync(Guid jobId, decimal factor, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(
+            "UPDATE core.job_material SET planned_qty = round(planned_qty * @Factor, 6) WHERE job_id = @JobId AND direction = 'consume'",
+            new { JobId = jobId, Factor = factor }, cancellationToken);
+
     public async Task InsertJobMaterialsAsync(IReadOnlyList<JobMaterial> rows, CancellationToken cancellationToken)
     {
         foreach (var row in rows)

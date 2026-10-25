@@ -71,6 +71,13 @@
                     <label class="form-label" for="cap-crew">Crew size</label>
                     <input id="cap-crew" type="number" class="form-control" min="0" step="0.5" placeholder="None" @bind="form.CrewSize" />
                 </div>
+                @if (Material.BatchSize is { } materialBatch)
+                {
+                    <div class="col-sm-3">
+                        <label class="form-label" for="cap-batch">Batch size on this line, @Material.BaseUomCode</label>
+                        <input id="cap-batch" type="number" class="form-control" min="0" step="any" placeholder="@($"{Qty(materialBatch)} (the material's)")" @bind="form.BatchSize" />
+                    </div>
+                }
                 <div class="col-sm-3">
                     <label class="form-label" for="cap-from">Starts</label>
                     <input id="cap-from" type="date" class="form-control" @bind="form.From" />
@@ -140,7 +147,7 @@
                 <thead>
                     <tr>
                         <th>Line</th><th class="inv-num">Ideal rate</th><th class="inv-num">Planning rate</th><th>Changeover</th>
-                        <th class="inv-num">Crew</th><th>Starts</th><th>Ends on</th><th></th>
+                        <th class="inv-num">Crew</th>@if (Material.BatchSize is not null) { <th class="inv-num" title="The line's own batch size; blank means the material's">Batch</th> }<th>Starts</th><th>Ends on</th><th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -168,6 +175,10 @@
                             </td>
                             <td>@(c.StandardChangeover is { } ch ? $"{(int)ch.TotalMinutes} min" : "—")</td>
                             <td class="inv-num">@(c.StandardCrewSize?.ToString("0.##", CultureInfo.InvariantCulture) ?? "—")</td>
+                            @if (Material.BatchSize is { } batchOfMaterial)
+                            {
+                                <td class="inv-num">@(c.BatchSize is { } own ? $"{Qty(own)} {Material.BaseUomCode}" : $"{Qty(batchOfMaterial)}") @if (c.BatchSize is null) { <span class="small text-muted">material's</span> }</td>
+                            }
                             <td class="small">@Day(c.EffectiveFrom, c.SiteTimeZone)</td>
                             <td class="small">@(c.EffectiveTo is { } to ? Day(to, c.SiteTimeZone) : "—")</td>
                             <td class="text-end text-nowrap">

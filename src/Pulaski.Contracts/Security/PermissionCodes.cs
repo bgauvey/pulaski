@@ -27,6 +27,7 @@ public static class PermissionCodes
         [OverviewView, WorkOrdersView, ScheduleView, FloorView, InventoryView, EquipmentView, MaterialsView, ProcessesView, UnitsView, ReasonsView, ShiftsView, LaborView,
          MachinesView, SiteSettingsView, IntegrationsView];
     public const string SchedulePlan = "schedule.plan";
+    public const string SchedulePlanPartial = "schedule.plan_partial";
     public const string WorkOrderManage = "work_order.manage";
     public const string WorkOrderClose = "work_order.close";
     public const string RateModify = "rate.modify";

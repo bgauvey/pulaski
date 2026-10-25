@@ -39,6 +39,12 @@ internal sealed class DispatchWorkOrderHandler(
 
         var (workOrder, lines, jobs) = await WorkOrderPlanning.LockAsync(
             scheduling, workOrders, command.Id, command.ExpectedVersion, cancellationToken);
+        if (workOrder.QuantityHeld)
+        {
+            throw new DomainRuleException(
+                $"Work order {workOrder.OrderNumber} is held: the ERP's quantity isn't whole batches. Set a whole-batch quantity on the order first.");
+        }
+
         var dispatched = workOrder.WithStatus(WorkOrderStatus.Dispatched);
         if (jobs.Count == 0)
         {

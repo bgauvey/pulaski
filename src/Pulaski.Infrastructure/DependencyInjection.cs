@@ -88,6 +88,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitRepository, UnitRepository>();
         services.AddScoped<IInventoryRepository, InventoryRepository>();
         services.AddScoped<IAllocationRepository, AllocationRepository>();
+        services.AddScoped<Application.Materials.ILineBatchSizes, Materials.LineBatchSizes>();
         services.AddScoped<IAllocationReadStore, AllocationQueries>();
         services.AddScoped<ILotRecordsRepository, LotRecordsRepository>();
         services.AddScoped<IExpectedReceiptRepository, ExpectedReceiptRepository>();

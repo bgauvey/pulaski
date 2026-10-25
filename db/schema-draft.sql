@@ -301,6 +301,7 @@ CREATE TABLE core.material (
     batch_size          numeric(18,6) CHECK (batch_size > 0),  -- made in batches of this many base units (D-036); null: continuous
     batch_tolerance_pct numeric(5,2) NOT NULL DEFAULT 2 CHECK (batch_tolerance_pct >= 0 AND batch_tolerance_pct <= 50),  -- 'near' batches may differ by this much
     batch_rule          text CHECK (batch_rule IN ('exact','near')),  -- exact: every batch the batch size, partials approved; near: within the tolerance
+    erp_batch_rule      text CHECK (erp_batch_rule IN ('reject','round_up','round_down','hold')),  -- for ERP orders that aren't whole batches (D-066); null: the site's
     origin              text NOT NULL DEFAULT 'local' CHECK (origin IN ('erp','local')),
     external_system     text,
     external_key        text,
@@ -485,6 +486,7 @@ CREATE TABLE core.equipment_capability (
     standard_changeover     interval,
     standard_crew_size      numeric(6,2),
     is_preferred            boolean NOT NULL DEFAULT false,
+    batch_size              core.qty CHECK (batch_size > 0),    -- this line's batch size in the material's base unit (D-065); null: the material's
     effective_from          timestamptz NOT NULL,
     effective_to            timestamptz,
     CONSTRAINT capability_no_overlap EXCLUDE USING gist (
@@ -917,12 +919,19 @@ CREATE TABLE core.work_order (
     external_key                text,
     external_version            text,
     erp_change_pending          boolean NOT NULL DEFAULT false,       -- ERP changed after release; planner must accept
+    erp_pending_change          jsonb,                                -- what the ERP sent, while erp_change_pending (D-066)
+    erp_qty                     core.qty,                             -- the quantity the ERP sent, in erp_uom_id (D-066)
+    erp_uom_id                  uuid REFERENCES core.uom(id),
+    batch_adjustment            text CHECK (batch_adjustment IN ('rounded_up','rounded_down','held')),  -- how the ERP quantity was made whole batches
+    quantity_held               boolean NOT NULL DEFAULT false,       -- not whole batches; can't be dispatched until a planner sets the quantity
+    imported_at                 timestamptz,                          -- last import that created or changed it
     notes                       text CHECK (length(notes) <= 4000),   -- the planner's note on the order
     created_at                  timestamptz NOT NULL DEFAULT now(),
     updated_at                  timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT wo_number_uq UNIQUE (site_id, order_number),
     CONSTRAINT wo_window_ck CHECK (planned_end IS NULL OR planned_start IS NULL OR planned_end > planned_start),
-    CONSTRAINT wo_erp_ck CHECK (origin = 'local' OR (external_system IS NOT NULL AND external_key IS NOT NULL))
+    CONSTRAINT wo_erp_ck CHECK (origin = 'local' OR (external_system IS NOT NULL AND external_key IS NOT NULL)),
+    CONSTRAINT wo_erp_pending_ck CHECK (erp_change_pending = (erp_pending_change IS NOT NULL))
 );
 CREATE UNIQUE INDEX wo_external_uq ON core.work_order (external_system, external_key) WHERE external_key IS NOT NULL;
 CREATE INDEX wo_mo_ix ON core.work_order (manufacturing_order_id);
@@ -956,6 +965,7 @@ CREATE TABLE core.job (
     dispatched_at       timestamptz,
     firmed_at           timestamptz,                            -- planned_start is frozen from here on (D-019)
     replaces_job_id     uuid REFERENCES core.job(id),           -- set on the replacement for a cancelled, started job
+    partial_batch_planned boolean NOT NULL DEFAULT false,       -- planned with a partial last batch (D-067): a replacement for the exact remainder
     completed_at        timestamptz,                            -- when it was last completed (D-035); downstream "after end" links count from it
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
@@ -1006,6 +1016,7 @@ CREATE TABLE core.job_run (
 CREATE TABLE core.scheduling_policy (
     site_id             uuid PRIMARY KEY REFERENCES core.equipment(id),
     changeover_mode     text NOT NULL DEFAULT 'auto' CHECK (changeover_mode IN ('auto','scheduler')),
+    erp_batch_rule      text NOT NULL DEFAULT 'reject' CHECK (erp_batch_rule IN ('reject','round_up','round_down','hold')),  -- D-066
     updated_at          timestamptz NOT NULL DEFAULT now()
 );
 
@@ -2051,7 +2062,10 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0029_deliveries'),
     ('0030_reason_trees'),
     ('0031_declaration_reversals'),
-    ('0032_lot_allocations');
+    ('0032_lot_allocations'),
+    ('0033_line_batch_sizes'),
+    ('0034_erp_work_orders'),
+    ('0035_partial_replacements');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2075,6 +2089,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('integrations.view', 'See outbound deliveries to the ERP and how they went'),
     ('site_settings.view', 'See a site''s settings: changeover mode, reporting tolerances and calendar exceptions'),
     ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
+    ('schedule.plan_partial', 'Replace a cancelled job with exactly what is left, even when that isn''t whole batches'),
     ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
     ('work_order.close', 'Cancel and close work orders'),
     ('rate.modify', 'Set and clear the modified planning rate'),
@@ -2137,6 +2152,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('planner', 'machines.view'),
     ('planner', 'site_settings.view'),
     ('planner', 'schedule.plan'),
+    ('planner', 'schedule.plan_partial'),
     ('planner', 'work_order.manage'),
     ('planner', 'work_order.close'),
     ('planner', 'rate.modify'),

@@ -163,6 +163,22 @@ public sealed class InMemoryBoms : IBomReadStore, IBomRepository
         }
     }
 
+    public Task ScaleJobMaterialsAsync(Guid jobId, decimal factor, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            for (var i = 0; i < _jobMaterials.Count; i++)
+            {
+                if (_jobMaterials[i].JobId == jobId && _jobMaterials[i].Direction == JobMaterial.Consume)
+                {
+                    _jobMaterials[i] = _jobMaterials[i] with { PlannedQty = Math.Round(_jobMaterials[i].PlannedQty * factor, 6) };
+                }
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task InsertJobMaterialsAsync(IReadOnlyList<JobMaterial> rows, CancellationToken cancellationToken)
     {
         lock (_lock)
