@@ -136,6 +136,9 @@ public sealed record UtilizationRowDto
     public string? ReasonCode { get; init; }
     public string? ReasonName { get; init; }
 
+    /// <summary>The groups the reason is filed under (D-062), top first, for rolling the rows up by group (#86); empty without a reason or groups.</summary>
+    public IReadOnlyList<ReasonGroupDto> ReasonGroups { get; init; } = [];
+
     /// <summary>For down time without a reason: true when the machine sent nothing.</summary>
     public bool NoSignal { get; init; }
     public decimal Hours { get; init; }
@@ -144,3 +147,6 @@ public sealed record UtilizationRowDto
     public decimal SharePct { get; init; }
     public int Stops { get; init; }
 }
+
+/// <summary>A reason group (D-062), as a report rolls reasons up to it (#86).</summary>
+public sealed record ReasonGroupDto(Guid Id, string Code, string Name);

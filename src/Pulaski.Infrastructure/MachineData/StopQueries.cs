@@ -58,13 +58,15 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
                d.mapped_reason_code_id AS mapped_reason_id, mr.code AS mapped_reason_code, mr.name AS mapped_reason_name,
                d.operator_reason_code_id AS operator_reason_id, orc.code AS operator_reason_code, orc.name AS operator_reason_name,
                er.utilization_class, d.is_micro_stop, d.coded_by, d.coded_at, d.comment, j.job_number,
-               d.source, d.replaces_ids, d.adjusted_by, d.adjusted_at, d.adjustment_comment, d.superseded_at, d.superseded_by, d.superseded_note
+               d.source, d.replaces_ids, d.adjusted_by, d.adjusted_at, d.adjustment_comment, d.superseded_at, d.superseded_by, d.superseded_note,
+               rt.group_path AS reason_group_path
         FROM ts.downtime d
         JOIN core.equipment e ON e.id = d.equipment_id
         LEFT JOIN core.machine_profile_code pc ON pc.profile_id = e.machine_profile_id AND pc.code_kind = 'stop_reason' AND pc.raw_value = d.plc_stop_reason
         LEFT JOIN core.reason_code mr ON mr.id = d.mapped_reason_code_id
         LEFT JOIN core.reason_code orc ON orc.id = d.operator_reason_code_id
         LEFT JOIN core.reason_code er ON er.id = d.effective_reason_code_id
+        LEFT JOIN core.reason_tree() rt ON rt.id = d.effective_reason_code_id
         LEFT JOIN core.job_run run ON run.id = d.run_id
         LEFT JOIN core.job j ON j.id = run.job_id
         WHERE e.site_id = @SiteId AND d.started_at >= @From AND d.started_at < @To
@@ -191,6 +193,7 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
         public Guid? OperatorReasonId { get; init; }
         public string? OperatorReasonCode { get; init; }
         public string? OperatorReasonName { get; init; }
+        public string? ReasonGroupPath { get; init; }
         public string? UtilizationClass { get; init; }
         public bool IsMicroStop { get; init; }
         public string? CodedBy { get; init; }
@@ -225,6 +228,7 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
             OperatorReasonId = OperatorReasonId,
             OperatorReasonCode = OperatorReasonCode,
             OperatorReasonName = OperatorReasonName,
+            ReasonGroupPath = ReasonGroupPath,
             UtilizationClass = UtilizationClass,
             IsMicroStop = IsMicroStop,
             CodedBy = CodedBy,

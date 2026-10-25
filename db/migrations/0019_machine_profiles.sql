@@ -14,9 +14,15 @@ ALTER TABLE core.reason_code
         'utilization','scrap','hold','inventory_adjustment',
         'indirect_labor','run_end','spc_cause','sample_exclusion')),
     DROP CONSTRAINT IF EXISTS reason_code_utilization_class_check,
-    ADD CONSTRAINT reason_code_utilization_class_check CHECK (utilization_class IN ('runtime','downtime','planned')),
-    DROP CONSTRAINT IF EXISTS reason_code_utilization_ck,
-    ADD CONSTRAINT reason_code_utilization_ck CHECK ((reason_kind = 'utilization') = (utilization_class IS NOT NULL));
+    ADD CONSTRAINT reason_code_utilization_class_check CHECK (utilization_class IN ('runtime','downtime','planned'));
+-- 0030 replaces this check with one that allows groups; re-run after it, it stays replaced.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'reason_code_class_ck' AND conrelid = 'core.reason_code'::regclass) THEN
+        ALTER TABLE core.reason_code DROP CONSTRAINT IF EXISTS reason_code_utilization_ck;
+        ALTER TABLE core.reason_code ADD CONSTRAINT reason_code_utilization_ck CHECK ((reason_kind = 'utilization') = (utilization_class IS NOT NULL));
+    END IF;
+END $$;
 
 -- ---- Equipment: line state and micro-stops ----
 

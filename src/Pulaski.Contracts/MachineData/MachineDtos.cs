@@ -86,6 +86,9 @@ public sealed record DowntimeDto
     public string? OperatorReasonCode { get; init; }
     public string? OperatorReasonName { get; init; }
 
+    /// <summary>The groups the effective reason (operator's, else mapped) is filed under, top first, joined by ' › ' (#86).</summary>
+    public string? ReasonGroupPath { get; init; }
+
     /// <summary>The effective reason's class: <c>runtime</c>, <c>downtime</c> or <c>planned</c>; null while uncoded.</summary>
     public string? UtilizationClass { get; init; }
     public bool IsMicroStop { get; init; }

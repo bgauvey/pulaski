@@ -20,10 +20,11 @@ public sealed record ParetoRow(
 /// </summary>
 public static class StopPareto
 {
-    public static IReadOnlyList<ParetoRow> Rows(OeeReportDto report, bool includePlanned, bool includeMicroStops, bool byStops)
+    // level: roll reasons up to that group level (#86); 0 keeps each reason.
+    public static IReadOnlyList<ParetoRow> Rows(OeeReportDto report, bool includePlanned, bool includeMicroStops, bool byStops, int level = 0)
     {
         var tops = report.Equipment.Where(e => e.Depth == 0).Select(e => e.EquipmentId).ToHashSet();
-        var grouped = report.Utilization
+        var grouped = ReasonRollup.Apply(report.Utilization, level)
             .Where(u => tops.Contains(u.EquipmentId) && (u.Use == "down" || (includePlanned && u.Use == "planned") || (includeMicroStops && u.Use == "micro_stop")))
             .GroupBy(u => (u.Use, u.ReasonCodeId, NoSignal: u.ReasonCodeId is null && u.NoSignal))
             .Select(g => (

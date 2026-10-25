@@ -113,6 +113,10 @@ else
                                 <div>@reference</div>
                             }
                             @e.ReasonName
+                            @if (e.ReasonGroupPath is { } path)
+                            {
+                                <span class="text-muted">· @path</span>
+                            }
                             @if (e.Comment is { } comment)
                             {
                                 <div class="text-muted">@comment</div>
@@ -217,13 +221,13 @@ else
             await Downloads.CsvAsync(
                 Csv.FileName("journal", Sites.Site?.Code, Time.GetUtcNow()),
                 Csv.Write(
-                    ["When", "Counts from", "What", "Lot", "Material", "Change", "After", "Unit", "From", "To", "Status from", "Status to", "Job", "Reference", "Reason", "Comment", "Who"],
+                    ["When", "Counts from", "What", "Lot", "Material", "Change", "After", "Unit", "From", "To", "Status from", "Status to", "Job", "Reference", "Reason", "Reason group", "Comment", "Who"],
                     all.Select(entry =>
                     {
                         var e = entry.Movement;
                         return (IReadOnlyList<object?>)[
                             Display.SiteTime(e.OccurredAt, tz), Display.SiteTime(e.EffectiveAt, tz), InventoryView.EventLabel(e.Kind), InventoryView.LotLabel(entry.LotNumber, entry.IsBulk, entry.LocationCode), entry.MaterialCode, e.QtyDelta, e.QtyAfter, e.UomCode,
-                            e.FromLocationCode, e.ToLocationCode, e.FromStatus, e.ToStatus, e.JobNumber, e.Reference, e.ReasonName, e.Comment, e.ActorId];
+                            e.FromLocationCode, e.ToLocationCode, e.FromStatus, e.ToStatus, e.JobNumber, e.Reference, e.ReasonName, e.ReasonGroupPath, e.Comment, e.ActorId];
                     })));
         }
         catch (ApiException ex)

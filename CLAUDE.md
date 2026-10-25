@@ -212,10 +212,12 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   lock per sink), then POSTs CloudEvents JSON with `Idempotency-Key` = event id and an HMAC signature. `DeliveryPolicy.AfterAttempt`: 2xx
   delivered, 4xx (not 408/425/429) failed now, else backoff to `MaxAttempts`. A subject's later rows are held behind a pending/failed one.
   Configure → Integrations retries/skips (`integrations.view` / `integrations.manage`). At least once; receivers dedupe.
-- Reason trees (D-062, proposed): groups (`is_selectable` false, fixed at creation, no class) hold reasons of their kind; `ReasonTree`
+- Reason trees (D-062, proposed): groups (`is_selectable` false, no class) hold reasons of their kind; `ReasonTree`
   checks placement (same kind, parent a group, no cycles, scope, ≤ 5 levels) and switching off. Tree changes lock the whole kind in id
   order (`LockReasonTreeAsync`); `MoveReasonCodeCommand` / `PUT /reason-codes/{id}/parent`. `core.reason_tree()` gives depth, `group_path`,
-  `sort_key`; pickers show the path. History refers to reason ids, so moves never change it.
+  `sort_key`, `group_ids`; pickers, stops and the journal show the path. History refers to reason ids, so moves never change it. Reports roll up
+  by group level on read (`ReasonRollup`, OEE rows' `ReasonGroups`); `ConvertReasonCodeCommand` (`PUT /reason-codes/{id}/group`) makes an unused
+  reason (`core.reason_code_uses`) a group or an empty group a reason (#86).
 - Reversing declarations (D-063, proposed): never edit; compensating `reversed` rows (reason + comment required) at the original's
   effective time. `ReverseMovementCommand` dispatches: latest single-lot (D-030), earlier quantity-only if `EnsureFitsAsync` allows,
   consumption (`Lot.Restore`), split/merge/transfer (both lots, `GetCounterpartAsync`, `Lot.TakeBack`), genealogy superseded.

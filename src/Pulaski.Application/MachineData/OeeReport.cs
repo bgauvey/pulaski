@@ -251,6 +251,7 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IUnitReadStore un
                 ReasonCodeId = u.Reason,
                 ReasonCode = u.Reason is { } r && reasons.TryGetValue(r, out var found) ? found.Code : null,
                 ReasonName = u.Reason is { } r2 && reasons.TryGetValue(r2, out var named) ? named.Name : null,
+                ReasonGroups = u.Reason is { } r3 && reasons.TryGetValue(r3, out var grouped) ? grouped.Groups ?? [] : [],
                 NoSignal = u.NoSignal,
                 Hours = Hours(u.Length),
                 SharePct = u.Scheduled > TimeSpan.Zero ? Math.Round(OeeTally.Hours(u.Length) / OeeTally.Hours(u.Scheduled) * 100m, 1) : 0,

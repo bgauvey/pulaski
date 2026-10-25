@@ -230,6 +230,47 @@ public sealed class StopTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Stops_carry_their_reason_groups_and_only_reasons_without_history_become_groups()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "GENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "GS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse line = await db.SendAsync(new CreateEquipmentCommand(site.Id, "GL-" + _s, "Pack line", null, "work_center", "production_line", true, true, false, null));
+        CreatedResponse filler = await db.SendAsync(new CreateEquipmentCommand(line.Id, "GF-" + _s, "Filler", null, "work_unit", "machine", true, false, false, null));
+        CreatedResponse mechanical = await db.SendAsync(new CreateReasonCodeCommand(site.Id, "utilization", "GMECH-" + _s, "Mechanical", false, 10, IsGroup: true));
+        CreatedResponse jam = await db.SendAsync(new CreateReasonCodeCommand(site.Id, "utilization", "GJAM-" + _s, "Jam", false, 10, UtilizationClasses.Downtime, ParentId: mechanical.Id));
+        CreatedResponse spare = await db.SendAsync(new CreateReasonCodeCommand(site.Id, "utilization", "GSPR-" + _s, "Spare", false, 20, UtilizationClasses.Downtime));
+        CreatedResponse empty = await db.SendAsync(new CreateReasonCodeCommand(site.Id, "utilization", "GEMP-" + _s, "Electrical", false, 30, IsGroup: true));
+
+        var now = DateTimeOffset.UtcNow;
+        await db.SendAsync(new EnterStopCommand(filler.Id, now.AddMinutes(-30), now.AddMinutes(-20), jam.Id, "Jammed"));
+
+        // The stops list and the OEE report name the group a reason is filed under.
+        var stop = Assert.Single(await StopsAsync(new ListStopsQuery(new StopFilter(site.Id, filler.Id, now.AddHours(-1), now.AddMinutes(1), false, true))));
+        Assert.Equal("Mechanical", stop.ReasonGroupPath);
+        var today = DateOnly.FromDateTime(now.UtcDateTime);
+        var report = await QueryAsync<GetOeeReportQuery, OeeReportDto>(new GetOeeReportQuery(site.Id, today.AddDays(-1), today, filler.Id));
+        var jammed = Assert.Single(report.Utilization, u => u.EquipmentId == filler.Id && u.ReasonCodeId == jam.Id);
+        Assert.Equal(["GMECH-" + _s], jammed.ReasonGroups.Select(g => g.Code));
+
+        async Task<long> VersionAsync(Guid id) =>
+            (await QueryAsync<ListAllReasonCodesQuery, IReadOnlyList<ReasonCodeAdminDto>>(new ListAllReasonCodesQuery(site.Id))).Single(r => r.Id == id).Version;
+
+        // A reason that recorded a stop stays a reason; one never used becomes a group, and is no longer offered.
+        var refused = await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new ConvertReasonCodeCommand(jam.Id, await VersionAsync(jam.Id), true)));
+        Assert.Contains("ts.downtime", refused.Message, StringComparison.Ordinal);
+        await db.SendAsync(new ConvertReasonCodeCommand(spare.Id, await VersionAsync(spare.Id), true));
+        var offered = await QueryAsync<ListReasonCodesQuery, IReadOnlyList<ReasonCodeDto>>(new ListReasonCodesQuery("utilization", site.Id));
+        Assert.DoesNotContain(offered, r => r.Id == spare.Id);
+
+        // A group with reasons in it stays a group; an empty one becomes a reason, a utilization one only with its class.
+        await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new ConvertReasonCodeCommand(mechanical.Id, await VersionAsync(mechanical.Id), false, UtilizationClasses.Downtime)));
+        await Assert.ThrowsAsync<ValidationException>(async () => await db.SendAsync(new ConvertReasonCodeCommand(empty.Id, await VersionAsync(empty.Id), false)));
+        await db.SendAsync(new ConvertReasonCodeCommand(empty.Id, await VersionAsync(empty.Id), false, UtilizationClasses.Downtime));
+        offered = await QueryAsync<ListReasonCodesQuery, IReadOnlyList<ReasonCodeDto>>(new ListReasonCodesQuery("utilization", site.Id));
+        Assert.Equal("downtime", Assert.Single(offered, r => r.Id == empty.Id).UtilizationClass);
+    }
+
+    [Fact]
     public async Task More_than_a_thousand_stops_come_in_pages_that_neither_skip_nor_repeat()
     {
         CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "PENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));

@@ -174,6 +174,27 @@ else
                                     <button type="button" class="btn btn-sm btn-primary" disabled="@_saving" @onclick="() => SaveAsync(r)">Save</button>
                                     <button type="button" class="btn btn-sm btn-link" @onclick="() => _edits.Remove(r.Id)">Undo</button>
                                 }
+                                else if (_converting == r.Id)
+                                {
+                                    <select class="form-select form-select-sm d-inline-block w-auto" aria-label="Class of @r.Code as a reason" @bind="_convertClass">
+                                        @foreach (var c in Classes)
+                                        {
+                                            <option value="@c">@ClassLabel(c)</option>
+                                        }
+                                    </select>
+                                    <button type="button" class="btn btn-sm btn-primary" disabled="@_saving" @onclick="() => ConvertAsync(r, toGroup: false)">Make reason</button>
+                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _converting = null">Cancel</button>
+                                }
+                                else if (isGroup)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_saving" title="Only an empty group can become a reason"
+                                            @onclick="() => MakeReasonAsync(r)">Make reason</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_saving" title="Only a reason that has never been used can become a group"
+                                            @onclick="() => ConvertAsync(r, toGroup: true)">Make group</button>
+                                }
                             </td>
                         </tr>
                     }
@@ -278,6 +299,33 @@ else
             _newRequiresComment = _newIsGroup = false;
         });
     }
+
+    private Guid? _converting;
+    private string _convertClass = "downtime";
+
+    // A utilization reason needs its class, so that is asked first.
+    private Task MakeReasonAsync(ReasonCodeAdminDto reason)
+    {
+        if (_kind != Utilization)
+        {
+            return ConvertAsync(reason, toGroup: false);
+        }
+
+        (_converting, _convertClass) = (reason.Id, "downtime");
+        return Task.CompletedTask;
+    }
+
+    // A reason that has never been used becomes a group; an empty group a reason (#86). The API says why when it can't.
+    private Task ConvertAsync(ReasonCodeAdminDto reason, bool toGroup) => RunAsync(async () =>
+    {
+        await Api.ConvertReasonCodeAsync(reason.Id, new ConvertReasonCodeRequest
+        {
+            Version = reason.Version,
+            IsGroup = toGroup,
+            UtilizationClass = !toGroup && _kind == Utilization ? _convertClass : null,
+        });
+        _converting = null;
+    });
 
     // A move and the other changes are separate calls: the move first, then the rest with the version it returns.
     private async Task SaveAsync(ReasonCodeAdminDto reason)

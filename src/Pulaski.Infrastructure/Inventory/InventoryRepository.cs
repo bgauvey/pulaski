@@ -275,7 +275,7 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     private const string UpdateReasonCode = """
         UPDATE core.reason_code SET name = @Name, requires_comment = @RequiresComment, sort_order = @SortOrder, is_active = @IsActive,
-            utilization_class = @UtilizationClass, parent_id = @ParentId
+            utilization_class = @UtilizationClass, parent_id = @ParentId, is_selectable = NOT @IsGroup
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -500,6 +500,9 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     public Task<long> UpdateReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(UpdateReasonCode, reason, cancellationToken);
+
+    public async Task<IReadOnlyList<string>> ReasonCodeUsesAsync(Guid id, CancellationToken cancellationToken) =>
+        [.. await session.QueryAsync<string>("SELECT table_name FROM core.reason_code_uses(@Id)", new { Id = id }, cancellationToken)];
 
     public Task LockLocationAsync(Guid id, CancellationToken cancellationToken) =>
         session.ExecuteAsync(LockLocation, new { Id = id }, cancellationToken);

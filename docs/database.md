@@ -1187,7 +1187,11 @@ Derived edges can be recalculated when windows or residence times change; the ol
 
 ### core.reason_tree() — every reason's place in its tree (D-062) · *In use*
 
-Returns `id`, `depth` (0 at the top), `group_path` (the names of the groups above it, top first, joined by ` › `; null at the top) and `sort_key` (a `text[]` that sorts a kind's reasons in tree order, each level by `sort_order`, then name and code). A recursive query with a cycle guard, read by the Reasons screen and the reason pickers (`JOIN core.reason_tree() t ON t.id = r.id`).
+Returns `id`, `depth` (0 at the top), `group_path` (the names of the groups above it, top first, joined by ` › `; null at the top), `sort_key` (a `text[]` that sorts a kind's reasons in tree order, each level by `sort_order`, then name and code) and `group_ids` (the ids of the groups above it, top first; empty at the top; #86). A recursive query with a cycle guard, read by the Reasons screen, the reason pickers, the stops list, the journal and the OEE report (`JOIN core.reason_tree() t ON t.id = r.id`).
+
+### core.reason_code_uses(id) — where a reason is referred to (#86) · *In use*
+
+Returns `table_name`, `column_name` for each table and column whose foreign key to `core.reason_code` holds the reason, apart from `reason_code.parent_id` (reasons filed under it) and the copies of a partitioned table's key on each partition. Found from `pg_constraint`, so a new table that refers to reasons is covered. `plpgsql STABLE SECURITY DEFINER` with a fixed `search_path`: the app role can't read every such table, and the function tells only whether the reason is used. `ConvertReasonCodeCommand` refuses to make a used reason a group.
 
 ### core.trace_forward(lot), core.trace_backward(lot) — genealogy trace · *In use*
 

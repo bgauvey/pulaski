@@ -249,6 +249,9 @@ public interface IInventoryRepository
     /// <returns>The new row version.</returns>
     Task<long> InsertReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken);
 
+    /// <summary>Where the reason is referred to (#86), as table names, from <c>core.reason_code_uses</c>; empty when nowhere.</summary>
+    Task<IReadOnlyList<string>> ReasonCodeUsesAsync(Guid id, CancellationToken cancellationToken);
+
     /// <summary>Writes the name, comment flag, order, active flag, class and group (parent); the code, kind and group flag never change.</summary>
     /// <returns>The new row version.</returns>
     Task<long> UpdateReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken);

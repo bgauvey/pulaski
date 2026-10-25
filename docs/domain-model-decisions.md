@@ -1352,7 +1352,12 @@ Issue #40. `core.reason_code.parent_id` and `is_selectable` existed but nothing 
 
 **Reading.** `core.reason_tree()` (a `LANGUAGE sql STABLE` function, recursive with a cycle guard) gives depth, the group path ("Mechanical › Jam") and a tree-order sort key. The Reasons screen lists each kind in tree order with indentation and an **Under** choice. Pickers (`ReasonCodeDto.GroupPath`, `Display.ReasonLabel`) show the path and keep tree order.
 
-**Not done.** Report roll-up by group, and converting a reason to a group or back.
+**Roll-up and conversion (#86).** Reports total by group on read, never stored, so a moved reason takes its history to its new group:
+
+- `core.reason_tree()` also returns `group_ids` (the groups above, top first). The OEE report's utilization rows carry `ReasonGroups`; `ReasonRollup` (web) adds rows up to the group at the chosen level (a reason filed less deep stays itself) for *Where the time went* and the stop Pareto, which therefore still can't disagree with the report. Stops and the journal show the group path beside the reason.
+- `ConvertReasonCodeCommand` (`PUT /api/reason-codes/{id}/group`, `reasons.manage`, event `pulaski.reason_code.converted.v1`), under the kind lock: a reason becomes a group only if nothing refers to it (`core.reason_code_uses(id)`, which finds the referring tables from the foreign keys, so a new table is covered; it runs with its owner's rights and returns only table names); a group becomes a reason only when empty, a utilization one with a class. A group never needs a comment and has no class.
+
+This replaces "fixed at creation" above: being a group may change while history stays meaningful.
 
 ## Reversing declarations (D-063, proposed)
 

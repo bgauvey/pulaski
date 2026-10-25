@@ -166,6 +166,7 @@
                     <input class="form-check-input" type="checkbox" id="pareto-micro" checked="@_paretoMicro" @onchange="@(e => _paretoMicro = e.Value is true)" />
                     <label class="form-check-label small" for="pareto-micro">Micro-stops</label>
                 </div>
+                @RollupChoice(report, "pareto-rollup")
                 <select class="form-select form-select-sm w-auto" aria-label="Rank by" value="@(_paretoByStops ? "stops" : "hours")" @onchange="@(e => _paretoByStops = e.Value?.ToString() == "stops")">
                     <option value="hours">Rank by time</option>
                     <option value="stops">Rank by number of stops</option>
@@ -209,6 +210,7 @@
         <div class="inv-section-head">
             <h2 id="oee-uses">Where the time went</h2>
             <div class="d-flex gap-2">
+                @RollupChoice(report, "uses-rollup")
                 <select class="form-select form-select-sm w-auto" aria-label="Equipment for where the time went" value="@(UsesOf?.ToString() ?? "")"
                         @onchange="@(e => _usesOf = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
                     @foreach (var e in report.Equipment)
@@ -285,6 +287,7 @@ else if (_error is null)
     private bool _paretoPlanned;
     private bool _paretoMicro;
     private bool _paretoByStops;
+    private int _rollup;
     private OeeReportDto? _report;
     private ApiException? _error;
     private bool _busy;
@@ -293,9 +296,21 @@ else if (_error is null)
 
     private Guid? UsesOf => _usesOf is { } id && _report?.Equipment.Any(e => e.EquipmentId == id) == true ? id : _report?.Equipment.FirstOrDefault()?.EquipmentId;
 
-    private IReadOnlyList<UtilizationRowDto> UseRows => _report?.Utilization.Where(u => u.EquipmentId == UsesOf).ToList() ?? [];
+    // Reasons rolled up to the chosen group level (#86), for where the time went and the Pareto alike.
+    private int Rollup => _report is null ? 0 : Math.Min(_rollup, ReasonRollup.Levels(_report));
 
-    private IReadOnlyList<ParetoRow> ParetoRows => _report is null ? [] : StopPareto.Rows(_report, _paretoPlanned, _paretoMicro, _paretoByStops);
+    private IReadOnlyList<UtilizationRowDto> UseRows => _report is null ? [] : ReasonRollup.Apply(_report.Utilization.Where(u => u.EquipmentId == UsesOf), Rollup);
+
+    private IReadOnlyList<ParetoRow> ParetoRows => _report is null ? [] : StopPareto.Rows(_report, _paretoPlanned, _paretoMicro, _paretoByStops, Rollup);
+
+    private RenderFragment RollupChoice(OeeReportDto report, string id) => ReasonRollup.Levels(report) == 0
+        ? @<text></text>
+        : @<select id="@id" class="form-select form-select-sm w-auto" aria-label="Roll reasons up to" value="@Rollup" @onchange="@(e => _rollup = int.TryParse(e.Value?.ToString(), out var l) ? l : 0)">
+              @foreach (var (level, label) in ReasonRollup.Choices(report))
+              {
+                  <option value="@level">@label</option>
+              }
+          </select>;
 
     protected override async Task OnInitializedAsync()
     {
@@ -402,8 +417,9 @@ else if (_error is null)
         ParetoRows.Select(r => (IReadOnlyList<object?>)
             [r.ReasonCode, r.ReasonCode is null ? r.Label : r.ReasonName, MachineView.UseLabel(r.Use), r.Hours, r.Stops, r.SharePct, r.CumulativePct, string.Join(" ", r.EquipmentCodes)]))).AsTask();
 
-    private Task ExportUsesAsync() => Downloads.CsvAsync(File("utilization"), Csv.Write(
-        ["Equipment", "Use", "Reason code", "Reason", "Hours", "Share %", "Stops"],
-        _report!.Utilization.Select(u => (IReadOnlyList<object?>)[u.EquipmentCode, MachineView.UseLabel(u.Use),
-            u.ReasonCode ?? (u.Use == "down" ? (u.NoSignal ? "No signal" : "Uncoded") : null), u.ReasonName, u.Hours, u.SharePct, u.Stops]))).AsTask();
+    private Task ExportUsesAsync() => Downloads.CsvAsync(File(Rollup == 0 ? "utilization" : $"utilization-groups-{Rollup}"), Csv.Write(
+        ["Equipment", "Use", "Reason code", "Reason", "Groups", "Hours", "Share %", "Stops"],
+        ReasonRollup.Apply(_report!.Utilization, Rollup).Select(u => (IReadOnlyList<object?>)[u.EquipmentCode, MachineView.UseLabel(u.Use),
+            u.ReasonCode ?? (u.Use == "down" ? (u.NoSignal ? "No signal" : "Uncoded") : null), u.ReasonName,
+            string.Join(" › ", u.ReasonGroups.Select(g => g.Name)), u.Hours, u.SharePct, u.Stops]))).AsTask();
 }

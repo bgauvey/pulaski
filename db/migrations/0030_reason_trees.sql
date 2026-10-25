@@ -17,17 +17,25 @@ CREATE INDEX IF NOT EXISTS reason_code_parent_ix ON core.reason_code (parent_id)
 
 -- Every reason with its place in its tree (D-062): how deep, the names of the groups above it (top first, joined by ' › ') and
 -- a key that sorts a kind's reasons in tree order (each level by sort order, then name). Small tables; worked out on read.
-CREATE OR REPLACE FUNCTION core.reason_tree()
-RETURNS TABLE (id uuid, depth integer, group_path text, sort_key text[])
-LANGUAGE sql STABLE AS $$
-    WITH RECURSIVE t (id, name, depth, group_path, sort_key) AS (
-        SELECT r.id, r.name, 0, NULL::text, ARRAY[lpad(r.sort_order::text, 5, '0') || lower(r.name) || ' ' || r.code]
-        FROM core.reason_code r
-        WHERE r.parent_id IS NULL
-        UNION ALL
-        SELECT c.id, c.name, t.depth + 1, coalesce(t.group_path || ' › ', '') || t.name,
-               t.sort_key || (lpad(c.sort_order::text, 5, '0') || lower(c.name) || ' ' || c.code)
-        FROM t JOIN core.reason_code c ON c.parent_id = t.id
-    ) CYCLE id SET is_cycle USING visited
-    SELECT id, depth, group_path, sort_key FROM t WHERE NOT is_cycle
-$$;
+-- 0040 gives it another column; re-run after that, the newer one stays.
+DO $$
+BEGIN
+    IF to_regprocedure('core.reason_tree()') IS NULL THEN
+        EXECUTE $def$
+        CREATE FUNCTION core.reason_tree()
+        RETURNS TABLE (id uuid, depth integer, group_path text, sort_key text[])
+        LANGUAGE sql STABLE AS $f$
+            WITH RECURSIVE t (id, name, depth, group_path, sort_key) AS (
+                SELECT r.id, r.name, 0, NULL::text, ARRAY[lpad(r.sort_order::text, 5, '0') || lower(r.name) || ' ' || r.code]
+                FROM core.reason_code r
+                WHERE r.parent_id IS NULL
+                UNION ALL
+                SELECT c.id, c.name, t.depth + 1, coalesce(t.group_path || ' › ', '') || t.name,
+                       t.sort_key || (lpad(c.sort_order::text, 5, '0') || lower(c.name) || ' ' || c.code)
+                FROM t JOIN core.reason_code c ON c.parent_id = t.id
+            ) CYCLE id SET is_cycle USING visited
+            SELECT id, depth, group_path, sort_key FROM t WHERE NOT is_cycle
+        $f$;
+        $def$;
+    END IF;
+END $$;

@@ -205,6 +205,7 @@ public static class EventTypes
     public const string ReasonCodeCreated = "pulaski.reason_code.created.v1";
     public const string ReasonCodeUpdated = "pulaski.reason_code.updated.v1";
     public const string ReasonCodeMoved = "pulaski.reason_code.moved.v1";
+    public const string ReasonCodeConverted = "pulaski.reason_code.converted.v1";
     public const string MaterialShelfLifeSet = "pulaski.material.shelf_life_set.v1";
     public const string MaterialCreated = "pulaski.material.created.v1";
     public const string MaterialUpdated = "pulaski.material.updated.v1";

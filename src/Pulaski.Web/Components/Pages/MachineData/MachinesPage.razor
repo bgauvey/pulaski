@@ -240,6 +240,10 @@ else
                                 else if (s.OperatorReasonCode is not null)
                                 {
                                     <span>@MachineView.ReasonText(s)</span>
+                                    @if (s.ReasonGroupPath is { } path)
+                                    {
+                                        <div class="small text-muted">@path</div>
+                                    }
                                     @if (s.OperatorReasonId != s.MappedReasonId && s.MappedReasonCode is not null)
                                     {
                                         <div class="small text-muted">The code said @s.MappedReasonCode</div>
@@ -249,6 +253,10 @@ else
                                 else if (s.MappedReasonCode is not null)
                                 {
                                     <span>@MachineView.ReasonText(s)</span> <span class="chip ms-1" title="From the stop code; confirm it or give another">to confirm</span>
+                                    @if (s.ReasonGroupPath is { } path)
+                                    {
+                                        <div class="small text-muted">@path</div>
+                                    }
                                 }
                                 else
                                 {

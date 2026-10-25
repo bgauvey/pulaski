@@ -1,4 +1,5 @@
 using Pulaski.Application.Labor;
+using Pulaski.Contracts.MachineData;
 using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Application.MachineData;
@@ -18,7 +19,8 @@ public sealed record OeeRunRecord(
 /// <summary>Production reported into a run at one moment (D-035): processed is good and scrap together.</summary>
 public sealed record OeeCountRecord(Guid RunId, DateTimeOffset OccurredAt, Guid? UomId, decimal Processed, decimal Defective);
 
-public sealed record OeeReasonRecord(Guid Id, string Code, string Name, string? UtilizationClass);
+/// <summary>A reason the report names, with the groups it is filed under, top first (#86).</summary>
+public sealed record OeeReasonRecord(Guid Id, string Code, string Name, string? UtilizationClass, IReadOnlyList<ReasonGroupDto>? Groups = null);
 
 /// <summary>Read side for the utilization and OEE report (D-052): the machine history of a period, untouched.</summary>
 public interface IOeeReadStore
