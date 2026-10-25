@@ -239,6 +239,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   canonical field → property path). `ODataMaterialRows.Read` (pure) → `MaterialImportRow`s via `MaterialImportFields.ToRow`, then the unchanged
   `ImportMaterialsCommand`. `ODataMaterialFetcher` (API; `$select`, `@odata.nextLink`, ≤ 5000 items; credentials from `MaterialConnections:<code>`,
   never the DB). Set up with `integrations.manage`, run (dry run first) with `materials.manage`; on demand only.
+- Stop adjustments (D-069, proposed): enter (`EnterStopCommand`), split, merge stops; never edit: the old rows get `superseded_at`/`_by`, new
+  `ts.downtime` rows carry `source` (machine/manual/split/merge), `replaces_ids`, `adjusted_*`. Every reader of stops (OEE, list, uncoded)
+  filters `superseded_at IS NULL`; current stops never overlap (`StopAdjustments`). Closed stops only, ≤ 31 days; lock equipment
+  (`FOR NO KEY UPDATE`, as ingest) then stops in id order. Permission `downtime.adjust` (Supervisor).
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

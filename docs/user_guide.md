@@ -1540,7 +1540,7 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | --- | --- |
 | **Administrator** | Everything, at every site, including users and roles. |
 | **Planner** | The schedule (place, sequence, pin, assign and cancel jobs, and replace one with a partial batch); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; materials; allocating lots to jobs. |
-| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches. |
+| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops, and enter, split and merge them; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches. |
 | **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off. |
 | **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements. |
 | **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; lot attribute definitions; the site's settings. |
@@ -1985,6 +1985,31 @@ The board refreshes every 5 seconds.
 3. Click **Code** on a stop. Choose the **Reason**, add a **Comment** if you like (some reasons need one), and click **Save**. Where the stop code mapped a reason, **Confirm …** accepts it in one click; until then the list shows it as *to confirm*.
 4. **Change** on a coded stop gives it another reason. The list shows who coded it, their comment, and the reason the code gave when the two differ.
 
+### Put stops right: enter, split and merge
+
+When the machine's record is wrong or missing, a supervisor can correct it. Nothing is deleted: a stop that is split or merged is kept as **replaced**, and the new stops take its place in the list and in utilization and OEE. Every change needs a reason in words.
+
+**Enter a stop the machine didn't report** (a power cut with no signal, a line with no tags yet):
+
+1. On the **Stops** tab, click **Enter a stop**.
+2. Choose the **Machine**, when it **Started** and **Ended** (site time), and the **Reason**.
+3. Say **Why** it is entered, and click **Save**.
+
+It may not overlap another stop of that machine, must have ended already, and can be at most 31 days back.
+
+**Split a stop in two** (a jam, then waiting for cartons):
+
+1. Untick **Only stops to code** if the stop has a reason already.
+2. Click **Split** on the stop. It offers the middle of the stop; change **Split at** to when the second part began.
+3. Say why, and click **Split**. Both parts keep the stop's reason; **Code** or **Change** each one afterwards.
+
+**Merge stops into one** (one jam where the machine flickered back to running for a few seconds):
+
+1. Tick the stops to merge, at least two, all of one machine and next to each other: no other stop of that machine between them. Tick **Show micro-stops** to merge those too.
+2. Say why in the bar above the list, and click **Merge into one stop**. The merged stop runs from the first one's start to the last one's end and keeps the first one's reason.
+
+Only stops that have ended can be split or merged. **Show replaced stops** lists the stops that were split or merged too, with who replaced them and when.
+
 ### Utilization and OEE reports
 
 1. Open the **Utilization and OEE** tab.
@@ -1999,12 +2024,13 @@ A dash means there is nothing to measure that figure against, such as performanc
 
 ### In detail
 
-- **Who:** seeing Machines needs permission to see machines; coding stops needs permission to code machine stops (Operators and Supervisors have both).
+- **Who:** seeing Machines needs permission to see machines; coding stops needs permission to code machine stops (Operators and Supervisors have both); entering, splitting and merging stops needs permission to adjust them (Supervisors).
 - **Which reasons are offered:** with reasons ticked on the machine's profile (**Reasons offered**), those and the ones its codes and states map to; with none ticked, or no profile, every utilization reason of the site.
 - **Stop code:** the first one the machine reports during the stop is the stop's, even if the machine reports another later. A machine's own override (on the profile's **Machines** tab) beats the profile.
 - **Unit mode:** a stop keeps the unit mode it began in; one in Maintenance or Manual is shown with that mode.
 - **Counts on the board** are the machine's processed less defective counts in the run open on it.
 - **Each coding is recorded** as an event, with the reason before and after and whether it confirmed the mapped one.
+- **Adjusted stops** (D-069) say where they came from: **Entered by hand**, **Split** or **Merged**, with who did it and why. A replaced stop can't be coded; code the stops that replaced it. A stop entered by hand has no PackML state (it shows *Undefined*), takes the run on the machine at its start, and is coded with the reason given. None of them is a micro-stop, however short: someone said it was a stop. Time between merged stops counts as stop time, even where the machine ran. Each adjustment is recorded as an event with the stops before and after. Splits and merges can be repeated on the stops they made, within 31 days of the stop's start.
 - **Scheduled time** is what the equipment's [shift schedule](#15-shift-schedules) gives it: its shifts, counted towards the day they start on; equipment without shifts (around the clock) is scheduled the whole site-local day. Time outside its shifts isn't counted, and neither is time still to come.
 - **How each moment counts:** in a unit mode that isn't production time (Maintenance, Manual) it is *non-production*; in a stop it counts by its reason's class: **planned** reasons (setup, changeover, cleaning) are planned stops, **runtime** reasons are run time, **downtime** reasons and uncoded stops are down. A micro-stop is run time. Otherwise executing is run time and anything else is down. Before a machine has sent anything, or while its signal is lost, it is down with *no signal*. Time in a job that counts as planned downtime (planned maintenance) is a planned stop.
 - **Planned time** is scheduled time less non-production modes and planned stops. **Availability** = run time ÷ planned time.
@@ -2094,7 +2120,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Labor:** people come from HR or the ERP only as a file you import: nothing fetches them on a timer, someone missing from a file isn't switched off (send them with `active` = no), and qualifications aren't imported. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
 - **Materials import** from CSV or B2MML files, from an OData v4 connection on demand, or one item at a time through the API. Nothing fetches items on a timer, other kinds of service (plain REST, SOAP, a database) have no connection yet, and there are no adapters for label printing. Capabilities import from CSV only, and only for now: a future or past period is set on the material page. B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
-- **Machine data:** stops can't be split, merged or entered by hand. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
+- **Machine data:** a stop's times can't be changed directly and a stop entered in error can't be removed (split it, or enter it again correctly, instead); adjustments can't be undone. Machine data that arrives late for time already covered by a stop entered by hand opens its own stop, which may then overlap it. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
 - **Batches:** a line's own batch size changes only the size; the tolerance stays the material's. The order form's batch hint shows the material's size, not each line's. A replacement is rounded up to whole batches, or planned for exactly what is left with a partial last batch; it can't be rounded down. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).

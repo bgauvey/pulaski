@@ -151,6 +151,7 @@ public sealed class InMemoryStores
         services.RemoveAll<IEdgeRepository>();
         services.RemoveAll<IStopReadStore>();
         services.RemoveAll<IStopRepository>();
+        services.RemoveAll<IStopAdjustmentRepository>();
         services.RemoveAll<IOeeReadStore>();
         services.RemoveAll<IQualificationRepository>();
         services.RemoveAll<ITerminalRepository>();
@@ -211,6 +212,7 @@ public sealed class InMemoryStores
         services.AddSingleton<IEdgeRepository>(Edge);
         services.AddSingleton<IStopReadStore>(Stops);
         services.AddSingleton<IStopRepository>(Stops);
+        services.AddSingleton<IStopAdjustmentRepository>(Stops);
         services.AddSingleton<IOeeReadStore>(Oee);
         services.AddSingleton<IQualificationRepository>(Labor);
         services.AddSingleton<IQualificationReadStore>(Labor);

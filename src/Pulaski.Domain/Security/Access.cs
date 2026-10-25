@@ -55,6 +55,7 @@ public static class Permissions
     public const string LaborRecord = "labor.record";
     public const string LaborApprove = "labor.approve";
     public const string DowntimeCode = "downtime.code";
+    public const string DowntimeAdjust = "downtime.adjust";
     public const string People = "people.manage";
     public const string Terminals = "terminals.manage";
     public const string LotAttributes = "lot_attributes.manage";
@@ -96,6 +97,7 @@ public static class Permissions
         new(LaborRecord, "Labor", "Record labor for others and check crews onto lines"),
         new(LaborApprove, "Labor", "Approve a shift's labor and correct approved labor"),
         new(DowntimeCode, "Floor", "Code machine stops: confirm or change their reason"),
+        new(DowntimeAdjust, "Floor", "Enter machine stops by hand, and split or merge stops"),
         new(LotReceive, "Inventory", "Receive lots"),
         new(LotMove, "Inventory", "Move lots between locations"),
         new(LotShip, "Inventory", "Ship lots"),
@@ -169,6 +171,7 @@ public static class Permissions
         [LaborApprove] = [LaborView],
         [People] = [LaborView],
         [DowntimeCode] = [MachinesView],
+        [DowntimeAdjust] = [MachinesView],
         // Terminals are placed on lines; their screen lists the site's equipment.
         [Terminals] = [EquipmentView],
         [Integrations] = [IntegrationsView],
@@ -214,8 +217,9 @@ public static class Roles
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView, Permissions.SiteSettingsView,
              Permissions.JobExecute, Permissions.JobReopen, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove,
              Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide, Permissions.ProductionCorrect,
-             Permissions.LotAllocate, Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode],
-            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes machine stops. Doesn't correct inventory."),
+             Permissions.LotAllocate, Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode,
+             Permissions.DowntimeAdjust],
+            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops. Doesn't correct inventory."),
         new(Operator, "Operator", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
              Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove, Permissions.LaborRecordOwn,

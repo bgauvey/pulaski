@@ -83,6 +83,19 @@ public sealed record DowntimeDto
     public DateTimeOffset? CodedAt { get; init; }
     public string? Comment { get; init; }
     public string? JobNumber { get; init; }
+
+    /// <summary>Where it came from (D-069): <c>machine</c>, <c>manual</c>, <c>split</c> or <c>merge</c>.</summary>
+    public string Source { get; init; } = "machine";
+
+    /// <summary>A split or merge: the stops it replaced.</summary>
+    public IReadOnlyList<Guid> ReplacesIds { get; init; } = [];
+    public string? AdjustedBy { get; init; }
+    public DateTimeOffset? AdjustedAt { get; init; }
+    public string? AdjustmentComment { get; init; }
+
+    /// <summary>When it was replaced by a split or merge; such a stop is history, not counted.</summary>
+    public DateTimeOffset? SupersededAt { get; init; }
+    public string? SupersededBy { get; init; }
 }
 
 /// <summary>Codes a stop: the operator's reason, kept beside the one its stop code maps to (D-005).</summary>
@@ -96,3 +109,41 @@ public sealed record CodeDowntimeRequest
 
 /// <summary>The stop coded.</summary>
 public sealed record DowntimeCodedResponse(Guid Id);
+
+/// <summary>A stop entered by hand (D-069), for time the machine didn't report: closed, with its reason and why it was entered.</summary>
+public sealed record EnterStopRequest
+{
+    public Guid EquipmentId { get; init; }
+    public DateTimeOffset StartedAt { get; init; }
+    public DateTimeOffset EndedAt { get; init; }
+    public Guid ReasonCodeId { get; init; }
+
+    /// <summary>Why it was entered; required.</summary>
+    public string? Comment { get; init; }
+}
+
+/// <summary>Splits a closed stop in two at a time inside it (D-069). Both parts keep its reasons, to be coded on their own.</summary>
+public sealed record SplitStopRequest
+{
+    /// <summary>The stop's start, which locates it in history.</summary>
+    public DateTimeOffset StartedAt { get; init; }
+    public DateTimeOffset At { get; init; }
+
+    /// <summary>Why; required.</summary>
+    public string? Comment { get; init; }
+}
+
+/// <summary>A stop, by its id and start, which locates it in history.</summary>
+public sealed record StopKeyDto(Guid Id, DateTimeOffset StartedAt);
+
+/// <summary>Merges consecutive closed stops of one machine into one (D-069), with the first one's reasons.</summary>
+public sealed record MergeStopsRequest
+{
+    public IReadOnlyList<StopKeyDto> Stops { get; init; } = [];
+
+    /// <summary>Why; required.</summary>
+    public string? Comment { get; init; }
+}
+
+/// <summary>The stops an adjustment made, in time order.</summary>
+public sealed record StopsAdjustedResponse(IReadOnlyList<StopKeyDto> Stops);

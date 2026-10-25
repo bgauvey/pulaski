@@ -962,7 +962,7 @@ A stop's reason comes from its first-out code through the profile; with no code,
 
 **Machines screen** (`machines.view`, Operate → Machines): a status board refreshed every 5 seconds, each piece of equipment that tracks state in its OEE category (the site's `core.oee_state_category`, else D-005's defaults); a line set to series or parallel takes the worst or best category of the equipment tracking state below it, a constraint-machine line its machine's state. And the stops to code. Starting roles: Operator and Supervisor see and code; Planner, Quality, Manager and Auditor see.
 
-**Not yet:** OPC UA and CIP connectors; alarm and warning history; process values; rules that synthesise a state from discrete signals; OEE rollups (the reports are D-052); splitting, merging or entering stops by hand; machine counts as production reports; running the edge as a Windows service or systemd unit (it runs as a console worker or container).
+**Not yet:** OPC UA and CIP connectors; alarm and warning history; process values; rules that synthesise a state from discrete signals; OEE rollups (the reports are D-052); machine counts as production reports; running the edge as a Windows service or systemd unit (it runs as a console worker or container).
 
 ## Utilization and OEE reports (D-052, proposed)
 
@@ -1486,6 +1486,26 @@ Issue #18. Materials came from files (CSV, B2MML) or one at a time through the A
 **Permissions.** Setting up (`POST`/`PUT /api/material-connections`) needs `integrations.manage`, because it decides where the API connects. Running needs `materials.manage`. Seeing the list needs `integrations.view` or `materials.view`. The panel is on Configure → Integrations and in the Materials import area. Events: `pulaski.material_connection.added.v1`, `…changed.v1`.
 
 **Not done.** Schedules, other protocols (plain REST, SOAP, database), OAuth client-credential flows, and connections for other master data (people, capabilities).
+
+## Stop adjustments (D-069, proposed)
+
+Issue #23. Stops came only from machine data (D-050), so an outage the machine didn't report, a stop that was really two, or one that flickered back to running for seconds couldn't be put right.
+
+**Supersede, never edit.** A stop adjusted is never changed or deleted. It is marked `superseded_at`/`superseded_by`, and new `ts.downtime` rows replace it. Each row says where it came from (`source`: `machine`, `manual`, `split`, `merge`), which stops it replaced (`replaces_ids`), and who adjusted it, when and why (`adjusted_by`, `adjusted_by_user_id`, `adjusted_at`, `adjustment_comment`; CHECKs tie them to the source). The machine's own stop stays as it was recorded, so every adjustment traces back to it. Every adjustment is also an event (`pulaski.downtime.entered.v1`, `…split.v1`, `…merged.v1`), with the stops before and after and the comment.
+
+**Current stops.** Utilization and OEE (D-052), the uncoded count and queue, and the stop list read only stops not superseded; the list shows replaced ones on request (`includeSuperseded`). A superseded stop can't be coded. A machine's current stops never overlap: every adjustment is checked against them (`StopAdjustments`, half-open intervals, an open stop lasting for ever).
+
+**The adjustments.**
+- **Enter** (`EnterStopCommand`): a closed stop on equipment that tracks state, ended by now, started within 31 days, overlapping none of its current stops, with a reason offered for it (`StopSql.CodingReasons`) and a comment. It records PackML Undefined (no state was reported), the production unit mode, the run on the equipment then, and the reason as its operator coding.
+- **Split** (`SplitStopCommand`): a closed, current stop at a time strictly inside it, into two parts that keep all it held (stop code, mapped and operator reasons, coding, run), to be coded on their own.
+- **Merge** (`MergeStopsCommand`): two or more closed, current stops of one machine with no other current stop between them, into one from the first's start to the last's end, with the first's reasons. The time between them becomes stop time, even where the machine ran.
+- Adjusted stops are never micro-stops: someone said they are stops. Open stops belong to machine data until they close, so they aren't split or merged.
+
+**Locking.** The equipment is locked first (`FOR NO KEY UPDATE`, as ingest locks it), then its stops in id order, so an adjustment and ingest never interleave on one machine.
+
+**Permission.** The new `downtime.adjust` (implies `machines.view`; Supervisor by default). Coding stays `downtime.code`. Endpoints `POST /api/machines/stops`, `/stops/{id}/split`, `/stops/merge`; Operate → Machines → Stops has **Enter a stop**, **Split** on a row, and ticks to merge.
+
+**Not done.** Changing a stop's times or voiding one entered in error (a split or a new entry does it for now); undoing an adjustment; adjusting a machine's state history (only stops); machine data that arrives late for time already covered by a stop entered by hand still opens its own stop, which may then overlap.
 
 ## Application architecture
 

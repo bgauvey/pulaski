@@ -56,13 +56,14 @@ internal sealed class OeeQueries(NpgsqlDataSource dataSource) : IOeeReadStore
         ) b
         """;
 
-    // A stop that started more than 35 days before the period is left out: the machine still shows as down, just uncoded.
+    // A stop that started more than 35 days before the period is left out: the machine still shows as down, just uncoded. Stops replaced by a
+    // split or merge (D-069) are history; the stops replacing them count instead.
     private const string Stops = """
         SELECT d.equipment_id, d.started_at, d.ended_at, d.effective_reason_code_id AS reason_code_id, r.utilization_class, d.is_micro_stop
         FROM ts.downtime d
         LEFT JOIN core.reason_code r ON r.id = d.effective_reason_code_id
         WHERE d.equipment_id = ANY(@Ids) AND d.started_at < @To AND d.started_at >= @From - interval '35 days'
-          AND (d.ended_at IS NULL OR d.ended_at > @From)
+          AND (d.ended_at IS NULL OR d.ended_at > @From) AND d.superseded_at IS NULL
         """;
 
     // A changeover or maintenance job may have no material, and so no ideal rate.

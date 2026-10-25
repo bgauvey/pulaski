@@ -284,10 +284,11 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<IReadOnlyList<MachineStatusDto>> GetMachineStatusAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<MachineStatusDto>>($"api/machines/status?siteId={siteId}", ct);
 
-    public Task<IReadOnlyList<DowntimeDto>> ListStopsAsync(Guid siteId, DateTimeOffset from, DateTimeOffset to, Guid? equipmentId, bool uncodedOnly, bool includeMicroStops, CancellationToken ct = default) =>
+    public Task<IReadOnlyList<DowntimeDto>> ListStopsAsync(Guid siteId, DateTimeOffset from, DateTimeOffset to, Guid? equipmentId, bool uncodedOnly, bool includeMicroStops,
+        bool includeSuperseded = false, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<DowntimeDto>>(Query("api/machines/stops", ("siteId", siteId), ("from", from.ToString("O", System.Globalization.CultureInfo.InvariantCulture)),
             ("to", to.ToString("O", System.Globalization.CultureInfo.InvariantCulture)), ("equipmentId", equipmentId),
-            ("uncodedOnly", uncodedOnly), ("includeMicroStops", includeMicroStops)), ct);
+            ("uncodedOnly", uncodedOnly), ("includeMicroStops", includeMicroStops), ("includeSuperseded", includeSuperseded)), ct);
 
     public Task<OeeReportDto> GetOeeReportAsync(Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId = null, CancellationToken ct = default) =>
         GetAsync<OeeReportDto>(Query("api/machines/oee", ("siteId", siteId),
@@ -297,6 +298,15 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<DowntimeCodedResponse> CodeStopAsync(Guid id, CodeDowntimeRequest request, CancellationToken ct = default) =>
         SendAsync<DowntimeCodedResponse>(HttpMethod.Post, $"api/machines/stops/{id}/code", request, ct);
+
+    public Task<StopsAdjustedResponse> EnterStopAsync(EnterStopRequest request, CancellationToken ct = default) =>
+        SendAsync<StopsAdjustedResponse>(HttpMethod.Post, "api/machines/stops", request, ct);
+
+    public Task<StopsAdjustedResponse> SplitStopAsync(Guid id, SplitStopRequest request, CancellationToken ct = default) =>
+        SendAsync<StopsAdjustedResponse>(HttpMethod.Post, $"api/machines/stops/{id}/split", request, ct);
+
+    public Task<StopsAdjustedResponse> MergeStopsAsync(MergeStopsRequest request, CancellationToken ct = default) =>
+        SendAsync<StopsAdjustedResponse>(HttpMethod.Post, "api/machines/stops/merge", request, ct);
 
     public Task<IReadOnlyList<ReasonCodeDto>> ListCodingReasonsAsync(Guid equipmentId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<ReasonCodeDto>>($"api/equipment/{equipmentId}/coding-reasons", ct);

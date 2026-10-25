@@ -15,7 +15,8 @@
         <h1 class="mb-1">Machines</h1>
         <p class="text-muted mb-0">
             What every machine is doing now, as its edge node reports it, and its stops. A stop is time a machine isn't executing; stops shorter
-            than the machine's micro-stop threshold aren't coded. Give each stop its reason, or confirm the one its stop code maps to.
+            than the machine's micro-stop threshold aren't coded. Give each stop its reason, or confirm the one its stop code maps to. Where the
+            machine's record is wrong or missing, a supervisor can enter a stop by hand, or split or merge stops.
         </p>
     </div>
     @if (Sites.Sites.Count > 1)
@@ -103,7 +104,78 @@ else
             <input class="form-check-input" type="checkbox" id="micro" checked="@_micro" @onchange="@(e => ToggleAsync(() => _micro = e.Value is true))" />
             <label class="form-check-label" for="micro">Show micro-stops</label>
         </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="replaced" checked="@_superseded" @onchange="@(e => ToggleAsync(() => _superseded = e.Value is true))" />
+            <label class="form-check-label" for="replaced">Show replaced stops</label>
+        </div>
+        @if (CanAdjustAny && _entry is null)
+        {
+            <button type="button" class="btn btn-outline-primary ms-auto" @onclick="StartEntry">Enter a stop</button>
+        }
     </div>
+
+    @if (_entry is { } entry)
+    {
+        <form class="table-panel p-3 mb-3" @onsubmit="SaveEntryAsync" @onsubmit:preventDefault>
+            <h2 class="h6">Enter a stop</h2>
+            <p class="small text-muted">For time the machine didn't report, such as an outage with no signal. It may not overlap the machine's other stops.</p>
+            <div class="d-flex flex-wrap gap-2 align-items-end">
+                <div>
+                    <label class="form-label" for="entry-machine">Machine</label>
+                    <select id="entry-machine" class="form-select" value="@(entry.EquipmentId?.ToString() ?? "")" @onchange="OnEntryEquipmentChangedAsync">
+                        <option value="">Machine…</option>
+                        @foreach (var m in _status ?? [])
+                        {
+                            <option value="@m.EquipmentId">@m.Code · @m.Name</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="entry-start">Started</label>
+                    <input id="entry-start" type="datetime-local" class="form-control" @bind="entry.Start" />
+                </div>
+                <div>
+                    <label class="form-label" for="entry-end">Ended</label>
+                    <input id="entry-end" type="datetime-local" class="form-control" @bind="entry.End" />
+                </div>
+                <div>
+                    <label class="form-label" for="entry-reason">Reason</label>
+                    <select id="entry-reason" class="form-select" value="@(entry.ReasonId?.ToString() ?? "")"
+                            @onchange="@(e => entry.ReasonId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
+                        <option value="">Reason…</option>
+                        @foreach (var r in _entryReasons)
+                        {
+                            <option value="@r.Id">@MachineProfileView.ReasonLabel(r)</option>
+                        }
+                    </select>
+                </div>
+                <div class="inv-grow">
+                    <label class="form-label" for="entry-comment">Why</label>
+                    <input id="entry-comment" class="form-control" maxlength="1000" placeholder="Why it is entered (needed)" @bind="entry.Comment" @bind:event="oninput" />
+                </div>
+                <button type="submit" class="btn btn-primary"
+                        disabled="@(_saving || entry.EquipmentId is null || entry.ReasonId is null || entry.Start is null || entry.End is null || string.IsNullOrWhiteSpace(entry.Comment))">Save</button>
+                <button type="button" class="btn btn-link" @onclick="@(() => _entry = null)">Cancel</button>
+            </div>
+        </form>
+    }
+
+    @if (_chosen.Count > 0)
+    {
+        <form class="table-panel p-3 mb-3 d-flex flex-wrap gap-2 align-items-center" @onsubmit="MergeAsync" @onsubmit:preventDefault>
+            <span class="fw-semibold">@_chosen.Count @(_chosen.Count == 1 ? "stop" : "stops") chosen</span>
+            @if (MachineView.MergeProblem(_chosen.Values) is { } problem)
+            {
+                <span class="small text-muted">@problem</span>
+            }
+            else
+            {
+                <input class="form-control inv-grow" maxlength="1000" aria-label="Why merge" placeholder="Why merge them (needed)" @bind="_adjustComment" @bind:event="oninput" />
+                <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_adjustComment))">Merge into one stop</button>
+            }
+            <button type="button" class="btn btn-link" @onclick="@(() => _chosen.Clear())">Clear</button>
+        </form>
+    }
 
     @if (_stops is null)
     {
@@ -118,12 +190,21 @@ else
         <div class="table-panel">
             <table class="table align-middle">
                 <thead>
-                    <tr><th>Started</th><th class="inv-num">Duration</th><th>Equipment</th><th>Stopped in</th><th>Stop code</th><th>Reason</th><th>Job</th><th></th></tr>
+                    <tr>@if (CanAdjustAny) { <th><span class="visually-hidden">Choose to merge</span></th> }<th>Started</th><th class="inv-num">Duration</th><th>Equipment</th><th>Stopped in</th><th>Stop code</th><th>Reason</th><th>Job</th><th></th></tr>
                 </thead>
                 <tbody>
                     @foreach (var s in _stops)
                     {
-                        <tr @key="s.Id" class="@(s.IsMicroStop ? "text-muted" : "")">
+                        <tr @key="s.Id" class="@(s.IsMicroStop || s.SupersededAt is not null ? "text-muted" : "")">
+                            @if (CanAdjustAny)
+                            {
+                                <td>
+                                    @if (MachineView.CanAdjust(s))
+                                    {
+                                        <input class="form-check-input" type="checkbox" aria-label="Choose to merge" checked="@_chosen.ContainsKey(s.Id)" @onchange="@(e => Choose(s, e.Value is true))" />
+                                    }
+                                </td>
+                            }
                             <td>@Display.SiteTime(s.StartedAt, Sites.Site?.TimeZone)</td>
                             <td class="inv-num">
                                 @MachineView.Duration(TimeSpan.FromSeconds(s.DurationSeconds))
@@ -157,6 +238,14 @@ else
                                 {
                                     <span class="chip chip-warning">Uncoded</span>
                                 }
+                                @if (s.SupersededAt is not null)
+                                {
+                                    <div class="small"><span class="chip">replaced</span> by @s.SupersededBy, @Display.SiteTime(s.SupersededAt, Sites.Site?.TimeZone)</div>
+                                }
+                                @if (MachineView.SourceLabel(s.Source) is { } source)
+                                {
+                                    <div class="small text-muted"><span class="chip">@source</span> @s.AdjustedBy · @s.AdjustmentComment</div>
+                                }
                             </td>
                             <td>@s.JobNumber</td>
                             <td class="text-end">
@@ -164,12 +253,31 @@ else
                                 {
                                     <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => StartCodingAsync(s)">@(s.OperatorReasonCode is null ? "Code" : "Change")</button>
                                 }
+                                @if (CanAdjustAny && MachineView.CanAdjust(s) && _splitting?.Id != s.Id)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-1" @onclick="() => StartSplit(s)">Split</button>
+                                }
                             </td>
                         </tr>
+                        @if (_splitting?.Id == s.Id)
+                        {
+                            <tr @key="(s.Id, 2)">
+                                <td colspan="@Columns">
+                                    <form class="d-flex flex-wrap gap-2 align-items-center" @onsubmit="SplitAsync" @onsubmit:preventDefault>
+                                        <label class="small" for="split-at">Split at</label>
+                                        <input id="split-at" type="datetime-local" step="1" class="form-control w-auto" @bind="_splitAt" />
+                                        <input class="form-control inv-grow" maxlength="1000" aria-label="Why split" placeholder="Why split it (needed)" @bind="_adjustComment" @bind:event="oninput" />
+                                        <button type="submit" class="btn btn-primary" disabled="@(_saving || _splitAt is null || string.IsNullOrWhiteSpace(_adjustComment))">Split</button>
+                                        <button type="button" class="btn btn-link" @onclick="@(() => _splitting = null)">Cancel</button>
+                                    </form>
+                                    <div class="small text-muted mt-1">Both parts keep the stop's reason; code each one afterwards.</div>
+                                </td>
+                            </tr>
+                        }
                         @if (_coding?.Id == s.Id)
                         {
                             <tr @key="(s.Id, 1)">
-                                <td colspan="8">
+                                <td colspan="@Columns">
                                     <form class="d-flex flex-wrap gap-2 align-items-center" @onsubmit="SaveCodeAsync" @onsubmit:preventDefault>
                                         <select class="form-select w-auto" aria-label="Reason for the stop" value="@(_reasonId?.ToString() ?? "")"
                                                 @onchange="@(e => _reasonId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
@@ -224,7 +332,31 @@ else
 
     private bool NeedsComment => _reasonId is { } id && _reasons.FirstOrDefault(r => r.Id == id)?.RequiresComment == true;
 
-    private bool CanCode(DowntimeDto stop) => !stop.IsMicroStop && User.Can(PermissionCodes.DowntimeCode, Sites.SiteId);
+    private bool CanCode(DowntimeDto stop) => !stop.IsMicroStop && stop.SupersededAt is null && User.Can(PermissionCodes.DowntimeCode, Sites.SiteId);
+
+    private bool CanAdjustAny => User.Can(PermissionCodes.DowntimeAdjust, Sites.SiteId);
+
+    private int Columns => CanAdjustAny ? 9 : 8;
+
+    // Adjusting stops (D-069): entering one, splitting one, or the stops chosen to merge, with the comment the split or merge needs.
+    private sealed class StopEntry
+    {
+        public Guid? EquipmentId { get; set; }
+        public DateTime? Start { get; set; }
+        public DateTime? End { get; set; }
+        public Guid? ReasonId { get; set; }
+        public string? Comment { get; set; }
+    }
+
+    private StopEntry? _entry;
+    private IReadOnlyList<ReasonCodeDto> _entryReasons = [];
+    private DowntimeDto? _splitting;
+    private DateTime? _splitAt;
+    private readonly Dictionary<Guid, DowntimeDto> _chosen = [];
+    private string? _adjustComment;
+    private bool _superseded;
+
+    private bool Adjusting => _entry is not null || _splitting is not null || _chosen.Count > 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -264,7 +396,7 @@ else
         try
         {
             var now = Clock.GetUtcNow();
-            _stops = await Api.ListStopsAsync(site, now.AddHours(-_hours), now.AddMinutes(1), _equipment, _uncodedOnly, _micro);
+            _stops = await Api.ListStopsAsync(site, now.AddHours(-_hours), now.AddMinutes(1), _equipment, _uncodedOnly, _micro, _superseded);
         }
         catch (ApiException ex)
         {
@@ -281,7 +413,7 @@ else
             {
                 await InvokeAsync(async () =>
                 {
-                    if (_coding is null && !_saving)
+                    if (_coding is null && !_saving && !Adjusting)
                     {
                         await LoadStatusAsync();
                         if (_tab == "stops")
@@ -303,7 +435,8 @@ else
     private async Task OnSiteChangedAsync(ChangeEventArgs e)
     {
         Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
-        (_equipment, _coding) = (null, null);
+        (_equipment, _coding, _entry, _splitting) = (null, null, null, null);
+        _chosen.Clear();
         await LoadStatusAsync();
         await LoadStopsAsync();
     }
@@ -375,6 +508,105 @@ else
         {
             await Api.CodeStopAsync(stop.Id, new CodeDowntimeRequest { StartedAt = stop.StartedAt, ReasonCodeId = reason, Comment = _comment });
             _coding = null;
+            await LoadStopsAsync();
+            await LoadStatusAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void StartEntry()
+    {
+        var now = Display.ToSite(Clock.GetUtcNow(), Sites.Site?.TimeZone).DateTime;
+        var minute = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0);
+        (_entry, _entryReasons) = (new StopEntry { EquipmentId = _equipment, Start = minute.AddMinutes(-30), End = minute }, []);
+        if (_equipment is { } equipment)
+        {
+            _ = LoadEntryReasonsAsync(equipment);
+        }
+    }
+
+    private async Task OnEntryEquipmentChangedAsync(ChangeEventArgs e)
+    {
+        if (_entry is null)
+        {
+            return;
+        }
+
+        (_entry.EquipmentId, _entry.ReasonId, _entryReasons) = (Guid.TryParse(e.Value?.ToString(), out var id) ? id : null, null, []);
+        if (_entry.EquipmentId is { } equipment)
+        {
+            await LoadEntryReasonsAsync(equipment);
+        }
+    }
+
+    private async Task LoadEntryReasonsAsync(Guid equipmentId)
+    {
+        try
+        {
+            if (!_reasonsByEquipment.TryGetValue(equipmentId, out var reasons))
+            {
+                reasons = await Api.ListCodingReasonsAsync(equipmentId);
+                _reasonsByEquipment[equipmentId] = reasons;
+            }
+
+            _entryReasons = reasons;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private Task SaveEntryAsync() =>
+        _entry is { EquipmentId: { } equipment, ReasonId: { } reason } entry
+        && Display.FromSiteLocal(entry.Start, Sites.Site?.TimeZone) is { } start && Display.FromSiteLocal(entry.End, Sites.Site?.TimeZone) is { } end
+            ? AdjustAsync(() => Api.EnterStopAsync(new EnterStopRequest { EquipmentId = equipment, StartedAt = start, EndedAt = end, ReasonCodeId = reason, Comment = entry.Comment }))
+            : Task.CompletedTask;
+
+    private void StartSplit(DowntimeDto stop)
+    {
+        var middle = stop.StartedAt + (stop.EndedAt!.Value - stop.StartedAt) / 2;
+        var local = Display.ToSite(middle, Sites.Site?.TimeZone).DateTime;
+        (_splitting, _splitAt, _adjustComment) = (stop, local.AddTicks(-(local.Ticks % TimeSpan.TicksPerSecond)), null);
+    }
+
+    private Task SplitAsync() =>
+        _splitting is { } stop && Display.FromSiteLocal(_splitAt, Sites.Site?.TimeZone) is { } at
+            ? AdjustAsync(() => Api.SplitStopAsync(stop.Id, new SplitStopRequest { StartedAt = stop.StartedAt, At = at, Comment = _adjustComment }))
+            : Task.CompletedTask;
+
+    private void Choose(DowntimeDto stop, bool chosen)
+    {
+        if (chosen)
+        {
+            _chosen[stop.Id] = stop;
+        }
+        else
+        {
+            _chosen.Remove(stop.Id);
+        }
+    }
+
+    private Task MergeAsync() =>
+        AdjustAsync(() => Api.MergeStopsAsync(new MergeStopsRequest { Stops = [.. _chosen.Values.Select(s => new StopKeyDto(s.Id, s.StartedAt))], Comment = _adjustComment }));
+
+    private async Task AdjustAsync(Func<Task<StopsAdjustedResponse>> adjust)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await adjust();
+            (_entry, _splitting, _adjustComment) = (null, null, null);
+            _chosen.Clear();
             await LoadStopsAsync();
             await LoadStatusAsync();
         }
