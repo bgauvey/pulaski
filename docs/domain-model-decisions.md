@@ -1470,6 +1470,23 @@ Issue #31. A cancelled job's replacement was always rounded up to whole batches 
 
 **On the floor.** A planned partial is reported as it comes, without a pause or completion reason (`ProductionReporter`: `InventoryJob.PartialBatchPlanned`). It then follows the material's rule: near is accepted, exact is held for approval.
 
+## Material connections (D-068, proposed)
+
+Issue #18. Materials came from files (CSV, B2MML) or one at a time through the API.
+
+**The connector.** A material connection (`core.material_connection`) is an OData v4 service: root URL, entity set, optional `$filter`, the external system its items belong to, and a field map from the import's canonical fields (`MaterialImportFields.Names`, less `external_system`) to the service's property names or `A/B` paths. Code and external key are required.
+
+- **The mapper** (`ODataMaterialRows.Read`, pure) only turns each JSON item into a `MaterialImportRow` through `MaterialImportFields.ToRow`, exactly as the file adapters do (D-053): every row carries the connection's external system; a missing property leaves the field alone, null clears it, and a non-scalar is the row's problem.
+- **The import** is `ImportMaterialsCommand` unchanged: same rules, field ownership (D-033), events and all or nothing, with the reason "*<name> import*". No domain rule is repeated.
+
+**Fetching.** `IMaterialConnectionFetcher` is implemented in the API (`ODataMaterialFetcher`, named `HttpClient`, 60 s). It requests `$select` of the mapped properties plus the filter, follows `@odata.nextLink` (at most 200 pages and 5,000 items) and sends `OData-MaxVersion: 4.0`. Credentials come from configuration `MaterialConnections:<code>` (`BearerToken`, or `Username`/`Password`) and never touch the database. Every failure (status, timeout, not JSON, not a collection, too many items) comes back as the import's file problem. The URL must be https, except http on loopback for trying a service out.
+
+**Running.** On demand only: `POST /api/material-connections/{id}/run` with `dryRun` (a check saves and records nothing) and `createClasses`. The fetch runs outside any transaction; only an import records `last_run_*`.
+
+**Permissions.** Setting up (`POST`/`PUT /api/material-connections`) needs `integrations.manage`, because it decides where the API connects. Running needs `materials.manage`. Seeing the list needs `integrations.view` or `materials.view`. The panel is on Configure → Integrations and in the Materials import area. Events: `pulaski.material_connection.added.v1`, `…changed.v1`.
+
+**Not done.** Schedules, other protocols (plain REST, SOAP, database), OAuth client-credential flows, and connections for other master data (people, capabilities).
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

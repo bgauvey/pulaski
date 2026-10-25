@@ -301,6 +301,19 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<IReadOnlyList<ReasonCodeDto>> ListCodingReasonsAsync(Guid equipmentId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<ReasonCodeDto>>($"api/equipment/{equipmentId}/coding-reasons", ct);
 
+    // Material connections (D-068)
+
+    public Task<IReadOnlyList<MaterialConnectionDto>> ListMaterialConnectionsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MaterialConnectionDto>>("api/material-connections", ct);
+
+    public Task<CreatedResponse> SaveMaterialConnectionAsync(Guid? id, SaveMaterialConnectionRequest request, CancellationToken ct = default) =>
+        id is { } existing
+            ? SendAsync<CreatedResponse>(HttpMethod.Put, $"api/material-connections/{existing}", request, ct)
+            : SendAsync<CreatedResponse>(HttpMethod.Post, "api/material-connections", request, ct);
+
+    public Task<ImportMaterialsResponse> RunMaterialConnectionAsync(Guid id, RunMaterialConnectionRequest request, CancellationToken ct = default) =>
+        SendAsync<ImportMaterialsResponse>(HttpMethod.Post, $"api/material-connections/{id}/run", request, ct);
+
     // Outbound deliveries to the ERP (D-061)
 
     public Task<DeliveryStatusDto> GetErpDeliveryStatusAsync(CancellationToken ct = default) =>

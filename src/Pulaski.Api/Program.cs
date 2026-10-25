@@ -63,6 +63,8 @@ if (builder.Configuration.GetValue("Pulaski:DatabaseMaintenance", true))
 
 // The ERP feed (D-061): its settings for screens, and the HTTP client it sends with.
 builder.Services.AddSingleton<IDeliveryTargets, DeliveryTargets>();
+builder.Services.AddSingleton<Pulaski.Application.Materials.IMaterialConnectionFetcher, ODataMaterialFetcher>();
+builder.Services.AddHttpClient(ODataMaterialFetcher.ClientName, client => client.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddHttpClient(ErpWebhookSender.ClientName, (services, client) =>
     client.Timeout = TimeSpan.FromSeconds(ErpDeliveryOptions.From(services.GetRequiredService<IConfiguration>()).TimeoutSeconds));
 

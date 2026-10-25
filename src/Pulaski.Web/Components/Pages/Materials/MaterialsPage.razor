@@ -29,6 +29,7 @@
 @if (_importing)
 {
     <MaterialFileImport OnImported="ReloadAsync" OnClose="() => _importing = false" />
+    <Pulaski.Web.Components.Pages.Integrations.MaterialConnectionsPanel OnImported="ReloadAsync" />
 }
 
 @if (_adding)

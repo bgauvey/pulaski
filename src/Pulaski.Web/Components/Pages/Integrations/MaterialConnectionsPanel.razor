@@ -1,0 +1,274 @@
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* External sources of material master data Pulaski pulls from (D-068): OData v4 services. Set up by whoever manages integrations;
+   checked and imported by whoever manages materials, all or nothing, as a file is. *@
+<section class="inv-facts mb-3" aria-labelledby="connections-title">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h2 class="h6 mb-0 me-auto" id="connections-title">Material connections</h2>
+        @if (CanConfigure && _form is null)
+        {
+            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => _form = ConnectionForm.New()">Add connection</button>
+        }
+    </div>
+    <p class="small text-muted">
+        An OData v4 service your ERP or item master offers. Pulaski reads its items, maps each to the import's fields, and imports them like a
+        materials file: matched on the connection's external system and each item's key, so running it again updates rather than duplicates.
+        Credentials are kept in the API's configuration, never here.
+    </p>
+
+    <ProblemAlert Error="_error" />
+
+    @if (_form is { } form)
+    {
+        <form class="border rounded p-3 mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+            <div class="row g-2">
+                <div class="col-sm-3">
+                    <label class="form-label small" for="mc-code">Code</label>
+                    <input id="mc-code" class="form-control form-control-sm" maxlength="30" placeholder="ERP-ITEMS" disabled="@(form.Id is not null)" @bind="form.Code" />
+                </div>
+                <div class="col-sm-5">
+                    <label class="form-label small" for="mc-name">Name</label>
+                    <input id="mc-name" class="form-control form-control-sm" maxlength="100" @bind="form.Name" />
+                </div>
+                <div class="col-sm-4">
+                    <label class="form-label small" for="mc-system">External system</label>
+                    <input id="mc-system" class="form-control form-control-sm" maxlength="100" placeholder="e.g. ERP1" @bind="form.ExternalSystem" />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label small" for="mc-url">Service root</label>
+                    <input id="mc-url" class="form-control form-control-sm" maxlength="500" placeholder="https://erp.example.com/odata/v4/items" @bind="form.BaseUrl" />
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label small" for="mc-set">Entity set</label>
+                    <input id="mc-set" class="form-control form-control-sm" maxlength="100" placeholder="Products" @bind="form.EntitySet" />
+                </div>
+                <div class="col-sm-3">
+                    <div class="form-check mt-4">
+                        <input class="form-check-input" type="checkbox" id="mc-active" @bind="form.IsActive" />
+                        <label class="form-check-label small" for="mc-active">Active</label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small" for="mc-filter">Filter <span class="text-muted">(optional, OData $filter)</span></label>
+                    <input id="mc-filter" class="form-control form-control-sm" maxlength="1000" placeholder="Plant eq '1000' and Blocked eq false" @bind="form.Filter" />
+                </div>
+            </div>
+            <div class="small fw-semibold mt-3 mb-1">Fields: Pulaski's field ← the service's property (use / for a property of a property, such as Unit/Code)</div>
+            <div class="row g-2">
+                @foreach (var field in ConnectionForm.Fields)
+                {
+                    <div class="col-sm-3" @key="field">
+                        <label class="form-label small mb-0" for="mc-f-@field">@field@(field is "code" or "external_key" ? " (required)" : "")</label>
+                        <input id="mc-f-@field" class="form-control form-control-sm" maxlength="400" value="@form.Map.GetValueOrDefault(field)"
+                               @onchange="e => form.Map[field] = e.Value?.ToString() ?? string.Empty" />
+                    </div>
+                }
+            </div>
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-sm btn-primary" disabled="@_busy">Save</button>
+                <button type="button" class="btn btn-sm btn-link" @onclick="() => _form = null">Cancel</button>
+            </div>
+        </form>
+    }
+
+    @if (_connections is null)
+    {
+        @if (_error is null)
+        {
+            <p class="small text-muted mb-0">Loading…</p>
+        }
+    }
+    else if (_connections.Count == 0)
+    {
+        <p class="small text-muted mb-0">No connections yet.@(CanConfigure ? "" : " Someone who manages integrations adds them.")</p>
+    }
+    else
+    {
+        <div class="table-panel">
+            <table class="table table-sm align-middle mb-0">
+                <thead><tr><th>Connection</th><th>Service</th><th>Items are</th><th>Credentials</th><th>Last import</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var c in _connections)
+                    {
+                        <tr @key="c.Id" class="@(c.IsActive ? "" : "text-muted")">
+                            <td><span class="fw-semibold">@c.Code</span><div class="small text-muted">@c.Name@(c.IsActive ? "" : " · off")</div></td>
+                            <td class="small text-break">@c.BaseUrl/@c.EntitySet@(c.Filter is { } f ? $" · {f}" : "")</td>
+                            <td class="small">@c.ExternalSystem</td>
+                            <td class="small">@(c.HasCredentials ? "Configured" : "None configured")</td>
+                            <td class="small">@(c.LastRunAt is { } at ? $"{Display.SiteTime(at, null)} UTC by {c.LastRunBy}: {c.LastRunSummary}" : "Never")</td>
+                            <td class="text-end text-nowrap">
+                                @if (CanRun && c.IsActive)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => RunAsync(c, dryRun: true)">Check</button>
+                                    <button type="button" class="btn btn-sm btn-primary ms-1" disabled="@(_busy || !ReadyToImport(c))" @onclick="() => RunAsync(c, dryRun: false)"
+                                            title="Check first; import when the check finds no errors">Import</button>
+                                }
+                                @if (CanConfigure)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _form = ConnectionForm.For(c)">Edit</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (CanRun)
+        {
+            <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" id="mc-classes" @bind="_createClasses" />
+                <label class="form-check-label small" for="mc-classes">Create missing classes</label>
+            </div>
+        }
+    }
+
+    @if (_busy)
+    {
+        <p class="small text-muted mt-2 mb-0">Reading @_runFor?.Code…</p>
+    }
+    else if (_result is { } r && _runFor is { } ran)
+    {
+        <div class="drawer-alert @(r.Errors > 0 || r.FileProblems.Count > 0 ? "is-warning" : "") mt-3" role="status">
+            <span>@MaterialConnectionView.Summary(ran.Code, r)</span>
+        </div>
+        @if (r.Rows.Any(x => x.Action == "error"))
+        {
+            <table class="table table-sm mt-2 mb-0">
+                <thead><tr><th>Item</th><th>Code</th><th>Problem</th></tr></thead>
+                <tbody>
+                    @foreach (var row in r.Rows.Where(x => x.Action == "error").Take(200))
+                    {
+                        <tr @key="row.Line"><td>@row.Line</td><td>@row.Code</td><td class="small">@row.Message</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+</section>
+
+@code {
+    /// <summary>Called after an import changed materials, so the page can reload them.</summary>
+    [Parameter]
+    public EventCallback OnImported { get; set; }
+
+    private IReadOnlyList<MaterialConnectionDto>? _connections;
+    private ApiException? _error;
+    private ConnectionForm? _form;
+    private bool _busy;
+    private bool _createClasses;
+    private MaterialConnectionDto? _runFor;
+    private ImportMaterialsResponse? _result;
+    private bool _resultWasCheck;
+
+    private bool CanConfigure => User.Can(PermissionCodes.Integrations);
+
+    private bool CanRun => User.Can(PermissionCodes.Materials);
+
+    // Import comes after a clean check of the same connection, as for a file.
+    private bool ReadyToImport(MaterialConnectionDto c) =>
+        _resultWasCheck && _runFor?.Id == c.Id && _result is { Errors: 0, FileProblems.Count: 0 } r && r.Created + r.Updated > 0;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _connections = await Api.ListMaterialConnectionsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.SaveMaterialConnectionAsync(_form!.Id, _form.ToRequest());
+            _form = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RunAsync(MaterialConnectionDto connection, bool dryRun)
+    {
+        (_busy, _error, _runFor, _result) = (true, null, connection, null);
+        try
+        {
+            _result = await Api.RunMaterialConnectionAsync(connection.Id, new RunMaterialConnectionRequest { DryRun = dryRun, CreateClasses = _createClasses });
+            _resultWasCheck = dryRun;
+            if (!dryRun && _result.Applied)
+            {
+                await LoadAsync();
+                await OnImported.InvokeAsync();
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class ConnectionForm
+    {
+        public static readonly string[] Fields =
+            ["code", "name", "type", "base_unit", "class", "class_name", "description", "lot_tracked", "shelf_life_days", "active", "external_key", "external_version"];
+
+        public Guid? Id { get; private init; }
+        public long Version { get; private init; }
+        public string? Code { get; set; }
+        public string? Name { get; set; }
+        public string? BaseUrl { get; set; }
+        public string? EntitySet { get; set; }
+        public string? Filter { get; set; }
+        public string? ExternalSystem { get; set; }
+        public bool IsActive { get; set; } = true;
+        public Dictionary<string, string> Map { get; private init; } = [];
+
+        public static ConnectionForm New() => new();
+
+        public static ConnectionForm For(MaterialConnectionDto c) => new()
+        {
+            Id = c.Id,
+            Version = c.Version,
+            Code = c.Code,
+            Name = c.Name,
+            BaseUrl = c.BaseUrl,
+            EntitySet = c.EntitySet,
+            Filter = c.Filter,
+            ExternalSystem = c.ExternalSystem,
+            IsActive = c.IsActive,
+            Map = new Dictionary<string, string>(c.FieldMap),
+        };
+
+        public SaveMaterialConnectionRequest ToRequest() => new()
+        {
+            Version = Version,
+            Code = Code ?? "",
+            Name = Name ?? "",
+            BaseUrl = BaseUrl ?? "",
+            EntitySet = EntitySet ?? "",
+            Filter = Filter,
+            ExternalSystem = ExternalSystem ?? "",
+            IsActive = IsActive,
+            FieldMap = Map.Where(m => !string.IsNullOrWhiteSpace(m.Value)).ToDictionary(m => m.Key, m => m.Value.Trim()),
+        };
+    }
+}

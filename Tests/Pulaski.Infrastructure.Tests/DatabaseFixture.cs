@@ -15,6 +15,9 @@ namespace Pulaski.Infrastructure.Tests;
 /// </summary>
 public sealed class DatabaseFixture : IAsyncLifetime
 {
+    /// <summary>What material connections fetch (D-068), as a test sets it, in place of an OData service.</summary>
+    public Testing.FakeMaterialConnectionFetcher MaterialConnectionFetcher { get; } = new();
+
     private const string DefaultAdminConnection = "Host=localhost;Database=postgres";
 
     private readonly string _adminConnection =
@@ -82,6 +85,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         services.AddInfrastructure(AppConnectionString);
         services.AddSingleton<IRequestContext>(_actor);
         services.AddSingleton<Application.Integrations.IDeliveryTargets>(new TestDeliveryTargets());
+        services.AddSingleton<Application.Materials.IMaterialConnectionFetcher>(MaterialConnectionFetcher);
 
         // The API keys badge hashes with its signing key (D-049); here a stand-in does.
         services.AddSingleton<Application.Labor.IBadgeHasher>(new ReversingBadgeHasher());
