@@ -1557,7 +1557,7 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 
 Equipment (with machine profiles and edge nodes), units and retrying or skipping deliveries to the ERP (**Integrations**) belong to the Administrator. Someone with two roles can do what either allows.
 
-When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator.
+When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator. A switched-off button is greyed out the same way everywhere; point at it to see why, when it says. Permissions held at one site count only there: on the **Schedule**, at a site where you can't plan, jobs don't drag and a job's panel shows a lock note instead of *Move*, *Pins* and *Cancel*; where you can't manage work orders, cards don't drag between Kanban columns and an order's panel has no status buttons.
 
 ### What each role can see
 
@@ -2143,7 +2143,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Notes** can only be written when the order is created.
 - **Released product specifications** are not maintained in Pulaski yet. Shop-order sheets flag this gap and require operators to verify the approved specification elsewhere.
 - **Signing in through your company's identity provider** (Okta, Entra ID, AD FS, Keycloak) isn't built yet: users have Pulaski passwords, and an administrator resets forgotten ones (Pulaski sends no e-mail).
-- **The schedule shows its buttons to everyone who can see it;** someone who can see the schedule but not plan sees them, and a click explains that planning needs permission instead of changing anything. Switched-off buttons elsewhere can look like ordinary ones.
+- **A switched-off button's reason** shows when you point at it with the mouse, but not when you move to it with the keyboard (switched-off buttons are skipped); screen readers announce it as unavailable without the reason. Screens that are view-only for you say so in a note at the top instead.
 - **Only Administrator is held everywhere;** every role you create is held at a site.
 
 ---

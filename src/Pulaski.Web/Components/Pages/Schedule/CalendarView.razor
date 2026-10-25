@@ -58,7 +58,7 @@
                             var s = item.Segment;
                             var continues = s.Start < dayStart;
                             <div class="cal-item line-@(LineIndex(item.LineId) % LinePalette) @ItemClasses(item)" @key="item.Key + item.Signature"
-                                 draggable="@(CanHold(item) ? "true" : "false")" role="button" tabindex="0"
+                                 draggable="@(CanHold(item) && !Controller.ReadOnly ? "true" : "false")" role="button" tabindex="0"
                                  title="@Describe(item)" aria-label="@Describe(item)"
                                  @ondragstart="() => Controller.StartDrag(item)" @ondragend="Controller.EndDrag"
                                  @onclick="() => SelectAsync(item)" @onkeydown="e => OnKey(e, item)">

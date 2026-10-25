@@ -111,13 +111,24 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
     /// <summary>While true the page holds back its refresh, so the board doesn't change under the pointer.</summary>
     public bool IsDragging => DraggingItem is not null || DraggingWorkOrder is not null;
 
-    /// <summary>
-    /// The user may look at the schedule but not plan (D-037): nothing drags, and an edit says why instead of
-    /// going to the API.
-    /// </summary>
-    public bool ReadOnly { get; set; }
+    /// <summary>Whether the user may plan jobs at a site (<c>schedule.plan</c>); everywhere by default.</summary>
+    public Func<Guid, bool> CanPlanAt { get; init; } = _ => true;
 
-    public const string ReadOnlyMessage = "You can view the schedule, but planning needs permission to plan jobs.";
+    /// <summary>Whether the user may dispatch, firm or cancel work orders at a site (<c>work_orders.manage</c>); everywhere by default.</summary>
+    public Func<Guid, bool> CanManageOrdersAt { get; init; } = _ => true;
+
+    /// <summary>
+    /// The user may look at the site's schedule but not plan there (D-037, #47): jobs don't drag, the drawer leaves out what
+    /// changes them, and an edit that gets here anyway says why instead of going to the API.
+    /// </summary>
+    public bool ReadOnly => SiteId is not { } site || !CanPlanAt(site);
+
+    /// <summary>The user may not move the site's work orders between statuses: the Kanban doesn't drag, the drawer has no status buttons.</summary>
+    public bool OrdersReadOnly => SiteId is not { } site || !CanManageOrdersAt(site);
+
+    public const string ReadOnlyMessage = "You can view the schedule, but planning needs permission to plan jobs at this site.";
+
+    public const string OrdersReadOnlyMessage = "You can view work orders, but dispatching, firming or cancelling them needs permission to manage work orders at this site.";
 
     public void StartDrag(BoardItem item)
     {
@@ -127,9 +138,10 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
         }
     }
 
+    // A work order drags onto a line (planning) on the Gantt, or to another status (managing orders) on the Kanban.
     public void StartDrag(WorkOrderDto workOrder)
     {
-        if (!ReadOnly)
+        if (!ReadOnly || !OrdersReadOnly)
         {
             (DraggingItem, DraggingWorkOrder) = (null, workOrder);
         }
@@ -369,7 +381,8 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
                 await RunAsync(
                     ScheduleBoard.WorkOrderKey(workOrder.Id),
                     $"{workOrder.OrderNumber} is now {Display.Label(status).ToLowerInvariant()}.",
-                    () => api.MoveWorkOrderAsync(workOrder, status));
+                    () => api.MoveWorkOrderAsync(workOrder, status),
+                    orders: true);
             }
             finally
             {
@@ -390,11 +403,11 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
     public bool ExpireToasts() => _toasts.RemoveAll(t => t.Expires <= Now) > 0;
 
     /// <summary>Sends one edit, then re-reads the board whatever happened: after a conflict the planner needs the current state.</summary>
-    private async Task RunAsync(string key, string success, Func<Task> send)
+    private async Task RunAsync(string key, string success, Func<Task> send, bool orders = false)
     {
-        if (ReadOnly)
+        if (orders ? OrdersReadOnly : ReadOnly)
         {
-            Toast("warning", ReadOnlyMessage);
+            Toast("warning", orders ? OrdersReadOnlyMessage : ReadOnlyMessage);
             return;
         }
 
