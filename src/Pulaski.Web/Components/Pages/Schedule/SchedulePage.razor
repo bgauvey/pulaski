@@ -146,7 +146,11 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _controller = new ScheduleController(Api, Time) { ReadOnly = !User.Can(PermissionCodes.SchedulePlan) };
+        _controller = new ScheduleController(Api, Time)
+        {
+            ReadOnly = !User.Can(PermissionCodes.SchedulePlan),
+            ShowsSite = id => User.Can(PermissionCodes.ScheduleView, id),
+        };
         _controller.StateChanged += OnControllerChanged;
         await _controller.InitializeAsync(_cts.Token);
         if (WorkOrder is { } workOrder && _controller.Board.FindWorkOrder(workOrder) is not null)

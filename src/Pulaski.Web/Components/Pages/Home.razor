@@ -566,7 +566,8 @@
         try
         {
             _equipment = await Api.ListEquipmentAsync();
-            _sites = [.. _equipment.Where(e => e.Level == "site" && e.IsActive).OrderBy(e => e.Code, StringComparer.Ordinal)];
+            // Only the sites whose Overview the user may see (#43).
+            _sites = [.. _equipment.Where(e => e.Level == "site" && e.IsActive && User.Can(PermissionCodes.OverviewView, e.Id)).OrderBy(e => e.Code, StringComparer.Ordinal)];
             _siteId = _sites.FirstOrDefault()?.Id ?? Guid.Empty;
             await LoadAsync();
         }

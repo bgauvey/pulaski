@@ -741,7 +741,7 @@ Users, roles and permissions stay behind `security.manage`.
 
 **The UI.** Each page names the views that open it (`[RequiresView]`). The layout checks it once the user is known: a page the user may not see answers **Page not found** (so its feature isn't named), and someone whose roles allow no screen at all gets a page saying so, with a sign-out button. The start page is the Overview, or the first screen in the menu the user can see. The menu shows only the screens the user can see, and leaves out a group with none. Links to other screens (`ScreenLink`) show as plain text, or not at all for buttons, when the user can't open them; actions the user can't take (selecting work orders to move, an empty action menu) are left out.
 
-**Not yet:** the site chosen on a screen can be one where the user may see something else but not that screen; the API then refuses the data and the screen says so.
+**Site pickers follow the screen** (issue #43). The layout hands the page's `[RequiresView]` views to `SiteSelection` on every navigation, and a screen's site picker offers only the sites where the user holds one of them (`SiteSelection.Sites`, `ForScreen` for screens with lists of their own: Overview, Schedule). The chosen site is kept for the session; a screen that can't show it opens on its own first site and leaves the choice for the next screen that can. Pickers that choose where something is created follow that change permission instead (new work order: `work_orders.manage`; new process: `processes.manage`), and choosing where a role applies lists every site. The API's checks are unchanged.
 
 ## Labor (D-040, proposed)
 

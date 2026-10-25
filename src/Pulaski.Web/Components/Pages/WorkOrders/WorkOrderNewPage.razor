@@ -215,7 +215,8 @@ else
             _equipment = await Api.ListEquipmentAsync();
             _materials = await Api.ListMaterialsAsync();
             _uoms = await Api.ListUomsAsync();
-            _sites = [.. _equipment.Where(e => e.Level == "site" && e.IsActive)];
+            // A new order goes only where the user may manage work orders (#43).
+            _sites = [.. _equipment.Where(e => e.Level == "site" && e.IsActive && User.Can(PermissionCodes.WorkOrderManage, e.Id))];
             _form.SiteId = _sites.FirstOrDefault()?.Id ?? Guid.Empty;
 
             // Start defaults to the next whole hour at the site.

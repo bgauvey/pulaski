@@ -66,7 +66,7 @@
                     <label class="form-label small" for="new-site">At site</label>
                     <select id="new-site" class="form-select" @bind="_new.SiteId">
                         <option value="">Choose a site…</option>
-                        @foreach (var s in Sites.Sites)
+                        @foreach (var s in Sites.AllSites)
                         {
                             <option value="@s.Id">@s.Code · @s.Name</option>
                         }
@@ -194,7 +194,7 @@ else
                                             {
                                                 <select class="form-select form-select-sm w-auto" aria-label="At site" @bind="edit.SiteId">
                                                     <option value="">At site…</option>
-                                                    @foreach (var s in Sites.Sites)
+                                                    @foreach (var s in Sites.AllSites)
                                                     {
                                                         <option value="@s.Id">@s.Code</option>
                                                     }

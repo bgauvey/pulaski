@@ -29,6 +29,9 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
 
     public IReadOnlyList<EquipmentDto> Sites { get; private set; } = [];
 
+    /// <summary>Whether the board may show a site: where the user may see the schedule (#43). Every site by default.</summary>
+    public Func<Guid, bool> ShowsSite { get; init; } = _ => true;
+
     public Guid? SiteId { get; private set; }
 
     public string? TimeZone => Sites.FirstOrDefault(s => s.Id == SiteId)?.TimeZone;
@@ -65,7 +68,7 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
         try
         {
             _equipment = await api.ListEquipmentAsync(ct: ct);
-            Sites = [.. _equipment.Where(e => e.Level == "site").OrderBy(e => e.Code, StringComparer.OrdinalIgnoreCase)];
+            Sites = [.. _equipment.Where(e => e.Level == "site" && ShowsSite(e.Id)).OrderBy(e => e.Code, StringComparer.OrdinalIgnoreCase)];
             SiteId ??= Sites.FirstOrDefault(s => _equipment.Any(e => e.SiteId == s.Id && OnBoard(e)))?.Id
                 ?? (Sites.Count > 0 ? Sites[0].Id : null);
             await RefreshAsync(ct);

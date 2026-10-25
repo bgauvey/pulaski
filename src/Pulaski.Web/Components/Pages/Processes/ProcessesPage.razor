@@ -139,7 +139,8 @@ else
     {
         try
         {
-            _sites = [.. (await Api.ListEquipmentAsync()).Where(e => e.Level == "site")];
+            // A new process goes only where the user may maintain processes (#43).
+            _sites = [.. (await Api.ListEquipmentAsync()).Where(e => e.Level == "site" && User.Can(PermissionCodes.Processes, e.Id))];
             _siteId = _sites.FirstOrDefault()?.Id ?? Guid.Empty;
             _processes = await Api.ListProcessesAsync();
         }

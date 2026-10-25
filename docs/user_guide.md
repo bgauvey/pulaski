@@ -197,7 +197,7 @@ The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plan
 
 ### The Overview page
 
-**Operate → Overview** is the home page: a live board for the plant. In a few seconds it answers *which lines are running, which aren't and why, and what needs a person*. It refreshes itself every 30 seconds; the pill at the top right says when it was last updated (and turns grey, with a warning, if Pulaski can't reach the server for over a minute). The refresh button updates it at once. With several sites, pick one at the top.
+**Operate → Overview** is the home page: a live board for the plant. In a few seconds it answers *which lines are running, which aren't and why, and what needs a person*. It refreshes itself every 30 seconds; the pill at the top right says when it was last updated (and turns grey, with a warning, if Pulaski can't reach the server for over a minute). The refresh button updates it at once. With several sites whose Overview you may see, pick one at the top.
 
 **Diagonal hatching means "no data".** A part of the board that has nothing to show yet (quality checks, which Pulaski doesn't do yet, or machine figures when no line reports its state) sits where it will be, hatched and greyed, with a plug symbol saying what will fill it, so the page won't move around when the data arrives. A dash or hatching means *not measured*; a 0 means measured and none.
 
@@ -1610,6 +1610,7 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 
 - **Viewing permissions** are listed first on the Permissions tab, under *Viewing*: one per screen (Overview, Work orders, Schedule, Floor, Inventory, Equipment, Materials, Processes and BOMs, Units, Reasons, Shifts). A view a role gets with a change permission shows ticked and locked, with what it comes with when you point at it.
 - **Permissions belong to Pulaski; roles belong to you.** The list of permissions is fixed by the version of Pulaski you run, and grows when new screens need one. Roles, their names and which permissions they hold are yours to change. Administrator always holds every permission, including new ones.
+- **Site pickers follow the screen.** A screen's site picker lists only the sites where you may see that screen, so a role held at one site doesn't offer the others. Pulaski remembers the site you chose: a screen that can't show it opens on its own first site, and the next screen that can show it goes back to it. The site lists for a new work order or a new process offer only the sites where you may create one. Choosing where a role applies, on **Users**, still lists every site.
 - **Changes to a role apply at once** to everyone who holds it, on their next click.
 - **Every user needs a role.** A new user comes with one, and a user's last role can't be taken away: add another first, or switch them off.
 - **Someone stays administrator.** The last active administrator can't lose the role or be switched off, and nobody can switch themselves off.
@@ -2144,7 +2145,6 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Signing in through your company's identity provider** (Okta, Entra ID, AD FS, Keycloak) isn't built yet: users have Pulaski passwords, and an administrator resets forgotten ones (Pulaski sends no e-mail).
 - **The schedule shows its buttons to everyone who can see it;** someone who can see the schedule but not plan sees them, and a click explains that planning needs permission instead of changing anything. Switched-off buttons elsewhere can look like ordinary ones.
 - **Only Administrator is held everywhere;** every role you create is held at a site.
-- **The site picker** on a screen lists every site where you can see something, not only the sites where you can see that screen; choosing one where you can't gives a "may not see this at this site" message.
 
 ---
 
