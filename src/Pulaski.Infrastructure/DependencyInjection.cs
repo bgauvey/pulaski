@@ -77,6 +77,7 @@ public static class DependencyInjection
         services.AddSingleton<IEdgeReadStore, EdgeQueries>();
         services.AddSingleton<IStopReadStore, StopQueries>();
         services.AddSingleton<IOeeReadStore, OeeQueries>();
+        services.AddSingleton<IMachineHistoryReadStore, MachineHistoryQueries>();
         services.AddSingleton<IOverviewReadStore, OverviewQueries>();
 
         services.AddScoped<DbSession>();

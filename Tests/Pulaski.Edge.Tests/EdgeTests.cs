@@ -116,6 +116,37 @@ public sealed class EdgeTests : IDisposable
     }
 
     [Fact]
+    public void A_process_value_is_forwarded_past_its_deadband_and_at_the_heartbeat_while_it_holds()
+    {
+        using var buffer = new EdgeBuffer(_path);
+        var binder = new TagBinder(buffer, TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(1));
+        var temperature = Guid.CreateVersion7();
+        binder.Use(Config with
+        {
+            Tags = [new() { Id = temperature, EquipmentId = Guid.CreateVersion7(), Role = "process_value", ConnectionId = _connection, Address = "P/N/D:Temp", Deadband = 0.5m }],
+        });
+
+        Assert.Equal(1, binder.Accept(_connection, new ConnectorSample("P/N/D:Temp", 200.0, T0)));
+        Assert.Equal(0, binder.Accept(_connection, new ConnectorSample("P/N/D:Temp", 200.4, T0.AddSeconds(10))));   // within the deadband
+        Assert.Equal(1, binder.Accept(_connection, new ConnectorSample("P/N/D:Temp", 201.0, T0.AddSeconds(20))));   // past it
+        Assert.Equal(0, binder.Accept(_connection, new ConnectorSample("P/N/D:Temp", 201.3, T0.AddSeconds(30))));
+
+        // Not yet a minute since 201.0; then the held-back 201.3 goes, at its own time; then the steady value, as of the flush.
+        Assert.Equal(0, binder.Flush(T0.AddSeconds(50)));
+        Assert.Equal(1, binder.Flush(T0.AddSeconds(80)));
+        Assert.Equal(0, binder.Flush(T0.AddSeconds(85)));
+        Assert.Equal(1, binder.Flush(T0.AddSeconds(150)));
+
+        // Lost: forwarded at once, and no heartbeat for a value that isn't there.
+        Assert.Equal(1, binder.Accept(_connection, new ConnectorSample("P/N/D:Temp", null, T0.AddSeconds(160), SampleQuality.Bad)));
+        Assert.Equal(0, binder.Flush(T0.AddSeconds(400)));
+
+        var signals = buffer.Take(10);
+        Assert.Equal<decimal?>([200.0m, 201.0m, 201.3m, 201.3m, null], signals.Select(s => s.Value));
+        Assert.Equal([T0, T0.AddSeconds(20), T0.AddSeconds(30), T0.AddSeconds(150), T0.AddSeconds(160)], signals.Select(s => s.OccurredAt));
+    }
+
+    [Fact]
     public void A_tag_bound_later_starts_with_the_last_value_seen_at_its_address()
     {
         using var buffer = new EdgeBuffer(_path);

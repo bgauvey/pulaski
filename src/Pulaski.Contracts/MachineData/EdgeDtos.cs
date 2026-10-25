@@ -45,16 +45,20 @@ public sealed record EquipmentTagDto
     public required Guid EquipmentId { get; init; }
     public required string EquipmentCode { get; init; }
 
-    /// <summary><c>state</c>, <c>unit_mode</c>, <c>stop_reason</c>, <c>processed_count</c>, <c>defective_count</c>, <c>consumed_count</c> or <c>machine_speed</c>.</summary>
+    /// <summary><c>state</c>, <c>unit_mode</c>, <c>stop_reason</c>, <c>processed_count</c>, <c>defective_count</c>, <c>consumed_count</c>,
+    /// <c>machine_speed</c>, <c>alarm</c>, <c>warning</c>, <c>process_value</c> or <c>level</c>.</summary>
     public required string Role { get; init; }
     public required Guid ConnectionId { get; init; }
     public required string ConnectionCode { get; init; }
 
-    /// <summary>For Sparkplug B: <c>group/node[/device]:metric</c>.</summary>
+    /// <summary>The connector's address: Sparkplug B <c>group/node[/device]:metric</c>, an OPC UA node id, an EtherNet/IP tag name.</summary>
     public required string Address { get; init; }
     public decimal ScaleFactor { get; init; } = 1;
     public decimal ScaleOffset { get; init; }
     public long? CounterRollover { get; init; }
+
+    /// <summary>Process values only (#26): a change smaller than this, in scaled units, isn't recorded until the heartbeat.</summary>
+    public decimal? Deadband { get; init; }
     public bool IsActive { get; init; }
 
     /// <summary>The value the edge last reported for the address, and when.</summary>
@@ -142,6 +146,7 @@ public sealed record CreateEquipmentTagRequest
     public decimal ScaleFactor { get; init; } = 1;
     public decimal ScaleOffset { get; init; }
     public long? CounterRollover { get; init; }
+    public decimal? Deadband { get; init; }
 }
 
 public sealed record UpdateEquipmentTagRequest
@@ -151,6 +156,7 @@ public sealed record UpdateEquipmentTagRequest
     public decimal ScaleFactor { get; init; } = 1;
     public decimal ScaleOffset { get; init; }
     public long? CounterRollover { get; init; }
+    public decimal? Deadband { get; init; }
     public bool IsActive { get; init; } = true;
 }
 
@@ -178,6 +184,9 @@ public sealed record EdgeTagConfigDto
     public required string Role { get; init; }
     public required Guid ConnectionId { get; init; }
     public required string Address { get; init; }
+
+    /// <summary>Process values only (#26): the tag's deadband in the source's own units (before scaling).</summary>
+    public decimal? Deadband { get; init; }
 }
 
 /// <summary>A value the edge read for a tag. Values are numbers: booleans as 0 and 1. <see cref="Good"/> false means no signal.</summary>

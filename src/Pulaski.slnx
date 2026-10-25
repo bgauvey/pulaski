@@ -12,6 +12,8 @@
   </Folder>
   <Project Path="Pulaski.Api/Pulaski.Api.csproj" />
   <Project Path="Pulaski.Application/Pulaski.Application.csproj" />
+  <Project Path="Pulaski.Connectors.EthernetIp/Pulaski.Connectors.EthernetIp.csproj" />
+  <Project Path="Pulaski.Connectors.OpcUa/Pulaski.Connectors.OpcUa.csproj" />
   <Project Path="Pulaski.Connectors.Sparkplug/Pulaski.Connectors.Sparkplug.csproj" />
   <Project Path="Pulaski.Connectors/Pulaski.Connectors.csproj" />
   <Project Path="Pulaski.Contracts/Pulaski.Contracts.csproj" />

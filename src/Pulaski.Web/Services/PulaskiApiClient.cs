@@ -297,6 +297,14 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
             ("to", to.ToString("O", System.Globalization.CultureInfo.InvariantCulture)), ("equipmentId", equipmentId),
             ("uncodedOnly", uncodedOnly), ("includeMicroStops", includeMicroStops), ("includeSuperseded", includeSuperseded), ("after", after)), ct);
 
+    public Task<AlarmListDto> ListAlarmsAsync(Guid siteId, DateTimeOffset from, DateTimeOffset to, Guid? equipmentId, bool activeOnly, CancellationToken ct = default) =>
+        GetAsync<AlarmListDto>(Query("api/machines/alarms", ("siteId", siteId), ("from", from.ToString("O", System.Globalization.CultureInfo.InvariantCulture)),
+            ("to", to.ToString("O", System.Globalization.CultureInfo.InvariantCulture)), ("equipmentId", equipmentId), ("activeOnly", activeOnly)), ct);
+
+    public Task<IReadOnlyList<ProcessValueSeriesDto>> GetProcessValuesAsync(Guid equipmentId, DateTimeOffset from, DateTimeOffset to, Guid? tagId = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ProcessValueSeriesDto>>(Query("api/machines/process-values", ("equipmentId", equipmentId),
+            ("from", from.ToString("O", System.Globalization.CultureInfo.InvariantCulture)), ("to", to.ToString("O", System.Globalization.CultureInfo.InvariantCulture)), ("tagId", tagId)), ct);
+
     public Task<OeeReportDto> GetOeeReportAsync(Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId = null, CancellationToken ct = default) =>
         GetAsync<OeeReportDto>(Query("api/machines/oee", ("siteId", siteId),
             ("from", from.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),

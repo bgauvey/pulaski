@@ -5,12 +5,12 @@ namespace Pulaski.Infrastructure.Persistence;
 
 /// <summary>
 /// Housekeeping the API runs against its own database (D-028): checking the schema is new enough,
-/// and keeping the history tables partitioned ahead.
+/// keeping the history tables partitioned ahead, and dropping process values past their retention (#26).
 /// </summary>
 public sealed class DatabaseMaintenance(NpgsqlDataSource dataSource)
 {
     /// <summary>The newest file in <c>db/migrations</c>, without <c>.sql</c>. This build needs it applied.</summary>
-    public const string RequiredMigration = "0037_stop_adjustments";
+    public const string RequiredMigration = "0038_alarms_process_values";
 
     private const string HasMigrationSql = "SELECT EXISTS (SELECT 1 FROM public.schema_migration WHERE version = @Version)";
 
@@ -36,5 +36,17 @@ public sealed class DatabaseMaintenance(NpgsqlDataSource dataSource)
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         return await connection.ExecuteScalarAsync<int>(
             new CommandDefinition("SELECT ts.ensure_partitions(@Months)", new { Months = months }, cancellationToken: cancellationToken));
+    }
+
+    /// <summary>
+    /// Drops the monthly <c>ts.process_value</c> partitions that ended more than <paramref name="keepDays"/> ago (at least 7), through
+    /// <c>ts.drop_old_process_values</c>. A month goes whole, once its last day is past the retention.
+    /// </summary>
+    /// <returns>How many partitions were dropped.</returns>
+    public async Task<int> DropOldProcessValuesAsync(int keepDays, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return await connection.ExecuteScalarAsync<int>(
+            new CommandDefinition("SELECT ts.drop_old_process_values(@Days)", new { Days = keepDays }, cancellationToken: cancellationToken));
     }
 }

@@ -194,19 +194,19 @@ What the edge reported seeing (Sparkplug birth certificates and data), so tags c
 
 ### core.equipment_tag — machine signal bindings · *In use (D-050)*
 
-One signal an edge reads for a piece of equipment, and what it means. One active tag per role on a piece of equipment, process values aside (`equipment_tag_role_uq`), and one per address on a connection (`equipment_tag_source_uq`). A tag may be physically deleted by equipment maintainers; any quality-characteristic source binding is cleared first. The deletion event and time-series history remain.
+One signal an edge reads for a piece of equipment, and what it means. One active tag per role on a piece of equipment, except process values, alarms and warnings, which may have several (`equipment_tag_role_uq`, D-071), and one per address on a connection (`equipment_tag_source_uq`). A tag may be physically deleted by equipment maintainers; any quality-characteristic source binding is cleared first. The deletion event and time-series history remain.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key; the edge's signals name it. |
 | `equipment_id` | uuid → equipment | no | Equipment of the node's site that tracks state. |
-| `tag_role` | text | no | `state`, `unit_mode`, `stop_reason`, `processed_count`, `defective_count`, `consumed_count` or `machine_speed`; `level` (a silo's or tank's, D-060) can be bound but isn't read yet; `alarm`, `warning` and `process_value` aren't recorded yet. |
+| `tag_role` | text | no | `state`, `unit_mode`, `stop_reason`, `processed_count`, `defective_count`, `consumed_count`, `machine_speed`, `alarm` and `warning` (code-valued: the active number, 0 for none; D-071), `process_value`, or `level` (a silo's or tank's, D-060; kept with the process values). |
 | `connection_id` | uuid → edge_connection | no | Where it is read. |
-| `source_address` | text | no | Sparkplug B: `group/node[/device]:metric`. |
+| `source_address` | text | no | The connector's address: Sparkplug B `group/node[/device]:metric`, an OPC UA node id (`ns=2;s=Line1.State`), an EtherNet/IP tag name with its type (`Program:Main.State\|dint`). |
 | `uom_id` | uuid → uom | yes | Unit of the value; not used yet. |
-| `scale_factor`, `scale_offset` | numeric(18,9) | no | Counts are multiplied by the factor; a speed is value × factor + offset. Defaults 1 and 0. |
+| `scale_factor`, `scale_offset` | numeric(18,9) | no | Counts are multiplied by the factor; a speed, process value or level is value × factor + offset. Defaults 1 and 0. |
 | `counter_rollover` | bigint | yes | Counters only: the value the counter wraps at. Without it a counter going back is taken as reset to zero. |
-| `deadband` | numeric(18,9) | yes | Process values only; not used yet. |
+| `deadband` | numeric(18,9) | yes | Process values only, in scaled units: the edge records a change no bigger than this only at its heartbeat (D-071). The edge's configuration gets it in raw units (÷ the scale factor). |
 | `is_active` | boolean | no | Off: its signals are skipped. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
@@ -1430,7 +1430,9 @@ Stops can also be entered by hand, split and merged (D-069). An adjusted stop is
 
 A stop entered by hand records `packml_state` 0 (Undefined: no state was reported), unit mode 1, the run on the equipment at its start, and its reason as `operator_reason_code_id`. Parts of a split, and a merged stop, keep the (first) stop's codes, reasons, coding and run. None is a micro-stop.
 
-### ts.equipment_alarm — alarms and warnings · *Planned*
+### ts.equipment_alarm — alarms and warnings · *In use (D-071)*
+
+Raised and cleared by machine data ingest from code-valued alarm and warning tags: a new number clears the tag's open row and raises another; 0 clears it; a reading that isn't good changes nothing. Apart from state changes and stops. Cleared rows are kept; nothing is deleted. Open rows are indexed by tag (`equipment_alarm_open_ix`).
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1439,9 +1441,10 @@ A stop entered by hand records `packml_state` 0 (Undefined: no state was reporte
 | `cleared_at` | timestamptz | yes | When cleared. |
 | `equipment_id` | uuid → equipment | no | The equipment. |
 | `alarm_kind` | text | no | `alarm` or `warning`. |
-| `alarm_number` | integer | no | PackML `Admin.Alarm[].ID`. |
-| `alarm_value` | integer | yes | Its value. |
-| `message` | text | yes | Its text. |
+| `alarm_number` | integer | no | PackML `Admin.Alarm[].ID` or `Admin.Warning[].ID`: the tag's value when raised. |
+| `alarm_value` | integer | yes | Its value. Not written yet. |
+| `message` | text | yes | The machine profile's message for the number (`core.machine_profile_code`, kind `alarm` or `warning`), as it was when raised. |
+| `equipment_tag_id` | uuid → equipment_tag | yes | The tag that raised it, so each of a machine's alarm words clears on its own. |
 
 ### ts.production_count — count deltas · *In use (operator reports)*
 
@@ -1466,17 +1469,17 @@ Deltas calculated at the edge, with rollover handled there; the raw counter is k
 | `actor_id` | text | yes | Who reported it (issuer\|subject, as on `evt.event`). |
 | `comment` | text | yes | The reporter's comment, at most 1000 characters. |
 
-### ts.process_value — high-rate telemetry · *Planned*
+### ts.process_value — high-rate telemetry · *In use (D-071)*
 
-No surrogate id and no FKs, because size and insert cost matter at this volume. Daily partitions and short retention.
+Process values and levels, scaled, appended by machine data ingest; a reading a tag already has at that moment (a batch sent again) is skipped. No surrogate id and no FKs, because size and insert cost matter at this volume. Monthly partitions, dropped whole once older than `Retention:ProcessValueDays` (90 by default) by `ts.drop_old_process_values`.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `equipment_tag_id` | uuid | no | The source tag id (no FK); historical samples remain if its tag is deleted. Primary key with `occurred_at`. |
 | `occurred_at` | timestamptz | no | Sample time. Partition key. |
 | `value_num` | double precision | yes | Numeric value. |
-| `value_text` | text | yes | Text value. |
-| `quality` | smallint | no | OPC quality; 192 is "good". Sparkplug quality is mapped to the same scale. |
+| `value_text` | text | yes | Text value. Not written yet: signals are numeric. |
+| `quality` | smallint | no | OPC quality: 192 good, 0 bad (no value). Every connector's quality is mapped to these two. |
 
 ### ts.job_status_change — job status history · *In use*
 
@@ -1672,6 +1675,10 @@ Creates monthly partitions (UTC bounds) for a partitioned table, starting at the
 ### ts.ensure_partitions(months) — function (D-028)
 
 Creates the current month and the next `months` − 1 for every range-partitioned table in `ts` and `evt`, by calling `ts.create_month_partitions` for each, and returns how many partitions it created (0 when all were there). `months` is 1 to 24. `SECURITY DEFINER`, with a fixed `search_path`: it runs as the schema owner, since creating a partition needs ownership of its parent. Only `pulaski_app` may execute it. The API calls it at startup and every 12 hours with 3; the seed calls it once.
+
+### ts.drop_old_process_values(keep_days) — function (D-071)
+
+Drops the monthly `ts.process_value` partitions whose end is more than `keep_days` (at least 7) days ago, and returns how many. Only that table. `SECURITY DEFINER` with a fixed `search_path`, like `ts.ensure_partitions`: dropping a partition needs ownership. Only `pulaski_app` may execute it; the API calls it with `Retention:ProcessValueDays` every 12 hours.
 
 ## 16. Schema version
 

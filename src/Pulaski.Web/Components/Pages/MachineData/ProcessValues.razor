@@ -1,0 +1,131 @@
+@using System.Globalization
+@using Pulaski.Web.Services.MachineData
+@inject PulaskiApiClient Api
+@inject Downloads Downloads
+@inject TimeProvider Clock
+
+@* Process values and levels (#26): a machine's readings in a period, by tag, with the latest, lowest, highest and mean. *@
+<div class="inv-toolbar flex-wrap">
+    <select class="form-select w-auto" aria-label="Equipment" value="@(_equipment?.ToString() ?? "")" @onchange="OnEquipmentChangedAsync">
+        <option value="">Choose equipment…</option>
+        @foreach (var m in Machines)
+        {
+            <option value="@m.EquipmentId">@m.Code · @m.Name</option>
+        }
+    </select>
+    <select class="form-select w-auto" aria-label="Period" value="@_hours" @onchange="OnPeriodChangedAsync">
+        <option value="1">Last hour</option>
+        <option value="8">Last 8 hours</option>
+        <option value="24">Last 24 hours</option>
+        <option value="168">Last 7 days</option>
+    </select>
+    <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@(_loading || _equipment is null)" @onclick="LoadAsync">Refresh</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@(_series is not { Count: > 0 })" @onclick="ExportAsync">Export CSV</button>
+</div>
+
+<ProblemAlert Error="_error" />
+@if (_equipment is null)
+{
+    <div class="empty-panel"><p class="text-muted mb-0">Choose a piece of equipment to see its process values.</p></div>
+}
+else if (_series is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+else if (_series.Count == 0)
+{
+    <div class="empty-panel"><p class="text-muted mb-0">No process value or level tags on this equipment. Bind them on its edge node.</p></div>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead><tr><th>Tag</th><th class="inv-num">Latest</th><th>At</th><th class="inv-num">Lowest</th><th class="inv-num">Highest</th><th class="inv-num">Mean</th><th class="inv-num">Readings</th></tr></thead>
+            <tbody>
+                @foreach (var s in _series)
+                {
+                    var sum = ProcessValueView.Summarize(s.Points, _until);
+                    <tr @key="s.TagId">
+                        <td><code>@s.Address</code> @if (s.UomCode is { } uom) { <span class="small text-muted">@uom</span> }</td>
+                        <td class="inv-num fw-semibold">@(sum.Latest is { Good: false } ? "no signal" : ProcessValueView.Value(sum.Latest?.Value))</td>
+                        <td class="small text-nowrap">@(sum.Latest is { } latest ? Display.SiteTime(latest.At, TimeZone) : "")</td>
+                        <td class="inv-num">@ProcessValueView.Value(sum.Min)</td>
+                        <td class="inv-num">@ProcessValueView.Value(sum.Max)</td>
+                        <td class="inv-num" title="Weighted by how long each reading held">@ProcessValueView.Value(sum.Mean)</td>
+                        <td class="inv-num">@sum.Readings@(sum.Lost > 0 ? $" ({sum.Lost} without a value)" : "")</td>
+                    </tr>
+                    @if (s.IsTruncated)
+                    {
+                        <tr><td colspan="7" class="small text-muted" role="status">@s.Address has more readings than one view shows; the figures cover the first @s.Points.Count. Choose a shorter period.</td></tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="small text-muted">Readings are recorded when a value moves by more than its tag's deadband, and at least once a minute while it holds. Export CSV gives every reading.</p>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid SiteId { get; set; }
+
+    [Parameter]
+    public string? SiteCode { get; set; }
+
+    [Parameter]
+    public string? TimeZone { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<MachineStatusDto> Machines { get; set; } = [];
+
+    private IReadOnlyList<ProcessValueSeriesDto>? _series;
+    private Guid? _equipment;
+    private int _hours = 8;
+    private DateTimeOffset _until;
+    private bool _loading;
+    private ApiException? _error;
+
+    private async Task OnEquipmentChangedAsync(ChangeEventArgs e)
+    {
+        _equipment = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _series = null;
+        await LoadAsync();
+    }
+
+    private async Task OnPeriodChangedAsync(ChangeEventArgs e)
+    {
+        _hours = int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var hours) ? hours : 8;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_equipment is not { } equipment)
+        {
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _until = Clock.GetUtcNow();
+            _series = await Api.GetProcessValuesAsync(equipment, _until.AddHours(-_hours), _until.AddMinutes(1));
+            _error = null;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task ExportAsync() => Downloads.CsvAsync(
+        Csv.FileName("process-values", SiteCode, Display.ToSite(Clock.GetUtcNow(), TimeZone)),
+        Csv.Write(
+            ["Equipment", "Tag", "Unit", "At", "Value", "Good"],
+            _series!.SelectMany(s => s.Points.Select(p => (IReadOnlyList<object?>)
+                [s.EquipmentCode, s.Address, s.UomCode, Display.SiteTime(p.At, TimeZone), p.Value, p.Good ? "yes" : "no"])))).AsTask();
+}

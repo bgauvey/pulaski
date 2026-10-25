@@ -14,16 +14,20 @@ public static class TagRoles
     public const string MachineSpeed = "machine_speed";
     public const string ProcessValue = "process_value";
 
-    /// <summary>A silo's or tank's level (D-060): bound now, read once process values are recorded, to check how a balance flowed.</summary>
+    /// <summary>A silo's or tank's level (D-060): its readings are kept like process values (#26), for checking how a balance flowed.</summary>
     public const string Level = "level";
 
     public static IReadOnlyList<string> All { get; } =
         [State, UnitMode, StopReason, Alarm, Warning, ProcessedCount, DefectiveCount, ConsumedCount, MachineSpeed, ProcessValue, Level];
 
-    /// <summary>The roles Pulaski records today; alarms, warnings and process values come later.</summary>
-    public static IReadOnlyList<string> Recorded { get; } = [State, UnitMode, StopReason, ProcessedCount, DefectiveCount, ConsumedCount, MachineSpeed];
+    /// <summary>The roles Pulaski records: state, stops, counts and speed (D-050), and alarms, warnings and process values (#26).</summary>
+    public static IReadOnlyList<string> Recorded { get; } =
+        [State, UnitMode, StopReason, ProcessedCount, DefectiveCount, ConsumedCount, MachineSpeed, Alarm, Warning, ProcessValue];
 
-    /// <summary>The roles a tag can be bound to: those recorded, and a level, whose readings are kept for later (D-060).</summary>
+    /// <summary>Roles a piece of equipment may have several active tags for (#26); every other role has one.</summary>
+    public static IReadOnlyList<string> Repeatable { get; } = [Alarm, Warning, ProcessValue];
+
+    /// <summary>The roles a tag can be bound to: those recorded, and a level, whose readings are kept with the process values (D-060).</summary>
     public static IReadOnlyList<string> Bindable { get; } = [.. Recorded, Level];
 
     /// <summary>The <c>ts.production_count.count_kind</c> a counter role feeds, or null when it isn't a counter.</summary>

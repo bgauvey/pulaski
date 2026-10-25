@@ -157,3 +157,50 @@ public sealed record MergeStopsRequest
 
 /// <summary>The stops an adjustment made, in time order.</summary>
 public sealed record StopsAdjustedResponse(IReadOnlyList<StopKeyDto> Stops);
+
+/// <summary>An alarm or warning a machine raised (#26): from a code-valued tag, with the message its machine profile gives the number.</summary>
+public sealed record AlarmDto
+{
+    public required Guid Id { get; init; }
+    public DateTimeOffset RaisedAt { get; init; }
+
+    /// <summary>Null while it is still active.</summary>
+    public DateTimeOffset? ClearedAt { get; init; }
+
+    /// <summary>How long it was (or has been) active, in seconds.</summary>
+    public int DurationSeconds { get; init; }
+    public required Guid EquipmentId { get; init; }
+    public required string EquipmentCode { get; init; }
+
+    /// <summary><c>alarm</c> or <c>warning</c>.</summary>
+    public required string Kind { get; init; }
+    public int Number { get; init; }
+    public string? Message { get; init; }
+
+    /// <summary>The tag that raised it, by its address.</summary>
+    public string? Address { get; init; }
+}
+
+/// <summary>Alarms and warnings (#26), active first, then newest first. <see cref="IsTruncated"/>: there were more; narrow the period or equipment.</summary>
+public sealed record AlarmListDto
+{
+    public IReadOnlyList<AlarmDto> Alarms { get; init; } = [];
+    public bool IsTruncated { get; init; }
+}
+
+/// <summary>A process value tag's readings between two times (#26), oldest first, in scaled units.</summary>
+public sealed record ProcessValueSeriesDto
+{
+    public required Guid TagId { get; init; }
+    public required Guid EquipmentId { get; init; }
+    public required string EquipmentCode { get; init; }
+    public required string Address { get; init; }
+    public string? UomCode { get; init; }
+    public IReadOnlyList<ProcessValuePointDto> Points { get; init; } = [];
+
+    /// <summary>True when there were more readings than one request returns: the points stop at the limit; ask again from the last one.</summary>
+    public bool IsTruncated { get; init; }
+}
+
+/// <summary>One reading: <see cref="Value"/> is null when the source had none (<see cref="Good"/> false).</summary>
+public sealed record ProcessValuePointDto(DateTimeOffset At, double? Value, bool Good);

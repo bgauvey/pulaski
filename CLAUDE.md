@@ -47,9 +47,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Identity (D-037, proposed): local sign-in now (`pulaski-local`, PBKDF2 hashes in `sec.local_credential`, API-issued
   HMAC JWT from `Security:SigningKey`); OpenID Connect (Okta, Entra ID, AD FS, Keycloak) later as another bearer scheme.
   Users are keyed by issuer + subject. The UI keeps the token in a cookie session and sends it on every API call.
-- Machine data: MQTT Sparkplug B and OPC UA, built on the connector SDK (`src/Pulaski.Connectors`: `IConnector`, samples;
-  `Pulaski.Connectors.Sparkplug`: hand-written protobuf codec, host logic in `SparkplugHost`, MQTTnet 4). `src/Pulaski.Edge` is the
-  worker: `TagBinder` (samples → signals on change), `EdgeBuffer` (SQLite store-and-forward), `ConnectorHost`, `Forwarder`.
+- Machine data: MQTT Sparkplug B, OPC UA and EtherNet/IP, built on the connector SDK (`src/Pulaski.Connectors`: `IConnector`, samples;
+  `Pulaski.Connectors.Sparkplug`: hand-written protobuf codec, host logic in `SparkplugHost`, MQTTnet 4; `Pulaski.Connectors.OpcUa`:
+  OPC Foundation stack 2.0 behind `IOpcUaSession`; `Pulaski.Connectors.EthernetIp`: libplctag behind `ICipTagReader`). `src/Pulaski.Edge`
+  is the worker: `EdgeHost` (console, container, Windows service, systemd), `TagBinder` (samples → signals on change; deadband and
+  heartbeat for process values), `EdgeBuffer` (SQLite store-and-forward), `ConnectorHost`, `Forwarder`.
 - Containers for the demo and Linux sites; Windows service option.
 
 ## Domain conventions
@@ -247,6 +249,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   state (`GetMachineStatusHandler`) and its current shift so far (`OverviewFigures.Scope`, else the site day): reported output/scrap,
   down time by reason and the state lane (`EquipmentUses`, shared with the OEE report), uncoded stops; plus held lots. The strip spans
   the current shifts (`OverviewFigures.Window`). Null = unavailable, never zero.
+- Edge connectors, alarms and process values (D-071, proposed): protocols `sparkplug_b`, `opc_ua` (node ids; sign and encrypt, server
+  trusted by store or thumbprint, `trustAnyServer` for simulators; certificates under `Edge:PkiPath`), `ethernet_ip` (tag `|type`,
+  polled). Alarm/warning tags are code-valued (0 = none), several per machine; ingest raises/clears `ts.equipment_alarm` per tag
+  (`AlarmRules`). Process values and levels go to `ts.process_value` (scaled, deadband at the edge, 1-min heartbeat), dropped by month
+  after `Retention:ProcessValueDays` (90) via `ts.drop_old_process_values`. Machines → Alarms and Process values.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
@@ -312,6 +319,7 @@ Treat these as working assumptions; confirm with Bill before building anything t
 - Run: `dotnet run --project src/Pulaski.Api` (http://localhost:5080, OpenAPI at
   `/openapi/v1.json`) and `dotnet run --project src/Pulaski.Web` (http://localhost:5090).
 - Machine data demo: `docker compose -f deploy/simulator/compose.yaml up -d` (broker + PackML simulators for EXT-01-EXT,
-  EXT-01-SAW and PACK1; `PULASKI_MQTT_PORT=1884` if 1883 is taken), then `dotnet run --project src/Pulaski.Edge` with
+  EXT-01-SAW and PACK1; `PULASKI_MQTT_PORT=1884` if 1883 is taken; an OPC UA server on opc.tcp://localhost:50000, which
+  `PULASKI_OPCUA_TEST_ENDPOINT` points the OPC UA server tests at), then `dotnet run --project src/Pulaski.Edge` with
   `Edge__EdgeNodeId`, `Edge__Username`, `Edge__Password` (from Configure → Edge nodes → Setup). Send the simulator
   commands with `tools/Pulaski.SparkplugCommand`.

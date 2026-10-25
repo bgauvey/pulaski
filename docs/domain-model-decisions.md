@@ -964,7 +964,7 @@ A stop's reason comes from its first-out code through the profile; with no code,
 
 **Machines screen** (`machines.view`, Operate → Machines): a status board refreshed every 5 seconds, each piece of equipment that tracks state in its OEE category (the site's `core.oee_state_category`, else D-005's defaults); a line set to series or parallel takes the worst or best category of the equipment tracking state below it, a constraint-machine line its machine's state. And the stops to code. Starting roles: Operator and Supervisor see and code; Planner, Quality, Manager and Auditor see.
 
-**Not yet:** OPC UA and CIP connectors; alarm and warning history; process values; rules that synthesise a state from discrete signals; OEE rollups (the reports are D-052); machine counts as production reports; running the edge as a Windows service or systemd unit (it runs as a console worker or container).
+**Not yet:** rules that synthesise a state from discrete signals; OEE rollups (the reports are D-052); machine counts as production reports. OPC UA and EtherNet/IP connectors, alarm and warning history, process values and running the edge as a service came with D-071.
 
 ## Utilization and OEE reports (D-052, proposed)
 
@@ -1531,6 +1531,55 @@ Issue #42. The Overview showed current-shift OEE, but its machine state, output,
 **Unavailable is not zero.** A null figure means not measured: with no line tracking state, down time, stops to code and lines with no signal show as placeholders, not 0. Output and lots are always measured, so they show 0.
 
 **Not done.** SPC alerts (no quality checks yet); machine counts as a live estimate of output; calendar exceptions in the scope (as in the OEE report); per-line targets.
+
+## Edge connectors, service hosting, alarms and process values (D-071, proposed)
+
+Issues #22, #24, #25 and #26 (#11 came earlier). D-050 read only Sparkplug B, recorded no alarms, warnings or process values, and
+ran the edge as a console program.
+
+**One connector interface, three protocols.** OPC UA (`opc_ua`, `Pulaski.Connectors.OpcUa`) and EtherNet/IP (`ethernet_ip`,
+`Pulaski.Connectors.EthernetIp`) sit beside Sparkplug B on the D-050 `IConnector`: they emit samples and know nothing of equipment,
+PackML or OEE. `EdgeProtocols` holds each protocol's settings, address rules and hints, and the edge node screen offers settings
+by protocol. Secrets (passwords) stay in the edge's configuration.
+- *OPC UA* uses the OPC Foundation's UA .NET Standard stack (MIT, 2.0). The address is a node id (`ns=2;s=Line1.State`). One
+  subscription monitors the bound nodes and follows changes to them. A sample takes the source time, else the server time; a
+  status that isn't good is Bad. Browsing from `browseRoot` (the Objects folder) to `browseDepth` (3) on connect announces the
+  variables for binding. A lost session (three failed keep-alives) marks the bound nodes Bad, then the edge reconnects, waiting 1 s
+  doubling to 1 min. **Secure by default:** sign and encrypt, with the best policy the server offers (or the one named). A server
+  certificate is trusted only from the edge's trusted store (`Edge:PkiPath`, `trusted/certs`) or by its SHA-1 thumbprint on the
+  connection (then copied into the store). Security mode none and `trustAnyServer` are explicit settings, for simulators. The
+  connector logic sits behind `IOpcUaSession`, so it is tested without a server; the stack adapter is checked against Microsoft's
+  OPC PLC simulator (`deploy/simulator`, `PULASKI_OPCUA_TEST_ENDPOINT`).
+- *EtherNet/IP* uses libplctag (MPL-2.0, native library embedded for Windows, Linux and macOS). The address is a Logix tag name
+  with its type after `|` (`Program:Main.State|dint`; DINT when left out). The tags are polled every `pollIntervalMs` (1000) and
+  stamped with the read time, since CIP carries none. The edge forwards only changes. A tag that fails is published Bad once, its
+  handle dropped and retried each poll. An address is announced the first time it reads; there is no tag browsing. Families:
+  ControlLogix/CompactLogix (with a CIP `path`), Micro800, Omron NJ/NX, PLC-5, SLC 500, Logix PCCC.
+
+**Running as a service (#25).** `EdgeHost` builds the one worker for every host: console, container, Windows service
+(`UseWindowsService`, service name `PulaskiEdge`, Event Log) and systemd (`Type=notify`). Under a service the content root is the
+program's folder, so relative `BufferPath` and `PkiPath` resolve beside it. The shutdown timeout is 15 s. A worker that fails
+exits 1, so the manager's recovery restarts it. `deploy/edge` has the install scripts (LocalService, data under ProgramData,
+restart 10 s / 30 s / 60 s) and the unit file.
+
+**Alarms and warnings (#26) are code-valued.** A tag's value is the active number, as PackML `Admin.Alarm[].ID` / `Warning[].ID`
+carry it; 0 is none. A machine may have several alarm and warning tags (the role uniqueness index leaves out alarm, warning and
+process value). Ingest (`AlarmRules`) raises a row in `ts.equipment_alarm` per tag (`equipment_tag_id`) with the message from the
+machine profile's alarm/warning codes. A different number clears the open one and raises the new one; 0 clears; a reading that
+isn't good changes nothing. A clear is never before its raise. Alarms are their own history, apart from states and stops.
+`GET /api/machines/alarms` (31 days, active first, at most 2000 with `isTruncated`); Machines → Alarms.
+
+**Process values (#26)** go to `ts.process_value`, scaled, quality 192 good / 0 bad, appended idempotently. Level readings
+(D-060) go there too, ready for silo genealogy (#81). The edge applies the tag's deadband (stored in scaled units, sent in raw
+units) and a heartbeat (`Edge:ProcessValueHeartbeat`, 1 min): a value within its deadband, or steady, is still recorded once a
+minute while good. `GET /api/machines/process-values` (31 days, at most 10,000 readings a tag, with `isTruncated`); Machines →
+Process values summarizes latest, lowest, highest and time-weighted mean, and exports every reading as CSV. Only numbers are
+recorded (signals are numeric). **Retention:** `ts.drop_old_process_values` (SECURITY DEFINER, at least 7 days) drops whole
+monthly partitions older than `Retention:ProcessValueDays` (90), on the API's 12-hourly partition round.
+
+**Not yet:** OPC UA events and alarms-and-conditions (alarms come from code-valued tags), OPC UA reverse connect, writing to
+machines, EtherNet/IP tag browsing and arrays, text process values, charts of process values, and statistical process control
+on them (#65).
 
 ## Application architecture
 

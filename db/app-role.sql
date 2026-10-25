@@ -44,6 +44,10 @@ GRANT SELECT, INSERT ON ts.production_count TO pulaski_app;
 GRANT SELECT, INSERT ON ts.equipment_state_change TO pulaski_app;
 -- Stops are updated while open and when coded (D-050); still never deleted.
 GRANT SELECT, INSERT, UPDATE ON ts.downtime TO pulaski_app;
+-- Alarms and warnings are cleared when the machine clears them (#26); process values are only appended, and dropped by month
+-- through ts.drop_old_process_values.
+GRANT SELECT, INSERT, UPDATE ON ts.equipment_alarm TO pulaski_app;
+GRANT SELECT, INSERT ON ts.process_value TO pulaski_app;
 
 -- Users, roles and local passwords (D-037). Roles are data an administrator maintains; the API copies the
 -- code's permission catalog into sec.permission at start.
@@ -60,6 +64,9 @@ DO $$
 BEGIN
     IF to_regprocedure('ts.ensure_partitions(integer)') IS NOT NULL THEN
         GRANT EXECUTE ON FUNCTION ts.ensure_partitions(integer) TO pulaski_app;
+    END IF;
+    IF to_regprocedure('ts.drop_old_process_values(integer)') IS NOT NULL THEN
+        GRANT EXECUTE ON FUNCTION ts.drop_old_process_values(integer) TO pulaski_app;
     END IF;
     IF to_regclass('public.schema_migration') IS NOT NULL THEN
         GRANT SELECT ON public.schema_migration TO pulaski_app;

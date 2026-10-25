@@ -85,6 +85,7 @@ public class LiveStateTests
     {
         Assert.Equal("processed", TagRoles.CountKind(TagRoles.ProcessedCount));
         Assert.Null(TagRoles.CountKind(TagRoles.State));
-        Assert.DoesNotContain(TagRoles.Alarm, TagRoles.Recorded);
+        Assert.Contains(TagRoles.Alarm, TagRoles.Recorded);
+        Assert.Equal([TagRoles.Alarm, TagRoles.Warning, TagRoles.ProcessValue], TagRoles.Repeatable);
     }
 }
