@@ -97,6 +97,10 @@ public sealed class InMemoryStores
 
     public InMemoryLineBatchSizes LineBatchSizes { get; } = new();
 
+    public InMemoryMaterialConnections MaterialConnections { get; } = new();
+
+    public FakeMaterialConnectionFetcher MaterialConnectionFetcher { get; } = new();
+
     /// <summary>Replaces any registered stores with these instances.</summary>
     public IServiceCollection Register(IServiceCollection services)
     {
@@ -157,6 +161,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IAllocationRepository>();
         services.RemoveAll<IAllocationReadStore>();
         services.RemoveAll<ILineBatchSizes>();
+        services.RemoveAll<IMaterialConnectionStore>();
+        services.RemoveAll<IMaterialConnectionFetcher>();
 
         services.AddSingleton<IUnitOfWork>(UnitOfWork);
         services.AddSingleton<IEventLog>(Events);
@@ -215,6 +221,8 @@ public sealed class InMemoryStores
         services.AddSingleton<IAllocationRepository>(Allocations);
         services.AddSingleton<IAllocationReadStore>(Allocations);
         services.AddSingleton<ILineBatchSizes>(LineBatchSizes);
+        services.AddSingleton<IMaterialConnectionStore>(MaterialConnections);
+        services.AddSingleton<IMaterialConnectionFetcher>(MaterialConnectionFetcher);
         return services;
     }
 }

@@ -408,4 +408,27 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
         var result = Assert.Single((await response.Content.ReadFromJsonAsync<ImportWorkOrdersResponse>())!.Results);
         Assert.Equal(("refused", true), (result.Action, result.Messages[0].Contains("OTHER-SITE", StringComparison.Ordinal)));
     }
+
+    [Fact]
+    public async Task Material_connections_are_set_up_by_integrations_and_run_by_materials()
+    {
+        var request = new Pulaski.Contracts.Materials.SaveMaterialConnectionRequest
+        {
+            Code = "ERP-" + Guid.NewGuid().ToString("N")[..4],
+            Name = "ERP items",
+            BaseUrl = "https://erp.example/odata",
+            EntitySet = "Products",
+            ExternalSystem = "ERP1",
+            FieldMap = new Dictionary<string, string> { ["code"] = "Number", ["external_key"] = "Id" },
+        };
+        var site = Guid.CreateVersion7();
+        var planner = await factory.CreateClientAsAsync(Roles.Planner, site);
+        Assert.Equal(HttpStatusCode.Forbidden, (await planner.PostAsJsonAsync("/api/material-connections", request)).StatusCode);
+
+        var created = await (await factory.CreateClient().PostAsJsonAsync("/api/material-connections", request)).Content.ReadFromJsonAsync<CreatedResponse>();
+        var run = new Pulaski.Contracts.Materials.RunMaterialConnectionRequest { DryRun = true };
+        var operatorClient = await factory.CreateClientAsAsync(Roles.Operator, site);
+        Assert.Equal(HttpStatusCode.Forbidden, (await operatorClient.PostAsJsonAsync($"/api/material-connections/{created!.Id}/run", run)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await planner.PostAsJsonAsync($"/api/material-connections/{created.Id}/run", run)).StatusCode);
+    }
 }

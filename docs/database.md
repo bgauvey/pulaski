@@ -261,6 +261,25 @@ Per-site mapping of raw state to an OEE category (D-005). Raw state is always st
 
 ## 3. Material, BOM and capability
 
+### core.material_connection — external sources of material master data (D-068) · *In use*
+
+An OData v4 service Pulaski pulls items from, on demand, through the materials import (D-034, D-053): the same rules, events and all-or-nothing transaction as a file. No secrets: credentials are in the API's configuration under `MaterialConnections:<code>`.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `code` | text | no | Unique, upper case, fixed once created: it names the connection's configuration section. |
+| `name` | text | no | For screens, and each event's reason (*<name> import*). |
+| `kind` | text | no | `odata` (OData v4). |
+| `base_url` | text | no | The service root: https (http only on the API's own machine). |
+| `entity_set` | text | no | The entity set holding the items, such as `Products`. |
+| `filter` | text | yes | An OData `$filter` sent with the request. |
+| `external_system` | text | no | The system the items belong to; with each item's key it is what the import matches on (D-033). |
+| `field_map` | jsonb | no | Import field → the service's property (or `A/B` path): `{"code": "Number", "external_key": "Id", ...}`. Code and external key are required. |
+| `is_active` | boolean | no | False: it can't be run. |
+| `last_run_at`, `last_run_by`, `last_run_summary` | timestamptz, text, text | yes | The last import (not a check): when, who and what it did. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
 ### core.material_class — material groups · *In use*
 
 Groups materials (e.g. all resins), so processes and changeover rules can match a class instead of each material. Flat: a class has no parent (D-033). Never deleted; switched off instead.

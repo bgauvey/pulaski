@@ -1398,6 +1398,30 @@ For example:
 - **Left out or blank** works as in CSV: a property that isn't there keeps what the material has, and one with an empty value clears an optional field.
 - Any B2MML namespace version (or none) works, inside `MaterialInformation`, a wrapper such as `SyncMaterialInformation`, or as a bare `MaterialDefinition`. The *Line* is where the material's `MaterialDefinition` starts. Further class IDs and descriptions (other languages) are ignored. Files with a `DOCTYPE` are refused. At most 5 MB and 5,000 materials per file.
 
+### Import materials from a connection
+
+Instead of a file, Pulaski can read items straight from an **OData v4** service, which many ERPs and item masters offer. Someone who manages integrations sets the connection up once; anyone who maintains materials can then check and import it whenever the item master changes.
+
+1. Open **Materials**, click **Import file**, and find **Material connections** under the file import (or open **Configure → Integrations**).
+2. Click **Check** on the connection's row. Pulaski reads every item and says what an import would do: how many to create, update or leave unchanged, and any items with errors, with why.
+3. When the check finds no errors, click **Import**. As with a file, it is all or nothing.
+4. Tick **Create missing classes** before checking if the items name classes Pulaski doesn't have yet.
+
+**Set up a connection** (needs *integrations.manage*, Administrator to start with)
+
+1. On **Configure → Integrations**, under **Material connections**, click **Add connection**.
+2. Give it a **Code** (fixed once saved: it names the credentials in the configuration), a **Name**, and the **External system** the items belong to, such as *ERP1*. Items are matched on that system and each item's key, so the same item is never made twice.
+3. Enter the **Service root** (an https address) and the **Entity set** holding the items, such as *Products*, and optionally a **Filter** in OData syntax to take only some of them.
+4. Under **Fields**, type, for each Pulaski field, the name of the service's property that holds it: at least **code** and **external_key**, and for new items **name**, **type** and **base_unit**. Use `/` for a property of a property, such as `Unit/Code`. A field left blank isn't read: materials keep what they have.
+5. Click **Save**.
+
+**In detail**
+
+- **Credentials** never go in the database. Put them in the API's settings or environment under `MaterialConnections:<code>`: `BearerToken`, or `Username` and `Password` for basic authentication. The list says whether credentials are configured.
+- **What is read.** Pulaski asks for only the properties the fields name (`$select`), applies the filter, and follows the service's next-page links, up to 5,000 items (an import's limit). A property the item doesn't have leaves that field as the material has it; a null clears an optional field. Values are read as from a file: yes/no and true/false, whole days.
+- **The rules are the import's.** For an ERP item the ERP owns its code, name, base unit and type; Pulaski owns the rest. Each change is recorded with the reason *<connection name> import*, and the list shows the last import, who ran it and what it did. A check is not recorded.
+- **Only OData v4**, read on demand: nothing runs on a timer.
+
 ### Import capabilities from a CSV file
 
 Set up which lines can run which materials, and how fast, for many materials at once.
@@ -2068,7 +2092,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 
 - **No screen yet for the changeover rules** (how long each material change takes): they are set up in the database.
 - **Labor:** people come from HR or the ERP only as a file you import: nothing fetches them on a timer, someone missing from a file isn't switched off (send them with `active` = no), and qualifications aren't imported. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
-- **Materials import from files only:** CSV or B2MML on the screen, or the ERP one item at a time through the API. Nothing fetches items from an ERP on a timer, and there are no adapters for label printing. Capabilities import from CSV only, and only for now: a future or past period is set on the material page. B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
+- **Materials import** from CSV or B2MML files, from an OData v4 connection on demand, or one item at a time through the API. Nothing fetches items on a timer, other kinds of service (plain REST, SOAP, a database) have no connection yet, and there are no adapters for label printing. Capabilities import from CSV only, and only for now: a future or past period is set on the material page. B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** stops can't be split, merged or entered by hand. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.

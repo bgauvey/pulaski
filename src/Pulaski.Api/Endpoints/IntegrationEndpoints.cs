@@ -2,7 +2,10 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Integrations;
+using Pulaski.Application.Materials;
+using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Integrations;
+using Pulaski.Contracts.Materials;
 using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
@@ -40,6 +43,29 @@ internal static class IntegrationEndpoints
             ICommandHandler<RetryFailedDeliveriesCommand, RetryDeliveriesResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new RetryFailedDeliveriesCommand(), ct)))
         .RequirePermission(Permissions.Integrations);
+
+        // External sources of material master data (D-068): set up by whoever manages integrations, run by whoever manages materials.
+        var connections = routes.MapGroup("/material-connections").WithTags("Integrations");
+
+        connections.MapGet("/", async Task<Ok<IReadOnlyList<MaterialConnectionDto>>> (
+            IQueryHandler<ListMaterialConnectionsQuery, IReadOnlyList<MaterialConnectionDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListMaterialConnectionsQuery(), ct)))
+        .RequireAny(null, Permissions.IntegrationsView, Permissions.MaterialsView);
+
+        connections.MapPost("/", async Task<Ok<CreatedResponse>> (
+            SaveMaterialConnectionRequest request, ICommandHandler<SaveMaterialConnectionCommand, CreatedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SaveMaterialConnectionCommand(null, request), ct)))
+        .RequirePermission(Permissions.Integrations);
+
+        connections.MapPut("/{id:guid}", async Task<Ok<CreatedResponse>> (
+            Guid id, SaveMaterialConnectionRequest request, ICommandHandler<SaveMaterialConnectionCommand, CreatedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SaveMaterialConnectionCommand(id, request), ct)))
+        .RequirePermission(Permissions.Integrations);
+
+        connections.MapPost("/{id:guid}/run", async Task<Ok<ImportMaterialsResponse>> (
+            Guid id, RunMaterialConnectionRequest request, ICommandHandler<RunMaterialConnectionCommand, ImportMaterialsResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RunMaterialConnectionCommand(id, request.DryRun, request.CreateClasses), ct)))
+        .RequirePermission(Permissions.Materials);
 
         return routes;
     }
