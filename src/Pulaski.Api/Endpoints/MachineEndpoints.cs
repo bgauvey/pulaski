@@ -21,12 +21,13 @@ internal static class MachineEndpoints
             TypedResults.Ok(await handler.HandleAsync(new GetMachineStatusQuery(siteId), ct)))
         .RequireAny(Site.Query(), Permissions.MachinesView);
 
-        // Stops that started in [from, to); for equipment, its stops and those of everything below it. Replaced stops only when asked for.
-        machines.MapGet("/stops", async Task<Ok<IReadOnlyList<DowntimeDto>>> (
+        // Stops that started in [from, to), newest first, a page at a time (#10): pass the page's next as after for the rest. For equipment,
+        // its stops and those of everything below it. Replaced stops only when asked for.
+        machines.MapGet("/stops", async Task<Ok<StopPageDto>> (
             Guid siteId, DateTimeOffset from, DateTimeOffset to, Guid? equipmentId, bool? uncodedOnly, bool? includeMicroStops, bool? includeSuperseded,
-            IQueryHandler<ListStopsQuery, IReadOnlyList<DowntimeDto>> handler, CancellationToken ct) =>
+            string? after, int? limit, IQueryHandler<ListStopsQuery, StopPageDto> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ListStopsQuery(new StopFilter(
-                siteId, equipmentId, from, to, uncodedOnly ?? false, includeMicroStops ?? false, includeSuperseded ?? false)), ct)))
+                siteId, equipmentId, from, to, uncodedOnly ?? false, includeMicroStops ?? false, includeSuperseded ?? false), after, limit), ct)))
         .RequireAny(Site.Query(), Permissions.MachinesView);
 
         // Utilization and OEE between two production days (D-052), for equipment and everything below it, or the whole site.

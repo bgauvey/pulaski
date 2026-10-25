@@ -86,7 +86,7 @@ public sealed class InMemoryStops : IStopRepository, IStopReadStore, IStopAdjust
         }
     }
 
-    public Task<IReadOnlyList<DowntimeDto>> ListStopsAsync(StopFilter filter, DateTimeOffset now, CancellationToken cancellationToken) =>
+    public Task<IReadOnlyList<DowntimeDto>> ListStopsAsync(StopFilter filter, StopCursor? after, int take, DateTimeOffset now, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<DowntimeDto>>([]);
 
     Task<IReadOnlyList<ReasonCodeDto>> IStopReadStore.ListCodingReasonsAsync(Guid equipmentId, CancellationToken cancellationToken)

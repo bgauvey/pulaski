@@ -85,6 +85,37 @@ public sealed class EdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Addresses_seen_when_reporting_fails_are_reported_once_it_works_again()
+    {
+        using var buffer = new EdgeBuffer(_path);
+        var binder = new TagBinder(buffer, TimeSpan.FromSeconds(5));
+        binder.Discovered(_connection, new DiscoveredAddress("P/N/D:Birth", "Int32", 1, T0));
+        binder.Discovered(_connection, new DiscoveredAddress("P/N/D:Speed", "Float", 2.5, T0));
+
+        // The API is down, and while the request is out the connector sees the speed again and a new address.
+        var sent = new List<EdgeMetricsRequest>();
+        await Assert.ThrowsAsync<HttpRequestException>(() => ConnectorHost.ReportSeenAsync(binder, (request, _) =>
+        {
+            binder.Discovered(_connection, new DiscoveredAddress("P/N/D:Speed", null, 3.5, T0.AddSeconds(5)));
+            binder.Discovered(_connection, new DiscoveredAddress("P/N/D:New", "Boolean", true, T0.AddSeconds(5)));
+            throw new HttpRequestException("API unreachable");
+        }, CancellationToken.None));
+
+        // Back up: everything goes, the speed with its newer value and the data type it was first seen with.
+        await ConnectorHost.ReportSeenAsync(binder, (request, _) =>
+        {
+            sent.Add(request);
+            return Task.CompletedTask;
+        }, CancellationToken.None);
+
+        var metrics = Assert.Single(sent).Metrics.OrderBy(m => m.Address, StringComparer.Ordinal).ToList();
+        Assert.Equal(["P/N/D:Birth", "P/N/D:New", "P/N/D:Speed"], metrics.Select(m => m.Address));
+        var speed = metrics[2];
+        Assert.Equal(("Float", "3.5", T0.AddSeconds(5)), (speed.DataType, speed.Value, speed.SeenAt));
+        Assert.Empty(binder.TakeSeen());
+    }
+
+    [Fact]
     public void A_tag_bound_later_starts_with_the_last_value_seen_at_its_address()
     {
         using var buffer = new EdgeBuffer(_path);

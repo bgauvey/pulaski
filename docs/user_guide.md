@@ -1989,7 +1989,7 @@ The board refreshes every 5 seconds.
 ### Code stops
 
 1. Open the **Stops** tab. The heading shows how many are waiting. **Only stops to code** is ticked: stops with no reason, longer than the micro-stop threshold, including one still going on.
-2. Choose the **Equipment** and **Period** (8 hours, 24 hours or 7 days) to look at. Untick **Only stops to code** to see every stop, with its reason; tick **Show micro-stops** to see those too.
+2. Choose the **Equipment** and **Period** (8 hours, 24 hours or 7 days) to look at. Untick **Only stops to code** to see every stop, with its reason; tick **Show micro-stops** to see those too. The newest 500 show first; when there are more, the list says so under it: click **Load more** for the next 500. Stops already loaded stay as the list refreshes.
 3. Click **Code** on a stop. Choose the **Reason**, add a **Comment** if you like (some reasons need one), and click **Save**. Where the stop code mapped a reason, **Confirm …** accepts it in one click; until then the list shows it as *to confirm*.
 4. **Change** on a coded stop gives it another reason. The list shows who coded it, their comment, and the reason the code gave when the two differ.
 

@@ -53,6 +53,16 @@ public sealed record MachineOpenStopDto
     public bool IsCoded { get; init; }
 }
 
+/// <summary>
+/// One page of stops, newest first (#10). <see cref="Next"/> continues the list where this page ends; null when there is no more.
+/// Pages never skip or repeat a stop, even when several started at the same moment.
+/// </summary>
+public sealed record StopPageDto
+{
+    public IReadOnlyList<DowntimeDto> Stops { get; init; } = [];
+    public string? Next { get; init; }
+}
+
 /// <summary>One stop of a machine (D-050), with the reason its stop code maps to and the one an operator gave.</summary>
 public sealed record DowntimeDto
 {

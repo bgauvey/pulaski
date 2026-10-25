@@ -24,6 +24,8 @@ public sealed class OeeReportTests(DatabaseFixture db)
         return await scope.ServiceProvider.GetRequiredService<IQueryHandler<TQuery, TResult>>().HandleAsync(query, CancellationToken.None);
     }
 
+    private async Task<IReadOnlyList<DowntimeDto>> StopsAsync(ListStopsQuery query) => (await QueryAsync<ListStopsQuery, StopPageDto>(query)).Stops;
+
     [Fact]
     public async Task A_lines_stops_runs_and_reports_become_utilization_and_oee()
     {
@@ -51,7 +53,7 @@ public sealed class OeeReportTests(DatabaseFixture db)
             S(2, 5, 2), S(3, 15, 6),     // a 10-minute stop, coded as a jam below
             S(4, 20, 5), S(5, 21, 6),    // a 1-minute micro-stop
         ]));
-        var stop = (await QueryAsync<ListStopsQuery, IReadOnlyList<DowntimeDto>>(new ListStopsQuery(new StopFilter(site.Id, filler.Id, t0, now.AddMinutes(1), true, false)))).Single();
+        var stop = (await StopsAsync(new ListStopsQuery(new StopFilter(site.Id, filler.Id, t0, now.AddMinutes(1), true, false)))).Single();
         await db.SendAsync(new CodeDowntimeCommand(stop.Id, stop.StartedAt, jam.Id, null));
 
         // A job ran on the line for the 30 minutes from t0 at an ideal 600/h, and 270 were reported, 20 of them scrap.

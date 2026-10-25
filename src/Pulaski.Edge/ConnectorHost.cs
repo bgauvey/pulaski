@@ -14,6 +14,7 @@ public sealed class ConnectorHost(
     ILoggerFactory loggers, TimeProvider time, ILogger<ConnectorHost> log) : BackgroundService
 {
     private readonly Dictionary<Guid, Running> _running = [];
+    private int _seenFailures;
 
     private sealed record Running(string Fingerprint, IConnector Connector, CancellationTokenSource Stop, Task Task);
 
@@ -150,6 +151,27 @@ public sealed class ConnectorHost(
 
     private async Task ReportSeenAsync(CancellationToken cancellationToken)
     {
+        try
+        {
+            await ReportSeenAsync(binder, api.SendMetricsAsync, cancellationToken);
+            _seenFailures = 0;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or PulaskiApiException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            // Kept to try again; a failure that goes on is a warning, so a catalog that stays out of date shows in the log.
+            _seenFailures++;
+            log.Log(_seenFailures is 1 or 3 || _seenFailures % 10 == 0 ? LogLevel.Warning : LogLevel.Debug,
+                "Couldn't report the addresses seen ({Failures} times in a row); trying again: {Message}", _seenFailures, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Reports the addresses seen since the last report. When that fails they are put back and go with the next report (#11), so an
+    /// address seen only once (a Sparkplug birth during an outage) still reaches Pulaski's catalog. Reporting one again is harmless.
+    /// </summary>
+    internal static async Task ReportSeenAsync(
+        TagBinder binder, Func<EdgeMetricsRequest, CancellationToken, Task> send, CancellationToken cancellationToken)
+    {
         var seen = binder.TakeSeen();
         if (seen.Count == 0)
         {
@@ -158,12 +180,12 @@ public sealed class ConnectorHost(
 
         try
         {
-            await api.SendMetricsAsync(new EdgeMetricsRequest { Metrics = seen }, cancellationToken);
+            await send(new EdgeMetricsRequest { Metrics = seen }, cancellationToken);
         }
-        catch (Exception ex) when (ex is HttpRequestException or PulaskiApiException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        catch
         {
-            // What was seen is reported again the next time it is seen; nothing is lost that matters.
-            log.LogDebug("Couldn't report {Count} addresses seen: {Message}", seen.Count, ex.Message);
+            binder.ReturnSeen(seen);
+            throw;
         }
     }
 

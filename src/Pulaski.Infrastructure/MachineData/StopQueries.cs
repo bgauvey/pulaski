@@ -74,8 +74,11 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
           AND (@IncludeSuperseded OR d.superseded_at IS NULL)
           AND (NOT @UncodedOnly OR (d.effective_reason_code_id IS NULL AND NOT d.is_micro_stop AND d.superseded_at IS NULL
                                     AND (d.ended_at IS NOT NULL OR d.started_at < @Now - e.micro_stop_threshold)))
-        ORDER BY d.started_at DESC, d.superseded_at NULLS FIRST
-        LIMIT 1000
+          -- Keyset paging (#10): after the last stop of the previous page, in the same total order.
+          AND (@AfterStart::timestamptz IS NULL
+               OR (d.started_at, d.superseded_at IS NULL, d.id) < (@AfterStart::timestamptz, @AfterCurrent::boolean, @AfterId::uuid))
+        ORDER BY d.started_at DESC, (d.superseded_at IS NULL) DESC, d.id DESC
+        LIMIT @Take
         """;
 
     public async Task<IReadOnlyList<MachineStatusRow>> ListMachineStatusAsync(Guid siteId, DateTimeOffset now, CancellationToken cancellationToken)
@@ -112,7 +115,7 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
         }, r.ConstraintEquipmentId))];
     }
 
-    public async Task<IReadOnlyList<DowntimeDto>> ListStopsAsync(StopFilter filter, DateTimeOffset now, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<DowntimeDto>> ListStopsAsync(StopFilter filter, StopCursor? after, int take, DateTimeOffset now, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         var rows = await connection.QueryAsync<StopRow>(new CommandDefinition(StopsSql, new
@@ -125,6 +128,10 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
             IncludeMicro = filter.IncludeMicroStops,
             filter.IncludeSuperseded,
             Now = now,
+            AfterStart = after?.StartedAt,
+            AfterCurrent = after?.IsCurrent,
+            AfterId = after?.Id,
+            Take = take,
         }, cancellationToken: cancellationToken));
         return [.. rows.Select(r => r.ToDto())];
     }

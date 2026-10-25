@@ -142,6 +142,19 @@ public sealed class TagBinder(EdgeBuffer buffer, TimeSpan speedInterval)
         return seen;
     }
 
+    /// <summary>
+    /// Puts back what <see cref="TakeSeen"/> took when reporting it failed, to report again (#11). Anything seen since is newer and
+    /// wins; what it lacks (a data type) comes from the old entry, and the later time is kept.
+    /// </summary>
+    public void ReturnSeen(IEnumerable<EdgeMetricReportDto> metrics)
+    {
+        foreach (var metric in metrics)
+        {
+            _seen.AddOrUpdate((metric.ConnectionId, metric.Address), metric,
+                (_, newer) => newer with { DataType = newer.DataType ?? metric.DataType, SeenAt = Max(newer.SeenAt, metric.SeenAt) });
+        }
+    }
+
     /// <summary>A value as a number: numbers as they are, booleans as 0 and 1, text when it reads as a number; otherwise none.</summary>
     public static decimal? Number(object? value) => value switch
     {

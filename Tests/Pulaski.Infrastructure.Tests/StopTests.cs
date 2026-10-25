@@ -1,6 +1,8 @@
+using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.EquipmentModel;
+using Pulaski.Application.Errors;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.MachineData;
 using Pulaski.Contracts.Common;
@@ -24,6 +26,8 @@ public sealed class StopTests(DatabaseFixture db)
         await using var scope = db.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IQueryHandler<TQuery, TResult>>().HandleAsync(query, CancellationToken.None);
     }
+
+    private async Task<IReadOnlyList<DowntimeDto>> StopsAsync(ListStopsQuery query) => (await QueryAsync<ListStopsQuery, StopPageDto>(query)).Stops;
 
     [Fact]
     public async Task Stops_are_opened_closed_mapped_coded_and_shown_on_the_board()
@@ -67,13 +71,13 @@ public sealed class StopTests(DatabaseFixture db)
             S(8, fillState.Id, 30, 5),                                                         // starved, ongoing for 10 minutes
         ]));
 
-        var all = await QueryAsync<ListStopsQuery, IReadOnlyList<DowntimeDto>>(new ListStopsQuery(new StopFilter(site.Id, line.Id, now.AddHours(-1), now.AddMinutes(1), false, true)));
+        var all = await StopsAsync(new ListStopsQuery(new StopFilter(site.Id, line.Id, now.AddHours(-1), now.AddMinutes(1), false, true)));
         Assert.Equal([(30, false, "SSTV-" + _s), (20, true, "SSTV-" + _s), (5, false, "SJAM-" + _s)],
             all.Select(s => ((int)Math.Round((s.StartedAt - t0).TotalMinutes), s.IsMicroStop, s.MappedReasonCode)));
         Assert.Null(all[0].EndedAt);
         Assert.Equal((600, "Infeed jam"), (all[2].DurationSeconds, all[2].StopCodeText));
 
-        var uncoded = await QueryAsync<ListStopsQuery, IReadOnlyList<DowntimeDto>>(new ListStopsQuery(new StopFilter(site.Id, null, now.AddHours(-1), now.AddMinutes(1), true, false)));
+        var uncoded = await StopsAsync(new ListStopsQuery(new StopFilter(site.Id, null, now.AddHours(-1), now.AddMinutes(1), true, false)));
         Assert.Empty(uncoded);    // both have mapped reasons
 
         var reasons = await QueryAsync<ListCodingReasonsQuery, IReadOnlyList<ReasonCodeDto>>(new ListCodingReasonsQuery(filler.Id));
@@ -81,7 +85,7 @@ public sealed class StopTests(DatabaseFixture db)
 
         var jamStop = all[2];
         await db.SendAsync(new CodeDowntimeCommand(jamStop.Id, jamStop.StartedAt, other.Id, "Wrong carton"));
-        var coded = (await QueryAsync<ListStopsQuery, IReadOnlyList<DowntimeDto>>(new ListStopsQuery(new StopFilter(site.Id, filler.Id, now.AddHours(-1), now.AddMinutes(1), false, false))))
+        var coded = (await StopsAsync(new ListStopsQuery(new StopFilter(site.Id, filler.Id, now.AddHours(-1), now.AddMinutes(1), false, false))))
             .Single(s => s.Id == jamStop.Id);
         Assert.Equal(("SOTH-" + _s, "SJAM-" + _s, "Wrong carton", "downtime"), (coded.OperatorReasonCode, coded.MappedReasonCode, coded.Comment, coded.UtilizationClass));
 
@@ -121,7 +125,7 @@ public sealed class StopTests(DatabaseFixture db)
         ]));
 
         async Task<IReadOnlyList<DowntimeDto>> ListAsync(bool superseded = false) =>
-            await QueryAsync<ListStopsQuery, IReadOnlyList<DowntimeDto>>(new ListStopsQuery(new StopFilter(site.Id, filler.Id, t0, now.AddMinutes(1), false, true, superseded)));
+            await StopsAsync(new ListStopsQuery(new StopFilter(site.Id, filler.Id, t0, now.AddMinutes(1), false, true, superseded)));
         async Task<IReadOnlyList<UtilizationRowDto>> UtilizationAsync()
         {
             var today = DateOnly.FromDateTime(now.UtcDateTime);
@@ -162,5 +166,63 @@ public sealed class StopTests(DatabaseFixture db)
         Assert.Equal(("ASET-" + _s, "planned", false), (manual.OperatorReasonCode, manual.UtilizationClass, manual.AdjustedBy is null));
         var planned = Assert.Single(await UtilizationAsync(), u => u.Use == "planned");
         Assert.Equal((setup.Id, 0.05m, 1), (planned.ReasonCodeId, planned.Hours, planned.Stops));
+    }
+
+    [Fact]
+    public async Task More_than_a_thousand_stops_come_in_pages_that_neither_skip_nor_repeat()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "PENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "PS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse filler = await db.SendAsync(new CreateEquipmentCommand(site.Id, "PF-" + _s, "Filler", null, "work_unit", "machine", true, false, false, null));
+
+        // 1,203 closed stops, three to each start time; one of each three replaced by a split (D-069), so it shows only when asked for.
+        var t0 = DateTimeOffset.UtcNow.AddMinutes(-50);
+        await using (var admin = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await admin.ExecuteAsync(
+                """
+                INSERT INTO ts.downtime (started_at, ended_at, equipment_id, packml_state, superseded_at, superseded_by)
+                SELECT @t0 + (g / 3) * interval '1 second', @t0 + (g / 3) * interval '1 second' + interval '1 second', @filler, 2,
+                       CASE WHEN g % 3 = 0 THEN now() END, CASE WHEN g % 3 = 0 THEN 'test' END
+                FROM generate_series(0, 1202) AS g
+                """,
+                new { t0, filler = filler.Id });
+        }
+
+        async Task<List<DowntimeDto>> AllAsync(bool superseded)
+        {
+            var all = new List<DowntimeDto>();
+            string? after = null;
+            var pages = 0;
+            do
+            {
+                var page = await QueryAsync<ListStopsQuery, StopPageDto>(new ListStopsQuery(
+                    new StopFilter(site.Id, filler.Id, t0.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1), false, true, superseded), after, 250));
+                all.AddRange(page.Stops);
+                after = page.Next;
+                pages++;
+            }
+            while (after is not null && pages < 20);
+
+            return all;
+        }
+
+        var current = await AllAsync(superseded: false);
+        Assert.Equal(802, current.Count);
+        Assert.Equal(802, current.Select(s => s.Id).Distinct().Count());
+
+        var everything = await AllAsync(superseded: true);
+        Assert.Equal(1203, everything.Count);
+        Assert.Equal(1203, everything.Select(s => s.Id).Distinct().Count());
+
+        // Newest first; at one start time, the current stops before the replaced one.
+        Assert.True(everything.Zip(everything.Skip(1)).All(p => p.First.StartedAt >= p.Second.StartedAt));
+        Assert.True(everything.GroupBy(s => s.StartedAt).All(g => g.SkipWhile(s => s.SupersededAt is null).All(s => s.SupersededAt is not null)));
+
+        // The default page is 500; a cursor that isn't one is refused.
+        var first = await QueryAsync<ListStopsQuery, StopPageDto>(new ListStopsQuery(new StopFilter(site.Id, filler.Id, t0.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1), false, true)));
+        Assert.Equal((500, true), (first.Stops.Count, first.Next is not null));
+        await Assert.ThrowsAsync<ValidationException>(() => QueryAsync<ListStopsQuery, StopPageDto>(new ListStopsQuery(
+            new StopFilter(site.Id, filler.Id, t0, DateTimeOffset.UtcNow, false, true), "not-a-cursor")));
     }
 }

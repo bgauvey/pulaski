@@ -303,9 +303,12 @@ else
                 </tbody>
             </table>
         </div>
-        @if (_stops.Count == 1000)
+        @if (_next is not null)
         {
-            <p class="small text-muted">Showing the latest 1000 stops; narrow the period or equipment to see the rest.</p>
+            <div class="d-flex align-items-center gap-2" role="status">
+                <span class="small text-muted">Showing the latest @_stops.Count stops in this period; there are more.</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_loadingMore" @onclick="LoadMoreStopsAsync">Load more</button>
+            </div>
         }
     }
 }
@@ -316,6 +319,8 @@ else
     private readonly CancellationTokenSource _cts = new();
     private IReadOnlyList<MachineStatusDto>? _status;
     private IReadOnlyList<DowntimeDto>? _stops;
+    private string? _next;
+    private bool _loadingMore;
     private IReadOnlyList<ReasonCodeDto> _reasons = [];
     private readonly Dictionary<Guid, IReadOnlyList<ReasonCodeDto>> _reasonsByEquipment = [];
     private ApiException? _error;
@@ -389,18 +394,54 @@ else
     {
         if (Sites.SiteId is not { } site)
         {
-            _stops = [];
+            (_stops, _next) = ([], null);
             return;
         }
 
         try
         {
+            // A refresh reloads as many stops as are shown, so pages already loaded stay (#10).
             var now = Clock.GetUtcNow();
-            _stops = await Api.ListStopsAsync(site, now.AddHours(-_hours), now.AddMinutes(1), _equipment, _uncodedOnly, _micro, _superseded);
+            var shown = _stops?.Count ?? 0;
+            var stops = new List<DowntimeDto>();
+            string? next = null;
+            do
+            {
+                var page = await Api.ListStopsAsync(site, now.AddHours(-_hours), now.AddMinutes(1), _equipment, _uncodedOnly, _micro, _superseded, next);
+                stops.AddRange(page.Stops);
+                next = page.Next;
+            }
+            while (next is not null && stops.Count < shown);
+
+            (_stops, _next) = (stops, next);
         }
         catch (ApiException ex)
         {
             _error = ex;
+        }
+    }
+
+    private async Task LoadMoreStopsAsync()
+    {
+        if (Sites.SiteId is not { } site || _next is null || _stops is null)
+        {
+            return;
+        }
+
+        _loadingMore = true;
+        try
+        {
+            var now = Clock.GetUtcNow();
+            var page = await Api.ListStopsAsync(site, now.AddHours(-_hours), now.AddMinutes(1), _equipment, _uncodedOnly, _micro, _superseded, _next);
+            (_stops, _next) = ([.. _stops, .. page.Stops], page.Next);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _loadingMore = false;
         }
     }
 
@@ -438,7 +479,14 @@ else
         (_equipment, _coding, _entry, _splitting) = (null, null, null, null);
         _chosen.Clear();
         await LoadStatusAsync();
-        await LoadStopsAsync();
+        await ReloadStopsAsync();
+    }
+
+    // Other filters: start again from the first page.
+    private Task ReloadStopsAsync()
+    {
+        (_stops, _next) = (null, null);
+        return LoadStopsAsync();
     }
 
     private async Task ShowStopsAsync()
@@ -449,26 +497,26 @@ else
 
     private async Task ShowStopsOfAsync(Guid equipmentId)
     {
-        (_equipment, _uncodedOnly) = (equipmentId, true);
-        await ShowStopsAsync();
+        (_equipment, _uncodedOnly, _tab) = (equipmentId, true, "stops");
+        await ReloadStopsAsync();
     }
 
     private async Task OnEquipmentChangedAsync(ChangeEventArgs e)
     {
         _equipment = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
-        await LoadStopsAsync();
+        await ReloadStopsAsync();
     }
 
     private async Task OnPeriodChangedAsync(ChangeEventArgs e)
     {
         _hours = int.TryParse(e.Value?.ToString(), out var hours) ? hours : 24;
-        await LoadStopsAsync();
+        await ReloadStopsAsync();
     }
 
     private async Task ToggleAsync(Action change)
     {
         change();
-        await LoadStopsAsync();
+        await ReloadStopsAsync();
     }
 
     private async Task StartCodingAsync(DowntimeDto stop)

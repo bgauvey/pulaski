@@ -291,11 +291,11 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<IReadOnlyList<MachineStatusDto>> GetMachineStatusAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<MachineStatusDto>>($"api/machines/status?siteId={siteId}", ct);
 
-    public Task<IReadOnlyList<DowntimeDto>> ListStopsAsync(Guid siteId, DateTimeOffset from, DateTimeOffset to, Guid? equipmentId, bool uncodedOnly, bool includeMicroStops,
-        bool includeSuperseded = false, CancellationToken ct = default) =>
-        GetAsync<IReadOnlyList<DowntimeDto>>(Query("api/machines/stops", ("siteId", siteId), ("from", from.ToString("O", System.Globalization.CultureInfo.InvariantCulture)),
+    public Task<StopPageDto> ListStopsAsync(Guid siteId, DateTimeOffset from, DateTimeOffset to, Guid? equipmentId, bool uncodedOnly, bool includeMicroStops,
+        bool includeSuperseded = false, string? after = null, CancellationToken ct = default) =>
+        GetAsync<StopPageDto>(Query("api/machines/stops", ("siteId", siteId), ("from", from.ToString("O", System.Globalization.CultureInfo.InvariantCulture)),
             ("to", to.ToString("O", System.Globalization.CultureInfo.InvariantCulture)), ("equipmentId", equipmentId),
-            ("uncodedOnly", uncodedOnly), ("includeMicroStops", includeMicroStops), ("includeSuperseded", includeSuperseded)), ct);
+            ("uncodedOnly", uncodedOnly), ("includeMicroStops", includeMicroStops), ("includeSuperseded", includeSuperseded), ("after", after)), ct);
 
     public Task<OeeReportDto> GetOeeReportAsync(Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId = null, CancellationToken ct = default) =>
         GetAsync<OeeReportDto>(Query("api/machines/oee", ("siteId", siteId),
