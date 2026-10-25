@@ -31,6 +31,14 @@ public sealed class InMemoryEdge : IEdgeRepository, IEdgeReadStore
 
     public List<MachineCountRow> Counts { get; } = [];
 
+    /// <summary>Every alarm and warning raised (#26), with when it was cleared.</summary>
+    public List<(AlarmRow Row, DateTimeOffset? ClearedAt)> Alarms { get; } = [];
+
+    public List<ProcessValueRow> ProcessValues { get; } = [];
+
+    /// <summary>The profiles' alarm and warning messages, as a test sets them.</summary>
+    public Dictionary<(Guid ProfileId, string Kind, int Number), string> AlarmMessages { get; } = [];
+
     public void AddSite(Guid siteId)
     {
         lock (_lock)
@@ -322,6 +330,43 @@ public sealed class InMemoryEdge : IEdgeRepository, IEdgeReadStore
         LastSequence = n.Value.LastSequence,
         Version = n.Version,
     };
+
+    public Task<IReadOnlyDictionary<Guid, OpenAlarm>> GetOpenAlarmsAsync(IReadOnlyCollection<Guid> tagIds, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyDictionary<Guid, OpenAlarm>>(() => Alarms
+            .Where(a => a.ClearedAt is null && tagIds.Contains(a.Row.TagId))
+            .GroupBy(a => a.Row.TagId)
+            .ToDictionary(g => g.Key, g => g.Select(a => new OpenAlarm(a.Row.Id, a.Row.RaisedAt, a.Row.Number)).Last()));
+
+    public Task<IReadOnlyDictionary<(Guid ProfileId, string Kind, int Number), string>> GetAlarmMessagesAsync(
+        IReadOnlyCollection<Guid> profileIds, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyDictionary<(Guid ProfileId, string Kind, int Number), string>>(() =>
+            AlarmMessages.Where(m => profileIds.Contains(m.Key.ProfileId)).ToDictionary(m => m.Key, m => m.Value));
+
+    public Task InsertAlarmsAsync(IReadOnlyList<AlarmRow> rows, CancellationToken cancellationToken) => Locked(() =>
+    {
+        Alarms.AddRange(rows.Select(r => (r, (DateTimeOffset?)null)));
+        return 0;
+    });
+
+    public Task ClearAlarmsAsync(IReadOnlyList<(OpenAlarm Alarm, DateTimeOffset ClearedAt)> cleared, CancellationToken cancellationToken) => Locked(() =>
+    {
+        foreach (var (alarm, at) in cleared)
+        {
+            var index = Alarms.FindIndex(a => a.Row.Id == alarm.Id && a.ClearedAt is null);
+            if (index >= 0)
+            {
+                Alarms[index] = (Alarms[index].Row, at);
+            }
+        }
+
+        return 0;
+    });
+
+    public Task InsertProcessValuesAsync(IReadOnlyList<ProcessValueRow> rows, CancellationToken cancellationToken) => Locked(() =>
+    {
+        ProcessValues.AddRange(rows.Where(r => !ProcessValues.Any(p => p.TagId == r.TagId && p.OccurredAt == r.OccurredAt)));
+        return 0;
+    });
 
     private Task<T> Locked<T>(Func<T> read)
     {

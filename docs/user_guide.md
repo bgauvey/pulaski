@@ -1920,29 +1920,34 @@ If one machine's code means something else than on the others with the same prof
 
 ## 19. Edge nodes: collecting machine data
 
-**Configure → Edge nodes.** A Pulaski Edge node is a small program on plant hardware, near the machines. It reads them through an MQTT broker they publish to in **Sparkplug B**, keeps what it reads in a buffer on its own disk, and forwards it to Pulaski. If the network or Pulaski goes down, it keeps reading and forwards everything once it can, so nothing is lost.
+**Configure → Edge nodes.** A Pulaski Edge node is a small program on plant hardware, near the machines. It reads them through an MQTT broker they publish to in **Sparkplug B**, an **OPC UA** server, or straight from an **EtherNet/IP** PLC (Allen-Bradley Logix, Micro800, Omron NJ/NX), keeps what it reads in a buffer on its own disk, and forwards it to Pulaski. If the network or Pulaski goes down, it keeps reading and forwards everything once it can, so nothing is lost.
 
 ### Ideas to know first
 
-- **Connections** are where an edge node reads from: today, an MQTT broker. Pulaski listens as a Sparkplug B host application.
-- **Tags** bind a signal to equipment: *this* metric is PACK1's state, *that* one its processed count. A Sparkplug B address reads `group/node/device:metric`, for example `Plant1/Packing/PACK-01:Status/StateCurrent`.
+- **Connections** are where an edge node reads from: an MQTT broker (Pulaski listens as a Sparkplug B host application), an OPC UA server, or a PLC over EtherNet/IP.
+- **Tags** bind a signal to equipment: *this* metric is PACK1's state, *that* one its processed count. The address depends on the connection: Sparkplug B `group/node/device:metric` (such as `Plant1/Packing/PACK-01:Status/StateCurrent`), an OPC UA node id (such as `ns=2;s=Line1.State`), or an EtherNet/IP tag name with its type after `|` (such as `Program:Main.State|dint`; `dint` when left out; also `bool`, `sint`, `int`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`).
 - **What Pulaski does with them.** A state value goes through the equipment's [machine profile](#18-machine-profiles) to its PackML state, and every change of state is kept, with the value the machine sent. The machine's first-out stop code is kept until it runs again. Counter readings become counts, in the job running on the equipment. Losing the signal is recorded as *Undefined*.
+- **Alarms and warnings.** An alarm or warning tag carries the number of the one active now, as PackML's `Admin.Alarm[].ID` does, and 0 for none. A new number clears the one before and raises it, with its message from the machine profile; 0 clears it. A machine may have several alarm and warning tags. They are kept apart from its state and stops.
+- **Process values** (a temperature, a pressure) and **levels** are kept as readings, multiplied by the tag's scale, for looking back over on [Machines](#20-machines-live-status-and-stops).
 
 ### Add an edge node
 
 1. Open **Configure → Edge nodes**. With more than one site, choose the site.
 2. Type a **Code** (such as `GW-PACK`; it can't change later) and a **Name**, and click **Add edge node**. Its page opens.
-3. On **Connections**, give the broker a **Code** and **Name**, its **Broker host** and **Port**, tick **TLS** if it uses it, and optionally the Sparkplug **Group id** (to hear only one group), a **Host id** (Pulaski then announces itself, so nodes know it is listening), a **Client id** and a **User name**. Click **Add connection**.
+3. On **Connections**, give the connection a **Code** and **Name**, choose its **Protocol**, fill in its settings and click **Add connection**:
+   - **Sparkplug B (MQTT):** the **Broker host** and **Port**, **TLS** if it uses it, and optionally the Sparkplug **Group id** (to hear only one group), a **Host id** (Pulaski then announces itself, so nodes know it is listening), a **Client id** and a **User name**.
+   - **OPC UA:** the server's **Endpoint** (`opc.tcp://plc1:4840`). It signs and encrypts unless **Security** says otherwise, with the best **Policy** the server offers. The edge trusts the server only if its certificate is in the edge's trusted store or matches the **Server thumbprint** you give; **Trust any server** is for a test server only. Optionally a **User name** (anonymous without), how often the server sends changes (**Publishing ms**, 1000) and samples (**Sampling ms**), and where and how deep to look for variables to offer on Seen (**Browse from**, the Objects folder; **Browse depth**, 3).
+   - **EtherNet/IP:** the PLC's address (**PLC address**), its **CIP path** (`1,0` for a ControlLogix CPU in slot 0; CompactLogix and Micro800 need none), the **PLC** family, and how often to read (**Poll ms**, 1000) and to wait (**Timeout ms**, 5000).
 4. On **Configure → Users**, add a user for the edge (such as `edge-gw-pack`) with the **Edge node** role at the site. Sign in as that user once and set its password, then sign out.
-5. On the node's **Setup** tab, copy the configuration into the edge's `appsettings.json` on the edge machine, fill in the user's password (and the broker's, if it has a user name), and start Pulaski Edge.
+5. On the node's **Setup** tab, copy the configuration into the edge's `appsettings.json` on the edge machine, fill in the user's password (and the broker's or OPC UA server's, if the connection has a user name), and start Pulaski Edge. It runs as a console program, a container, a Windows service or a systemd service: `deploy/edge/README.md` explains installing it as a service.
 6. To remove a node from use, click **Delete** on its row or page and confirm. Its connections and tags are switched off with it.
 
 ### Bind tags
 
-1. Once the edge runs, open its **Seen** tab: every metric its brokers have announced, with its last value. Type in **Filter addresses** to find one.
+1. Once the edge runs, open its **Seen** tab: every metric its brokers have announced and every variable its OPC UA servers offer, with the last value. EtherNet/IP tags appear once they have been read, so type those on the **Tags** tab. Type in **Filter addresses** to find one.
 2. Click **Bind** next to a metric. Pulaski guesses the role from the name; choose the **Equipment** (only equipment of the site that tracks state is offered) and check the **Role**.
-3. For a count, set the **Scale** (how many units one count is) and, if the counter wraps, its **Rollover** value. Click **Bind tag**.
-4. To type an address instead, use the same form on the **Tags** tab. To change a tag, edit its address, scale, rollover or **Active** checkbox and click **Save**. To delete a tag completely, whether active or inactive, click **Delete** on its row and confirm.
+3. For a count, set the **Scale** (how many units one count is) and, if the counter wraps, its **Rollover** value. For a process value, set the **Scale** (a temperature in tenths: 0.1) and, if you like, a **Deadband**: a change no bigger than that, in scaled units, isn't recorded straight away. Click **Bind tag**.
+4. To type an address instead, use the same form on the **Tags** tab. To change a tag, edit its address, scale, rollover, deadband or **Active** checkbox and click **Save**. To delete a tag completely, whether active or inactive, click **Delete** on its row and confirm.
 
 The edge reads its tags every minute, so new and changed ones take effect without restarting it.
 
@@ -1956,19 +1961,23 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 
 - **Who:** seeing edge nodes needs permission to see equipment; adding and changing them, their connections and tags needs permission to maintain equipment at the site. The edge's own user needs only the **Edge node** role and sees no screens.
 - **Sending once.** The edge numbers everything it buffers and Pulaski applies each number once, so forwarding again after a failure changes nothing. A new buffer file starts a new numbering, which Pulaski recognises.
-- **What the edge forwards:** a tag's value when it changes, when it is lost, and the last value seen when the tag is newly bound; a speed at most every 5 seconds. A connection it hears from without a birth certificate is asked for one (a Sparkplug *rebirth*), as is every node its tags name when it connects, so an idle machine's state is known.
+- **What the edge forwards:** a tag's value when it changes, when it is lost, and the last value seen when the tag is newly bound; a speed at most every 5 seconds; a process value when it moves past its deadband, and at least once a minute while it holds steady or stays within it (`Edge:ProcessValueHeartbeat`). A connection it hears from without a birth certificate is asked for one (a Sparkplug *rebirth*), as is every node its tags name when it connects, so an idle machine's state is known.
 - **Stop codes** are latched: a machine that clears its code once acknowledged keeps it in Pulaski until it runs (Execute) again.
 - **Counts** are taken across the rollover value; a counter going back without one is taken as reset to zero. Machine counts go into the run open on the equipment but don't change the job's reported quantities yet: production is still reported on the Floor.
 - **Switching a node off** stops Pulaski taking its data and the edge collecting. Switching a tag or connection off stops it being read.
 - **Delete behavior.** Deleting a node deactivates it and all its connections and tags. Deleting a tag physically removes its binding, so it disappears from the Tags tab; this works whether the tag is active or inactive. Any quality characteristic using it as an automatic source is kept but detached. The deletion event and historical machine data are retained. Add a new binding if the signal is needed again. Reactivating a node later does not reactivate its connections or tags; switch those back on individually if needed.
 - **Without Pulaski**, the edge starts with the last configuration it kept.
-- **The demo simulators.** `docker compose -f deploy/simulator/compose.yaml up -d` starts a local-only MQTT broker and three PackML simulators: group `Plant1`, nodes `Extruder`, `Saw` and `Packer`, and devices `EXT-01-EXT`, `EXT-01-SAW` and `PACK1`. The Spruiktec simulators publish standard PackML state numbers; `deploy/simulator/packml-simulator-profile.csv` is an example profile with the matching state values. The broker is anonymous and has no TLS: keep it on your development machine.
+- **OPC UA in detail.** One subscription carries the bound nodes; a reading takes the time the server stamped it with. A status that isn't good is recorded as a lost signal. If the server stops answering, the edge records every bound node as lost and reconnects, waiting a second and then longer each time, up to a minute. The edge keeps its own certificate and the servers it trusts in a `pki` folder beside it (`Edge:PkiPath`). A server it refuses leaves its certificate in `pki/rejected/certs`: check it and move it to `pki/trusted/certs`, or put its thumbprint on the connection. The server must trust the edge's certificate (`pki/own/certs`) too.
+- **EtherNet/IP in detail.** The edge reads each bound tag every poll interval and records the time it read it (the PLC sends no time). A tag it can't read is recorded as lost once and tried again on every poll. Only single values are read, not whole arrays or structures.
+- **Alarm messages** come from the machine profile's **Alarms** and **Warnings** lists, by number, as they were when the alarm was raised. An alarm stays active while the signal is lost: it clears only when the machine says so.
+- **Process values are kept 90 days** (`Retention:ProcessValueDays` in the API's settings), dropped a month at a time once a whole month is older. Only numbers are kept.
+- **The demo simulators.** `docker compose -f deploy/simulator/compose.yaml up -d` starts an OPC UA server on `opc.tcp://localhost:50000` (Microsoft's OPC PLC; add an OPC UA connection with **Trust any server**, or **Security** none, and bind such as `ns=3;s=StepUp`), a local-only MQTT broker and three PackML simulators: group `Plant1`, nodes `Extruder`, `Saw` and `Packer`, and devices `EXT-01-EXT`, `EXT-01-SAW` and `PACK1`. The Spruiktec simulators publish standard PackML state numbers; `deploy/simulator/packml-simulator-profile.csv` is an example profile with the matching state values. The broker is anonymous and has no TLS: keep it on your development machine.
 - **Connect the edge.** Add a Sparkplug B connection on the edge node with broker host `localhost`, port `1883` (or the value of `PULASKI_MQTT_PORT` if 1883 is occupied), and group id `Plant1`. If Pulaski Edge runs in the same Docker Compose network as the broker, use host `broker` and port `1883` instead. Bind the three simulator addresses from the Seen tab, for example `Plant1/Extruder/EXT-01-EXT:Status/StateCurrent`, `Plant1/Saw/EXT-01-SAW:Status/StateCurrent` and `Plant1/Packer/PACK1:Status/StateCurrent`. Useful companion metrics include `Status/UnitModeCurrent`, `Status/CurMachSpeed`, and the `Admin/Prod*Count/0/AccCount` counters.
 - **Start a simulated machine.** After a fresh start, wait for its initial `Clearing` transition to finish at `Stopped`. Then Reset takes 1–10 seconds to reach `Idle`; the simulator command tool's `--delay-seconds 12` allows for that before it sends Start. For example, run `dotnet run --project tools/Pulaski.SparkplugCommand -- --host localhost --port 1883 --delay-seconds 12 spBv1.0/Plant1/DCMD/Extruder/EXT-01-EXT Command/Reset=true Command/Start=true`. Change `Extruder/EXT-01-EXT` to `Saw/EXT-01-SAW` or `Packer/PACK1` for the other devices; use the configured broker port if it is not 1883. Start takes another 1–10 seconds to reach `Execute`.
 
 ## 20. Machines: live status and stops
 
-**Operate → Machines.** What every machine is doing now, as its [edge node](#19-edge-nodes-collecting-machine-data) reports it, its stops to code, and its utilization and OEE over past days.
+**Operate → Machines.** What every machine is doing now, as its [edge node](#19-edge-nodes-collecting-machine-data) reports it, its stops to code, its alarms and warnings, its process values, and its utilization and OEE over past days.
 
 ### Ideas to know first
 
@@ -2018,6 +2027,20 @@ It may not overlap another stop of that machine, must have ended already, and ca
 
 Only stops that have ended can be split or merged. **Show replaced stops** lists the stops that were split or merged too, with who replaced them and when.
 
+### Alarms and warnings
+
+1. Open the **Alarms** tab. It lists the alarms and warnings active in the period, the active ones first, then the newest.
+2. Choose the **Equipment** (it and everything below it) and **Period** (8 hours, 24 hours or 7 days). Tick **Only active ones** to see what is still going on.
+3. Each row shows when it was raised and cleared (**active** while it isn't), how long, the equipment, **Alarm** or **Warning**, its number and message, and the tag that raised it. Click **Refresh** to update.
+
+### Process values
+
+1. Open the **Process values** tab and choose the **Equipment**.
+2. Choose the **Period** (last hour, 8 hours, 24 hours or 7 days). Each process value and level tag shows its latest reading and when, the lowest, the highest and the mean, and how many readings there were (and how many without a value).
+3. **Export CSV** saves every reading in the period, for a spreadsheet or a chart.
+
+The mean weighs each reading by how long it held, since readings are recorded when the value moves, not at a steady rate.
+
 ### Utilization and OEE reports
 
 1. Open the **Utilization and OEE** tab.
@@ -2032,7 +2055,7 @@ A dash means there is nothing to measure that figure against, such as performanc
 
 ### In detail
 
-- **Who:** seeing Machines needs permission to see machines; coding stops needs permission to code machine stops (Operators and Supervisors have both); entering, splitting and merging stops needs permission to adjust them (Supervisors).
+- **Who:** seeing Machines (with its alarms and process values) needs permission to see machines; coding stops needs permission to code machine stops (Operators and Supervisors have both); entering, splitting and merging stops needs permission to adjust them (Supervisors).
 - **Which reasons are offered:** with reasons ticked on the machine's profile (**Reasons offered**), those and the ones its codes and states map to; with none ticked, or no profile, every utilization reason of the site.
 - **Stop code:** the first one the machine reports during the stop is the stop's, even if the machine reports another later. A machine's own override (on the profile's **Machines** tab) beats the profile.
 - **Unit mode:** a stop keeps the unit mode it began in; one in Maintenance or Manual is shown with that mode.
@@ -2128,7 +2151,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Labor:** people come from HR or the ERP only as a file you import: nothing fetches them on a timer, someone missing from a file isn't switched off (send them with `active` = no), and qualifications aren't imported. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
 - **Materials import** from CSV or B2MML files, from an OData v4 connection on demand, or one item at a time through the API. Nothing fetches items on a timer, other kinds of service (plain REST, SOAP, a database) have no connection yet, and there are no adapters for label printing. Capabilities import from CSV only, and only for now: a future or past period is set on the material page. B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
-- **Machine data:** a stop's times can't be changed directly and a stop entered in error can't be removed (split it, or enter it again correctly, instead); adjustments can't be undone. Machine data that arrives late for time already covered by a stop entered by hand opens its own stop, which may then overlap it. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
+- **Machine data:** a stop's times can't be changed directly and a stop entered in error can't be removed (split it, or enter it again correctly, instead); adjustments can't be undone. Machine data that arrives late for time already covered by a stop entered by hand opens its own stop, which may then overlap it. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
 - **Batches:** a line's own batch size changes only the size; the tolerance stays the material's. The order form's batch hint shows the material's size, not each line's. A replacement is rounded up to whole batches, or planned for exactly what is left with a partial last batch; it can't be rounded down. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).

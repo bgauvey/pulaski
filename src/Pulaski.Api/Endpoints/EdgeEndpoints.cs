@@ -64,7 +64,7 @@ internal static class EdgeEndpoints
             CreateEquipmentTagRequest request, ICommandHandler<CreateEquipmentTagCommand, CreatedResponse> handler, CancellationToken ct) =>
         {
             var created = await handler.HandleAsync(new CreateEquipmentTagCommand(
-                request.EquipmentId, request.Role, request.ConnectionId, request.Address, request.ScaleFactor, request.ScaleOffset, request.CounterRollover), ct);
+                request.EquipmentId, request.Role, request.ConnectionId, request.Address, request.ScaleFactor, request.ScaleOffset, request.CounterRollover, request.Deadband), ct);
             return TypedResults.Created($"/api/equipment-tags/{created.Id}", created);
         })
         .WithTags("Machine data")
@@ -73,7 +73,7 @@ internal static class EdgeEndpoints
         routes.MapPut("/equipment-tags/{id:guid}", async Task<Ok<VersionResponse>> (
             Guid id, UpdateEquipmentTagRequest request, ICommandHandler<UpdateEquipmentTagCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new UpdateEquipmentTagCommand(
-                id, request.Version, request.Address, request.ScaleFactor, request.ScaleOffset, request.CounterRollover, request.IsActive), ct)))
+                id, request.Version, request.Address, request.ScaleFactor, request.ScaleOffset, request.CounterRollover, request.IsActive, request.Deadband), ct)))
         .WithTags("Machine data")
         .RequirePermission(Permissions.Equipment, Site.Of(SiteOf.EquipmentTag));
 

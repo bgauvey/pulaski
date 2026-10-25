@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pulaski.Connectors\Pulaski.Connectors.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- libplctag (MPL-2.0) and its native library, embedded for Windows, Linux and macOS (#24). -->
+    <PackageReference Include="libplctag" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Pulaski.Edge.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -21,66 +21,206 @@ public sealed record UpdateEdgeConnectionCommand(Guid Id, long ExpectedVersion, 
 
 /// <summary>Binds a signal the edge reads to a role on a piece of equipment (D-050).</summary>
 public sealed record CreateEquipmentTagCommand(
-    Guid EquipmentId, string Role, Guid ConnectionId, string Address, decimal ScaleFactor, decimal ScaleOffset, long? CounterRollover)
+    Guid EquipmentId, string Role, Guid ConnectionId, string Address, decimal ScaleFactor, decimal ScaleOffset, long? CounterRollover,
+    decimal? Deadband = null)
     : ICommand<CreatedResponse>;
 
 public sealed record UpdateEquipmentTagCommand(
-    Guid Id, long ExpectedVersion, string Address, decimal ScaleFactor, decimal ScaleOffset, long? CounterRollover, bool IsActive)
+    Guid Id, long ExpectedVersion, string Address, decimal ScaleFactor, decimal ScaleOffset, long? CounterRollover, bool IsActive,
+    decimal? Deadband = null)
     : ICommand<VersionResponse>;
 public sealed record DeleteEquipmentTagCommand(Guid Id) : ICommand<bool>;
 
-/// <summary>Connector protocols, their settings and their addresses (D-050).</summary>
+/// <summary>Connector protocols, their settings and their addresses (D-050): Sparkplug B, OPC UA (#22) and EtherNet/IP (#24).</summary>
 public static partial class EdgeProtocols
 {
     public const string SparkplugB = "sparkplug_b";
+    public const string OpcUa = "opc_ua";
+    public const string EthernetIp = "ethernet_ip";
 
-    public static IReadOnlyList<string> All { get; } = [SparkplugB];
+    public static IReadOnlyList<string> All { get; } = [SparkplugB, OpcUa, EthernetIp];
 
     /// <summary>The settings a Sparkplug B connection takes; the broker password stays in the edge's own configuration.</summary>
     public static IReadOnlyList<string> SparkplugSettings { get; } = ["host", "port", "tls", "clientId", "groupId", "hostId", "username"];
 
+    /// <summary>
+    /// An OPC UA connection's settings; the user's password stays in the edge's configuration. Secure by default: sign and encrypt,
+    /// and a server certificate trusted only by its thumbprint or the edge's trusted store, unless <c>trustAnyServer</c> says otherwise.
+    /// </summary>
+    public static IReadOnlyList<string> OpcUaSettings { get; } =
+        ["endpoint", "securityMode", "securityPolicy", "serverThumbprint", "trustAnyServer", "username", "publishingIntervalMs", "samplingIntervalMs", "browseRoot", "browseDepth"];
+
+    /// <summary>An EtherNet/IP (CIP) connection's settings: the PLC's address, its CIP path and family, and how often to read.</summary>
+    public static IReadOnlyList<string> EthernetIpSettings { get; } = ["gateway", "path", "plc", "pollIntervalMs", "timeoutMs"];
+
+    public static IReadOnlyList<string> OpcUaSecurityModes { get; } = ["none", "sign", "signAndEncrypt"];
+
+    public static IReadOnlyList<string> EthernetIpPlcs { get; } = ["controllogix", "compactlogix", "micro800", "omron-njnx", "plc5", "slc500", "logixpccc"];
+
+    /// <summary>The types an EtherNet/IP tag can be read as, after <c>|</c> in its address; DINT when left out.</summary>
+    public static IReadOnlyList<string> EthernetIpTypes { get; } = ["bool", "sint", "int", "dint", "lint", "usint", "uint", "udint", "ulint", "real", "lreal"];
+
+    public static string Label(string protocol) => protocol switch
+    {
+        SparkplugB => "Sparkplug B",
+        OpcUa => "OPC UA",
+        EthernetIp => "EtherNet/IP",
+        _ => protocol,
+    };
+
+    public static IReadOnlyList<string> SettingsOf(string protocol) => protocol switch
+    {
+        SparkplugB => SparkplugSettings,
+        OpcUa => OpcUaSettings,
+        EthernetIp => EthernetIpSettings,
+        _ => [],
+    };
+
     /// <summary>What is wrong with a connection's settings, field by field; empty when nothing is.</summary>
     public static IReadOnlyList<string> SettingsProblems(string protocol, IReadOnlyDictionary<string, string> settings)
     {
+        if (!All.Contains(protocol))
+        {
+            return [$"'{protocol}' isn't a protocol Pulaski Edge reads ({string.Join(", ", All.Select(Label))})."];
+        }
+
+        var known = SettingsOf(protocol);
         var problems = new List<string>();
-        if (protocol != SparkplugB)
+        problems.AddRange(settings.Keys.Where(k => !known.Contains(k)).Select(k => $"'{k}' isn't a {Label(protocol)} setting ({string.Join(", ", known)})."));
+        string? Get(string key) => settings.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
+        void Whole(string key, int min, int max, string what)
         {
-            return ["Only Sparkplug B connections are supported so far."];
+            if (Get(key) is { } text && !(int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n >= min && n <= max))
+            {
+                problems.Add($"{what} is a whole number from {min} to {max}.");
+            }
         }
 
-        problems.AddRange(settings.Keys.Where(k => !SparkplugSettings.Contains(k)).Select(k => $"'{k}' isn't a Sparkplug B setting ({string.Join(", ", SparkplugSettings)})."));
-        if (!settings.TryGetValue("host", out var host) || string.IsNullOrWhiteSpace(host))
+        void Flag(string key)
         {
-            problems.Add("Give the broker's host.");
+            if (Get(key) is { } flag && flag is not ("true" or "false"))
+            {
+                problems.Add($"{key} is true or false.");
+            }
         }
 
-        if (settings.TryGetValue("port", out var port) && !(int.TryParse(port, NumberStyles.Integer, CultureInfo.InvariantCulture, out var p) && p is > 0 and < 65536))
+        switch (protocol)
         {
-            problems.Add("The port is a number from 1 to 65535.");
-        }
+            case SparkplugB:
+                if (Get("host") is null)
+                {
+                    problems.Add("Give the broker's host.");
+                }
 
-        if (settings.TryGetValue("tls", out var tls) && tls is not ("true" or "false"))
-        {
-            problems.Add("tls is true or false.");
-        }
+                Whole("port", 1, 65535, "The port");
+                Flag("tls");
+                if (Get("groupId") is { } group && !SparkplugId().IsMatch(group))
+                {
+                    problems.Add("The group id has no '/', '+', '#' or ':'.");
+                }
 
-        if (settings.TryGetValue("groupId", out var group) && !SparkplugId().IsMatch(group))
-        {
-            problems.Add("The group id has no '/', '+', '#' or ':'.");
+                break;
+            case OpcUa:
+                if (Get("endpoint") is not { } endpoint)
+                {
+                    problems.Add("Give the server's endpoint, such as opc.tcp://plc1:4840.");
+                }
+                else if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || uri.Scheme != "opc.tcp")
+                {
+                    problems.Add("The endpoint is an opc.tcp:// address, such as opc.tcp://plc1:4840.");
+                }
+
+                if (Get("securityMode") is { } mode && !OpcUaSecurityModes.Contains(mode))
+                {
+                    problems.Add($"securityMode is {string.Join(", ", OpcUaSecurityModes)}.");
+                }
+
+                if (Get("serverThumbprint") is { } thumbprint && !Thumbprint().IsMatch(thumbprint))
+                {
+                    problems.Add("serverThumbprint is the server certificate's SHA-1 thumbprint: 40 hexadecimal digits.");
+                }
+
+                Flag("trustAnyServer");
+                Whole("publishingIntervalMs", 50, 60000, "The publishing interval");
+                Whole("samplingIntervalMs", 0, 60000, "The sampling interval");
+                Whole("browseDepth", 0, 10, "The browse depth");
+                if (Get("browseRoot") is { } root && !OpcUaNodeId().IsMatch(root))
+                {
+                    problems.Add("browseRoot is a node id, such as ns=2;s=Line1 or i=85.");
+                }
+
+                break;
+            case EthernetIp:
+                if (Get("gateway") is null)
+                {
+                    problems.Add("Give the PLC's address (gateway), such as 10.0.0.20.");
+                }
+
+                if (Get("plc") is { } plc && !EthernetIpPlcs.Contains(plc))
+                {
+                    problems.Add($"plc is {string.Join(", ", EthernetIpPlcs)}.");
+                }
+
+                if (Get("path") is { } path && !CipPath().IsMatch(path))
+                {
+                    problems.Add("path is the CIP route to the CPU, such as 1,0.");
+                }
+
+                if ((Get("plc") ?? "controllogix") is "controllogix" && Get("path") is null)
+                {
+                    problems.Add("A ControlLogix needs its CIP path, such as 1,0 (backplane, slot 0).");
+                }
+
+                Whole("pollIntervalMs", 50, 60000, "The poll interval");
+                Whole("timeoutMs", 100, 60000, "The timeout");
+                break;
         }
 
         problems.AddRange(settings.Where(s => s.Value.Length > 200).Select(s => $"{s.Key} is at most 200 characters."));
         return problems;
     }
 
-    /// <summary>A Sparkplug B address: <c>group/node[/device]:metric</c>.</summary>
-    public static bool IsValidAddress(string protocol, string address) => protocol == SparkplugB && SparkplugAddress().IsMatch(address);
+    /// <summary>
+    /// Whether <paramref name="address"/> is one the protocol's connector reads: Sparkplug B <c>group/node[/device]:metric</c>, an OPC UA
+    /// node id (<c>ns=2;s=Line1.State</c>), an EtherNet/IP tag name with an optional type (<c>Program:Main.State|dint</c>).
+    /// </summary>
+    public static bool IsValidAddress(string protocol, string address) => protocol switch
+    {
+        SparkplugB => SparkplugAddress().IsMatch(address),
+        OpcUa => address.Length <= 400 && OpcUaNodeId().IsMatch(address),
+        EthernetIp => address.Length <= 300 && EthernetIpAddress().IsMatch(address)
+            && (!address.Contains('|', StringComparison.Ordinal) || EthernetIpTypes.Contains(address[(address.LastIndexOf('|') + 1)..])),
+        _ => false,
+    };
+
+    /// <summary>What an address of the protocol looks like, for a refused one.</summary>
+    public static string AddressHint(string protocol) => protocol switch
+    {
+        SparkplugB => "A Sparkplug B address is group/node[/device]:metric.",
+        OpcUa => "An OPC UA address is a node id, such as ns=2;s=Line1.State or ns=3;i=1001.",
+        EthernetIp => $"An EtherNet/IP address is a tag name, optionally with its type after '|' ({string.Join(", ", EthernetIpTypes)}; dint when left out), such as Program:Main.State|dint.",
+        _ => "Not an address this connection reads.",
+    };
 
     [GeneratedRegex(@"^[^/+#:]+$")]
     private static partial Regex SparkplugId();
 
     [GeneratedRegex(@"^[^/+#:]+/[^/+#:]+(/[^/+#:]+)?:.{1,300}$")]
     private static partial Regex SparkplugAddress();
+
+    // ns=<index>; or nsu=<uri>; then i=, s=, g= or b=.
+    [GeneratedRegex(@"^(ns=\d+;|nsu=[^;]+;)?(i=\d+|s=.+|g=[0-9A-Fa-f-]{36}|b=[A-Za-z0-9+/=]+)$")]
+    private static partial Regex OpcUaNodeId();
+
+    [GeneratedRegex(@"^[0-9A-Fa-f]{40}$")]
+    private static partial Regex Thumbprint();
+
+    [GeneratedRegex(@"^\d+(,\d+)*$")]
+    private static partial Regex CipPath();
+
+    // A Logix tag: Program:<name>. prefix allowed, members with '.', array indexes, a bit as .<n>; then an optional |type.
+    [GeneratedRegex(@"^(Program:[A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*(\[\d+(,\d+)*\])?(\.([A-Za-z_][A-Za-z0-9_]*|\d+)(\[\d+(,\d+)*\])?)*(\|[a-z]+)?$")]
+    private static partial Regex EthernetIpAddress();
 }
 
 internal static class EdgeRules
@@ -98,9 +238,12 @@ internal static class EdgeRules
         }
     }
 
-    public static void EnsureTagNumbers(decimal scaleFactor, long? counterRollover) => new Validator()
+    public static void EnsureTagNumbers(string role, decimal scaleFactor, long? counterRollover, decimal? deadband) => new Validator()
         .Require(scaleFactor != 0, "ScaleFactor", "The scale factor isn't zero.")
         .Require(counterRollover is null or > 0, "CounterRollover", "A rollover value is above zero.")
+        .Require(TagRoles.CountKind(role) is not null || counterRollover is null, "CounterRollover", "Only a counter rolls over.")
+        .Require(deadband is null || role == TagRoles.ProcessValue, "Deadband", "Only a process value has a deadband.")
+        .Require(deadband is null or >= 0, "Deadband", "A deadband isn't negative.")
         .ThrowIfInvalid();
 
     public static async Task<EdgeNodeRecord> LockNodeAsync(IEdgeRepository edge, Guid id, long? expectedVersion, CancellationToken cancellationToken)
@@ -254,7 +397,7 @@ internal sealed class CreateEdgeConnectionHandler(IUnitOfWork unitOfWork, IEdgeR
         new Validator()
             .Require(MachineProfileRules.IsValidCode(code), "Code", "Letters, digits, '-', '_' or '.', up to 20.")
             .RequireText(name, "Name", 100)
-            .Require(EdgeProtocols.All.Contains(command.Protocol), "Protocol", "Sparkplug B.")
+            .Require(EdgeProtocols.All.Contains(command.Protocol), "Protocol", "Sparkplug B, OPC UA or EtherNet/IP.")
             .ThrowIfInvalid();
         EdgeRules.EnsureSettings(command.Protocol, settings);
 
@@ -314,11 +457,9 @@ internal sealed class CreateEquipmentTagHandler(IUnitOfWork unitOfWork, IEdgeRep
     {
         var address = command.Address.Trim();
         new Validator()
-            .Require(TagRoles.Bindable.Contains(command.Role), "Role",
-                TagRoles.All.Contains(command.Role) ? "Alarms, warnings and process values aren't recorded yet." : "Not a tag role.")
-            .Require(TagRoles.CountKind(command.Role) is not null || command.CounterRollover is null, "CounterRollover", "Only a counter rolls over.")
+            .Require(TagRoles.Bindable.Contains(command.Role), "Role", "Not a tag role.")
             .ThrowIfInvalid();
-        EdgeRules.EnsureTagNumbers(command.ScaleFactor, command.CounterRollover);
+        EdgeRules.EnsureTagNumbers(command.Role, command.ScaleFactor, command.CounterRollover, command.Deadband);
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var connectionSnapshot = await edge.GetConnectionAsync(command.ConnectionId, cancellationToken)
@@ -328,7 +469,7 @@ internal sealed class CreateEquipmentTagHandler(IUnitOfWork unitOfWork, IEdgeRep
             ?? throw new NotFoundException($"Connection {command.ConnectionId} not found.");
         if (!EdgeProtocols.IsValidAddress(connection.Protocol, address))
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["Address"] = ["A Sparkplug B address is group/node[/device]:metric."] });
+            throw new ValidationException(new Dictionary<string, string[]> { ["Address"] = [EdgeProtocols.AddressHint(connection.Protocol)] });
         }
 
         var equipment = await edge.GetTagEquipmentAsync(command.EquipmentId, cancellationToken) ?? throw new NotFoundException($"Equipment {command.EquipmentId} not found.");
@@ -337,7 +478,8 @@ internal sealed class CreateEquipmentTagHandler(IUnitOfWork unitOfWork, IEdgeRep
             throw new DomainRuleException($"Bind tags to equipment of {node.Code}'s site that tracks state; {equipment.Code} doesn't qualify.");
         }
 
-        var tag = new EquipmentTagRecord(ids.NewId(), equipment.Id, command.Role, connection.Id, address, command.ScaleFactor, command.ScaleOffset, command.CounterRollover, IsActive: true);
+        var tag = new EquipmentTagRecord(
+            ids.NewId(), equipment.Id, command.Role, connection.Id, address, command.ScaleFactor, command.ScaleOffset, command.CounterRollover, IsActive: true, command.Deadband);
         var envelope = events.Create(EventTypes.EquipmentTagCreated, "equipment", equipment.Id, new { After = tag });
         var version = await edge.InsertTagAsync(tag, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
@@ -352,7 +494,6 @@ internal sealed class UpdateEquipmentTagHandler(IUnitOfWork unitOfWork, IEdgeRep
     public async Task<VersionResponse> HandleAsync(UpdateEquipmentTagCommand command, CancellationToken cancellationToken)
     {
         var address = command.Address.Trim();
-        EdgeRules.EnsureTagNumbers(command.ScaleFactor, command.CounterRollover);
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var snapshot = await edge.GetTagAsync(command.Id, cancellationToken) ?? throw new NotFoundException($"Tag {command.Id} not found.");
@@ -369,14 +510,10 @@ internal sealed class UpdateEquipmentTagHandler(IUnitOfWork unitOfWork, IEdgeRep
 
         if (!EdgeProtocols.IsValidAddress(connectionSnapshot.Protocol, address))
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["Address"] = ["A Sparkplug B address is group/node[/device]:metric."] });
+            throw new ValidationException(new Dictionary<string, string[]> { ["Address"] = [EdgeProtocols.AddressHint(connectionSnapshot.Protocol)] });
         }
 
-        if (TagRoles.CountKind(current.Value.Role) is null && command.CounterRollover is not null)
-        {
-            throw new ValidationException(new Dictionary<string, string[]> { ["CounterRollover"] = ["Only a counter rolls over."] });
-        }
-
+        EdgeRules.EnsureTagNumbers(current.Value.Role, command.ScaleFactor, command.CounterRollover, command.Deadband);
         var updated = current.Value with
         {
             Address = address,
@@ -384,6 +521,7 @@ internal sealed class UpdateEquipmentTagHandler(IUnitOfWork unitOfWork, IEdgeRep
             ScaleOffset = command.ScaleOffset,
             CounterRollover = command.CounterRollover,
             IsActive = command.IsActive,
+            Deadband = command.Deadband,
         };
         if (updated == current.Value)
         {

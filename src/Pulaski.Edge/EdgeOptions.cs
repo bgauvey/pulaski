@@ -18,6 +18,12 @@ public sealed class EdgeOptions
     /// <summary>The SQLite file it buffers in. Losing it loses only what wasn't forwarded yet.</summary>
     public string BufferPath { get; set; } = "pulaski-edge.db";
 
+    /// <summary>
+    /// Where OPC UA keeps the edge's application certificate and trust lists (#22): <c>own</c>, <c>trusted</c>, <c>issuer</c>,
+    /// <c>rejected</c>. Copy a server's certificate into <c>trusted/certs</c> to trust it, or give its thumbprint on the connection.
+    /// </summary>
+    public string PkiPath { get; set; } = "pki";
+
     /// <summary>Secrets per connection code, such as <c>{ "BROKER1": { "password": "..." } }</c>; never sent to Pulaski.</summary>
     public Dictionary<string, Dictionary<string, string>> Connections { get; set; } = [];
 
@@ -26,5 +32,8 @@ public sealed class EdgeOptions
 
     /// <summary>A machine speed is forwarded at most this often; states, modes, stop codes and counts as soon as they change.</summary>
     public TimeSpan SpeedInterval { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>A process value is forwarded at least this often while it holds steady or stays within its deadband (#26).</summary>
+    public TimeSpan ProcessValueHeartbeat { get; set; } = TimeSpan.FromMinutes(1);
     public int BatchSize { get; set; } = 500;
 }

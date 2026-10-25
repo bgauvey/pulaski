@@ -223,8 +223,9 @@ CREATE TABLE core.equipment_tag (
     updated_at          timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX equipment_tag_equipment_ix ON core.equipment_tag (equipment_id, tag_role);
--- One active tag per role on a piece of equipment (process values aside), and one role per address.
-CREATE UNIQUE INDEX equipment_tag_role_uq ON core.equipment_tag (equipment_id, tag_role) WHERE is_active AND tag_role <> 'process_value';
+-- One active tag per role on a piece of equipment (process values, alarms and warnings may have several, #26), and one role per address.
+CREATE UNIQUE INDEX equipment_tag_role_uq ON core.equipment_tag (equipment_id, tag_role)
+    WHERE is_active AND tag_role NOT IN ('process_value', 'alarm', 'warning');
 CREATE UNIQUE INDEX equipment_tag_source_uq ON core.equipment_tag (connection_id, source_address) WHERE is_active;
 
 -- Each machine's state as its signals last left it (D-050): current state, so relational. Written by ingest only.
@@ -1703,9 +1704,11 @@ CREATE TABLE ts.equipment_alarm (
     alarm_number    integer NOT NULL,                           -- PackML Admin.Alarm[].ID
     alarm_value     integer,
     message         text,
+    equipment_tag_id uuid REFERENCES core.equipment_tag(id),    -- the alarm or warning tag that raised it (#26)
     PRIMARY KEY (id, raised_at)
 ) PARTITION BY RANGE (raised_at);
 CREATE INDEX ON ts.equipment_alarm (equipment_id, raised_at);
+CREATE INDEX equipment_alarm_open_ix ON ts.equipment_alarm (equipment_tag_id) WHERE cleared_at IS NULL;
 
 -- Count deltas computed at the edge (rollover handled there); raw counter
 -- kept for reconciliation.
@@ -1733,8 +1736,9 @@ CREATE INDEX ON ts.production_count (run_id);
 CREATE INDEX production_count_job_ix ON ts.production_count (job_id) WHERE job_id IS NOT NULL;
 CREATE INDEX production_count_report_ix ON ts.production_count (report_id) WHERE report_id IS NOT NULL;
 
--- High-rate telemetry. No surrogate id and no FKs: 16 bytes and an FK probe
--- per row matter at this volume. Daily partitions, short retention.
+-- High-rate telemetry (#26). No surrogate id and no FKs: 16 bytes and an FK probe
+-- per row matter at this volume. Monthly partitions like the rest, dropped after
+-- Retention:ProcessValueDays (90 by default) by ts.drop_old_process_values.
 CREATE TABLE ts.process_value (
     equipment_tag_id    uuid NOT NULL,
     occurred_at         timestamptz NOT NULL,
@@ -2056,6 +2060,41 @@ END $$;
 
 REVOKE ALL ON FUNCTION ts.ensure_partitions(integer) FROM PUBLIC;
 
+-- Drops the monthly ts.process_value partitions that end more than p_keep_days ago; returns how many. SECURITY DEFINER, like
+-- ts.ensure_partitions: dropping a partition needs ownership, which pulaski_app doesn't have. Only this table, never less than a week.
+CREATE FUNCTION ts.drop_old_process_values(p_keep_days integer)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+    v_part   regclass;
+    v_bound  text;
+    v_end    timestamptz;
+    v_dropped integer := 0;
+BEGIN
+    IF p_keep_days IS NULL OR p_keep_days < 7 THEN
+        RAISE EXCEPTION 'drop_old_process_values: keep at least 7 days, not %', p_keep_days;
+    END IF;
+
+    FOR v_part, v_bound IN
+        SELECT c.oid::regclass, pg_get_expr(c.relpartbound, c.oid)
+        FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid
+        WHERE i.inhparent = 'ts.process_value'::regclass
+    LOOP
+        -- FOR VALUES FROM ('…') TO ('…'): the upper bound is the second quoted value.
+        v_end := (regexp_match(v_bound, 'TO \(''([^'']+)''\)'))[1]::timestamptz;
+        IF v_end IS NOT NULL AND v_end <= now() - make_interval(days => p_keep_days) THEN
+            EXECUTE format('DROP TABLE %s', v_part);
+            v_dropped := v_dropped + 1;
+        END IF;
+    END LOOP;
+    RETURN v_dropped;
+END $$;
+
+REVOKE ALL ON FUNCTION ts.drop_old_process_values(integer) FROM PUBLIC;
+
 -- =====================================================================
 -- 16. SCHEMA VERSION (D-028)
 --     Each db/migrations file brings an existing database up to this
@@ -2104,7 +2143,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0034_erp_work_orders'),
     ('0035_partial_replacements'),
     ('0036_material_connections'),
-    ('0037_stop_adjustments');
+    ('0037_stop_adjustments'),
+    ('0038_alarms_process_values');
 
 -- =====================================================================
 -- 17. SEED DATA

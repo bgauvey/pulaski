@@ -1,6 +1,11 @@
-# Pulaski machine data demo (D-050): an MQTT broker and three PackML simulators publishing Sparkplug B.
+# Pulaski machine data demo (D-050): an MQTT broker and three PackML simulators publishing Sparkplug B, and an OPC UA
+# server (#22).
 #
 #   docker compose -f deploy/simulator/compose.yaml up -d
+#
+# The OPC UA server (Microsoft's OPC PLC simulator) listens on opc.tcp://localhost:${PULASKI_OPCUA_PORT:-50000}. It accepts any
+# client certificate and also offers security none; on the connection set trustAnyServer = true (it makes its own certificate on
+# each start), or give its thumbprint. Its changing values are under ns=3, such as ns=3;s=StepUp and ns=3;s=FastUInt1.
 #
 # The simulators publish to group "Plant1" on the broker at localhost:${PULASKI_MQTT_PORT:-1883}. Bind their
 # Sparkplug B addresses to EXT-01-EXT, EXT-01-SAW and PACK1 in Pulaski. The image is amd64; Docker Desktop
@@ -62,3 +67,9 @@ services:
       SPARKPLUG_GROUP_ID: Plant1
       SPARKPLUG_EDGE_NODE: Packer
       TICK: "1000"
+
+  opcua:
+    image: mcr.microsoft.com/iotedge/opc-plc:2.15.12
+    command: ["--pn=50000", "--autoaccept", "--unsecuretransport", "--sph", "--fn=5", "--fr=1", "--ft=uint", "--sn=5", "--sr=10", "--st=double"]
+    ports:
+      - "${PULASKI_OPCUA_PORT:-50000}:50000"

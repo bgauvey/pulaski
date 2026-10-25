@@ -18,7 +18,8 @@ public sealed record EdgeConnectionRecord(Guid Id, Guid EdgeNodeId, string Code,
 }
 
 public sealed record EquipmentTagRecord(
-    Guid Id, Guid EquipmentId, string Role, Guid ConnectionId, string Address, decimal ScaleFactor, decimal ScaleOffset, long? CounterRollover, bool IsActive);
+    Guid Id, Guid EquipmentId, string Role, Guid ConnectionId, string Address, decimal ScaleFactor, decimal ScaleOffset, long? CounterRollover, bool IsActive,
+    decimal? Deadband = null);
 
 /// <summary>Equipment as a tag binding checks it.</summary>
 public sealed record TagEquipment(Guid Id, Guid? SiteId, string Code, bool TracksState);
@@ -33,6 +34,12 @@ public sealed record OpenRun(Guid EquipmentId, Guid RunId, Guid JobId);
 public sealed record StateChangeRow(Guid Id, Guid EquipmentId, Guid? RunId, long EdgeSequence, StateChange Change);
 
 /// <summary>A machine count for <c>ts.production_count</c> (source <c>machine</c>).</summary>
+/// <summary>A row for <c>ts.equipment_alarm</c> (#26): raised by an alarm or warning tag, with its profile's message.</summary>
+public sealed record AlarmRow(Guid Id, DateTimeOffset RaisedAt, Guid EquipmentId, Guid TagId, string Kind, int Number, string? Message);
+
+/// <summary>A row for <c>ts.process_value</c> (#26): a reading in scaled units; none when the source had none.</summary>
+public sealed record ProcessValueRow(Guid TagId, DateTimeOffset OccurredAt, double? Value, bool Good);
+
 public sealed record MachineCountRow(Guid Id, DateTimeOffset OccurredAt, Guid EquipmentId, Guid? RunId, Guid? JobId, string CountKind, decimal Quantity, long RawCounter);
 
 /// <summary>What deciding a machine's stops needs (D-050): its micro-stop threshold, its profile's reasons, and its open stop.</summary>
@@ -109,6 +116,19 @@ public interface IEdgeRepository
     Task InsertStateChangesAsync(IReadOnlyList<StateChangeRow> rows, CancellationToken cancellationToken);
 
     Task InsertCountsAsync(IReadOnlyList<MachineCountRow> rows, string actorId, CancellationToken cancellationToken);
+
+    /// <summary>The alarms and warnings the tags raised that aren't cleared yet (#26), by tag.</summary>
+    Task<IReadOnlyDictionary<Guid, OpenAlarm>> GetOpenAlarmsAsync(IReadOnlyCollection<Guid> tagIds, CancellationToken cancellationToken);
+
+    /// <summary>The profiles' alarm and warning messages (#26), by profile, kind (<c>alarm</c> or <c>warning</c>) and number.</summary>
+    Task<IReadOnlyDictionary<(Guid ProfileId, string Kind, int Number), string>> GetAlarmMessagesAsync(IReadOnlyCollection<Guid> profileIds, CancellationToken cancellationToken);
+
+    Task InsertAlarmsAsync(IReadOnlyList<AlarmRow> rows, CancellationToken cancellationToken);
+
+    Task ClearAlarmsAsync(IReadOnlyList<(OpenAlarm Alarm, DateTimeOffset ClearedAt)> cleared, CancellationToken cancellationToken);
+
+    /// <summary>Appends readings; one a tag already has at that moment (a batch sent again) is left as it is.</summary>
+    Task InsertProcessValuesAsync(IReadOnlyList<ProcessValueRow> rows, CancellationToken cancellationToken);
 
     /// <summary>The connections among <paramref name="connectionIds"/> that belong to the node.</summary>
     Task<IReadOnlyList<Guid>> ListNodeConnectionsAsync(Guid edgeNodeId, IReadOnlyCollection<Guid> connectionIds, CancellationToken cancellationToken);

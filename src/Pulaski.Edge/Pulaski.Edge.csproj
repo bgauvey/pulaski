@@ -7,12 +7,16 @@
   <ItemGroup>
     <ProjectReference Include="..\Pulaski.Contracts\Pulaski.Contracts.csproj" />
     <ProjectReference Include="..\Pulaski.Connectors\Pulaski.Connectors.csproj" />
+    <ProjectReference Include="..\Pulaski.Connectors.EthernetIp\Pulaski.Connectors.EthernetIp.csproj" />
+    <ProjectReference Include="..\Pulaski.Connectors.OpcUa\Pulaski.Connectors.OpcUa.csproj" />
     <ProjectReference Include="..\Pulaski.Connectors.Sparkplug\Pulaski.Connectors.Sparkplug.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
   </ItemGroup>
 
   <ItemGroup>

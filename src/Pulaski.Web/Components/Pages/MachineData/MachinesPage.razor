@@ -37,6 +37,8 @@
     <button type="button" class="inv-tab btn btn-link @(_tab == "stops" ? "active" : "")" @onclick="ShowStopsAsync">
         Stops @if (_status?.Sum(m => m.UncodedStops) is > 0 and var n) { <span class="chip chip-warning ms-1">@n to code</span> }
     </button>
+    <button type="button" class="inv-tab btn btn-link @(_tab == "alarms" ? "active" : "")" @onclick="@(() => _tab = "alarms")">Alarms</button>
+    <button type="button" class="inv-tab btn btn-link @(_tab == "values" ? "active" : "")" @onclick="@(() => _tab = "values")">Process values</button>
     <button type="button" class="inv-tab btn btn-link @(_tab == "reports" ? "active" : "")" @onclick="@(() => _tab = "reports")">Utilization and OEE</button>
 </nav>
 
@@ -72,6 +74,20 @@
             </section>
         }
         <p class="small text-muted">Updated @Display.SiteTime(_loadedAt, Sites.Site?.TimeZone) · refreshes every 5 seconds.</p>
+    }
+}
+else if (_tab == "alarms")
+{
+    @if (Sites.SiteId is { } alarmSite)
+    {
+        <MachineAlarms @key="alarmSite" SiteId="alarmSite" TimeZone="@Sites.Site?.TimeZone" Machines="@(_status ?? [])" />
+    }
+}
+else if (_tab == "values")
+{
+    @if (Sites.SiteId is { } valueSite)
+    {
+        <ProcessValues @key="valueSite" SiteId="valueSite" SiteCode="@Sites.Site?.Code" TimeZone="@Sites.Site?.TimeZone" Machines="@(_status ?? [])" />
     }
 }
 else if (_tab == "reports")

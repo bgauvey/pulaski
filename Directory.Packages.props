@@ -22,7 +22,12 @@
     <!-- Pulaski Edge and its connectors (D-050). -->
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
     <PackageVersion Include="MQTTnet" Version="4.3.7.1207" />
+    <PackageVersion Include="libplctag" Version="1.5.2" />
+    <PackageVersion Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="2.0.1" />
+    <PackageVersion Include="OPCFoundation.NetStandard.Opc.Ua.Server" Version="2.0.1" />
   </ItemGroup>
 </Project>

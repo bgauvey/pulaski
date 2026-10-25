@@ -67,31 +67,33 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         """;
 
     private const string GetTag = """
-        SELECT id, equipment_id, tag_role AS role, connection_id, source_address AS address, scale_factor, scale_offset, counter_rollover, is_active,
+        SELECT id, equipment_id, tag_role AS role, connection_id, source_address AS address, scale_factor, scale_offset, counter_rollover, is_active, deadband,
                xmin::text::bigint AS version
         FROM core.equipment_tag WHERE id = @Id FOR UPDATE
         """;
 
     private const string GetTagSnapshot = """
-        SELECT id, equipment_id, tag_role AS role, connection_id, source_address AS address, scale_factor, scale_offset, counter_rollover, is_active
+        SELECT id, equipment_id, tag_role AS role, connection_id, source_address AS address, scale_factor, scale_offset, counter_rollover, is_active, deadband
         FROM core.equipment_tag WHERE id = @Id
         """;
 
     private const string ListTagsForUpdate = """
-        SELECT id, equipment_id, tag_role AS role, connection_id, source_address AS address, scale_factor, scale_offset, counter_rollover, is_active,
+        SELECT id, equipment_id, tag_role AS role, connection_id, source_address AS address, scale_factor, scale_offset, counter_rollover, is_active, deadband,
                xmin::text::bigint AS version
         FROM core.equipment_tag WHERE connection_id = ANY(@ConnectionIds) ORDER BY id FOR UPDATE
         """;
 
     private const string InsertTag = """
-        INSERT INTO core.equipment_tag (id, equipment_id, tag_role, connection_id, source_address, scale_factor, scale_offset, counter_rollover, is_active, created_at, updated_at)
-        VALUES (@Id, @EquipmentId, @Role, @ConnectionId, @Address, @ScaleFactor, @ScaleOffset, @CounterRollover, @IsActive, @At, @At)
+        INSERT INTO core.equipment_tag (id, equipment_id, tag_role, connection_id, source_address, scale_factor, scale_offset, counter_rollover, deadband, is_active,
+                                        created_at, updated_at)
+        VALUES (@Id, @EquipmentId, @Role, @ConnectionId, @Address, @ScaleFactor, @ScaleOffset, @CounterRollover, @Deadband, @IsActive, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     private const string UpdateTag = """
         UPDATE core.equipment_tag
-        SET source_address = @Address, scale_factor = @ScaleFactor, scale_offset = @ScaleOffset, counter_rollover = @CounterRollover, is_active = @IsActive, updated_at = @At
+        SET source_address = @Address, scale_factor = @ScaleFactor, scale_offset = @ScaleOffset, counter_rollover = @CounterRollover, deadband = @Deadband,
+            is_active = @IsActive, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -258,26 +260,26 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
 
     public async Task<Versioned<EquipmentTagRecord>?> GetTagForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<TagRow>(GetTag, new { Id = id }, cancellationToken) is { } r
-            ? new(new EquipmentTagRecord(r.Id, r.EquipmentId, r.Role, r.ConnectionId, r.Address, r.ScaleFactor, r.ScaleOffset, r.CounterRollover, r.IsActive), r.Version)
+            ? new(new EquipmentTagRecord(r.Id, r.EquipmentId, r.Role, r.ConnectionId, r.Address, r.ScaleFactor, r.ScaleOffset, r.CounterRollover, r.IsActive, r.Deadband), r.Version)
             : null;
 
     public async Task<EquipmentTagRecord?> GetTagAsync(Guid id, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<TagSnapshotRow>(GetTagSnapshot, new { Id = id }, cancellationToken) is { } r
-            ? new EquipmentTagRecord(r.Id, r.EquipmentId, r.Role, r.ConnectionId, r.Address, r.ScaleFactor, r.ScaleOffset, r.CounterRollover, r.IsActive)
+            ? new EquipmentTagRecord(r.Id, r.EquipmentId, r.Role, r.ConnectionId, r.Address, r.ScaleFactor, r.ScaleOffset, r.CounterRollover, r.IsActive, r.Deadband)
             : null;
 
     public async Task<IReadOnlyList<Versioned<EquipmentTagRecord>>> ListTagsForUpdateAsync(
         IReadOnlyCollection<Guid> connectionIds, CancellationToken cancellationToken) =>
         [.. (await session.QueryAsync<TagRow>(ListTagsForUpdate, new { ConnectionIds = connectionIds.ToArray() }, cancellationToken))
             .Select(r => new Versioned<EquipmentTagRecord>(
-                new EquipmentTagRecord(r.Id, r.EquipmentId, r.Role, r.ConnectionId, r.Address, r.ScaleFactor, r.ScaleOffset, r.CounterRollover, r.IsActive), r.Version))];
+                new EquipmentTagRecord(r.Id, r.EquipmentId, r.Role, r.ConnectionId, r.Address, r.ScaleFactor, r.ScaleOffset, r.CounterRollover, r.IsActive, r.Deadband), r.Version))];
 
     public Task<long> InsertTagAsync(EquipmentTagRecord t, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(InsertTag,
-            new { t.Id, t.EquipmentId, t.Role, t.ConnectionId, t.Address, t.ScaleFactor, t.ScaleOffset, t.CounterRollover, t.IsActive, At = at }, cancellationToken);
+            new { t.Id, t.EquipmentId, t.Role, t.ConnectionId, t.Address, t.ScaleFactor, t.ScaleOffset, t.CounterRollover, t.Deadband, t.IsActive, At = at }, cancellationToken);
 
     public Task<long> UpdateTagAsync(EquipmentTagRecord t, DateTimeOffset at, CancellationToken cancellationToken) =>
-        session.ExecuteScalarAsync<long>(UpdateTag, new { t.Id, t.Address, t.ScaleFactor, t.ScaleOffset, t.CounterRollover, t.IsActive, At = at }, cancellationToken);
+        session.ExecuteScalarAsync<long>(UpdateTag, new { t.Id, t.Address, t.ScaleFactor, t.ScaleOffset, t.CounterRollover, t.Deadband, t.IsActive, At = at }, cancellationToken);
 
     public Task<IReadOnlyList<Guid>> DetachTagQualitySourcesAsync(Guid tagId, CancellationToken cancellationToken) =>
         session.QueryAsync<Guid>(DetachTagQualitySources, new { TagId = tagId }, cancellationToken);
@@ -406,6 +408,71 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         }
     }
 
+    private const string OpenAlarms = """
+        SELECT equipment_tag_id AS tag_id, id, raised_at, alarm_number AS number
+        FROM ts.equipment_alarm WHERE equipment_tag_id = ANY(@Ids) AND cleared_at IS NULL
+        """;
+
+    private const string AlarmMessages = """
+        SELECT profile_id, code_kind AS kind, raw_value AS number, message
+        FROM core.machine_profile_code WHERE profile_id = ANY(@Ids) AND code_kind IN ('alarm', 'warning') AND is_active
+        """;
+
+    private const string InsertAlarm = """
+        INSERT INTO ts.equipment_alarm (id, raised_at, equipment_id, equipment_tag_id, alarm_kind, alarm_number, message)
+        VALUES (@Id, @RaisedAt, @EquipmentId, @TagId, @Kind, @Number, @Message)
+        """;
+
+    private const string ClearAlarm = "UPDATE ts.equipment_alarm SET cleared_at = @ClearedAt WHERE id = @Id AND raised_at = @RaisedAt AND cleared_at IS NULL";
+
+    // One statement for a batch; 192 is OPC UA's "good", 0 "bad".
+    private const string InsertProcessValues = """
+        INSERT INTO ts.process_value (equipment_tag_id, occurred_at, value_num, quality)
+        SELECT * FROM unnest(@TagIds::uuid[], @Ats::timestamptz[], @Values::double precision[], @Qualities::smallint[])
+        ON CONFLICT (equipment_tag_id, occurred_at) DO NOTHING
+        """;
+
+    public async Task<IReadOnlyDictionary<Guid, OpenAlarm>> GetOpenAlarmsAsync(IReadOnlyCollection<Guid> tagIds, CancellationToken cancellationToken) =>
+        tagIds.Count == 0
+            ? new Dictionary<Guid, OpenAlarm>()
+            : (await session.QueryAsync<OpenAlarmRow>(OpenAlarms, new { Ids = tagIds.ToArray() }, cancellationToken))
+                .GroupBy(r => r.TagId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.RaisedAt).Select(r => new OpenAlarm(r.Id, r.RaisedAt, r.Number)).First());
+
+    public async Task<IReadOnlyDictionary<(Guid ProfileId, string Kind, int Number), string>> GetAlarmMessagesAsync(
+        IReadOnlyCollection<Guid> profileIds, CancellationToken cancellationToken) =>
+        profileIds.Count == 0
+            ? new Dictionary<(Guid, string, int), string>()
+            : (await session.QueryAsync<AlarmMessageRow>(AlarmMessages, new { Ids = profileIds.ToArray() }, cancellationToken))
+                .ToDictionary(r => (r.ProfileId, r.Kind, r.Number), r => r.Message);
+
+    public async Task InsertAlarmsAsync(IReadOnlyList<AlarmRow> rows, CancellationToken cancellationToken)
+    {
+        foreach (var r in rows)
+        {
+            await session.ExecuteAsync(InsertAlarm, new { r.Id, r.RaisedAt, r.EquipmentId, r.TagId, r.Kind, r.Number, r.Message }, cancellationToken);
+        }
+    }
+
+    public async Task ClearAlarmsAsync(IReadOnlyList<(OpenAlarm Alarm, DateTimeOffset ClearedAt)> cleared, CancellationToken cancellationToken)
+    {
+        foreach (var (alarm, clearedAt) in cleared)
+        {
+            await session.ExecuteAsync(ClearAlarm, new { alarm.Id, alarm.RaisedAt, ClearedAt = clearedAt }, cancellationToken);
+        }
+    }
+
+    public Task InsertProcessValuesAsync(IReadOnlyList<ProcessValueRow> rows, CancellationToken cancellationToken) =>
+        rows.Count == 0
+            ? Task.CompletedTask
+            : session.ExecuteAsync(InsertProcessValues, new
+            {
+                TagIds = rows.Select(r => r.TagId).ToArray(),
+                Ats = rows.Select(r => r.OccurredAt).ToArray(),
+                Values = rows.Select(r => r.Value).ToArray(),
+                Qualities = rows.Select(r => (short)(r.Good ? 192 : 0)).ToArray(),
+            }, cancellationToken);
+
     public Task<IReadOnlyList<Guid>> ListNodeConnectionsAsync(Guid edgeNodeId, IReadOnlyCollection<Guid> connectionIds, CancellationToken cancellationToken) =>
         session.QueryAsync<Guid>(NodeConnections, new { NodeId = edgeNodeId, Ids = connectionIds.ToArray() }, cancellationToken);
 
@@ -474,6 +541,7 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         public decimal ScaleOffset { get; init; }
         public long? CounterRollover { get; init; }
         public bool IsActive { get; init; }
+        public decimal? Deadband { get; init; }
         public long Version { get; init; }
     }
 
@@ -488,6 +556,23 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         public decimal ScaleOffset { get; init; }
         public long? CounterRollover { get; init; }
         public bool IsActive { get; init; }
+        public decimal? Deadband { get; init; }
+    }
+
+    private sealed class OpenAlarmRow
+    {
+        public Guid TagId { get; init; }
+        public Guid Id { get; init; }
+        public DateTimeOffset RaisedAt { get; init; }
+        public int Number { get; init; }
+    }
+
+    private sealed class AlarmMessageRow
+    {
+        public Guid ProfileId { get; init; }
+        public string Kind { get; init; } = "";
+        public int Number { get; init; }
+        public string Message { get; init; } = "";
     }
 
     private sealed class IngestTagRow

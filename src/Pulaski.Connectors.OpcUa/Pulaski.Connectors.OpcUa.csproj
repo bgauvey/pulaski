@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pulaski.Connectors\Pulaski.Connectors.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The OPC Foundation's UA .NET Standard stack (MIT), #22. -->
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Pulaski.Edge.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -141,7 +141,7 @@ public class EdgeHandlerTests
 
         await Assert.ThrowsAsync<ValidationException>(() => TagAsync(connection, TagRoles.UnitMode, "Plant1/Pack#ing:Status/StateCurrent"));
         await Assert.ThrowsAsync<ValidationException>(() => TagAsync(connection, TagRoles.UnitMode, "just-a-name"));
-        await Assert.ThrowsAsync<ValidationException>(() => TagAsync(connection, TagRoles.Alarm, "Plant1/Packing:Admin/Alarm"));
+        await Assert.ThrowsAsync<ValidationException>(() => TagAsync(connection, "spare", "Plant1/Packing:Admin/Spare"));
         await Assert.ThrowsAsync<ValidationException>(() => TagAsync(connection, TagRoles.State, "Plant1/Packing:X", rollover: 10));
 
         var rack = Edge.AddEquipment(_site, "RACK", tracksState: false);

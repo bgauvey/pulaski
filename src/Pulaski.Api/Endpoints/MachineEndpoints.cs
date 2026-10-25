@@ -36,6 +36,20 @@ internal static class MachineEndpoints
             TypedResults.Ok(await handler.HandleAsync(new GetOeeReportQuery(siteId, from, to, equipmentId), ct)))
         .RequireAny(Site.Query(), Permissions.MachinesView, Permissions.OverviewView);
 
+        // Alarms and warnings active in [from, to) (#26), active first; for equipment, its own and those below it.
+        machines.MapGet("/alarms", async Task<Ok<AlarmListDto>> (
+            Guid siteId, DateTimeOffset from, DateTimeOffset to, Guid? equipmentId, bool? activeOnly,
+            IQueryHandler<ListAlarmsQuery, AlarmListDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListAlarmsQuery(new AlarmFilter(siteId, equipmentId, from, to, activeOnly ?? false)), ct)))
+        .RequireAny(Site.Query(), Permissions.MachinesView);
+
+        // A piece of equipment's process values and levels in [from, to) (#26), by tag, oldest first.
+        machines.MapGet("/process-values", async Task<Ok<IReadOnlyList<ProcessValueSeriesDto>>> (
+            Guid equipmentId, DateTimeOffset from, DateTimeOffset to, Guid? tagId,
+            IQueryHandler<GetProcessValuesQuery, IReadOnlyList<ProcessValueSeriesDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetProcessValuesQuery(equipmentId, tagId, from, to), ct)))
+        .RequireAny(Site.QueryOf(SiteOf.Equipment, "equipmentId"), Permissions.MachinesView);
+
         machines.MapPost("/stops/{id:guid}/code", async Task<Ok<DowntimeCodedResponse>> (
             Guid id, CodeDowntimeRequest request, ICommandHandler<CodeDowntimeCommand, DowntimeCodedResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new CodeDowntimeCommand(id, request.StartedAt, request.ReasonCodeId, request.Comment), ct)))

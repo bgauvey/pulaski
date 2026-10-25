@@ -91,51 +91,35 @@ else
         {
             case "connections":
                 <p class="small text-muted">
-                    Where the edge reads from: an MQTT broker its machines publish to in Sparkplug B. Pulaski listens as a Sparkplug host application.
-                    The broker's password isn't kept here; it goes in the edge's own configuration (Setup).
+                    Where the edge reads from: an MQTT broker its machines publish to in Sparkplug B (Pulaski listens as a Sparkplug host application),
+                    an OPC UA server, or an EtherNet/IP PLC. Passwords aren't kept here; they go in the edge's own configuration (Setup).
                 </p>
                 @if (CanManage)
                 {
                     <form class="inv-toolbar flex-wrap" @onsubmit="AddConnectionAsync" @onsubmit:preventDefault>
                         <input class="form-control" style="width: 8rem" maxlength="20" placeholder="CODE" aria-label="Connection code" @bind="_connCode" @bind:event="oninput" />
                         <input class="form-control" style="width: 12rem" maxlength="100" placeholder="Name, e.g. Line broker" aria-label="Connection name" @bind="_connName" @bind:event="oninput" />
-                        @foreach (var (key, label, placeholder) in EdgeView.SparkplugSettings)
-                        {
-                            @if (key == "tls")
+                        <select class="form-select w-auto" aria-label="Protocol" value="@_connProtocol" @onchange="@(e => (_connProtocol, _connSettings) = (Text(e), []))">
+                            @foreach (var (protocol, label) in EdgeView.Protocols)
                             {
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="new-tls" checked="@(_connSettings.GetValueOrDefault("tls") == "true")"
-                                           @onchange="@(e => _connSettings["tls"] = (e.Value is true) ? "true" : "")" />
-                                    <label class="form-check-label" for="new-tls">TLS</label>
-                                </div>
+                                <option value="@protocol">@label</option>
                             }
-                            else
-                            {
-                                <input class="form-control" style="width: 10rem" aria-label="@label" placeholder="@($"{label}{(placeholder.Length > 0 ? ": " + placeholder : "")}")"
-                                       value="@_connSettings.GetValueOrDefault(key)" @onchange="@(e => _connSettings[key] = e.Value?.ToString() ?? "")" />
-                            }
-                        }
+                        </select>
+                        @SettingsFields(_connProtocol, _connSettings, (key, value) => _connSettings[key] = value, "new", small: false)
                         <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_connCode) || string.IsNullOrWhiteSpace(_connName))">Add connection</button>
                     </form>
                 }
 
                 @if (_detail.Connections.Count == 0)
                 {
-                    <div class="empty-panel"><p class="text-muted mb-0">No connections yet. Add the broker your machines publish to.</p></div>
+                    <div class="empty-panel"><p class="text-muted mb-0">No connections yet. Add the broker, server or PLC your machines are read through.</p></div>
                 }
                 else
                 {
                     <div class="table-panel">
                         <table class="table align-middle">
                             <thead>
-                                <tr>
-                                    <th>Code</th><th>Name</th>
-                                    @foreach (var (_, label, _) in EdgeView.SparkplugSettings)
-                                    {
-                                        <th>@label</th>
-                                    }
-                                    <th>Active</th><th></th>
-                                </tr>
+                                <tr><th>Code</th><th>Name</th><th>Protocol</th><th>Settings</th><th>Active</th><th></th></tr>
                             </thead>
                             <tbody>
                                 @foreach (var c in _detail.Connections)
@@ -144,21 +128,12 @@ else
                                     <tr @key="c.Id" class="@(c.IsActive ? "" : "text-muted")">
                                         <td class="fw-semibold">@c.Code</td>
                                         <td><input class="form-control form-control-sm" style="min-width: 10rem" maxlength="100" aria-label="Name of @c.Code" value="@edit.Name" @onchange="e => ChangeConnection(c, x => x with { Name = Text(e) })" /></td>
-                                        @foreach (var (key, label, _) in EdgeView.SparkplugSettings)
-                                        {
-                                            <td>
-                                                @if (key == "tls")
-                                                {
-                                                    <input class="form-check-input" type="checkbox" aria-label="TLS of @c.Code" checked="@(edit.Settings.GetValueOrDefault("tls") == "true")"
-                                                           @onchange="@(e => ChangeConnection(c, x => x with { Settings = With(x.Settings, key, (e.Value is true) ? "true" : "") }))" />
-                                                }
-                                                else
-                                                {
-                                                    <input class="form-control form-control-sm" style="min-width: 7rem" aria-label="@label of @c.Code" value="@edit.Settings.GetValueOrDefault(key)"
-                                                           @onchange="e => ChangeConnection(c, x => x with { Settings = With(x.Settings, key, Text(e)) })" />
-                                                }
-                                            </td>
-                                        }
+                                        <td class="small">@EdgeView.ProtocolLabel(c.Protocol)</td>
+                                        <td>
+                                            <div class="d-flex flex-wrap gap-2 align-items-center">
+                                                @SettingsFields(c.Protocol, edit.Settings, (key, value) => ChangeConnection(c, x => x with { Settings = With(x.Settings, key, value) }), c.Code, small: true)
+                                            </div>
+                                        </td>
                                         <td><input class="form-check-input" type="checkbox" aria-label="@c.Code active" checked="@edit.IsActive" @onchange="e => ChangeConnection(c, x => x with { IsActive = e.Value is true })" /></td>
                                         <td class="text-end">
                                             @if (_connEdits.ContainsKey(c.Id))
@@ -177,8 +152,11 @@ else
 
             case "tags":
                 <p class="small text-muted">
-                    Which signal means what on which equipment. A Sparkplug B address is <code>group/node[/device]:metric</code>; the easiest way to bind
-                    one is from <strong>Seen</strong>. Counts are multiplied by the scale; a counter that wraps needs its rollover value.
+                    Which signal means what on which equipment. A Sparkplug B address is <code>group/node[/device]:metric</code>, an OPC UA address a node id
+                    (<code>ns=2;s=Line1.State</code>), an EtherNet/IP address a tag name with its type (<code>Program:Main.State|dint</code>); the easiest way
+                    to bind one is from <strong>Seen</strong>. Counts and process values are multiplied by the scale; a counter that wraps needs its rollover
+                    value; a process value is recorded when it moves by more than its deadband (in scaled units), and at least once a minute while it holds.
+                    An alarm or warning tag carries the number of the active one (0 for none); a machine may have several.
                 </p>
                 @if (CanManage && _detail.Connections.Count > 0)
                 {
@@ -193,7 +171,7 @@ else
                 {
                     <div class="table-panel">
                         <table class="table align-middle">
-                            <thead><tr><th>Equipment</th><th>Role</th><th>Connection</th><th>Address</th><th>Scale</th><th>Rollover</th><th>Last value</th><th>Active</th><th></th></tr></thead>
+                            <thead><tr><th>Equipment</th><th>Role</th><th>Connection</th><th>Address</th><th>Scale</th><th>Rollover or deadband</th><th>Last value</th><th>Active</th><th></th></tr></thead>
                             <tbody>
                                 @foreach (var t in _detail.Tags)
                                 {
@@ -209,6 +187,11 @@ else
                                             {
                                                 <input class="form-control form-control-sm text-end" style="width: 8rem" aria-label="Rollover of @t.EquipmentCode @t.Role" placeholder="none" value="@edit.CounterRollover"
                                                        @onchange="e => ChangeTag(t, x => x with { CounterRollover = long.TryParse(Text(e), out var r) ? r : null })" />
+                                            }
+                                            else if (EdgeView.HasDeadband(t.Role))
+                                            {
+                                                <input class="form-control form-control-sm text-end" style="width: 8rem" aria-label="Deadband of @t.EquipmentCode @t.Address" placeholder="none"
+                                                       value="@(edit.Deadband is { } band ? EdgeView.Number(band) : "")" @onchange="e => ChangeTag(t, x => x with { Deadband = Dec(e) })" />
                                             }
                                         </td>
                                         <td class="small">@t.LastValue @if (t.LastSeenAt is { } seen) { <span class="text-muted">· @EdgeView.LastHeard(seen, DateTimeOffset.UtcNow, null)</span> }</td>
@@ -353,6 +336,7 @@ else
 
     private string? _connCode;
     private string? _connName;
+    private string _connProtocol = "sparkplug_b";
     private Dictionary<string, string> _connSettings = [];
     private readonly Dictionary<Guid, EdgeConnectionDto> _connEdits = [];
     private readonly Dictionary<Guid, EquipmentTagDto> _tagEdits = [];
@@ -364,6 +348,7 @@ else
     private string _bindRole = "state";
     private string? _bindScale;
     private string? _bindRollover;
+    private string? _bindDeadband;
 
     private bool CanManage => _detail is not null && User.Can(PermissionCodes.Equipment, _detail.Node.SiteId);
 
@@ -443,8 +428,42 @@ else
             : metric.Address.Contains("Defective", StringComparison.OrdinalIgnoreCase) ? "defective_count"
             : metric.Address.Contains("Processed", StringComparison.OrdinalIgnoreCase) ? "processed_count"
             : metric.Address.Contains("Speed", StringComparison.OrdinalIgnoreCase) ? "machine_speed"
+            : metric.Address.Contains("Alarm", StringComparison.OrdinalIgnoreCase) ? "alarm"
+            : metric.Address.Contains("Warning", StringComparison.OrdinalIgnoreCase) ? "warning"
             : _bindRole;
     }
+
+    // A protocol's settings as inputs: text, a tick box or a choice; setting one to blank leaves it out.
+    private RenderFragment SettingsFields(string protocol, IReadOnlyDictionary<string, string> values, Action<string, string> set, string idPrefix, bool small) =>
+        @<text>
+            @foreach (var setting in EdgeView.Settings(protocol))
+            {
+                var id = $"{idPrefix}-{setting.Key}";
+                var current = values.GetValueOrDefault(setting.Key) ?? "";
+                @if (setting.IsFlag)
+                {
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="@id" checked="@(current == "true")" @onchange="@(e => set(setting.Key, e.Value is true ? "true" : ""))" />
+                        <label class="form-check-label @(small ? "small" : "")" for="@id">@setting.Label</label>
+                    </div>
+                }
+                else if (setting.Choices is { } choices)
+                {
+                    <select class="form-select @(small ? "form-select-sm" : "") w-auto" aria-label="@setting.Label" title="@setting.Label" value="@current" @onchange="@(e => set(setting.Key, e.Value?.ToString() ?? ""))">
+                        @foreach (var (value, label) in choices)
+                        {
+                            <option value="@value">@setting.Label: @label</option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    <input class="form-control @(small ? "form-control-sm" : "")" style="width: @(small ? "9rem" : "11rem")" aria-label="@setting.Label" title="@setting.Label"
+                           placeholder="@($"{setting.Label}{(setting.Placeholder.Length > 0 ? ": " + setting.Placeholder : "")}")"
+                           value="@current" @onchange="@(e => set(setting.Key, e.Value?.ToString() ?? ""))" />
+                }
+            }
+        </text>;
 
     // Binding a tag, from Seen (an address picked) or typed on Tags.
     private RenderFragment BindForm(string? picked) =>
@@ -470,7 +489,8 @@ else
                         <option value="@c.Id">@c.Code</option>
                     }
                 </select>
-                <input class="form-control inv-grow" style="min-width: 16rem" aria-label="Address" placeholder="group/node/device:metric" value="@_bindAddress" @onchange="@(e => _bindAddress = Text(e))" />
+                <input class="form-control inv-grow" style="min-width: 16rem" aria-label="Address" placeholder="@EdgeView.AddressPlaceholder(_detail.Connections.FirstOrDefault(c => c.Id == _bindConnection)?.Protocol)"
+                       value="@_bindAddress" @onchange="@(e => _bindAddress = Text(e))" />
             }
             else
             {
@@ -480,6 +500,10 @@ else
             @if (EdgeView.IsCounter(_bindRole))
             {
                 <input class="form-control text-end" style="width: 8rem" aria-label="Rollover" placeholder="Rollover" value="@_bindRollover" @onchange="@(e => _bindRollover = Text(e))" />
+            }
+            else if (EdgeView.HasDeadband(_bindRole))
+            {
+                <input class="form-control text-end" style="width: 8rem" aria-label="Deadband" placeholder="Deadband" value="@_bindDeadband" @onchange="@(e => _bindDeadband = Text(e))" />
             }
             <button type="submit" class="btn btn-primary" disabled="@(_saving || _bindEquipment is null || _bindConnection is null || string.IsNullOrWhiteSpace(_bindAddress))">Bind tag</button>
             @if (picked is not null)
@@ -502,6 +526,7 @@ else
         {
             Code = _connCode!,
             Name = _connName!,
+            Protocol = _connProtocol,
             Settings = _connSettings.Where(s => !string.IsNullOrWhiteSpace(s.Value)).ToDictionary(s => s.Key, s => s.Value.Trim()),
         });
         (_connCode, _connName, _connSettings) = (null, null, []);
@@ -523,8 +548,10 @@ else
             Address = (_bindAddress ?? "").Trim(),
             ScaleFactor = decimal.TryParse(_bindScale, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var scale) ? scale : 1,
             CounterRollover = EdgeView.IsCounter(_bindRole) && long.TryParse(_bindRollover, out var rollover) ? rollover : null,
+            Deadband = EdgeView.HasDeadband(_bindRole)
+                && decimal.TryParse(_bindDeadband, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var band) ? band : null,
         });
-        (_binding, _bindAddress, _bindScale, _bindRollover) = (null, null, null, null);
+        (_binding, _bindAddress, _bindScale, _bindRollover, _bindDeadband) = (null, null, null, null, null);
     });
 
     private Task SaveTagAsync(EquipmentTagDto t)
@@ -537,6 +564,7 @@ else
             ScaleFactor = edit.ScaleFactor,
             ScaleOffset = edit.ScaleOffset,
             CounterRollover = edit.CounterRollover,
+            Deadband = edit.Deadband,
             IsActive = edit.IsActive,
         }));
     }

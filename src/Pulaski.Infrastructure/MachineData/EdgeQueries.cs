@@ -29,7 +29,7 @@ internal sealed class EdgeQueries(NpgsqlDataSource dataSource) : IEdgeReadStore
 
     private const string TagsSql = """
         SELECT t.id, t.equipment_id, e.code AS equipment_code, t.tag_role AS role, t.connection_id, c.code AS connection_code, t.source_address AS address,
-               t.scale_factor, t.scale_offset, t.counter_rollover, t.is_active, m.last_value, m.last_seen_at, t.xmin::text::bigint AS version
+               t.scale_factor, t.scale_offset, t.counter_rollover, t.deadband, t.is_active, m.last_value, m.last_seen_at, t.xmin::text::bigint AS version
         FROM core.equipment_tag t
         JOIN core.edge_connection c ON c.id = t.connection_id
         JOIN core.equipment e ON e.id = t.equipment_id
@@ -61,7 +61,9 @@ internal sealed class EdgeQueries(NpgsqlDataSource dataSource) : IEdgeReadStore
     private const string ConfigNodeSql = "SELECT id, code, site_id, is_active, stream_id, last_sequence FROM core.edge_node WHERE id = @Id";
 
     private const string ConfigTagsSql = """
-        SELECT t.id, t.equipment_id, t.tag_role AS role, t.connection_id, t.source_address AS address
+        SELECT t.id, t.equipment_id, t.tag_role AS role, t.connection_id, t.source_address AS address,
+               -- The edge compares raw readings: the deadband in the source's units.
+               CASE WHEN t.tag_role = 'process_value' THEN t.deadband / abs(t.scale_factor) END AS deadband
         FROM core.equipment_tag t
         JOIN core.edge_connection c ON c.id = t.connection_id
         WHERE c.edge_node_id = @Id AND c.is_active AND t.is_active

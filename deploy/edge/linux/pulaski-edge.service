@@ -1,0 +1,24 @@
+# Pulaski Edge as a systemd unit (#25). Publish to /opt/pulaski-edge (dotnet publish src/Pulaski.Edge -c Release -r linux-x64
+# --self-contained -o /opt/pulaski-edge), create the user (useradd --system --no-create-home pulaski-edge), copy this file to
+# /etc/systemd/system/, edit /opt/pulaski-edge/appsettings.json, then: systemctl enable --now pulaski-edge
+[Unit]
+Description=Pulaski Edge
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/opt/pulaski-edge/Pulaski.Edge
+WorkingDirectory=/opt/pulaski-edge
+User=pulaski-edge
+# /var/lib/pulaski-edge, owned by the service user: the buffer outlives restarts and upgrades.
+StateDirectory=pulaski-edge
+Environment=DOTNET_ENVIRONMENT=Production
+Environment=Edge__BufferPath=/var/lib/pulaski-edge/pulaski-edge.db
+Environment=Edge__PkiPath=/var/lib/pulaski-edge/pki
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

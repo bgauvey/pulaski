@@ -7,11 +7,17 @@ namespace Pulaski.Edge;
 
 /// <summary>
 /// Turns what connectors read into signals for the tags bound to it (D-050), and writes them to the buffer. A tag's value is
-/// forwarded when it changes, and when it is lost; a machine speed at most every <see cref="EdgeOptions.SpeedInterval"/>.
-/// Addresses nothing is bound to are only kept as seen, for binding.
+/// forwarded when it changes, and when it is lost; a machine speed at most every <see cref="EdgeOptions.SpeedInterval"/>; a
+/// process value when it moves past its deadband, and at least every <see cref="EdgeOptions.ProcessValueHeartbeat"/> while it
+/// holds (#26). Addresses nothing is bound to are only kept as seen, for binding.
 /// </summary>
-public sealed class TagBinder(EdgeBuffer buffer, TimeSpan speedInterval)
+public sealed class TagBinder(EdgeBuffer buffer, TimeSpan speedInterval, TimeSpan? processValueHeartbeat = null)
 {
+    private const string ProcessValue = "process_value";
+
+    private readonly TimeSpan _heartbeat = processValueHeartbeat ?? TimeSpan.FromMinutes(1);
+    private Dictionary<Guid, EdgeTagConfigDto> _processValues = [];
+    private readonly Dictionary<Guid, (decimal Value, DateTimeOffset At)> _pendingValue = [];
     private readonly Lock _lock = new();
     private Dictionary<(Guid Connection, string Address), List<EdgeTagConfigDto>> _tags = [];
     private readonly Dictionary<Guid, (decimal? Value, bool Good, DateTimeOffset At)> _last = [];
@@ -30,11 +36,13 @@ public sealed class TagBinder(EdgeBuffer buffer, TimeSpan speedInterval)
         lock (_lock)
         {
             _tags = config.Tags.GroupBy(t => (t.ConnectionId, t.Address)).ToDictionary(g => g.Key, g => g.ToList());
+            _processValues = config.Tags.Where(t => t.Role == ProcessValue).ToDictionary(t => t.Id);
             var bound = config.Tags.Select(t => t.Id).ToHashSet();
             foreach (var gone in _last.Keys.Where(k => !bound.Contains(k)).ToList())
             {
                 _last.Remove(gone);
                 _pendingSpeed.Remove(gone);
+                _pendingValue.Remove(gone);
             }
 
             var written = 0;
@@ -83,8 +91,17 @@ public sealed class TagBinder(EdgeBuffer buffer, TimeSpan speedInterval)
         {
             if (_last.TryGetValue(tag.Id, out var last) && last.Good == good && last.Value == value)
             {
-                // Back to what was last forwarded: a speed held back meanwhile is no longer news.
+                // Back to what was last forwarded: a speed or process value held back meanwhile is no longer news.
                 _pendingSpeed.Remove(tag.Id);
+                _pendingValue.Remove(tag.Id);
+                continue;
+            }
+
+            if (tag.Role == ProcessValue && good && tag.Deadband is { } band && last.Good && last.Value is { } forwarded
+                && Math.Abs(value!.Value - forwarded) <= band)
+            {
+                // Within the deadband: kept, and forwarded by Flush at the heartbeat, unless it moves further first.
+                _pendingValue[tag.Id] = (value.Value, sample.Timestamp);
                 continue;
             }
 
@@ -97,6 +114,7 @@ public sealed class TagBinder(EdgeBuffer buffer, TimeSpan speedInterval)
             }
 
             _pendingSpeed.Remove(tag.Id);
+            _pendingValue.Remove(tag.Id);
             _last[tag.Id] = (value, good, sample.Timestamp);
             buffer.Append(tag.Id, sample.Timestamp, value, good);
             written++;
@@ -105,7 +123,11 @@ public sealed class TagBinder(EdgeBuffer buffer, TimeSpan speedInterval)
         return written;
     }
 
-    /// <summary>Forwards the speeds held back whose interval has passed by <paramref name="now"/>.</summary>
+    /// <summary>
+    /// Forwards the speeds held back whose interval has passed by <paramref name="now"/>, and each good process value not forwarded
+    /// for a heartbeat: the reading held back in its deadband, else the value it holds, as of now (#26). A source that reports only
+    /// changes doesn't repeat a steady value, so the heartbeat shows it is still there.
+    /// </summary>
     public int Flush(DateTimeOffset now)
     {
         lock (_lock)
@@ -118,7 +140,21 @@ public sealed class TagBinder(EdgeBuffer buffer, TimeSpan speedInterval)
                 buffer.Append(tagId, at, value, good: true);
             }
 
-            return due.Count;
+            var beats = 0;
+            foreach (var tagId in _processValues.Keys)
+            {
+                if (!_last.TryGetValue(tagId, out var last) || !last.Good || last.Value is not { } holding || now - last.At < _heartbeat)
+                {
+                    continue;
+                }
+
+                var (value, at) = _pendingValue.Remove(tagId, out var held) ? held : (holding, now);
+                _last[tagId] = (value, true, at);
+                buffer.Append(tagId, at, value, good: true);
+                beats++;
+            }
+
+            return due.Count + beats;
         }
     }
 

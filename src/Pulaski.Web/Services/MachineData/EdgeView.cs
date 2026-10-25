@@ -4,9 +4,22 @@ using Pulaski.Contracts.MachineData;
 
 namespace Pulaski.Web.Services.MachineData;
 
+/// <summary>A connection setting as the screen edits it: free text, a tick box, or a choice.</summary>
+public sealed record ConnectionSetting(string Key, string Label, string Placeholder, IReadOnlyList<(string Value, string Label)>? Choices = null, bool IsFlag = false);
+
 /// <summary>Labels, settings and the configuration snippet for the edge node screens (D-050).</summary>
 public static class EdgeView
 {
+    /// <summary>The protocols Pulaski Edge reads (Sparkplug B, OPC UA #22, EtherNet/IP #24), in the order the screen offers them.</summary>
+    public static IReadOnlyList<(string Protocol, string Label)> Protocols { get; } =
+    [
+        ("sparkplug_b", "Sparkplug B (MQTT)"),
+        ("opc_ua", "OPC UA"),
+        ("ethernet_ip", "EtherNet/IP (Logix, Micro800, Omron NJ/NX)"),
+    ];
+
+    public static string ProtocolLabel(string protocol) => Protocols.FirstOrDefault(p => p.Protocol == protocol).Label ?? protocol;
+
     /// <summary>The roles a tag can take today, with what each carries.</summary>
     public static IReadOnlyList<(string Role, string Label)> Roles { get; } =
     [
@@ -17,24 +30,69 @@ public static class EdgeView
         ("defective_count", "Defective count"),
         ("consumed_count", "Consumed count"),
         ("machine_speed", "Machine speed"),
-        ("level", "Level (silo or tank; read later)"),
+        ("alarm", "Alarm (active number, 0 = none)"),
+        ("warning", "Warning (active number, 0 = none)"),
+        ("process_value", "Process value"),
+        ("level", "Level (silo or tank)"),
     ];
+
+    /// <summary>A process value's readings pass a deadband; nothing else has one.</summary>
+    public static bool HasDeadband(string role) => role == "process_value";
 
     public static string RoleLabel(string role) => Roles.FirstOrDefault(r => r.Role == role).Label ?? role;
 
     public static bool IsCounter(string role) => role.EndsWith("_count", StringComparison.Ordinal);
 
-    /// <summary>The Sparkplug B settings, in the order the screen shows them.</summary>
-    public static IReadOnlyList<(string Key, string Label, string Placeholder)> SparkplugSettings { get; } =
+    /// <summary>A protocol's settings, in the order the screen shows them. Passwords are never here: they go in the edge's configuration.</summary>
+    public static IReadOnlyList<ConnectionSetting> Settings(string protocol) => protocol switch
+    {
+        "opc_ua" => OpcUaSettings,
+        "ethernet_ip" => EthernetIpSettings,
+        _ => SparkplugSettings,
+    };
+
+    public static IReadOnlyList<ConnectionSetting> SparkplugSettings { get; } =
     [
-        ("host", "Broker host", "e.g. broker.plant1.local"),
-        ("port", "Port", "1883, or 8883 with TLS"),
-        ("tls", "TLS", ""),
-        ("groupId", "Group id", "all groups"),
-        ("hostId", "Host id", "e.g. pulaski"),
-        ("clientId", "Client id", "generated"),
-        ("username", "User name", "none"),
+        new("host", "Broker host", "e.g. broker.plant1.local"),
+        new("port", "Port", "1883, or 8883 with TLS"),
+        new("tls", "TLS", "", IsFlag: true),
+        new("groupId", "Group id", "all groups"),
+        new("hostId", "Host id", "e.g. pulaski"),
+        new("clientId", "Client id", "generated"),
+        new("username", "User name", "none"),
     ];
+
+    public static IReadOnlyList<ConnectionSetting> OpcUaSettings { get; } =
+    [
+        new("endpoint", "Endpoint", "opc.tcp://plc1:4840"),
+        new("securityMode", "Security", "", [("", "Sign and encrypt"), ("sign", "Sign"), ("none", "None (test only)")]),
+        new("securityPolicy", "Policy", "best offered"),
+        new("serverThumbprint", "Server thumbprint", "from the trusted store"),
+        new("trustAnyServer", "Trust any server (test only)", "", IsFlag: true),
+        new("username", "User name", "anonymous"),
+        new("publishingIntervalMs", "Publishing ms", "1000"),
+        new("samplingIntervalMs", "Sampling ms", "as publishing"),
+        new("browseRoot", "Browse from", "Objects (i=85)"),
+        new("browseDepth", "Browse depth", "3"),
+    ];
+
+    public static IReadOnlyList<ConnectionSetting> EthernetIpSettings { get; } =
+    [
+        new("gateway", "PLC address", "e.g. 10.0.0.20"),
+        new("path", "CIP path", "1,0 for a ControlLogix in slot 0"),
+        new("plc", "PLC", "", [("", "ControlLogix"), ("compactlogix", "CompactLogix"), ("micro800", "Micro800"), ("omron-njnx", "Omron NJ/NX"),
+            ("plc5", "PLC-5"), ("slc500", "SLC 500"), ("logixpccc", "Logix (PCCC)")]),
+        new("pollIntervalMs", "Poll ms", "1000"),
+        new("timeoutMs", "Timeout ms", "5000"),
+    ];
+
+    /// <summary>What an address of the protocol looks like, as a placeholder.</summary>
+    public static string AddressPlaceholder(string? protocol) => protocol switch
+    {
+        "opc_ua" => "ns=2;s=Line1.State",
+        "ethernet_ip" => "Program:Main.State|dint",
+        _ => "group/node/device:metric",
+    };
 
     /// <summary>When a node was last heard from: <c>just now</c>, <c>3 min ago</c>, or the site time; <c>never</c>.</summary>
     public static string LastHeard(DateTimeOffset? at, DateTimeOffset now, string? timeZone)
@@ -61,7 +119,7 @@ public static class EdgeView
     {
         var connections = node.Connections
             .Where(c => c.IsActive && c.Settings.ContainsKey("username"))
-            .ToDictionary(c => c.Code, _ => new Dictionary<string, string> { ["password"] = "<broker password>" });
+            .ToDictionary(c => c.Code, c => new Dictionary<string, string> { ["password"] = c.Protocol == "sparkplug_b" ? "<broker password>" : "<server password>" });
         var edge = new Dictionary<string, object>
         {
             ["ApiUrl"] = apiUrl.ToString(),

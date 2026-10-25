@@ -96,6 +96,16 @@ internal sealed class IngestEdgeSignalsHandler(IUnitOfWork unitOfWork, IEdgeRepo
             openStops[equipment] = open;
         }
 
+        // Alarms and warnings (#26): each tag's open one, and its profile's messages.
+        var alarmTags = tags.Values.Where(t => t.Role is TagRoles.Alarm or TagRoles.Warning).ToList();
+        var openAlarms = (await edge.GetOpenAlarmsAsync([.. alarmTags.Select(t => t.TagId)], cancellationToken))
+            .ToDictionary(a => a.Key, a => (OpenAlarm?)a.Value);
+        var messages = await edge.GetAlarmMessagesAsync(
+            [.. alarmTags.Where(t => t.MachineProfileId is not null).Select(t => t.MachineProfileId!.Value).Distinct()], cancellationToken);
+        var raised = new List<AlarmRow>();
+        var cleared = new List<(OpenAlarm Alarm, DateTimeOffset ClearedAt)>();
+        var values = new List<ProcessValueRow>();
+
         var changes = new List<StateChangeRow>();
         var counts = new List<MachineCountRow>();
         var changedLive = new HashSet<Guid>();
@@ -158,6 +168,29 @@ internal sealed class IngestEdgeSignalsHandler(IUnitOfWork unitOfWork, IEdgeRepo
                     live[equipment] = LiveStateRules.ApplySpeed(current, speed * tag.ScaleFactor + tag.ScaleOffset, signal.OccurredAt);
                     changedLive.Add(equipment);
                     break;
+                case TagRoles.Alarm or TagRoles.Warning:
+                    var open = openAlarms.GetValueOrDefault(tag.TagId);
+                    var number = AlarmRules.Number(signal.Value);
+                    if (AlarmRules.Cleared(open, number, signal.Good, signal.OccurredAt) is { } done)
+                    {
+                        cleared.Add(done);
+                        openAlarms[tag.TagId] = null;
+                    }
+
+                    if (AlarmRules.Raised(open, number, signal.Good) is { } alarm)
+                    {
+                        var message = tag.MachineProfileId is { } profile ? messages.GetValueOrDefault((profile, tag.Role, alarm)) : null;
+                        var row = new AlarmRow(ids.NewId(), signal.OccurredAt, equipment, tag.TagId, tag.Role, alarm, message);
+                        raised.Add(row);
+                        openAlarms[tag.TagId] = new OpenAlarm(row.Id, row.RaisedAt, alarm);
+                    }
+
+                    break;
+                case TagRoles.ProcessValue or TagRoles.Level:
+                    // Kept as read, scaled; a reading without a value says the signal was lost (#26, D-060).
+                    var reads = signal.Good && signal.Value is not null;
+                    values.Add(new ProcessValueRow(tag.TagId, signal.OccurredAt, reads ? (double)(signal.Value!.Value * tag.ScaleFactor + tag.ScaleOffset) : null, reads));
+                    break;
                 case var role when TagRoles.CountKind(role) is { } kind && signal.Good && signal.Value is { } reading:
                     var value = decimal.ToInt64(decimal.Truncate(reading));
                     var key = (equipment, kind);
@@ -174,6 +207,10 @@ internal sealed class IngestEdgeSignalsHandler(IUnitOfWork unitOfWork, IEdgeRepo
         }
 
         await edge.InsertStateChangesAsync(changes, cancellationToken);
+        // Raised before cleared: an alarm raised and cleared in one batch is inserted, then closed.
+        await edge.InsertAlarmsAsync(raised, cancellationToken);
+        await edge.ClearAlarmsAsync(cleared, cancellationToken);
+        await edge.InsertProcessValuesAsync(values, cancellationToken);
         await edge.InsertCountsAsync(counts, request.ActorId, cancellationToken);
         await edge.InsertStopsAsync([.. touchedStops.Values.Where(t => t.IsNew).Select(t => t.Stop)], cancellationToken);
         await edge.UpdateStopsAsync([.. touchedStops.Values.Where(t => !t.IsNew).Select(t => t.Stop)], cancellationToken);

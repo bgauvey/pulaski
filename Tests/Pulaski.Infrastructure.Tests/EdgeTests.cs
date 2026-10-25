@@ -84,6 +84,86 @@ public sealed class EdgeTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Alarm_and_warning_tags_raise_and_clear_alarms_and_process_values_are_kept_scaled()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "AENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "AS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse line = await db.SendAsync(new CreateEquipmentCommand(site.Id, "AL-" + _s, "Extruder", null, "work_center", "production_line", true, true, false, null));
+        CreatedResponse profile = await db.SendAsync(new CreateMachineProfileCommand(site.Id, "AP-" + _s, "Extruder", null, null, null));
+        var csv = MachineProfileCsv.Parse("kind,value,name,packml_state\nalarm,12,Melt pressure high,\nalarm,7,Screen pack blocked,\nwarning,3,Barrel zone 2 slow to heat,\n");
+        await db.SendAsync(new ImportMachineProfileCommand(profile.Id, profile.Version, csv, DryRun: false));
+        var lineNow = await QueryAsync<GetEquipmentQuery, EquipmentDto>(new GetEquipmentQuery(line.Id));
+        await db.SendAsync(new SetEquipmentMachineDataCommand(line.Id, lineNow.Version, profile.Id, StateDerivations.OwnTags, null, 300));
+
+        CreatedResponse node = await db.SendAsync(new CreateEdgeNodeCommand(site.Id, "AG-" + _s, "Gateway", null));
+        CreatedResponse connection = await db.SendAsync(new CreateEdgeConnectionCommand(node.Id, "BROKER", "Broker", EdgeProtocols.SparkplugB,
+            new Dictionary<string, string> { ["host"] = "localhost" }));
+        var address = $"Plant1/Extrusion/AL-{_s}:";
+
+        // Two alarm words and a warning on one machine (#26); a melt temperature in tenths of a degree, with a 0.5 °C deadband.
+        CreatedResponse alarms1 = await db.SendAsync(new CreateEquipmentTagCommand(line.Id, TagRoles.Alarm, connection.Id, address + "Admin/Alarm/0/ID", 1, 0, null));
+        CreatedResponse alarms2 = await db.SendAsync(new CreateEquipmentTagCommand(line.Id, TagRoles.Alarm, connection.Id, address + "Admin/Alarm/1/ID", 1, 0, null));
+        CreatedResponse warning = await db.SendAsync(new CreateEquipmentTagCommand(line.Id, TagRoles.Warning, connection.Id, address + "Admin/Warning/0/ID", 1, 0, null));
+        CreatedResponse melt = await db.SendAsync(new CreateEquipmentTagCommand(line.Id, TagRoles.ProcessValue, connection.Id, address + "Melt/Temp", 0.1m, 0, null, 0.5m));
+        await Assert.ThrowsAsync<Pulaski.Application.Errors.ValidationException>(() =>
+            db.SendAsync(new CreateEquipmentTagCommand(line.Id, TagRoles.State, connection.Id, address + "State", 1, 0, null, 1m)));
+
+        var config = await QueryAsync<GetEdgeConfigQuery, EdgeConfigDto>(new GetEdgeConfigQuery(node.Id));
+        Assert.Equal(5m, config.Tags.Single(t => t.Id == melt.Id).Deadband);   // 0.5 °C in tenths
+        Assert.Null(config.Tags.Single(t => t.Id == alarms1.Id).Deadband);
+
+        var t0 = new DateTimeOffset(2026, 10, 18, 8, 0, 0, TimeSpan.Zero);
+        EdgeSignalDto S(long seq, Guid tag, int seconds, decimal? value, bool good = true) =>
+            new() { Sequence = seq, TagId = tag, OccurredAt = t0.AddSeconds(seconds), Value = value, Good = good };
+        var batch = new IngestEdgeSignalsCommand(node.Id, Guid.CreateVersion7(), "1.0.0",
+        [
+            S(1, alarms1.Id, 0, 12), S(2, alarms2.Id, 5, 7), S(3, warning.Id, 10, 3),
+            S(4, alarms1.Id, 20, 12),           // the same alarm again: nothing new
+            S(5, alarms2.Id, 30, null, false),  // signal lost: the alarm stays
+            S(6, alarms1.Id, 40, 0),            // cleared
+            S(7, melt.Id, 0, 2105), S(8, melt.Id, 60, 2112), S(9, melt.Id, 120, null, false),
+        ]);
+        Assert.Equal(9, (await db.SendAsync(batch)).Applied);
+        Assert.Equal(0, (await db.SendAsync(batch)).Applied);
+
+        var listed = await QueryAsync<ListAlarmsQuery, AlarmListDto>(new ListAlarmsQuery(new AlarmFilter(site.Id, null, t0, t0.AddHours(1), ActiveOnly: false)));
+        Assert.False(listed.IsTruncated);
+        Assert.Equal(
+            [("warning", 3, "Barrel zone 2 slow to heat", false), ("alarm", 7, "Screen pack blocked", false), ("alarm", 12, "Melt pressure high", true)],
+            listed.Alarms.Select(a => (a.Kind, a.Number, a.Message, a.ClearedAt is not null)));
+        var cleared = listed.Alarms.Single(a => a.Number == 12);
+        Assert.Equal((t0, t0.AddSeconds(40), 40, address + "Admin/Alarm/0/ID"), (cleared.RaisedAt, cleared.ClearedAt, cleared.DurationSeconds, cleared.Address));
+
+        var active = await QueryAsync<ListAlarmsQuery, AlarmListDto>(new ListAlarmsQuery(new AlarmFilter(site.Id, line.Id, t0, t0.AddHours(1), ActiveOnly: true)));
+        Assert.Equal([3, 7], active.Alarms.Select(a => a.Number));
+
+        // A later batch clears the second word's alarm and raises another on it.
+        await db.SendAsync(new IngestEdgeSignalsCommand(node.Id, Guid.CreateVersion7(), "1.0.0", [S(1, alarms2.Id, 90, 12)]));
+        var after = await QueryAsync<ListAlarmsQuery, AlarmListDto>(new ListAlarmsQuery(new AlarmFilter(site.Id, line.Id, t0, t0.AddHours(1), ActiveOnly: true)));
+        Assert.Equal([(12, address + "Admin/Alarm/1/ID"), (3, address + "Admin/Warning/0/ID")], after.Alarms.Select(a => (a.Number, a.Address)));
+
+        var series = Assert.Single(await QueryAsync<GetProcessValuesQuery, IReadOnlyList<ProcessValueSeriesDto>>(
+            new GetProcessValuesQuery(line.Id, null, t0, t0.AddHours(1))));
+        Assert.Equal((melt.Id, address + "Melt/Temp", false), (series.TagId, series.Address, series.IsTruncated));
+        Assert.Equal([(t0, (double?)210.5, true), (t0.AddSeconds(60), 211.2, true), (t0.AddSeconds(120), null, false)],
+            series.Points.Select(p => (p.At, p.Value.HasValue ? Math.Round(p.Value.Value, 3) : (double?)null, p.Good)));
+    }
+
+    [Fact]
+    public async Task Process_values_older_than_the_retention_are_dropped_a_month_at_a_time()
+    {
+        await using var admin = await db.AdminDataSource.OpenConnectionAsync();
+        await admin.ExecuteAsync("SELECT ts.create_month_partitions('ts.process_value'::regclass, DATE '2020-01-01', 1)");
+        var maintenance = db.Services.GetRequiredService<Pulaski.Infrastructure.Persistence.DatabaseMaintenance>();
+
+        await Assert.ThrowsAsync<Npgsql.PostgresException>(() => maintenance.DropOldProcessValuesAsync(3, CancellationToken.None));
+        Assert.True(await maintenance.DropOldProcessValuesAsync(90, CancellationToken.None) >= 1);
+        Assert.Null(await admin.ExecuteScalarAsync<string?>("SELECT to_regclass('ts.process_value_p202001')::text"));
+        Assert.NotNull(await admin.ExecuteScalarAsync<string?>(
+            "SELECT to_regclass('ts.process_value_p' || to_char(current_date, 'YYYYMM'))::text"));
+    }
+
+    [Fact]
     public async Task Deleting_an_edge_node_deactivates_its_connections_and_tags()
     {
         CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "DE-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
