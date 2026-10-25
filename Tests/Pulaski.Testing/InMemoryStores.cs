@@ -9,6 +9,7 @@ using Pulaski.Application.Inventory;
 using Pulaski.Application.Labor;
 using Pulaski.Application.MachineData;
 using Pulaski.Application.Materials;
+using Pulaski.Application.Overview;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
 using Pulaski.Application.Scheduling;
@@ -89,6 +90,8 @@ public sealed class InMemoryStores
 
     public InMemoryOee Oee { get; } = new();
 
+    public InMemoryOverview Overview { get; } = new();
+
     public InMemoryTerminals Terminals { get; } = new();
 
     public InMemoryDeliveries Deliveries { get; } = new();
@@ -153,6 +156,7 @@ public sealed class InMemoryStores
         services.RemoveAll<IStopRepository>();
         services.RemoveAll<IStopAdjustmentRepository>();
         services.RemoveAll<IOeeReadStore>();
+        services.RemoveAll<IOverviewReadStore>();
         services.RemoveAll<IQualificationRepository>();
         services.RemoveAll<ITerminalRepository>();
         services.RemoveAll<ITerminalReadStore>();
@@ -214,6 +218,7 @@ public sealed class InMemoryStores
         services.AddSingleton<IStopRepository>(Stops);
         services.AddSingleton<IStopAdjustmentRepository>(Stops);
         services.AddSingleton<IOeeReadStore>(Oee);
+        services.AddSingleton<IOverviewReadStore>(Overview);
         services.AddSingleton<IQualificationRepository>(Labor);
         services.AddSingleton<IQualificationReadStore>(Labor);
         services.AddSingleton<ITerminalRepository>(Terminals);

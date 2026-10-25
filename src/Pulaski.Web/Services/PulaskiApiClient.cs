@@ -10,6 +10,7 @@ using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.MachineData;
 using Pulaski.Contracts.Materials;
+using Pulaski.Contracts.Overview;
 using Pulaski.Contracts.Processes;
 using Pulaski.Contracts.ReferenceData;
 using Pulaski.Contracts.Scheduling;
@@ -165,6 +166,9 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ShiftLaborDto> GetShiftLaborAsync(Guid siteId, DateOnly date, Guid? scheduleId, string? shiftCode, CancellationToken ct = default) =>
         GetAsync<ShiftLaborDto>(
             $"api/labor/sites/{siteId}/shift?date={date:yyyy-MM-dd}" + (scheduleId is { } s ? $"&scheduleId={s}&shiftCode={Uri.EscapeDataString(shiftCode ?? "")}" : ""), ct);
+
+    public Task<OverviewDto> GetOverviewAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<OverviewDto>($"api/overview?siteId={siteId}", ct);
 
     public Task<PendingLaborApprovalsDto> ListPendingLaborApprovalsAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<PendingLaborApprovalsDto>($"api/labor/sites/{siteId}/approvals/pending", ct);

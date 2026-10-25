@@ -1507,6 +1507,29 @@ Issue #23. Stops came only from machine data (D-050), so an outage the machine d
 
 **Not done.** Changing a stop's times or voiding one entered in error (a split or a new entry does it for now); undoing an adjustment; adjusting a machine's state history (only stops); machine data that arrives late for time already covered by a stop entered by hand still opens its own stop, which may then overlap.
 
+## Overview live figures (D-070, proposed)
+
+Issue #42. The Overview showed current-shift OEE, but its machine state, output, scrap, downtime, lots and stops to code were placeholders, and its strip rolled over 24 hours whatever the shifts.
+
+**One read, one permission.** `GET /api/overview?siteId=` (`GetOverviewQuery`) returns a site's live figures in one call per refresh, under `overview.view`, like the OEE report the Overview already reads (D-039: the Overview is a summary screen, so seeing it is enough for its figures). Links from it still go only where the user may look (`machines.view`, `inventory.view`, `work_orders.view`). Labor to approve stays under `labor.view` (#46). Nothing is stored; everything is worked out on read.
+
+**Scope: each line's shift so far.** A line's figures cover the shift it is on now (`ShiftSchedule.ShiftAt` with no lead time, so a shift about to start isn't current), else the site-local day so far (D-044). Lines on different shifts each count their own.
+
+**What each line shows.**
+- *State:* its category, PackML name, since when and why it is stopped, from the Machines board's derivation (`GetMachineStatusHandler`, D-050); a quiet edge node shows as such. A line that doesn't track state says so, never "no signal".
+- *Output and scrap:* production reports only (D-035, D-052), by unit; machine counts are left out.
+- *Down time:* availability loss from `Utilization.Classify`/`Combine` (shared with the OEE report through `EquipmentUses`): stops, not executing and no signal, by reason with no signal and not-coded named; micro-stops are run time and planned stops aren't down.
+- *Stops to code:* stops of the machines it takes its time from, overlapping its shift, with no effective reason and not micro-stops, each counted once.
+- *State lane:* run / down / no signal / planned stop / not in production, from the strip's start (or the shift's, if earlier) to now.
+
+**The strip follows the shifts.** Its span is the earliest current shift's start to the latest one's end, shared by every row; with no line on a shift it stays six hours back and eighteen ahead.
+
+**Site figures.** Good output against plan, scrap, down time with the biggest reason, and the attention cells are added up from the lines. The plan for a shift shares each production job's planned quantity over its projected time and counts the part inside the line's shift; units are never added together. Lots on hold and in quarantine count lots with stock. ERP changes to accept count open orders with a pending change (D-066), from the order list the Overview already reads.
+
+**Unavailable is not zero.** A null figure means not measured: with no line tracking state, down time, stops to code and lines with no signal show as placeholders, not 0. Output and lots are always measured, so they show 0.
+
+**Not done.** SPC alerts (no quality checks yet); machine counts as a live estimate of output; calendar exceptions in the scope (as in the OEE report); per-line targets.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

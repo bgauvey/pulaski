@@ -1,12 +1,13 @@
 @page "/"
 @attribute [RequiresView(PermissionCodes.OverviewView)]
 @* The plant overview (docs/admin-dashboard-brief.md). In five seconds it answers: which lines
-   are running, which are not and why, and what needs a person. OEE comes from the machine report;
-   labor to approve comes from the shift review; live state, output, quality and lots remain placeholders
-   until those views are built. *@
+   are running, which are not and why, and what needs a person. Live state, each line's shift so far
+   and held lots come from GET /overview (D-070); OEE from the machine report; labor to approve from
+   the shift review. SPC alerts remain a placeholder until quality checks exist. *@
 @implements IDisposable
 @using System.Globalization
 @using Pulaski.Contracts.MachineData
+@using Pulaski.Web.Services.MachineData
 @using Pulaski.Web.Services.Scheduling
 @inject PulaskiApiClient Api
 @inject CurrentUser User
@@ -99,19 +100,65 @@
         </div>
         <div class="ov-sum">
             <span class="ov-sum-label">Good output</span>
-            <span class="ov-sum-value is-ghost">— <span class="ov-sum-unit">of planned</span></span>
-            <span class="ov-meter is-ghost is-wide"></span>
-            <span class="ov-sum-note">Counted from the line's good-part counter</span>
+            @if (_overview is null)
+            {
+                <span class="ov-sum-value is-ghost">—</span>
+                <span class="ov-meter is-ghost is-wide"></span>
+            }
+            else if (GoodOutput.Count == 0)
+            {
+                <span class="ov-sum-value">0</span>
+            }
+            else
+            {
+                @foreach (var q in GoodOutput)
+                {
+                    <span class="ov-sum-value @(GoodOutput.Count > 1 ? "is-small" : "")">@Number(q.Qty) <span class="ov-sum-unit">@(q.Of > 0 ? $"of {Number(q.Of)} {q.UomCode}" : q.UomCode)</span></span>
+                    @if (q.Of > 0)
+                    {
+                        <span class="ov-meter is-wide"><span class="ov-meter-fill" style="width: @MeterWidth(q.Qty / q.Of * 100m)"></span></span>
+                    }
+                }
+            }
+            <span class="ov-sum-note">@(_overview is null ? "From production reports" : GoodOutput.Count == 0 ? "Nothing reported or planned this shift" : "Reported this shift, against the plan for the shift")</span>
         </div>
         <div class="ov-sum">
             <span class="ov-sum-label">Scrap</span>
-            <span class="ov-sum-value is-ghost">—</span>
-            <span class="ov-sum-note">Quantity and share of output</span>
+            @if (_overview is null)
+            {
+                <span class="ov-sum-value is-ghost">—</span>
+            }
+            else if (ScrapOutput.Count == 0)
+            {
+                <span class="ov-sum-value">0</span>
+            }
+            else
+            {
+                @foreach (var q in ScrapOutput)
+                {
+                    <span class="ov-sum-value @(ScrapOutput.Count > 1 ? "is-small" : "")">@Number(q.Qty) <span class="ov-sum-unit">@q.UomCode@(q.Of > 0 ? $" · {FormatPct(Math.Round(q.Qty / q.Of * 100m, 1))}" : "")</span></span>
+                }
+            }
+            <span class="ov-sum-note">@(_overview is not null && ScrapOutput.Count == 0 ? "Nothing reported this shift" : "Quantity and share of output")</span>
         </div>
         <div class="ov-sum">
             <span class="ov-sum-label">Downtime</span>
-            <span class="ov-sum-value is-ghost">— <span class="ov-sum-unit">min</span></span>
-            <span class="ov-sum-note">With the biggest reason named</span>
+            @if (_overview is null || !AnyTracked)
+            {
+                <span class="ov-sum-value is-ghost">— <span class="ov-sum-unit">min</span></span>
+                <span class="ov-sum-note">
+                    @if (_overview is not null)
+                    {
+                        <Icon Name="plug" Size="14" />
+                    }
+                    @(_overview is null ? "With the biggest reason named" : "Needs machine data: no line reports its state")
+                </span>
+            }
+            else
+            {
+                <span class="ov-sum-value">@Number(Math.Round(DownMinutes)) <span class="ov-sum-unit">min</span></span>
+                <span class="ov-sum-note">@(TopReason is { } top ? $"Top: {top.Name}, {Number(Math.Round(top.Minutes))} min" : "No down time this shift")</span>
+            }
         </div>
     </div>
 </section>
@@ -121,6 +168,9 @@
     <div class="ov-board-head">
         <h2 id="board-title" class="ov-h2">Lines</h2>
         <ul class="ov-key" aria-label="Key">
+            <li><span class="ov-swatch is-run"></span>Running</li>
+            <li><span class="ov-swatch is-down"></span>Down</li>
+            <li><span class="ov-swatch is-stop"></span>Planned stop</li>
             <li><span class="ov-swatch is-nosignal"></span>No signal</li>
             <li><span class="ov-swatch is-planned"></span>Planned</li>
             <li><span class="ov-swatch is-published"></span>Dispatched or firmed</li>
@@ -152,7 +202,7 @@
                 <span role="columnheader">State</span>
                 <span role="columnheader">Now or next</span>
                 <span role="columnheader" class="ov-scale">
-                    @foreach (var (percent, label) in _window.Ticks(Tz))
+                    @foreach (var (percent, label) in _window.Ticks(Tz, _window.TickStep))
                     {
                         <span class="ov-tick" style="left: @Pct(percent)">@label</span>
                     }
@@ -168,6 +218,7 @@
                 var segments = timeline?.Segments ?? [];
                 var job = OverviewModel.NowOrNext(segments, Now);
                 var flags = Flags(timeline);
+                var live = LiveOf(line.Id);
                 <div class="ov-row" role="row" @key="line.Id">
                     <span role="cell" class="ov-line">
                         @if (CanSchedule)
@@ -181,10 +232,30 @@
                         <span class="ov-line-name">@line.Name</span>
                     </span>
 
-                    <span role="cell">
-                        <span class="ov-state is-nosignal" title="No machine connection yet: connect this line through the edge connector to see whether it is running.">
-                            <Icon Name="signal-off" Size="16" /> No signal
-                        </span>
+                    <span role="cell" class="ov-live-state">
+                        @if (_overview is null)
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                        else if (live is not { TracksState: true })
+                        {
+                            <span class="ov-state is-untracked" title="This line doesn't report its machine state. Bind its tags through an edge node and switch on state tracking to see it here.">Not tracked</span>
+                        }
+                        else
+                        {
+                            <span class="ov-state @MachineView.CategoryClass(live.Category)" title="@StateTitle(live)">
+                                @if (live.Category == "no_signal" || live.EdgeQuiet)
+                                {
+                                    <Icon Name="signal-off" Size="16" />
+                                }
+                                else
+                                {
+                                    <span class="ov-state-dot" aria-hidden="true"></span>
+                                }
+                                @(live.EdgeQuiet ? "Edge quiet" : MachineView.CategoryLabel(live.Category))
+                            </span>
+                            <span class="ov-state-note">@StateNote(live)</span>
+                        }
                     </span>
 
                     <span role="cell" class="ov-job">
@@ -209,11 +280,25 @@
                                 <span class="ov-progress-text">@Number(job.PlannedQty - job.RemainingQty) of @ScheduleFormat.Qty(job.PlannedQty, job.UomCode)</span>
                             </span>
                         }
+                        @if (live is { Output.Count: > 0 })
+                        {
+                            <span class="ov-shift-output">This shift: @string.Join(", ", live.Output.Select(o => $"{Number(o.GoodQty)} {o.UomCode} good" + (o.ScrapQty > 0 ? $", {Number(o.ScrapQty)} scrap" : "")))</span>
+                        }
                     </span>
 
                     <span role="cell" class="ov-strip" style="--now: @Pct(_window.Percent(Now))" aria-label="@StripLabel(line, segments)">
                         <span class="ov-lane is-state">
-                            <span class="ov-nosignal" style="width: @Pct(_window.Percent(Now))"></span>
+                            @if (live is { TracksState: true })
+                            {
+                                @foreach (var bar in OverviewModel.StateBars(live.States, _window))
+                                {
+                                    <span class="ov-act @UseClass(bar.Span.Use)" style="left: @Pct(bar.Left); width: @Pct(bar.Width)" title="@UseTitle(bar.Span)"></span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="ov-nosignal" style="width: @Pct(_window.Percent(Now))"></span>
+                            }
                         </span>
                         <span class="ov-lane is-plan">
                             @if (!OverviewModel.Bars(segments, _window).Any())
@@ -348,8 +433,10 @@
     private IReadOnlyList<WorkOrderDto> _orders = [];
     private IReadOnlyList<WorkOrderProgressDto> _progress = [];
     private PendingLaborApprovalsDto? _labor;
+    private OverviewDto? _overview;
     private Guid _siteId;
     private OverviewWindow _window = OverviewWindow.Around(DateTimeOffset.UtcNow);
+    private Dictionary<Guid, OverviewLineDto> _live = [];
     private DateTimeOffset? _loadedAt;
     private bool _loading;
     private ApiException? _error;
@@ -381,24 +468,49 @@
             var conflicts = open.Count(p => p.Warnings.Count > 0 || p.HasOverlap);
             var overlaps = open.Count(p => p.HasOverlap);
             var unplaced = open.Count(p => p.Order.Status == "planned" && p.PlacedQty < p.Order.PlannedQty);
-            var silent = _lines?.Count(l => l.TracksState) ?? 0;
+            var tracked = _overview?.Lines.Where(l => l.TracksState).ToList() ?? [];
+            var machines = User.Can(PermissionCodes.MachinesView, _siteId) ? "machines" : null;
 
-            yield return new("stop", "Uncoded stops", 0, "Needs machine data", "danger", null,
-                "Stops longer than a micro-stop that no one has given a reason yet, this shift.", IsPlaceholder: true);
+            // Machine figures are unavailable, not zero, until a line reports its state (D-070).
+            const string uncodedHelp = "Stops in each line's current shift, longer than a micro-stop, that no one has given a reason yet.";
+            if (tracked.Count == 0)
+            {
+                yield return new("stop", "Uncoded stops", 0, "Needs machine data", "danger", null, uncodedHelp, IsPlaceholder: true);
+            }
+            else
+            {
+                var uncoded = tracked.Sum(l => l.UncodedStops ?? 0);
+                yield return new("stop", "Uncoded stops", uncoded, uncoded == 0 ? "All coded" : "Give them a reason", "danger", machines, uncodedHelp);
+            }
+
             yield return new("spc", "Open SPC alerts", 0, "Needs quality checks", "danger", null,
                 "Control-chart rule violations waiting for someone to respond.", IsPlaceholder: true);
             yield return new("clock", "Orders behind", behind, behind == 0 ? "All on time" : "Late or slipping", "danger", "work-orders",
                 "Open orders projected to finish after their due date, or to start more than 15 minutes after their published baseline.");
-            yield return new("lot", "Lots on hold", 0, "Needs lot tracking", "warning", null,
-                "Material lots on hold or in quarantine at this site.", IsPlaceholder: true);
+            var (onHold, quarantine) = (_overview?.LotsOnHold ?? 0, _overview?.LotsInQuarantine ?? 0);
+            yield return new("lot", "Lots on hold", onHold + quarantine,
+                onHold + quarantine == 0 ? "None" : quarantine == 0 ? $"{onHold} on hold" : onHold == 0 ? $"{quarantine} in quarantine" : $"{onHold} on hold, {quarantine} in quarantine",
+                "warning", User.Can(PermissionCodes.InventoryView, _siteId) ? $"inventory/lots?status={(onHold > 0 || quarantine == 0 ? "on_hold" : "quarantine")}" : null,
+                "Lots with stock on hold or in quarantine at this site.");
             yield return new("alert", "Schedule conflicts", conflicts, overlaps > 0 ? $"{overlaps} with an overlap" : conflicts == 0 ? "None" : "Warnings to review", "warning", "schedule",
                 "Open orders with a schedule warning (late, no rate, unit mismatch…) or work that overlaps on a line.");
-            yield return new("signal-off", "Lines with no signal", silent, "No machine connection yet", "muted", "equipment",
-                "Lines that should report their state but send nothing. Until the edge connector is set up, that is every line.");
+            const string silentHelp = "Lines that report their state but send nothing now: no signal, or their edge node has been quiet for over 2 minutes.";
+            if (tracked.Count == 0)
+            {
+                yield return new("signal-off", "Lines with no signal", 0, "No line reports its state", "muted", null, silentHelp, IsPlaceholder: true);
+            }
+            else
+            {
+                var silent = tracked.Count(l => l.Category == "no_signal" || l.EdgeQuiet);
+                yield return new("signal-off", "Lines with no signal", silent, silent == 0 ? "All reporting" : "Not reporting", "muted", machines, silentHelp);
+            }
+
             yield return new("schedule", "Not on a line", unplaced, unplaced == 0 ? "Everything placed" : "Quantity to place", "warning", "schedule",
                 "Planned orders with quantity not yet on a line or department.");
-            yield return new("erp", "ERP changes to accept", 0, "Needs an ERP connection", "warning", null,
-                "Orders the ERP changed after they were dispatched, waiting for a planner to accept.", IsPlaceholder: true);
+            var erp = open.Count(p => p.Order.PendingChange is not null);
+            yield return new("erp", "ERP changes to accept", erp, erp == 0 ? "None" : "Accept or reject", "warning",
+                User.Can(PermissionCodes.WorkOrdersView) ? "work-orders" : null,
+                "Open orders the ERP changed after they left planning, waiting for a planner to accept or reject the change.");
             yield return LaborCell();
         }
     }
@@ -477,6 +589,8 @@
         _timelines = [];
         _oeeReport = null;
         _labor = null;
+        _overview = null;
+        _live = [];
         await LoadAsync();
     }
 
@@ -506,14 +620,17 @@
                 ? null
                 : Api.GetOeeReportAsync(_siteId, productionDate.AddDays(-1), productionDate);
             var labor = CanSeeLabor ? Api.ListPendingLaborApprovalsAsync(_siteId) : null;
+            var overview = _siteId == Guid.Empty ? null : Api.GetOverviewAsync(_siteId);
 
             _orders = [.. (await orders).Where(o => o.SiteId == _siteId)];
             _progress = await progress;
             _timelines = (await Task.WhenAll(timelines)).ToDictionary(t => t.LineId);
             _oeeReport = oee is null ? null : await oee;
             _labor = labor is null ? null : await labor;
+            _overview = overview is null ? null : await overview;
+            _live = _overview?.Lines.ToDictionary(l => l.EquipmentId) ?? [];
             _lines = lines;
-            _window = OverviewWindow.Around(Now);
+            _window = _overview is { } o ? OverviewWindow.Of(o) : OverviewWindow.Around(Now);
             _loadedAt = Now;
             _error = null;
         }
@@ -557,7 +674,97 @@
     private string StripLabel(EquipmentDto line, IReadOnlyList<TimelineSegmentDto> segments)
     {
         var jobs = segments.Count(s => s.Kind == "job" && s.End > _window.Start && s.Start < _window.End);
-        return $"{line.Code}: no machine signal; {jobs} planned jobs between {ScheduleFormat.Time(_window.Start, Tz)} and {ScheduleFormat.Time(_window.End, Tz)}";
+        var live = LiveOf(line.Id);
+        var state = live is not { TracksState: true } ? "doesn't report its state"
+            : live.DownMinutes is { } down ? $"{MachineView.CategoryLabel(live.Category).ToLowerInvariant()}, down {Number(Math.Round(down))} min this shift"
+            : MachineView.CategoryLabel(live.Category).ToLowerInvariant();
+        return $"{line.Code}: {state}; {jobs} planned jobs between {ScheduleFormat.Time(_window.Start, Tz)} and {ScheduleFormat.Time(_window.End, Tz)}";
+    }
+
+    private OverviewLineDto? LiveOf(Guid lineId) => _live.GetValueOrDefault(lineId);
+
+    private bool AnyTracked => _overview?.Lines.Any(l => l.TracksState) ?? false;
+
+    private decimal DownMinutes => _overview?.Lines.Sum(l => l.DownMinutes ?? 0m) ?? 0m;
+
+    private OverviewReasonDto? TopReason => _overview is null ? null : OverviewModel.TopReason(_overview.Lines);
+
+    // Each line's plan inside its own shift, so lines on different shifts each count their own.
+    private IReadOnlyList<OverviewQty> GoodOutput => _overview is null
+        ? []
+        : OverviewModel.Good(_overview.Lines, _overview.Lines.SelectMany(l =>
+            OverviewModel.Planned(_timelines.GetValueOrDefault(l.EquipmentId)?.Segments ?? [], l.From, OverviewModel.Until(l, Tz))));
+
+    private IReadOnlyList<OverviewQty> ScrapOutput => _overview is null ? [] : OverviewModel.Scrap(_overview.Lines).Where(q => q.Of > 0).ToList();
+
+    private string StateTitle(OverviewLineDto live)
+    {
+        var parts = new List<string> { live.PackMlName ?? MachineView.CategoryLabel(live.Category) };
+        if (live.StateSince is { } since)
+        {
+            parts.Add($"since {ScheduleFormat.Time(since, Tz)}");
+        }
+
+        if (live.StopText is { } stop)
+        {
+            parts.Add(stop);
+        }
+
+        if (live.EdgeQuiet)
+        {
+            parts.Add("its edge node has been quiet for over 2 minutes");
+        }
+
+        if (live.DownMinutes is { } down)
+        {
+            parts.Add($"down {Number(Math.Round(down))} min this shift");
+        }
+
+        return string.Join("; ", parts);
+    }
+
+    // "12 min · Jam at infeed", or "2 stops to code".
+    private string StateNote(OverviewLineDto live)
+    {
+        var parts = new List<string>();
+        if (live.StateSince is { } since)
+        {
+            parts.Add(MachineView.Duration(Now - since));
+        }
+
+        if (live.Category != "producing" && live.StopText is { } stop)
+        {
+            parts.Add(stop);
+        }
+
+        if (live.UncodedStops is > 0 and var uncoded)
+        {
+            parts.Add(uncoded == 1 ? "1 stop to code" : $"{uncoded} stops to code");
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    private static string UseClass(string use) => use switch
+    {
+        "run" => "is-run",
+        "down" => "is-down",
+        "planned" => "is-stop",
+        "non_production" => "is-nonprod",
+        _ => "is-nosignal",
+    };
+
+    private string UseTitle(OverviewStateSpanDto span)
+    {
+        var what = span.Use switch
+        {
+            "run" => "Running",
+            "down" => "Down",
+            "planned" => "Planned stop",
+            "non_production" => "Not in production mode",
+            _ => "No signal",
+        };
+        return $"{what}: {ScheduleFormat.Time(span.Start, Tz)} to {ScheduleFormat.Time(span.End, Tz)} ({MachineView.Duration(span.End - span.Start)})";
     }
 
     // "06:00" today, "Mon 19 Oct 06:00" on another day.
