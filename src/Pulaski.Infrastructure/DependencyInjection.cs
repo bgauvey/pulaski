@@ -108,6 +108,7 @@ public static class DependencyInjection
         services.AddScoped<IMachineDataRepository, MachineDataRepository>();
         services.AddScoped<IEdgeRepository, EdgeRepository>();
         services.AddScoped<IStopRepository, StopRepository>();
+        services.AddScoped<IStopAdjustmentRepository, StopAdjustmentRepository>();
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
 
         return services;

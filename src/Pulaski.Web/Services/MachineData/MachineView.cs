@@ -100,4 +100,22 @@ public static class MachineView
         stop.OperatorReasonCode is { } op ? $"{op} · {stop.OperatorReasonName}"
         : stop.MappedReasonCode is { } mapped ? $"{mapped} · {stop.MappedReasonName}"
         : "";
+
+    /// <summary>Where a stop came from (D-069), as the list says it; nothing for a machine's own stop.</summary>
+    public static string? SourceLabel(string source) => source switch
+    {
+        "manual" => "Entered by hand",
+        "split" => "Split",
+        "merge" => "Merged",
+        _ => null,
+    };
+
+    /// <summary>A stop that may be split or merged: closed and not replaced already (D-069).</summary>
+    public static bool CanAdjust(DowntimeDto stop) => stop.EndedAt is not null && stop.SupersededAt is null;
+
+    /// <summary>Why the chosen stops can't be merged yet, or null when they can be tried: the API checks they are consecutive.</summary>
+    public static string? MergeProblem(IReadOnlyCollection<DowntimeDto> chosen) =>
+        chosen.Count < 2 ? "Choose at least two stops to merge."
+        : chosen.Select(s => s.EquipmentId).Distinct().Count() > 1 ? "Only stops of one machine can be merged."
+        : null;
 }

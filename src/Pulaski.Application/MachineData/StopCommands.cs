@@ -10,7 +10,7 @@ namespace Pulaski.Application.MachineData;
 /// <summary>A stop as coding sees it (D-050).</summary>
 public sealed record StopRecord(
     Guid Id, DateTimeOffset StartedAt, DateTimeOffset? EndedAt, Guid EquipmentId, string EquipmentCode, Guid? MappedReasonCodeId, Guid? OperatorReasonCodeId,
-    bool IsMicroStop, string? Comment);
+    bool IsMicroStop, string? Comment, bool IsSuperseded = false);
 
 /// <summary>A reason an operator may choose for a stop, with whether it needs a comment.</summary>
 public sealed record CodingReason(Guid Id, bool RequiresComment);
@@ -45,7 +45,9 @@ public interface IStopReadStore
 /// <summary>A row of the machine status board before lines take their state from their machines.</summary>
 public sealed record MachineStatusRow(MachineStatusDto Status, Guid? ConstraintEquipmentId);
 
-public sealed record StopFilter(Guid SiteId, Guid? EquipmentId, DateTimeOffset From, DateTimeOffset To, bool UncodedOnly, bool IncludeMicroStops);
+/// <summary>Which stops to list; <c>IncludeSuperseded</c> adds those replaced by a split or merge (D-069), which are history and not counted.</summary>
+public sealed record StopFilter(
+    Guid SiteId, Guid? EquipmentId, DateTimeOffset From, DateTimeOffset To, bool UncodedOnly, bool IncludeMicroStops, bool IncludeSuperseded = false);
 
 /// <summary>An operator codes a stop (D-050): confirms the reason its code maps to, or gives another. Both are kept (D-005).</summary>
 public sealed record CodeDowntimeCommand(Guid Id, DateTimeOffset StartedAt, Guid ReasonCodeId, string? Comment) : ICommand<DowntimeCodedResponse>;
@@ -63,6 +65,11 @@ internal sealed class CodeDowntimeHandler(IUnitOfWork unitOfWork, IStopRepositor
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var stop = await stops.GetStopForUpdateAsync(command.Id, command.StartedAt, cancellationToken) ?? throw new NotFoundException($"Stop {command.Id} not found.");
+        if (stop.IsSuperseded)
+        {
+            throw new DomainRuleException("This stop has been split or merged: code the stops that replaced it.");
+        }
+
         if (stop.IsMicroStop)
         {
             throw new DomainRuleException("A micro-stop isn't coded: it is shorter than the machine's micro-stop threshold.");

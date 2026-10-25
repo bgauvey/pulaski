@@ -1655,7 +1655,9 @@ CREATE INDEX ON ts.equipment_state_change (equipment_id, occurred_at);
 CREATE INDEX ON ts.equipment_state_change USING brin (occurred_at);
 
 -- Stop intervals with first-out and operator reasons (both kept). Updated
--- while open and when coded; each change is also an evt.event.
+-- while open and when coded; each change is also an evt.event. Adjusting a
+-- stop (D-069) never changes it: it is marked superseded and new stops,
+-- entered by hand or split or merged from it, replace it.
 CREATE TABLE ts.downtime (
     id                          uuid NOT NULL DEFAULT uuidv7(),
     started_at                  timestamptz NOT NULL,
@@ -1673,11 +1675,24 @@ CREATE TABLE ts.downtime (
     comment                     text,
     unit_mode                   smallint NOT NULL DEFAULT 1,        -- the machine's unit mode when it stopped (D-050)
     coded_by                    text,                               -- who coded it, as on evt.event
+    source                      text NOT NULL DEFAULT 'machine',    -- machine | manual | split | merge (D-069)
+    replaces_ids                uuid[],                             -- split or merge: the stops it replaced
+    adjusted_by                 text,                               -- who entered, split or merged it, as on evt.event
+    adjusted_by_user_id         uuid,
+    adjusted_at                 timestamptz,
+    adjustment_comment          text,                               -- why
+    superseded_at               timestamptz,                        -- replaced by a split or merge; kept, never deleted
+    superseded_by               text,
     PRIMARY KEY (id, started_at),
-    CONSTRAINT downtime_span_ck CHECK (ended_at IS NULL OR ended_at >= started_at)
+    CONSTRAINT downtime_span_ck CHECK (ended_at IS NULL OR ended_at >= started_at),
+    CONSTRAINT downtime_source_ck CHECK (source IN ('machine', 'manual', 'split', 'merge')),
+    CONSTRAINT downtime_adjusted_ck CHECK ((source = 'machine') = (adjusted_at IS NULL)),
+    CONSTRAINT downtime_replaces_ck CHECK ((source IN ('split', 'merge')) = (replaces_ids IS NOT NULL)),
+    CONSTRAINT downtime_superseded_ck CHECK (superseded_at IS NULL OR ended_at IS NOT NULL)
 ) PARTITION BY RANGE (started_at);
 CREATE INDEX ON ts.downtime (equipment_id, started_at);
-CREATE INDEX ON ts.downtime (equipment_id) WHERE effective_reason_code_id IS NULL AND NOT is_micro_stop;  -- uncoded queue
+CREATE INDEX downtime_uncoded_idx ON ts.downtime (equipment_id)                                    -- uncoded queue
+    WHERE effective_reason_code_id IS NULL AND NOT is_micro_stop AND superseded_at IS NULL;
 
 CREATE TABLE ts.equipment_alarm (
     id              uuid NOT NULL DEFAULT uuidv7(),
@@ -2088,7 +2103,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0033_line_batch_sizes'),
     ('0034_erp_work_orders'),
     ('0035_partial_replacements'),
-    ('0036_material_connections');
+    ('0036_material_connections'),
+    ('0037_stop_adjustments');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2126,6 +2142,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('labor.record', 'Record labor for others and check crews onto lines'),
     ('labor.approve', 'Approve a shift''s labor and correct approved labor'),
     ('downtime.code', 'Code machine stops: confirm or change their reason'),
+    ('downtime.adjust', 'Enter machine stops by hand, and split or merge stops'),
     ('lot.receive', 'Receive lots'),
     ('lot.move', 'Move lots between locations'),
     ('lot.ship', 'Ship lots'),
@@ -2154,7 +2171,7 @@ ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 INSERT INTO sec.role (code, name, description, is_system) VALUES
     ('administrator', 'Administrator', 'Everything, everywhere, including users and roles.', true),
     ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes.', true),
-    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes machine stops. Doesn''t correct inventory.', true),
+    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops. Doesn''t correct inventory.', true),
     ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops.', true),
     ('quality', 'Quality', 'Holds and releases lots, corrects inventory, decides on partial batches, and keeps lot attributes and certificates.', true),
     ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people, lot attributes and the site''s settings.', true),
@@ -2202,6 +2219,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('supervisor', 'labor.approve'),
     ('supervisor', 'machines.view'),
     ('supervisor', 'downtime.code'),
+    ('supervisor', 'downtime.adjust'),
     ('operator', 'overview.view'),
     ('operator', 'floor.view'),
     ('operator', 'inventory.view'),

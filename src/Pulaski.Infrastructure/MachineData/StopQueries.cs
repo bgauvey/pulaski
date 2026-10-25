@@ -33,6 +33,7 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
                n.code AS edge_node_code, n.last_seen_at AS edge_seen_at,
                (SELECT count(*)::int FROM ts.downtime u
                 WHERE u.equipment_id = e.id AND u.started_at > @Now - interval '1 day' AND u.effective_reason_code_id IS NULL AND NOT u.is_micro_stop
+                  AND u.superseded_at IS NULL
                   AND (u.ended_at IS NOT NULL OR u.started_at < @Now - e.micro_stop_threshold)) AS uncoded_stops
         FROM tree t
         JOIN core.equipment e ON e.id = t.id
@@ -56,7 +57,8 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
                d.plc_stop_reason AS stop_code, pc.message AS stop_code_text,
                d.mapped_reason_code_id AS mapped_reason_id, mr.code AS mapped_reason_code, mr.name AS mapped_reason_name,
                d.operator_reason_code_id AS operator_reason_id, orc.code AS operator_reason_code, orc.name AS operator_reason_name,
-               er.utilization_class, d.is_micro_stop, d.coded_by, d.coded_at, d.comment, j.job_number
+               er.utilization_class, d.is_micro_stop, d.coded_by, d.coded_at, d.comment, j.job_number,
+               d.source, d.replaces_ids, d.adjusted_by, d.adjusted_at, d.adjustment_comment, d.superseded_at, d.superseded_by
         FROM ts.downtime d
         JOIN core.equipment e ON e.id = d.equipment_id
         LEFT JOIN core.machine_profile_code pc ON pc.profile_id = e.machine_profile_id AND pc.code_kind = 'stop_reason' AND pc.raw_value = d.plc_stop_reason
@@ -69,9 +71,10 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
           AND (@EquipmentId::uuid IS NULL OR d.equipment_id = @EquipmentId
                OR d.equipment_id IN (SELECT descendant_id FROM core.equipment_closure WHERE ancestor_id = @EquipmentId))
           AND (@IncludeMicro OR NOT d.is_micro_stop)
-          AND (NOT @UncodedOnly OR (d.effective_reason_code_id IS NULL AND NOT d.is_micro_stop
+          AND (@IncludeSuperseded OR d.superseded_at IS NULL)
+          AND (NOT @UncodedOnly OR (d.effective_reason_code_id IS NULL AND NOT d.is_micro_stop AND d.superseded_at IS NULL
                                     AND (d.ended_at IS NOT NULL OR d.started_at < @Now - e.micro_stop_threshold)))
-        ORDER BY d.started_at DESC
+        ORDER BY d.started_at DESC, d.superseded_at NULLS FIRST
         LIMIT 1000
         """;
 
@@ -120,6 +123,7 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
             filter.To,
             filter.UncodedOnly,
             IncludeMicro = filter.IncludeMicroStops,
+            filter.IncludeSuperseded,
             Now = now,
         }, cancellationToken: cancellationToken));
         return [.. rows.Select(r => r.ToDto())];
@@ -186,6 +190,13 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
         public DateTimeOffset? CodedAt { get; init; }
         public string? Comment { get; init; }
         public string? JobNumber { get; init; }
+        public string Source { get; init; } = StopSources.Machine;
+        public Guid[]? ReplacesIds { get; init; }
+        public string? AdjustedBy { get; init; }
+        public DateTimeOffset? AdjustedAt { get; init; }
+        public string? AdjustmentComment { get; init; }
+        public DateTimeOffset? SupersededAt { get; init; }
+        public string? SupersededBy { get; init; }
 
         public DowntimeDto ToDto() => new()
         {
@@ -212,6 +223,13 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
             CodedAt = CodedAt,
             Comment = Comment,
             JobNumber = JobNumber,
+            Source = Source,
+            ReplacesIds = ReplacesIds ?? [],
+            AdjustedBy = AdjustedBy,
+            AdjustedAt = AdjustedAt,
+            AdjustmentComment = AdjustmentComment,
+            SupersededAt = SupersededAt,
+            SupersededBy = SupersededBy,
         };
     }
 }
@@ -246,7 +264,7 @@ internal sealed class StopRepository(Persistence.DbSession session) : IStopRepos
 {
     private const string GetStop = """
         SELECT d.id, d.started_at, d.ended_at, d.equipment_id, e.code AS equipment_code, d.mapped_reason_code_id, d.operator_reason_code_id,
-               d.is_micro_stop, d.comment
+               d.is_micro_stop, d.comment, d.superseded_at IS NOT NULL AS is_superseded
         FROM ts.downtime d JOIN core.equipment e ON e.id = d.equipment_id
         WHERE d.id = @Id AND d.started_at = @StartedAt
         FOR UPDATE OF d
@@ -260,7 +278,8 @@ internal sealed class StopRepository(Persistence.DbSession session) : IStopRepos
 
     public async Task<StopRecord?> GetStopForUpdateAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<Row>(GetStop, new { Id = id, StartedAt = startedAt }, cancellationToken) is { } r
-            ? new StopRecord(r.Id, r.StartedAt, r.EndedAt, r.EquipmentId, r.EquipmentCode, r.MappedReasonCodeId, r.OperatorReasonCodeId, r.IsMicroStop, r.Comment)
+            ? new StopRecord(r.Id, r.StartedAt, r.EndedAt, r.EquipmentId, r.EquipmentCode, r.MappedReasonCodeId, r.OperatorReasonCodeId, r.IsMicroStop, r.Comment,
+                r.IsSuperseded)
             : null;
 
     public async Task<IReadOnlyList<CodingReason>> ListCodingReasonsAsync(Guid equipmentId, CancellationToken cancellationToken) =>
@@ -282,5 +301,6 @@ internal sealed class StopRepository(Persistence.DbSession session) : IStopRepos
         public Guid? OperatorReasonCodeId { get; init; }
         public bool IsMicroStop { get; init; }
         public string? Comment { get; init; }
+        public bool IsSuperseded { get; init; }
     }
 }

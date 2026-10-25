@@ -79,6 +79,9 @@ public static class EventTypes
     public const string EquipmentTagDeactivated = "pulaski.equipment.tag_deactivated.v1";
     public const string EquipmentTagDeleted = "pulaski.equipment.tag_deleted.v1";
     public const string DowntimeCoded = "pulaski.downtime.coded.v1";
+    public const string DowntimeEntered = "pulaski.downtime.entered.v1";
+    public const string DowntimeSplit = "pulaski.downtime.split.v1";
+    public const string DowntimeMerged = "pulaski.downtime.merged.v1";
     public const string ShiftScheduleCreated = "pulaski.shift_schedule.created.v1";
     public const string ShiftScheduleUpdated = "pulaski.shift_schedule.updated.v1";
     public const string ShiftOverrideSet = "pulaski.shift_schedule.override_set.v1";

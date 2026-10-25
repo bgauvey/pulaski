@@ -1395,9 +1395,11 @@ Each row is a change of the (state, mode) pair and carries when the previous pai
 | `stop_reason` | integer | yes | The first-out stop code latched when the state changed (D-050). |
 | `recorded_at` | timestamptz | no | When Pulaski received it; later than `occurred_at` when the edge buffered through an outage. |
 
-### ts.downtime — machine stops · *In use (D-050)*
+### ts.downtime — machine stops · *In use (D-050, D-069)*
 
 Time a machine isn't executing: opened by machine data ingest when it leaves Execute (or loses its signal), closed when it executes again, and coded by operators. Updated while open and when coded (the app may update this table, never delete); coding is also an event (`pulaski.downtime.coded.v1`). The machine's open stop is pointed at from `core.equipment_live_state`.
+
+Stops can also be entered by hand, split and merged (D-069). An adjusted stop is never changed: it is marked superseded and new rows replace it, saying where they came from. A machine's current (not superseded) stops never overlap. Utilization, OEE and the stop list read only current stops. Each adjustment is an event (`pulaski.downtime.entered.v1`, `…split.v1`, `…merged.v1`). Indexes: `(equipment_id, started_at)`, and `downtime_uncoded_idx` on `equipment_id` for current stops without a reason that aren't micro-stops.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1417,6 +1419,16 @@ Time a machine isn't executing: opened by machine data ingest when it leaves Exe
 | `coded_by_user_id` | uuid | yes | The Pulaski user who coded it. |
 | `coded_at` | timestamptz | yes | When. |
 | `comment` | text | yes | The operator's comment. |
+| `source` | text | no | Where it came from: `machine` (ingest; default), `manual` (entered by hand), `split` (a part of a split stop) or `merge` (stops merged) (`downtime_source_ck`). |
+| `replaces_ids` | uuid[] | yes | A split or merge: the stops it replaced, in time order; set exactly then (`downtime_replaces_ck`). |
+| `adjusted_by` | text | yes | Who entered, split or merged it, as on `evt.event`; set exactly when `source` isn't `machine` (`downtime_adjusted_ck`), as are the next three. |
+| `adjusted_by_user_id` | uuid | yes | The Pulaski user who did. |
+| `adjusted_at` | timestamptz | yes | When. |
+| `adjustment_comment` | text | yes | Why. |
+| `superseded_at` | timestamptz | yes | When a split or merge replaced it; it is history, not counted or coded. Only a closed stop (`downtime_superseded_ck`). |
+| `superseded_by` | text | yes | Who replaced it. |
+
+A stop entered by hand records `packml_state` 0 (Undefined: no state was reported), unit mode 1, the run on the equipment at its start, and its reason as `operator_reason_code_id`. Parts of a split, and a merged stop, keep the (first) stop's codes, reasons, coding and run. None is a micro-stop.
 
 ### ts.equipment_alarm — alarms and warnings · *Planned*
 

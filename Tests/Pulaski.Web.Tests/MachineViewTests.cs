@@ -79,4 +79,32 @@ public class MachineViewTests
 
         Assert.Equal(["L1"], MachineView.TopShifts(report).Select(s => s.EquipmentCode));
     }
+
+    private static DowntimeDto Stop(Guid equipment, bool closed = true, bool replaced = false, string source = "machine") => new()
+    {
+        Id = Guid.CreateVersion7(),
+        StartedAt = DateTimeOffset.UnixEpoch,
+        EndedAt = closed ? DateTimeOffset.UnixEpoch.AddMinutes(5) : null,
+        EquipmentId = equipment,
+        EquipmentCode = "M",
+        PackMlName = "Stopped",
+        Source = source,
+        SupersededAt = replaced ? DateTimeOffset.UnixEpoch.AddHours(1) : null,
+    };
+
+    [Fact]
+    public void Closed_current_stops_can_be_split_or_merged_and_say_where_they_came_from()
+    {
+        var machine = Guid.CreateVersion7();
+        Assert.True(MachineView.CanAdjust(Stop(machine)));
+        Assert.False(MachineView.CanAdjust(Stop(machine, closed: false)));
+        Assert.False(MachineView.CanAdjust(Stop(machine, replaced: true)));
+
+        Assert.Equal(("Entered by hand", "Split", "Merged", (string?)null),
+            (MachineView.SourceLabel("manual"), MachineView.SourceLabel("split"), MachineView.SourceLabel("merge"), MachineView.SourceLabel("machine")));
+
+        Assert.NotNull(MachineView.MergeProblem([Stop(machine)]));
+        Assert.NotNull(MachineView.MergeProblem([Stop(machine), Stop(Guid.CreateVersion7())]));
+        Assert.Null(MachineView.MergeProblem([Stop(machine), Stop(machine)]));
+    }
 }
