@@ -197,33 +197,38 @@ The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plan
 
 ### The Overview page
 
-**Operate → Overview** is the home page: a live board for the plant. In a few seconds it answers *which lines are running, which aren't and why, and what needs a person*. It refreshes itself every 30 seconds; the pill at the top right says when it was last updated (and turns grey, with a warning, if Pulaski can't reach the server for over a minute). The refresh button updates it at once. With several sites, pick one at the top.
+**Operate → Overview** is the home page: a live board for the plant. In a few seconds it answers *which lines are running, which aren't and why, and what needs a person*. It refreshes itself every 30 seconds; the pill at the top right says when it was last updated (and turns grey, with a warning, if Pulaski can't reach the server for over a minute). The refresh button updates it at once. With several sites whose Overview you may see, pick one at the top.
 
-**Diagonal hatching means "no data yet".** Several parts of the board need machine data, quality checks, lot tracking or an ERP connection, none of which Pulaski collects yet. Those parts already sit where they'll be, hatched and greyed, with a plug symbol saying what will fill them, so the page won't move around when the data arrives.
+**Diagonal hatching means "no data".** A part of the board that has nothing to show yet (quality checks, which Pulaski doesn't do yet, or machine figures when no line reports its state) sits where it will be, hatched and greyed, with a plug symbol saying what will fill it, so the page won't move around when the data arrives. A dash or hatching means *not measured*; a 0 means measured and none.
 
 **Needs attention** (the grid at the top) counts what needs a person, most urgent first. A count above zero is marked with a coloured bar and icon; click it to go to the list behind it.
 
 | Cell | Counts | Today |
 | --- | --- | --- |
-| Uncoded stops | Stops this shift with no reason given | Needs machine data |
+| Uncoded stops | Stops in each line's current shift, longer than a micro-stop, with no reason yet | Live → Machines (needs a line that reports its state) |
 | Open SPC alerts | Control-chart alerts to respond to | Needs quality checks |
 | Orders behind | Open orders projected late or slipping past their baseline | Live → Work orders |
-| Lots on hold | Lots on hold or in quarantine | Needs lot tracking |
+| Lots on hold | Lots with stock on hold or in quarantine | Live → Inventory → Lots |
 | Schedule conflicts | Open orders with a schedule warning or an overlap | Live → Schedule |
-| Lines with no signal | Lines that should report their state but don't | Live: every line, until machines are connected |
+| Lines with no signal | Lines that report their state but send nothing now, or whose edge node has gone quiet | Live → Machines (needs a line that reports its state) |
 | Not on a line | Planned orders with quantity not yet placed | Live → Schedule |
-| ERP changes to accept | Orders the ERP changed after dispatch | Needs an ERP connection |
+| ERP changes to accept | Open orders the ERP changed after they left planning | Live → Work orders |
 | Labor to approve | Shifts of the last 14 days that have ended with labor not yet approved | Live → Labor → Shift review |
 
-**This shift** shows OEE and its availability, performance and quality components from the current shift's machine and production reports. Site OEE combines the active production lines from their underlying time and ideal-output components; it does not average line percentages. When there is no rated production to calculate OEE, it shows a dash. Good output against plan, scrap and downtime are not shown here yet.
+**This shift** adds up each line's current shift so far (a line without shifts counts the site's day so far):
+
+- **OEE** and its availability, performance and quality components, from the machine and production reports. Site OEE combines the active production lines from their underlying time and ideal-output components; it does not average line percentages. When there is no rated production to calculate OEE, it shows a dash.
+- **Good output** from production reports, against what the schedule planned for the shift, with a bar. The plan shares each job's quantity over its time on the schedule and counts the part inside the shift. Lines making different units show one figure per unit; units are never added together. Machine counts aren't output: only what is reported.
+- **Scrap** reported, with its share of all output in that unit.
+- **Downtime** in minutes, with the biggest reason named. It counts stops, time not running and time with no signal; micro-stops and planned stops (setup, cleaning) don't count. *No signal* and *Not coded* are named like reasons. With no line reporting its state it shows a dash and *Needs machine data*.
 
 **Labor to approve** counts the site's shifts from the last 14 days that have ended, have time recorded and aren't approved yet; underneath it says how many sessions they hold and the oldest day. Click it to open **Shift review** on that day, on the first shift waiting. It shows 0, *Nothing waiting*, when there is nothing to approve, including when no labor has been recorded. Approving a shift takes it off the count at the next refresh; correcting an approved shift doesn't put it back. Without permission to see labor at the site the cell shows a lock and *Needs permission to see labor*, and no count.
 
 **Lines** has one row per line:
 
-- **State:** the machine state. Until the line is connected it says **No signal**.
-- **Now or next:** the job the schedule has on the line now, or the next one and when it starts, with how much of it is made.
-- **The strip** covers six hours back to eighteen hours ahead, with a black line at *now*. The top lane will show what the line actually did (hatched while there's no signal); the bottom lane shows the planned jobs: outlined for planned, solid for dispatched or firmed, hatched for changeovers. Hover over a job to see it; click it to open its order on the Schedule. If nothing is planned in the window, the lane says when the next work starts.
+- **State:** what the line is doing now, as on **Operate → Machines** (Producing, Waiting, Held, Stopped, Ready, or No signal), with how long, why it stopped and how many of its stops this shift still need a reason. *Edge quiet* means the edge node it is read through has sent nothing for over 2 minutes. A line that doesn't report its state says **Not tracked**.
+- **Now or next:** the job the schedule has on the line now, or the next one and when it starts, with how much of it is made, and what the line has reported this shift (good and scrap).
+- **The strip** covers the current shift, with a black line at *now*; when lines are on different shifts it runs from the earliest one's start to the latest one's end, and when no line is on a shift it covers six hours back to eighteen ahead. The top lane shows what the line actually did up to now: green running, dark red down, blue a planned stop, grey not in production mode, hatched no signal (all hatched for a line that doesn't report its state). Point at a stretch to see it. The bottom lane shows the planned jobs: outlined for planned, solid for dispatched or firmed, hatched for changeovers. Hover over a job to see it; click it to open its order on the Schedule. If nothing is planned in the window, the lane says when the next work starts.
 - **OEE** for the line's current shift, with small bars for availability, performance and quality. The value comes from the machine/OEE report and refreshes with the Overview. A dash means there is no rated production data for that shift.
 - **Flags** at the end: a red mark if work overlaps on the line, an amber clock if a job has a schedule warning (hover for the messages).
 
@@ -1552,7 +1557,7 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 
 Equipment (with machine profiles and edge nodes), units and retrying or skipping deliveries to the ERP (**Integrations**) belong to the Administrator. Someone with two roles can do what either allows.
 
-When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator.
+When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator. A switched-off button is greyed out the same way everywhere; point at it to see why, when it says. Permissions held at one site count only there: on the **Schedule**, at a site where you can't plan, jobs don't drag and a job's panel shows a lock note instead of *Move*, *Pins* and *Cancel*; where you can't manage work orders, cards don't drag between Kanban columns and an order's panel has no status buttons.
 
 ### What each role can see
 
@@ -1605,6 +1610,7 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 
 - **Viewing permissions** are listed first on the Permissions tab, under *Viewing*: one per screen (Overview, Work orders, Schedule, Floor, Inventory, Equipment, Materials, Processes and BOMs, Units, Reasons, Shifts). A view a role gets with a change permission shows ticked and locked, with what it comes with when you point at it.
 - **Permissions belong to Pulaski; roles belong to you.** The list of permissions is fixed by the version of Pulaski you run, and grows when new screens need one. Roles, their names and which permissions they hold are yours to change. Administrator always holds every permission, including new ones.
+- **Site pickers follow the screen.** A screen's site picker lists only the sites where you may see that screen, so a role held at one site doesn't offer the others. Pulaski remembers the site you chose: a screen that can't show it opens on its own first site, and the next screen that can show it goes back to it. The site lists for a new work order or a new process offer only the sites where you may create one. Choosing where a role applies, on **Users**, still lists every site.
 - **Changes to a role apply at once** to everyone who holds it, on their next click.
 - **Every user needs a role.** A new user comes with one, and a user's last role can't be taken away: add another first, or switch them off.
 - **Someone stays administrator.** The last active administrator can't lose the role or be switched off, and nobody can switch themselves off.
@@ -2122,7 +2128,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Labor:** people come from HR or the ERP only as a file you import: nothing fetches them on a timer, someone missing from a file isn't switched off (send them with `active` = no), and qualifications aren't imported. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
 - **Materials import** from CSV or B2MML files, from an OData v4 connection on demand, or one item at a time through the API. Nothing fetches items on a timer, other kinds of service (plain REST, SOAP, a database) have no connection yet, and there are no adapters for label printing. Capabilities import from CSV only, and only for now: a future or past period is set on the material page. B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
-- **Machine data:** a stop's times can't be changed directly and a stop entered in error can't be removed (split it, or enter it again correctly, instead); adjustments can't be undone. Machine data that arrives late for time already covered by a stop entered by hand opens its own stop, which may then overlap it. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
+- **Machine data:** a stop's times can't be changed directly and a stop entered in error can't be removed (split it, or enter it again correctly, instead); adjustments can't be undone. Machine data that arrives late for time already covered by a stop entered by hand opens its own stop, which may then overlap it. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
 - **Batches:** a line's own batch size changes only the size; the tolerance stays the material's. The order form's batch hint shows the material's size, not each line's. A replacement is rounded up to whole batches, or planned for exactly what is left with a partial last batch; it can't be rounded down. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
@@ -2133,13 +2139,12 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
 - **Allocations are kept up to date by hand:** nothing refreshes them when stock moves or the schedule changes; click **Refresh**. Suggestions don't prefer lots near the line, lots already in a container, or whole lots, and there are no picking lists; a substitution (a material the job doesn't plan) isn't allocated. Allocating doesn't stop another job consuming the stock: it only warns.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP; there are no lead times, purchase suggestions or partial receipts against one delivery (receiving closes it). The live timing is the schedule as projected now, not a forecast of slips.
-- **The Overview** still shows no live machine state, reported counts, good output, scrap, downtime, quality, lots or labor. OEE is available for the current shift from the machine/OEE report; its timeline strip remains a rolling 24 hours rather than the current shift.
+- **The Overview** has no quality figures or SPC alerts yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
 - **Released product specifications** are not maintained in Pulaski yet. Shop-order sheets flag this gap and require operators to verify the approved specification elsewhere.
 - **Signing in through your company's identity provider** (Okta, Entra ID, AD FS, Keycloak) isn't built yet: users have Pulaski passwords, and an administrator resets forgotten ones (Pulaski sends no e-mail).
-- **The schedule shows its buttons to everyone who can see it;** someone who can see the schedule but not plan sees them, and a click explains that planning needs permission instead of changing anything. Switched-off buttons elsewhere can look like ordinary ones.
+- **A switched-off button's reason** shows when you point at it with the mouse, but not when you move to it with the keyboard (switched-off buttons are skipped); screen readers announce it as unavailable without the reason. Screens that are view-only for you say so in a note at the top instead.
 - **Only Administrator is held everywhere;** every role you create is held at a site.
-- **The site picker** on a screen lists every site where you can see something, not only the sites where you can see that screen; choosing one where you can't gives a "may not see this at this site" message.
 
 ---
 

@@ -243,6 +243,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `ts.downtime` rows carry `source` (machine/manual/split/merge), `replaces_ids`, `adjusted_*`. Every reader of stops (OEE, list, uncoded)
   filters `superseded_at IS NULL`; current stops never overlap (`StopAdjustments`). Closed stops only, ≤ 31 days; lock equipment
   (`FOR NO KEY UPDATE`, as ingest) then stops in id order. Permission `downtime.adjust` (Supervisor).
+- Overview live figures (D-070, proposed): `GET /overview?siteId=` (`GetOverviewQuery`, `overview.view`) computes on read each line's
+  state (`GetMachineStatusHandler`) and its current shift so far (`OverviewFigures.Scope`, else the site day): reported output/scrap,
+  down time by reason and the state lane (`EquipmentUses`, shared with the OEE report), uncoded stops; plus held lots. The strip spans
+  the current shifts (`OverviewFigures.Window`). Null = unavailable, never zero.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

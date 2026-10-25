@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @inject PulaskiApiClient Api
 @inject CurrentUser User
+@inject SiteSelection Sites
 @inject NavigationManager Navigation
 
 <div class="shell">
@@ -106,13 +107,16 @@
     [CascadingParameter]
     private RouteData? RouteData { get; set; }
 
-    private bool MaySeePage =>
-        RouteData?.PageType.GetCustomAttributes(typeof(RequiresViewAttribute), inherit: false).FirstOrDefault() is not RequiresViewAttribute required
-        || User.CanAny(required.AnyOf);
+    private RequiresViewAttribute? Required =>
+        RouteData?.PageType.GetCustomAttributes(typeof(RequiresViewAttribute), inherit: false).FirstOrDefault() as RequiresViewAttribute;
+
+    private bool MaySeePage => Required is not { } required || User.CanAny(required.AnyOf);
 
     // The start page is the Overview; whoever can't see it starts at the first screen they can (D-039).
+    // Site pickers offer only the sites where the user holds one of the screen's views (#43).
     protected override void OnParametersSet()
     {
+        Sites.ScreenViews = Required?.AnyOf;
         if (User.Me is not null && !MaySeePage && RouteData?.PageType == typeof(Pages.Home) && User.FirstScreen is { Length: > 0 } first)
         {
             Navigation.NavigateTo(first, replace: true);

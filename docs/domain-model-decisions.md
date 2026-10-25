@@ -741,7 +741,9 @@ Users, roles and permissions stay behind `security.manage`.
 
 **The UI.** Each page names the views that open it (`[RequiresView]`). The layout checks it once the user is known: a page the user may not see answers **Page not found** (so its feature isn't named), and someone whose roles allow no screen at all gets a page saying so, with a sign-out button. The start page is the Overview, or the first screen in the menu the user can see. The menu shows only the screens the user can see, and leaves out a group with none. Links to other screens (`ScreenLink`) show as plain text, or not at all for buttons, when the user can't open them; actions the user can't take (selecting work orders to move, an empty action menu) are left out.
 
-**Not yet:** the site chosen on a screen can be one where the user may see something else but not that screen; the API then refuses the data and the screen says so.
+**Site pickers follow the screen** (issue #43). The layout hands the page's `[RequiresView]` views to `SiteSelection` on every navigation, and a screen's site picker offers only the sites where the user holds one of them (`SiteSelection.Sites`, `ForScreen` for screens with lists of their own: Overview, Schedule). The chosen site is kept for the session; a screen that can't show it opens on its own first site and leaves the choice for the next screen that can. Pickers that choose where something is created follow that change permission instead (new work order: `work_orders.manage`; new process: `processes.manage`), and choosing where a role applies lists every site. The API's checks are unchanged.
+
+**Actions the user may not take** (issue #47). One action among others in a panel (a drawer's *Move*, a status button, *Import CSV*) is left out, with a lock note where the panel would otherwise look incomplete; a form the user may look at but not change is shown switched off (`fieldset.view-only-scope`) under a `ViewOnlyNote`. Either way the check is the permission at the site shown, not anywhere. On the Schedule, `ScheduleController.ReadOnly` is `schedule.plan` at its site and `OrdersReadOnly` is `work_orders.manage` there (status changes need it, D-018); nothing drags that the user couldn't drop, and an edit that gets through anyway is stopped with a message before the API. Every switched-off button looks the same (greyed, `not-allowed`) and keeps the pointer so its title shows. Native `disabled` is kept, so keyboards skip it and screen readers announce it as unavailable. The API stays the authority.
 
 ## Labor (D-040, proposed)
 
@@ -1506,6 +1508,29 @@ Issue #23. Stops came only from machine data (D-050), so an outage the machine d
 **Permission.** The new `downtime.adjust` (implies `machines.view`; Supervisor by default). Coding stays `downtime.code`. Endpoints `POST /api/machines/stops`, `/stops/{id}/split`, `/stops/merge`; Operate → Machines → Stops has **Enter a stop**, **Split** on a row, and ticks to merge.
 
 **Not done.** Changing a stop's times or voiding one entered in error (a split or a new entry does it for now); undoing an adjustment; adjusting a machine's state history (only stops); machine data that arrives late for time already covered by a stop entered by hand still opens its own stop, which may then overlap.
+
+## Overview live figures (D-070, proposed)
+
+Issue #42. The Overview showed current-shift OEE, but its machine state, output, scrap, downtime, lots and stops to code were placeholders, and its strip rolled over 24 hours whatever the shifts.
+
+**One read, one permission.** `GET /api/overview?siteId=` (`GetOverviewQuery`) returns a site's live figures in one call per refresh, under `overview.view`, like the OEE report the Overview already reads (D-039: the Overview is a summary screen, so seeing it is enough for its figures). Links from it still go only where the user may look (`machines.view`, `inventory.view`, `work_orders.view`). Labor to approve stays under `labor.view` (#46). Nothing is stored; everything is worked out on read.
+
+**Scope: each line's shift so far.** A line's figures cover the shift it is on now (`ShiftSchedule.ShiftAt` with no lead time, so a shift about to start isn't current), else the site-local day so far (D-044). Lines on different shifts each count their own.
+
+**What each line shows.**
+- *State:* its category, PackML name, since when and why it is stopped, from the Machines board's derivation (`GetMachineStatusHandler`, D-050); a quiet edge node shows as such. A line that doesn't track state says so, never "no signal".
+- *Output and scrap:* production reports only (D-035, D-052), by unit; machine counts are left out.
+- *Down time:* availability loss from `Utilization.Classify`/`Combine` (shared with the OEE report through `EquipmentUses`): stops, not executing and no signal, by reason with no signal and not-coded named; micro-stops are run time and planned stops aren't down.
+- *Stops to code:* stops of the machines it takes its time from, overlapping its shift, with no effective reason and not micro-stops, each counted once.
+- *State lane:* run / down / no signal / planned stop / not in production, from the strip's start (or the shift's, if earlier) to now.
+
+**The strip follows the shifts.** Its span is the earliest current shift's start to the latest one's end, shared by every row; with no line on a shift it stays six hours back and eighteen ahead.
+
+**Site figures.** Good output against plan, scrap, down time with the biggest reason, and the attention cells are added up from the lines. The plan for a shift shares each production job's planned quantity over its projected time and counts the part inside the line's shift; units are never added together. Lots on hold and in quarantine count lots with stock. ERP changes to accept count open orders with a pending change (D-066), from the order list the Overview already reads.
+
+**Unavailable is not zero.** A null figure means not measured: with no line tracking state, down time, stops to code and lines with no signal show as placeholders, not 0. Output and lots are always measured, so they show 0.
+
+**Not done.** SPC alerts (no quality checks yet); machine counts as a live estimate of output; calendar exceptions in the scope (as in the OEE report); per-line targets.
 
 ## Application architecture
 

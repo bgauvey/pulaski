@@ -35,7 +35,7 @@
                     var late = jobs.Any(j => j.Segment.Warnings.Any(w => w.Code == "late"));
                     var overlap = Controller.Board.IsOverlapping(wo);
                     <article class="kanban-card @(SelectedWorkOrder == wo.Id ? "is-selected" : "") @(overlap ? "is-overlap" : "") @(Controller.Saving.Contains(key) ? "is-saving" : "") @(Controller.Changed.Contains(key) ? "is-updated" : "") @(Controller.DraggingWorkOrder?.Id == wo.Id ? "is-dragging" : "")"
-                             @key="@($"{wo.Id}:{wo.Version}")" draggable="true" tabindex="0" role="button" aria-label="@($"{wo.OrderNumber}, {wo.MaterialCode}")"
+                             @key="@($"{wo.Id}:{wo.Version}")" draggable="@(Controller.OrdersReadOnly ? "false" : "true")" tabindex="0" role="button" aria-label="@($"{wo.OrderNumber}, {wo.MaterialCode}")"
                              @ondragstart="() => Controller.StartDrag(wo)" @ondragend="Controller.EndDrag"
                              @onclick="() => OnSelect.InvokeAsync(wo.Id)" @onkeydown="e => OnKey(e, wo)">
                         <div class="d-flex justify-content-between align-items-start gap-2">

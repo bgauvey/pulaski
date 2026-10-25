@@ -1,4 +1,5 @@
 using Pulaski.Contracts.MachineData;
+using Pulaski.Contracts.Overview;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Web.Services;
 
@@ -119,4 +120,69 @@ public class OverviewModelTests
             CanRunJob = canRunJob,
             Figures = figures,
         };
+
+    private static OverviewLineDto Line(params (string Uom, decimal Good, decimal Scrap)[] output) => new()
+    {
+        EquipmentId = Guid.CreateVersion7(),
+        Code = "L",
+        TracksState = true,
+        From = Now.AddHours(-2),
+        Output = [.. output.Select(o => new OverviewOutputDto { UomCode = o.Uom, GoodQty = o.Good, ScrapQty = o.Scrap })],
+    };
+
+    [Fact]
+    public void A_shift_window_from_the_api_ticks_every_two_hours()
+    {
+        var window = OverviewWindow.Of(new OverviewDto { SiteId = Guid.Empty, WindowStart = Now.AddHours(-2), WindowEnd = Now.AddHours(6), WindowIsShift = true });
+
+        Assert.Equal((2, 4), (window.TickStep, window.Ticks("UTC", window.TickStep).Count));
+        Assert.Equal(3, OverviewWindow.Around(Now).TickStep);
+    }
+
+    [Fact]
+    public void The_plan_for_a_shift_shares_each_job_over_its_projected_time()
+    {
+        var half = Segment(-4, 0) with { UomCode = "m", PlannedQty = 800m };      // half of it inside the shift
+        var whole = Segment(0, 2) with { UomCode = "m", PlannedQty = 300m };
+        var kilos = Segment(1, 10) with { UomCode = "kg", PlannedQty = 900m };    // 5 of its 9 hours
+        var changeover = Segment(0, 1, kind: "changeover_placeholder", type: "changeover") with { UomCode = "m" };
+
+        var planned = OverviewModel.Planned([half, whole, kilos, changeover], Now.AddHours(-2), Now.AddHours(6));
+
+        Assert.Equal([("m", 700m), ("kg", 500m)], planned.Select(p => (p.UomCode, Math.Round(p.Qty, 6))));
+    }
+
+    [Fact]
+    public void Good_and_scrap_add_up_by_unit_against_plan_and_output()
+    {
+        var lines = new[] { Line(("m", 400m, 10m)), Line(("m", 200m, 30m), ("kg", 50m, 0m)) };
+
+        Assert.Equal([("kg", 50m, 0m), ("m", 600m, 1000m), ("pcs", 0m, 20m)],
+            OverviewModel.Good(lines, [new("m", 700m), new("m", 300m), new("pcs", 20m)]).Select(q => (q.UomCode, q.Qty, q.Of)));
+        Assert.Equal([("kg", 0m, 50m), ("m", 40m, 640m)], OverviewModel.Scrap(lines).Select(q => (q.UomCode, q.Qty, q.Of)));
+    }
+
+    [Fact]
+    public void The_top_reason_adds_up_across_lines()
+    {
+        var a = Line() with { DownReasons = [new() { ReasonCode = "JAM", Name = "Jam", Minutes = 12m }, new() { Name = "No signal", NoSignal = true, Minutes = 20m }] };
+        var b = Line() with { DownReasons = [new() { ReasonCode = "JAM", Name = "Jam", Minutes = 9m }] };
+
+        Assert.Equal(("JAM", 21m), (OverviewModel.TopReason([a, b])?.ReasonCode, OverviewModel.TopReason([a, b])?.Minutes));
+        Assert.Null(OverviewModel.TopReason([Line()]));
+    }
+
+    [Fact]
+    public void State_bars_are_cut_to_the_window()
+    {
+        var window = new OverviewWindow(Now.AddHours(-2), Now.AddHours(6));
+        var bars = OverviewModel.StateBars(
+        [
+            new() { Start = Now.AddHours(-5), End = Now.AddHours(-3), Use = "run" },
+            new() { Start = Now.AddHours(-3), End = Now.AddHours(-1), Use = "down" },
+            new() { Start = Now.AddHours(-1), End = Now, Use = "run" },
+        ], window);
+
+        Assert.Equal([("down", 0d, 12.5d), ("run", 12.5d, 12.5d)], bars.Select(b => (b.Span.Use, Math.Round(b.Left, 6), Math.Round(b.Width, 6))));
+    }
 }

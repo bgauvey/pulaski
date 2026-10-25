@@ -7,6 +7,7 @@ using Pulaski.Application.Integrations;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.Labor;
 using Pulaski.Application.MachineData;
+using Pulaski.Application.Overview;
 using Pulaski.Application.Materials;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
@@ -23,6 +24,7 @@ using Pulaski.Infrastructure.Integrations;
 using Pulaski.Infrastructure.Inventory;
 using Pulaski.Infrastructure.Labor;
 using Pulaski.Infrastructure.MachineData;
+using Pulaski.Infrastructure.Overview;
 using Pulaski.Infrastructure.Materials;
 using Pulaski.Infrastructure.Persistence;
 using Pulaski.Infrastructure.Processes;
@@ -75,6 +77,7 @@ public static class DependencyInjection
         services.AddSingleton<IEdgeReadStore, EdgeQueries>();
         services.AddSingleton<IStopReadStore, StopQueries>();
         services.AddSingleton<IOeeReadStore, OeeQueries>();
+        services.AddSingleton<IOverviewReadStore, OverviewQueries>();
 
         services.AddScoped<DbSession>();
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DbSession>());

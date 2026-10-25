@@ -58,7 +58,7 @@
 </div>
 
 <ProblemAlert Error="_controller.LoadError" />
-<ViewOnlyNote Permission="@PermissionCodes.SchedulePlan" What="plan jobs" />
+<ViewOnlyNote Permission="@PermissionCodes.SchedulePlan" What="plan jobs" SiteId="_controller.SiteId" />
 
 <OverlapBanner Board="_controller.Board" TimeZone="@_controller.TimeZone" OnShow="SelectItem" />
 
@@ -146,7 +146,12 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _controller = new ScheduleController(Api, Time) { ReadOnly = !User.Can(PermissionCodes.SchedulePlan) };
+        _controller = new ScheduleController(Api, Time)
+        {
+            CanPlanAt = id => User.Can(PermissionCodes.SchedulePlan, id),
+            CanManageOrdersAt = id => User.Can(PermissionCodes.WorkOrderManage, id),
+            ShowsSite = id => User.Can(PermissionCodes.ScheduleView, id),
+        };
         _controller.StateChanged += OnControllerChanged;
         await _controller.InitializeAsync(_cts.Token);
         if (WorkOrder is { } workOrder && _controller.Board.FindWorkOrder(workOrder) is not null)

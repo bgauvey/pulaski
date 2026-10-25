@@ -30,7 +30,6 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IUnitReadStore un
         var zone = TimeZoneInfo.FindSystemTimeZoneById(await store.GetSiteTimeZoneAsync(query.SiteId, cancellationToken) ?? "UTC");
         var equipment = await store.ListEquipmentAsync(query.SiteId, cancellationToken);
         var byId = equipment.ToDictionary(e => e.Id);
-        var children = equipment.Where(e => e.ParentId is not null).ToLookup(e => e.ParentId!.Value);
 
         var shown = equipment;
         if (query.EquipmentId is { } chosen)
@@ -53,42 +52,12 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IUnitReadStore un
             shown = [.. equipment.Where(e => below.Contains(e.Id))];
         }
 
-        // Lines take their time from their machines, and those perhaps from theirs: everything that feeds what is shown.
-        var needed = new HashSet<Guid>();
-        void Need(Guid id, int depth)
-        {
-            if (!needed.Add(id) || depth >= MaxDepth)
-            {
-                return;
-            }
-
-            var e = byId[id];
-            if (e.StateDerivation is StateDerivations.Series or StateDerivations.Parallel)
-            {
-                foreach (var child in children[id])
-                {
-                    Need(child.Id, depth + 1);
-                }
-            }
-            else if (e.StateDerivation == StateDerivations.ConstraintMachine && e.ConstraintEquipmentId is { } constraint && byId.ContainsKey(constraint))
-            {
-                Need(constraint, depth + 1);
-            }
-        }
-
-        foreach (var e in shown)
-        {
-            Need(e.Id, 0);
-        }
-
         // Shifts of the last day may run into the next; nothing after now.
         var start = Utilization.DayStart(from, zone);
         var end = Min(Utilization.DayStart(to.AddDays(2), zone), now);
         var shownIds = shown.Select(e => e.Id).ToList();
         var calendars = (await store.ListEquipmentShiftsAsync(shownIds, cancellationToken)).ToDictionary(c => c.EquipmentId);
-        var modes = await store.GetProductionModesAsync(query.SiteId, cancellationToken);
-        var states = (await store.ListStatesAsync(needed, start, end, cancellationToken)).ToLookup(s => s.EquipmentId, s => s.State);
-        var stops = (await store.ListStopsAsync(needed, start, end, cancellationToken)).ToLookup(s => s.EquipmentId, s => s.Stop);
+        var uses = await EquipmentUses.LoadAsync(store, query.SiteId, equipment, shownIds, start, end, cancellationToken);
         var runs = await store.ListRunsAsync(shownIds, start, end, cancellationToken);
         var runsById = runs.ToDictionary(r => r.RunId);
         var runsOn = runs.ToLookup(r => r.EquipmentId);
@@ -111,33 +80,6 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IUnitReadStore un
         // What a run makes, for the product rows: a material in the job's unit; nothing for planned downtime or a job without one.
         static (Guid Material, Guid Uom)? ProductOf(OeeRunRecord run) =>
             run is { MaterialId: { } material, JobUomId: { } uom, CountsAsPlannedDowntime: false } ? (material, uom) : null;
-
-        var uses = new Dictionary<Guid, IReadOnlyList<UseSpan>>();
-        IReadOnlyList<UseSpan> Uses(Guid id, int depth)
-        {
-            if (uses.TryGetValue(id, out var done))
-            {
-                return done;
-            }
-
-            var e = byId[id];
-            IReadOnlyList<UseSpan> result;
-            if (depth < MaxDepth && e.StateDerivation is StateDerivations.Series or StateDerivations.Parallel)
-            {
-                result = Utilization.Combine(e.StateDerivation, [.. children[id].Select(c => Uses(c.Id, depth + 1))], start, end);
-            }
-            else if (depth < MaxDepth && e.StateDerivation == StateDerivations.ConstraintMachine && e.ConstraintEquipmentId is { } constraint && byId.ContainsKey(constraint))
-            {
-                result = Uses(constraint, depth + 1);
-            }
-            else
-            {
-                result = Utilization.Classify([.. states[id]], [.. stops[id]], modes, start, end);
-            }
-
-            uses[id] = result;
-            return result;
-        }
 
         var shownSet = shownIds.ToHashSet();
         var equipmentRows = new List<OeeEquipmentRowDto>();
@@ -167,7 +109,7 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IUnitReadStore un
             var e = shown[order];
             var calendar = calendars.GetValueOrDefault(e.Id);
             var windows = Utilization.Windows(calendar?.Schedule, calendar?.Zone ?? zone, from, to, end);
-            var slices = Utilization.Slice(Uses(e.Id, 0), windows, [.. runsOn[e.Id].Select(r => new RunWindow(r.RunId, r.StartedAt, r.EndedAt))], now)
+            var slices = Utilization.Slice(uses.Of(e.Id), windows, [.. runsOn[e.Id].Select(r => new RunWindow(r.RunId, r.StartedAt, r.EndedAt))], now)
                 .Select(s => s.RunId is { } r && runsById[r].CountsAsPlannedDowntime ? Utilization.InPlannedJob(s) : s);
 
             var total = new OeeTally();

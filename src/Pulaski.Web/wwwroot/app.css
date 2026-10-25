@@ -171,6 +171,38 @@ small, .small {
     --bs-btn-disabled-color: var(--text-faint);
 }
 
+/*
+   Switched off (#47): every kind of button greys out the same way, so one that can't be used never looks like one that
+   can. It still takes the pointer, so its title (why it is off) shows on hover; a disabled button never fires a click.
+*/
+.btn:disabled,
+.btn.disabled,
+fieldset:disabled .btn {
+    --bs-btn-disabled-opacity: 1;
+    --bs-btn-disabled-color: var(--text-faint);
+    --bs-btn-disabled-bg: var(--surface-2);
+    --bs-btn-disabled-border-color: var(--border);
+    pointer-events: auto;
+    cursor: not-allowed;
+}
+
+.btn-link:disabled,
+.btn-link.disabled,
+fieldset:disabled .btn-link {
+    --bs-btn-disabled-bg: transparent;
+    --bs-btn-disabled-border-color: transparent;
+    text-decoration: none;
+}
+
+.link-button:disabled,
+.icon-button:disabled,
+.sort-button:disabled,
+.segmented-item:disabled {
+    color: var(--text-faint);
+    text-decoration: none;
+    cursor: not-allowed;
+}
+
 /* ---- Forms ---- */
 
 .form-label,

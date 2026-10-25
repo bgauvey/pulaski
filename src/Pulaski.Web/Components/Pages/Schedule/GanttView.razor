@@ -40,7 +40,7 @@
             {
                 var key = ScheduleBoard.WorkOrderKey(wo.Id);
                 <div class="tray-card @(Controller.Saving.Contains(key) ? "is-saving" : "") @(Controller.DraggingWorkOrder?.Id == wo.Id ? "is-dragging" : "")"
-                     @key="wo.Id" draggable="true" role="button" tabindex="0" data-drag="@($"wo:{wo.Id}")"
+                     @key="wo.Id" draggable="@(Controller.ReadOnly ? "false" : "true")" role="button" tabindex="0" data-drag="@($"wo:{wo.Id}")"
                      @ondragstart="() => Controller.StartDrag(wo)" @ondragend="Controller.EndDrag"
                      @onclick="() => OnSelectWorkOrder.InvokeAsync(wo.Id)"
                      @onkeydown="e => OnKey(e, () => OnSelectWorkOrder.InvokeAsync(wo.Id))">
@@ -130,7 +130,7 @@
                         var width = _scale.Width(s.Start, s.End);
                         <div class="bar @BarClasses(item)" @key="item.Key + item.Signature"
                              style="left:@Pct(_scale.Percent(s.Start));width:@Pct(width);top:@(lanes[item.Key] * LaneHeight + 4)px"
-                             draggable="@(item.CanChangeLine ? "true" : "false")" data-drag="@($"job:{item.Key}")"
+                             draggable="@(item.CanChangeLine && !Controller.ReadOnly ? "true" : "false")" data-drag="@($"job:{item.Key}")"
                              role="button" tabindex="0" aria-label="@Describe(item)" title="@Describe(item)"
                              @ondragstart="() => Controller.StartDrag(item)" @ondragend="Controller.EndDrag"
                              @onclick="() => Select(item)" @onkeydown="e => OnKey(e, () => Select(item))">
@@ -168,7 +168,7 @@
                         <div class="bar bar-ghost @(candidate.FitsWindow ? "" : "is-tight") @(Selected == (window.JobId, s.Kind) ? "is-selected" : "")"
                              @key="@($"ghost:{window.Key}:{window.Signature}")"
                              style="left:@Pct(_scale.Percent(s.Start));width:@Pct(_scale.Width(s.Start, s.End));top:@(laneCount * LaneHeight + ghostLanes[window.Key] * GhostLaneHeight + 4)px"
-                             draggable="@(window.CanChangeLine ? "true" : "false")" data-drag="@($"job:{window.Key}")"
+                             draggable="@(window.CanChangeLine && !Controller.ReadOnly ? "true" : "false")" data-drag="@($"job:{window.Key}")"
                              role="button" tabindex="0" title="@GhostTitle(window, candidate, line)" aria-label="@GhostTitle(window, candidate, line)"
                              @ondragstart="() => Controller.StartDrag(window)" @ondragend="Controller.EndDrag"
                              @onclick="() => Select(window)" @onkeydown="e => OnKey(e, () => Select(window))">
