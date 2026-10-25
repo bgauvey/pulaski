@@ -220,6 +220,14 @@
                     <td><ScreenLink Href="@($"schedule?workOrder={wo.Id}")" Permission="@PermissionCodes.ScheduleView" class="fw-semibold">@wo.OrderNumber</ScreenLink></td>
                     <td class="text-nowrap">
                         <span class="@Display.StatusChip(wo.Status)">@Display.Label(wo.Status)</span>
+                        @if (wo.QuantityHeld)
+                        {
+                            <span class="chip chip-warning ms-1" title="The ERP's quantity isn't whole batches; set one before dispatching">held</span>
+                        }
+                        @if (wo.PendingChange is not null)
+                        {
+                            <span class="chip chip-warning ms-1" title="The ERP changed it; accept or reject the change">ERP change</span>
+                        }
                         @if (wo.Priority > 0)
                         {
                             <span class="wo-priority" title="Priority @wo.Priority" aria-label="Priority @wo.Priority"><Icon Name="arrow-up" Size="16" /></span>
@@ -279,7 +287,17 @@
                                     <dt>BOM</dt>
                                     <dd>@(wo.BomVersionNumber is { } bomVersion ? $"Version {bomVersion}" : "None: no components planned")</dd>
                                     <dt>Origin</dt>
-                                    <dd>@Display.Label(wo.Origin) · @wo.SiteCode</dd>
+                                    <dd>
+                                        @(wo.Origin == "erp" ? "ERP" : Display.Label(wo.Origin)) · @wo.SiteCode
+                                        @if (wo.ExternalKey is { } key)
+                                        {
+                                            <div class="small text-muted">@wo.ExternalSystem @key@(wo.ExternalVersion is { } v ? $" · version {v}" : "")@(wo.ImportedAt is { } imported ? $" · last from the ERP {Display.SiteTime(imported, tz)}" : "")</div>
+                                        }
+                                        @if (wo.ErpQty is { } sent)
+                                        {
+                                            <div class="small">The ERP sent @Number(sent) @wo.ErpUomCode: @WorkOrderView.Adjustment(wo.BatchAdjustment)</div>
+                                        }
+                                    </dd>
                                     @if (wo.Notes is not null)
                                     {
                                         <dt>Notes</dt>
@@ -287,6 +305,35 @@
                                     }
                                 </dl>
                                 <div>
+                                    @if (wo.QuantityHeld)
+                                    {
+                                        <div class="drawer-alert is-warning mb-2">
+                                            @wo.OrderNumber is held: the ERP's quantity isn't whole batches, so it can't be dispatched yet.
+                                            @if (CanManage(wo))
+                                            {
+                                                <form class="d-flex gap-2 mt-2" @onsubmit="() => SetQuantityAsync(wo)" @onsubmit:preventDefault>
+                                                    <input type="number" class="form-control form-control-sm w-auto" min="0" step="any" aria-label="Whole-batch quantity" @bind="_heldQuantity" />
+                                                    <span class="align-self-center small">@wo.UomCode</span>
+                                                    <button type="submit" class="btn btn-sm btn-primary" disabled="@(_busyId == wo.Id || _heldQuantity is not > 0)">Set quantity</button>
+                                                </form>
+                                            }
+                                        </div>
+                                    }
+                                    @if (wo.PendingChange is { } change)
+                                    {
+                                        <div class="drawer-alert is-warning mb-2">
+                                            <div class="fw-semibold">The ERP changed this order@(change.Version is { } cv ? $" (version {cv})" : ""):</div>
+                                            <div class="small">@WorkOrderView.PendingSummary(wo, change, tz)</div>
+                                            @if (CanManage(wo))
+                                            {
+                                                <div class="d-flex flex-wrap gap-2 mt-2">
+                                                    <button type="button" class="btn btn-sm btn-primary" disabled="@(_busyId == wo.Id)" @onclick="() => AcceptErpAsync(wo)">Accept</button>
+                                                    <input class="form-control form-control-sm w-auto" maxlength="500" placeholder="Why it is rejected" aria-label="Reason for rejecting" @bind="_rejectReason" @bind:event="oninput" />
+                                                    <button type="button" class="btn btn-sm btn-outline-danger" disabled="@(_busyId == wo.Id || string.IsNullOrWhiteSpace(_rejectReason))" @onclick="() => RejectErpAsync(wo)">Reject</button>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
                                     @if (p.Jobs.Count == 0)
                                     {
                                         <p class="text-muted mb-0">No open jobs.</p>
@@ -643,6 +690,42 @@
             + (failures.Count > 0 ? $", {failures.Count} failed. {string.Join(" ", failures)}" : ".");
         _resultFailed = failures.Count > 0;
         _busy = false;
+        await LoadAsync();
+    }
+
+    private decimal? _heldQuantity;
+    private string? _rejectReason;
+
+    private bool CanManage(WorkOrderDto order) => User.Can(PermissionCodes.WorkOrderManage, order.SiteId);
+
+    private Task SetQuantityAsync(WorkOrderDto order) =>
+        RunOnOrderAsync(order, () => Api.SetWorkOrderQuantityAsync(order.Id, order.Version, _heldQuantity!.Value), "quantity set; it can be dispatched");
+
+    private Task AcceptErpAsync(WorkOrderDto order) => RunOnOrderAsync(order, () => Api.AcceptErpChangeAsync(order.Id, order.Version), "the ERP's change is applied");
+
+    private Task RejectErpAsync(WorkOrderDto order) =>
+        RunOnOrderAsync(order, () => Api.RejectErpChangeAsync(order.Id, order.Version, _rejectReason!.Trim()), "the ERP's change is rejected");
+
+    private async Task RunOnOrderAsync(WorkOrderDto order, Func<Task<VersionResponse>> action, string done)
+    {
+        _busyId = order.Id;
+        try
+        {
+            await action();
+            _result = $"{order.OrderNumber}: {done}.";
+            _resultFailed = false;
+            (_heldQuantity, _rejectReason) = (null, null);
+        }
+        catch (ApiException ex)
+        {
+            _result = $"{order.OrderNumber}: {ex.Detail ?? ex.Title}";
+            _resultFailed = true;
+        }
+        finally
+        {
+            _busyId = null;
+        }
+
         await LoadAsync();
     }
 

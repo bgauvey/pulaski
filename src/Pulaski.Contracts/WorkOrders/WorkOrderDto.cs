@@ -41,6 +41,25 @@ public sealed record WorkOrderDto
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
 
+    /// <summary>For an ERP order (D-066): the system and key it is known by there, and the version last applied.</summary>
+    public string? ExternalSystem { get; init; }
+    public string? ExternalKey { get; init; }
+    public string? ExternalVersion { get; init; }
+
+    /// <summary>The quantity the ERP sent, when the plan differs from it, and in what unit.</summary>
+    public decimal? ErpQty { get; init; }
+    public string? ErpUomCode { get; init; }
+
+    /// <summary><c>rounded_up</c>, <c>rounded_down</c> or <c>held</c>: how the ERP's quantity was made whole batches.</summary>
+    public string? BatchAdjustment { get; init; }
+
+    /// <summary>Not whole batches: it can't be dispatched until a planner sets a whole-batch quantity.</summary>
+    public bool QuantityHeld { get; init; }
+
+    /// <summary>A change from the ERP waiting for a planner, once the order was dispatched.</summary>
+    public ErpPendingChangeDto? PendingChange { get; init; }
+    public DateTimeOffset? ImportedAt { get; init; }
+
     /// <summary>Concurrency token; send it back unchanged when changing status.</summary>
     public long Version { get; init; }
 

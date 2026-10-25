@@ -631,7 +631,7 @@ Some materials are made a fixed amount at a time: a 50 kg mix, a 200 l tank. Pul
 - **Locks.** Approve and reject lock the job, the partial batch, its run, then its lot, the reporting order (D-027), so they serialize with reports.
 - **Events:** `pulaski.material.batching_set.v1`, `pulaski.partial_batch.reported.v1`, `…approved.v1`, `…rejected.v1`, with the lot's own movements.
 
-**Not yet:** a rule for ERP orders that aren't whole batches (orders aren't imported yet), choosing to round a replacement down, and permissions for who may approve (settled by D-037: Supervisor or Quality, never whoever reported it).
+**Not yet:** choosing to round a replacement down, and permissions for who may approve (settled by D-037: Supervisor or Quality, never whoever reported it).
 
 ## Users, roles and permissions (D-037, proposed)
 
@@ -1430,6 +1430,32 @@ Issue #29. A material had one batch size, so a 200 kg mixer beside 50 kg ones co
 
 **Unchanged.** The material's batching screen, its rule and tolerance, and the open-orders note when the material's size changes. Changing a line's size leaves open jobs as they are, with a note.
 
+## Work orders from the ERP (D-066, proposed)
+
+Issue #30. The schema had `origin`, `external_*` and `erp_change_pending`, but nothing imported orders, and there was no rule for an ERP quantity that isn't whole batches.
+
+**Import.** `POST /api/work-orders/import` takes one or many orders (`ImportWorkOrdersCommand`). Each runs in its own transaction and comes back `created`, `updated`, `unchanged`, `pending`, `cancelled` or `refused` with why. It is idempotent on `external_system` + `external_key` (unique), and the same `external_version` again changes nothing. Rows at sites where the caller lacks `work_order.manage` are refused.
+
+**A new order** is made exactly like a local one (`CreateWorkOrderHandler.MakeAsync`): jobs per operation, components from the BOM. It is stamped `origin = 'erp'` with its system, key and version, and the event is `pulaski.work_order.imported.v1`. The process is the one named, else the material's default, else the only active released process at the site that covers the material; none or several is refused. A local order with the same number is refused.
+
+**Batch rule (explicit, configurable).** `ErpBatchRule.Apply` takes the ERP's quantity in the base unit. The material's `erp_batch_rule`, else the site's `scheduling_policy.erp_batch_rule`, else `reject`, decides:
+
+- `reject`: refused, naming the whole quantities either side;
+- `round_up` / `round_down`: whole batches above / below; rounding down to nothing is refused;
+- `hold`: imported at the ERP's quantity, shared by percentage, `quantity_held`. Dispatch is refused until `SetWorkOrderQuantityCommand` sets whole batches and re-plans.
+
+The ERP's own quantity is kept in `erp_qty`/`erp_uom_id` with `batch_adjustment`, so nothing is silently rounded. The rule is set with `PUT /api/sites/{id}/erp-batch-rule` (`site_settings.manage`) and `PUT /api/materials/{id}/erp-batch-rule` (`materials.manage`).
+
+**Changes (answers the open question).** The ERP owns product, quantity, start, due date and priority.
+- **While the order is planned**, a change applies at once (`ErpOrderWriter.ApplyAsync`). Jobs are re-planned in place (`ReplanAsync`): each operation's jobs are shared again like `ProcessJobPlan`, in whole batches of each job's line size (`ShareBySize`), with components scaled linearly (`ScaleJobMaterialsAsync`). A moved start shifts every hold-until; a new due date ends department windows. This is refused once a job has started, or when an operation's jobs no longer match the process (changed by hand).
+- **Once dispatched**, the change is stored in `erp_pending_change` (`erp_change_pending`). `AcceptErpChangeCommand` applies it the same way; `RejectErpChangeCommand` drops it with a reason.
+- **Cancellations** follow the same split: applied while planned (the order and its unstarted jobs), pending after.
+- **The product can't change.** An order already completed, closed or cancelled ignores the change.
+
+Locks are lines, then the order, then its jobs (D-017). Events: `…erp_changed.v1`, `…erp_change_pending.v1`, `…erp_change_accepted.v1`, `…erp_change_rejected.v1`, `…quantity_set.v1`, `pulaski.job.replanned.v1`, `pulaski.erp_batch_rule.set.v1`.
+
+**Not done.** Manufacturing orders, a file/B2MML import, re-planning after a job has started or after jobs were changed by hand, and changing the order's unit.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
@@ -1472,7 +1498,7 @@ These need an answer before the related area is built; tick each one as it moves
 
 - [ ] Does a typical ERP send only manufacturing orders, or work orders too?
 - [ ] Can one work order span multiple lines, or does splitting happen only at the manufacturing order level?
-- [ ] Should an ERP change after release update the order automatically, or flag it for a planner to accept?
+- [x] Should an ERP change after release update the order automatically, or flag it for a planner to accept? Applied while planned, flagged once dispatched (D-066).
 
 **Events and audit**
 

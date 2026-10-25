@@ -609,12 +609,30 @@ Everything is checked before anything is created, and all problems are listed to
 
 ### Details
 
-Click ⓘ to open a row. You see the due date, the published baseline, how much is on lines, the process and version, the BOM version, the origin, the notes, every open job with its line, status, projected times and remaining quantity, any warnings, and the **planned components** for each job.
+Click ⓘ to open a row. You see the due date, the published baseline, how much is on lines, the process and version, the BOM version, the origin (for an ERP order, its key, version and what the ERP sent), the notes, a held quantity or a change from the ERP to decide on, every open job with its line, status, projected times and remaining quantity, any warnings, and the **planned components** for each job.
 
 ### Act on orders
 
 - **One order:** select its checkbox, then use the shared **Actions** menu above the list. It shows the permitted status changes, **Print shop order**, and **Show on the schedule** when available.
 - **Several orders:** select their checkboxes, or use **Select visible** to select the filtered rows. The same **Actions** menu shows bulk status changes with the number eligible (*3 of 5*); other selected orders are skipped. **Cancel…** asks you to confirm. **Clear selection** removes the current selection.
+
+### Orders from the ERP
+
+Your ERP can send work orders to Pulaski (whoever runs the integration sets this up; see *In detail*). An ERP order is made like one you create: from its process, with a job per operation and its components planned. Its row says **ERP** under **Origin**, with the ERP's key.
+
+1. **The quantity isn't whole batches.** For a material made in batches, Pulaski follows the material's rule, or the site's (**Configure → Site settings**): refuse the order, round up or down to whole batches, or import it **held**. The ERP's own quantity is shown on the order beside Pulaski's (*The ERP sent 1,025 kg: rounded up to whole batches*).
+2. **A held order** shows *held* in the list and can't be dispatched. Open its row, type a whole-batch quantity, and click **Set quantity**; its jobs are re-planned.
+3. **The ERP changes an order.** While it is still planned, the change applies at once and its jobs are re-planned. Once dispatched, the row shows *ERP change*: open it to see what would change, then click **Accept** (the change applies and its jobs are re-planned) or type a reason and click **Reject** (the order stays as it is).
+4. **The ERP cancels an order.** While planned, it is cancelled with its jobs; after that the cancellation waits for you like any change.
+
+**In detail**
+
+- **Sending once is enough.** Orders are matched on the ERP's system and key, so sending one again never makes a second; the same version again changes nothing. An order number already used by an order made in Pulaski is refused.
+- **Which process.** The one the ERP names, else the material's default process, else the only active process at the site whose released version makes it. If none or several fit, the order is refused and the answer says why.
+- **What the ERP owns:** product, quantity, start, due date and priority. Pulaski owns the schedule, dispatch and status. The ERP can't change an order's product; cancel it and send a new one.
+- **Re-planning** changes each job's quantity in place, shared between the lines as when it was made (whole batches of each line's size), scales its components, and moves its hold-until by as much as the start moved. It is refused once a job has started, or when the order's jobs were changed by hand on the schedule; change them there instead.
+- **Every step is recorded:** imported, changed, change pending, accepted (with the ERP's values) and rejected (with your reason).
+- **For the integration:** `POST /api/work-orders/import` with a list of orders (`externalSystem`, `externalKey`, `externalVersion`, `siteCode`, `orderNumber`, `materialCode`, `quantity`, `uomCode`, `plannedStart`, `dueAt`, `priority`, `processCode`, `notes`, `cancelled`). Each comes back `created`, `updated`, `unchanged`, `pending`, `cancelled` or `refused` with why, and each is saved on its own. The caller needs *work_order.manage* at the order's site.
 
 ### Print a shop order
 
@@ -1414,6 +1432,7 @@ A material made in batches, such as a dry blend mixed 50 kg at a time, has a bat
 1. Enter the **Batch size** in the material's base unit and press **Enter**. Leave it blank for a material made continuously.
 2. Check the **Batch rule** Pulaski picked: **exact** for finished goods (every batch exactly the batch size; partial batches need approval), **near** for everything else (batches may differ by the tolerance; partial batches are accepted). You can change it.
 3. For the near rule, set the **Batch tolerance** (2% by default).
+4. Optionally set **ERP orders not whole batches**: what happens when the ERP sends an order of this material that isn't whole batches. *The site's rule* uses the one on Site settings (see [Orders from the ERP](#orders-from-the-erp)).
 
 From then on orders and jobs must be whole batches and production is reported batch by batch (see [Materials made in batches](#materials-made-in-batches)). Orders already made keep their quantity; Pulaski names any open order that is no longer whole batches.
 
@@ -1774,6 +1793,11 @@ Import the same file, or next week's, as often as you like: people are matched o
 2. Under **Changeovers**, choose **Automatic** or **Placed by planners**.
 3. Click **Save changeovers**. The schedule uses it on its next refresh.
 
+### Choose what happens to ERP orders that aren't whole batches
+
+1. Under **ERP orders that aren't whole batches**, choose **Refuse the order** (the default), **Round up**, **Round down** or **Import it held until a planner sets whole batches**.
+2. Click **Save rule**. A material can have a rule of its own under **Batches** on its page (**ERP orders not whole batches**), which wins over the site's.
+
 ### Set the reporting tolerances
 
 1. Under **Reporting tolerances**, type the **Output** and **Consumption** percentages, from 100 to 1000. The example under each box shows what the number allows.
@@ -2046,7 +2070,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** stops can't be split, merged or entered by hand. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
-- **Batches:** a line's own batch size changes only the size; the tolerance stays the material's. The order form's batch hint shows the material's size, not each line's. A replacement job is always rounded up to whole batches; to make fewer, cancel it. Orders from the ERP aren't imported yet, so there is no rule yet for an ERP order that isn't whole batches. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
+- **Batches:** a line's own batch size changes only the size; the tolerance stays the material's. The order form's batch hint shows the material's size, not each line's. A replacement job is always rounded up to whole batches; to make fewer, cancel it. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
 - **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, and scanning 2D codes or supplier barcodes beyond reading their text. Moves, holds, splits, merges, shipments and counts can't be back-dated (only quantity movements can, by up to 31 days), and a lot's location and status on a past date aren't reconstructed. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
 - **Reversing:** moves, holds and shipments only when they are the lot's latest movement; corrections of lot details, packing and unpacking aren't reversed (put them right with another movement). A lot that joined a balance where lots mix can't be taken back out as itself. Reversal is one movement at a time: there is no undoing a chain of dependent movements in one step.

@@ -89,6 +89,47 @@ internal static class WorkOrderEndpoints
         .RequirePermission(Permissions.WorkOrderClose, Site.Of(SiteOf.WorkOrder));
 
         // Planning (D-018): these also carry the order's jobs, so they are not plain status changes.
+        // Orders from the ERP (D-066), one or many per call, each in its own transaction; rows at sites where the caller may not manage
+        // work orders are refused.
+        group.MapPost("/import", async Task<Ok<ImportWorkOrdersResponse>> (
+            ImportWorkOrdersRequest request,
+            HttpContext http,
+            ICommandHandler<ImportWorkOrdersCommand, ImportWorkOrdersResponse> handler,
+            CancellationToken ct) =>
+        {
+            var sites = await Visible.SitesAsync(http, Permissions.WorkOrderManage);
+            return TypedResults.Ok(await handler.HandleAsync(new ImportWorkOrdersCommand(request.Orders, sites?.ToHashSet()), ct));
+        })
+        .RequirePermission(Permissions.WorkOrderManage);
+
+        // The rule for ERP quantities that aren't whole batches (D-066): the site's default, and a material's own.
+        routes.MapPut("/sites/{siteId:guid}/erp-batch-rule", async Task<Ok<VersionResponse>> (
+            Guid siteId, SetErpBatchRuleRequest request, ICommandHandler<SetErpBatchRuleCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetErpBatchRuleCommand(siteId, request.Rule ?? ""), ct)))
+            .WithTags("Work orders")
+        .RequirePermission(Permissions.SiteSettings, Site.Route("siteId"));
+
+        routes.MapPut("/materials/{id:guid}/erp-batch-rule", async Task<Ok<VersionResponse>> (
+            Guid id, SetErpBatchRuleRequest request, ICommandHandler<SetMaterialErpBatchRuleCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetMaterialErpBatchRuleCommand(id, request.Version, string.IsNullOrWhiteSpace(request.Rule) ? null : request.Rule), ct)))
+            .WithTags("Work orders")
+        .RequirePermission(Permissions.Materials);
+
+        group.MapPost("/{id:guid}/erp-change/accept", async Task<Ok<VersionResponse>> (
+            Guid id, DecideErpChangeRequest request, ICommandHandler<AcceptErpChangeCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new AcceptErpChangeCommand(id, request.Version), ct)))
+        .RequirePermission(Permissions.WorkOrderManage, Site.Of(SiteOf.WorkOrder));
+
+        group.MapPost("/{id:guid}/erp-change/reject", async Task<Ok<VersionResponse>> (
+            Guid id, DecideErpChangeRequest request, ICommandHandler<RejectErpChangeCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RejectErpChangeCommand(id, request.Version, request.Reason ?? ""), ct)))
+        .RequirePermission(Permissions.WorkOrderManage, Site.Of(SiteOf.WorkOrder));
+
+        group.MapPut("/{id:guid}/quantity", async Task<Ok<VersionResponse>> (
+            Guid id, SetWorkOrderQuantityRequest request, ICommandHandler<SetWorkOrderQuantityCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetWorkOrderQuantityCommand(id, request.Version, request.Quantity), ct)))
+        .RequirePermission(Permissions.WorkOrderManage, Site.Of(SiteOf.WorkOrder));
+
         group.MapPost("/{id:guid}/dispatch", async Task<Ok<DispatchWorkOrderResponse>> (
             Guid id,
             WorkOrderPlanningRequest request,

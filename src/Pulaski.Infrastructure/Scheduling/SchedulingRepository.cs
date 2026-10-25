@@ -148,6 +148,7 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
             planned_start = @PlannedStart,
             planned_end = @PlannedEnd,
             completed_at = @CompletedAt,
+            planned_qty = @PlannedQty,
             updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint

@@ -65,4 +65,13 @@ public static class SiteSettingsView
     private static string Pct(decimal value) => value.ToString("0.#", CultureInfo.InvariantCulture) + "%";
 
     private static string Qty(decimal value) => value.ToString("#,0.##", CultureInfo.InvariantCulture);
+
+    /// <summary>The rules for ERP quantities that aren't whole batches (D-066), with what each does.</summary>
+    public static IReadOnlyList<(string Rule, string Label)> ErpBatchRules { get; } =
+    [
+        ("reject", "Refuse the order: the ERP must send whole batches"),
+        ("round_up", "Round up to whole batches"),
+        ("round_down", "Round down to whole batches"),
+        ("hold", "Import it held until a planner sets whole batches"),
+    ];
 }

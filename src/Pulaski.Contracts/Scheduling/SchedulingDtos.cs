@@ -62,6 +62,9 @@ public sealed record SchedulingPolicyDto
 {
     public required Guid SiteId { get; init; }
     public required string ChangeoverMode { get; init; }
+
+    /// <summary>For ERP orders that aren't whole batches (D-066): <c>reject</c> (the default), <c>round_up</c>, <c>round_down</c> or <c>hold</c>.</summary>
+    public string ErpBatchRule { get; init; } = "reject";
     public bool IsDefault { get; init; }
     public long Version { get; init; }
 }

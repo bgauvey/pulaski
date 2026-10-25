@@ -227,6 +227,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   tolerance stay the material's, `Batching.OnLine`). `ILineBatchSizes` (in-transaction) feeds order creation (`Batching.ShareBySize`: whole
   batches of each line's size adding up exactly, else refused with the nearest quantities), job create/move/assign/start-on-line checks
   (`BatchPlanning`), replacements, and reports/partial batches (`ProductionReporter`). Department jobs use the material's size.
+- ERP work orders (D-066, proposed): `POST /work-orders/import` (`ImportWorkOrdersCommand`, one transaction per order, idempotent on external
+  system + key, same version = unchanged) makes orders via `CreateWorkOrderHandler.MakeAsync` (process named, else material default, else the
+  only released one). `ErpBatchRule` (material `erp_batch_rule` > site `scheduling_policy.erp_batch_rule` > reject; round_up/down; hold →
+  `quantity_held`, no dispatch until `SetWorkOrderQuantityCommand`); ERP quantity kept in `erp_qty`. Changes apply while planned
+  (`ErpOrderWriter.ReplanAsync` re-shares jobs in place, scales components), else `erp_pending_change` for Accept/Reject.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

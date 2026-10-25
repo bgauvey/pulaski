@@ -136,6 +136,20 @@ public static class MaterialProperties
                         ? "Not used: exact batches are always the batch size."
                         : $"How far a batch may be from the batch size: a {Batching(m)} batch is accepted from {Low(m)} to {High(m)} {m.BaseUomCode}.",
                 },
+                new()
+                {
+                    Key = ErpBatchRuleKey, Name = "ERP orders not whole batches", Category = Batches, Value = m.ErpBatchRule ?? "", Editor = PropertyEditor.Choice,
+                    Choices =
+                    [
+                        new("", "The site's rule"),
+                        new("reject", "Refuse the order"),
+                        new("round_up", "Round up to whole batches"),
+                        new("round_down", "Round down to whole batches"),
+                        new("hold", "Import it held for a planner"),
+                    ],
+                    Description = "What happens when the ERP sends a work order for this material that isn't whole batches (D-066). " +
+                        "The site's rule is set on Site settings; the ERP's own quantity is always kept on the order beside Pulaski's.",
+                },
             ],
             new()
             {
@@ -145,6 +159,9 @@ public static class MaterialProperties
             },
         ];
     }
+
+    /// <summary>The material's own rule for ERP orders that aren't whole batches (D-066), saved on its own.</summary>
+    public const string ErpBatchRuleKey = "erpBatchRule";
 
     /// <summary>The batch settings to send for an edited batch property; null when nothing changes (D-036).</summary>
     public static SetBatchingRequest? ApplyBatching(MaterialDto m, PropertyChange change)

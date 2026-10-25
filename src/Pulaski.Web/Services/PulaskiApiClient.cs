@@ -413,6 +413,23 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Post, $"api/work-orders/{id}/firm", request, ct);
 
+    // Orders from the ERP (D-066)
+
+    public Task<VersionResponse> AcceptErpChangeAsync(Guid workOrderId, long version, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/work-orders/{workOrderId}/erp-change/accept", new DecideErpChangeRequest { Version = version }, ct);
+
+    public Task<VersionResponse> RejectErpChangeAsync(Guid workOrderId, long version, string reason, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/work-orders/{workOrderId}/erp-change/reject", new DecideErpChangeRequest { Version = version, Reason = reason }, ct);
+
+    public Task<VersionResponse> SetWorkOrderQuantityAsync(Guid workOrderId, long version, decimal quantity, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/work-orders/{workOrderId}/quantity", new SetWorkOrderQuantityRequest { Version = version, Quantity = quantity }, ct);
+
+    public Task<VersionResponse> SetSiteErpBatchRuleAsync(Guid siteId, string rule, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/sites/{siteId}/erp-batch-rule", new SetErpBatchRuleRequest { Rule = rule }, ct);
+
+    public Task<VersionResponse> SetMaterialErpBatchRuleAsync(Guid materialId, long version, string? rule, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/materials/{materialId}/erp-batch-rule", new SetErpBatchRuleRequest { Version = version, Rule = rule }, ct);
+
     /// <summary>
     /// Moves a work order to <paramref name="to"/>. Dispatch, un-dispatch and firm carry the order's
     /// jobs, so they have their own endpoints (D-018); everything else is a plain status change.

@@ -288,6 +288,7 @@ Groups materials (e.g. all resins), so processes and changeover rules can match 
 | `batch_size` | numeric(18,6) | yes | Made in batches of this many base units (D-036): orders and jobs are whole batches, and production is reported batch by batch. Null for a material made continuously. Pulaski-owned. |
 | `batch_tolerance_pct` | numeric(5,2) | no | Under the `near` rule, how far a batch may be from `batch_size`, 0 to 50. Default 2. |
 | `batch_rule` | text | yes | `exact` (every batch is the batch size; a partial batch waits for approval) or `near` (within the tolerance; a partial batch is accepted). Set exactly when `batch_size` is (`material_batch_ck`); defaults from the type, `exact` for finished goods. |
+| `erp_batch_rule` | text | yes | The material's own rule for ERP orders that aren't whole batches (D-066): `reject`, `round_up`, `round_down` or `hold`; null uses the site's. |
 | `is_lot_tracked` | boolean | no | Whether inventory of it is tracked by lot. Default true. Changes only while none of it is on hand. |
 | `origin` | text | no | `local` (created in Pulaski) or `erp` (imported). |
 | `external_system`, `external_key`, `external_version` | text | yes | The ERP record this came from. System and key are required for `erp` rows and unique together; the import matches on them. |
@@ -853,8 +854,13 @@ The top level, usually from the ERP. A work order may also stand alone.
 | `priority` | integer | no | Higher is more urgent. Default 0. |
 | `status` | text | no | `planned` → `dispatched` → `firmed` → `in_progress` → `completed` → `closed`, or `cancelled` (D-018). Dispatch, un-dispatch and firm have their own commands. |
 | `origin` | text | no | `local` or `erp`. |
-| `external_system`, `external_key`, `external_version` | text | yes | The ERP record. |
-| `erp_change_pending` | boolean | no | The ERP changed the order after dispatch and a planner must accept it. |
+| `external_system`, `external_key`, `external_version` | text | yes | The ERP record (D-066): system and key are unique together (`wo_external_uq`), so an import finds its order; the version is the one last applied. |
+| `erp_change_pending` | boolean | no | The ERP changed the order after dispatch and a planner must accept or reject it; true exactly when `erp_pending_change` is set (`wo_erp_pending_ck`). |
+| `erp_pending_change` | jsonb | yes | The change waiting (D-066): `Quantity`, `UomId`, `PlannedStart`, `DueAt`, `Priority`, `Version`, `Cancelled`, `ReceivedAt`. |
+| `erp_qty`, `erp_uom_id` | qty, uuid → uom | yes | What the ERP sent, when the plan differs from it (rounded or held). |
+| `batch_adjustment` | text | yes | How the ERP's quantity was made whole batches: `rounded_up`, `rounded_down` or `held`. |
+| `quantity_held` | boolean | no | Not whole batches: it can't be dispatched until a planner sets a whole-batch quantity. |
+| `imported_at` | timestamptz | yes | When an import last created or changed it. |
 | `notes` | text | yes | The planner's note on the order, at most 4000 characters. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
@@ -942,6 +948,7 @@ A site without a row uses the defaults.
 | --- | --- | --- | --- |
 | `site_id` | uuid → equipment | no | Primary key: the site. |
 | `changeover_mode` | text | no | `auto` (default): Pulaski shows a dynamic changeover placeholder wherever the material changes. `scheduler`: planners place changeover jobs and Pulaski warns where one is missing. |
+| `erp_batch_rule` | text | no | What an ERP order that isn't whole batches does (D-066): `reject` (default), `round_up`, `round_down` or `hold`. A material's own rule wins. |
 | `updated_at` | timestamptz | no | Last change. |
 
 ### core.run_standard — planning rate per line and material (D-016) · *In use*

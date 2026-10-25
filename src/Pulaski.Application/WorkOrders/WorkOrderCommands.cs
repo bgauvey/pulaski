@@ -32,6 +32,10 @@ public sealed record CreateWorkOrderCommand(
     int Priority,
     string? Notes) : ICommand<CreatedResponse>;
 
+/// <summary>Where an imported order came from and how its quantity was taken (D-066).</summary>
+internal sealed record ErpOrderOrigin(
+    string System, string Key, string? Version, decimal ErpQuantity, Guid ErpUomId, string? Adjustment, bool Held, DateTimeOffset ImportedAt);
+
 public sealed record ChangeWorkOrderStatusCommand(
     Guid Id,
     long ExpectedVersion,
@@ -68,7 +72,17 @@ internal sealed class CreateWorkOrderHandler(
             .ThrowIfInvalid();
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var (workOrder, version) = await MakeAsync(command, null, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new CreatedResponse(workOrder.Id, version);
+    }
 
+    /// <summary>
+    /// Makes the order and its jobs inside the caller's transaction. An ERP order (D-066) is stamped with where it came from; one held
+    /// because it isn't whole batches is shared between its lines by percentage, as a material made continuously is.
+    /// </summary>
+    internal async Task<(WorkOrder WorkOrder, long Version)> MakeAsync(CreateWorkOrderCommand command, ErpOrderOrigin? erp, CancellationToken cancellationToken)
+    {
         // Read the route without a lock to learn which lines to lock first (D-017).
         var route = await processes.GetReleasedAsync(command.ProcessId, lockVersion: false, cancellationToken)
             ?? throw new DomainRuleException($"Process {command.ProcessId} not found, or it has no released version.");
@@ -107,8 +121,8 @@ internal sealed class CreateWorkOrderHandler(
         var sizeAt = timeProvider.GetUtcNow();
         async Task<IReadOnlyDictionary<Guid, decimal>> LineSizesAsync() =>
             output.Batching is null || lineBatches is null ? new Dictionary<Guid, decimal>() : await lineBatches.GetAsync(output.Id, routeEquipment, sizeAt, cancellationToken);
-        var lineSizes = await LineSizesAsync();
-        if (output.Batching is { } batching)
+        var lineSizes = erp?.Held == true ? new Dictionary<Guid, decimal>() : await LineSizesAsync();
+        if (output.Batching is { } batching && erp?.Held != true)
         {
             if (lineSizes.Count == 0)
             {
@@ -126,7 +140,7 @@ internal sealed class CreateWorkOrderHandler(
             .ToDictionary(l => l.Id);
 
         // Under the lines' lock, their batch sizes must still be the ones the plan used (capabilities change with the line locked).
-        var lockedSizes = await LineSizesAsync();
+        var lockedSizes = erp?.Held == true ? lineSizes : await LineSizesAsync();
         if (lockedSizes.Count != lineSizes.Count || lockedSizes.Any(s => !lineSizes.TryGetValue(s.Key, out var size) || size != s.Value))
         {
             throw new ConflictException("A line's batch size changed while the order was being made. Try again.");
@@ -177,8 +191,24 @@ internal sealed class CreateWorkOrderHandler(
             route.Version.Id,
             command.Notes,
             bom?.Id);
+        if (erp is not null)
+        {
+            workOrder = workOrder with
+            {
+                Origin = WorkOrder.ErpOrigin,
+                ExternalSystem = erp.System,
+                ExternalKey = erp.Key,
+                ExternalVersion = erp.Version,
+                ErpQuantity = erp.ErpQuantity,
+                ErpUomId = erp.ErpUomId,
+                BatchAdjustment = erp.Adjustment,
+                QuantityHeld = erp.Held,
+                ImportedAt = erp.ImportedAt,
+            };
+        }
 
-        var envelope = events.Create(EventTypes.WorkOrderCreated, "work_order", workOrder.Id, new { After = workOrder });
+        var envelope = events.Create(
+            erp is null ? EventTypes.WorkOrderCreated : EventTypes.WorkOrderImported, "work_order", workOrder.Id, new { After = workOrder }, erp?.System);
         var version = await workOrders.InsertAsync(workOrder, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
 
@@ -209,8 +239,7 @@ internal sealed class CreateWorkOrderHandler(
                 c.Item.ConsumptionMethod, c.Item.Id))],
             cancellationToken);
 
-        await transaction.CommitAsync(cancellationToken);
-        return new CreatedResponse(workOrder.Id, version);
+        return (workOrder, version);
     }
 
     /// <summary>A job on a department waits in a window that ends at the order's due date (D-022).</summary>
