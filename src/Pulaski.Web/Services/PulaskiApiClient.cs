@@ -166,6 +166,9 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         GetAsync<ShiftLaborDto>(
             $"api/labor/sites/{siteId}/shift?date={date:yyyy-MM-dd}" + (scheduleId is { } s ? $"&scheduleId={s}&shiftCode={Uri.EscapeDataString(shiftCode ?? "")}" : ""), ct);
 
+    public Task<PendingLaborApprovalsDto> ListPendingLaborApprovalsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<PendingLaborApprovalsDto>($"api/labor/sites/{siteId}/approvals/pending", ct);
+
     public Task<LaborResponse> ApproveShiftAsync(Guid siteId, ApproveShiftRequest request, CancellationToken ct = default) =>
         SendAsync<LaborResponse>(HttpMethod.Post, $"api/labor/sites/{siteId}/approvals", request, ct);
 

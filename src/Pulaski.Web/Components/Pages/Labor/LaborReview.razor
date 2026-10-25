@@ -130,6 +130,10 @@ else if (_shift is { } detail)
     [Parameter]
     public string? TimeZone { get; set; }
 
+    /// <summary>The day to open on; today when not given.</summary>
+    [Parameter]
+    public DateOnly? Day { get; set; }
+
     private DateOnly _day;
     private IReadOnlyList<LaborShiftDto>? _shifts;
     private ShiftLaborDto? _shift;
@@ -145,7 +149,7 @@ else if (_shift is { } detail)
 
     protected override async Task OnInitializedAsync()
     {
-        _day = DateOnly.FromDateTime(Display.ToSite(Clock.GetUtcNow(), TimeZone).DateTime);
+        _day = Day ?? DateOnly.FromDateTime(Display.ToSite(Clock.GetUtcNow(), TimeZone).DateTime);
         await LoadShiftsAsync();
     }
 
@@ -182,9 +186,10 @@ else if (_shift is { } detail)
         try
         {
             _shifts = await Api.ListLaborShiftsAsync(SiteId, _day);
+            // Open the first shift waiting for approval, else the first.
             if (_shift is null && _shifts.Count > 0)
             {
-                await OpenAsync(_shifts[0]);
+                await OpenAsync(_shifts.FirstOrDefault(s => !s.IsApproved && HasEnded(s)) ?? _shifts[0]);
             }
         }
         catch (ApiException ex)

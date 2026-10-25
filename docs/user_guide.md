@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-10-24 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-10-25 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#21-reference) tables give the exact rules.
 
@@ -199,7 +199,7 @@ The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plan
 
 **Operate → Overview** is the home page: a live board for the plant. In a few seconds it answers *which lines are running, which aren't and why, and what needs a person*. It refreshes itself every 30 seconds; the pill at the top right says when it was last updated (and turns grey, with a warning, if Pulaski can't reach the server for over a minute). The refresh button updates it at once. With several sites, pick one at the top.
 
-**Diagonal hatching means "no data yet".** Several parts of the board need machine data, quality checks, lot tracking, labor tracking or an ERP connection, none of which Pulaski collects yet. Those parts already sit where they'll be, hatched and greyed, with a plug symbol saying what will fill them, so the page won't move around when the data arrives.
+**Diagonal hatching means "no data yet".** Several parts of the board need machine data, quality checks, lot tracking or an ERP connection, none of which Pulaski collects yet. Those parts already sit where they'll be, hatched and greyed, with a plug symbol saying what will fill them, so the page won't move around when the data arrives.
 
 **Needs attention** (the grid at the top) counts what needs a person, most urgent first. A count above zero is marked with a coloured bar and icon; click it to go to the list behind it.
 
@@ -213,9 +213,11 @@ The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plan
 | Lines with no signal | Lines that should report their state but don't | Live: every line, until machines are connected |
 | Not on a line | Planned orders with quantity not yet placed | Live → Schedule |
 | ERP changes to accept | Orders the ERP changed after dispatch | Needs an ERP connection |
-| Labor to approve | Labor sessions from the last shift to approve | Needs labor tracking |
+| Labor to approve | Shifts of the last 14 days that have ended with labor not yet approved | Live → Labor → Shift review |
 
 **This shift** shows OEE and its availability, performance and quality components from the current shift's machine and production reports. Site OEE combines the active production lines from their underlying time and ideal-output components; it does not average line percentages. When there is no rated production to calculate OEE, it shows a dash. Good output against plan, scrap and downtime are not shown here yet.
+
+**Labor to approve** counts the site's shifts from the last 14 days that have ended, have time recorded and aren't approved yet; underneath it says how many sessions they hold and the oldest day. Click it to open **Shift review** on that day, on the first shift waiting. It shows 0, *Nothing waiting*, when there is nothing to approve, including when no labor has been recorded. Approving a shift takes it off the count at the next refresh; correcting an approved shift doesn't put it back. Without permission to see labor at the site the cell shows a lock and *Needs permission to see labor*, and no count.
 
 **Lines** has one row per line:
 
@@ -1770,7 +1772,7 @@ Import the same file, or next week's, as often as you like: people are matched o
 
 ### Review and approve a shift
 
-1. Open **Operate → Labor → Shift review** and choose the **Day**. Each shift that has labor is a button; one with *approved* is locked.
+1. Open **Operate → Labor → Shift review** (or click **Labor to approve** on the Overview) and choose the **Day**. Each shift that has labor is a button; one with *approved* is locked. The first shift that has ended and isn't approved opens by itself.
 2. Check the people, times and hours. Click **Change** to fix a start, end or share, or **End** for someone still on.
 3. Once the shift has ended, add a note if you like and click **Approve shift**. Anyone still on is clocked off at the end of the shift.
 4. To fix an approved shift, click **Correct** (change the times or share) or **Remove**, say why, and click **Save**. The original row stays, struck through; the hours count the correction.
@@ -2117,7 +2119,7 @@ Between two production jobs on different materials, a line needs a changeover. P
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
 - **No screen yet for the changeover rules** (how long each material change takes): they are set up in the database.
-- **Labor:** people come from HR or the ERP only as a file you import: nothing fetches them on a timer, someone missing from a file isn't switched off (send them with `active` = no), and qualifications aren't imported. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* is still a placeholder.
+- **Labor:** people come from HR or the ERP only as a file you import: nothing fetches them on a timer, someone missing from a file isn't switched off (send them with `active` = no), and qualifications aren't imported. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
 - **Materials import** from CSV or B2MML files, from an OData v4 connection on demand, or one item at a time through the API. Nothing fetches items on a timer, other kinds of service (plain REST, SOAP, a database) have no connection yet, and there are no adapters for label printing. Capabilities import from CSV only, and only for now: a future or past period is set on the material page. B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** a stop's times can't be changed directly and a stop entered in error can't be removed (split it, or enter it again correctly, instead); adjustments can't be undone. Machine data that arrives late for time already covered by a stop entered by hand opens its own stop, which may then overlap it. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.

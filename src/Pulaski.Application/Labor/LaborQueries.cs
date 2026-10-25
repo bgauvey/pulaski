@@ -20,6 +20,12 @@ public sealed record ListLaborShiftsQuery(Guid SiteId, DateOnly Date) : IQuery<I
 
 public sealed record GetShiftLaborQuery(ShiftKey Shift) : IQuery<ShiftLaborDto>;
 
+/// <summary>The shifts of the last <see cref="Days"/> days that have ended with labor waiting for approval.</summary>
+public sealed record ListPendingLaborApprovalsQuery(Guid SiteId) : IQuery<PendingLaborApprovalsDto>
+{
+    public const int Days = 14;
+}
+
 /// <summary>Labor between two production days (D-040): by job against its standard, by person and by shift.</summary>
 public sealed record GetLaborReportQuery(Guid SiteId, DateOnly From, DateOnly To) : IQuery<LaborReportDto>;
 
@@ -264,6 +270,28 @@ internal sealed class ListLaborShiftsHandler(ILaborReadStore store, TimeProvider
         var rows = await store.ListSessionsAsync(query.SiteId, query.Date, query.Date, cancellationToken);
         var breaks = LaborView.Counting(await LaborView.BreaksAsync(store, query.SiteId, null, rows, now, cancellationToken));
         return await LaborView.ShiftsAsync(store, query.SiteId, rows, breaks, query.Date, query.Date, now, cancellationToken);
+    }
+}
+
+internal sealed class ListPendingLaborApprovalsHandler(ILaborReadStore store, TimeProvider timeProvider)
+    : IQueryHandler<ListPendingLaborApprovalsQuery, PendingLaborApprovalsDto>
+{
+    public async Task<PendingLaborApprovalsDto> HandleAsync(ListPendingLaborApprovalsQuery query, CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        var zone = LaborView.Zone(await store.GetSiteTimeZoneAsync(query.SiteId, cancellationToken));
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, zone).DateTime);
+        var from = today.AddDays(-ListPendingLaborApprovalsQuery.Days);
+        var rows = await store.ListSessionsAsync(query.SiteId, from, today, cancellationToken);
+        var breaks = LaborView.Counting(await LaborView.BreaksAsync(store, query.SiteId, null, rows, now, cancellationToken));
+        var shifts = await LaborView.ShiftsAsync(store, query.SiteId, rows, breaks, from, today, now, cancellationToken);
+
+        // Approvable as ApproveShiftHandler sees it: ended (at its shift's end, else the end of the day) and with time that counts.
+        return new PendingLaborApprovalsDto
+        {
+            From = from,
+            Shifts = [.. shifts.Where(s => !s.IsApproved && s.Sessions > 0 && (s.End ?? LaborView.DayStart(s.ProductionDate.AddDays(1), zone)) <= now)],
+        };
     }
 }
 

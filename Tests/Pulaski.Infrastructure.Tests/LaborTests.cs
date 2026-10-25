@@ -49,6 +49,7 @@ public sealed class LaborTests(DatabaseFixture db)
             [new ShiftDto { Code = "D", Start = "00:00", Minutes = 600, Days = [0], Crew = "NOPE" }])));
         var siteVersion = (await QueryAsync<GetEquipmentQuery, EquipmentDto>(new GetEquipmentQuery(site.Id))).Version;
         await db.SendAsync(new SetEquipmentCalendarCommand(site.Id, siteVersion, CalendarModes.Schedule, schedule.Id));
+        Assert.Empty((await QueryAsync<ListPendingLaborApprovalsQuery, PendingLaborApprovalsDto>(new ListPendingLaborApprovalsQuery(site.Id))).Shifts);
 
         var crews = await QueryAsync<ListCrewsQuery, IReadOnlyList<CrewDto>>(new ListCrewsQuery(site.Id));
         Assert.Equal(("RED", 2), (Assert.Single(crews).Code, crews[0].Members));
@@ -68,6 +69,11 @@ public sealed class LaborTests(DatabaseFixture db)
         var shift = Assert.Single(shifts);
         Assert.Equal(("D", "RED", 2, 1, false), (shift.ShiftCode, shift.CrewCode, shift.Sessions, shift.OpenSessions, shift.IsApproved));
 
+        // Yesterday's ended shift waits for approval; today's hasn't ended, so it doesn't.
+        await db.SendAsync(new CheckInCommand(line.Id, [bob.Id], DateTimeOffset.UtcNow.AddMinutes(-1)));
+        var pending = await QueryAsync<ListPendingLaborApprovalsQuery, PendingLaborApprovalsDto>(new ListPendingLaborApprovalsQuery(site.Id));
+        Assert.Equal((today.AddDays(-ListPendingLaborApprovalsQuery.Days), today.AddDays(-1), 2), (pending.From, Assert.Single(pending.Shifts).ProductionDate, pending.Shifts[0].Sessions));
+
         // Approval ends Ann's open time when the shift ended (midnight) and locks the shift.
         var approved = await db.SendAsync(new ApproveShiftCommand(key, "OK"));
         Assert.Single(approved.Notes);
@@ -75,15 +81,17 @@ public sealed class LaborTests(DatabaseFixture db)
         var anns = review.Sessions.Single(s => s.PersonId == ann.Id);
         Assert.Equal((yesterday.AddDays(1), true, 23m), (anns.EndedAt, anns.IsApproved, anns.Hours));
         await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new ApproveShiftCommand(key, null)));
+        Assert.Empty((await QueryAsync<ListPendingLaborApprovalsQuery, PendingLaborApprovalsDto>(new ListPendingLaborApprovalsQuery(site.Id))).Shifts);
 
         // A correction replaces Bob's session; the report counts the correction.
         await db.SendAsync(new CorrectLaborSessionCommand(bobs.Id, false, line.Id, null, LaborTypes.Direct, null, yesterday.AddHours(1), yesterday.AddHours(7), 100, "Stayed till 07:00"));
         var report = await QueryAsync<GetLaborReportQuery, LaborReportDto>(new GetLaborReportQuery(site.Id, today.AddDays(-1), today.AddDays(-1)));
         Assert.Equal(6m, report.People.Single(p => p.PersonId == bob.Id).TotalHours);
         Assert.Equal(23m + 6m, Assert.Single(report.Shifts).Hours);
+        Assert.Empty((await QueryAsync<ListPendingLaborApprovalsQuery, PendingLaborApprovalsDto>(new ListPendingLaborApprovalsQuery(site.Id))).Shifts);
 
         await using var connection = await db.AdminDataSource.OpenConnectionAsync();
-        Assert.Equal(3, await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM core.labor_session WHERE site_id = @Id", new { site.Id }));
+        Assert.Equal(4, await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM core.labor_session WHERE site_id = @Id", new { site.Id }));
         Assert.Equal(1, await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM core.labor_approval WHERE site_id = @Id", new { site.Id }));
     }
 

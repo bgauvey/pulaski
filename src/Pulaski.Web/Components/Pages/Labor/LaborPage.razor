@@ -39,7 +39,7 @@
     @switch (Tab)
     {
         case "Shift review":
-            <LaborReview @key="siteId" SiteId="siteId" TimeZone="@Sites.Site?.TimeZone" />
+            <LaborReview @key="siteId" SiteId="siteId" TimeZone="@Sites.Site?.TimeZone" Day="ReviewDay" />
             break;
         case "Reports":
             <LaborReports @key="siteId" SiteId="siteId" SiteCode="@Sites.Site?.Code" TimeZone="@Sites.Site?.TimeZone" />
@@ -56,6 +56,13 @@ else if (_loaded)
 
 @code {
     private bool _loaded;
+
+    // The Overview's labor to approve opens Shift review on the oldest day waiting.
+    [SupplyParameterFromQuery(Name = "day")]
+    private string? DayQuery { get; set; }
+
+    private DateOnly? ReviewDay =>
+        DateOnly.TryParseExact(DayQuery, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var day) ? day : null;
 
     private string Tab => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/') switch
     {

@@ -263,6 +263,14 @@ public sealed record ShiftLaborDto
     public IReadOnlyList<BreakDto> Breaks { get; init; } = [];
 }
 
+/// <summary>A site's shifts that have ended with labor not yet approved (D-040), oldest first, for the Overview.</summary>
+public sealed record PendingLaborApprovalsDto
+{
+    /// <summary>The first production day looked at; older shifts aren't counted.</summary>
+    public DateOnly From { get; init; }
+    public IReadOnlyList<LaborShiftDto> Shifts { get; init; } = [];
+}
+
 /// <summary>Approves a shift's labor (D-040); open sessions in it end when the shift ended.</summary>
 public sealed record ApproveShiftRequest
 {

@@ -2,7 +2,8 @@
 @attribute [RequiresView(PermissionCodes.OverviewView)]
 @* The plant overview (docs/admin-dashboard-brief.md). In five seconds it answers: which lines
    are running, which are not and why, and what needs a person. OEE comes from the machine report;
-   live state, output, quality, lots and labor remain placeholders until those views are built. *@
+   labor to approve comes from the shift review; live state, output, quality and lots remain placeholders
+   until those views are built. *@
 @implements IDisposable
 @using System.Globalization
 @using Pulaski.Contracts.MachineData
@@ -346,6 +347,7 @@
     private OeeReportDto? _oeeReport;
     private IReadOnlyList<WorkOrderDto> _orders = [];
     private IReadOnlyList<WorkOrderProgressDto> _progress = [];
+    private PendingLaborApprovalsDto? _labor;
     private Guid _siteId;
     private OverviewWindow _window = OverviewWindow.Around(DateTimeOffset.UtcNow);
     private DateTimeOffset? _loadedAt;
@@ -363,7 +365,11 @@
 
     private bool IsStale => _loadedAt is { } at && Now - at > StaleAfter;
 
-    private sealed record AttentionCell(string Icon, string Label, int Count, string Detail, string Tone, string? Href, string Help, bool IsPlaceholder = false);
+    private sealed record AttentionCell(
+        string Icon, string Label, int Count, string Detail, string Tone, string? Href, string Help, bool IsPlaceholder = false, string PlaceholderIcon = "plug");
+
+    // Labor is counted only where the user may see it (D-039); the count and its link follow approvals on every refresh.
+    private bool CanSeeLabor => _siteId != Guid.Empty && User.Can(PermissionCodes.LaborView, _siteId);
 
     // Ordered by urgency (docs/admin-dashboard-brief.md). Placeholders keep their place until their data exists.
     private IEnumerable<AttentionCell> Attention
@@ -393,9 +399,29 @@
                 "Planned orders with quantity not yet on a line or department.");
             yield return new("erp", "ERP changes to accept", 0, "Needs an ERP connection", "warning", null,
                 "Orders the ERP changed after they were dispatched, waiting for a planner to accept.", IsPlaceholder: true);
-            yield return new("labor", "Labor to approve", 0, "Needs labor tracking", "muted", null,
-                "Closed labor sessions from the last shift waiting for approval.", IsPlaceholder: true);
+            yield return LaborCell();
         }
+    }
+
+    private AttentionCell LaborCell()
+    {
+        const string help = "Shifts of the last two weeks that have ended with labor no one has approved yet.";
+        if (!CanSeeLabor)
+        {
+            return new("labor", "Labor to approve", 0, "Needs permission to see labor", "muted", null, help, IsPlaceholder: true, PlaceholderIcon: "lock");
+        }
+
+        var shifts = _labor?.Shifts ?? [];
+        if (shifts.Count == 0)
+        {
+            return new("labor", "Labor to approve", 0, "Nothing waiting", "muted", "labor/review", help);
+        }
+
+        var oldest = shifts[0].ProductionDate;
+        var sessions = shifts.Sum(s => s.Sessions);
+        return new("labor", "Labor to approve", shifts.Count,
+            $"{sessions} {(sessions == 1 ? "session" : "sessions")}, oldest {oldest.ToString("ddd d MMM", CultureInfo.InvariantCulture)}", "muted",
+            $"labor/review?day={oldest.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}", help);
     }
 
     private RenderFragment AttentionBody(AttentionCell cell) =>
@@ -408,7 +434,7 @@
             <span class="ov-att-detail">
                 @if (cell.IsPlaceholder)
                 {
-                    <Icon Name="plug" Size="14" />
+                    <Icon Name="@cell.PlaceholderIcon" Size="14" />
                 }
                 @cell.Detail
             </span>
@@ -450,6 +476,7 @@
         _lines = null;
         _timelines = [];
         _oeeReport = null;
+        _labor = null;
         await LoadAsync();
     }
 
@@ -478,11 +505,13 @@
             Task<OeeReportDto>? oee = _siteId == Guid.Empty
                 ? null
                 : Api.GetOeeReportAsync(_siteId, productionDate.AddDays(-1), productionDate);
+            var labor = CanSeeLabor ? Api.ListPendingLaborApprovalsAsync(_siteId) : null;
 
             _orders = [.. (await orders).Where(o => o.SiteId == _siteId)];
             _progress = await progress;
             _timelines = (await Task.WhenAll(timelines)).ToDictionary(t => t.LineId);
             _oeeReport = oee is null ? null : await oee;
+            _labor = labor is null ? null : await labor;
             _lines = lines;
             _window = OverviewWindow.Around(Now);
             _loadedAt = Now;

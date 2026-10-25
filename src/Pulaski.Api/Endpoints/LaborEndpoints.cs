@@ -223,6 +223,12 @@ internal static class LaborEndpoints
             TypedResults.Ok(await handler.HandleAsync(new GetShiftLaborQuery(new ShiftKey(siteId, date, scheduleId, shiftCode)), ct)))
         .RequireAny(Site.Route(), Permissions.LaborView);
 
+        // The Overview's labor to approve.
+        sites.MapGet("/approvals/pending", async Task<Ok<PendingLaborApprovalsDto>> (
+            Guid siteId, IQueryHandler<ListPendingLaborApprovalsQuery, PendingLaborApprovalsDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListPendingLaborApprovalsQuery(siteId), ct)))
+        .RequireAny(Site.Route(), Permissions.LaborView);
+
         sites.MapPost("/approvals", async Task<Ok<LaborResponse>> (Guid siteId, ApproveShiftRequest request, ICommandHandler<ApproveShiftCommand, LaborResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ApproveShiftCommand(new ShiftKey(siteId, request.ProductionDate, request.ShiftScheduleId, request.ShiftCode), request.Note), ct)))
         .RequirePermission(Permissions.LaborApprove, Site.Route());

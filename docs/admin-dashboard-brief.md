@@ -46,7 +46,7 @@ muted, not hidden, so the layout never jumps.
 | Lots on hold | `core.lot` status `on_hold` or `quarantine` | Holds |
 | ERP changes to accept | work orders with `erp_change_pending` | Dispatch list |
 | Lines with no signal | work centers whose current state is 0 / Undefined | Equipment status |
-| Labor to approve | `core.labor_session` closed, not approved, previous shift | Labor |
+| Labor to approve | shifts of the last 14 days that have ended, with counting `core.labor_session` rows and no `core.labor_approval` | Labor → Shift review, oldest day |
 
 Card anatomy: icon, large number, one-line label, small secondary text ("3 over 30 min").
 
