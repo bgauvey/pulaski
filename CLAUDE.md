@@ -232,6 +232,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   only released one). `ErpBatchRule` (material `erp_batch_rule` > site `scheduling_policy.erp_batch_rule` > reject; round_up/down; hold →
   `quantity_held`, no dispatch until `SetWorkOrderQuantityCommand`); ERP quantity kept in `erp_qty`. Changes apply while planned
   (`ErpOrderWriter.ReplanAsync` re-shares jobs in place, scales components), else `erp_pending_change` for Accept/Reject.
+- Partial replacements (D-067, proposed): `CancelJobCommand.ReplaceExact` plans exactly what is left; not whole batches → `job.partial_batch_planned`
+  (needs `schedule.plan_partial`, via the conditional `RequireWhen<TRequest>` filter). Such a job skips whole-batch checks on move/assign/start
+  and reports its partial batch without a stop reason; the material's rule (exact → approval) still applies.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

@@ -443,6 +443,9 @@ public sealed record InventoryJob
     public string LineCode { get; init; } = "";
     public decimal? PlannedQty { get; init; }
     public Guid? UomId { get; init; }
+
+    /// <summary>Planned with a partial last batch (D-067): it is reported without a stop reason.</summary>
+    public bool PartialBatchPlanned { get; init; }
 }
 
 public sealed record InventoryReason

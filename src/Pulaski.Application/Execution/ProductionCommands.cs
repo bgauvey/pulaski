@@ -318,7 +318,9 @@ internal sealed class ProductionReporter(
         }
 
         batching.EnsurePartial(partial, material.BaseUomCode);
-        if (!onStop && (run.IsOpen || run.EndReasonCodeId is null))
+
+        // A job planned with a partial last batch (D-067) reports it as it comes; any other partial is an exception for a line that stopped.
+        if (!onStop && !job.PartialBatchPlanned && (run.IsOpen || run.EndReasonCodeId is null))
         {
             throw new DomainRuleException(run.IsOpen
                 ? "A partial batch is reported when the line stops: pause or complete the job with a reason, and report it there."

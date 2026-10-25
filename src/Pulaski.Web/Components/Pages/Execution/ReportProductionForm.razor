@@ -69,12 +69,15 @@
                     }
                 </div>
             </div>
-            @if (SelectedRun is { EndedWithReason: true, HasPartialBatch: false })
+            @if (SelectedRun is { HasPartialBatch: false } selectedRun && (selectedRun.EndedWithReason || Job.PartialBatchPlanned))
             {
                 <div class="col-6">
                     <label class="form-label" for="rep-partial-@Job.JobId">Partial batch, @Job.BaseUomCode</label>
                     <input id="rep-partial-@Job.JobId" type="number" min="0" step="any" class="form-control" placeholder="None" @bind="_partial" @bind:event="oninput" />
-                    <div class="form-text">This run stopped with a reason, so the batch it was making can be added.@(Job.BatchRule == "exact" ? " It waits on hold for approval." : "")</div>
+                    <div class="form-text">
+                        @(Job.PartialBatchPlanned ? "This job was planned with a partial last batch; report it here when it is made." : "This run stopped with a reason, so the batch it was making can be added.")
+                        @(Job.BatchRule == "exact" ? " It waits on hold for approval." : "")
+                    </div>
                 </div>
             }
         }

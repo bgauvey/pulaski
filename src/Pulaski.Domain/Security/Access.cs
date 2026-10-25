@@ -26,6 +26,7 @@ public static class Permissions
 
     // Changing (D-037).
     public const string SchedulePlan = "schedule.plan";
+    public const string SchedulePlanPartial = "schedule.plan_partial";
     public const string WorkOrderManage = "work_order.manage";
     public const string WorkOrderClose = "work_order.close";
     public const string RateModify = "rate.modify";
@@ -82,6 +83,7 @@ public static class Permissions
         new(SiteSettingsView, "Viewing", "See a site's settings: changeover mode, reporting tolerances and calendar exceptions"),
         new(IntegrationsView, "Viewing", "See outbound deliveries to the ERP and how they went"),
         new(SchedulePlan, "Planning", "Plan jobs: create, sequence, pin, assign to lines and cancel them"),
+        new(SchedulePlanPartial, "Planning", "Replace a cancelled job with exactly what is left, even when that isn't whole batches"),
         new(WorkOrderManage, "Planning", "Create work orders, dispatch, un-dispatch and firm them"),
         new(WorkOrderClose, "Planning", "Cancel and close work orders"),
         new(RateModify, "Planning", "Set and clear the modified planning rate"),
@@ -133,6 +135,7 @@ public static class Permissions
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> Implied { get; } = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
     {
         [SchedulePlan] = [ScheduleView, WorkOrdersView],
+        [SchedulePlanPartial] = [ScheduleView, WorkOrdersView],
         [WorkOrderManage] = [WorkOrdersView],
         [WorkOrderClose] = [WorkOrdersView],
         [RateModify] = [MaterialsView],
@@ -204,7 +207,7 @@ public static class Roles
         new(Planner, "Planner", false,
             [Permissions.OverviewView, Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.FloorView, Permissions.InventoryView,
              Permissions.MaterialsView, Permissions.ProcessesView, Permissions.MachinesView, Permissions.SiteSettingsView,
-             Permissions.SchedulePlan, Permissions.WorkOrderManage, Permissions.WorkOrderClose, Permissions.RateModify, Permissions.Materials,
+             Permissions.SchedulePlan, Permissions.SchedulePlanPartial, Permissions.WorkOrderManage, Permissions.WorkOrderClose, Permissions.RateModify, Permissions.Materials,
              Permissions.LotAllocate],
             "Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes."),
         new(Supervisor, "Supervisor", false,

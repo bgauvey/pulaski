@@ -28,7 +28,7 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
         j.id AS job_id, j.job_number, j.job_type, j.status, j.xmin::text::bigint AS version, j.site_id, j.equipment_id,
         e.code AS line_code, j.group_equipment_id, j.work_order_id, wo.order_number AS work_order_number, wo.status AS work_order_status,
         j.material_id, m.code AS material_code, m.name AS material_name, j.planned_qty, j.uom_id, u.code AS uom_code,
-        j.process_operation_id, j.completed_at, site.time_zone AS site_time_zone,
+        j.process_operation_id, j.completed_at, site.time_zone AS site_time_zone, j.partial_batch_planned,
         -- The batch size on the job's line (D-065): its capability's own, else the material's.
         CASE WHEN m.batch_size IS NULL THEN NULL
              ELSE coalesce((SELECT c.batch_size FROM core.equipment_capability c
@@ -265,6 +265,7 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
             BatchSize = job.BatchSize,
             BatchTolerancePct = job.BatchTolerancePct,
             BatchRule = job.BatchRule,
+            PartialBatchPlanned = job.PartialBatchPlanned,
             BaseUomId = job.BaseUomId,
             BaseUomCode = job.BaseUomCode,
             PartialBatches = partials,
@@ -413,6 +414,7 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
         public decimal? BatchSize { get; init; }
         public decimal BatchTolerancePct { get; init; }
         public string? BatchRule { get; init; }
+        public bool PartialBatchPlanned { get; init; }
         public Guid? BaseUomId { get; init; }
         public string? BaseUomCode { get; init; }
     }

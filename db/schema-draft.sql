@@ -965,6 +965,7 @@ CREATE TABLE core.job (
     dispatched_at       timestamptz,
     firmed_at           timestamptz,                            -- planned_start is frozen from here on (D-019)
     replaces_job_id     uuid REFERENCES core.job(id),           -- set on the replacement for a cancelled, started job
+    partial_batch_planned boolean NOT NULL DEFAULT false,       -- planned with a partial last batch (D-067): a replacement for the exact remainder
     completed_at        timestamptz,                            -- when it was last completed (D-035); downstream "after end" links count from it
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
@@ -2063,7 +2064,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0031_declaration_reversals'),
     ('0032_lot_allocations'),
     ('0033_line_batch_sizes'),
-    ('0034_erp_work_orders');
+    ('0034_erp_work_orders'),
+    ('0035_partial_replacements');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2087,6 +2089,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('integrations.view', 'See outbound deliveries to the ERP and how they went'),
     ('site_settings.view', 'See a site''s settings: changeover mode, reporting tolerances and calendar exceptions'),
     ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
+    ('schedule.plan_partial', 'Replace a cancelled job with exactly what is left, even when that isn''t whole batches'),
     ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
     ('work_order.close', 'Cancel and close work orders'),
     ('rate.modify', 'Set and clear the modified planning rate'),
@@ -2149,6 +2152,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('planner', 'machines.view'),
     ('planner', 'site_settings.view'),
     ('planner', 'schedule.plan'),
+    ('planner', 'schedule.plan_partial'),
     ('planner', 'work_order.manage'),
     ('planner', 'work_order.close'),
     ('planner', 'rate.modify'),

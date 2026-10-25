@@ -159,4 +159,21 @@ public class BatchReportHandlerTests
 
         await Assert.ThrowsAsync<DomainRuleException>(() => Report(job, [50m]));
     }
+
+    [Fact]
+    public async Task A_job_planned_with_a_partial_last_batch_reports_it_without_a_stop_and_it_follows_the_rule()
+    {
+        var material = Inventory.AddMaterial("BLEND-PLANNED", _kg, "kg", batchSize: 50m, batchRule: BatchRule.Near);
+        var job = Inventory.AddJob("J-R", _site, material.Id, status: JobStatus.Running, uomId: _kg, plannedQty: 125m, partialBatchPlanned: true);
+        Execution.OpenRun(job.Id, job.EquipmentId, HandlerFixture.Now.AddHours(-2), _kg);
+
+        var report = await Report(job, [50m, 50m], partial: 25m);
+
+        Assert.Equal((125m, 3), (report.RunGoodQty, report.Lots.Count));
+        Assert.Equal(PartialBatchStatus.Accepted, Assert.Single(Execution.PartialBatches).Status);
+
+        // An ordinary job still reports a partial batch only when the line stops.
+        var (other, _, _) = Running(BatchRule.Near);
+        await Assert.ThrowsAsync<DomainRuleException>(() => Report(other, [50m], partial: 25m));
+    }
 }

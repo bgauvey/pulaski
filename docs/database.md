@@ -891,6 +891,7 @@ A job is what the planner places and sequences on a line and what operators exec
 | `dispatched_at` | timestamptz | yes | When its order was dispatched. |
 | `firmed_at` | timestamptz | yes | When its order was firmed; from then on `planned_start` is frozen. |
 | `replaces_job_id` | uuid → job | yes | On a replacement, the cancelled job whose remaining quantity it took. |
+| `partial_batch_planned` | boolean | no | Planned with a partial last batch (D-067): a replacement for exactly what was left. Its quantity needn't be whole batches on its line, and its partial batch is reported without a stop reason. |
 | `completed_at` | timestamptz | yes | When it was last completed (D-035); cleared on reopening. Downstream *after end* links count their lag from it. |
 | `process_operation_id` | uuid → process_operation | yes | The process operation the job belongs to, when its order came from a process (D-024). Set when the order makes the job; a job added later takes the operation that runs on its line (or the first), and a replacement keeps the cancelled job's (D-025). Order quantities are counted per operation, and the links will drive the projection later. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |

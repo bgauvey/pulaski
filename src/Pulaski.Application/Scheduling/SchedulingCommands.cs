@@ -49,7 +49,11 @@ public sealed record PinJobCommand(
 public sealed record AssignJobCommand(Guid Id, long ExpectedVersion, Guid TargetId, Guid? BeforeJobId) : ICommand<VersionResponse>;
 
 /// <summary>Cancels a job; with <see cref="Replace"/>, a new job takes its slot for the quantity it did not make (D-019).</summary>
-public sealed record CancelJobCommand(Guid Id, long ExpectedVersion, string? Reason, bool Replace) : ICommand<CancelJobResponse>;
+/// <summary>
+/// Cancels a job (D-019), with a replacement for what is left when <paramref name="Replace"/>: rounded up to whole batches, or with
+/// <paramref name="ReplaceExact"/> exactly what is left, a partial last batch included (D-067).
+/// </summary>
+public sealed record CancelJobCommand(Guid Id, long ExpectedVersion, string? Reason, bool Replace, bool ReplaceExact = false) : ICommand<CancelJobResponse>;
 
 internal sealed class CreateJobHandler(
     IUnitOfWork unitOfWork,
@@ -199,7 +203,7 @@ internal sealed class SequenceJobHandler(
         if (job.MaterialId is { } material)
         {
             await SchedulingRules.EnsureEligibleAsync(scheduling, target, material, at, cancellationToken);
-            if (target.Id != job.EquipmentId)
+            if (target.Id != job.EquipmentId && !job.PartialBatchPlanned)
             {
                 await EnsureWholeOnAsync(job, target, at, cancellationToken);
             }
@@ -329,7 +333,7 @@ internal sealed class AssignJobHandler(
                 await SchedulingRules.EnsureEligibleAsync(scheduling, target, material, at, cancellationToken);
 
                 // Assigned to a line, a group job must be whole batches of that line's size (D-065).
-                if (boms is not null && units is not null && job.PlannedQty is { } quantity && job.UomId is { } uomId)
+                if (boms is not null && units is not null && job.PlannedQty is { } quantity && job.UomId is { } uomId && !job.PartialBatchPlanned)
                 {
                     await BatchPlanning.EnsureWholeAsync(
                         boms, units, material, quantity, uomId, $"Job {job.JobNumber} on {target.Code}", lineBatches, target.Id, at, cancellationToken);
@@ -388,6 +392,7 @@ internal sealed class CancelJobHandler(
 
         Job? replacement = null;
         WorkOrder? workOrder = null;
+        string? note = null;
         if (command.Replace)
         {
             workOrder = job.WorkOrderId is { } workOrderId
@@ -396,13 +401,23 @@ internal sealed class CancelJobHandler(
             var workOrderStatus = workOrder?.Status ?? WorkOrderStatus.Planned;
             var remaining = (job.PlannedQty ?? 0m) - await scheduling.GetGoodQtyAsync(job.Id, cancellationToken);
 
-            // What is left of a batch material is planned in whole batches, rounded up to meet the order (D-036).
+            // What is left of a batch material is planned in whole batches, rounded up to meet the order (D-036); or, when asked, exactly
+            // what is left, with a partial last batch (D-067).
+            var partial = false;
             if (remaining > 0 && job.MaterialId is { } materialId && job.UomId is { } uomId)
             {
-                remaining = await BatchPlanning.RoundUpAsync(boms, units, materialId, remaining, uomId, lineBatches, job.EquipmentId, at, cancellationToken);
+                if (command.ReplaceExact)
+                {
+                    partial = !await BatchPlanning.IsWholeAsync(boms, units, materialId, remaining, uomId, lineBatches, job.EquipmentId, at, cancellationToken);
+                    note = partial ? await BatchPlanning.PartialNoteAsync(boms, units, materialId, remaining, uomId, lineBatches, job.EquipmentId, at, cancellationToken) : null;
+                }
+                else
+                {
+                    remaining = await BatchPlanning.RoundUpAsync(boms, units, materialId, remaining, uomId, lineBatches, job.EquipmentId, at, cancellationToken);
+                }
             }
 
-            replacement = job.Replacement(ids.NewId(), remaining, workOrderStatus, at);
+            replacement = job.Replacement(ids.NewId(), remaining, workOrderStatus, at) with { PartialBatchPlanned = partial };
         }
 
         var envelope = events.Create(
@@ -433,7 +448,7 @@ internal sealed class CancelJobHandler(
 
         await transaction.CommitAsync(cancellationToken);
 
-        return new CancelJobResponse(version, replacement?.Id);
+        return new CancelJobResponse(version, replacement?.Id, note);
     }
 }
 
@@ -579,6 +594,38 @@ internal static class BatchPlanning
 
         var converter = UnitConversions.For(materialId, await units.GetUnitsAsync(cancellationToken), await units.GetConversionsAsync([materialId], cancellationToken));
         batching.EnsureWholeBatches(converter.Convert(quantity, uomId, material.BaseUomId), what, converter.Code(material.BaseUomId));
+    }
+
+    /// <summary>Whether the quantity is whole batches of the line's size; true for a material made continuously.</summary>
+    public static async Task<bool> IsWholeAsync(
+        IBomRepository boms, IUnitRepository units, Guid materialId, decimal quantity, Guid uomId,
+        ILineBatchSizes? lineBatches, Guid? lineId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        if (await OnLineAsync(boms, lineBatches, materialId, lineId, at, cancellationToken) is not var (batching, material))
+        {
+            return true;
+        }
+
+        var converter = UnitConversions.For(materialId, await units.GetUnitsAsync(cancellationToken), await units.GetConversionsAsync([materialId], cancellationToken));
+        return batching.WholeBatches(converter.Convert(quantity, uomId, material.BaseUomId)) is not null;
+    }
+
+    /// <summary>"3 batches of 50 kg and a partial batch of 25 kg", for the note on a replacement with a partial last batch (D-067).</summary>
+    public static async Task<string?> PartialNoteAsync(
+        IBomRepository boms, IUnitRepository units, Guid materialId, decimal quantity, Guid uomId,
+        ILineBatchSizes? lineBatches, Guid? lineId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        if (await OnLineAsync(boms, lineBatches, materialId, lineId, at, cancellationToken) is not var (batching, material))
+        {
+            return null;
+        }
+
+        var converter = UnitConversions.For(materialId, await units.GetUnitsAsync(cancellationToken), await units.GetConversionsAsync([materialId], cancellationToken));
+        var inBase = converter.Convert(quantity, uomId, material.BaseUomId);
+        var whole = Math.Floor(inBase / batching.Size);
+        var unit = converter.Code(material.BaseUomId);
+        return $"{(whole > 0 ? $"{whole} {(whole == 1 ? "batch" : "batches")} of {Batching.Qty(batching.Size)} {unit} and " : "")}a partial batch of {Batching.Qty(inBase - whole * batching.Size)} {unit}" +
+            (batching.IsExact ? ", which waits for approval when reported." : ", accepted when reported.");
     }
 
     /// <summary>The quantity rounded up to whole batches of the line's size, in its own unit; unchanged for a material made continuously.</summary>

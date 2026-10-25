@@ -97,7 +97,8 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
     }
 
     public InventoryJob AddJob(
-        string number, Guid siteId, Guid? materialId, string status = "planned", string jobType = "production", Guid? uomId = null, decimal? plannedQty = null)
+        string number, Guid siteId, Guid? materialId, string status = "planned", string jobType = "production", Guid? uomId = null, decimal? plannedQty = null,
+        bool partialBatchPlanned = false)
     {
         var job = new InventoryJob
         {
@@ -111,6 +112,7 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
             LineCode = "EXT-01",
             UomId = uomId,
             PlannedQty = plannedQty,
+            PartialBatchPlanned = partialBatchPlanned,
         };
         lock (_lock)
         {

@@ -37,6 +37,12 @@ public sealed record Job(
     Guid? ProcessOperationId = null,
     DateTimeOffset? CompletedAt = null)
 {
+    /// <summary>
+    /// Planned with a partial last batch (D-067): the replacement for exactly what was left of a cancelled job. Its quantity needn't be
+    /// whole batches on any line, and its last batch is reported as a partial batch without a stop reason.
+    /// </summary>
+    public bool PartialBatchPlanned { get; init; }
+
     /// <summary>A production job for part of a work order, sized by the run standard.</summary>
     /// <exception cref="DomainRuleException">The quantity is invalid.</exception>
     public static Job CreateProduction(

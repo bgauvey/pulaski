@@ -631,7 +631,7 @@ Some materials are made a fixed amount at a time: a 50 kg mix, a 200 l tank. Pul
 - **Locks.** Approve and reject lock the job, the partial batch, its run, then its lot, the reporting order (D-027), so they serialize with reports.
 - **Events:** `pulaski.material.batching_set.v1`, `pulaski.partial_batch.reported.v1`, `…approved.v1`, `…rejected.v1`, with the lot's own movements.
 
-**Not yet:** choosing to round a replacement down, and permissions for who may approve (settled by D-037: Supervisor or Quality, never whoever reported it).
+**Not yet:** choosing to round a replacement down (a replacement for exactly what is left is D-067), and permissions for who may approve (settled by D-037: Supervisor or Quality, never whoever reported it).
 
 ## Users, roles and permissions (D-037, proposed)
 
@@ -1455,6 +1455,20 @@ The ERP's own quantity is kept in `erp_qty`/`erp_uom_id` with `batch_adjustment`
 Locks are lines, then the order, then its jobs (D-017). Events: `…erp_changed.v1`, `…erp_change_pending.v1`, `…erp_change_accepted.v1`, `…erp_change_rejected.v1`, `…quantity_set.v1`, `pulaski.job.replanned.v1`, `pulaski.erp_batch_rule.set.v1`.
 
 **Not done.** Manufacturing orders, a file/B2MML import, re-planning after a job has started or after jobs were changed by hand, and changing the order's unit.
+
+## Replacement jobs for a partial batch (D-067, proposed)
+
+Issue #31. A cancelled job's replacement was always rounded up to whole batches (D-036), so a planner had to cancel without one when less than a batch was left.
+
+**Exact replacement.** `CancelJobCommand.ReplaceExact` (with `Replace`) plans exactly what is left: the cancelled job's quantity less its good output, unrounded. When that isn't whole batches of the job's line size (D-065), the replacement is `core.job.partial_batch_planned`, and the response notes its batches (*1 batch of 50 kg and a partial batch of 25 kg*, and whether it waits for approval). A whole remainder is an ordinary replacement. Job totals stay right: the order's good output across the cancelled job and its replacement adds up to what was planned, and genealogy is unchanged (lots belong to the jobs that made them).
+
+**Permission.** The new `schedule.plan_partial` (Planner by default) is required only when `ReplaceExact` is set: `RequireWhen<CancelJobRequest>` is a conditional endpoint filter, like back-dating's. Rounding up still needs only `schedule.plan`.
+
+**Limits.**
+- A planned-partial job's quantity is accepted on any line: sequencing, assigning and starting on a line skip the whole-batch check, since any quantity is whole batches plus one partial.
+- Its partial is still checked against the line's batch (`EnsurePartial`: above 0 and below a batch), one per run, and in a lot of its own where the rule is exact.
+
+**On the floor.** A planned partial is reported as it comes, without a pause or completion reason (`ProductionReporter`: `InventoryJob.PartialBatchPlanned`). It then follows the material's rule: near is accepted, exact is held for approval.
 
 ## Application architecture
 

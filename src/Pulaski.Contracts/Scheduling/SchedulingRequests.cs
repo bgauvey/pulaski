@@ -65,6 +65,9 @@ public sealed record CancelJobRequest
     public long Version { get; init; }
     public string? Reason { get; init; }
     public bool Replace { get; init; }
+
+    /// <summary>With <see cref="Replace"/>: exactly what is left, a partial last batch included, instead of rounding up (D-067). Needs <c>schedule.plan_partial</c>.</summary>
+    public bool ReplaceExact { get; init; }
 }
 
 /// <summary>Dispatch, un-dispatch or firm a work order (D-018); the reason is recorded on the event.</summary>

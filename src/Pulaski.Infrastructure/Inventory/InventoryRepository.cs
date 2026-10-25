@@ -153,7 +153,7 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     private const string GetJobForUpdate = """
         SELECT j.id, j.site_id, j.job_number, j.job_type, j.status, j.material_id,
-               j.equipment_id, e.code AS line_code, j.planned_qty, j.uom_id
+               j.equipment_id, e.code AS line_code, j.planned_qty, j.uom_id, j.partial_batch_planned
         FROM core.job j
         JOIN core.equipment e ON e.id = j.equipment_id
         WHERE j.id = @Id
