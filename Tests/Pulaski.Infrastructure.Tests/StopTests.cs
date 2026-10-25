@@ -169,6 +169,67 @@ public sealed class StopTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Stops_are_retimed_removed_and_undone_and_late_machine_data_is_trimmed_around_stops_entered_by_hand()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "RENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "RS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse filler = await db.SendAsync(new CreateEquipmentCommand(site.Id, "RF-" + _s, "Filler", null, "work_unit", "machine", true, false, false, null));
+        CreatedResponse jam = await db.SendAsync(new CreateReasonCodeCommand(site.Id, "utilization", "RJAM-" + _s, "Jam", false, 10, UtilizationClasses.Downtime));
+        var fillerNow = await QueryAsync<GetEquipmentQuery, EquipmentDto>(new GetEquipmentQuery(filler.Id));
+        await db.SendAsync(new SetEquipmentMachineDataCommand(filler.Id, fillerNow.Version, null, StateDerivations.OwnTags, null, 60));
+        CreatedResponse node = await db.SendAsync(new CreateEdgeNodeCommand(site.Id, "RG-" + _s, "Gateway", null));
+        CreatedResponse connection = await db.SendAsync(new CreateEdgeConnectionCommand(node.Id, "B", "Broker", EdgeProtocols.SparkplugB, new Dictionary<string, string> { ["host"] = "b" }));
+        CreatedResponse state = await db.SendAsync(new CreateEquipmentTagCommand(filler.Id, TagRoles.State, connection.Id, "P/N/RF:State", 1, 0, null));
+
+        var now = DateTimeOffset.UtcNow;
+        var t0 = now.AddMinutes(-90);
+        var stream = Guid.CreateVersion7();
+        EdgeSignalDto S(long seq, int minutes, decimal value) => new() { Sequence = seq, TagId = state.Id, OccurredAt = t0.AddMinutes(minutes), Value = value };
+        await db.SendAsync(new IngestEdgeSignalsCommand(node.Id, stream, null, [S(1, 0, 6), S(2, 5, 2), S(3, 15, 6)]));   // a 10-minute stop
+
+        async Task<List<DowntimeDto>> CurrentAsync() => [.. (await StopsAsync(new ListStopsQuery(new StopFilter(site.Id, filler.Id, t0, now.AddMinutes(1), false, true))))
+            .OrderBy(s => s.StartedAt)];
+        async Task<List<DowntimeDto>> AllAsync() => [.. await StopsAsync(new ListStopsQuery(new StopFilter(site.Id, filler.Id, t0, now.AddMinutes(1), false, true, true)))];
+        var machine = Assert.Single(await CurrentAsync());
+
+        // Change its times, then undo that: the machine's stop is back, as a copy, with its times.
+        var retimed = Assert.Single((await db.SendAsync(new RetimeStopCommand(machine.Id, machine.StartedAt, t0.AddMinutes(6), t0.AddMinutes(14), "Clock offset"))).Stops);
+        Assert.Equal(("retime", t0.AddMinutes(6), (DateTimeOffset?)t0.AddMinutes(14)), Single(await CurrentAsync()));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new RetimeStopCommand(retimed.Id, retimed.StartedAt, t0.AddMinutes(6), t0.AddMinutes(14), "Same")));
+        var restored = Assert.Single((await db.SendAsync(new UndoStopAdjustmentCommand(retimed.Id, retimed.StartedAt, "Offset was right after all"))).Stops);
+        Assert.Equal(("restore", t0.AddMinutes(5), (DateTimeOffset?)t0.AddMinutes(15)), Single(await CurrentAsync()));
+        Assert.Equal("Undone: Offset was right after all", (await AllAsync()).Single(s => s.Id == retimed.Id).SupersededNote);
+
+        // Split it, split one part again: undoing the first split is refused, since a part of it was adjusted since.
+        var parts = (await db.SendAsync(new SplitStopCommand(restored.Id, restored.StartedAt, t0.AddMinutes(10), "Jam, then waiting"))).Stops;
+        await db.SendAsync(new SplitStopCommand(parts[1].Id, parts[1].StartedAt, t0.AddMinutes(12), "Waiting had two causes"));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new UndoStopAdjustmentCommand(parts[0].Id, parts[0].StartedAt, "Back to one")));
+
+        // A stop entered by hand in error is removed; a machine's stop can't be.
+        var entered = Assert.Single((await db.SendAsync(new EnterStopCommand(filler.Id, t0.AddMinutes(30), t0.AddMinutes(40), jam.Id, "Power cut"))).Stops);
+        await db.SendAsync(new VoidStopCommand(entered.Id, entered.StartedAt, "Wrong machine"));
+        Assert.DoesNotContain(await CurrentAsync(), s => s.Id == entered.Id);
+        Assert.Equal("Removed: Wrong machine", (await AllAsync()).Single(s => s.Id == entered.Id).SupersededNote);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new VoidStopCommand(parts[0].Id, parts[0].StartedAt, "Not mine")));
+
+        // An outage entered by hand for 50–60; the edge's buffer then delivers the machine's own stop, 48–62: only the edges of it are kept.
+        await db.SendAsync(new EnterStopCommand(filler.Id, t0.AddMinutes(50), t0.AddMinutes(60), jam.Id, "Line down, edge offline"));
+        await db.SendAsync(new IngestEdgeSignalsCommand(node.Id, stream, null, [S(4, 48, 2), S(5, 62, 6)]));
+        var late = (await CurrentAsync()).Where(s => s.StartedAt >= t0.AddMinutes(45)).ToList();
+        Assert.Equal(
+            [("trim", t0.AddMinutes(48), (DateTimeOffset?)t0.AddMinutes(50)), ("manual", t0.AddMinutes(50), t0.AddMinutes(60)), ("trim", t0.AddMinutes(60), t0.AddMinutes(62))],
+            late.Select(s => (s.Source, s.StartedAt, s.EndedAt)));
+        Assert.Equal("Covered by a stop entered or adjusted by hand", (await AllAsync()).Single(s => s.Source == "machine" && s.StartedAt == t0.AddMinutes(48)).SupersededNote);
+
+        // Current stops never overlap.
+        var current = await CurrentAsync();
+        Assert.True(current.Zip(current.Skip(1)).All(p => p.First.EndedAt <= p.Second.StartedAt));
+
+        static (string Source, DateTimeOffset Start, DateTimeOffset? End) Single(List<DowntimeDto> stops) =>
+            Assert.Single(stops) is var s ? (s.Source, s.StartedAt, s.EndedAt) : default;
+    }
+
+    [Fact]
     public async Task More_than_a_thousand_stops_come_in_pages_that_neither_skip_nor_repeat()
     {
         CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "PENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));

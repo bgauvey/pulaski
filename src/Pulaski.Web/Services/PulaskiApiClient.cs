@@ -323,6 +323,15 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<StopsAdjustedResponse> MergeStopsAsync(MergeStopsRequest request, CancellationToken ct = default) =>
         SendAsync<StopsAdjustedResponse>(HttpMethod.Post, "api/machines/stops/merge", request, ct);
 
+    public Task<StopsAdjustedResponse> RetimeStopAsync(Guid id, RetimeStopRequest request, CancellationToken ct = default) =>
+        SendAsync<StopsAdjustedResponse>(HttpMethod.Post, $"api/machines/stops/{id}/retime", request, ct);
+
+    public Task<StopsAdjustedResponse> VoidStopAsync(Guid id, StopReasonedRequest request, CancellationToken ct = default) =>
+        SendAsync<StopsAdjustedResponse>(HttpMethod.Post, $"api/machines/stops/{id}/void", request, ct);
+
+    public Task<StopsAdjustedResponse> UndoStopAdjustmentAsync(Guid id, StopReasonedRequest request, CancellationToken ct = default) =>
+        SendAsync<StopsAdjustedResponse>(HttpMethod.Post, $"api/machines/stops/{id}/undo", request, ct);
+
     public Task<IReadOnlyList<ReasonCodeDto>> ListCodingReasonsAsync(Guid equipmentId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<ReasonCodeDto>>($"api/equipment/{equipmentId}/coding-reasons", ct);
 

@@ -94,7 +94,7 @@ public sealed record DowntimeDto
     public string? Comment { get; init; }
     public string? JobNumber { get; init; }
 
-    /// <summary>Where it came from (D-069): <c>machine</c>, <c>manual</c>, <c>split</c> or <c>merge</c>.</summary>
+    /// <summary>Where it came from (D-069, #68): <c>machine</c>, <c>manual</c>, <c>split</c>, <c>merge</c>, <c>retime</c>, <c>restore</c> or <c>trim</c>.</summary>
     public string Source { get; init; } = "machine";
 
     /// <summary>A split or merge: the stops it replaced.</summary>
@@ -106,6 +106,9 @@ public sealed record DowntimeDto
     /// <summary>When it was replaced by a split or merge; such a stop is history, not counted.</summary>
     public DateTimeOffset? SupersededAt { get; init; }
     public string? SupersededBy { get; init; }
+
+    /// <summary>Why, when nothing replaced it: removed (a stop entered in error), undone, or covered by a stop entered by hand (#68).</summary>
+    public string? SupersededNote { get; init; }
 }
 
 /// <summary>Codes a stop: the operator's reason, kept beside the one its stop code maps to (D-005).</summary>
@@ -133,6 +136,28 @@ public sealed record EnterStopRequest
 }
 
 /// <summary>Splits a closed stop in two at a time inside it (D-069). Both parts keep its reasons, to be coded on their own.</summary>
+/// <summary>New times for a closed stop (#68).</summary>
+public sealed record RetimeStopRequest
+{
+    /// <summary>The stop's start now, which locates it in history.</summary>
+    public DateTimeOffset StartedAt { get; init; }
+    public DateTimeOffset NewStartedAt { get; init; }
+    public DateTimeOffset NewEndedAt { get; init; }
+
+    /// <summary>Why; required.</summary>
+    public string? Comment { get; init; }
+}
+
+/// <summary>Removes a stop entered by hand, or undoes the adjustment that made a stop (#68).</summary>
+public sealed record StopReasonedRequest
+{
+    /// <summary>The stop's start, which locates it in history.</summary>
+    public DateTimeOffset StartedAt { get; init; }
+
+    /// <summary>Why; required.</summary>
+    public string? Comment { get; init; }
+}
+
 public sealed record SplitStopRequest
 {
     /// <summary>The stop's start, which locates it in history.</summary>

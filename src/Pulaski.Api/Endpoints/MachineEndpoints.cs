@@ -67,6 +67,22 @@ internal static class MachineEndpoints
             TypedResults.Ok(await handler.HandleAsync(new SplitStopCommand(id, request.StartedAt, request.At, request.Comment), ct)))
         .RequirePermission(Permissions.DowntimeAdjust, Site.Of(SiteOf.Downtime));
 
+        // Other times for a stop, removing one entered by hand, undoing an adjustment (#68): each replaces, never edits.
+        machines.MapPost("/stops/{id:guid}/retime", async Task<Ok<StopsAdjustedResponse>> (
+            Guid id, RetimeStopRequest request, ICommandHandler<RetimeStopCommand, StopsAdjustedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RetimeStopCommand(id, request.StartedAt, request.NewStartedAt, request.NewEndedAt, request.Comment), ct)))
+        .RequirePermission(Permissions.DowntimeAdjust, Site.Of(SiteOf.Downtime));
+
+        machines.MapPost("/stops/{id:guid}/void", async Task<Ok<StopsAdjustedResponse>> (
+            Guid id, StopReasonedRequest request, ICommandHandler<VoidStopCommand, StopsAdjustedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new VoidStopCommand(id, request.StartedAt, request.Comment), ct)))
+        .RequirePermission(Permissions.DowntimeAdjust, Site.Of(SiteOf.Downtime));
+
+        machines.MapPost("/stops/{id:guid}/undo", async Task<Ok<StopsAdjustedResponse>> (
+            Guid id, StopReasonedRequest request, ICommandHandler<UndoStopAdjustmentCommand, StopsAdjustedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new UndoStopAdjustmentCommand(id, request.StartedAt, request.Comment), ct)))
+        .RequirePermission(Permissions.DowntimeAdjust, Site.Of(SiteOf.Downtime));
+
         // The stops are all of one machine (the handler checks), so the first one's site is theirs.
         machines.MapPost("/stops/merge", async Task<Ok<StopsAdjustedResponse>> (
             MergeStopsRequest request, ICommandHandler<MergeStopsCommand, StopsAdjustedResponse> handler, CancellationToken ct) =>

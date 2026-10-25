@@ -39,7 +39,7 @@ public class StopHandlerTests
     }
 
     private Task<EdgeSignalBatchResponse> IngestAsync(Guid node, Guid stream, params EdgeSignalDto[] signals) =>
-        new IngestEdgeSignalsHandler(_f.Stores.UnitOfWork, Edge, new FixedRequestContext("edge"), _f.Ids, _f.Time)
+        new IngestEdgeSignalsHandler(_f.Stores.UnitOfWork, Edge, _f.Stores.Stops, _f.Stores.Events, _f.Events, new FixedRequestContext("edge"), _f.Ids, _f.Time)
             .HandleAsync(new IngestEdgeSignalsCommand(node, stream, null, signals), Ct);
 
     private static EdgeSignalDto S(long seq, Guid tag, int minutes, decimal value) => new() { Sequence = seq, TagId = tag, OccurredAt = T0.AddMinutes(minutes), Value = value };

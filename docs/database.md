@@ -1419,16 +1419,17 @@ Stops can also be entered by hand, split and merged (D-069). An adjusted stop is
 | `coded_by_user_id` | uuid | yes | The Pulaski user who coded it. |
 | `coded_at` | timestamptz | yes | When. |
 | `comment` | text | yes | The operator's comment. |
-| `source` | text | no | Where it came from: `machine` (ingest; default), `manual` (entered by hand), `split` (a part of a split stop) or `merge` (stops merged) (`downtime_source_ck`). |
-| `replaces_ids` | uuid[] | yes | A split or merge: the stops it replaced, in time order; set exactly then (`downtime_replaces_ck`). |
-| `adjusted_by` | text | yes | Who entered, split or merged it, as on `evt.event`; set exactly when `source` isn't `machine` (`downtime_adjusted_ck`), as are the next three. |
+| `source` | text | no | Where it came from: `machine` (ingest; default), `manual` (entered by hand), `split` (a part of a split stop), `merge` (stops merged), `retime` (other times given), `restore` (a replaced stop back after an undo) or `trim` (what is left of a late machine stop outside stops entered by hand) (`downtime_source_ck`, #68). |
+| `replaces_ids` | uuid[] | yes | A split, merge, retime, restore or trim: the stops it replaced (for a restore, the adjustment's stops it undid); set exactly then (`downtime_replaces_ck`). |
+| `adjusted_by` | text | yes | Who entered, split, merged, retimed or restored it (for a trim, the edge's user), as on `evt.event`; set exactly when `source` isn't `machine` (`downtime_adjusted_ck`), as are the next three. |
 | `adjusted_by_user_id` | uuid | yes | The Pulaski user who did. |
 | `adjusted_at` | timestamptz | yes | When. |
 | `adjustment_comment` | text | yes | Why. |
-| `superseded_at` | timestamptz | yes | When a split or merge replaced it; it is history, not counted or coded. Only a closed stop (`downtime_superseded_ck`). |
+| `superseded_at` | timestamptz | yes | When an adjustment replaced or removed it; it is history, not counted or coded. Only a closed stop (`downtime_superseded_ck`). |
 | `superseded_by` | text | yes | Who replaced it. |
+| `superseded_note` | text | yes | Why, when nothing replaced it: *Removed: …* (a stop entered by hand, voided), *Undone: …* (an adjustment's stops), or covered by a stop entered by hand (a trimmed machine stop) (#68). |
 
-A stop entered by hand records `packml_state` 0 (Undefined: no state was reported), unit mode 1, the run on the equipment at its start, and its reason as `operator_reason_code_id`. Parts of a split, and a merged stop, keep the (first) stop's codes, reasons, coding and run. None is a micro-stop.
+A stop entered by hand records `packml_state` 0 (Undefined: no state was reported), unit mode 1, the run on the equipment at its start, and its reason as `operator_reason_code_id`. Parts of a split, a merged stop and a retimed stop keep the (first) stop's codes, reasons, coding and run, and none is a micro-stop. A restored stop is a copy of the one an undo brought back, micro-stop flag included; a trimmed part is a micro-stop when shorter than the machine's threshold.
 
 ### ts.equipment_alarm — alarms and warnings · *In use (D-071)*
 

@@ -17,7 +17,7 @@ internal sealed class StopAdjustmentRepository(Persistence.DbSession session) : 
     private const string GetStops = """
         SELECT d.id, d.started_at, d.ended_at, d.equipment_id, d.run_id, d.packml_state::int AS packml_state, d.unit_mode::int AS unit_mode,
                d.plc_stop_reason, d.mapped_reason_code_id, d.operator_reason_code_id, d.comment, d.coded_by, d.coded_by_user_id, d.coded_at,
-               d.source, d.superseded_at IS NOT NULL AS is_superseded
+               d.source, d.superseded_at IS NOT NULL AS is_superseded, d.is_micro_stop, d.replaces_ids, d.adjusted_at
         FROM ts.downtime d
         WHERE (d.id, d.started_at) IN (SELECT * FROM unnest(@Ids::uuid[], @Starts::timestamptz[]))
         ORDER BY d.id
@@ -45,12 +45,12 @@ internal sealed class StopAdjustmentRepository(Persistence.DbSession session) : 
                                  operator_reason_code_id, comment, coded_by, coded_by_user_id, coded_at, is_micro_stop, source, replaces_ids,
                                  adjusted_by, adjusted_by_user_id, adjusted_at, adjustment_comment)
         VALUES (@Id, @StartedAt, @EndedAt, @EquipmentId, @RunId, @PackMlState, @UnitMode, @PlcStopReason, @MappedReasonCodeId,
-                @OperatorReasonCodeId, @Comment, @CodedBy, @CodedByUserId, @CodedAt, false, @Source, @ReplacesIds,
+                @OperatorReasonCodeId, @Comment, @CodedBy, @CodedByUserId, @CodedAt, @IsMicroStop, @Source, @ReplacesIds,
                 @AdjustedBy, @AdjustedByUserId, @AdjustedAt, @AdjustmentComment)
         """;
 
     private const string Supersede = """
-        UPDATE ts.downtime SET superseded_at = @At, superseded_by = @By
+        UPDATE ts.downtime SET superseded_at = @At, superseded_by = @By, superseded_note = @Note
         WHERE (id, started_at) IN (SELECT * FROM unnest(@Ids::uuid[], @Starts::timestamptz[])) AND superseded_at IS NULL
         """;
 
@@ -63,9 +63,7 @@ internal sealed class StopAdjustmentRepository(Persistence.DbSession session) : 
         [.. await session.QueryAsync<Guid>(EquipmentOfStops, Keys(stops), cancellationToken)];
 
     public async Task<IReadOnlyList<AdjustableStop>> GetStopsForUpdateAsync(IReadOnlyList<StopKeyDto> stops, CancellationToken cancellationToken) =>
-        [.. (await session.QueryAsync<StopRow>(GetStops, Keys(stops), cancellationToken)).Select(r => new AdjustableStop(
-            r.Id, r.StartedAt, r.EndedAt, r.EquipmentId, r.RunId, r.PackMlState, r.UnitMode, r.PlcStopReason, r.MappedReasonCodeId, r.OperatorReasonCodeId,
-            r.Comment, r.CodedBy, r.CodedByUserId, r.CodedAt, r.Source, r.IsSuperseded))];
+        [.. (await session.QueryAsync<StopRow>(GetStops, Keys(stops), cancellationToken)).Select(ToStop)];
 
     public async Task<IReadOnlyList<StopInterval>> ListCurrentStopsAsync(Guid equipmentId, DateTimeOffset start, DateTimeOffset until, CancellationToken cancellationToken) =>
         [.. (await session.QueryAsync<IntervalRow>(CurrentStops, new { Id = equipmentId, From = start, To = until }, cancellationToken))
@@ -91,6 +89,7 @@ internal sealed class StopAdjustmentRepository(Persistence.DbSession session) : 
             newStop.CodedBy,
             newStop.CodedByUserId,
             newStop.CodedAt,
+            newStop.IsMicroStop,
             newStop.Source,
             ReplacesIds = newStop.ReplacesIds?.ToArray(),
             newStop.AdjustedBy,
@@ -99,9 +98,49 @@ internal sealed class StopAdjustmentRepository(Persistence.DbSession session) : 
             newStop.AdjustmentComment,
         }, cancellationToken);
 
-    public Task SupersedeAsync(IReadOnlyList<StopKeyDto> stops, string supersededBy, DateTimeOffset at, CancellationToken cancellationToken) =>
-        session.ExecuteAsync(Supersede, new { Ids = stops.Select(s => s.Id).ToArray(), Starts = stops.Select(s => s.StartedAt).ToArray(), By = supersededBy, At = at },
-            cancellationToken);
+    public Task SupersedeAsync(IReadOnlyList<StopKeyDto> stops, string supersededBy, DateTimeOffset at, string? note, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(Supersede, new
+        {
+            Ids = stops.Select(s => s.Id).ToArray(),
+            Starts = stops.Select(s => s.StartedAt).ToArray(),
+            By = supersededBy,
+            At = at,
+            Note = note,
+        }, cancellationToken);
+
+    // One adjustment's stops: the same replaced stops, made at the same moment (both parts of a split). Locked, current or not.
+    private const string Adjustment = """
+        SELECT d.id, d.started_at, d.ended_at, d.equipment_id, d.run_id, d.packml_state::int AS packml_state, d.unit_mode::int AS unit_mode,
+               d.plc_stop_reason, d.mapped_reason_code_id, d.operator_reason_code_id, d.comment, d.coded_by, d.coded_by_user_id, d.coded_at,
+               d.source, d.superseded_at IS NOT NULL AS is_superseded, d.is_micro_stop, d.replaces_ids, d.adjusted_at
+        FROM ts.downtime d
+        WHERE d.equipment_id = @EquipmentId AND d.adjusted_at = @AdjustedAt AND d.replaces_ids @> @Ids AND d.replaces_ids <@ @Ids
+          AND d.started_at >= @AdjustedAt - interval '62 days'
+        ORDER BY d.id
+        FOR UPDATE
+        """;
+
+    private const string Replaced = """
+        SELECT d.id, d.started_at, d.ended_at, d.equipment_id, d.run_id, d.packml_state::int AS packml_state, d.unit_mode::int AS unit_mode,
+               d.plc_stop_reason, d.mapped_reason_code_id, d.operator_reason_code_id, d.comment, d.coded_by, d.coded_by_user_id, d.coded_at,
+               d.source, d.superseded_at IS NOT NULL AS is_superseded, d.is_micro_stop, d.replaces_ids, d.adjusted_at
+        FROM ts.downtime d
+        WHERE d.equipment_id = @EquipmentId AND d.id = ANY(@Ids) AND d.started_at >= @Near - interval '62 days'
+        ORDER BY d.id
+        FOR UPDATE
+        """;
+
+    public async Task<IReadOnlyList<AdjustableStop>> ListAdjustmentAsync(
+        Guid equipmentId, IReadOnlyList<Guid> replacesIds, DateTimeOffset adjustedAt, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<StopRow>(Adjustment, new { EquipmentId = equipmentId, Ids = replacesIds.ToArray(), AdjustedAt = adjustedAt }, cancellationToken))
+            .Select(ToStop)];
+
+    public async Task<IReadOnlyList<AdjustableStop>> GetReplacedForUpdateAsync(Guid equipmentId, IReadOnlyList<Guid> ids, DateTimeOffset near, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<StopRow>(Replaced, new { EquipmentId = equipmentId, Ids = ids.ToArray(), Near = near }, cancellationToken)).Select(ToStop)];
+
+    private static AdjustableStop ToStop(StopRow r) => new(
+        r.Id, r.StartedAt, r.EndedAt, r.EquipmentId, r.RunId, r.PackMlState, r.UnitMode, r.PlcStopReason, r.MappedReasonCodeId, r.OperatorReasonCodeId,
+        r.Comment, r.CodedBy, r.CodedByUserId, r.CodedAt, r.Source, r.IsSuperseded, r.IsMicroStop, r.ReplacesIds, r.AdjustedAt);
 
     private static object Keys(IReadOnlyList<StopKeyDto> stops) =>
         new { Ids = stops.Select(s => s.Id).ToArray(), Starts = stops.Select(s => s.StartedAt).ToArray() };
@@ -138,5 +177,8 @@ internal sealed class StopAdjustmentRepository(Persistence.DbSession session) : 
         public DateTimeOffset? CodedAt { get; init; }
         public string Source { get; init; } = StopSources.Machine;
         public bool IsSuperseded { get; init; }
+        public bool IsMicroStop { get; init; }
+        public Guid[]? ReplacesIds { get; init; }
+        public DateTimeOffset? AdjustedAt { get; init; }
     }
 }

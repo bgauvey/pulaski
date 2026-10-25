@@ -1509,7 +1509,14 @@ Issue #23. Stops came only from machine data (D-050), so an outage the machine d
 
 **Permission.** The new `downtime.adjust` (implies `machines.view`; Supervisor by default). Coding stays `downtime.code`. Endpoints `POST /api/machines/stops`, `/stops/{id}/split`, `/stops/merge`; Operate → Machines → Stops has **Enter a stop**, **Split** on a row, and ticks to merge.
 
-**Not done.** Changing a stop's times or voiding one entered in error (a split or a new entry does it for now); undoing an adjustment; adjusting a machine's state history (only stops); machine data that arrives late for time already covered by a stop entered by hand still opens its own stop, which may then overlap.
+**Not done.** Adjusting a machine's state history (only stops).
+
+**Follow-ups** (issue #68). Three more adjustments, each replacing and never editing, each an event. Every stop that is replaced without a replacement keeps why in `superseded_note`.
+- **Retime** (`RetimeStopCommand`, `retime` source): a closed, current stop within 31 days gets other times (in the past, within 31 days, overlapping no other current stop of the machine) and keeps all it held.
+- **Void** (`VoidStopCommand`): only a stop entered by hand. It is superseded with nothing in its place, noted *Removed: why*. A machine's own stop is split, merged or retimed instead.
+- **Undo** (`UndoStopAdjustmentCommand`, `restore` source): a split, merge or retime whose stops all are still current, and whose replaced stops would overlap no other current stop. Its stops are superseded (*Undone: why*) and copies of the stops it replaced come back with their reasons, coding and micro-stop flag. One adjustment's stops are found by the same `replaces_ids` and `adjusted_at`. Restoring by copy keeps history append-only. A stop entered by hand is removed, not undone.
+- **Late machine data** (`trim` source): when ingest closes a machine stop overlapping another current stop of the machine (one entered or adjusted by hand), the machine stop is superseded (*Covered by a stop entered or adjusted by hand*) and only the parts nothing covers are kept, micro-stops by the machine's threshold. Whoever entered the stop by hand knew more than the machine. An open stop is trimmed when it closes, so it may overlap until then.
+- Permission `downtime.adjust`; endpoints `POST /api/machines/stops/{id}/retime`, `/void`, `/undo`; buttons on Operate → Machines → Stops.
 
 ## Overview live figures (D-070, proposed)
 

@@ -16,7 +16,9 @@ public sealed record IngestEdgeSignalsCommand(Guid EdgeNodeId, Guid StreamId, st
 /// <summary>Records the addresses a node's connections have seen, so tags can be bound by picking them.</summary>
 public sealed record ReportEdgeMetricsCommand(Guid EdgeNodeId, IReadOnlyList<EdgeMetricReportDto> Metrics) : ICommand<int>;
 
-internal sealed class IngestEdgeSignalsHandler(IUnitOfWork unitOfWork, IEdgeRepository edge, IRequestContext request, IIdGenerator ids, TimeProvider time)
+internal sealed class IngestEdgeSignalsHandler(
+    IUnitOfWork unitOfWork, IEdgeRepository edge, IStopAdjustmentRepository adjustments, IEventLog eventLog, IEventFactory events, IRequestContext request,
+    IIdGenerator ids, TimeProvider time)
     : ICommandHandler<IngestEdgeSignalsCommand, EdgeSignalBatchResponse>
 {
     public const int MaxSignals = 5000;
@@ -214,6 +216,11 @@ internal sealed class IngestEdgeSignalsHandler(IUnitOfWork unitOfWork, IEdgeRepo
         await edge.InsertCountsAsync(counts, request.ActorId, cancellationToken);
         await edge.InsertStopsAsync([.. touchedStops.Values.Where(t => t.IsNew).Select(t => t.Stop)], cancellationToken);
         await edge.UpdateStopsAsync([.. touchedStops.Values.Where(t => !t.IsNew).Select(t => t.Stop)], cancellationToken);
+        foreach (var (stop, _) in touchedStops.Values.Where(t => t.Stop.EndedAt is not null))
+        {
+            await TrimAsync(stop, stopContexts.GetValueOrDefault(stop.EquipmentId)?.MicroStop ?? MachineProfileRules.DefaultMicroStop, cancellationToken);
+        }
+
         foreach (var equipment in changedLive)
         {
             await edge.UpsertLiveAsync(equipment, live[equipment]!, openStops[equipment], node.Id, time.GetUtcNow(), cancellationToken);
@@ -225,6 +232,42 @@ internal sealed class IngestEdgeSignalsHandler(IUnitOfWork unitOfWork, IEdgeRepo
         }
 
         return applied;
+    }
+
+    /// <summary>
+    /// Machine data that came in late over a stop entered or adjusted by hand (#68): a closed machine stop overlapping one of the machine's
+    /// other current stops is replaced by what is left of it outside them (none, when they cover it), so current stops still never overlap.
+    /// Whoever entered the stop by hand knew more than the machine. An open stop is trimmed when it closes.
+    /// </summary>
+    private async Task TrimAsync(MachineStop stop, TimeSpan microStop, CancellationToken cancellationToken)
+    {
+        var end = stop.EndedAt!.Value;
+        var others = (await adjustments.ListCurrentStopsAsync(stop.EquipmentId, stop.StartedAt, end, cancellationToken)).Where(c => c.Id != stop.Id).ToList();
+        if (StopAdjustments.FirstOverlap(stop.StartedAt, end, others) is null)
+        {
+            return;
+        }
+
+        var key = new StopKeyDto(stop.Id, stop.StartedAt);
+        var found = (await adjustments.GetStopsForUpdateAsync([key], cancellationToken)).Single();
+        var now = time.GetUtcNow();
+        var by = new Adjuster(request.ActorId, null, now, "Machine data came in for time a stop entered or adjusted by hand already covers; only the rest is kept.");
+        var parts = StopAdjustments.Uncovered(stop.StartedAt, end, others)
+            .Select(p => NewStop.From(found, ids.NewId(), p.Start, p.End, StopSources.Trim, [stop.Id], by) with { IsMicroStop = p.End - p.Start < microStop })
+            .ToList();
+        await adjustments.SupersedeAsync([key], request.ActorId, now, "Covered by a stop entered or adjusted by hand", cancellationToken);
+        foreach (var part in parts)
+        {
+            await adjustments.InsertAsync(part, cancellationToken);
+        }
+
+        await eventLog.AppendAsync(events.Create(EventTypes.DowntimeTrimmed, "equipment", stop.EquipmentId, new
+        {
+            Stop = key,
+            stop.EndedAt,
+            Covering = others.Where(o => o.Start < end && (o.End ?? DateTimeOffset.MaxValue) > stop.StartedAt).Select(o => new StopKeyDto(o.Id, o.Start)).ToList(),
+            Kept = parts.Select(p => new { p.Id, p.StartedAt, p.EndedAt }).ToList(),
+        }), cancellationToken);
     }
 
     /// <summary>The PackML state a raw value means: by the machine's profile, or PackML's own numbers without one.</summary>

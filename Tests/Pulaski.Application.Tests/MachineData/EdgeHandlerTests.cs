@@ -45,7 +45,7 @@ public class EdgeHandlerTests
         new CreateEquipmentTagHandler(_f.Stores.UnitOfWork, Edge, _f.Stores.Events, _f.Events, _f.Ids)
             .HandleAsync(new CreateEquipmentTagCommand(equipment ?? _packer, role, connection, address, scale, 0, rollover), Ct);
 
-    private IngestEdgeSignalsHandler Ingest() => new(_f.Stores.UnitOfWork, Edge, new FixedRequestContext("edge-gw-1"), _f.Ids, _f.Time);
+    private IngestEdgeSignalsHandler Ingest() => new(_f.Stores.UnitOfWork, Edge, _f.Stores.Stops, _f.Stores.Events, _f.Events, new FixedRequestContext("edge-gw-1"), _f.Ids, _f.Time);
 
     private static EdgeSignalDto Signal(long sequence, Guid tag, int minutes, decimal? value, bool good = true) =>
         new() { Sequence = sequence, TagId = tag, OccurredAt = T0.AddMinutes(minutes), Value = value, Good = good };

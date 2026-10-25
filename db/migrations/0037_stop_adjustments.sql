@@ -14,14 +14,21 @@ ALTER TABLE ts.downtime
     ADD COLUMN IF NOT EXISTS superseded_by text;
 
 ALTER TABLE ts.downtime
-    DROP CONSTRAINT IF EXISTS downtime_source_ck,
-    ADD CONSTRAINT downtime_source_ck CHECK (source IN ('machine', 'manual', 'split', 'merge')),
     DROP CONSTRAINT IF EXISTS downtime_adjusted_ck,
     ADD CONSTRAINT downtime_adjusted_ck CHECK ((source = 'machine') = (adjusted_at IS NULL)),
-    DROP CONSTRAINT IF EXISTS downtime_replaces_ck,
-    ADD CONSTRAINT downtime_replaces_ck CHECK ((source IN ('split', 'merge')) = (replaces_ids IS NOT NULL)),
     DROP CONSTRAINT IF EXISTS downtime_superseded_ck,
     ADD CONSTRAINT downtime_superseded_ck CHECK (superseded_at IS NULL OR ended_at IS NOT NULL);
+
+-- Added only when missing: 0039 widens both (#68), and running this again mustn't narrow them back.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'downtime_source_ck' AND conrelid = 'ts.downtime'::regclass) THEN
+        ALTER TABLE ts.downtime ADD CONSTRAINT downtime_source_ck CHECK (source IN ('machine', 'manual', 'split', 'merge'));
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'downtime_replaces_ck' AND conrelid = 'ts.downtime'::regclass) THEN
+        ALTER TABLE ts.downtime ADD CONSTRAINT downtime_replaces_ck CHECK ((source IN ('split', 'merge')) = (replaces_ids IS NOT NULL));
+    END IF;
+END $$;
 
 -- The uncoded queue leaves out replaced stops.
 DROP INDEX IF EXISTS ts.downtime_equipment_id_idx;

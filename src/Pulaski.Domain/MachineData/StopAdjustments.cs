@@ -14,6 +14,18 @@ public static class StopSources
 
     /// <summary>Stops merged into one.</summary>
     public const string Merge = "merge";
+
+    /// <summary>A stop given other times (#68).</summary>
+    public const string Retime = "retime";
+
+    /// <summary>A stop an adjustment had replaced, current again because the adjustment was undone (#68).</summary>
+    public const string Restore = "restore";
+
+    /// <summary>What is left of a machine stop that came in late over a stop entered or adjusted by hand (#68).</summary>
+    public const string Trim = "trim";
+
+    /// <summary>The adjustments that can be undone: their stops replaced others (a stop entered by hand is removed instead).</summary>
+    public static IReadOnlyList<string> Undoable { get; } = [Split, Merge, Retime];
 }
 
 /// <summary>A stop's time, as adjustments check it. An open stop has no end.</summary>
@@ -97,6 +109,105 @@ public static class StopAdjustments
         }
 
         return (start, end);
+    }
+
+    /// <summary>
+    /// New times for a stop (#68): it is closed, recent and current; the new times are in order, past, recent, and overlap none of the
+    /// machine's other current stops.
+    /// </summary>
+    public static void EnsureCanRetime(
+        StopInterval stop, bool isSuperseded, DateTimeOffset start, DateTimeOffset end, DateTimeOffset now, IEnumerable<StopInterval> current)
+    {
+        EnsureAdjustable(stop, isSuperseded, now);
+        if (start == stop.Start && end == stop.End)
+        {
+            throw new DomainRuleException("Those are the stop's times already.");
+        }
+
+        EnsureCanEnter(start, end, now, current.Where(c => c.Id != stop.Id));
+    }
+
+    /// <summary>Removing a stop (#68): only one entered by hand, still current; a machine's own stop is split, merged or retimed instead.</summary>
+    public static void EnsureCanVoid(StopInterval stop, string source, bool isSuperseded)
+    {
+        if (isSuperseded)
+        {
+            throw new DomainRuleException($"The stop at {stop.Start:u} has already been replaced or removed.");
+        }
+
+        if (source != StopSources.Manual)
+        {
+            throw new DomainRuleException("Only a stop entered by hand can be removed; change a machine's stop by splitting, merging or retiming it.");
+        }
+    }
+
+    /// <summary>
+    /// Undoing an adjustment (#68): a split, merge or retime whose stops are all still current (nothing has adjusted them since), restoring
+    /// the stops it replaced, which may overlap none of the machine's other current stops.
+    /// </summary>
+    /// <param name="source">The adjustment's kind, from one of its stops.</param>
+    /// <param name="results">Its stops, with whether each is superseded.</param>
+    /// <param name="replaced">The stops it replaced.</param>
+    /// <param name="current">The machine's current stops around them, its own stops among them.</param>
+    public static void EnsureCanUndo(
+        string source, IReadOnlyList<(StopInterval Stop, bool IsSuperseded)> results, IReadOnlyList<StopInterval> replaced, IEnumerable<StopInterval> current)
+    {
+        if (!StopSources.Undoable.Contains(source))
+        {
+            throw new DomainRuleException(source == StopSources.Manual
+                ? "A stop entered by hand is removed, not undone."
+                : "Only a split, a merge or a change of times can be undone.");
+        }
+
+        if (results.Any(r => r.IsSuperseded))
+        {
+            throw new DomainRuleException("Its stops have been adjusted since: undo that first.");
+        }
+
+        var own = results.Select(r => r.Stop.Id).ToHashSet();
+        var others = current.Where(c => !own.Contains(c.Id)).ToList();
+        foreach (var stop in replaced)
+        {
+            if (FirstOverlap(stop.Start, stop.End ?? stop.Start, others) is { } overlap)
+            {
+                throw new DomainRuleException($"The stop it replaced, from {stop.Start:u}, would overlap the stop from {overlap.Start:u}.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// The parts of <c>[start, end)</c> that none of <paramref name="covering"/> covers, in order (#68): what is left of a machine stop that
+    /// came in late over stops entered or adjusted by hand.
+    /// </summary>
+    public static IReadOnlyList<(DateTimeOffset Start, DateTimeOffset End)> Uncovered(DateTimeOffset start, DateTimeOffset end, IEnumerable<StopInterval> covering)
+    {
+        var parts = new List<(DateTimeOffset, DateTimeOffset)>();
+        var at = start;
+        foreach (var c in covering.Where(c => c.Start < end && (c.End ?? DateTimeOffset.MaxValue) > start).OrderBy(c => c.Start))
+        {
+            if (c.Start > at)
+            {
+                parts.Add((at, c.Start));
+            }
+
+            var coveredTo = c.End ?? DateTimeOffset.MaxValue;
+            if (coveredTo > at)
+            {
+                at = coveredTo;
+            }
+
+            if (at >= end)
+            {
+                return parts;
+            }
+        }
+
+        if (at < end)
+        {
+            parts.Add((at, end));
+        }
+
+        return parts;
     }
 
     private static void EnsureAdjustable(StopInterval stop, bool isSuperseded, DateTimeOffset now)

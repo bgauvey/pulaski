@@ -1676,19 +1676,20 @@ CREATE TABLE ts.downtime (
     comment                     text,
     unit_mode                   smallint NOT NULL DEFAULT 1,        -- the machine's unit mode when it stopped (D-050)
     coded_by                    text,                               -- who coded it, as on evt.event
-    source                      text NOT NULL DEFAULT 'machine',    -- machine | manual | split | merge (D-069)
-    replaces_ids                uuid[],                             -- split or merge: the stops it replaced
+    source                      text NOT NULL DEFAULT 'machine',    -- machine | manual | split | merge (D-069) | retime | restore | trim (#68)
+    replaces_ids                uuid[],                             -- split, merge, retime, restore or trim: the stops it replaced
     adjusted_by                 text,                               -- who entered, split or merged it, as on evt.event
     adjusted_by_user_id         uuid,
     adjusted_at                 timestamptz,
     adjustment_comment          text,                               -- why
     superseded_at               timestamptz,                        -- replaced by a split or merge; kept, never deleted
     superseded_by               text,
+    superseded_note             text,                               -- why, for a stop removed or undone (#68)
     PRIMARY KEY (id, started_at),
     CONSTRAINT downtime_span_ck CHECK (ended_at IS NULL OR ended_at >= started_at),
-    CONSTRAINT downtime_source_ck CHECK (source IN ('machine', 'manual', 'split', 'merge')),
+    CONSTRAINT downtime_source_ck CHECK (source IN ('machine', 'manual', 'split', 'merge', 'retime', 'restore', 'trim')),
     CONSTRAINT downtime_adjusted_ck CHECK ((source = 'machine') = (adjusted_at IS NULL)),
-    CONSTRAINT downtime_replaces_ck CHECK ((source IN ('split', 'merge')) = (replaces_ids IS NOT NULL)),
+    CONSTRAINT downtime_replaces_ck CHECK ((source IN ('split', 'merge', 'retime', 'restore', 'trim')) = (replaces_ids IS NOT NULL)),
     CONSTRAINT downtime_superseded_ck CHECK (superseded_at IS NULL OR ended_at IS NOT NULL)
 ) PARTITION BY RANGE (started_at);
 CREATE INDEX ON ts.downtime (equipment_id, started_at);
@@ -2144,7 +2145,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0035_partial_replacements'),
     ('0036_material_connections'),
     ('0037_stop_adjustments'),
-    ('0038_alarms_process_values');
+    ('0038_alarms_process_values'),
+    ('0039_stop_adjustment_followups');
 
 -- =====================================================================
 -- 17. SEED DATA

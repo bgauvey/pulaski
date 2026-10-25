@@ -246,7 +246,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Stop adjustments (D-069, proposed): enter (`EnterStopCommand`), split, merge stops; never edit: the old rows get `superseded_at`/`_by`, new
   `ts.downtime` rows carry `source` (machine/manual/split/merge), `replaces_ids`, `adjusted_*`. Every reader of stops (OEE, list, uncoded)
   filters `superseded_at IS NULL`; current stops never overlap (`StopAdjustments`). Closed stops only, ≤ 31 days; lock equipment
-  (`FOR NO KEY UPDATE`, as ingest) then stops in id order. Permission `downtime.adjust` (Supervisor).
+  (`FOR NO KEY UPDATE`, as ingest) then stops in id order. Permission `downtime.adjust` (Supervisor). Follow-ups (#68): retime (`retime`),
+  void (manual stops only, `superseded_note`), undo (split/merge/retime whose stops are all current → `restore` copies of the replaced),
+  and ingest trims a closed machine stop around stops entered by hand (`trim`, `StopAdjustments.Uncovered`).
 - Overview live figures (D-070, proposed): `GET /overview?siteId=` (`GetOverviewQuery`, `overview.view`) computes on read each line's
   state (`GetMachineStatusHandler`) and its current shift so far (`OverviewFigures.Scope`, else the site day): reported output/scrap,
   down time by reason and the state lane (`EquipmentUses`, shared with the OEE report), uncoded stops; plus held lots. The strip spans
