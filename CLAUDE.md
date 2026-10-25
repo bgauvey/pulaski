@@ -223,6 +223,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`AllocationUse`), into another warns. `LotRecommendation` (FEFO, then FIFO; only available, unexpired at need time, free stock; every
   pick and exclusion explained); `AllocationPlanner` shared by `GetJobAllocationsQuery` and the commands. Refresh is on demand (job or
   site); locks job → lots → allocations in id order. Permission `lot.allocate`.
+- Line batch sizes (D-065, proposed): `core.equipment_capability.batch_size` (null = the material's; only for a batch material; rule and
+  tolerance stay the material's, `Batching.OnLine`). `ILineBatchSizes` (in-transaction) feeds order creation (`Batching.ShareBySize`: whole
+  batches of each line's size adding up exactly, else refused with the nearest quantities), job create/move/assign/start-on-line checks
+  (`BatchPlanning`), replacements, and reports/partial batches (`ProductionReporter`). Department jobs use the material's size.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

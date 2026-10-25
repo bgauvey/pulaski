@@ -36,9 +36,15 @@ public static class ProcessJobPlan
     /// For a material made in batches (D-036), the batch size in the order's unit: each share is then a whole
     /// number of batches, largest remainders first, and the quantity must be whole batches already.
     /// </param>
-    /// <exception cref="DomainRuleException">The definition is not releasable, or a share rounds to nothing.</exception>
+    /// <param name="lineBatchQuantities">
+    /// Equipment with a batch size of its own for the material (D-065), in the order's unit; the rest use <paramref name="batchQuantity"/>.
+    /// Each share is then whole batches of its own equipment's size, adding up exactly.
+    /// </param>
+    /// <param name="unitCode">The order's unit, for messages.</param>
+    /// <exception cref="DomainRuleException">The definition is not releasable, or a share rounds to nothing, or the batches don't add up.</exception>
     public static IReadOnlyList<OperationJob> For(
-        ProcessDefinition definition, string orderNumber, decimal quantity, DateTimeOffset start, decimal? batchQuantity = null)
+        ProcessDefinition definition, string orderNumber, decimal quantity, DateTimeOffset start, decimal? batchQuantity = null,
+        IReadOnlyDictionary<Guid, decimal>? lineBatchQuantities = null, string unitCode = "")
     {
         if (quantity <= 0)
         {
@@ -60,8 +66,9 @@ public static class ProcessJobPlan
                 .Aggregate(start, (a, b) => b > a ? b : a);
             earliest[op.Id] = at;
 
-            var batchShares = batchQuantity is { } size
-                ? Batching.Share((int)Math.Round(quantity / size), [.. op.Equipment.Select(e => e.SharePercent)])
+            decimal SizeOf(Guid equipmentId) => lineBatchQuantities?.GetValueOrDefault(equipmentId) is { } own and > 0 ? own : batchQuantity!.Value;
+            var batchShares = batchQuantity is not null
+                ? Batching.ShareBySize(quantity, [.. op.Equipment.Select(e => (e.SharePercent, SizeOf(e.EquipmentId)))], $"Work order {orderNumber}, operation {op.Number}", unitCode)
                 : null;
             var remaining = quantity;
             for (var i = 0; i < op.Equipment.Count; i++)
@@ -70,7 +77,7 @@ public static class ProcessJobPlan
                 var qty = last
                     ? remaining
                     : batchShares is not null
-                        ? Math.Round(batchShares[i] * batchQuantity!.Value, QuantityScale)
+                        ? Math.Round(batchShares[i] * SizeOf(op.Equipment[i].EquipmentId), QuantityScale)
                         : Math.Round(quantity * op.Equipment[i].SharePercent / 100m, QuantityScale, MidpointRounding.ToZero);
                 if (qty <= 0)
                 {

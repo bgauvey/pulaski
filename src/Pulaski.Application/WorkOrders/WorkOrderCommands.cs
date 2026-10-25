@@ -49,7 +49,8 @@ internal sealed class CreateWorkOrderHandler(
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    TimeProvider timeProvider) : ICommandHandler<CreateWorkOrderCommand, CreatedResponse>
+    TimeProvider timeProvider,
+    Materials.ILineBatchSizes? lineBatches = null) : ICommandHandler<CreateWorkOrderCommand, CreatedResponse>
 {
     public const int NotesMaxLength = 4000;
 
@@ -99,18 +100,37 @@ internal sealed class CreateWorkOrderHandler(
                 $"{converter.Code(command.UomId)} doesn't convert to {converter.Code(output.BaseUomId)}, the base unit of {output.Code}; enter the quantity in another unit, or add a conversion for {output.Code} on the Units page.");
         }
 
-        // A material made in batches is ordered in whole batches, and each line gets whole batches of it (D-036).
+        // A material made in batches is ordered in whole batches, and each line gets whole batches of it (D-036), of its own size
+        // where its capability gives one (D-065).
         decimal? batchQuantity = null;
+        var routeEquipment = route.Version.Definition.Operations.SelectMany(o => o.Equipment.Select(e => e.EquipmentId)).Distinct().ToList();
+        var sizeAt = timeProvider.GetUtcNow();
+        async Task<IReadOnlyDictionary<Guid, decimal>> LineSizesAsync() =>
+            output.Batching is null || lineBatches is null ? new Dictionary<Guid, decimal>() : await lineBatches.GetAsync(output.Id, routeEquipment, sizeAt, cancellationToken);
+        var lineSizes = await LineSizesAsync();
         if (output.Batching is { } batching)
         {
-            batching.EnsureWholeBatches(
-                converter.Convert(command.PlannedQty, command.UomId, output.BaseUomId), $"Work order {orderNumber}", converter.Code(output.BaseUomId));
+            if (lineSizes.Count == 0)
+            {
+                batching.EnsureWholeBatches(
+                    converter.Convert(command.PlannedQty, command.UomId, output.BaseUomId), $"Work order {orderNumber}", converter.Code(output.BaseUomId));
+            }
+
             batchQuantity = converter.Convert(batching.Size, output.BaseUomId, command.UomId);
         }
 
-        var plan = ProcessJobPlan.For(route.Version.Definition, orderNumber, command.PlannedQty, command.PlannedStart, batchQuantity);
+        var plan = ProcessJobPlan.For(
+            route.Version.Definition, orderNumber, command.PlannedQty, command.PlannedStart, batchQuantity,
+            lineSizes.ToDictionary(s => s.Key, s => converter.Convert(s.Value, output.BaseUomId, command.UomId)), converter.Code(command.UomId));
         var lines = (await scheduling.LockLinesAsync([.. plan.Select(j => j.EquipmentId).Distinct()], cancellationToken))
             .ToDictionary(l => l.Id);
+
+        // Under the lines' lock, their batch sizes must still be the ones the plan used (capabilities change with the line locked).
+        var lockedSizes = await LineSizesAsync();
+        if (lockedSizes.Count != lineSizes.Count || lockedSizes.Any(s => !lineSizes.TryGetValue(s.Key, out var size) || size != s.Value))
+        {
+            throw new ConflictException("A line's batch size changed while the order was being made. Try again.");
+        }
 
         // Under the lock, the route must still be the released one.
         var locked = await processes.GetReleasedAsync(process.Id, lockVersion: true, cancellationToken);

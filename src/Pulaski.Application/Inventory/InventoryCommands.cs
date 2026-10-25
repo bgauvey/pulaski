@@ -569,12 +569,13 @@ internal sealed class ProduceLotHandler(
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    TimeProvider timeProvider) : ICommandHandler<ProduceLotCommand, LotTransactionResponse>
+    TimeProvider timeProvider,
+    Materials.ILineBatchSizes? lineBatches = null) : ICommandHandler<ProduceLotCommand, LotTransactionResponse>
 {
     /// <summary>Production is a report of good output, so it goes through the same run and rate checks (D-035).</summary>
     public async Task<LotTransactionResponse> HandleAsync(ProduceLotCommand command, CancellationToken cancellationToken)
     {
-        var report = await new ReportProductionHandler(unitOfWork, inventory, units, execution, eventLog, events, ids, timeProvider).HandleAsync(
+        var report = await new ReportProductionHandler(unitOfWork, inventory, units, execution, eventLog, events, ids, timeProvider, lineBatches).HandleAsync(
             new ReportProductionCommand(
                 command.JobId, command.RunId, command.Quantity, 0m, command.UomId, null, command.LocationId, command.LotNumber, command.ExpiresAt, command.Comment)
             {

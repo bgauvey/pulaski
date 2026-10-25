@@ -1,6 +1,7 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Inventory;
+using Pulaski.Application.Materials;
 using Pulaski.Application.Scheduling;
 using Pulaski.Application.Units;
 using Pulaski.Application.WorkOrders;
@@ -168,7 +169,10 @@ internal sealed class StartJobHandler(
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    TimeProvider timeProvider) : ICommandHandler<StartJobCommand, ExecutionResponse>
+    TimeProvider timeProvider,
+    Boms.IBomRepository? boms = null,
+    Units.IUnitRepository? units = null,
+    ILineBatchSizes? lineBatches = null) : ICommandHandler<StartJobCommand, ExecutionResponse>
 {
     public async Task<ExecutionResponse> HandleAsync(StartJobCommand command, CancellationToken cancellationToken)
     {
@@ -273,6 +277,13 @@ internal sealed class StartJobHandler(
         }
 
         await SchedulingRules.EnsureEligibleAsync(scheduling, line, job.MaterialId!.Value, now, cancellationToken);
+
+        // The line it starts on takes it only in whole batches of its own size (D-065).
+        if (boms is not null && units is not null && job.PlannedQty is { } quantity && job.UomId is { } uomId)
+        {
+            await BatchPlanning.EnsureWholeAsync(boms, units, job.MaterialId!.Value, quantity, uomId, $"Job {job.JobNumber} on {line.Code}", lineBatches, line.Id, now, cancellationToken);
+        }
+
         var assigned = job.Assign(target, targetIsGroup: false, await SchedulingRules.RankAsync(scheduling, target, null, job.Id, now, cancellationToken));
         var envelope = events.Create(
             EventTypes.JobAssigned, "job", job.Id,
@@ -336,7 +347,8 @@ internal sealed class PauseJobHandler(
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    TimeProvider timeProvider) : ICommandHandler<PauseJobCommand, ExecutionResponse>
+    TimeProvider timeProvider,
+    ILineBatchSizes? lineBatches = null) : ICommandHandler<PauseJobCommand, ExecutionResponse>
 {
     public async Task<ExecutionResponse> HandleAsync(PauseJobCommand command, CancellationToken cancellationToken)
     {
@@ -363,7 +375,7 @@ internal sealed class PauseJobHandler(
         if (command.PartialBatch is { } partial)
         {
             notes.AddRange(await ExecutionWrites.ReportPartialAsync(
-                new ProductionReporter(inventory, units, execution, eventLog, events, ids), job, run, partial, comment, now, cancellationToken));
+                new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches), job, run, partial, comment, now, cancellationToken));
             run = (await execution.GetRunForUpdateAsync(run.Id, cancellationToken))!;
         }
 
@@ -390,7 +402,8 @@ internal sealed class CompleteJobHandler(
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    TimeProvider timeProvider) : ICommandHandler<CompleteJobCommand, ExecutionResponse>
+    TimeProvider timeProvider,
+    ILineBatchSizes? lineBatches = null) : ICommandHandler<CompleteJobCommand, ExecutionResponse>
 {
     public async Task<ExecutionResponse> HandleAsync(CompleteJobCommand command, CancellationToken cancellationToken)
     {
@@ -421,7 +434,7 @@ internal sealed class CompleteJobHandler(
             }
 
             notes.AddRange(await ExecutionWrites.ReportPartialAsync(
-                new ProductionReporter(inventory, units, execution, eventLog, events, ids), job, run, partial, comment, now, cancellationToken));
+                new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches), job, run, partial, comment, now, cancellationToken));
             run = await execution.GetRunForUpdateAsync(run.Id, cancellationToken);
         }
 

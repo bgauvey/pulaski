@@ -828,6 +828,8 @@ What each shift made, for a supervisor's shift report or the morning meeting.
 A material with a **batch size** (set on its [material page](#batches)) is planned and reported in whole batches.
 
 - **Orders and jobs are whole batches.** With a batch size of 50 kg, an order for 125 kg is refused (*125 kg is 2.5 batches of 50 kg… Plan 100 or 150 kg*). A process that shares an order between lines gives each line whole batches.
+- **Each line's own size.** Where a line has a [batch size of its own](#batches), its jobs are whole batches of that size, its reports are batches of that size, and a partial batch there is less than one of them. An order shared between lines of different sizes gives each line whole batches of its own size, as near its share as possible and adding up exactly; when no split adds up, the order is refused with the nearest quantities that do (*Plan 1000 or 1100 kg, or change the shares*).
+- **Moving a job.** A job moves, or is assigned from a department, only to a line where it is whole batches of that line's size; otherwise the move is refused with the size and the nearest whole quantities. A job planned to a department uses the material's size until a line is chosen. Changing a line's size leaves its open jobs as they are; new jobs, moves and reports use the new size.
 - **Report batch by batch.** The report form lists **Good batches**, each prefilled with the batch size: change a weight if it differs, and click **Add batch** for each more. Rejected batches go under **Rejected batches**, with a scrap reason. Each good batch becomes its own lot.
 - **How close a batch must be.** Under the **near** rule a batch may differ from the batch size by the tolerance (2% by default: 49 to 51 kg for 50 kg), so 49.3 kg is a batch and 40 kg isn't. Under the **exact** rule, the default for finished goods, every batch is exactly the batch size.
 
@@ -1271,7 +1273,7 @@ The **Where it can run** table lists each line that can run the material: its id
 1. Click **Add line**.
 2. Choose the **Line**. Only active lines that run jobs are offered; a department gets its lines' capabilities.
 3. Enter the **Ideal rate, per hour**, the best the line can do, and its **Rate unit**. The unit must convert to the material's base unit; for metres of profile on a line rated in kilograms, add a [conversion](#6-units-and-conversions) first.
-4. Optionally enter the **Standard changeover** in minutes (used when no changeover rule matches), the **Crew size**, and tick **Preferred line**.
+4. Optionally enter the **Standard changeover** in minutes (used when no changeover rule matches), the **Crew size**, and tick **Preferred line**. For a material made in batches, enter the **Batch size on this line** when the line's equipment makes a different amount at a time (a 200 kg mixer next to the 50 kg ones); leave it blank for the material's batch size.
 5. **Starts** is today unless you pick another day. **Ends on** is optional: leave it empty for a capability with no end.
 6. Click **Add**. If the line has no planning rate for the material yet, the ideal rate becomes it, and a note says so.
 
@@ -1390,6 +1392,7 @@ Set up which lines can run which materials, and how fast, for many materials at 
    | `ideal_rate`, `rate_unit` | The ideal rate per hour and its unit, such as `900` and `m`. Required, except on a row that ends a capability. |
    | `changeover_minutes`, `crew_size` | The standard changeover in minutes and the standard crew. |
    | `preferred` | `yes` if it is the preferred line for the material. |
+   | `batch_size` | The line's own batch size in the material's base unit, for a material made in batches; blank for the material's. |
    | `active` | `no` ends the capability now. |
 
 3. Click **Choose File** and pick the file. Each row shows **Create** (a new capability from now), **Update** (with what changes), **Unchanged** or **Error**, with what happens to the line's planning rate.
@@ -1399,7 +1402,7 @@ Set up which lines can run which materials, and how fast, for many materials at 
 
 - **Which capability a row is.** The one for that material and line in effect now. If there is one, its values change in place and its period stays. If there is none, a new one starts now with no end. `active` = `no` ends the one in effect now. Capabilities that start later or ended earlier are left alone, and nothing is ever deleted. To plan a future period, use the material page.
 - **The planning rate follows** as on the material page: a new capability sets it from the ideal rate when the line has none, and a new ideal rate recalculates it while it is still based on the ideal rate. A modified rate stays in force.
-- **Left out or blank.** A column the file doesn't have keeps what the capability has. A blank `changeover_minutes` or `crew_size` clears it.
+- **Left out or blank.** A column the file doesn't have keeps what the capability has. A blank `changeover_minutes`, `crew_size` or `batch_size` clears it.
 - **The rules are the material page's:** the line must be active and run jobs, the material active, and the rate's unit must convert to the material's base unit. A material and line can appear only once in a file. Every line must be at a site where you may maintain processes.
 - **Numbers** use a decimal point and no thousands separator (`1500.5`), so `1,5` from a spreadsheet in another language is an error rather than 15.
 - **All or nothing**, with a check first, as for materials. Each change is recorded as `pulaski.capability.added.v1`, `…changed.v1` or `…ended.v1` with the reason *CSV import*. For scripts: `POST /api/capabilities/import/csv` (`?dryRun=true` to check) and `GET /api/capabilities/import/template`.
@@ -1413,6 +1416,8 @@ A material made in batches, such as a dry blend mixed 50 kg at a time, has a bat
 3. For the near rule, set the **Batch tolerance** (2% by default).
 
 From then on orders and jobs must be whole batches and production is reported batch by batch (see [Materials made in batches](#materials-made-in-batches)). Orders already made keep their quantity; Pulaski names any open order that is no longer whole batches.
+
+**A line with its own batch size.** Equipment of different sizes can make the same material: give a line its own batch size on its row under [Where it can run](#where-it-can-run-capabilities-and-rates). Only the size changes; the batch rule and tolerance stay the material's, because they describe the product. A line can have its own size only once the material has one.
 
 ### What can change, and when
 
@@ -2041,7 +2046,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** stops can't be split, merged or entered by hand. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. The Overview still shows no machine state. Only Sparkplug B is read (no OPC UA or EtherNet/IP yet), alarms, warnings and process values aren't recorded, and Pulaski Edge runs as a console program or container, not yet as a Windows service.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
-- **Batches:** the batch size is per material, not per line (a 50 kg mixer next to a 200 kg one isn't modelled). A replacement job is always rounded up to whole batches; to make fewer, cancel it. Orders from the ERP aren't imported yet, so there is no rule yet for an ERP order that isn't whole batches. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
+- **Batches:** a line's own batch size changes only the size; the tolerance stays the material's. The order form's batch hint shows the material's size, not each line's. A replacement job is always rounded up to whole batches; to make fewer, cancel it. Orders from the ERP aren't imported yet, so there is no rule yet for an ERP order that isn't whole batches. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
 - **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, and scanning 2D codes or supplier barcodes beyond reading their text. Moves, holds, splits, merges, shipments and counts can't be back-dated (only quantity movements can, by up to 31 days), and a lot's location and status on a past date aren't reconstructed. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
 - **Reversing:** moves, holds and shipments only when they are the lot's latest movement; corrections of lot details, packing and unpacking aren't reversed (put them right with another movement). A lot that joined a balance where lots mix can't be taken back out as itself. Reversal is one movement at a time: there is no undoing a chain of dependent movements in one step.

@@ -18,6 +18,9 @@ public sealed record CapabilityImportRow
     public Supplied<decimal?>? CrewSize { get; init; }
     public Supplied<bool>? IsPreferred { get; init; }
 
+    /// <summary>The line's own batch size (D-065); blank for the material's.</summary>
+    public Supplied<decimal?>? BatchSize { get; init; }
+
     /// <summary>False ends the capability in effect now; true or left out keeps or adds one.</summary>
     public Supplied<bool>? IsActive { get; init; }
     public IReadOnlyList<string> Problems { get; init; } = [];
@@ -45,6 +48,7 @@ public static class CapabilityCsv
         ["changeover_minutes"] = ["changeover", "standard_changeover_minutes"],
         ["crew_size"] = ["crew", "standard_crew_size"],
         ["preferred"] = ["is_preferred"],
+        ["batch_size"] = ["line_batch_size"],
         ["active"] = ["is_active"],
     };
 
@@ -168,6 +172,7 @@ public static class CapabilityCsv
             ChangeoverMinutes = changeover,
             CrewSize = Cell("crew_size") is { } crew ? new(Number(crew, "crew_size")) : null,
             IsPreferred = Flag("preferred"),
+            BatchSize = Cell("batch_size") is { } batch ? new(batch.Length == 0 ? null : Number(batch, "batch_size")) : null,
             IsActive = Flag("active"),
             Problems = problems,
         };

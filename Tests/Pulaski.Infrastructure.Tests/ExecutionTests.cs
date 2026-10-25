@@ -270,4 +270,49 @@ public sealed class ExecutionTests(DatabaseFixture db)
         var detail = await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(job));
         Assert.Equal(("approved", 50m, true), (Assert.Single(detail.PartialBatches).Status, detail.BatchSize!.Value, detail.Runs[0].HasPartialBatch));
     }
+
+    [Fact]
+    public async Task A_line_with_its_own_batch_size_reports_in_its_batches_and_takes_only_whole_ones()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "LE-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "LS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse big = await db.SendAsync(new CreateEquipmentCommand(site.Id, "BIG-" + _s, "Big mixer", null, "work_center", "production_line", true, true, false, null));
+        CreatedResponse staging = await db.SendAsync(new CreateEquipmentCommand(site.Id, "LST-" + _s, "Staging", null, "work_center", "storage_zone", false, false, true, null));
+        CreatedResponse material = await db.SendAsync(new CreateMaterialCommand("BL-" + _s, "Blend", null, "intermediate", null, db.UomId, true, null));
+
+        // Not made in batches yet: a line can't have a batch size of its own.
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(
+            new AddCapabilityCommand(material.Id, big.Id, 400m, db.UomId, null, null, false, DateTimeOffset.UtcNow.AddDays(-1), null, BatchSize: 200m)));
+        var materialVersion = await ScalarAsync<long>("SELECT xmin::text::bigint FROM core.material WHERE id = @Id", new { Id = material.Id });
+        await db.SendAsync(new SetBatchingCommand(material.Id, materialVersion, 50m, 2m, null));
+        var capability = await db.SendAsync(
+            new AddCapabilityCommand(material.Id, big.Id, 400m, db.UomId, null, null, false, DateTimeOffset.UtcNow.AddDays(-1), null, BatchSize: 200m));
+        Assert.Contains(capability.Notes, n => n.Contains("batches of 200", StringComparison.Ordinal));
+
+        Guid order = Guid.CreateVersion7(), job = Guid.CreateVersion7();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO core.work_order (id, site_id, order_number, material_id, planned_qty, uom_id, status)
+                VALUES (@order, @site, 'LWO-' || @s, @material, 400, @uom, 'firmed');
+                INSERT INTO core.job (id, site_id, work_order_id, job_number, job_type, equipment_id, material_id, planned_qty, uom_id, status)
+                VALUES (@job, @site, @order, 'LJ-' || @s, 'production', @big, @material, 400, @uom, 'firmed');
+                """,
+                new { s = _s, big = big.Id, material = material.Id, uom = db.UomId, order, site = site.Id, job });
+        }
+
+        var started = await db.SendAsync(new StartJobCommand(job, await VersionAsync(job)));
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE core.job_run SET started_at = started_at - interval '1 hour' WHERE id = @Id", new { Id = started.RunId });
+        }
+
+        // The material's 50 isn't a batch on this line; its 200 is.
+        await Assert.ThrowsAsync<DomainRuleException>(() =>
+            db.SendAsync(new ReportProductionCommand(job, null, 0m, 0m, null, null, staging.Id) { GoodBatches = [50m] }));
+        var reported = await db.SendAsync(new ReportProductionCommand(job, null, 0m, 0m, null, null, staging.Id) { GoodBatches = [200m] });
+        Assert.Single(reported.Lots);
+        Assert.Equal(200m, (await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(job))).BatchSize!.Value);
+    }
 }

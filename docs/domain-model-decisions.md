@@ -618,7 +618,7 @@ Some materials are made a fixed amount at a time: a 50 kg mix, a 200 l tank. Pul
 
 `PUT /api/materials/{id}/batching` sets them; open orders keep their quantity, and the answer names those that are no longer whole batches.
 
-**Planning in whole batches.** A work order's quantity, converted to the base unit, must be a whole number of batches; the refusal names the two nearest. Shares between equipment (D-024) are whole batches each, largest remainders first, at least one batch per share. A job added by hand is whole batches. A cancelled job's replacement (D-019) rounds what is left **up** to whole batches, to meet the order.
+**Planning in whole batches.** A work order's quantity, converted to the base unit, must be a whole number of batches; the refusal names the two nearest. Shares between equipment (D-024) are whole batches each, largest remainders first, at least one batch per share. A job added by hand is whole batches. A cancelled job's replacement (D-019) rounds what is left **up** to whole batches, to meet the order. Lines may have their own batch size (D-065).
 
 **Reporting batch by batch (amends D-035).** For a batch material a report carries `goodBatches` and `scrapBatches` (each batch's weight in the base unit) instead of quantities; each must be a batch under the rule. Each good batch is its own lot. The rate check and counts work on the total, as before.
 
@@ -631,7 +631,7 @@ Some materials are made a fixed amount at a time: a 50 kg mix, a 200 l tank. Pul
 - **Locks.** Approve and reject lock the job, the partial batch, its run, then its lot, the reporting order (D-027), so they serialize with reports.
 - **Events:** `pulaski.material.batching_set.v1`, `pulaski.partial_batch.reported.v1`, `…approved.v1`, `…rejected.v1`, with the lot's own movements.
 
-**Not yet:** a batch size per line (a 50 kg mixer next to a 200 kg one), a rule for ERP orders that aren't whole batches (orders aren't imported yet), choosing to round a replacement down, and permissions for who may approve (settled by D-037: Supervisor or Quality, never whoever reported it).
+**Not yet:** a rule for ERP orders that aren't whole batches (orders aren't imported yet), choosing to round a replacement down, and permissions for who may approve (settled by D-037: Supervisor or Quality, never whoever reported it).
 
 ## Users, roles and permissions (D-037, proposed)
 
@@ -1413,6 +1413,22 @@ Issue #32. Stock couldn't be set aside for a job, and nothing suggested which lo
 Events: `pulaski.lot.allocated.v1`, `…allocation_released.v1`, `…allocation_changed.v1`.
 
 **Not done.** Automatic refresh on stock or schedule changes, preference for locations near the line or whole lots, picking lists, allocating substitutions, hard reservations.
+
+## Batch sizes per line (D-065, proposed)
+
+Issue #29. A material had one batch size, so a 200 kg mixer beside 50 kg ones couldn't be modelled.
+
+**Where.** `core.equipment_capability.batch_size`: the line's own batch size for the material in its base unit, null for the material's. It is versioned with the capability's period, edited on the material page and in the capabilities CSV (`batch_size`). It is allowed only for a material made in batches. Only the size changes: the rule and tolerance stay the material's (`Batching.OnLine`), because they describe the product.
+
+**Precedence.** The capability in effect on the job's line, else the material. A group (department) has no capability, so its jobs use the material's size until a line is chosen. `ILineBatchSizes` reads the sizes in the command's transaction, after the lines are locked (capabilities change with the line locked, D-034).
+
+**Planning.**
+- **Order creation.** Each operation's equipment shares the order in whole batches of its own size (`Batching.ShareBySize`): it searches counts near each share's target, at least one each, for an exact sum, taking the closest to the shares. With one size for all, it is `Share` as before. When nothing adds up, the order is refused naming the nearest quantities below and above. The sizes are read again under the lines' lock, and a change in between is a conflict.
+- **Jobs.** A job added by hand is whole batches of its line's size. Moving a job (`SequenceJobCommand`), assigning a department job (`AssignJobCommand`) or starting one on a line (`StartJobCommand`) is refused unless it is whole batches of the new line's size. A cancelled job's replacement rounds up to whole batches of its line's size.
+
+**Execution.** Reports check each batch against the run's line size, and a partial batch is less than one of those; `core.partial_batch.batch_size` stores the size it was measured against. The floor board and job page show the line's size.
+
+**Unchanged.** The material's batching screen, its rule and tolerance, and the open-orders note when the material's size changes. Changing a line's size leaves open jobs as they are, with a note.
 
 ## Application architecture
 

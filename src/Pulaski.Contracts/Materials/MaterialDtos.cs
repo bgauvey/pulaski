@@ -40,6 +40,9 @@ public sealed record MaterialCapabilityDto
     public DateTimeOffset EffectiveFrom { get; init; }
     public DateTimeOffset? EffectiveTo { get; init; }
 
+    /// <summary>The line's own batch size in the material's base unit (D-065); null: the material's.</summary>
+    public decimal? BatchSize { get; init; }
+
     /// <summary>True when it applies now: jobs for the material can be placed on the line.</summary>
     public bool IsInEffect { get; init; }
 
@@ -72,6 +75,9 @@ public sealed record AddCapabilityRequest
     public decimal? StandardCrewSize { get; init; }
     public bool IsPreferred { get; init; }
 
+    /// <summary>The line's own batch size (D-065), in the material's base unit; blank for the material's.</summary>
+    public decimal? BatchSize { get; init; }
+
     /// <summary>When it starts; now when left out.</summary>
     public DateTimeOffset? EffectiveFrom { get; init; }
 
@@ -90,6 +96,9 @@ public sealed record UpdateCapabilityRequest
     public bool IsPreferred { get; init; }
     public DateTimeOffset EffectiveFrom { get; init; }
     public DateTimeOffset? EffectiveTo { get; init; }
+
+    /// <summary>The line's own batch size (D-065); blank for the material's.</summary>
+    public decimal? BatchSize { get; init; }
 }
 
 public sealed record EndCapabilityRequest
@@ -257,5 +266,5 @@ public sealed record SetBatchingRequest
 /// <summary>The capabilities CSV file (D-055): its header line with every column, for a template.</summary>
 public static class CapabilityCsvFormat
 {
-    public const string Header = "material,site,line,ideal_rate,rate_unit,changeover_minutes,crew_size,preferred,active";
+    public const string Header = "material,site,line,ideal_rate,rate_unit,changeover_minutes,crew_size,preferred,batch_size,active";
 }

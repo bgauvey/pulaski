@@ -135,7 +135,8 @@ internal sealed class ImportCapabilitiesHandler(
             row.CrewSize is { } crew ? crew.Value : current?.StandardCrewSize,
             row.IsPreferred?.Value ?? current?.IsPreferred ?? false,
             current?.EffectiveFrom ?? now,
-            current?.EffectiveTo);
+            current?.EffectiveTo,
+            row.BatchSize is { } batch ? batch.Value : current?.BatchSize);
         await writes.MaterialForRateAsync(material.Id, unit.Id, current?.RateUomId, cancellationToken);
         var unitCode = await AddCapabilityHandler.UnitCodeAsync(units, unit.Id, cancellationToken);
 
@@ -153,6 +154,7 @@ internal sealed class ImportCapabilitiesHandler(
 
             var added = Capability.Create(ids.NewId(), line.Line.Id, material.Id, change);
             await writes.EnsureNoOverlapAsync(added, line.Line.Code, material.Code, cancellationToken);
+            await writes.CheckBatchSizeAsync(added, null, material, line.Line.Code, cancellationToken);
             var envelope = events.Create(EventTypes.CapabilityAdded, "equipment_capability", added.Id, new { After = added }, command.Source);
             await capabilities.InsertAsync(added, cancellationToken);
             await eventLog.AppendAsync(envelope, cancellationToken);
@@ -166,6 +168,7 @@ internal sealed class ImportCapabilitiesHandler(
             return new ImportRowResultDto { Line = row.Line, Code = label, Action = Unchanged };
         }
 
+        await writes.CheckBatchSizeAsync(updated, current.BatchSize, material, line.Line.Code, cancellationToken);
         var changed = events.Create(EventTypes.CapabilityChanged, "equipment_capability", updated.Id, new { Before = current, After = updated }, command.Source);
         await capabilities.UpdateAsync(updated, cancellationToken);
         await eventLog.AppendAsync(changed, cancellationToken);
@@ -229,6 +232,7 @@ internal sealed class ImportCapabilitiesHandler(
         Add(before.StandardChangeover != after.StandardChangeover, "changeover_minutes");
         Add(before.StandardCrewSize != after.StandardCrewSize, "crew_size");
         Add(before.IsPreferred != after.IsPreferred, "preferred");
+        Add(before.BatchSize != after.BatchSize, "batch_size");
         return changes;
     }
 

@@ -1,6 +1,7 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Inventory;
+using Pulaski.Application.Materials;
 using Pulaski.Application.Units;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Inventory;
@@ -113,12 +114,13 @@ internal sealed class ReportProductionHandler(
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    TimeProvider timeProvider) : ICommandHandler<ReportProductionCommand, ReportProductionResponse>
+    TimeProvider timeProvider,
+    ILineBatchSizes? lineBatches = null) : ICommandHandler<ReportProductionCommand, ReportProductionResponse>
 {
     public async Task<ReportProductionResponse> HandleAsync(ReportProductionCommand command, CancellationToken cancellationToken)
     {
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
-        var result = await new ProductionReporter(inventory, units, execution, eventLog, events, ids)
+        var result = await new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches)
             .ReportAsync(command, onStop: false, timeProvider.GetUtcNow(), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return result;
@@ -136,7 +138,8 @@ internal sealed class ProductionReporter(
     IExecutionRepository execution,
     IEventLog eventLog,
     IEventFactory events,
-    IIdGenerator ids)
+    IIdGenerator ids,
+    ILineBatchSizes? lineBatches = null)
 {
     /// <param name="command">The report.</param>
     /// <param name="onStop">The report is the partial batch of a run being ended now, by a pause or completion with a reason.</param>
@@ -169,11 +172,17 @@ internal sealed class ProductionReporter(
         var jobUom = job.UomId ?? throw new DomainRuleException($"{job.JobNumber} has no unit.");
         var converter = await RunReporting.ConverterAsync(units, material.Id, cancellationToken);
 
+        // Batches of the size on the run's line (D-065): its own where its capability gives one, else the material's.
+        var lineBatching = material.Batching is { } materialBatching
+            ? materialBatching.OnLine(lineBatches is null ? null
+                : (await lineBatches.GetAsync(material.Id, [run.EquipmentId], now, cancellationToken)).TryGetValue(run.EquipmentId, out var lineSize) ? lineSize : null)
+            : null;
+
         // What was made, in the entered unit: the quantities, or for a batch material the batches in its base unit.
         Guid unit;
         decimal goodEntered;
         decimal scrapEntered;
-        if (material.Batching is { } batching)
+        if (lineBatching is { } batching)
         {
             await EnsureBatchesAsync(command, batching, material, job, run, onStop, cancellationToken);
             unit = material.BaseUomId;
@@ -260,7 +269,7 @@ internal sealed class ProductionReporter(
 
         // Good output into lots: one for a quantity, one per batch, and one for a partial batch.
         var lots = new List<LotTransactionResponse>();
-        var outputs = material.Batching is null
+        var outputs = lineBatching is null
             ? (goodEntered > 0 ? [goodEntered] : [])
             : command.GoodBatches.ToList();
         foreach (var quantity in outputs)
@@ -272,7 +281,7 @@ internal sealed class ProductionReporter(
         {
             var partialLot = await ProduceAsync(job, command, partialQty, unit, outputs.Count == 0 ? lotNumber : null, comment, run, now, reportId, cancellationToken);
             lots.Add(partialLot);
-            warnings.Add(await RecordPartialAsync(job, material, run, partialLot, partialQty, occurredAt, envelope.ActorId, cancellationToken));
+            warnings.Add(await RecordPartialAsync(job, material, lineBatching!, run, partialLot, partialQty, occurredAt, envelope.ActorId, cancellationToken));
         }
 
         warnings.AddRange(lots.SelectMany(l => l.Warnings));
@@ -340,9 +349,9 @@ internal sealed class ProductionReporter(
 
     /// <summary>The partial batch's record; under the exact rule its lot goes on hold until someone approves it (D-036).</summary>
     private async Task<InventoryWarningDto> RecordPartialAsync(
-        InventoryJob job, InventoryMaterial material, JobRun run, LotTransactionResponse lot, decimal quantity, DateTimeOffset occurredAt, string actorId, CancellationToken cancellationToken)
+        InventoryJob job, InventoryMaterial material, Batching batching, JobRun run, LotTransactionResponse lot, decimal quantity, DateTimeOffset occurredAt, string actorId,
+        CancellationToken cancellationToken)
     {
-        var batching = material.Batching!;
         var partial = PartialBatch.Report(ids.NewId(), job.Id, run.Id, lot.LotId, quantity, material.BaseUomId, batching, occurredAt, actorId);
         var envelope = events.Create(EventTypes.PartialBatchReported, "partial_batch", partial.Id, new { After = partial, job.JobNumber });
         await execution.InsertPartialBatchAsync(partial, envelope.OccurredAt, cancellationToken);

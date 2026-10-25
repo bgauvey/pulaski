@@ -485,6 +485,7 @@ CREATE TABLE core.equipment_capability (
     standard_changeover     interval,
     standard_crew_size      numeric(6,2),
     is_preferred            boolean NOT NULL DEFAULT false,
+    batch_size              core.qty CHECK (batch_size > 0),    -- this line's batch size in the material's base unit (D-065); null: the material's
     effective_from          timestamptz NOT NULL,
     effective_to            timestamptz,
     CONSTRAINT capability_no_overlap EXCLUDE USING gist (
@@ -2051,7 +2052,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0029_deliveries'),
     ('0030_reason_trees'),
     ('0031_declaration_reversals'),
-    ('0032_lot_allocations');
+    ('0032_lot_allocations'),
+    ('0033_line_batch_sizes');
 
 -- =====================================================================
 -- 17. SEED DATA

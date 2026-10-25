@@ -18,6 +18,9 @@ public sealed class CapabilityForm
     public int? ChangeoverMinutes { get; set; }
     public decimal? CrewSize { get; set; }
     public bool IsPreferred { get; set; }
+
+    /// <summary>The line's own batch size (D-065), in the material's base unit; blank for the material's.</summary>
+    public decimal? BatchSize { get; set; }
     public DateTime? From { get; set; }
     public DateTime? EndsOn { get; set; }
 
@@ -49,6 +52,7 @@ public sealed class CapabilityForm
             ChangeoverMinutes = c.StandardChangeover is { } ch ? (int)ch.TotalMinutes : null,
             CrewSize = c.StandardCrewSize is { } crew ? Trim(crew) : null,
             IsPreferred = c.IsPreferred,
+            BatchSize = c.BatchSize is { } batch ? Trim(batch) : null,
             From = fromDay,
             EndsOn = endsOn,
             _originalFrom = c.EffectiveFrom,
@@ -86,6 +90,7 @@ public sealed class CapabilityForm
         StandardChangeoverMinutes = ChangeoverMinutes,
         StandardCrewSize = CrewSize,
         IsPreferred = IsPreferred,
+        BatchSize = BatchSize,
         EffectiveFrom = From == Display.ToSite(now, timeZone).Date ? null : Display.FromSiteLocal(From, timeZone),
         EffectiveTo = Display.FromSiteLocal(EndsOn, timeZone),
     };
@@ -98,6 +103,7 @@ public sealed class CapabilityForm
         StandardChangeoverMinutes = ChangeoverMinutes,
         StandardCrewSize = CrewSize,
         IsPreferred = IsPreferred,
+        BatchSize = BatchSize,
         EffectiveFrom = From == _originalFromDay && _originalFrom is { } f ? f : Display.FromSiteLocal(From, timeZone) ?? DateTimeOffset.MinValue,
         EffectiveTo = EndsOn == _originalEndsOn ? _originalTo : Display.FromSiteLocal(EndsOn, timeZone),
     };

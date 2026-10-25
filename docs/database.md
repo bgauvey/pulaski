@@ -481,6 +481,7 @@ The list of which material can run on which equipment. A production job may only
 | `standard_changeover` | interval | yes | Changeover time into this material when no changeover rule matches (D-015). 0 to 7 days. |
 | `standard_crew_size` | numeric(6,2) | yes | The labor estimate: people needed to run it. |
 | `is_preferred` | boolean | no | Marks the preferred line for the material. Informational; Pulaski never picks a line (D-014). |
+| `batch_size` | qty | yes | The line's own batch size in the material's base unit (D-065); null uses the material's `batch_size`. Set only for a material made in batches; the rule and tolerance stay the material's. Planning, moves, replacements and reports on the line use it. |
 | `effective_from` | timestamptz | no | When the capability starts (included). |
 | `effective_to` | timestamptz | yes | When it stops applying (not included); null means open-ended. Later than `effective_from`. Periods for the same equipment and material may not overlap (`capability_no_overlap`). |
 
