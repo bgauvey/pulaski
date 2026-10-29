@@ -53,6 +53,9 @@ public interface IOeeReadStore
     Task<IReadOnlyList<OeeReasonRecord>> ListReasonsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<OeeMaterialRecord>> ListMaterialsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
+    /// <summary>Every period of the site's OEE targets (D-073).</summary>
+    Task<IReadOnlyList<OeeTarget>> ListTargetsAsync(Guid siteId, CancellationToken cancellationToken);
 }
 
 /// <summary>

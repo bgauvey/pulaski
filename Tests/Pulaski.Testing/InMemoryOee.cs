@@ -142,6 +142,16 @@ public sealed class InMemoryOee : IOeeReadStore
         }
     }
 
+    public List<OeeTarget> Targets { get; } = [];
+
+    public Task<IReadOnlyList<OeeTarget>> ListTargetsAsync(Guid siteId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<OeeTarget>>([.. Targets.Where(t => t.SiteId == siteId)]);
+        }
+    }
+
     // Materials as the runs name them.
     public Task<IReadOnlyList<OeeMaterialRecord>> ListMaterialsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
     {

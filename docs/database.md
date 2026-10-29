@@ -1566,6 +1566,20 @@ Variables store the values and their statistics; attributes store inspected and 
 | `chart_component` | text | no | `location`, `dispersion`, `proportion` or `count`. |
 | `severity` | text | no | Severity from the characteristic's rule. |
 
+### core.oee_target — OEE targets by period (D-073) · *In use*
+
+A site's default targets (`equipment_id` null) or one piece of equipment's, which replace the site's whole. A scope's periods never overlap; they are ended, never deleted.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The site. |
+| `equipment_id` | uuid → equipment | yes | Equipment of the site that tracks state; null for the site's default. |
+| `effective_from` | date | no | First production day in force. Unique per site and scope (`oee_target_scope_from_uq`). |
+| `effective_to` | date | yes | First day no longer in force; null while open. After `effective_from`. |
+| `availability_pct`, `performance_pct`, `quality_pct`, `oee_pct` | numeric(4,1) | yes | Targets above 0 and at most 100; at least one is set. |
+| `created_at`, `updated_at` | timestamptz | no | When written. |
+
 ## 13. Utilization and OEE rollup
 
 Daily rollups of the OEE report (D-072, #66), kept by `OeeRollupService` in the API. Not partitioned; rows are updated in place and never deleted.

@@ -1,0 +1,194 @@
+@using System.Globalization
+@using Pulaski.Web.Services.MachineData
+@inject PulaskiApiClient Api
+@inject TimeProvider Clock
+
+@* OEE targets (D-073): the site's default and each piece of equipment's, each in force from a production day until ended. The OEE report
+   shows figures against the target of their day. *@
+<section class="inv-facts mb-3" id="oee-targets" aria-labelledby="targets-heading">
+    <h2 class="h6" id="targets-heading">OEE targets</h2>
+    <p class="small text-muted">
+        What availability, performance, quality and OEE should reach. The site's targets apply to all its equipment; a machine or line with targets of its
+        own uses those instead. A change starts on the day you choose, so earlier days keep the targets they had. Leave a figure blank for no target.
+    </p>
+    <ProblemAlert Error="_error" />
+
+    @if (_targets is null)
+    {
+        <p class="small text-muted mb-0">Loading…</p>
+    }
+    else
+    {
+        var shown = _showAll ? _targets : OeeTargetsView.InForce(_targets, Today);
+        @if (shown.Count == 0)
+        {
+            <p class="small text-muted">No targets@(_showAll ? "" : " in force today").</p>
+        }
+        else
+        {
+            <div class="table-panel mb-2">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>For</th><th>When</th><th class="text-end">Availability</th><th class="text-end">Performance</th><th class="text-end">Quality</th><th class="text-end">OEE</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var t in shown)
+                        {
+                            <tr @key="t.Id">
+                                <td class="fw-semibold">@(t.EquipmentId is null ? "Site (default)" : $"{t.EquipmentCode} · {t.EquipmentName}")</td>
+                                <td class="small">@OeeTargetsView.Period(t)</td>
+                                <td class="text-end">@OeeTargetsView.Pct(t.Targets.AvailabilityPct)</td>
+                                <td class="text-end">@OeeTargetsView.Pct(t.Targets.PerformancePct)</td>
+                                <td class="text-end">@OeeTargetsView.Pct(t.Targets.QualityPct)</td>
+                                <td class="text-end">@OeeTargetsView.Pct(t.Targets.OeePct)</td>
+                                <td class="text-end text-nowrap">
+                                    @if (CanManage && t.EffectiveTo is null)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => Edit(t)">Change</button>
+                                        <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => EndAsync(t)"
+                                                title="From today on, @(t.EquipmentId is null ? "the site has no targets" : "it follows the site's")">End today</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <button type="button" class="btn btn-sm btn-link px-0 mb-2" @onclick="() => _showAll = !_showAll">@(_showAll ? "Show only those in force today" : "Show earlier and ended targets")</button>
+
+        @if (CanManage)
+        {
+            <form class="row g-2 align-items-end" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+                <div class="col-12 col-md-4">
+                    <label class="form-label small fw-semibold" for="target-scope">For</label>
+                    <select id="target-scope" class="form-select form-select-sm" value="@(_scope?.ToString() ?? "")"
+                            @onchange="@(e => _scope = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
+                        <option value="">Site (default)</option>
+                        @foreach (var e in _equipment)
+                        {
+                            <option value="@e.Id">@e.Code · @e.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small fw-semibold" for="target-from">From</label>
+                    <input id="target-from" type="date" class="form-control form-control-sm" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)"
+                           @onchange="@(e => _from = DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : _from)" />
+                </div>
+                @Figure("target-a", "Availability %", () => _availability, v => _availability = v)
+                @Figure("target-p", "Performance %", () => _performance, v => _performance = v)
+                @Figure("target-q", "Quality %", () => _quality, v => _quality = v)
+                @Figure("target-oee", "OEE %", () => _oee, v => _oee = v)
+                <div class="col-12">
+                    @if (OeeTargetsView.Problem(_availability, _performance, _quality, _oee) is { } problem)
+                    {
+                        <p class="small text-muted mb-1">@problem</p>
+                    }
+                    <button type="submit" class="btn btn-sm btn-primary" disabled="@(_saving || OeeTargetsView.Problem(_availability, _performance, _quality, _oee) is not null)">Save targets</button>
+                </div>
+            </form>
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Guid SiteId { get; set; }
+
+    [Parameter] public bool CanManage { get; set; }
+
+    [Parameter] public string? TimeZone { get; set; }
+
+    /// <summary>Says what was saved, in the page's message.</summary>
+    [Parameter] public EventCallback<string> Saved { get; set; }
+
+    private IReadOnlyList<OeeTargetDto>? _targets;
+    private IReadOnlyList<EquipmentDto> _equipment = [];
+    private Guid? _loadedFor;
+    private Guid? _scope;
+    private DateOnly _from;
+    private decimal? _availability;
+    private decimal? _performance;
+    private decimal? _quality;
+    private decimal? _oee;
+    private bool _showAll;
+    private bool _saving;
+    private ApiException? _error;
+
+    private DateOnly Today => DateOnly.FromDateTime(Display.ToSite(Clock.GetUtcNow(), TimeZone).DateTime);
+
+    private RenderFragment Figure(string id, string label, Func<decimal?> get, Action<decimal?> set) =>
+        @<div class="col-6 col-md-1">
+            <label class="form-label small fw-semibold" for="@id">@label</label>
+            <input id="@id" type="number" class="form-control form-control-sm" min="0.1" max="100" step="0.1" value="@get()?.ToString(CultureInfo.InvariantCulture)"
+                   @oninput="@(e => set(decimal.TryParse(e.Value?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : null))" />
+        </div>;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == SiteId)
+        {
+            return;
+        }
+
+        _loadedFor = SiteId;
+        _targets = null;
+        _from = Today;
+        try
+        {
+            _targets = await Api.ListOeeTargetsAsync(SiteId);
+            if (CanManage)
+            {
+                _equipment = OeeTargetsView.Equipment(await Api.ListEquipmentAsync(SiteId), SiteId);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private void Edit(OeeTargetDto target)
+    {
+        (_scope, _from) = (target.EquipmentId, Today < target.EffectiveFrom ? target.EffectiveFrom : Today);
+        (_availability, _performance, _quality, _oee) = (target.Targets.AvailabilityPct, target.Targets.PerformancePct, target.Targets.QualityPct, target.Targets.OeePct);
+    }
+
+    private async Task SaveAsync() => await RunAsync(async () =>
+    {
+        _targets = await Api.SetOeeTargetAsync(SiteId, new SetOeeTargetRequest
+        {
+            EquipmentId = _scope,
+            EffectiveFrom = _from,
+            AvailabilityPct = _availability,
+            PerformancePct = _performance,
+            QualityPct = _quality,
+            OeePct = _oee,
+            Version = OeeTargetsView.Latest(_targets!, _scope)?.Version ?? 0,
+        });
+        return $"Saved the OEE targets from {_from.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture)}.";
+    });
+
+    private async Task EndAsync(OeeTargetDto target) => await RunAsync(async () =>
+    {
+        _targets = await Api.EndOeeTargetAsync(SiteId, new EndOeeTargetRequest { EquipmentId = target.EquipmentId, EndOn = Today, Version = target.Version });
+        return target.EquipmentId is null ? "Ended the site's OEE targets." : $"Ended {target.EquipmentCode}'s own targets; it follows the site's now.";
+    });
+
+    private async Task RunAsync(Func<Task<string>> action)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var message = await action();
+            await Saved.InvokeAsync(message);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

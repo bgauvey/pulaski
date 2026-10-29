@@ -2,11 +2,13 @@ using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.EquipmentModel;
+using Pulaski.Application.Errors;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.MachineData;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.MachineData;
+using Pulaski.Domain;
 using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Infrastructure.Tests;
@@ -163,5 +165,42 @@ public sealed class OeeReportTests(DatabaseFixture db)
         Assert.Empty(await CurrentAsync());
         Assert.True(await RollAsync() >= 30);
         await SameAsync();
+    }
+
+    [Fact]
+    public async Task Targets_are_set_by_period_ended_never_deleted_and_shown_against_the_figures()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "TENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "TS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse other = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "TS2-" + _s, "Other site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse line = await db.SendAsync(new CreateEquipmentCommand(site.Id, "TL-" + _s, "Pack line", null, "work_center", "production_line", true, true, false, null));
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // The site's default from ten days ago, then the line's own from today.
+        var list = await db.SendAsync(new SetOeeTargetCommand(site.Id, null, today.AddDays(-10), new(null, null, null, 60m), 0));
+        var siteTarget = Assert.Single(list);
+        list = await db.SendAsync(new SetOeeTargetCommand(site.Id, line.Id, today, new(90m, null, null, 70m), 0));
+        Assert.Equal([null, line.Id], list.Select(t => t.EquipmentId));
+        Assert.Equal("TL-" + _s, list[1].EquipmentCode);
+
+        // A stale version is refused; so is equipment of another site, or a start before the latest.
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new SetOeeTargetCommand(site.Id, null, today, new(null, null, null, 65m), 0)));
+        await Assert.ThrowsAsync<NotFoundException>(() => db.SendAsync(new SetOeeTargetCommand(other.Id, line.Id, today, new(null, null, null, 65m), 0)));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new SetOeeTargetCommand(site.Id, null, today.AddDays(-11), new(null, null, null, 65m), siteTarget.Version)));
+
+        // The site's raised from today: the old period ends yesterday and stays.
+        list = await db.SendAsync(new SetOeeTargetCommand(site.Id, null, today, new(null, null, null, 65m), siteTarget.Version));
+        var siteRows = list.Where(t => t.EquipmentId is null).ToList();
+        Assert.Equal([(today, (DateOnly?)null, 65m), (today.AddDays(-10), today, 60m)], siteRows.Select(t => (t.EffectiveFrom, t.EffectiveTo, t.Targets.OeePct!.Value)));
+
+        var report = await QueryAsync<GetOeeReportQuery, OeeReportDto>(new GetOeeReportQuery(site.Id, today.AddDays(-2), today, null));
+        Assert.Equal((90m, 70m), (report.Equipment.Single().Target!.AvailabilityPct!.Value, report.Equipment.Single().Target!.OeePct!.Value));
+        Assert.All(report.Shifts.Where(r => r.ProductionDate < today), r => Assert.Equal(60m, r.Target!.OeePct));
+
+        // Ending the line's own from tomorrow: it follows the site's again then.
+        var lineTarget = list.Single(t => t.EquipmentId == line.Id);
+        list = await db.SendAsync(new EndOeeTargetCommand(site.Id, line.Id, today.AddDays(1), lineTarget.Version));
+        Assert.Equal(today.AddDays(1), list.Single(t => t.EquipmentId == line.Id).EffectiveTo);
+        Assert.Equal(3, (await QueryAsync<ListOeeTargetsQuery, IReadOnlyList<OeeTargetDto>>(new ListOeeTargetsQuery(site.Id))).Count);
     }
 }

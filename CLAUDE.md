@@ -191,6 +191,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (a count belongs to one production day). `OeeRollupService` (API) rolls each site's final days (to today − 2, 366 back) into `ts.oee_rollup`
   (jsonb per equipment + day), `ts.oee_rollup_day`, `ts.oee_rollup_site.generation`. Repositories mark days on history writes and bump the
   generation on settings writes (`OeeRollupMarks`). Reports over 31 days (to 366) or `FromRollups` use current days + ≤ 31 on read, by day.
+- OEE targets and trend (D-073, proposed): `core.oee_target` periods per site (default) or equipment, ended never deleted (`OeeTargets.Set`/`End`/
+  `InForce`, equipment's own replaces the site's whole); `/api/oee-targets/sites/{siteId}` (`site_settings.manage`; version of the scope's latest).
+  Report rows carry `Target` (equipment: last day; shift/day: its day), read on each report, never rolled up. Trend = SVG `OeeTrendChart` over
+  the report's own shift/day rows (`OeeTrend`, days combine hours).
 - Lot attributes and certificates (D-056, proposed): typed `core.lot_attribute` definitions per site (all materials or classes via
   `lot_attribute_class.is_applied`), values in `lot_attribute_value` beside the lot (never touch `core.lot`/`ts.lot_event`);
   `LotAttributeDefinition.Parse` reads values. `lot_document` = file (bytes in `lot_document_content`, insert-only, sniffed PDF/PNG/JPEG

@@ -89,7 +89,10 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IOeeRollupStore r
             }
         }
 
-        var report = await AssembleAsync(shown, byId, figures, query.ShiftCode, fromRollups, zone, cancellationToken);
+        // Equipment rows are measured against the targets of the period's last day, or today's when that is still to come.
+        var targets = await store.ListTargetsAsync(query.SiteId, cancellationToken);
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, zone).DateTime);
+        var report = await AssembleAsync(shown, byId, figures, query.ShiftCode, fromRollups, zone, targets, to < today ? to : today, cancellationToken);
         return report with
         {
             From = from,
@@ -104,8 +107,11 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IOeeRollupStore r
     /// <summary>Adds up the windows into the report's tables: by equipment, by shift (or by day), by product, and where the time went.</summary>
     private async Task<OeeReportDto> AssembleAsync(
         IReadOnlyList<OeeEquipmentRecord> shown, Dictionary<Guid, OeeEquipmentRecord> byId, IReadOnlyList<OeeWindowFigures> figures, string? shiftCode,
-        bool byDay, TimeZoneInfo zone, CancellationToken cancellationToken)
+        bool byDay, TimeZoneInfo zone, IReadOnlyList<OeeTarget> targets, DateOnly targetDay, CancellationToken cancellationToken)
     {
+        OeeTargetFiguresDto? TargetOf(Guid equipmentId, DateOnly day) =>
+            OeeTargets.InForce(targets, equipmentId, day) is { Values: var v } ? new(v.AvailabilityPct, v.PerformancePct, v.QualityPct, v.OeePct) : null;
+
         var shownSet = shown.Select(e => e.Id).ToHashSet();
         var kept = figures.Where(f => shiftCode is null || (f.Start is not null && f.ShiftCode == shiftCode)).ToLookup(f => f.EquipmentId);
 
@@ -167,6 +173,7 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IOeeRollupStore r
                 StateDerivation = e.StateDerivation,
                 CanRunJob = e.CanRunJob,
                 Figures = Figures(total),
+                Target = TargetOf(e.Id, targetDay),
             });
 
             var timed = windows.Where(w => w.Start is not null);
@@ -196,6 +203,7 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IOeeRollupStore r
                     EquipmentCode = e.Code,
                     CanRunJob = e.CanRunJob,
                     Figures = Figures(tally),
+                    Target = TargetOf(e.Id, row.Day),
                 }));
             }
 

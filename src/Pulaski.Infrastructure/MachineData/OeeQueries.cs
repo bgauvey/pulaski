@@ -219,6 +219,13 @@ internal sealed class OeeQueries(NpgsqlDataSource dataSource) : IOeeReadStore
             .Select(m => new OeeMaterialRecord(m.Id, m.Code, m.Name))];
     }
 
+    public async Task<IReadOnlyList<OeeTarget>> ListTargetsAsync(Guid siteId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. (await connection.QueryAsync<OeeTargetSql.Row>(new CommandDefinition(OeeTargetSql.OfSite, new { SiteId = siteId }, cancellationToken: cancellationToken)))
+            .Select(r => r.ToDomain())];
+    }
+
     private sealed class MaterialRow
     {
         public Guid Id { get; init; }

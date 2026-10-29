@@ -94,6 +94,9 @@ public sealed record OeeEquipmentRowDto
     /// <summary>Jobs run on it, so it has performance and quality; a machine below a line has availability only.</summary>
     public bool CanRunJob { get; init; }
     public required OeeFiguresDto Figures { get; init; }
+
+    /// <summary>The targets in force on the period's last day (or today, if earlier), D-073; null without any.</summary>
+    public OeeTargetFiguresDto? Target { get; init; }
 }
 
 public sealed record OeeShiftRowDto
@@ -110,6 +113,9 @@ public sealed record OeeShiftRowDto
     public required string EquipmentCode { get; init; }
     public bool CanRunJob { get; init; }
     public required OeeFiguresDto Figures { get; init; }
+
+    /// <summary>The targets in force on its production day (D-073); null without any.</summary>
+    public OeeTargetFiguresDto? Target { get; init; }
 }
 
 public sealed record OeeProductRowDto

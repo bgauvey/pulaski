@@ -5,6 +5,7 @@ using Pulaski.Application.MachineData;
 using Pulaski.Application.Security;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.MachineData;
+using Pulaski.Domain.MachineData;
 using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
@@ -35,6 +36,24 @@ internal static class MachineEndpoints
             Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId, string? shiftCode, IQueryHandler<GetOeeReportQuery, OeeReportDto> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new GetOeeReportQuery(siteId, from, to, equipmentId, string.IsNullOrWhiteSpace(shiftCode) ? null : shiftCode), ct)))
         .RequireAny(Site.Query(), Permissions.MachinesView, Permissions.OverviewView);
+
+        // OEE targets (D-073): the site's default and each piece of equipment's, by period; seen with the site settings or the machines.
+        var targets = routes.MapGroup("/oee-targets/sites").WithTags("Machines");
+        targets.MapGet("/{siteId:guid}", async Task<Ok<IReadOnlyList<OeeTargetDto>>> (
+            Guid siteId, IQueryHandler<ListOeeTargetsQuery, IReadOnlyList<OeeTargetDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListOeeTargetsQuery(siteId), ct)))
+        .RequireAny(Site.Route(), Permissions.SiteSettingsView, Permissions.MachinesView);
+
+        targets.MapPut("/{siteId:guid}", async Task<Ok<IReadOnlyList<OeeTargetDto>>> (
+            Guid siteId, SetOeeTargetRequest request, ICommandHandler<SetOeeTargetCommand, IReadOnlyList<OeeTargetDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetOeeTargetCommand(siteId, request.EquipmentId, request.EffectiveFrom,
+                new OeeTargetValues(request.AvailabilityPct, request.PerformancePct, request.QualityPct, request.OeePct), request.Version), ct)))
+        .RequirePermission(Permissions.SiteSettings, Site.Route());
+
+        targets.MapPost("/{siteId:guid}/end", async Task<Ok<IReadOnlyList<OeeTargetDto>>> (
+            Guid siteId, EndOeeTargetRequest request, ICommandHandler<EndOeeTargetCommand, IReadOnlyList<OeeTargetDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new EndOeeTargetCommand(siteId, request.EquipmentId, request.EndOn, request.Version), ct)))
+        .RequirePermission(Permissions.SiteSettings, Site.Route());
 
         // Alarms and warnings active in [from, to) (#26), active first; for equipment, its own and those below it.
         machines.MapGet("/alarms", async Task<Ok<AlarmListDto>> (

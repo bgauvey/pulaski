@@ -204,6 +204,20 @@ public class OeeReportHandlerTests
         Assert.Equal(6.5m, report.Shifts.Single(s => s.ProductionDate == Day && s.EquipmentId == _line).Figures.RunHours);
     }
 
+    [Fact]
+    public async Task Figures_carry_the_target_of_their_day()
+    {
+        Oee.Targets.Add(new(Guid.CreateVersion7(), _site, null, Day.AddDays(-30), null, new(null, null, null, 50m)));
+        Oee.Targets.Add(new(Guid.CreateVersion7(), _site, _capper, Day, null, new(95m, null, null, null)));
+
+        var report = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day, Day, null), CancellationToken.None);
+
+        Assert.Equal(50m, report.Equipment.Single(e => e.EquipmentId == _line).Target!.OeePct);
+        Assert.Equal((95m, (decimal?)null), (report.Equipment.Single(e => e.EquipmentId == _capper).Target!.AvailabilityPct,
+            report.Equipment.Single(e => e.EquipmentId == _capper).Target!.OeePct));
+        Assert.All(report.Shifts.Where(s => s.EquipmentId == _line), s => Assert.Equal(50m, s.Target!.OeePct));
+    }
+
     private OeeRollups Rollups() => new(Oee, _f.Stores.OeeRollups, _f.Stores.OeeRollups, _f.Stores.Units, _f.Stores.UnitOfWork, _f.Time);
 
     private sealed class UtilizationRowComparer : IEqualityComparer<Contracts.MachineData.UtilizationRowDto>

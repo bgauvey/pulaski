@@ -1634,6 +1634,30 @@ equipment and day; with a shift chosen, that shift's day rows).
 
 **Not covered.** Changes to a job after its runs (material, unit, planned-downtime flag) don't re-roll; they don't happen in the app today.
 
+## OEE targets and trend (D-073, proposed)
+
+Issue #67. The OEE report had no targets and no charts.
+
+**Targets are site data by period.** `core.oee_target`: a site's default (`equipment_id` null) or one piece of equipment's (it must be active
+equipment of the site that tracks state), with availability, performance, quality and OEE percentages (each optional, at least one; above 0, at
+most 100, one decimal). A period is in force from `effective_from` up to, not including, `effective_to`; a scope's periods never overlap
+and are ended, never deleted. `OeeTargets` (domain, pure): `Set` from a day on the latest period's first day changes it; later, ends the
+latest there (if still in force) and adds an open one; earlier is refused. `End` ends the latest on a later day. `InForce`: the equipment's
+own period, else the site's, whole (no mixing of figures).
+
+**Writes.** `SetOeeTargetCommand` / `EndOeeTargetCommand` (`PUT /api/oee-targets/sites/{siteId}`, `POST …/end`, `site_settings.manage`), events
+`pulaski.oee_target.set.v1` / `.ended.v1`. A scope is locked through its site's or equipment's row (`FOR NO KEY UPDATE`), then its periods
+read; the caller sends the version of the scope's latest period (0 for none): 409 when it changed. `GET /api/oee-targets/sites/{siteId}`
+with `site_settings.view` or `machines.view`. Set on Configure → Site settings (`OeeTargetsSection`).
+
+**In the report.** Equipment rows carry the targets of the period's last day (today if that is still to come); shift and day rows their own
+day's (`Target`). Targets are read when the report is, never kept in rollups (D-072), so a change shows at once.
+
+**Trend.** The OEE tab charts one figure for one piece of equipment, by shift or by day (by day only beyond 31 days), as inline SVG
+(`OeeTrendChart`, no JavaScript): the line, each point's target as a dashed step, points below target in the danger color and labelled so.
+The points are the report's own shift (or day) rows (`OeeTrend.Points`); a day of shifts adds their hours up (`OeeTrend.Combine`), so the
+chart can't disagree with the tables. The stop Pareto stays a table (#21).
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

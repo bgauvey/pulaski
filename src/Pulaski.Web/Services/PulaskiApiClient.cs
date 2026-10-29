@@ -1117,6 +1117,17 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ExecutionPolicyDto> SetExecutionPolicyAsync(Guid siteId, SetExecutionPolicyRequest request, CancellationToken ct = default) =>
         SendAsync<ExecutionPolicyDto>(HttpMethod.Put, $"api/execution/sites/{siteId}/policy", request, ct);
 
+    // OEE targets (D-073)
+
+    public Task<IReadOnlyList<OeeTargetDto>> ListOeeTargetsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<OeeTargetDto>>($"api/oee-targets/sites/{siteId}", ct);
+
+    public Task<IReadOnlyList<OeeTargetDto>> SetOeeTargetAsync(Guid siteId, SetOeeTargetRequest request, CancellationToken ct = default) =>
+        SendAsync<IReadOnlyList<OeeTargetDto>>(HttpMethod.Put, $"api/oee-targets/sites/{siteId}", request, ct);
+
+    public Task<IReadOnlyList<OeeTargetDto>> EndOeeTargetAsync(Guid siteId, EndOeeTargetRequest request, CancellationToken ct = default) =>
+        SendAsync<IReadOnlyList<OeeTargetDto>>(HttpMethod.Post, $"api/oee-targets/sites/{siteId}/end", request, ct);
+
     // Terminals and badges (D-049): managing them as a signed-in user
 
     public Task<IReadOnlyList<TerminalDto>> ListTerminalsAsync(Guid siteId, CancellationToken ct = default) =>

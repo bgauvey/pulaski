@@ -86,6 +86,8 @@ public static class EventTypes
     public const string DowntimeVoided = "pulaski.downtime.voided.v1";
     public const string DowntimeRestored = "pulaski.downtime.restored.v1";
     public const string DowntimeTrimmed = "pulaski.downtime.trimmed.v1";
+    public const string OeeTargetSet = "pulaski.oee_target.set.v1";
+    public const string OeeTargetEnded = "pulaski.oee_target.ended.v1";
     public const string ShiftScheduleCreated = "pulaski.shift_schedule.created.v1";
     public const string ShiftScheduleUpdated = "pulaski.shift_schedule.updated.v1";
     public const string ShiftOverrideSet = "pulaski.shift_schedule.override_set.v1";

@@ -92,6 +92,8 @@ public sealed class InMemoryStores
 
     public InMemoryOeeRollups OeeRollups { get; } = new();
 
+    public InMemoryOeeTargets OeeTargets { get; } = new();
+
     public InMemoryOverview Overview { get; } = new();
 
     public InMemoryMachineHistory MachineHistory { get; } = new();
@@ -162,6 +164,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IOeeReadStore>();
         services.RemoveAll<IOeeRollupStore>();
         services.RemoveAll<IOeeRollupRepository>();
+        services.RemoveAll<IOeeTargetRepository>();
+        services.RemoveAll<IOeeTargetReadStore>();
         services.RemoveAll<IOverviewReadStore>();
         services.RemoveAll<IMachineHistoryReadStore>();
         services.RemoveAll<IQualificationRepository>();
@@ -227,6 +231,8 @@ public sealed class InMemoryStores
         services.AddSingleton<IOeeReadStore>(Oee);
         services.AddSingleton<IOeeRollupStore>(OeeRollups);
         services.AddSingleton<IOeeRollupRepository>(OeeRollups);
+        services.AddSingleton<IOeeTargetRepository>(OeeTargets);
+        services.AddSingleton<IOeeTargetReadStore>(OeeTargets);
         services.AddSingleton<IOverviewReadStore>(Overview);
         services.AddSingleton<IMachineHistoryReadStore>(MachineHistory);
         services.AddSingleton<IQualificationRepository>(Labor);

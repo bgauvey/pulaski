@@ -1101,6 +1101,25 @@ CREATE TABLE core.run_standard (
         AND (modified_rate_per_hour IS NULL) = (modified_by IS NULL))
 );
 
+-- OEE targets (D-073): for a site (its default; equipment_id null) or a piece of equipment, by period from a production day until
+-- ended (effective_to: the first day no longer in force). A scope's periods never overlap; never deleted.
+CREATE TABLE core.oee_target (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    equipment_id        uuid REFERENCES core.equipment(id),        -- null: the site's default
+    effective_from      date NOT NULL,
+    effective_to        date,                                       -- first day no longer in force; null while open
+    availability_pct    numeric(4,1) CHECK (availability_pct > 0 AND availability_pct <= 100),
+    performance_pct     numeric(4,1) CHECK (performance_pct > 0 AND performance_pct <= 100),
+    quality_pct         numeric(4,1) CHECK (quality_pct > 0 AND quality_pct <= 100),
+    oee_pct             numeric(4,1) CHECK (oee_pct > 0 AND oee_pct <= 100),
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT oee_target_period_ck CHECK (effective_to IS NULL OR effective_to > effective_from),
+    CONSTRAINT oee_target_values_ck CHECK (num_nonnulls(availability_pct, performance_pct, quality_pct, oee_pct) > 0)
+);
+CREATE UNIQUE INDEX oee_target_scope_from_uq ON core.oee_target (site_id, coalesce(equipment_id, site_id), effective_from);
+
 -- Per-site tolerances for production reporting (D-035). A site without a row uses the defaults.
 -- Reported output may reach the run's elapsed time x the capability's ideal rate x rate_tolerance_pct;
 -- consumption beyond the planned components x consumption_tolerance_pct is allowed, with a warning.
@@ -2164,7 +2183,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0038_alarms_process_values'),
     ('0039_stop_adjustment_followups'),
     ('0040_reason_group_rollups'),
-    ('0041_oee_rollups');
+    ('0041_oee_rollups'),
+    ('0042_oee_targets');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2186,7 +2206,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('labor.view', 'See labor: who is on, shift review and labor reports'),
     ('machines.view', 'See machines: their live state and their stops'),
     ('integrations.view', 'See outbound deliveries to the ERP and how they went'),
-    ('site_settings.view', 'See a site''s settings: changeover mode, reporting tolerances and calendar exceptions'),
+    ('site_settings.view', 'See a site''s settings: changeover mode, reporting tolerances, OEE targets and calendar exceptions'),
     ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
     ('schedule.plan_partial', 'Replace a cancelled job with exactly what is left, even when that isn''t whole batches'),
     ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
@@ -2216,7 +2236,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('units.manage', 'Maintain units of measure'),
     ('reasons.manage', 'Maintain reason codes'),
     ('equipment.manage', 'Maintain equipment: sites, lines, locations, machine profiles, edge nodes and tags'),
-    ('site_settings.manage', 'Set a site''s changeover mode, reporting tolerances and calendar exceptions'),
+    ('site_settings.manage', 'Set a site''s changeover mode, reporting tolerances, OEE targets and calendar exceptions'),
     ('shifts.manage', 'Maintain shift schedules and choose which one equipment follows'),
     ('people.manage', 'Maintain people and crews'),
     ('terminals.manage', 'Register and enrol shop-floor terminals'),

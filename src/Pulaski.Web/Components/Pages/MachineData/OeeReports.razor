@@ -68,7 +68,7 @@
                                         <div class="small text-muted">@how</div>
                                     }
                                 </td>
-                                @FiguresCells(e.Figures)
+                                @FiguresCells(e.Figures, e.Target)
                             </tr>
                         }
                     </tbody>
@@ -104,13 +104,60 @@
                                 <td>@(s.ShiftCode is not null ? $"{s.ShiftCode} {s.ShiftName}" : report.ByDay ? "All shifts" : "Whole day")</td>
                                 <td>@s.CrewCode</td>
                                 <td class="fw-semibold">@s.EquipmentCode</td>
-                                @FiguresCells(s.Figures)
+                                @FiguresCells(s.Figures, s.Target)
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
             <p class="small text-muted">The top equipment of each group; choose one piece of equipment to see its shifts alone.</p>
+        }
+    </section>
+
+    <section class="inv-section" aria-labelledby="oee-trend">
+        <div class="inv-section-head">
+            <h2 id="oee-trend">Trend</h2>
+            <div class="d-flex flex-wrap gap-2">
+                <select class="form-select form-select-sm w-auto" aria-label="Equipment for the trend" value="@(TrendOf?.ToString() ?? "")"
+                        @onchange="@(e => _trendOf = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
+                    @foreach (var e in report.Equipment)
+                    {
+                        <option value="@e.EquipmentId">@e.Code · @e.Name</option>
+                    }
+                </select>
+                <select class="form-select form-select-sm w-auto" aria-label="Figure for the trend" value="@_trendMeasure" @onchange="@(e => _trendMeasure = e.Value?.ToString() ?? OeeTrend.Oee)">
+                    @foreach (var (measure, label) in OeeTrend.Measures)
+                    {
+                        <option value="@measure">@label</option>
+                    }
+                </select>
+                @if (!report.ByDay)
+                {
+                    <select class="form-select form-select-sm w-auto" aria-label="Points of the trend" value="@(_trendByDay ? "day" : "shift")"
+                            @onchange="@(e => _trendByDay = e.Value?.ToString() == "day")">
+                        <option value="shift">By shift</option>
+                        <option value="day">By day</option>
+                    </select>
+                }
+            </div>
+        </div>
+        @if (TrendOf is { } trendOf)
+        {
+            var points = OeeTrend.Points(report, trendOf, _trendMeasure, _trendByDay);
+            var (overall, below, measured) = OeeTrend.Summary(report, trendOf, _trendMeasure, points);
+            <OeeTrendChart Points="points" Label="@OeeTrend.LabelOf(_trendMeasure)" ByDay="@(report.ByDay || _trendByDay)" />
+            <p class="small text-muted mb-0">
+                @OeeTrend.LabelOf(_trendMeasure) over the period: @MachineView.Pct(overall).
+                @if (measured > 0)
+                {
+                    <span class="@(below > 0 ? "text-danger" : "")">@below of @measured @(report.ByDay || _trendByDay ? "days" : "shifts") below target.</span>
+                }
+                else
+                {
+                    <span>No target; set targets on <ScreenLink Href="site-settings#oee-targets" Permission="@PermissionCodes.SiteSettingsView">Site settings</ScreenLink>.</span>
+                }
+                The same figures as the @(report.ByDay ? "By day" : "By shift") table; a day adds its shifts' hours up.
+            </p>
         }
     </section>
 
@@ -292,6 +339,13 @@ else if (_error is null)
     private bool _paretoPlanned;
     private bool _paretoMicro;
     private bool _paretoByStops;
+    private Guid? _trendOf;
+    private string _trendMeasure = OeeTrend.Oee;
+    private bool _trendByDay;
+
+    // The trend's equipment: the one chosen, while the report still has it, else the first shown.
+    private Guid? TrendOf => _report is null ? null
+        : _trendOf is { } id && _report.Equipment.Any(e => e.EquipmentId == id) ? id : _report.Equipment.FirstOrDefault()?.EquipmentId;
     private int _rollup;
     private OeeReportDto? _report;
     private ApiException? _error;
@@ -375,7 +429,17 @@ else if (_error is null)
             <th class="inv-num">Avail.</th><th class="inv-num">Perf.</th><th class="inv-num">Quality</th><th class="inv-num">OEE</th>
         </text>;
 
-    private static RenderFragment FiguresCells(OeeFiguresDto f) =>
+    // A percentage with its target beneath (D-073); below it, the shortfall says so in words as well as color.
+    private static RenderFragment PctCell(decimal? value, decimal? target, bool strong = false) =>
+        @<td class="@(strong ? "inv-num fw-semibold" : "inv-num")">
+            @MachineView.Pct(value)
+            @if (target is { } t)
+            {
+                <div class="@(OeeTargetsView.Below(value, t) == true ? "small text-danger" : "small text-muted")">@(OeeTargetsView.Below(value, t) == true ? "below " : "of ")@OeeTargetsView.Pct(t)</div>
+            }
+        </td>;
+
+    private static RenderFragment FiguresCells(OeeFiguresDto f, OeeTargetFiguresDto? target = null) =>
         @<text>
             <td class="inv-num">@Qty(f.ScheduledHours)</td>
             <td class="inv-num">@Qty(f.PlannedHours)</td>
@@ -388,10 +452,10 @@ else if (_error is null)
                 }
             </td>
             <td class="inv-num">@f.Stops@(f.MicroStops > 0 ? $" + {f.MicroStops} micro" : "")</td>
-            <td class="inv-num">@MachineView.Pct(f.AvailabilityPct)</td>
-            <td class="inv-num">@MachineView.Pct(f.PerformancePct)</td>
-            <td class="inv-num">@MachineView.Pct(f.QualityPct)</td>
-            <td class="inv-num fw-semibold">@MachineView.Pct(f.OeePct)</td>
+            @PctCell(f.AvailabilityPct, target?.AvailabilityPct)
+            @PctCell(f.PerformancePct, target?.PerformancePct)
+            @PctCell(f.QualityPct, target?.QualityPct)
+            @PctCell(f.OeePct, target?.OeePct, strong: true)
         </text>;
 
     private static readonly string[] FigureHeaders =
@@ -402,16 +466,20 @@ else if (_error is null)
         [f.ScheduledHours, f.NonProductionHours, f.PlannedStopHours, f.PlannedHours, f.RunHours, f.DownHours, f.UncodedHours, f.NoSignalHours,
          f.RunWithoutJobHours, f.Stops, f.MicroStops, f.AvailabilityPct, f.PerformancePct, f.QualityPct, f.OeePct];
 
+    private static readonly string[] TargetHeaders = ["Availability target %", "Performance target %", "Quality target %", "OEE target %"];
+
+    private static IEnumerable<object?> TargetValues(OeeTargetFiguresDto? t) => [t?.AvailabilityPct, t?.PerformancePct, t?.QualityPct, t?.OeePct];
+
     private string File(string what) => Csv.FileName(what, SiteCode, Display.ToSite(Clock.GetUtcNow(), TimeZone));
 
     private Task ExportEquipmentAsync() => Downloads.CsvAsync(File("oee-equipment"), Csv.Write(
-        ["Equipment", "Name", .. FigureHeaders],
-        _report!.Equipment.Select(e => (IReadOnlyList<object?>)[e.Code, e.Name, .. FigureValues(e.Figures)]))).AsTask();
+        ["Equipment", "Name", .. FigureHeaders, .. TargetHeaders],
+        _report!.Equipment.Select(e => (IReadOnlyList<object?>)[e.Code, e.Name, .. FigureValues(e.Figures), .. TargetValues(e.Target)]))).AsTask();
 
     private Task ExportShiftsAsync() => Downloads.CsvAsync(File("oee-shifts"), Csv.Write(
-        ["Day", "Shift", "Crew", "Equipment", .. FigureHeaders],
+        ["Day", "Shift", "Crew", "Equipment", .. FigureHeaders, .. TargetHeaders],
         _report!.Shifts.Select(s => (IReadOnlyList<object?>)[s.ProductionDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), s.ShiftCode, s.CrewCode, s.EquipmentCode,
-            .. FigureValues(s.Figures)]))).AsTask();
+            .. FigureValues(s.Figures), .. TargetValues(s.Target)]))).AsTask();
 
     private Task ExportProductsAsync() => Downloads.CsvAsync(File("oee-products"), Csv.Write(
         ["Material", "Name", "Unit", "Good", "Scrap", "Runs", "Ran on", .. FigureHeaders],
