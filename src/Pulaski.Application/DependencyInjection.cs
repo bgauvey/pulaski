@@ -18,6 +18,8 @@ public static class DependencyInjection
         services.AddSingleton<IMaterialSourceAdapter, B2mmlMaterialSource>();
         services.AddSingleton<IPeopleSourceAdapter, CsvPeopleSource>();
         services.AddSingleton<IPeopleSourceAdapter, ScimPeopleSource>();
+        services.AddScoped<MachineData.OeeRollups>();
+        services.AddScoped<MachineData.OeeTargetWrites>();
 
         var handlerInterfaces = new[] { typeof(ICommandHandler<,>), typeof(IQueryHandler<,>) };
         var handlers = typeof(DependencyInjection).Assembly.GetTypes()

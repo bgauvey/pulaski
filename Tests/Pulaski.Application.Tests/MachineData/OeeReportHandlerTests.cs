@@ -65,7 +65,7 @@ public class OeeReportHandlerTests
 
     private static DateTimeOffset At(double hours) => T0.AddHours(hours);
 
-    private GetOeeReportHandler Handler() => new(Oee, _f.Stores.Units, _f.Time);
+    private GetOeeReportHandler Handler() => new(Oee, _f.Stores.OeeRollups, _f.Stores.Units, _f.Time);
 
     [Fact]
     public async Task A_line_takes_its_time_from_its_machines_and_its_output_from_its_runs()
@@ -132,12 +132,99 @@ public class OeeReportHandlerTests
     }
 
     [Fact]
-    public async Task Days_still_to_come_are_left_out_and_the_range_is_at_most_31_days()
+    public async Task One_shift_keeps_only_its_windows_their_stops_and_the_output_reported_in_them()
     {
-        var report = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day.AddDays(40), Day.AddDays(-10), null), CancellationToken.None);
+        var all = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day, Day, null), CancellationToken.None);
+        var shiftA = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day, Day, null, "A"), CancellationToken.None);
+        var other = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day, Day, null, "N"), CancellationToken.None);
 
-        Assert.Equal((Day.AddDays(10), Day.AddDays(40)), (report.From, report.To));
+        // Shift A is every window here, so it is the whole report; a shift not worked has nothing.
+        Assert.Equal(all.Equipment.Select(e => e.Figures), shiftA.Equipment.Select(e => e.Figures));
+        Assert.Equal(all.Utilization.Count, shiftA.Utilization.Count);
+        Assert.Equal((0m, 0, (decimal?)null), (other.Equipment[0].Figures.ScheduledHours, other.Equipment[0].Figures.Stops, other.Equipment[0].Figures.QualityPct));
+        Assert.Empty(other.Shifts);
+        Assert.Empty(other.Utilization);
+        Assert.Empty(other.Products);
+    }
+
+    [Fact]
+    public async Task Days_still_to_come_are_left_out_and_a_range_is_at_most_366_days()
+    {
+        var report = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day.AddDays(40), Day.AddDays(10), null), CancellationToken.None);
+
+        Assert.Equal((Day.AddDays(10), Day.AddDays(40), false), (report.From, report.To, report.FromRollups));
         Assert.Equal(0m, report.Equipment[0].Figures.ScheduledHours);
         Assert.Empty(report.Shifts);
+
+        var year = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day.AddDays(-400), Day.AddDays(40), null), CancellationToken.None);
+        Assert.Equal((Day.AddDays(40 - 365), Day.AddDays(40), true), (year.From, year.To, year.FromRollups));
+    }
+
+    [Fact]
+    public async Task A_day_rolled_up_gives_the_figures_the_history_gives()
+    {
+        // Three days on, the day is final.
+        _f.Time.SetUtcNow(HandlerFixture.Now.AddDays(3));
+        Oee.AddCount(_line, new(_run, At(15), _kg, 10m, 0m));    // after the shift: still the day's
+        var onRead = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day, Day, null), CancellationToken.None);
+
+        await Rollups().RollDayAsync(new OeeDayToRoll(_site, Day, 0, null), CancellationToken.None);
+        var rolled = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day, Day, null, FromRollups: true), CancellationToken.None);
+
+        Assert.True(rolled.FromRollups && rolled.ByDay);
+        Assert.Equal(onRead.Equipment.Select(e => e.Figures), rolled.Equipment.Select(e => e.Figures));
+        Assert.Equal(onRead.Products.Select(p => (p.MaterialCode, p.GoodQty, p.ScrapQty, p.Runs, p.Figures)),
+            rolled.Products.Select(p => (p.MaterialCode, p.GoodQty, p.ScrapQty, p.Runs, p.Figures)));
+        Assert.Equal(onRead.Utilization, rolled.Utilization, new UtilizationRowComparer());
+        Assert.Equal(onRead.Shifts.Select(s => (s.ProductionDate, s.EquipmentId, s.Figures)), rolled.Shifts.Select(s => (s.ProductionDate, s.EquipmentId, s.Figures)));
+        Assert.Equal(510m, rolled.Products.Single().GoodQty);
+    }
+
+    [Fact]
+    public async Task Days_marked_or_rolled_before_a_settings_change_are_worked_out_again_and_beyond_31_left_out()
+    {
+        _f.Time.SetUtcNow(HandlerFixture.Now.AddDays(3));
+        await Rollups().RollDayAsync(new OeeDayToRoll(_site, Day, 0, null), CancellationToken.None);
+        var rolls = _f.Stores.OeeRollups;
+
+        // Rolled, then a late change marks it: it is worked out from the history again until it is rolled again.
+        rolls.Mark(_site, Day, HandlerFixture.Now.AddDays(3));
+        Assert.Empty(await rolls.ListCurrentDaysAsync(_site, Day, Day, CancellationToken.None));
+        await Rollups().RollDayAsync(new OeeDayToRoll(_site, Day, 0, HandlerFixture.Now.AddDays(3)), CancellationToken.None);
+        Assert.Single(await rolls.ListCurrentDaysAsync(_site, Day, Day, CancellationToken.None));
+
+        // A settings change makes every rolled day of the site out of date.
+        rolls.SiteChanged(_site);
+        Assert.Empty(await rolls.ListCurrentDaysAsync(_site, Day, Day, CancellationToken.None));
+
+        // 40 days and none current: the newest 31 are worked out now, the 9 before are left out and named.
+        var report = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day.AddDays(-37), Day.AddDays(2), null), CancellationToken.None);
+        Assert.Equal([.. Enumerable.Range(0, 9).Select(d => Day.AddDays(-37 + d))], report.LeftOutDays);
+        Assert.Contains(report.Notes, n => n.StartsWith("9 days aren't included", StringComparison.Ordinal));
+        Assert.Equal(6.5m, report.Shifts.Single(s => s.ProductionDate == Day && s.EquipmentId == _line).Figures.RunHours);
+    }
+
+    [Fact]
+    public async Task Figures_carry_the_target_of_their_day()
+    {
+        Oee.Targets.Add(new(Guid.CreateVersion7(), _site, null, Day.AddDays(-30), null, new(null, null, null, 50m)));
+        Oee.Targets.Add(new(Guid.CreateVersion7(), _site, _capper, Day, null, new(95m, null, null, null)));
+
+        var report = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day, Day, null), CancellationToken.None);
+
+        Assert.Equal(50m, report.Equipment.Single(e => e.EquipmentId == _line).Target!.OeePct);
+        Assert.Equal((95m, (decimal?)null), (report.Equipment.Single(e => e.EquipmentId == _capper).Target!.AvailabilityPct,
+            report.Equipment.Single(e => e.EquipmentId == _capper).Target!.OeePct));
+        Assert.All(report.Shifts.Where(s => s.EquipmentId == _line), s => Assert.Equal(50m, s.Target!.OeePct));
+    }
+
+    private OeeRollups Rollups() => new(Oee, _f.Stores.OeeRollups, _f.Stores.OeeRollups, _f.Stores.Units, _f.Stores.UnitOfWork, _f.Time);
+
+    private sealed class UtilizationRowComparer : IEqualityComparer<Contracts.MachineData.UtilizationRowDto>
+    {
+        public bool Equals(Contracts.MachineData.UtilizationRowDto? x, Contracts.MachineData.UtilizationRowDto? y) =>
+            (x?.EquipmentId, x?.Use, x?.ReasonCodeId, x?.NoSignal, x?.Hours, x?.SharePct, x?.Stops) == (y?.EquipmentId, y?.Use, y?.ReasonCodeId, y?.NoSignal, y?.Hours, y?.SharePct, y?.Stops);
+
+        public int GetHashCode(Contracts.MachineData.UtilizationRowDto obj) => HashCode.Combine(obj.EquipmentId, obj.Use, obj.ReasonCodeId);
     }
 }

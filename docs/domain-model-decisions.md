@@ -944,7 +944,7 @@ A stop's reason comes from its first-out code through the profile; with no code,
 
 **Line state** (answers the open question). Each line sets how its state comes from its machines: `series` (sequential process, the worst machine state), `parallel` (parallel operations, the best), `constraint_machine`, or `own_tags`. From worst to best: no signal, stopped or faulted, held, waiting, ready or transitioning, producing.
 
-**OEE.** Availability × performance × quality by equipment, line, shift and product, computed on read from the raw history; performance uses the ideal rate of the run standard (D-034). Rollups (`ts.oee_rollup`) come later and key on production date, schedule and shift code like labor (D-038, D-040), not `shift_instance`.
+**OEE.** Availability × performance × quality by equipment, line, shift and product, computed on read from the raw history; performance uses the ideal rate of the run standard (D-034). Daily rollups (`ts.oee_rollup`) came with D-072, keyed on equipment and production date, with each window's shift code, not `shift_instance`.
 
 **Events.** State changes, counts and stops land in `ts` tables, not the audit log (telemetry boundary above). Operator coding, profile, binding and reason changes are events as usual: `pulaski.machine_profile.created.v1`, `…updated.v1`, `…state_set.v1`, `…code_set.v1`, `…reasons_set.v1`, `…imported.v1`, `pulaski.equipment.machine_data_set.v1`, `pulaski.equipment.stop_reason_override_set.v1`.
 
@@ -992,7 +992,9 @@ Utilization and OEE by equipment, line, shift and product (charter v1 item 6), w
 
 **Rows.** By equipment (every active piece that tracks state, in tree order; equipment that runs no jobs has availability only); by shift (each equipment × working window); by product (material and job unit, over the time inside its runs, with good and scrap in the job's unit); and the time of each equipment by use and reason, with the stops that started in the period. A stop already going on when the period began isn't counted again.
 
-**Bounds.** Stops are read back 35 days before the period; one older than that still shows as down, uncoded. Rollups (`ts.oee_rollup`) stay for later, keyed on production date, schedule and shift code (D-050), once reading on demand is too slow.
+**Bounds.** Stops are read back 35 days before the period; one older than that still shows as down, uncoded. Periods over 31 days come from daily rollups (D-072).
+
+**One shift, and the stop Pareto** (issue #21). `shiftCode` keeps only that shift's windows: their time and stops, and the output reported in them (a count belongs to the window it was made in, else the last one before it, so a count between two shifts goes with the earlier one). Equipment without shifts has none then. The stop Pareto is worked out on screen (`StopPareto`) from the report's own time-by-use-and-reason rows, so it shares their classification, period, equipment and shift by construction. It adds up the top equipment shown (a line's time already includes its machines', so they aren't counted again), ranks down time by reason (Uncoded and No signal named as such), optionally with planned stops and micro-stops, by time or by number of stops, with each reason's share and the running total. It is exported as CSV; there is no chart yet (#67).
 
 ## Material source adapters (D-053, proposed)
 
@@ -1350,7 +1352,12 @@ Issue #40. `core.reason_code.parent_id` and `is_selectable` existed but nothing 
 
 **Reading.** `core.reason_tree()` (a `LANGUAGE sql STABLE` function, recursive with a cycle guard) gives depth, the group path ("Mechanical › Jam") and a tree-order sort key. The Reasons screen lists each kind in tree order with indentation and an **Under** choice. Pickers (`ReasonCodeDto.GroupPath`, `Display.ReasonLabel`) show the path and keep tree order.
 
-**Not done.** Report roll-up by group, and converting a reason to a group or back.
+**Roll-up and conversion (#86).** Reports total by group on read, never stored, so a moved reason takes its history to its new group:
+
+- `core.reason_tree()` also returns `group_ids` (the groups above, top first). The OEE report's utilization rows carry `ReasonGroups`; `ReasonRollup` (web) adds rows up to the group at the chosen level (a reason filed less deep stays itself) for *Where the time went* and the stop Pareto, which therefore still can't disagree with the report. Stops and the journal show the group path beside the reason.
+- `ConvertReasonCodeCommand` (`PUT /api/reason-codes/{id}/group`, `reasons.manage`, event `pulaski.reason_code.converted.v1`), under the kind lock: a reason becomes a group only if nothing refers to it (`core.reason_code_uses(id)`, which finds the referring tables from the foreign keys, so a new table is covered; it runs with its owner's rights and returns only table names); a group becomes a reason only when empty, a utilization one with a class. A group never needs a comment and has no class.
+
+This replaces "fixed at creation" above: being a group may change while history stays meaningful.
 
 ## Reversing declarations (D-063, proposed)
 
@@ -1507,7 +1514,14 @@ Issue #23. Stops came only from machine data (D-050), so an outage the machine d
 
 **Permission.** The new `downtime.adjust` (implies `machines.view`; Supervisor by default). Coding stays `downtime.code`. Endpoints `POST /api/machines/stops`, `/stops/{id}/split`, `/stops/merge`; Operate → Machines → Stops has **Enter a stop**, **Split** on a row, and ticks to merge.
 
-**Not done.** Changing a stop's times or voiding one entered in error (a split or a new entry does it for now); undoing an adjustment; adjusting a machine's state history (only stops); machine data that arrives late for time already covered by a stop entered by hand still opens its own stop, which may then overlap.
+**Not done.** Adjusting a machine's state history (only stops).
+
+**Follow-ups** (issue #68). Three more adjustments, each replacing and never editing, each an event. Every stop that is replaced without a replacement keeps why in `superseded_note`.
+- **Retime** (`RetimeStopCommand`, `retime` source): a closed, current stop within 31 days gets other times (in the past, within 31 days, overlapping no other current stop of the machine) and keeps all it held.
+- **Void** (`VoidStopCommand`): only a stop entered by hand. It is superseded with nothing in its place, noted *Removed: why*. A machine's own stop is split, merged or retimed instead.
+- **Undo** (`UndoStopAdjustmentCommand`, `restore` source): a split, merge or retime whose stops all are still current, and whose replaced stops would overlap no other current stop. Its stops are superseded (*Undone: why*) and copies of the stops it replaced come back with their reasons, coding and micro-stop flag. One adjustment's stops are found by the same `replaces_ids` and `adjusted_at`. Restoring by copy keeps history append-only. A stop entered by hand is removed, not undone.
+- **Late machine data** (`trim` source): when ingest closes a machine stop overlapping another current stop of the machine (one entered or adjusted by hand), the machine stop is superseded (*Covered by a stop entered or adjusted by hand*) and only the parts nothing covers are kept, micro-stops by the machine's threshold. Whoever entered the stop by hand knew more than the machine. An open stop is trimmed when it closes, so it may overlap until then.
+- Permission `downtime.adjust`; endpoints `POST /api/machines/stops/{id}/retime`, `/void`, `/undo`; buttons on Operate → Machines → Stops.
 
 ## Overview live figures (D-070, proposed)
 
@@ -1580,6 +1594,69 @@ monthly partitions older than `Retention:ProcessValueDays` (90), on the API's 12
 **Not yet:** OPC UA events and alarms-and-conditions (alarms come from code-valued tags), OPC UA reverse connect, writing to
 machines, EtherNet/IP tag browsing and arrays, text process values, charts of process values, and statistical process control
 on them (#65).
+
+## Daily OEE rollups (D-072, proposed)
+
+Issue #66. The OEE report (D-052) was worked out from the history on every view and covered at most 31 days.
+
+**One figuring, kept by day.** `OeeFigurer` works out each piece of equipment's working windows (`OeeWindowFigures`: a tally of times in ticks
+and output, time by use and reason, output by product with its runs, runs without an ideal rate). The on-read report and the rollups both
+use it, and one assembler adds windows up into the report's tables, so a day's rollup gives exactly what the history gives. Windows add up:
+a period's report is the sum of its days.
+
+**Each count belongs to one day.** A count belongs to the window it was made in, else the last that started before it on its own site-local
+day or the day before; with neither, to its day outside every window (in the day's totals, in no shift). Before, a report's totals took
+every count up to the end of the day after its last day, so two adjoining periods counted some output twice.
+
+**Storage.** Not partitioned, updated in place, never deleted (`pulaski_app` has SELECT/INSERT/UPDATE): `ts.oee_rollup` (equipment + production
+day → the windows as `jsonb`, an empty array for none), `ts.oee_rollup_day` (site + day: rolled at, rolled generation, `dirty_at`),
+`ts.oee_rollup_site` (generation). It replaces the planned hourly `ts.oee_rollup`, which nothing wrote. Names of reasons, groups and
+materials are looked up when the report is read, so renames and regrouping never need a re-roll.
+
+**Rolling.** `OeeRollupService` (API hosted service; `Rollups:Oee:Enabled`, `PollSeconds` 60, `DaysPerRound` 31) calls `OeeRollups.RollAsync`:
+days of every active site with equipment that tracks state, from 366 days back (no earlier than 35 days before the site was made) to the
+day before yesterday, newest first, that were never rolled, are marked, or were rolled at an older generation. Each day is worked out for
+the whole site, then saved with the generation and `dirty_at` seen before; the saved day stays marked if `dirty_at` changed meanwhile, so a
+change made while rolling is never lost.
+
+**Re-rolling.** In the transaction of the change, in the repositories:
+- *History* marks days (`OeeRollupMarks.MarkAsync`; from the day before the change's first day, to its last, never later than the day before
+  yesterday, so live data marks nothing): stops from ingest, entered, adjusted, superseded or coded; state changes (from their time to now);
+  runs started, ended or changed; reported output and its corrections.
+- *Settings* move the site to a new generation (`SiteChangedAsync`): equipment created or changed (tree, flags, time zone), machine-data
+  settings (derivation, constraint, micro-stop threshold), equipment calendars, shift schedules and overrides, capabilities (ideal rates),
+  and a utilization reason changed (every site for an enterprise-wide one). Unit conversions move every site on.
+
+**Reading.** Up to 31 days the report is worked out from the history, as before. Longer (to 366 days), or with `FromRollups`, current days
+come from rollups and the rest (today, yesterday, marked or out-of-date days) from the history, newest first and at most 31 of them; any
+older ones are left out, listed in `LeftOutDays` and a note. Such a report has `FromRollups` and `ByDay` (by-shift rows become one row per
+equipment and day; with a shift chosen, that shift's day rows).
+
+**Not covered.** Changes to a job after its runs (material, unit, planned-downtime flag) don't re-roll; they don't happen in the app today.
+
+## OEE targets and trend (D-073, proposed)
+
+Issue #67. The OEE report had no targets and no charts.
+
+**Targets are site data by period.** `core.oee_target`: a site's default (`equipment_id` null) or one piece of equipment's (it must be active
+equipment of the site that tracks state), with availability, performance, quality and OEE percentages (each optional, at least one; above 0, at
+most 100, one decimal). A period is in force from `effective_from` up to, not including, `effective_to`; a scope's periods never overlap
+and are ended, never deleted. `OeeTargets` (domain, pure): `Set` from a day on the latest period's first day changes it; later, ends the
+latest there (if still in force) and adds an open one; earlier is refused. `End` ends the latest on a later day. `InForce`: the equipment's
+own period, else the site's, whole (no mixing of figures).
+
+**Writes.** `SetOeeTargetCommand` / `EndOeeTargetCommand` (`PUT /api/oee-targets/sites/{siteId}`, `POST …/end`, `site_settings.manage`), events
+`pulaski.oee_target.set.v1` / `.ended.v1`. A scope is locked through its site's or equipment's row (`FOR NO KEY UPDATE`), then its periods
+read; the caller sends the version of the scope's latest period (0 for none): 409 when it changed. `GET /api/oee-targets/sites/{siteId}`
+with `site_settings.view` or `machines.view`. Set on Configure → Site settings (`OeeTargetsSection`).
+
+**In the report.** Equipment rows carry the targets of the period's last day (today if that is still to come); shift and day rows their own
+day's (`Target`). Targets are read when the report is, never kept in rollups (D-072), so a change shows at once.
+
+**Trend.** The OEE tab charts one figure for one piece of equipment, by shift or by day (by day only beyond 31 days), as inline SVG
+(`OeeTrendChart`, no JavaScript): the line, each point's target as a dashed step, points below target in the danger color and labelled so.
+The points are the report's own shift (or day) rows (`OeeTrend.Points`); a day of shifts adds their hours up (`OeeTrend.Combine`), so the
+chart can't disagree with the tables. The stop Pareto stays a table (#21).
 
 ## Application architecture
 

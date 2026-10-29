@@ -2,6 +2,8 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.Shifts;
 using Pulaski.Infrastructure.Persistence;
 
+using Pulaski.Infrastructure.MachineData;
+
 namespace Pulaski.Infrastructure.Shifts;
 
 /// <summary>Write side for shift schedules and the working time equipment follows (D-038).</summary>
@@ -70,8 +72,12 @@ internal sealed class ShiftRepository(DbSession session) : IShiftRepository
     public Task<long> InsertAsync(ShiftScheduleRecord schedule, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(Insert, Args(schedule, at), cancellationToken);
 
-    public Task<long> UpdateAsync(ShiftScheduleRecord schedule, DateTimeOffset at, CancellationToken cancellationToken) =>
-        session.ExecuteScalarAsync<long>(Update, Args(schedule, at), cancellationToken);
+    public async Task<long> UpdateAsync(ShiftScheduleRecord schedule, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var version = await session.ExecuteScalarAsync<long>(Update, Args(schedule, at), cancellationToken);
+        await OeeRollupMarks.SiteChangedAsync(session, schedule.SiteId, cancellationToken);
+        return version;
+    }
 
     public async Task<IReadOnlyList<string>> ListCrewCodesAsync(Guid siteId, CancellationToken cancellationToken) =>
         [.. await session.QueryAsync<string>(CrewCodes, new { SiteId = siteId }, cancellationToken)];
@@ -84,8 +90,12 @@ internal sealed class ShiftRepository(DbSession session) : IShiftRepository
             ? new Versioned<EquipmentCalendar>(new EquipmentCalendar(r.Id, r.SiteId, r.Code, r.Level, r.Mode, r.ShiftScheduleId), r.Version)
             : null;
 
-    public Task<long> SetEquipmentCalendarAsync(Guid equipmentId, string mode, Guid? shiftScheduleId, DateTimeOffset at, CancellationToken cancellationToken) =>
-        session.ExecuteScalarAsync<long>(SetCalendar, new { Id = equipmentId, Mode = mode, ScheduleId = shiftScheduleId, At = at }, cancellationToken);
+    public async Task<long> SetEquipmentCalendarAsync(Guid equipmentId, string mode, Guid? shiftScheduleId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var version = await session.ExecuteScalarAsync<long>(SetCalendar, new { Id = equipmentId, Mode = mode, ScheduleId = shiftScheduleId, At = at }, cancellationToken);
+        await OeeRollupMarks.SiteOfEquipmentChangedAsync(session, equipmentId, cancellationToken);
+        return version;
+    }
 
     public Task<bool> IsShiftApprovedAsync(Guid siteId, Guid scheduleId, DateOnly productionDate, string code, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(ShiftApproved, new { SiteId = siteId, ScheduleId = scheduleId, Date = productionDate, Code = code }, cancellationToken);

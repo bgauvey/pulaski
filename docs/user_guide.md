@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-10-25 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-10-29 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#21-reference) tables give the exact rules.
 
@@ -1105,6 +1105,8 @@ The **Journal** tab lists every movement in the site, newest first: receipts, wr
 
 A material's and a job's pages have a **Movements** button that opens the journal filtered to them.
 
+A movement's reason shows the groups it is filed under after it (*Damaged · Handling › Forklift*); the export has them in a **Reason group** column.
+
 ### Count a location
 
 A **count** checks what is really at a location and puts the records right.
@@ -1158,12 +1160,13 @@ When a receipt, consumption, production, write-up or write-off is entered late, 
 4. A **utilization** reason also has a **Class**: *Runtime* (producing or running slow), *Downtime* (an unplanned stop, counted against availability) or *Planned (not in OEE)* (setup, teardown, cleaning, planned maintenance, breaks). Choose it when you add the reason; you can change it later on its row and **Save**.
 5. To keep a long list tidy, file reasons under **groups**. Add a group by ticking **Group** before you click **Add**: it holds reasons (and other groups) but is never chosen itself. Choose **Under** to add a reason or group straight into a group.
 6. To move a reason or group, choose another group in its row's **Under** list (or **At the top**) and click **Save**. Everything inside a group moves with it.
+7. To turn a reason into a group, click **Make group** on its row. To turn an empty group into a reason, click **Make reason**; on the utilization tab, choose its **Class** first, then click **Make reason** again (**Cancel** leaves it a group).
 
 **In detail**
 
 - **Where people see it.** Wherever a reason is chosen (writing stock up or off, holds, scrap, ending a run, indirect labor, coding a machine stop), it is listed with its groups, such as *Mechanical › Jam*, in the order of the tree. Groups aren't offered.
 - **History doesn't change.** Movements, stops, reports and labor keep pointing at the reason itself. Moving it to another group, or renaming a group, changes nothing they recorded; they go on showing the reason's code and name.
-- **Being a group is fixed.** Like the code and kind, whether a reason is a group can't change once it is created, so a reason history used never becomes a heading. To regroup, add a new group and move reasons into it.
+- **Reason or group.** Only a reason that has never been recorded anywhere (a movement, a stop, a profile's mapping, a labor session…) can become a group, so what history recorded keeps its meaning; Pulaski says where it was used. To file a used reason under a heading, add a new group and move the reason into it. A group becomes a reason only once it is empty: move what it holds out first. A reason that becomes a group stops needing a comment and loses its class, and is no longer offered.
 - **The rules.** A reason goes only under a group of its own kind, never inside itself, and at most five levels deep. A reason for every site goes only under a group for every site; a site's reason goes under a group for every site or for that site. The **Under** list offers only groups that fit.
 - **Switching off.** A group can be switched off only when everything in it is off. Nothing can be switched on, or moved, into a group that is off.
 - **Order** sorts a reason among the others in the same group; the tree is shown group by group.
@@ -1813,12 +1816,13 @@ Import the same file, or next week's, as often as you like: people are matched o
 
 ## 17. Site settings
 
-**Configure → Site settings.** Three things that apply to a whole site: who places changeovers on the schedule, how far production reports may go, and the holidays and shutdowns when the site doesn't work. Each part has its own **Save** button.
+**Configure → Site settings.** What applies to a whole site: who places changeovers on the schedule, how far production reports may go, the OEE it aims for, and the holidays and shutdowns when the site doesn't work. Each part has its own **Save** button.
 
 ### Ideas to know first
 
 - **Changeovers** are the time a line needs between two materials. *Automatic* (the default) lets Pulaski add them to the schedule; *Placed by planners* leaves it to the planners, and Pulaski warns where one is missing. See [Changeovers](#changeovers).
 - **Reporting tolerances** keep production reports believable. The output tolerance is a **limit**: a report that would take a run past its length × the line's ideal rate × the tolerance is refused. The consumption tolerance is a **warning**: using more of a component than planned × the tolerance is recorded, with a warning to check it. Both are 110% to start with.
+- **OEE targets** say what availability, performance, quality and OEE should reach. The site's targets apply to all its equipment; a machine or line can have targets of its own, which replace the site's. Each set of targets applies from a day on, so earlier days keep the targets they had. The OEE report shows each figure against its target.
 - **Calendar exceptions** take time out of the calendar: a holiday, a planned shutdown, a week with no demand. One set on the site covers everything in it; one on an area or line covers that and everything below it, whichever [shift schedule](#15-shift-schedules) it follows. Planning places no work in it.
 
 ### Choose who places changeovers
@@ -1836,6 +1840,15 @@ Import the same file, or next week's, as often as you like: people are matched o
 
 1. Under **Reporting tolerances**, type the **Output** and **Consumption** percentages, from 100 to 1000. The example under each box shows what the number allows.
 2. Click **Save tolerances**. **Use the defaults** puts both back to 110%; click **Save tolerances** to keep that.
+
+### Set OEE targets
+
+1. Under **OEE targets**, the table shows the targets in force today; **Show earlier and ended targets** shows all of them.
+2. To set targets, choose what they are **For** (**Site (default)** or a piece of equipment), the day they start (**From**, today to begin with), and type the **Availability**, **Performance**, **Quality** and **OEE** percentages you want. Leave a box blank for no target.
+3. Click **Save targets**. **Change** on a row fills the form with its targets, from today.
+4. To stop a target, click **End today**: from today, equipment follows the site's targets again (or, for the site's, there are none).
+
+**In detail:** a new start day ends the targets before it the day before; starting on the same day as the latest targets changes them instead. Targets can't start before the latest ones already set, and they are never deleted, so the report always measures a day against the targets it had. Each figure is above 0 and at most 100, with one decimal at most. A machine's own targets replace the site's whole: a figure left blank there has no target, even if the site has one.
 
 ### Calendar exceptions: holidays and shutdowns
 
@@ -1998,7 +2011,7 @@ The board refreshes every 5 seconds.
 ### Code stops
 
 1. Open the **Stops** tab. The heading shows how many are waiting. **Only stops to code** is ticked: stops with no reason, longer than the micro-stop threshold, including one still going on.
-2. Choose the **Equipment** and **Period** (8 hours, 24 hours or 7 days) to look at. Untick **Only stops to code** to see every stop, with its reason; tick **Show micro-stops** to see those too. The newest 500 show first; when there are more, the list says so under it: click **Load more** for the next 500. Stops already loaded stay as the list refreshes.
+2. Choose the **Equipment** and **Period** (8 hours, 24 hours or 7 days) to look at. Untick **Only stops to code** to see every stop, with its reason (and the groups it is filed under, beneath it); tick **Show micro-stops** to see those too. The newest 500 show first; when there are more, the list says so under it: click **Load more** for the next 500. Stops already loaded stay as the list refreshes.
 3. Click **Code** on a stop. Choose the **Reason**, add a **Comment** if you like (some reasons need one), and click **Save**. Where the stop code mapped a reason, **Confirm …** accepts it in one click; until then the list shows it as *to confirm*.
 4. **Change** on a coded stop gives it another reason. The list shows who coded it, their comment, and the reason the code gave when the two differ.
 
@@ -2025,7 +2038,19 @@ It may not overlap another stop of that machine, must have ended already, and ca
 1. Tick the stops to merge, at least two, all of one machine and next to each other: no other stop of that machine between them. Tick **Show micro-stops** to merge those too.
 2. Say why in the bar above the list, and click **Merge into one stop**. The merged stop runs from the first one's start to the last one's end and keeps the first one's reason.
 
-Only stops that have ended can be split or merged. **Show replaced stops** lists the stops that were split or merged too, with who replaced them and when.
+**Change a stop's times** (the machine's clock was off, or the stop really ended later):
+
+1. Click **Change times** on the stop, set **From** and **to** (site time), say why, and click **Change times**.
+
+It keeps its reason and coding, and may not overlap another stop of the machine.
+
+**Remove a stop entered in error:** click **Remove** on it (only stops entered by hand have it), say why, and click **Remove stop**. It stays in the list as *removed*, with why.
+
+**Undo a split, merge or change of times:** click **Undo …** on a stop it made, say why, and click **Undo**. The stops it replaced come back, with their reasons and coding. It works only while none of its stops has been adjusted since (undo that first), and only if the stops coming back wouldn't overlap another stop.
+
+Only stops that have ended can be split, merged or retimed. **Show replaced stops** lists the stops that were replaced or removed too, with who did it, when and, for a removed or undone one, why.
+
+**Machine data that arrives late.** If the edge was offline and you entered the outage by hand, the machine's own stop for that time may arrive later. Pulaski keeps your stop: the machine's stop is replaced by only the parts of it your stop doesn't cover (shown as **Trimmed**), so stops never overlap. This happens when the machine's stop ends.
 
 ### Alarms and warnings
 
@@ -2044,14 +2069,17 @@ The mean weighs each reading by how long it held, since readings are recorded wh
 ### Utilization and OEE reports
 
 1. Open the **Utilization and OEE** tab.
-2. Choose the production days (**From** and **to**, at most 31 days) and, if you like, one piece of **Equipment** (it and everything below it); click **Show**. It opens on the last 7 days, all equipment.
+2. Choose the production days (**From** and **to**, at most 366 days) and, if you like, one piece of **Equipment** (it and everything below it) and one **Shift**; click **Show**. It opens on the last 7 days, all equipment, all shifts.
 3. **By equipment** lists each piece of equipment that tracks state, machines indented under their line, with its scheduled, planned, run and down hours, stops, and **availability**, **performance**, **quality** and **OEE**. Down time not coded yet shows as *uncoded* under the hours.
-4. **By shift** shows the same for each shift worked, for the line (the top of each group); choose one machine to see its own shifts.
+4. **By shift** shows the same for each shift worked, for the line (the top of each group); choose one machine to see its own shifts. For a period longer than 31 days it is **By day**: one row per day, all shifts together (or the shift you chose).
 5. **By product** shows each material made: where it ran, how many runs, good and scrap as reported, and its OEE over the time inside its runs.
-6. **Where the time went** breaks one piece of equipment's scheduled time into run, micro-stops, down (by reason, **Uncoded** or **No signal**), planned stops (by reason) and non-production modes, longest first. Choose the equipment in the section's list.
-7. **Export CSV** on each section saves it as a file.
+6. **Stop Pareto** ranks the down time by reason, the biggest first, across the lines and machines shown: each reason's hours and stops, its share, the running total, and which equipment it happened on. **Uncoded** and **No signal** are listed like reasons. Tick **Planned stops** or **Micro-stops** to rank those too, and choose **Rank by number of stops** to rank by how often rather than how long. The reasons in bold make up the first 80%.
+7. **Where the time went** breaks one piece of equipment's scheduled time into run, micro-stops, down (by reason, **Uncoded** or **No signal**), planned stops (by reason) and non-production modes, longest first. Choose the equipment in the section's list.
+   When reasons are filed under [groups](#reason-codes), both the Pareto and this section have a list to total them: **Each reason**, **Top groups**, or **Groups, level 2** and deeper.
+8. **Trend** charts one figure (**OEE**, **Availability**, **Performance** or **Quality**) for one piece of equipment, shift by shift or day by day, with its target as a dashed line. Points below their target are red; hover a point for its value and target. Under the chart: the figure over the whole period and how many shifts or days fell below target.
+9. **Export CSV** on each section saves it as a file; the equipment and shift files have the targets too.
 
-A dash means there is nothing to measure that figure against, such as performance on a machine that doesn't run jobs.
+A dash means there is nothing to measure that figure against, such as performance on a machine that doesn't run jobs. With [OEE targets](#set-oee-targets) set, each percentage shows its target beneath it (*of 65%*), in red as *below 65%* when it falls short: equipment against the targets of the period's last day (or today), shifts and days against their own day's.
 
 ### In detail
 
@@ -2069,7 +2097,13 @@ A dash means there is nothing to measure that figure against, such as performanc
 - **Several products** add up by their time at the ideal rate (quantity ÷ ideal rate), so different units don't matter. A run without an ideal rate (no capability, or a rate whose unit doesn't convert) is listed in a note above the tables; its output shows in the product's good and scrap but not in performance or quality.
 - **Lines:** a line set to take its state from its machines takes its time from theirs: in series, at each moment the worst (down, then planned, then non-production, then run); in parallel, the best; or its constraint machine's. Its jobs and reports are its own, so the line has full OEE; a machine below it that runs no jobs has availability only.
 - **Stops** count the stops that started in the period (a stop already going on when it began isn't counted again); micro-stops are counted separately.
-- **Worked out when you ask:** nothing is stored, so coding a stop, changing a reason's class or correcting a shift schedule changes the report at once.
+- **One shift** keeps only that shift's working time, its stops and the output reported in it; output reported between shifts goes with the shift before, if that shift started the same day or the day before. Output reported on a day with no shift before it counts in that day's totals but in no shift. Equipment without shifts shows nothing for a shift. The shifts offered are those worked in the period.
+- **The stop Pareto** uses the same time as **Where the time went**, for the top equipment shown: a line's time already comes from its machines, so the machines below a line aren't added again. Choose one machine as the **Equipment** to rank its own stops.
+- **Totals by group** add up each reason under the group it is filed in at the level chosen; a reason filed less deep than that, or not in a group, stays itself. Groups are as they are now, so moving a reason to another group moves its time with it. The export of **Where the time went** has a **Groups** column.
+- **Longer periods** (more than 31 days, up to 366) come from **daily rollups**: Pulaski works each finished day out once, in the background, and keeps it. The report says so above the tables. Today and yesterday are always worked out when you ask, and so is any day being worked out again; if more than 31 days are waiting, the oldest are left out and a note names them (try again a little later).
+- **Rollups stay right.** A stop entered, adjusted or coded late, a late machine state, or output reported into an old run marks its day to be worked out again. Changing a shift schedule, equipment settings, a utilization reason's class, an ideal rate or a unit conversion works out every day of the site again (it takes a few minutes; meanwhile long reports leave out what isn't ready). A rolled day gives exactly the figures the history gives.
+- **The trend** uses the rows of the **By shift** (or **By day**) table. By day adds a day's shifts up from their hours, as the totals do, never averaging percentages. Output reported on a day outside every shift is in the totals but not in the trend.
+- **Worked out when you ask:** up to 31 days nothing is stored, so coding a stop, changing a reason's class or correcting a shift schedule changes the report at once.
 
 ---
 
@@ -2151,13 +2185,12 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Labor:** people come from HR or the ERP only as a file you import: nothing fetches them on a timer, someone missing from a file isn't switched off (send them with `active` = no), and qualifications aren't imported. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
 - **Materials import** from CSV or B2MML files, from an OData v4 connection on demand, or one item at a time through the API. Nothing fetches items on a timer, other kinds of service (plain REST, SOAP, a database) have no connection yet, and there are no adapters for label printing. Capabilities import from CSV only, and only for now: a future or past period is set on the material page. B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
-- **Machine data:** a stop's times can't be changed directly and a stop entered in error can't be removed (split it, or enter it again correctly, instead); adjustments can't be undone. Machine data that arrives late for time already covered by a stop entered by hand opens its own stop, which may then overlap it. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report has no charts (a stop Pareto, say: **Where the time went** lists the reasons longest first, as a table) or targets yet, isn't stored (each view works it out again, so a long period on many machines takes a moment), and covers at most 31 days. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
+- **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
 - **Batches:** a line's own batch size changes only the size; the tolerance stays the material's. The order form's batch hint shows the material's size, not each line's. A replacement is rounded up to whole batches, or planned for exactly what is left with a partial last batch; it can't be rounded down. A rejected partial batch shows in the job's reports as a correction (good down, scrap up).
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
 - **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, and scanning 2D codes or supplier barcodes beyond reading their text. Moves, holds, splits, merges, shipments and counts can't be back-dated (only quantity movements can, by up to 31 days), and a lot's location and status on a past date aren't reconstructed. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
 - **Reversing:** moves, holds and shipments only when they are the lot's latest movement; corrections of lot details, packing and unpacking aren't reversed (put them right with another movement). A lot that joined a balance where lots mix can't be taken back out as itself. Reversal is one movement at a time: there is no undoing a chain of dependent movements in one step.
-- **Reason groups** only tidy the lists people choose from: reports (OEE *Where the time went*, stops, the journal) still list each reason, not totals by group. A reason can't be turned into a group, or a group into a reason.
 - **Genealogy through a silo is an estimate** from the declared movements: a level tag can be bound to a silo, but its readings aren't used yet to confirm when it was empty or how it flowed. A reversed movement and its reversal are left out of the estimate, as if neither happened.
 - **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
 - **Allocations are kept up to date by hand:** nothing refreshes them when stock moves or the schedule changes; click **Refresh**. Suggestions don't prefer lots near the line, lots already in a container, or whole lots, and there are no picking lists; a substitution (a material the job doesn't plan) isn't allocated. Allocating doesn't stop another job consuming the stock: it only warns.

@@ -643,6 +643,15 @@ internal static class InventoryEndpoints
             TypedResults.Ok(await handler.HandleAsync(new MoveReasonCodeCommand(id, request.Version, request.ParentId), ct)))
         .RequirePermission(Permissions.Reasons, Site.Of(SiteOf.ReasonCode));
 
+        // A reason nothing refers to becomes a group; an empty group becomes a reason (#86).
+        reasons.MapPut("/{id:guid}/group", async Task<Ok<VersionResponse>> (
+            Guid id,
+            ConvertReasonCodeRequest request,
+            ICommandHandler<ConvertReasonCodeCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ConvertReasonCodeCommand(id, request.Version, request.IsGroup, request.UtilizationClass), ct)))
+        .RequirePermission(Permissions.Reasons, Site.Of(SiteOf.ReasonCode));
+
         routes.MapGet("/jobs/{id:guid}/materials", async Task<Ok<JobMaterialsDto>> (
             Guid id,
             IQueryHandler<GetJobMaterialsQuery, JobMaterialsDto> handler,

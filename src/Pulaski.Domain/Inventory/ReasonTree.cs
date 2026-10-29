@@ -76,6 +76,34 @@ public static class ReasonTree
             : null;
     }
 
+    /// <summary>
+    /// Why <paramref name="reason"/> can't become a group, or a group a reason, as asked; null when it can (#86). A reason that anything
+    /// refers to (<paramref name="uses"/>: stops, lots, labor, a machine's profile…) stays a reason, so what it recorded keeps meaning what
+    /// it meant; make a new group and move it in instead. A group becomes a reason once nothing is filed under it.
+    /// </summary>
+    /// <param name="kindTree">Every reason of the reason's kind.</param>
+    /// <param name="reason">The reason as it is now.</param>
+    /// <param name="toGroup">Whether it is to be a group.</param>
+    /// <param name="uses">Where it is referred to, as table names; empty when nowhere.</param>
+    public static string? WhyNotConvert(IReadOnlyCollection<ReasonCode> kindTree, ReasonCode reason, bool toGroup, IReadOnlyCollection<string> uses)
+    {
+        if (toGroup == reason.IsGroup)
+        {
+            return null;
+        }
+
+        if (toGroup)
+        {
+            return uses.Count > 0
+                ? $"{reason.Code} has been used ({string.Join(", ", uses.Order(StringComparer.Ordinal))}), so it stays a reason: what it recorded must keep its meaning. Make a new group and move {reason.Code} into it."
+                : null;
+        }
+
+        return kindTree.Where(r => r.ParentId == reason.Id).Select(r => r.Code).Order(StringComparer.Ordinal).ToList() is { Count: > 0 } inside
+            ? $"Move what is in {reason.Code} out first: {string.Join(", ", inside)}."
+            : null;
+    }
+
     /// <summary>The groups above a reason, nearest first.</summary>
     public static IReadOnlyList<ReasonCode> Ancestors(IReadOnlyCollection<ReasonCode> kindTree, ReasonCode reason)
     {

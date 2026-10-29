@@ -305,8 +305,8 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         GetAsync<IReadOnlyList<ProcessValueSeriesDto>>(Query("api/machines/process-values", ("equipmentId", equipmentId),
             ("from", from.ToString("O", System.Globalization.CultureInfo.InvariantCulture)), ("to", to.ToString("O", System.Globalization.CultureInfo.InvariantCulture)), ("tagId", tagId)), ct);
 
-    public Task<OeeReportDto> GetOeeReportAsync(Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId = null, CancellationToken ct = default) =>
-        GetAsync<OeeReportDto>(Query("api/machines/oee", ("siteId", siteId),
+    public Task<OeeReportDto> GetOeeReportAsync(Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId = null, string? shiftCode = null, CancellationToken ct = default) =>
+        GetAsync<OeeReportDto>(Query("api/machines/oee", ("siteId", siteId), ("shiftCode", shiftCode),
             ("from", from.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),
             ("to", to.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),
             ("equipmentId", equipmentId)), ct);
@@ -322,6 +322,15 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<StopsAdjustedResponse> MergeStopsAsync(MergeStopsRequest request, CancellationToken ct = default) =>
         SendAsync<StopsAdjustedResponse>(HttpMethod.Post, "api/machines/stops/merge", request, ct);
+
+    public Task<StopsAdjustedResponse> RetimeStopAsync(Guid id, RetimeStopRequest request, CancellationToken ct = default) =>
+        SendAsync<StopsAdjustedResponse>(HttpMethod.Post, $"api/machines/stops/{id}/retime", request, ct);
+
+    public Task<StopsAdjustedResponse> VoidStopAsync(Guid id, StopReasonedRequest request, CancellationToken ct = default) =>
+        SendAsync<StopsAdjustedResponse>(HttpMethod.Post, $"api/machines/stops/{id}/void", request, ct);
+
+    public Task<StopsAdjustedResponse> UndoStopAdjustmentAsync(Guid id, StopReasonedRequest request, CancellationToken ct = default) =>
+        SendAsync<StopsAdjustedResponse>(HttpMethod.Post, $"api/machines/stops/{id}/undo", request, ct);
 
     public Task<IReadOnlyList<ReasonCodeDto>> ListCodingReasonsAsync(Guid equipmentId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<ReasonCodeDto>>($"api/equipment/{equipmentId}/coding-reasons", ct);
@@ -908,6 +917,9 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> MoveReasonCodeAsync(Guid id, MoveReasonCodeRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/reason-codes/{id}/parent", request, ct);
 
+    public Task<VersionResponse> ConvertReasonCodeAsync(Guid id, ConvertReasonCodeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/reason-codes/{id}/group", request, ct);
+
     public Task<IReadOnlyList<StockOnDateDto>> StockOnDateAsync(Guid siteId, DateTimeOffset at, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<StockOnDateDto>>(Query("api/inventory/reports/stock-on-date", ("siteId", siteId), ("at", Iso(at))), ct);
 
@@ -1104,6 +1116,17 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<ExecutionPolicyDto> SetExecutionPolicyAsync(Guid siteId, SetExecutionPolicyRequest request, CancellationToken ct = default) =>
         SendAsync<ExecutionPolicyDto>(HttpMethod.Put, $"api/execution/sites/{siteId}/policy", request, ct);
+
+    // OEE targets (D-073)
+
+    public Task<IReadOnlyList<OeeTargetDto>> ListOeeTargetsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<OeeTargetDto>>($"api/oee-targets/sites/{siteId}", ct);
+
+    public Task<IReadOnlyList<OeeTargetDto>> SetOeeTargetAsync(Guid siteId, SetOeeTargetRequest request, CancellationToken ct = default) =>
+        SendAsync<IReadOnlyList<OeeTargetDto>>(HttpMethod.Put, $"api/oee-targets/sites/{siteId}", request, ct);
+
+    public Task<IReadOnlyList<OeeTargetDto>> EndOeeTargetAsync(Guid siteId, EndOeeTargetRequest request, CancellationToken ct = default) =>
+        SendAsync<IReadOnlyList<OeeTargetDto>>(HttpMethod.Post, $"api/oee-targets/sites/{siteId}/end", request, ct);
 
     // Terminals and badges (D-049): managing them as a signed-in user
 

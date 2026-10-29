@@ -499,6 +499,17 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         }
     }
 
+    /// <summary>Where each reason is referred to, as a test sets it.</summary>
+    public Dictionary<Guid, List<string>> ReasonUses { get; } = [];
+
+    public Task<IReadOnlyList<string>> ReasonCodeUsesAsync(Guid id, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<string>>([.. ReasonUses.GetValueOrDefault(id, [])]);
+        }
+    }
+
     public Task<long> InsertReasonCodeAsync(ReasonCode reason, CancellationToken cancellationToken)
     {
         lock (_lock)

@@ -4,6 +4,8 @@ using Pulaski.Application.EquipmentModel;
 using Pulaski.Domain.EquipmentModel;
 using Pulaski.Infrastructure.Persistence;
 
+using Pulaski.Infrastructure.MachineData;
+
 namespace Pulaski.Infrastructure.EquipmentModel;
 
 /// <summary>Write side for equipment. Every statement runs in the command's transaction.</summary>
@@ -84,11 +86,16 @@ internal sealed class EquipmentRepository(DbSession session) : IEquipmentReposit
     {
         var version = await session.ExecuteScalarAsync<long>(Insert, WithTime(equipment, at), cancellationToken);
         await session.ExecuteAsync(InsertClosure, new { equipment.Id, equipment.ParentId }, cancellationToken);
+        await OeeRollupMarks.SiteOfEquipmentChangedAsync(session, equipment.Id, cancellationToken);
         return version;
     }
 
-    public Task<long> UpdateAsync(Equipment equipment, DateTimeOffset at, CancellationToken cancellationToken) =>
-        session.ExecuteScalarAsync<long>(Update, WithTime(equipment, at), cancellationToken);
+    public async Task<long> UpdateAsync(Equipment equipment, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var version = await session.ExecuteScalarAsync<long>(Update, WithTime(equipment, at), cancellationToken);
+        await OeeRollupMarks.SiteOfEquipmentChangedAsync(session, equipment.Id, cancellationToken);
+        return version;
+    }
 
     public Task<bool> HoldsStockAsync(Guid equipmentId, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(HoldsStock, new { Id = equipmentId }, cancellationToken);

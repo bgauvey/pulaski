@@ -4,6 +4,8 @@ using Pulaski.Application.Scheduling;
 using Pulaski.Domain.Scheduling;
 using Pulaski.Infrastructure.Persistence;
 
+using Pulaski.Infrastructure.MachineData;
+
 namespace Pulaski.Infrastructure.Scheduling;
 
 /// <summary>Write side for scheduling. Every statement runs in the command's transaction.</summary>
@@ -82,6 +84,7 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
         SET ended_at = @At,
             status = 'ended'
         WHERE job_id = @JobId AND ended_at IS NULL
+        RETURNING equipment_id, started_at, ended_at
         """;
 
     // Ranks either side of the end of the line.
@@ -243,8 +246,18 @@ internal sealed class SchedulingRepository(DbSession session, IIdGenerator ids) 
     public Task<decimal> GetGoodQtyAsync(Guid jobId, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<decimal>(GoodQty, new { JobId = jobId }, cancellationToken);
 
-    public Task EndOpenRunsAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken) =>
-        session.ExecuteAsync(EndOpenRuns, new { JobId = jobId, At = at }, cancellationToken);
+    public async Task EndOpenRunsAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var ended = await session.QueryAsync<EndedRun>(EndOpenRuns, new { JobId = jobId, At = at }, cancellationToken);
+        await OeeRollupMarks.MarkAsync(session, ended.Select(r => (r.EquipmentId, r.StartedAt, r.EndedAt)), cancellationToken);
+    }
+
+    private sealed class EndedRun
+    {
+        public Guid EquipmentId { get; init; }
+        public DateTimeOffset StartedAt { get; init; }
+        public DateTimeOffset EndedAt { get; init; }
+    }
 
     public async Task<RankGap?> FindGapAsync(Guid lineId, Guid? beforeJobId, Guid? excludingJobId, CancellationToken cancellationToken)
     {

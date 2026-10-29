@@ -2,6 +2,7 @@ using Dapper;
 using Npgsql;
 using Pulaski.Application.Labor;
 using Pulaski.Application.MachineData;
+using Pulaski.Contracts.MachineData;
 using Pulaski.Domain.MachineData;
 using Pulaski.Infrastructure.Labor;
 using Pulaski.Infrastructure.Shifts;
@@ -11,6 +12,8 @@ namespace Pulaski.Infrastructure.MachineData;
 /// <summary>Read side for the utilization and OEE report (D-052): the machine history of a period, as recorded.</summary>
 internal sealed class OeeQueries(NpgsqlDataSource dataSource) : IOeeReadStore
 {
+    private const string Materials = "SELECT id, code, name FROM core.material WHERE id = ANY(@Ids)";
+
     private const string TimeZone = "SELECT time_zone FROM core.equipment WHERE id = @Id AND level = 'site'";
 
     // Tree order; each row's parent is the nearest equipment above it that tracks state, as on the Machines board.
@@ -94,7 +97,14 @@ internal sealed class OeeQueries(NpgsqlDataSource dataSource) : IOeeReadStore
         GROUP BY c.run_id, c.occurred_at, c.uom_id
         """;
 
-    private const string Reasons = "SELECT id, code, name, utilization_class FROM core.reason_code WHERE id = ANY(@Ids)";
+    // Each reason with the ids of the groups above it, top first (#86); then those groups' codes and names.
+    private const string Reasons = """
+        SELECT r.id, r.code, r.name, r.utilization_class, t.group_ids
+        FROM core.reason_code r JOIN core.reason_tree() t ON t.id = r.id
+        WHERE r.id = ANY(@Ids)
+        """;
+
+    private const string ReasonGroups = "SELECT id, code, name FROM core.reason_code WHERE id = ANY(@Ids)";
 
     public async Task<string?> GetSiteTimeZoneAsync(Guid siteId, CancellationToken cancellationToken)
     {
@@ -187,8 +197,40 @@ internal sealed class OeeQueries(NpgsqlDataSource dataSource) : IOeeReadStore
         }
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        var rows = await connection.QueryAsync<ReasonRow>(new CommandDefinition(Reasons, new { Ids = ids.ToArray() }, cancellationToken: cancellationToken));
-        return [.. rows.Select(r => new OeeReasonRecord(r.Id, r.Code, r.Name, r.UtilizationClass))];
+        var rows = (await connection.QueryAsync<ReasonRow>(new CommandDefinition(Reasons, new { Ids = ids.ToArray() }, cancellationToken: cancellationToken))).ToList();
+        var groupIds = rows.SelectMany(r => r.GroupIds ?? []).Distinct().ToArray();
+        var groups = groupIds.Length == 0
+            ? new Dictionary<Guid, ReasonGroupDto>()
+            : (await connection.QueryAsync<ReasonGroupRow>(new CommandDefinition(ReasonGroups, new { Ids = groupIds }, cancellationToken: cancellationToken)))
+                .ToDictionary(g => g.Id, g => new ReasonGroupDto(g.Id, g.Code, g.Name));
+        return [.. rows.Select(r => new OeeReasonRecord(r.Id, r.Code, r.Name, r.UtilizationClass,
+            [.. (r.GroupIds ?? []).Where(groups.ContainsKey).Select(g => groups[g])]))];
+    }
+
+    public async Task<IReadOnlyList<OeeMaterialRecord>> ListMaterialsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
+    {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. (await connection.QueryAsync<MaterialRow>(new CommandDefinition(Materials, new { Ids = ids.ToArray() }, cancellationToken: cancellationToken)))
+            .Select(m => new OeeMaterialRecord(m.Id, m.Code, m.Name))];
+    }
+
+    public async Task<IReadOnlyList<OeeTarget>> ListTargetsAsync(Guid siteId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. (await connection.QueryAsync<OeeTargetSql.Row>(new CommandDefinition(OeeTargetSql.OfSite, new { SiteId = siteId }, cancellationToken: cancellationToken)))
+            .Select(r => r.ToDomain())];
+    }
+
+    private sealed class MaterialRow
+    {
+        public Guid Id { get; init; }
+        public string Code { get; init; } = "";
+        public string Name { get; init; } = "";
     }
 
     private sealed class EquipmentRow
@@ -251,5 +293,13 @@ internal sealed class OeeQueries(NpgsqlDataSource dataSource) : IOeeReadStore
         public string Code { get; init; } = "";
         public string Name { get; init; } = "";
         public string? UtilizationClass { get; init; }
+        public Guid[]? GroupIds { get; init; }
+    }
+
+    private sealed class ReasonGroupRow
+    {
+        public Guid Id { get; init; }
+        public string Code { get; init; } = "";
+        public string Name { get; init; } = "";
     }
 }

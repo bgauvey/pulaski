@@ -124,6 +124,9 @@ public sealed record LotEventDto
     public string? JobNumber { get; init; }
     public string? ReasonCode { get; init; }
     public string? ReasonName { get; init; }
+
+    /// <summary>The groups the reason is filed under, top first, joined by ' › ' (#86).</summary>
+    public string? ReasonGroupPath { get; init; }
     public string? Comment { get; init; }
     public string? ActorId { get; init; }
     public Guid? RelatedLotId { get; init; }

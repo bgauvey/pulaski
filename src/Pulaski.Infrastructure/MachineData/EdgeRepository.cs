@@ -332,6 +332,8 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         {
             await session.ExecuteAsync(InsertStop, StopArgs(stop), cancellationToken);
         }
+
+        await OeeRollupMarks.MarkAsync(session, stops.Select(s => (s.EquipmentId, s.StartedAt, s.EndedAt ?? s.StartedAt)), cancellationToken);
     }
 
     public async Task UpdateStopsAsync(IReadOnlyList<MachineStop> stops, CancellationToken cancellationToken)
@@ -340,6 +342,8 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         {
             await session.ExecuteAsync(UpdateStop, StopArgs(stop), cancellationToken);
         }
+
+        await OeeRollupMarks.MarkAsync(session, stops.Select(s => (s.EquipmentId, s.StartedAt, s.EndedAt ?? s.StartedAt)), cancellationToken);
     }
 
     private static object StopArgs(MachineStop s) => new
@@ -398,6 +402,9 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
                 c.StopReason,
             }, cancellationToken);
         }
+
+        // A state counts until the next one, so a late one changes time up to now.
+        await OeeRollupMarks.MarkAsync(session, rows.GroupBy(r => r.EquipmentId).Select(g => (g.Key, g.Min(r => r.Change.OccurredAt), DateTimeOffset.UtcNow)), cancellationToken);
     }
 
     public async Task InsertCountsAsync(IReadOnlyList<MachineCountRow> rows, string actorId, CancellationToken cancellationToken)

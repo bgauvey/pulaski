@@ -240,6 +240,10 @@ else
                                 else if (s.OperatorReasonCode is not null)
                                 {
                                     <span>@MachineView.ReasonText(s)</span>
+                                    @if (s.ReasonGroupPath is { } path)
+                                    {
+                                        <div class="small text-muted">@path</div>
+                                    }
                                     @if (s.OperatorReasonId != s.MappedReasonId && s.MappedReasonCode is not null)
                                     {
                                         <div class="small text-muted">The code said @s.MappedReasonCode</div>
@@ -249,6 +253,10 @@ else
                                 else if (s.MappedReasonCode is not null)
                                 {
                                     <span>@MachineView.ReasonText(s)</span> <span class="chip ms-1" title="From the stop code; confirm it or give another">to confirm</span>
+                                    @if (s.ReasonGroupPath is { } path)
+                                    {
+                                        <div class="small text-muted">@path</div>
+                                    }
                                 }
                                 else
                                 {
@@ -256,7 +264,7 @@ else
                                 }
                                 @if (s.SupersededAt is not null)
                                 {
-                                    <div class="small"><span class="chip">replaced</span> by @s.SupersededBy, @Display.SiteTime(s.SupersededAt, Sites.Site?.TimeZone)</div>
+                                    <div class="small"><span class="chip">@(s.SupersededNote is null ? "replaced" : "removed")</span> by @s.SupersededBy, @Display.SiteTime(s.SupersededAt, Sites.Site?.TimeZone)@(s.SupersededNote is { } note ? $" · {note}" : "")</div>
                                 }
                                 @if (MachineView.SourceLabel(s.Source) is { } source)
                                 {
@@ -269,12 +277,42 @@ else
                                 {
                                     <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => StartCodingAsync(s)">@(s.OperatorReasonCode is null ? "Code" : "Change")</button>
                                 }
-                                @if (CanAdjustAny && MachineView.CanAdjust(s) && _splitting?.Id != s.Id)
+                                @if (CanAdjustAny && MachineView.CanAdjust(s) && _splitting?.Id != s.Id && _acting?.Stop.Id != s.Id)
                                 {
                                     <button type="button" class="btn btn-sm btn-outline-secondary ms-1" @onclick="() => StartSplit(s)">Split</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-1" @onclick="@(() => StartAction(s, "retime"))">Change times</button>
+                                }
+                                @if (CanAdjustAny && MachineView.CanVoid(s) && _acting?.Stop.Id != s.Id)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-danger ms-1" @onclick="@(() => StartAction(s, "void"))">Remove</button>
+                                }
+                                @if (CanAdjustAny && MachineView.CanUndo(s) && _acting?.Stop.Id != s.Id)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-1" @onclick="@(() => StartAction(s, "undo"))">Undo @(MachineView.SourceLabel(s.Source)?.ToLowerInvariant())</button>
                                 }
                             </td>
                         </tr>
+                        @if (_acting is { } acting && acting.Stop.Id == s.Id)
+                        {
+                            <tr @key="(s.Id, 3)">
+                                <td colspan="@Columns">
+                                    <form class="d-flex flex-wrap gap-2 align-items-center" @onsubmit="ActAsync" @onsubmit:preventDefault>
+                                        @if (acting.Kind == "retime")
+                                        {
+                                            <label class="small" for="retime-from">From</label>
+                                            <input id="retime-from" type="datetime-local" step="1" class="form-control w-auto" @bind="_newStart" />
+                                            <label class="small" for="retime-to">to</label>
+                                            <input id="retime-to" type="datetime-local" step="1" class="form-control w-auto" @bind="_newEnd" />
+                                        }
+                                        <input class="form-control inv-grow" maxlength="1000" aria-label="Why" placeholder="@ActionPrompt(acting.Kind)" @bind="_adjustComment" @bind:event="oninput" />
+                                        <button type="submit" class="btn @(acting.Kind == "void" ? "btn-danger" : "btn-primary")"
+                                                disabled="@(_saving || string.IsNullOrWhiteSpace(_adjustComment) || (acting.Kind == "retime" && (_newStart is null || _newEnd is null)))">@ActionLabel(acting)</button>
+                                        <button type="button" class="btn btn-link" @onclick="@(() => _acting = null)">Cancel</button>
+                                    </form>
+                                    <div class="small text-muted mt-1">@ActionHelp(acting)</div>
+                                </td>
+                            </tr>
+                        }
                         @if (_splitting?.Id == s.Id)
                         {
                             <tr @key="(s.Id, 2)">
@@ -372,12 +410,15 @@ else
     private StopEntry? _entry;
     private IReadOnlyList<ReasonCodeDto> _entryReasons = [];
     private DowntimeDto? _splitting;
+    private (DowntimeDto Stop, string Kind)? _acting;
+    private DateTime? _newStart;
+    private DateTime? _newEnd;
     private DateTime? _splitAt;
     private readonly Dictionary<Guid, DowntimeDto> _chosen = [];
     private string? _adjustComment;
     private bool _superseded;
 
-    private bool Adjusting => _entry is not null || _splitting is not null || _chosen.Count > 0;
+    private bool Adjusting => _entry is not null || _splitting is not null || _acting is not null || _chosen.Count > 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -639,13 +680,62 @@ else
     {
         var middle = stop.StartedAt + (stop.EndedAt!.Value - stop.StartedAt) / 2;
         var local = Display.ToSite(middle, Sites.Site?.TimeZone).DateTime;
-        (_splitting, _splitAt, _adjustComment) = (stop, local.AddTicks(-(local.Ticks % TimeSpan.TicksPerSecond)), null);
+        (_splitting, _splitAt, _adjustComment, _acting) = (stop, local.AddTicks(-(local.Ticks % TimeSpan.TicksPerSecond)), null, null);
     }
 
     private Task SplitAsync() =>
         _splitting is { } stop && Display.FromSiteLocal(_splitAt, Sites.Site?.TimeZone) is { } at
             ? AdjustAsync(() => Api.SplitStopAsync(stop.Id, new SplitStopRequest { StartedAt = stop.StartedAt, At = at, Comment = _adjustComment }))
             : Task.CompletedTask;
+
+    // Changing a stop's times, removing one entered by hand, undoing an adjustment (#68).
+    private void StartAction(DowntimeDto stop, string kind)
+    {
+        (_acting, _adjustComment, _splitting) = ((stop, kind), null, null);
+        DateTime? Local(DateTimeOffset? at) => at is { } t ? Display.ToSite(t, Sites.Site?.TimeZone).DateTime : null;
+        (_newStart, _newEnd) = (Local(stop.StartedAt), Local(stop.EndedAt));
+    }
+
+    private static string ActionPrompt(string kind) => kind switch
+    {
+        "retime" => "Why change its times (needed)",
+        "void" => "Why remove it (needed)",
+        _ => "Why undo it (needed)",
+    };
+
+    private static string ActionLabel((DowntimeDto Stop, string Kind) acting) => acting.Kind switch
+    {
+        "retime" => "Change times",
+        "void" => "Remove stop",
+        _ => "Undo " + (MachineView.SourceLabel(acting.Stop.Source)?.ToLowerInvariant() ?? "adjustment"),
+    };
+
+    private static string ActionHelp((DowntimeDto Stop, string Kind) acting) => acting.Kind switch
+    {
+        "retime" => "It keeps its reason and coding; the new times may not overlap another stop of the machine.",
+        "void" => "It stays in the list as removed, with why; nothing replaces it.",
+        _ => acting.Stop.Source == "split"
+            ? "Both parts of the split are replaced by the stop they came from, with its reason and coding. Only if neither part was adjusted since."
+            : "This stop is replaced by the stops it came from, with their reasons and coding. Only if it wasn't adjusted since.",
+    };
+
+    private Task ActAsync()
+    {
+        if (_acting is not { } acting)
+        {
+            return Task.CompletedTask;
+        }
+
+        var stop = acting.Stop;
+        return acting.Kind switch
+        {
+            "retime" when Display.FromSiteLocal(_newStart, Sites.Site?.TimeZone) is { } from && Display.FromSiteLocal(_newEnd, Sites.Site?.TimeZone) is { } to =>
+                AdjustAsync(() => Api.RetimeStopAsync(stop.Id, new RetimeStopRequest { StartedAt = stop.StartedAt, NewStartedAt = from, NewEndedAt = to, Comment = _adjustComment })),
+            "void" => AdjustAsync(() => Api.VoidStopAsync(stop.Id, new StopReasonedRequest { StartedAt = stop.StartedAt, Comment = _adjustComment })),
+            "undo" => AdjustAsync(() => Api.UndoStopAdjustmentAsync(stop.Id, new StopReasonedRequest { StartedAt = stop.StartedAt, Comment = _adjustComment })),
+            _ => Task.CompletedTask,
+        };
+    }
 
     private void Choose(DowntimeDto stop, bool chosen)
     {
@@ -669,7 +759,7 @@ else
         try
         {
             await adjust();
-            (_entry, _splitting, _adjustComment) = (null, null, null);
+            (_entry, _splitting, _acting, _adjustComment) = (null, null, null, null);
             _chosen.Clear();
             await LoadStopsAsync();
             await LoadStatusAsync();

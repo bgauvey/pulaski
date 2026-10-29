@@ -119,7 +119,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
     private const string EventColumns = """
         e.id, e.occurred_at, e.effective_at, e.event_kind AS kind, e.qty_delta, e.qty_after, eu.code AS uom_code,
         fl.code AS from_location_code, tl.code AS to_location_code, e.from_status, e.to_status,
-        e.job_id, ej.job_number, r.code AS reason_code, r.name AS reason_name, e.comment, e.actor_id,
+        e.job_id, ej.job_number, r.code AS reason_code, r.name AS reason_name, rt.group_path AS reason_group_path, e.comment, e.actor_id,
         e.related_lot_id, rl.lot_number AS related_lot_number, rll.code AS related_lot_location_code, e.reference, e.reverses_event_id,
         e.container_id, ec.code AS container_code, e.report_id,
         EXISTS (SELECT 1 FROM ts.lot_event rv WHERE rv.lot_id = e.lot_id AND rv.reverses_event_id = e.id) AS is_reversed
@@ -131,6 +131,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         LEFT JOIN core.equipment tl ON tl.id = e.to_location_id
         LEFT JOIN core.job ej ON ej.id = e.job_id
         LEFT JOIN core.reason_code r ON r.id = e.reason_code_id
+        LEFT JOIN core.reason_tree() rt ON rt.id = e.reason_code_id
         LEFT JOIN core.lot rl ON rl.id = e.related_lot_id
         LEFT JOIN core.equipment rll ON rll.id = rl.location_equipment_id
         LEFT JOIN core.container ec ON ec.id = e.container_id

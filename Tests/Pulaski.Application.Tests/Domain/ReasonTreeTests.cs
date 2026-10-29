@@ -72,4 +72,19 @@ public class ReasonTreeTests
         Assert.Contains("switched off", ReasonTree.WhyNotUnder([groupOff, child], child, groupOff.Id), StringComparison.Ordinal);
         Assert.Null(ReasonTree.WhyNotUnder([groupOff, off], off, groupOff.Id));
     }
+
+    [Fact]
+    public void A_reason_never_used_becomes_a_group_and_an_empty_group_a_reason()
+    {
+        var group = R("MECH", group: true);
+        var jam = R("JAM", parent: group.Id);
+        var spare = R("SPARE");
+        var tree = new[] { group, jam, spare };
+
+        Assert.Null(ReasonTree.WhyNotConvert(tree, spare, toGroup: true, []));
+        Assert.Contains("ts.downtime", ReasonTree.WhyNotConvert(tree, jam, toGroup: true, ["ts.downtime"]), StringComparison.Ordinal);
+        Assert.Contains("JAM", ReasonTree.WhyNotConvert(tree, group, toGroup: false, []), StringComparison.Ordinal);
+        Assert.Null(ReasonTree.WhyNotConvert(tree, R("EMPTY", group: true), toGroup: false, []));
+        Assert.Null(ReasonTree.WhyNotConvert(tree, spare, toGroup: false, ["ts.downtime"]));   // already a reason: nothing to do
+    }
 }

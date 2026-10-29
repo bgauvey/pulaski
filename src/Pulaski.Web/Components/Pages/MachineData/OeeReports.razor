@@ -4,7 +4,8 @@
 @inject Downloads Downloads
 @inject TimeProvider Clock
 
-@* Utilization and OEE between two production days (D-052): by equipment, shift and product, and where the time went; each exportable as CSV. *@
+@* Utilization and OEE between two production days (D-052), optionally one shift: by equipment, shift and product, the stop Pareto (#21) and
+   where the time went; each exportable as CSV. *@
 <div class="inv-toolbar flex-wrap">
     <label class="small text-muted" for="oee-from">From</label>
     <input id="oee-from" type="date" class="form-control w-auto" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="e => SetDay(e, true)" />
@@ -18,14 +19,25 @@
             <option value="@m.EquipmentId">@m.Code · @m.Name</option>
         }
     </select>
+    <select class="form-select w-auto" aria-label="Shift" value="@(_shift ?? "")" @onchange="@(e => _shift = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString())">
+        <option value="">All shifts</option>
+        @foreach (var (shiftCode, shiftName) in _shiftChoices)
+        {
+            <option value="@shiftCode">Shift @shiftCode@(shiftName is null ? "" : $" · {shiftName}")</option>
+        }
+    </select>
     <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="LoadAsync">Show</button>
-    <span class="ms-auto small text-muted">Production days; at most @MaxDays days.</span>
+    <span class="ms-auto small text-muted">Production days; at most @MaxDays. Over @OnReadDays, from the daily rollups.</span>
 </div>
 
 <ProblemAlert Error="_error" />
 
 @if (_report is { } report)
 {
+    @if (report.FromRollups)
+    {
+        <p class="small text-muted mb-1">From the daily rollups (today, yesterday and any day not rolled yet worked out now), by day rather than by shift.</p>
+    }
     @foreach (var note in report.Notes)
     {
         <p class="small text-warning-strong mb-1">@note</p>
@@ -56,7 +68,7 @@
                                         <div class="small text-muted">@how</div>
                                     }
                                 </td>
-                                @FiguresCells(e.Figures)
+                                @FiguresCells(e.Figures, e.Target)
                             </tr>
                         }
                     </tbody>
@@ -72,7 +84,7 @@
 
     <section class="inv-section" aria-labelledby="oee-shifts">
         <div class="inv-section-head">
-            <h2 id="oee-shifts">By shift</h2>
+            <h2 id="oee-shifts">@(report.ByDay ? "By day" : "By shift")</h2>
             <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(ShiftRows.Count == 0)" @onclick="ExportShiftsAsync">Export CSV</button>
         </div>
         @if (ShiftRows.Count == 0)
@@ -89,16 +101,63 @@
                         {
                             <tr @key="(s.EquipmentId, s.Start)">
                                 <td>@s.ProductionDate.ToString("ddd d MMM", CultureInfo.InvariantCulture)</td>
-                                <td>@(s.ShiftCode is null ? "Whole day" : $"{s.ShiftCode} {s.ShiftName}")</td>
+                                <td>@(s.ShiftCode is not null ? $"{s.ShiftCode} {s.ShiftName}" : report.ByDay ? "All shifts" : "Whole day")</td>
                                 <td>@s.CrewCode</td>
                                 <td class="fw-semibold">@s.EquipmentCode</td>
-                                @FiguresCells(s.Figures)
+                                @FiguresCells(s.Figures, s.Target)
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
             <p class="small text-muted">The top equipment of each group; choose one piece of equipment to see its shifts alone.</p>
+        }
+    </section>
+
+    <section class="inv-section" aria-labelledby="oee-trend">
+        <div class="inv-section-head">
+            <h2 id="oee-trend">Trend</h2>
+            <div class="d-flex flex-wrap gap-2">
+                <select class="form-select form-select-sm w-auto" aria-label="Equipment for the trend" value="@(TrendOf?.ToString() ?? "")"
+                        @onchange="@(e => _trendOf = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
+                    @foreach (var e in report.Equipment)
+                    {
+                        <option value="@e.EquipmentId">@e.Code · @e.Name</option>
+                    }
+                </select>
+                <select class="form-select form-select-sm w-auto" aria-label="Figure for the trend" value="@_trendMeasure" @onchange="@(e => _trendMeasure = e.Value?.ToString() ?? OeeTrend.Oee)">
+                    @foreach (var (measure, label) in OeeTrend.Measures)
+                    {
+                        <option value="@measure">@label</option>
+                    }
+                </select>
+                @if (!report.ByDay)
+                {
+                    <select class="form-select form-select-sm w-auto" aria-label="Points of the trend" value="@(_trendByDay ? "day" : "shift")"
+                            @onchange="@(e => _trendByDay = e.Value?.ToString() == "day")">
+                        <option value="shift">By shift</option>
+                        <option value="day">By day</option>
+                    </select>
+                }
+            </div>
+        </div>
+        @if (TrendOf is { } trendOf)
+        {
+            var points = OeeTrend.Points(report, trendOf, _trendMeasure, _trendByDay);
+            var (overall, below, measured) = OeeTrend.Summary(report, trendOf, _trendMeasure, points);
+            <OeeTrendChart Points="points" Label="@OeeTrend.LabelOf(_trendMeasure)" ByDay="@(report.ByDay || _trendByDay)" />
+            <p class="small text-muted mb-0">
+                @OeeTrend.LabelOf(_trendMeasure) over the period: @MachineView.Pct(overall).
+                @if (measured > 0)
+                {
+                    <span class="@(below > 0 ? "text-danger" : "")">@below of @measured @(report.ByDay || _trendByDay ? "days" : "shifts") below target.</span>
+                }
+                else
+                {
+                    <span>No target; set targets on <ScreenLink Href="site-settings#oee-targets" Permission="@PermissionCodes.SiteSettingsView">Site settings</ScreenLink>.</span>
+                }
+                The same figures as the @(report.ByDay ? "By day" : "By shift") table; a day adds its shifts' hours up.
+            </p>
         }
     </section>
 
@@ -146,10 +205,63 @@
         }
     </section>
 
+    <section class="inv-section" aria-labelledby="oee-pareto">
+        <div class="inv-section-head">
+            <h2 id="oee-pareto">Stop Pareto</h2>
+            <div class="d-flex flex-wrap gap-3 align-items-center">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="pareto-planned" checked="@_paretoPlanned" @onchange="@(e => _paretoPlanned = e.Value is true)" />
+                    <label class="form-check-label small" for="pareto-planned">Planned stops</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="pareto-micro" checked="@_paretoMicro" @onchange="@(e => _paretoMicro = e.Value is true)" />
+                    <label class="form-check-label small" for="pareto-micro">Micro-stops</label>
+                </div>
+                @RollupChoice(report, "pareto-rollup")
+                <select class="form-select form-select-sm w-auto" aria-label="Rank by" value="@(_paretoByStops ? "stops" : "hours")" @onchange="@(e => _paretoByStops = e.Value?.ToString() == "stops")">
+                    <option value="hours">Rank by time</option>
+                    <option value="stops">Rank by number of stops</option>
+                </select>
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(ParetoRows.Count == 0)" @onclick="ExportParetoAsync">Export CSV</button>
+            </div>
+        </div>
+        @if (ParetoRows.Count == 0)
+        {
+            <p class="text-muted small">No down time in this period.</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Reason</th><th>Use</th><th class="inv-num">Hours</th><th class="inv-num">Stops</th><th class="inv-num">Share</th><th class="inv-num">Cumulative</th><th>Equipment</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in ParetoRows)
+                        {
+                            <tr @key="(r.Use, r.ReasonCode, r.NoSignal)">
+                                <td>@if (r.ReasonCode is null && r.Use == "down") { <span class="chip chip-warning">@r.Label</span> } else { @r.Label }</td>
+                                <td class="small">@MachineView.UseLabel(r.Use)</td>
+                                <td class="inv-num">@Qty(r.Hours)</td>
+                                <td class="inv-num">@r.Stops</td>
+                                <td class="inv-num">@Qty(r.SharePct)%</td>
+                                <td class="inv-num @(r.CumulativePct - r.SharePct < 80m ? "fw-semibold" : "text-muted")">@Qty(r.CumulativePct)%</td>
+                                <td class="small text-muted">@string.Join(", ", r.EquipmentCodes)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="small text-muted">
+                Down time by reason across the top equipment shown (a line's time already includes its machines'), classified as in By equipment.
+                The reasons in bold make up the first 80% of the @(_paretoByStops ? "stops" : "time"). Code stops on the Stops tab to move time out of Uncoded.
+            </p>
+        }
+    </section>
+
     <section class="inv-section" aria-labelledby="oee-uses">
         <div class="inv-section-head">
             <h2 id="oee-uses">Where the time went</h2>
             <div class="d-flex gap-2">
+                @RollupChoice(report, "uses-rollup")
                 <select class="form-select form-select-sm w-auto" aria-label="Equipment for where the time went" value="@(UsesOf?.ToString() ?? "")"
                         @onchange="@(e => _usesOf = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
                     @foreach (var e in report.Equipment)
@@ -202,7 +314,8 @@ else if (_error is null)
 }
 
 @code {
-    private const int MaxDays = 31;
+    private const int MaxDays = 366;
+    private const int OnReadDays = 31;
 
     [Parameter, EditorRequired]
     public Guid SiteId { get; set; }
@@ -221,6 +334,19 @@ else if (_error is null)
     private DateOnly _to;
     private Guid? _equipment;
     private Guid? _usesOf;
+    private string? _shift;
+    private IReadOnlyList<(string Code, string? Name)> _shiftChoices = [];
+    private bool _paretoPlanned;
+    private bool _paretoMicro;
+    private bool _paretoByStops;
+    private Guid? _trendOf;
+    private string _trendMeasure = OeeTrend.Oee;
+    private bool _trendByDay;
+
+    // The trend's equipment: the one chosen, while the report still has it, else the first shown.
+    private Guid? TrendOf => _report is null ? null
+        : _trendOf is { } id && _report.Equipment.Any(e => e.EquipmentId == id) ? id : _report.Equipment.FirstOrDefault()?.EquipmentId;
+    private int _rollup;
     private OeeReportDto? _report;
     private ApiException? _error;
     private bool _busy;
@@ -229,7 +355,21 @@ else if (_error is null)
 
     private Guid? UsesOf => _usesOf is { } id && _report?.Equipment.Any(e => e.EquipmentId == id) == true ? id : _report?.Equipment.FirstOrDefault()?.EquipmentId;
 
-    private IReadOnlyList<UtilizationRowDto> UseRows => _report?.Utilization.Where(u => u.EquipmentId == UsesOf).ToList() ?? [];
+    // Reasons rolled up to the chosen group level (#86), for where the time went and the Pareto alike.
+    private int Rollup => _report is null ? 0 : Math.Min(_rollup, ReasonRollup.Levels(_report));
+
+    private IReadOnlyList<UtilizationRowDto> UseRows => _report is null ? [] : ReasonRollup.Apply(_report.Utilization.Where(u => u.EquipmentId == UsesOf), Rollup);
+
+    private IReadOnlyList<ParetoRow> ParetoRows => _report is null ? [] : StopPareto.Rows(_report, _paretoPlanned, _paretoMicro, _paretoByStops, Rollup);
+
+    private RenderFragment RollupChoice(OeeReportDto report, string id) => ReasonRollup.Levels(report) == 0
+        ? @<text></text>
+        : @<select id="@id" class="form-select form-select-sm w-auto" aria-label="Roll reasons up to" value="@Rollup" @onchange="@(e => _rollup = int.TryParse(e.Value?.ToString(), out var l) ? l : 0)">
+              @foreach (var (level, label) in ReasonRollup.Choices(report))
+              {
+                  <option value="@level">@label</option>
+              }
+          </select>;
 
     protected override async Task OnInitializedAsync()
     {
@@ -259,8 +399,14 @@ else if (_error is null)
         _error = null;
         try
         {
-            _report = await Api.GetOeeReportAsync(SiteId, _from, _to, _equipment);
+            _report = await Api.GetOeeReportAsync(SiteId, _from, _to, _equipment, _shift);
             (_from, _to) = (_report.From, _report.To);
+            // A report by day names no shifts: the ones offered stay those of the last report by shift.
+            if (_shift is null && !_report.ByDay)
+            {
+                // The shifts worked, to choose from: kept while one is chosen, whose report names only it.
+                _shiftChoices = StopPareto.Shifts(_report);
+            }
         }
         catch (ApiException ex)
         {
@@ -283,7 +429,17 @@ else if (_error is null)
             <th class="inv-num">Avail.</th><th class="inv-num">Perf.</th><th class="inv-num">Quality</th><th class="inv-num">OEE</th>
         </text>;
 
-    private static RenderFragment FiguresCells(OeeFiguresDto f) =>
+    // A percentage with its target beneath (D-073); below it, the shortfall says so in words as well as color.
+    private static RenderFragment PctCell(decimal? value, decimal? target, bool strong = false) =>
+        @<td class="@(strong ? "inv-num fw-semibold" : "inv-num")">
+            @MachineView.Pct(value)
+            @if (target is { } t)
+            {
+                <div class="@(OeeTargetsView.Below(value, t) == true ? "small text-danger" : "small text-muted")">@(OeeTargetsView.Below(value, t) == true ? "below " : "of ")@OeeTargetsView.Pct(t)</div>
+            }
+        </td>;
+
+    private static RenderFragment FiguresCells(OeeFiguresDto f, OeeTargetFiguresDto? target = null) =>
         @<text>
             <td class="inv-num">@Qty(f.ScheduledHours)</td>
             <td class="inv-num">@Qty(f.PlannedHours)</td>
@@ -296,10 +452,10 @@ else if (_error is null)
                 }
             </td>
             <td class="inv-num">@f.Stops@(f.MicroStops > 0 ? $" + {f.MicroStops} micro" : "")</td>
-            <td class="inv-num">@MachineView.Pct(f.AvailabilityPct)</td>
-            <td class="inv-num">@MachineView.Pct(f.PerformancePct)</td>
-            <td class="inv-num">@MachineView.Pct(f.QualityPct)</td>
-            <td class="inv-num fw-semibold">@MachineView.Pct(f.OeePct)</td>
+            @PctCell(f.AvailabilityPct, target?.AvailabilityPct)
+            @PctCell(f.PerformancePct, target?.PerformancePct)
+            @PctCell(f.QualityPct, target?.QualityPct)
+            @PctCell(f.OeePct, target?.OeePct, strong: true)
         </text>;
 
     private static readonly string[] FigureHeaders =
@@ -310,24 +466,34 @@ else if (_error is null)
         [f.ScheduledHours, f.NonProductionHours, f.PlannedStopHours, f.PlannedHours, f.RunHours, f.DownHours, f.UncodedHours, f.NoSignalHours,
          f.RunWithoutJobHours, f.Stops, f.MicroStops, f.AvailabilityPct, f.PerformancePct, f.QualityPct, f.OeePct];
 
+    private static readonly string[] TargetHeaders = ["Availability target %", "Performance target %", "Quality target %", "OEE target %"];
+
+    private static IEnumerable<object?> TargetValues(OeeTargetFiguresDto? t) => [t?.AvailabilityPct, t?.PerformancePct, t?.QualityPct, t?.OeePct];
+
     private string File(string what) => Csv.FileName(what, SiteCode, Display.ToSite(Clock.GetUtcNow(), TimeZone));
 
     private Task ExportEquipmentAsync() => Downloads.CsvAsync(File("oee-equipment"), Csv.Write(
-        ["Equipment", "Name", .. FigureHeaders],
-        _report!.Equipment.Select(e => (IReadOnlyList<object?>)[e.Code, e.Name, .. FigureValues(e.Figures)]))).AsTask();
+        ["Equipment", "Name", .. FigureHeaders, .. TargetHeaders],
+        _report!.Equipment.Select(e => (IReadOnlyList<object?>)[e.Code, e.Name, .. FigureValues(e.Figures), .. TargetValues(e.Target)]))).AsTask();
 
     private Task ExportShiftsAsync() => Downloads.CsvAsync(File("oee-shifts"), Csv.Write(
-        ["Day", "Shift", "Crew", "Equipment", .. FigureHeaders],
+        ["Day", "Shift", "Crew", "Equipment", .. FigureHeaders, .. TargetHeaders],
         _report!.Shifts.Select(s => (IReadOnlyList<object?>)[s.ProductionDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), s.ShiftCode, s.CrewCode, s.EquipmentCode,
-            .. FigureValues(s.Figures)]))).AsTask();
+            .. FigureValues(s.Figures), .. TargetValues(s.Target)]))).AsTask();
 
     private Task ExportProductsAsync() => Downloads.CsvAsync(File("oee-products"), Csv.Write(
         ["Material", "Name", "Unit", "Good", "Scrap", "Runs", "Ran on", .. FigureHeaders],
         _report!.Products.Select(p => (IReadOnlyList<object?>)[p.MaterialCode, p.MaterialName, p.UomCode, p.GoodQty, p.ScrapQty, p.Runs, string.Join(" ", p.EquipmentCodes),
             .. FigureValues(p.Figures)]))).AsTask();
 
-    private Task ExportUsesAsync() => Downloads.CsvAsync(File("utilization"), Csv.Write(
-        ["Equipment", "Use", "Reason code", "Reason", "Hours", "Share %", "Stops"],
-        _report!.Utilization.Select(u => (IReadOnlyList<object?>)[u.EquipmentCode, MachineView.UseLabel(u.Use),
-            u.ReasonCode ?? (u.Use == "down" ? (u.NoSignal ? "No signal" : "Uncoded") : null), u.ReasonName, u.Hours, u.SharePct, u.Stops]))).AsTask();
+    private Task ExportParetoAsync() => Downloads.CsvAsync(File(_shift is null ? "stop-pareto" : $"stop-pareto-shift-{_shift}"), Csv.Write(
+        ["Reason code", "Reason", "Use", "Hours", "Stops", "Share %", "Cumulative %", "Equipment"],
+        ParetoRows.Select(r => (IReadOnlyList<object?>)
+            [r.ReasonCode, r.ReasonCode is null ? r.Label : r.ReasonName, MachineView.UseLabel(r.Use), r.Hours, r.Stops, r.SharePct, r.CumulativePct, string.Join(" ", r.EquipmentCodes)]))).AsTask();
+
+    private Task ExportUsesAsync() => Downloads.CsvAsync(File(Rollup == 0 ? "utilization" : $"utilization-groups-{Rollup}"), Csv.Write(
+        ["Equipment", "Use", "Reason code", "Reason", "Groups", "Hours", "Share %", "Stops"],
+        ReasonRollup.Apply(_report!.Utilization, Rollup).Select(u => (IReadOnlyList<object?>)[u.EquipmentCode, MachineView.UseLabel(u.Use),
+            u.ReasonCode ?? (u.Use == "down" ? (u.NoSignal ? "No signal" : "Uncoded") : null), u.ReasonName,
+            string.Join(" › ", u.ReasonGroups.Select(g => g.Name)), u.Hours, u.SharePct, u.Stops]))).AsTask();
 }

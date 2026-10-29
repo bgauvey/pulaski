@@ -26,6 +26,9 @@ public sealed record CreateReasonCodeCommand(
 /// <summary>Files a reason under a group of its kind, or at the top (null) (D-062). History keeps pointing at the same reason.</summary>
 public sealed record MoveReasonCodeCommand(Guid Id, long ExpectedVersion, Guid? ParentId) : ICommand<VersionResponse>;
 
+/// <summary>Makes a reason a group, or a group a reason (#86); a group becoming a utilization reason needs its class.</summary>
+public sealed record ConvertReasonCodeCommand(Guid Id, long ExpectedVersion, bool ToGroup, string? UtilizationClass = null) : ICommand<VersionResponse>;
+
 /// <summary>Changes a reason's name, comment flag, order, active flag and utilization class (null keeps it); the code and kind stay.</summary>
 public sealed record UpdateReasonCodeCommand(Guid Id, long ExpectedVersion, string Name, bool RequiresComment, int SortOrder, bool IsActive, string? UtilizationClass = null)
     : ICommand<VersionResponse>;
@@ -312,6 +315,47 @@ internal sealed class MoveReasonCodeHandler(
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
+        return new VersionResponse(version);
+    }
+}
+
+internal sealed class ConvertReasonCodeHandler(
+    IUnitOfWork unitOfWork,
+    IInventoryRepository inventory,
+    IEventLog eventLog,
+    IEventFactory events) : ICommandHandler<ConvertReasonCodeCommand, VersionResponse>
+{
+    public async Task<VersionResponse> HandleAsync(ConvertReasonCodeCommand command, CancellationToken cancellationToken)
+    {
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var (current, tree) = await ReasonCodeRules.LockAsync(inventory, command.Id, command.ExpectedVersion, cancellationToken);
+        if (current.IsGroup == command.ToGroup)
+        {
+            return new VersionResponse(command.ExpectedVersion);
+        }
+
+        // History refers to a reason by id: one that anything refers to keeps being a reason (#86).
+        var uses = command.ToGroup ? await inventory.ReasonCodeUsesAsync(current.Id, cancellationToken) : [];
+        if (ReasonTree.WhyNotConvert(tree, current, command.ToGroup, uses) is { } why)
+        {
+            throw new DomainRuleException(why);
+        }
+
+        var after = command.ToGroup
+            ? current with { IsGroup = true, UtilizationClass = null, RequiresComment = false }
+            : current with { IsGroup = false, UtilizationClass = command.UtilizationClass };
+        if (!ReasonCode.IsValidClass(after.Kind, after.UtilizationClass, after.IsGroup))
+        {
+            throw new ValidationException(new Dictionary<string, string[]>
+            {
+                [nameof(command.UtilizationClass)] = [ReasonCodeRules.ClassMessage(after.Kind, after.IsGroup)],
+            });
+        }
+
+        var envelope = events.Create(EventTypes.ReasonCodeConverted, "reason_code", after.Id, new { after.Code, ToGroup = after.IsGroup, after.UtilizationClass });
+        var version = await inventory.UpdateReasonCodeAsync(after, cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return new VersionResponse(version);
     }
 }

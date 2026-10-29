@@ -208,6 +208,14 @@ public sealed record CreateReasonCodeRequest
     public Guid? ParentId { get; init; }
 }
 
+/// <summary>Makes a reason a group or a group a reason (#86); a utilization reason needs its class.</summary>
+public sealed record ConvertReasonCodeRequest
+{
+    public long Version { get; init; }
+    public bool IsGroup { get; init; }
+    public string? UtilizationClass { get; init; }
+}
+
 /// <summary>Files a reason under a group of its kind, or at the top when <see cref="ParentId"/> is blank (D-062).</summary>
 public sealed record MoveReasonCodeRequest
 {

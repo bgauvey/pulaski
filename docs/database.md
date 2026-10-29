@@ -1187,7 +1187,11 @@ Derived edges can be recalculated when windows or residence times change; the ol
 
 ### core.reason_tree() — every reason's place in its tree (D-062) · *In use*
 
-Returns `id`, `depth` (0 at the top), `group_path` (the names of the groups above it, top first, joined by ` › `; null at the top) and `sort_key` (a `text[]` that sorts a kind's reasons in tree order, each level by `sort_order`, then name and code). A recursive query with a cycle guard, read by the Reasons screen and the reason pickers (`JOIN core.reason_tree() t ON t.id = r.id`).
+Returns `id`, `depth` (0 at the top), `group_path` (the names of the groups above it, top first, joined by ` › `; null at the top), `sort_key` (a `text[]` that sorts a kind's reasons in tree order, each level by `sort_order`, then name and code) and `group_ids` (the ids of the groups above it, top first; empty at the top; #86). A recursive query with a cycle guard, read by the Reasons screen, the reason pickers, the stops list, the journal and the OEE report (`JOIN core.reason_tree() t ON t.id = r.id`).
+
+### core.reason_code_uses(id) — where a reason is referred to (#86) · *In use*
+
+Returns `table_name`, `column_name` for each table and column whose foreign key to `core.reason_code` holds the reason, apart from `reason_code.parent_id` (reasons filed under it) and the copies of a partitioned table's key on each partition. Found from `pg_constraint`, so a new table that refers to reasons is covered. `plpgsql STABLE SECURITY DEFINER` with a fixed `search_path`: the app role can't read every such table, and the function tells only whether the reason is used. `ConvertReasonCodeCommand` refuses to make a used reason a group.
 
 ### core.trace_forward(lot), core.trace_backward(lot) — genealogy trace · *In use*
 
@@ -1419,16 +1423,17 @@ Stops can also be entered by hand, split and merged (D-069). An adjusted stop is
 | `coded_by_user_id` | uuid | yes | The Pulaski user who coded it. |
 | `coded_at` | timestamptz | yes | When. |
 | `comment` | text | yes | The operator's comment. |
-| `source` | text | no | Where it came from: `machine` (ingest; default), `manual` (entered by hand), `split` (a part of a split stop) or `merge` (stops merged) (`downtime_source_ck`). |
-| `replaces_ids` | uuid[] | yes | A split or merge: the stops it replaced, in time order; set exactly then (`downtime_replaces_ck`). |
-| `adjusted_by` | text | yes | Who entered, split or merged it, as on `evt.event`; set exactly when `source` isn't `machine` (`downtime_adjusted_ck`), as are the next three. |
+| `source` | text | no | Where it came from: `machine` (ingest; default), `manual` (entered by hand), `split` (a part of a split stop), `merge` (stops merged), `retime` (other times given), `restore` (a replaced stop back after an undo) or `trim` (what is left of a late machine stop outside stops entered by hand) (`downtime_source_ck`, #68). |
+| `replaces_ids` | uuid[] | yes | A split, merge, retime, restore or trim: the stops it replaced (for a restore, the adjustment's stops it undid); set exactly then (`downtime_replaces_ck`). |
+| `adjusted_by` | text | yes | Who entered, split, merged, retimed or restored it (for a trim, the edge's user), as on `evt.event`; set exactly when `source` isn't `machine` (`downtime_adjusted_ck`), as are the next three. |
 | `adjusted_by_user_id` | uuid | yes | The Pulaski user who did. |
 | `adjusted_at` | timestamptz | yes | When. |
 | `adjustment_comment` | text | yes | Why. |
-| `superseded_at` | timestamptz | yes | When a split or merge replaced it; it is history, not counted or coded. Only a closed stop (`downtime_superseded_ck`). |
+| `superseded_at` | timestamptz | yes | When an adjustment replaced or removed it; it is history, not counted or coded. Only a closed stop (`downtime_superseded_ck`). |
 | `superseded_by` | text | yes | Who replaced it. |
+| `superseded_note` | text | yes | Why, when nothing replaced it: *Removed: …* (a stop entered by hand, voided), *Undone: …* (an adjustment's stops), or covered by a stop entered by hand (a trimmed machine stop) (#68). |
 
-A stop entered by hand records `packml_state` 0 (Undefined: no state was reported), unit mode 1, the run on the equipment at its start, and its reason as `operator_reason_code_id`. Parts of a split, and a merged stop, keep the (first) stop's codes, reasons, coding and run. None is a micro-stop.
+A stop entered by hand records `packml_state` 0 (Undefined: no state was reported), unit mode 1, the run on the equipment at its start, and its reason as `operator_reason_code_id`. Parts of a split, a merged stop and a retimed stop keep the (first) stop's codes, reasons, coding and run, and none is a micro-stop. A restored stop is a copy of the one an undo brought back, micro-stop flag included; a trimmed part is a micro-stop when shorter than the machine's threshold.
 
 ### ts.equipment_alarm — alarms and warnings · *In use (D-071)*
 
@@ -1561,36 +1566,51 @@ Variables store the values and their statistics; attributes store inspected and 
 | `chart_component` | text | no | `location`, `dispersion`, `proportion` or `count`. |
 | `severity` | text | no | Severity from the characteristic's rule. |
 
-## 13. Utilization and OEE rollup
+### core.oee_target — OEE targets by period (D-073) · *In use*
 
-### ts.oee_rollup — OEE components per bucket · *Planned*
-
-Components, not percentages. One row per equipment per hour, split further at shift and run boundaries, and rebuildable from history. The time columns must add up to `calendar_ms`.
-
-- Planned production = calendar − not scheduled − planned downtime
-- Availability = producing ÷ planned production
-- Performance = (good + scrap) ÷ ideal quantity, where ideal = producing hours × ideal rate
-- Quality = good ÷ (good + scrap)
+A site's default targets (`equipment_id` null) or one piece of equipment's, which replace the site's whole. A scope's periods never overlap; they are ended, never deleted.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `id` | uuid | no | Primary key with `bucket_start`. |
-| `bucket_start`, `bucket_end` | timestamptz | no | The bucket. `bucket_start` is the partition key. |
-| `equipment_id` | uuid → equipment | no | The equipment. Unique with bucket, run and shift. |
-| `shift_instance_id` | uuid → shift_instance | yes | The shift. |
-| `run_id` | uuid | yes | The run. |
-| `material_id` | uuid → material | yes | The material running. |
-| `calendar_ms` | bigint | no | Bucket length. |
-| `not_scheduled_ms` | bigint | no | No shift, calendar exception or non-production mode. |
-| `planned_downtime_ms` | bigint | no | Planned jobs and reasons with `planned` impact. |
-| `producing_ms` | bigint | no | Time in producing states. |
-| `waiting_external_ms`, `held_internal_ms`, `stopped_faulted_ms`, `ready_transitioning_ms`, `no_signal_ms` | bigint | no | Time in each other OEE category. |
-| `stop_count`, `micro_stop_count` | integer | no | Stops and micro-stops in the bucket. |
-| `good_qty`, `scrap_qty`, `ideal_qty` | qty | no | Quantities in the run's unit. |
-| `uom_id` | uuid → uom | yes | That unit. |
-| `labor_ms` | bigint | no | Labor time booked. |
-| `computed_at` | timestamptz | no | When calculated. |
-| `policy_version` | integer | no | Bumped when the category mapping changes, so stale rows can be found. |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The site. |
+| `equipment_id` | uuid → equipment | yes | Equipment of the site that tracks state; null for the site's default. |
+| `effective_from` | date | no | First production day in force. Unique per site and scope (`oee_target_scope_from_uq`). |
+| `effective_to` | date | yes | First day no longer in force; null while open. After `effective_from`. |
+| `availability_pct`, `performance_pct`, `quality_pct`, `oee_pct` | numeric(4,1) | yes | Targets above 0 and at most 100; at least one is set. |
+| `created_at`, `updated_at` | timestamptz | no | When written. |
+
+## 13. Utilization and OEE rollup
+
+Daily rollups of the OEE report (D-072, #66), kept by `OeeRollupService` in the API. Not partitioned; rows are updated in place and never deleted.
+
+### ts.oee_rollup_site — a site's rollup generation · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key. The site. |
+| `generation` | bigint | no | Moves on whenever a setting that decides how past time counts changes (shifts, equipment, reason classes, ideal rates, conversions); a site without a row is at 0. |
+| `changed_at` | timestamptz | no | When it last moved on. |
+
+### ts.oee_rollup_day — a site's production day · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key with `production_date`. |
+| `production_date` | date | no | The production day. |
+| `rolled_generation` | bigint | yes | The site's generation when it was rolled; null if never. The day is current when this equals the site's generation and `dirty_at` is null. |
+| `rolled_at` | timestamptz | yes | When it was last rolled. |
+| `dirty_at` | timestamptz | yes | Set by a late write to the day's history (or the next day's); cleared by rolling it, unless set again meanwhile. |
+
+### ts.oee_rollup — each piece of equipment's windows of a day · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `equipment_id` | uuid → equipment | no | Primary key with `production_date`. Equipment that tracks state. |
+| `production_date` | date | no | The production day. |
+| `site_id` | uuid → equipment | no | Its site. |
+| `rolled_at` | timestamptz | no | When it was rolled. |
+| `windows` | jsonb | no | An array of `OeeWindowFigures`: each working window (production date, shift code and name, crew, start, end; no start for output outside every window), its tally (times in ticks, stops, good, scrap, earned hours), time by use and reason, output by material and unit with the runs, and runs without an ideal rate. Empty when it had no windows. |
 
 ## 14. Event log and outbox (`evt`)
 

@@ -5,6 +5,7 @@ using Pulaski.Application.MachineData;
 using Pulaski.Application.Security;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.MachineData;
+using Pulaski.Domain.MachineData;
 using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
@@ -30,11 +31,29 @@ internal static class MachineEndpoints
                 siteId, equipmentId, from, to, uncodedOnly ?? false, includeMicroStops ?? false, includeSuperseded ?? false), after, limit), ct)))
         .RequireAny(Site.Query(), Permissions.MachinesView);
 
-        // Utilization and OEE between two production days (D-052), for equipment and everything below it, or the whole site.
+        // Utilization and OEE between two production days (D-052), for equipment and everything below it, or the whole site; one shift with shiftCode (#21).
         machines.MapGet("/oee", async Task<Ok<OeeReportDto>> (
-            Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId, IQueryHandler<GetOeeReportQuery, OeeReportDto> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetOeeReportQuery(siteId, from, to, equipmentId), ct)))
+            Guid siteId, DateOnly from, DateOnly to, Guid? equipmentId, string? shiftCode, IQueryHandler<GetOeeReportQuery, OeeReportDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetOeeReportQuery(siteId, from, to, equipmentId, string.IsNullOrWhiteSpace(shiftCode) ? null : shiftCode), ct)))
         .RequireAny(Site.Query(), Permissions.MachinesView, Permissions.OverviewView);
+
+        // OEE targets (D-073): the site's default and each piece of equipment's, by period; seen with the site settings or the machines.
+        var targets = routes.MapGroup("/oee-targets/sites").WithTags("Machines");
+        targets.MapGet("/{siteId:guid}", async Task<Ok<IReadOnlyList<OeeTargetDto>>> (
+            Guid siteId, IQueryHandler<ListOeeTargetsQuery, IReadOnlyList<OeeTargetDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListOeeTargetsQuery(siteId), ct)))
+        .RequireAny(Site.Route(), Permissions.SiteSettingsView, Permissions.MachinesView);
+
+        targets.MapPut("/{siteId:guid}", async Task<Ok<IReadOnlyList<OeeTargetDto>>> (
+            Guid siteId, SetOeeTargetRequest request, ICommandHandler<SetOeeTargetCommand, IReadOnlyList<OeeTargetDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetOeeTargetCommand(siteId, request.EquipmentId, request.EffectiveFrom,
+                new OeeTargetValues(request.AvailabilityPct, request.PerformancePct, request.QualityPct, request.OeePct), request.Version), ct)))
+        .RequirePermission(Permissions.SiteSettings, Site.Route());
+
+        targets.MapPost("/{siteId:guid}/end", async Task<Ok<IReadOnlyList<OeeTargetDto>>> (
+            Guid siteId, EndOeeTargetRequest request, ICommandHandler<EndOeeTargetCommand, IReadOnlyList<OeeTargetDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new EndOeeTargetCommand(siteId, request.EquipmentId, request.EndOn, request.Version), ct)))
+        .RequirePermission(Permissions.SiteSettings, Site.Route());
 
         // Alarms and warnings active in [from, to) (#26), active first; for equipment, its own and those below it.
         machines.MapGet("/alarms", async Task<Ok<AlarmListDto>> (
@@ -65,6 +84,22 @@ internal static class MachineEndpoints
         machines.MapPost("/stops/{id:guid}/split", async Task<Ok<StopsAdjustedResponse>> (
             Guid id, SplitStopRequest request, ICommandHandler<SplitStopCommand, StopsAdjustedResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new SplitStopCommand(id, request.StartedAt, request.At, request.Comment), ct)))
+        .RequirePermission(Permissions.DowntimeAdjust, Site.Of(SiteOf.Downtime));
+
+        // Other times for a stop, removing one entered by hand, undoing an adjustment (#68): each replaces, never edits.
+        machines.MapPost("/stops/{id:guid}/retime", async Task<Ok<StopsAdjustedResponse>> (
+            Guid id, RetimeStopRequest request, ICommandHandler<RetimeStopCommand, StopsAdjustedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RetimeStopCommand(id, request.StartedAt, request.NewStartedAt, request.NewEndedAt, request.Comment), ct)))
+        .RequirePermission(Permissions.DowntimeAdjust, Site.Of(SiteOf.Downtime));
+
+        machines.MapPost("/stops/{id:guid}/void", async Task<Ok<StopsAdjustedResponse>> (
+            Guid id, StopReasonedRequest request, ICommandHandler<VoidStopCommand, StopsAdjustedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new VoidStopCommand(id, request.StartedAt, request.Comment), ct)))
+        .RequirePermission(Permissions.DowntimeAdjust, Site.Of(SiteOf.Downtime));
+
+        machines.MapPost("/stops/{id:guid}/undo", async Task<Ok<StopsAdjustedResponse>> (
+            Guid id, StopReasonedRequest request, ICommandHandler<UndoStopAdjustmentCommand, StopsAdjustedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new UndoStopAdjustmentCommand(id, request.StartedAt, request.Comment), ct)))
         .RequirePermission(Permissions.DowntimeAdjust, Site.Of(SiteOf.Downtime));
 
         // The stops are all of one machine (the handler checks), so the first one's site is theirs.

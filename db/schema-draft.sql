@@ -622,22 +622,52 @@ CREATE TABLE core.reason_code (
 );
 CREATE INDEX reason_code_parent_ix ON core.reason_code (parent_id) WHERE parent_id IS NOT NULL;
 
--- Every reason with its place in its tree (D-062): how deep, the names of the groups above it (top first, joined by ' › ') and
--- a key that sorts a kind's reasons in tree order (each level by sort order, then name). Small tables; worked out on read.
+-- Every reason with its place in its tree (D-062): how deep, the names of the groups above it (top first, joined by ' › '), a key that
+-- sorts a kind's reasons in tree order (each level by sort order, then name), and the groups' ids, top first, for rolling reports up (#86).
+-- Small tables; worked out on read.
 CREATE FUNCTION core.reason_tree()
-RETURNS TABLE (id uuid, depth integer, group_path text, sort_key text[])
+RETURNS TABLE (id uuid, depth integer, group_path text, sort_key text[], group_ids uuid[])
 LANGUAGE sql STABLE AS $$
-    WITH RECURSIVE t (id, name, depth, group_path, sort_key) AS (
-        SELECT r.id, r.name, 0, NULL::text, ARRAY[lpad(r.sort_order::text, 5, '0') || lower(r.name) || ' ' || r.code]
+    WITH RECURSIVE t (id, name, depth, group_path, sort_key, group_ids) AS (
+        SELECT r.id, r.name, 0, NULL::text, ARRAY[lpad(r.sort_order::text, 5, '0') || lower(r.name) || ' ' || r.code], ARRAY[]::uuid[]
         FROM core.reason_code r
         WHERE r.parent_id IS NULL
         UNION ALL
         SELECT c.id, c.name, t.depth + 1, coalesce(t.group_path || ' › ', '') || t.name,
-               t.sort_key || (lpad(c.sort_order::text, 5, '0') || lower(c.name) || ' ' || c.code)
+               t.sort_key || (lpad(c.sort_order::text, 5, '0') || lower(c.name) || ' ' || c.code), t.group_ids || t.id
         FROM t JOIN core.reason_code c ON c.parent_id = t.id
     ) CYCLE id SET is_cycle USING visited
-    SELECT id, depth, group_path, sort_key FROM t WHERE NOT is_cycle
+    SELECT id, depth, group_path, sort_key, group_ids FROM t WHERE NOT is_cycle
 $$;
+
+-- Every table and column that refers to the reason, apart from reasons filed under it: found from the foreign keys, so a new table that
+-- refers to reasons is covered. Reads only; whether a reason may become a group is decided in the application. It runs with its owner's
+-- rights because the app role can't read every such table (ts.quality_sample), and it tells only whether the reason is used there.
+CREATE FUNCTION core.reason_code_uses(p_id uuid)
+RETURNS TABLE (table_name text, column_name text)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
+DECLARE
+    v_table regclass;
+    v_column text;
+    v_used boolean;
+BEGIN
+    FOR v_table, v_column IN
+        SELECT c.conrelid::regclass, a.attname
+        FROM pg_constraint c
+        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+        WHERE c.contype = 'f' AND c.confrelid = 'core.reason_code'::regclass AND cardinality(c.conkey) = 1
+          AND c.conparentid = 0                       -- not the copies on each partition
+          AND NOT (c.conrelid = 'core.reason_code'::regclass AND a.attname = 'parent_id')
+        ORDER BY 1, 2
+    LOOP
+        EXECUTE format('SELECT EXISTS (SELECT 1 FROM %s WHERE %I = $1)', v_table, v_column) INTO v_used USING p_id;
+        IF v_used THEN
+            table_name := v_table::text;
+            column_name := v_column;
+            RETURN NEXT;
+        END IF;
+    END LOOP;
+END $$;
 
 -- Machine profiles (D-050): one kind of machine, as its controller reports it. Identical machines share a
 -- profile; equipment names its profile and may override single stop codes. Kept per site, like its reasons.
@@ -1070,6 +1100,25 @@ CREATE TABLE core.run_standard (
         (modified_rate_per_hour IS NULL) = (modified_at IS NULL)
         AND (modified_rate_per_hour IS NULL) = (modified_by IS NULL))
 );
+
+-- OEE targets (D-073): for a site (its default; equipment_id null) or a piece of equipment, by period from a production day until
+-- ended (effective_to: the first day no longer in force). A scope's periods never overlap; never deleted.
+CREATE TABLE core.oee_target (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    equipment_id        uuid REFERENCES core.equipment(id),        -- null: the site's default
+    effective_from      date NOT NULL,
+    effective_to        date,                                       -- first day no longer in force; null while open
+    availability_pct    numeric(4,1) CHECK (availability_pct > 0 AND availability_pct <= 100),
+    performance_pct     numeric(4,1) CHECK (performance_pct > 0 AND performance_pct <= 100),
+    quality_pct         numeric(4,1) CHECK (quality_pct > 0 AND quality_pct <= 100),
+    oee_pct             numeric(4,1) CHECK (oee_pct > 0 AND oee_pct <= 100),
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT oee_target_period_ck CHECK (effective_to IS NULL OR effective_to > effective_from),
+    CONSTRAINT oee_target_values_ck CHECK (num_nonnulls(availability_pct, performance_pct, quality_pct, oee_pct) > 0)
+);
+CREATE UNIQUE INDEX oee_target_scope_from_uq ON core.oee_target (site_id, coalesce(equipment_id, site_id), effective_from);
 
 -- Per-site tolerances for production reporting (D-035). A site without a row uses the defaults.
 -- Reported output may reach the run's elapsed time x the capability's ideal rate x rate_tolerance_pct;
@@ -1676,19 +1725,20 @@ CREATE TABLE ts.downtime (
     comment                     text,
     unit_mode                   smallint NOT NULL DEFAULT 1,        -- the machine's unit mode when it stopped (D-050)
     coded_by                    text,                               -- who coded it, as on evt.event
-    source                      text NOT NULL DEFAULT 'machine',    -- machine | manual | split | merge (D-069)
-    replaces_ids                uuid[],                             -- split or merge: the stops it replaced
+    source                      text NOT NULL DEFAULT 'machine',    -- machine | manual | split | merge (D-069) | retime | restore | trim (#68)
+    replaces_ids                uuid[],                             -- split, merge, retime, restore or trim: the stops it replaced
     adjusted_by                 text,                               -- who entered, split or merged it, as on evt.event
     adjusted_by_user_id         uuid,
     adjusted_at                 timestamptz,
     adjustment_comment          text,                               -- why
     superseded_at               timestamptz,                        -- replaced by a split or merge; kept, never deleted
     superseded_by               text,
+    superseded_note             text,                               -- why, for a stop removed or undone (#68)
     PRIMARY KEY (id, started_at),
     CONSTRAINT downtime_span_ck CHECK (ended_at IS NULL OR ended_at >= started_at),
-    CONSTRAINT downtime_source_ck CHECK (source IN ('machine', 'manual', 'split', 'merge')),
+    CONSTRAINT downtime_source_ck CHECK (source IN ('machine', 'manual', 'split', 'merge', 'retime', 'restore', 'trim')),
     CONSTRAINT downtime_adjusted_ck CHECK ((source = 'machine') = (adjusted_at IS NULL)),
-    CONSTRAINT downtime_replaces_ck CHECK ((source IN ('split', 'merge')) = (replaces_ids IS NOT NULL)),
+    CONSTRAINT downtime_replaces_ck CHECK ((source IN ('split', 'merge', 'retime', 'restore', 'trim')) = (replaces_ids IS NOT NULL)),
     CONSTRAINT downtime_superseded_ck CHECK (superseded_at IS NULL OR ended_at IS NOT NULL)
 ) PARTITION BY RANGE (started_at);
 CREATE INDEX ON ts.downtime (equipment_id, started_at);
@@ -1842,54 +1892,40 @@ CREATE TABLE ts.spc_violation (
 CREATE INDEX ON ts.spc_violation (characteristic_id, occurred_at);
 
 -- =====================================================================
--- 13. UTILIZATION AND OEE ROLLUP
---     Components, not percentages. One row per equipment per hour bucket,
---     split further at shift and run boundaries. Rebuildable from history.
---
---     calendar      = bucket length
---     planned_prod  = calendar - not_scheduled - planned_downtime
---     availability  = producing / planned_prod
---     performance   = (good + scrap) / ideal_qty     ideal = producing h * ideal rate
---     quality       = good / (good + scrap)
+-- 13. UTILIZATION AND OEE ROLLUP                     [D-052, D-072]
+--     Each site's production days worked out once, by the same figuring as
+--     the on-read report, and kept per equipment and day: a report longer
+--     than 31 days adds them up. Rebuildable from history at any time.
 -- =====================================================================
 
+-- Daily OEE rollups (#66, D-072). Not partitioned: a row per site and day, or per equipment and day, is small, and a re-roll updates in place.
+-- A site's generation moves on whenever a setting that decides how past time counts changes; every day rolled at an older one rolls again.
+CREATE TABLE ts.oee_rollup_site (
+    site_id             uuid PRIMARY KEY REFERENCES core.equipment(id),
+    generation          bigint NOT NULL DEFAULT 1,
+    changed_at          timestamptz NOT NULL DEFAULT now()
+);
+
+-- A site's production day: when it was rolled, at which generation, and whether a late change to its history has marked it since.
+CREATE TABLE ts.oee_rollup_day (
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    production_date     date NOT NULL,
+    rolled_generation   bigint,                                     -- null: never rolled
+    rolled_at           timestamptz,
+    dirty_at            timestamptz,                                -- set by a write to the day's history; cleared by rolling it
+    PRIMARY KEY (site_id, production_date)
+);
+
+-- Each piece of equipment's working windows of a production day as the OEE report adds them up (OeeWindowFigures as JSON): time by use
+-- and reason, output by product, unrated runs. An empty array for equipment with none that day.
 CREATE TABLE ts.oee_rollup (
-    id                      uuid NOT NULL DEFAULT uuidv7(),
-    bucket_start            timestamptz NOT NULL,
-    bucket_end              timestamptz NOT NULL,
-    equipment_id            uuid NOT NULL REFERENCES core.equipment(id),
-    shift_instance_id       uuid REFERENCES core.shift_instance(id),
-    run_id                  uuid,
-    material_id             uuid REFERENCES core.material(id),
-    -- time, milliseconds
-    calendar_ms             bigint NOT NULL,
-    not_scheduled_ms        bigint NOT NULL DEFAULT 0,          -- no shift, calendar exception, non-production mode
-    planned_downtime_ms     bigint NOT NULL DEFAULT 0,          -- planned jobs and 'planned' reasons
-    producing_ms            bigint NOT NULL DEFAULT 0,
-    waiting_external_ms     bigint NOT NULL DEFAULT 0,
-    held_internal_ms        bigint NOT NULL DEFAULT 0,
-    stopped_faulted_ms      bigint NOT NULL DEFAULT 0,
-    ready_transitioning_ms  bigint NOT NULL DEFAULT 0,
-    no_signal_ms            bigint NOT NULL DEFAULT 0,
-    -- events
-    stop_count              integer NOT NULL DEFAULT 0,
-    micro_stop_count        integer NOT NULL DEFAULT 0,
-    -- quantities, in the run's uom
-    good_qty                core.qty NOT NULL DEFAULT 0,
-    scrap_qty               core.qty NOT NULL DEFAULT 0,
-    ideal_qty               core.qty NOT NULL DEFAULT 0,
-    uom_id                  uuid REFERENCES core.uom(id),
-    -- labor
-    labor_ms                bigint NOT NULL DEFAULT 0,
-    computed_at             timestamptz NOT NULL DEFAULT now(),
-    policy_version          integer NOT NULL DEFAULT 1,         -- bump when category mapping changes
-    PRIMARY KEY (id, bucket_start),
-    CONSTRAINT oee_rollup_segment_uq UNIQUE NULLS NOT DISTINCT (equipment_id, bucket_start, run_id, shift_instance_id),
-    CONSTRAINT oee_rollup_time_ck CHECK (
-        not_scheduled_ms + planned_downtime_ms + producing_ms + waiting_external_ms + held_internal_ms
-        + stopped_faulted_ms + ready_transitioning_ms + no_signal_ms = calendar_ms)
-) PARTITION BY RANGE (bucket_start);
-CREATE INDEX ON ts.oee_rollup (equipment_id, bucket_start);
+    equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
+    production_date     date NOT NULL,
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    rolled_at           timestamptz NOT NULL,
+    windows             jsonb NOT NULL,
+    PRIMARY KEY (equipment_id, production_date)
+);
 
 -- =====================================================================
 -- 14. EVENT LOG AND OUTBOX (schema evt)                [D-004/007/008]
@@ -2144,7 +2180,11 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0035_partial_replacements'),
     ('0036_material_connections'),
     ('0037_stop_adjustments'),
-    ('0038_alarms_process_values');
+    ('0038_alarms_process_values'),
+    ('0039_stop_adjustment_followups'),
+    ('0040_reason_group_rollups'),
+    ('0041_oee_rollups'),
+    ('0042_oee_targets');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2166,7 +2206,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('labor.view', 'See labor: who is on, shift review and labor reports'),
     ('machines.view', 'See machines: their live state and their stops'),
     ('integrations.view', 'See outbound deliveries to the ERP and how they went'),
-    ('site_settings.view', 'See a site''s settings: changeover mode, reporting tolerances and calendar exceptions'),
+    ('site_settings.view', 'See a site''s settings: changeover mode, reporting tolerances, OEE targets and calendar exceptions'),
     ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
     ('schedule.plan_partial', 'Replace a cancelled job with exactly what is left, even when that isn''t whole batches'),
     ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
@@ -2196,7 +2236,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('units.manage', 'Maintain units of measure'),
     ('reasons.manage', 'Maintain reason codes'),
     ('equipment.manage', 'Maintain equipment: sites, lines, locations, machine profiles, edge nodes and tags'),
-    ('site_settings.manage', 'Set a site''s changeover mode, reporting tolerances and calendar exceptions'),
+    ('site_settings.manage', 'Set a site''s changeover mode, reporting tolerances, OEE targets and calendar exceptions'),
     ('shifts.manage', 'Maintain shift schedules and choose which one equipment follows'),
     ('people.manage', 'Maintain people and crews'),
     ('terminals.manage', 'Register and enrol shop-floor terminals'),

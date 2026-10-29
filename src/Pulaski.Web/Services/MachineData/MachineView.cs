@@ -107,8 +107,17 @@ public static class MachineView
         "manual" => "Entered by hand",
         "split" => "Split",
         "merge" => "Merged",
+        "retime" => "Times changed",
+        "restore" => "Restored by undo",
+        "trim" => "Trimmed",
         _ => null,
     };
+
+    /// <summary>A stop that may be removed: one entered by hand, not replaced already (#68).</summary>
+    public static bool CanVoid(DowntimeDto stop) => stop.Source == "manual" && stop.SupersededAt is null;
+
+    /// <summary>A stop whose adjustment may be undone: one a split, merge or change of times made, not replaced already (#68).</summary>
+    public static bool CanUndo(DowntimeDto stop) => stop.Source is "split" or "merge" or "retime" && stop.SupersededAt is null;
 
     /// <summary>A stop that may be split or merged: closed and not replaced already (D-069).</summary>
     public static bool CanAdjust(DowntimeDto stop) => stop.EndedAt is not null && stop.SupersededAt is null;

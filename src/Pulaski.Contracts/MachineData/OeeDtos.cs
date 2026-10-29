@@ -4,17 +4,26 @@ namespace Pulaski.Contracts.MachineData;
 
 /// <summary>
 /// Utilization and OEE between two production days (D-052): by equipment, by shift and by product, and where each piece of
-/// equipment's time went. Worked out on read from the machine history.
+/// equipment's time went. Worked out on read from the machine history; a period longer than 31 days from the daily rollups (#66).
 /// </summary>
 public sealed record OeeReportDto
 {
     public DateOnly From { get; init; }
     public DateOnly To { get; init; }
 
+    /// <summary>Worked out from the daily rollups (#66), with the days not rolled yet from the machine history.</summary>
+    public bool FromRollups { get; init; }
+
+    /// <summary><see cref="Shifts"/> has a row per equipment and production day, not per shift.</summary>
+    public bool ByDay { get; init; }
+
+    /// <summary>Days of the period left out because their rollups are being worked out again; empty when every day is in.</summary>
+    public IReadOnlyList<DateOnly> LeftOutDays { get; init; } = [];
+
     /// <summary>Equipment that tracks state, in tree order (the one asked for and everything below it, or all of the site).</summary>
     public IReadOnlyList<OeeEquipmentRowDto> Equipment { get; init; } = [];
 
-    /// <summary>Each piece of equipment's shifts (whole days for equipment without shifts), in time order.</summary>
+    /// <summary>Each piece of equipment's shifts (whole days for equipment without shifts), in time order; by day when <see cref="ByDay"/>.</summary>
     public IReadOnlyList<OeeShiftRowDto> Shifts { get; init; } = [];
 
     /// <summary>Each material made in the period, over the runs of it.</summary>
@@ -85,6 +94,9 @@ public sealed record OeeEquipmentRowDto
     /// <summary>Jobs run on it, so it has performance and quality; a machine below a line has availability only.</summary>
     public bool CanRunJob { get; init; }
     public required OeeFiguresDto Figures { get; init; }
+
+    /// <summary>The targets in force on the period's last day (or today, if earlier), D-073; null without any.</summary>
+    public OeeTargetFiguresDto? Target { get; init; }
 }
 
 public sealed record OeeShiftRowDto
@@ -101,6 +113,9 @@ public sealed record OeeShiftRowDto
     public required string EquipmentCode { get; init; }
     public bool CanRunJob { get; init; }
     public required OeeFiguresDto Figures { get; init; }
+
+    /// <summary>The targets in force on its production day (D-073); null without any.</summary>
+    public OeeTargetFiguresDto? Target { get; init; }
 }
 
 public sealed record OeeProductRowDto
@@ -136,6 +151,9 @@ public sealed record UtilizationRowDto
     public string? ReasonCode { get; init; }
     public string? ReasonName { get; init; }
 
+    /// <summary>The groups the reason is filed under (D-062), top first, for rolling the rows up by group (#86); empty without a reason or groups.</summary>
+    public IReadOnlyList<ReasonGroupDto> ReasonGroups { get; init; } = [];
+
     /// <summary>For down time without a reason: true when the machine sent nothing.</summary>
     public bool NoSignal { get; init; }
     public decimal Hours { get; init; }
@@ -144,3 +162,6 @@ public sealed record UtilizationRowDto
     public decimal SharePct { get; init; }
     public int Stops { get; init; }
 }
+
+/// <summary>A reason group (D-062), as a report rolls reasons up to it (#86).</summary>
+public sealed record ReasonGroupDto(Guid Id, string Code, string Name);

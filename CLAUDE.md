@@ -181,10 +181,20 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   code, else first state on the way with one); `equipment_live_state.open_downtime_*` points at the open stop. Operators code
   (`CodeDowntimeCommand`, `downtime.code`; offered reasons in `StopSql.CodingReasons`); Operate → Machines (`machines.view`) is the
   board (`GetMachineStatusHandler` derives series/parallel/constraint lines via `LineStates`) and the stops to code.
-- Utilization and OEE reports (D-052, proposed): computed on read, never stored (`GetOeeReportHandler`, `GET /machines/oee`, at most 31
-  production days). `Utilization.Classify` (unit mode, planned-downtime job, stop reason class, Execute; no signal = down), `Combine` for
+- Utilization and OEE reports (D-052, proposed): computed on read (`GetOeeReportHandler`, `GET /machines/oee`; up to 31 production days, longer
+  from rollups, D-072). `Utilization.Classify` (unit mode, planned-downtime job, stop reason class, Execute; no signal = down), `Combine` for
   derived lines, `Windows`/`Slice` to shifts and runs, `OeeTally` for A × P × Q with output weighed by ideal rate (earned hours). Output is
   production reports only, never machine counts. Machines → Utilization and OEE tab; the Overview uses its current-shift rows.
+  `shiftCode` keeps one shift's windows (#21); the stop Pareto (`StopPareto`, web) ranks the report's own use/reason rows of the top
+  equipment, so it can't disagree with it.
+- Daily OEE rollups (D-072, proposed): `OeeFigurer` → `OeeWindowFigures` per equipment and window, shared by the on-read report and the rollups
+  (a count belongs to one production day). `OeeRollupService` (API) rolls each site's final days (to today − 2, 366 back) into `ts.oee_rollup`
+  (jsonb per equipment + day), `ts.oee_rollup_day`, `ts.oee_rollup_site.generation`. Repositories mark days on history writes and bump the
+  generation on settings writes (`OeeRollupMarks`). Reports over 31 days (to 366) or `FromRollups` use current days + ≤ 31 on read, by day.
+- OEE targets and trend (D-073, proposed): `core.oee_target` periods per site (default) or equipment, ended never deleted (`OeeTargets.Set`/`End`/
+  `InForce`, equipment's own replaces the site's whole); `/api/oee-targets/sites/{siteId}` (`site_settings.manage`; version of the scope's latest).
+  Report rows carry `Target` (equipment: last day; shift/day: its day), read on each report, never rolled up. Trend = SVG `OeeTrendChart` over
+  the report's own shift/day rows (`OeeTrend`, days combine hours).
 - Lot attributes and certificates (D-056, proposed): typed `core.lot_attribute` definitions per site (all materials or classes via
   `lot_attribute_class.is_applied`), values in `lot_attribute_value` beside the lot (never touch `core.lot`/`ts.lot_event`);
   `LotAttributeDefinition.Parse` reads values. `lot_document` = file (bytes in `lot_document_content`, insert-only, sniffed PDF/PNG/JPEG
@@ -210,10 +220,12 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   lock per sink), then POSTs CloudEvents JSON with `Idempotency-Key` = event id and an HMAC signature. `DeliveryPolicy.AfterAttempt`: 2xx
   delivered, 4xx (not 408/425/429) failed now, else backoff to `MaxAttempts`. A subject's later rows are held behind a pending/failed one.
   Configure → Integrations retries/skips (`integrations.view` / `integrations.manage`). At least once; receivers dedupe.
-- Reason trees (D-062, proposed): groups (`is_selectable` false, fixed at creation, no class) hold reasons of their kind; `ReasonTree`
+- Reason trees (D-062, proposed): groups (`is_selectable` false, no class) hold reasons of their kind; `ReasonTree`
   checks placement (same kind, parent a group, no cycles, scope, ≤ 5 levels) and switching off. Tree changes lock the whole kind in id
   order (`LockReasonTreeAsync`); `MoveReasonCodeCommand` / `PUT /reason-codes/{id}/parent`. `core.reason_tree()` gives depth, `group_path`,
-  `sort_key`; pickers show the path. History refers to reason ids, so moves never change it.
+  `sort_key`, `group_ids`; pickers, stops and the journal show the path. History refers to reason ids, so moves never change it. Reports roll up
+  by group level on read (`ReasonRollup`, OEE rows' `ReasonGroups`); `ConvertReasonCodeCommand` (`PUT /reason-codes/{id}/group`) makes an unused
+  reason (`core.reason_code_uses`) a group or an empty group a reason (#86).
 - Reversing declarations (D-063, proposed): never edit; compensating `reversed` rows (reason + comment required) at the original's
   effective time. `ReverseMovementCommand` dispatches: latest single-lot (D-030), earlier quantity-only if `EnsureFitsAsync` allows,
   consumption (`Lot.Restore`), split/merge/transfer (both lots, `GetCounterpartAsync`, `Lot.TakeBack`), genealogy superseded.
@@ -244,7 +256,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Stop adjustments (D-069, proposed): enter (`EnterStopCommand`), split, merge stops; never edit: the old rows get `superseded_at`/`_by`, new
   `ts.downtime` rows carry `source` (machine/manual/split/merge), `replaces_ids`, `adjusted_*`. Every reader of stops (OEE, list, uncoded)
   filters `superseded_at IS NULL`; current stops never overlap (`StopAdjustments`). Closed stops only, ≤ 31 days; lock equipment
-  (`FOR NO KEY UPDATE`, as ingest) then stops in id order. Permission `downtime.adjust` (Supervisor).
+  (`FOR NO KEY UPDATE`, as ingest) then stops in id order. Permission `downtime.adjust` (Supervisor). Follow-ups (#68): retime (`retime`),
+  void (manual stops only, `superseded_note`), undo (split/merge/retime whose stops are all current → `restore` copies of the replaced),
+  and ingest trims a closed machine stop around stops entered by hand (`trim`, `StopAdjustments.Uncovered`).
 - Overview live figures (D-070, proposed): `GET /overview?siteId=` (`GetOverviewQuery`, `overview.view`) computes on read each line's
   state (`GetMachineStatusHandler`) and its current shift so far (`OverviewFigures.Scope`, else the site day): reported output/scrap,
   down time by reason and the state lane (`EquipmentUses`, shared with the OEE report), uncoded stops; plus held lots. The strip spans

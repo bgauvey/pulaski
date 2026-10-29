@@ -48,6 +48,8 @@ GRANT SELECT, INSERT, UPDATE ON ts.downtime TO pulaski_app;
 -- through ts.drop_old_process_values.
 GRANT SELECT, INSERT, UPDATE ON ts.equipment_alarm TO pulaski_app;
 GRANT SELECT, INSERT ON ts.process_value TO pulaski_app;
+-- Daily OEE rollups (#66): rolled again in place, never deleted.
+GRANT SELECT, INSERT, UPDATE ON ts.oee_rollup_site, ts.oee_rollup_day, ts.oee_rollup TO pulaski_app;
 
 -- Users, roles and local passwords (D-037). Roles are data an administrator maintains; the API copies the
 -- code's permission catalog into sec.permission at start.

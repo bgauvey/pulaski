@@ -166,13 +166,13 @@ public sealed class InMemoryStops : IStopRepository, IStopReadStore, IStopAdjust
             Inserted.Add(newStop);
             Adjustable[newStop.Id] = new AdjustableStop(newStop.Id, newStop.StartedAt, newStop.EndedAt, newStop.EquipmentId, newStop.RunId, newStop.PackMlState,
                 newStop.UnitMode, newStop.PlcStopReason, newStop.MappedReasonCodeId, newStop.OperatorReasonCodeId, newStop.Comment, newStop.CodedBy,
-                newStop.CodedByUserId, newStop.CodedAt, newStop.Source, IsSuperseded: false);
+                newStop.CodedByUserId, newStop.CodedAt, newStop.Source, IsSuperseded: false, newStop.IsMicroStop, newStop.ReplacesIds, newStop.AdjustedAt);
         }
 
         return Task.CompletedTask;
     }
 
-    public Task SupersedeAsync(IReadOnlyList<StopKeyDto> stops, string supersededBy, DateTimeOffset at, CancellationToken cancellationToken)
+    public Task SupersedeAsync(IReadOnlyList<StopKeyDto> stops, string supersededBy, DateTimeOffset at, string? note, CancellationToken cancellationToken)
     {
         lock (_lock)
         {
@@ -183,6 +183,24 @@ public sealed class InMemoryStops : IStopRepository, IStopReadStore, IStopAdjust
         }
 
         return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<AdjustableStop>> ListAdjustmentAsync(
+        Guid equipmentId, IReadOnlyList<Guid> replacesIds, DateTimeOffset adjustedAt, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<AdjustableStop>>([.. Adjustable.Values.Where(s => s.EquipmentId == equipmentId && s.AdjustedAt == adjustedAt
+                && s.ReplacesIds is { } ids && ids.ToHashSet().SetEquals(replacesIds))]);
+        }
+    }
+
+    public Task<IReadOnlyList<AdjustableStop>> GetReplacedForUpdateAsync(Guid equipmentId, IReadOnlyList<Guid> ids, DateTimeOffset near, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<AdjustableStop>>([.. Adjustable.Values.Where(s => s.EquipmentId == equipmentId && ids.Contains(s.Id))]);
+        }
     }
 
     private List<AdjustableStop> Find(IReadOnlyList<StopKeyDto> keys) =>

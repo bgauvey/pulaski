@@ -1,0 +1,142 @@
+@using System.Globalization
+@using Pulaski.Web.Services.MachineData
+
+@* A trend of one OEE figure (#67): one line over shifts or days, the target of each point's day as a dashed step (D-073), points below it
+   marked and labelled. Hovering a point shows its value; the table above holds the same figures. *@
+@if (Points.Count == 0)
+{
+    <p class="text-muted small mb-0">Nothing to chart in this period.</p>
+}
+else
+{
+    <svg class="oee-trend" viewBox="0 0 @Width @Height" role="img" aria-labelledby="@($"{Id}-title {Id}-desc")">
+        <title id="@($"{Id}-title")">@Label by @(ByDay ? "day" : "shift")</title>
+        <desc id="@($"{Id}-desc")">@Description</desc>
+
+        @foreach (var tick in Ticks)
+        {
+            <line class="grid" x1="@F(Left)" x2="@F(Width - Right)" y1="@F(Y(tick))" y2="@F(Y(tick))" />
+            @SvgText("axis", Left - 6, Y(tick) + 4, "end", $"{tick}%")
+        }
+
+        @foreach (var (x1, x2, target) in TargetSteps)
+        {
+            <line class="target" x1="@F(x1)" x2="@F(x2)" y1="@F(Y(target))" y2="@F(Y(target))" />
+        }
+        @if (Points.LastOrDefault(p => p.Target is not null) is { Target: { } lastTarget })
+        {
+            @SvgText("target-label", Width - Right + 4, Y(lastTarget) + 4, "start", $"Target {Pct(lastTarget)}")
+        }
+
+        <path class="series" d="@Path" />
+
+        @for (var i = 0; i < Points.Count; i++)
+        {
+            var p = Points[i];
+            var x = X(i);
+            <g class="pt">
+                <line class="crosshair" x1="@F(x)" x2="@F(x)" y1="@F(Top)" y2="@F(Height - Bottom)" />
+                @if (p.Value is { } v)
+                {
+                    <circle class="@(p.Below == true ? "marker below" : "marker")" cx="@F(x)" cy="@F(Y(v))" r="4" />
+                }
+                <rect class="hit" x="@F(x - Step / 2)" y="@F(Top)" width="@F(Math.Max(Step, 8))" height="@F(Height - Top - Bottom)">
+                    <title>@Tip(p)</title>
+                </rect>
+            </g>
+        }
+
+        @foreach (var i in LabelIndexes)
+        {
+            @SvgText("axis", X(i), Height - 8, "middle", Points[i].Label)
+        }
+    </svg>
+}
+
+@code {
+    private const double Width = 720;
+    private const double Height = 220;
+    private const double Left = 40;
+    private const double Right = 76;
+    private const double Top = 12;
+    private const double Bottom = 28;
+    private static readonly int[] Ticks = [0, 25, 50, 75, 100];
+
+    [Parameter, EditorRequired] public IReadOnlyList<OeeTrendPoint> Points { get; set; } = [];
+
+    /// <summary>The figure charted, as people call it: OEE, Availability…</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "OEE";
+
+    [Parameter] public bool ByDay { get; set; }
+
+    [Parameter] public string Id { get; set; } = "oee-trend";
+
+    private double Step => Points.Count > 1 ? (Width - Left - Right) / (Points.Count - 1) : Width - Left - Right;
+
+    private double X(int i) => Points.Count > 1 ? Left + i * Step : Left + (Width - Left - Right) / 2;
+
+    private static double Y(decimal value) => Top + (double)(100m - Math.Clamp(value, 0m, 100m)) / 100 * (Height - Top - Bottom);
+
+    // Breaks where a point has no figure.
+    private string Path
+    {
+        get
+        {
+            var parts = new List<string>();
+            var pen = false;
+            for (var i = 0; i < Points.Count; i++)
+            {
+                if (Points[i].Value is { } v)
+                {
+                    parts.Add($"{(pen ? "L" : "M")}{F(X(i))} {F(Y(v))}");
+                    pen = true;
+                }
+                else
+                {
+                    pen = false;
+                }
+            }
+
+            return string.Join(' ', parts);
+        }
+    }
+
+    // Each point's target across its share of the width, so a target that changes shows where it changed.
+    private IEnumerable<(double X1, double X2, decimal Target)> TargetSteps =>
+        Points.Select((p, i) => (p, i)).Where(t => t.p.Target is not null).Select(t => (
+            Math.Max(Left, X(t.i) - Step / 2), Math.Min(Width - Right, X(t.i) + Step / 2), t.p.Target!.Value));
+
+    // At most about eight labels along the bottom.
+    private IEnumerable<int> LabelIndexes
+    {
+        get
+        {
+            var every = Math.Max(1, (int)Math.Ceiling(Points.Count / 8.0));
+            return Enumerable.Range(0, Points.Count).Where(i => i % every == 0);
+        }
+    }
+
+    private string Description
+    {
+        get
+        {
+            var measured = Points.Count(p => p.Below is not null);
+            var below = Points.Count(p => p.Below == true);
+            return measured == 0
+                ? $"{Points.Count} points; no targets."
+                : $"{Points.Count} points; {below} of {measured} with a target below it.";
+        }
+    }
+
+    private static string Tip(OeeTrendPoint p) => p.Value is { } v
+        ? $"{p.Label}: {Pct(v)}" + (p.Target is { } t ? $" (target {Pct(t)}{(v < t ? ", below" : "")})" : "")
+        : $"{p.Label}: nothing to measure";
+
+    private static string Pct(decimal value) => value.ToString("0.#", CultureInfo.InvariantCulture) + "%";
+
+    // Razor reads <text> as its own keyword, so SVG labels are written out as encoded markup.
+    private static MarkupString SvgText(string cssClass, double x, double y, string anchor, string content) =>
+        new($"<text class=\"{cssClass}\" x=\"{F(x)}\" y=\"{F(y)}\" text-anchor=\"{anchor}\">{System.Net.WebUtility.HtmlEncode(content)}</text>");
+
+    private static string F(double value) => value.ToString("0.#", CultureInfo.InvariantCulture);
+}

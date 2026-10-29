@@ -58,13 +58,15 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
                d.mapped_reason_code_id AS mapped_reason_id, mr.code AS mapped_reason_code, mr.name AS mapped_reason_name,
                d.operator_reason_code_id AS operator_reason_id, orc.code AS operator_reason_code, orc.name AS operator_reason_name,
                er.utilization_class, d.is_micro_stop, d.coded_by, d.coded_at, d.comment, j.job_number,
-               d.source, d.replaces_ids, d.adjusted_by, d.adjusted_at, d.adjustment_comment, d.superseded_at, d.superseded_by
+               d.source, d.replaces_ids, d.adjusted_by, d.adjusted_at, d.adjustment_comment, d.superseded_at, d.superseded_by, d.superseded_note,
+               rt.group_path AS reason_group_path
         FROM ts.downtime d
         JOIN core.equipment e ON e.id = d.equipment_id
         LEFT JOIN core.machine_profile_code pc ON pc.profile_id = e.machine_profile_id AND pc.code_kind = 'stop_reason' AND pc.raw_value = d.plc_stop_reason
         LEFT JOIN core.reason_code mr ON mr.id = d.mapped_reason_code_id
         LEFT JOIN core.reason_code orc ON orc.id = d.operator_reason_code_id
         LEFT JOIN core.reason_code er ON er.id = d.effective_reason_code_id
+        LEFT JOIN core.reason_tree() rt ON rt.id = d.effective_reason_code_id
         LEFT JOIN core.job_run run ON run.id = d.run_id
         LEFT JOIN core.job j ON j.id = run.job_id
         WHERE e.site_id = @SiteId AND d.started_at >= @From AND d.started_at < @To
@@ -191,6 +193,7 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
         public Guid? OperatorReasonId { get; init; }
         public string? OperatorReasonCode { get; init; }
         public string? OperatorReasonName { get; init; }
+        public string? ReasonGroupPath { get; init; }
         public string? UtilizationClass { get; init; }
         public bool IsMicroStop { get; init; }
         public string? CodedBy { get; init; }
@@ -204,6 +207,7 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
         public string? AdjustmentComment { get; init; }
         public DateTimeOffset? SupersededAt { get; init; }
         public string? SupersededBy { get; init; }
+        public string? SupersededNote { get; init; }
 
         public DowntimeDto ToDto() => new()
         {
@@ -224,6 +228,7 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
             OperatorReasonId = OperatorReasonId,
             OperatorReasonCode = OperatorReasonCode,
             OperatorReasonName = OperatorReasonName,
+            ReasonGroupPath = ReasonGroupPath,
             UtilizationClass = UtilizationClass,
             IsMicroStop = IsMicroStop,
             CodedBy = CodedBy,
@@ -237,6 +242,7 @@ internal sealed class StopQueries(NpgsqlDataSource dataSource) : IStopReadStore
             AdjustmentComment = AdjustmentComment,
             SupersededAt = SupersededAt,
             SupersededBy = SupersededBy,
+            SupersededNote = SupersededNote,
         };
     }
 }
@@ -281,6 +287,7 @@ internal sealed class StopRepository(Persistence.DbSession session) : IStopRepos
         UPDATE ts.downtime
         SET operator_reason_code_id = @ReasonCodeId, comment = @Comment, coded_by = @CodedBy, coded_by_user_id = @CodedByUserId, coded_at = @At
         WHERE id = @Id AND started_at = @StartedAt
+        RETURNING equipment_id, started_at, coalesce(ended_at, started_at) AS ended_at
         """;
 
     public async Task<StopRecord?> GetStopForUpdateAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken) =>
@@ -292,10 +299,21 @@ internal sealed class StopRepository(Persistence.DbSession session) : IStopRepos
     public async Task<IReadOnlyList<CodingReason>> ListCodingReasonsAsync(Guid equipmentId, CancellationToken cancellationToken) =>
         [.. (await session.QueryAsync<ReasonCodeDto>(StopSql.CodingReasons, new { Id = equipmentId }, cancellationToken)).Select(r => new CodingReason(r.Id, r.RequiresComment))];
 
-    public Task CodeStopAsync(Guid id, DateTimeOffset startedAt, Guid reasonCodeId, string? comment, string codedBy, Guid? codedByUserId, DateTimeOffset at,
-        CancellationToken cancellationToken) =>
-        session.ExecuteAsync(Code, new { Id = id, StartedAt = startedAt, ReasonCodeId = reasonCodeId, Comment = comment, CodedBy = codedBy, CodedByUserId = codedByUserId, At = at },
+    public async Task CodeStopAsync(Guid id, DateTimeOffset startedAt, Guid reasonCodeId, string? comment, string codedBy, Guid? codedByUserId, DateTimeOffset at,
+        CancellationToken cancellationToken)
+    {
+        var coded = await session.QueryAsync<CodedStop>(Code,
+            new { Id = id, StartedAt = startedAt, ReasonCodeId = reasonCodeId, Comment = comment, CodedBy = codedBy, CodedByUserId = codedByUserId, At = at },
             cancellationToken);
+        await OeeRollupMarks.MarkAsync(session, coded.Select(c => (c.EquipmentId, c.StartedAt, c.EndedAt)), cancellationToken);
+    }
+
+    private sealed class CodedStop
+    {
+        public Guid EquipmentId { get; init; }
+        public DateTimeOffset StartedAt { get; init; }
+        public DateTimeOffset EndedAt { get; init; }
+    }
 
     private sealed class Row
     {
