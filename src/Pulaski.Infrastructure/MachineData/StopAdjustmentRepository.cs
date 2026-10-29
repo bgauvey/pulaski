@@ -52,6 +52,7 @@ internal sealed class StopAdjustmentRepository(Persistence.DbSession session) : 
     private const string Supersede = """
         UPDATE ts.downtime SET superseded_at = @At, superseded_by = @By, superseded_note = @Note
         WHERE (id, started_at) IN (SELECT * FROM unnest(@Ids::uuid[], @Starts::timestamptz[])) AND superseded_at IS NULL
+        RETURNING equipment_id, started_at, ended_at
         """;
 
     public async Task<StopEquipment?> LockEquipmentAsync(Guid equipmentId, CancellationToken cancellationToken) =>
@@ -72,8 +73,9 @@ internal sealed class StopAdjustmentRepository(Persistence.DbSession session) : 
     public Task<Guid?> RunAtAsync(Guid equipmentId, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.QuerySingleOrDefaultAsync<Guid?>(RunAt, new { Id = equipmentId, At = at }, cancellationToken);
 
-    public Task InsertAsync(NewStop newStop, CancellationToken cancellationToken) =>
-        session.ExecuteAsync(Insert, new
+    public async Task InsertAsync(NewStop newStop, CancellationToken cancellationToken)
+    {
+        await session.ExecuteAsync(Insert, new
         {
             newStop.Id,
             newStop.StartedAt,
@@ -97,9 +99,12 @@ internal sealed class StopAdjustmentRepository(Persistence.DbSession session) : 
             newStop.AdjustedAt,
             newStop.AdjustmentComment,
         }, cancellationToken);
+        await OeeRollupMarks.MarkAsync(session, newStop.EquipmentId, newStop.StartedAt, newStop.EndedAt, cancellationToken);
+    }
 
-    public Task SupersedeAsync(IReadOnlyList<StopKeyDto> stops, string supersededBy, DateTimeOffset at, string? note, CancellationToken cancellationToken) =>
-        session.ExecuteAsync(Supersede, new
+    public async Task SupersedeAsync(IReadOnlyList<StopKeyDto> stops, string supersededBy, DateTimeOffset at, string? note, CancellationToken cancellationToken)
+    {
+        var changed = await session.QueryAsync<ChangedStop>(Supersede, new
         {
             Ids = stops.Select(s => s.Id).ToArray(),
             Starts = stops.Select(s => s.StartedAt).ToArray(),
@@ -107,6 +112,8 @@ internal sealed class StopAdjustmentRepository(Persistence.DbSession session) : 
             At = at,
             Note = note,
         }, cancellationToken);
+        await OeeRollupMarks.MarkAsync(session, changed.Select(c => (c.EquipmentId, c.StartedAt, c.EndedAt ?? c.StartedAt)), cancellationToken);
+    }
 
     // One adjustment's stops: the same replaced stops, made at the same moment (both parts of a split). Locked, current or not.
     private const string Adjustment = """
@@ -180,5 +187,12 @@ internal sealed class StopAdjustmentRepository(Persistence.DbSession session) : 
         public bool IsMicroStop { get; init; }
         public Guid[]? ReplacesIds { get; init; }
         public DateTimeOffset? AdjustedAt { get; init; }
+    }
+
+    private sealed class ChangedStop
+    {
+        public Guid EquipmentId { get; init; }
+        public DateTimeOffset StartedAt { get; init; }
+        public DateTimeOffset? EndedAt { get; init; }
     }
 }

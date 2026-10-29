@@ -1873,54 +1873,40 @@ CREATE TABLE ts.spc_violation (
 CREATE INDEX ON ts.spc_violation (characteristic_id, occurred_at);
 
 -- =====================================================================
--- 13. UTILIZATION AND OEE ROLLUP
---     Components, not percentages. One row per equipment per hour bucket,
---     split further at shift and run boundaries. Rebuildable from history.
---
---     calendar      = bucket length
---     planned_prod  = calendar - not_scheduled - planned_downtime
---     availability  = producing / planned_prod
---     performance   = (good + scrap) / ideal_qty     ideal = producing h * ideal rate
---     quality       = good / (good + scrap)
+-- 13. UTILIZATION AND OEE ROLLUP                     [D-052, D-072]
+--     Each site's production days worked out once, by the same figuring as
+--     the on-read report, and kept per equipment and day: a report longer
+--     than 31 days adds them up. Rebuildable from history at any time.
 -- =====================================================================
 
+-- Daily OEE rollups (#66, D-072). Not partitioned: a row per site and day, or per equipment and day, is small, and a re-roll updates in place.
+-- A site's generation moves on whenever a setting that decides how past time counts changes; every day rolled at an older one rolls again.
+CREATE TABLE ts.oee_rollup_site (
+    site_id             uuid PRIMARY KEY REFERENCES core.equipment(id),
+    generation          bigint NOT NULL DEFAULT 1,
+    changed_at          timestamptz NOT NULL DEFAULT now()
+);
+
+-- A site's production day: when it was rolled, at which generation, and whether a late change to its history has marked it since.
+CREATE TABLE ts.oee_rollup_day (
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    production_date     date NOT NULL,
+    rolled_generation   bigint,                                     -- null: never rolled
+    rolled_at           timestamptz,
+    dirty_at            timestamptz,                                -- set by a write to the day's history; cleared by rolling it
+    PRIMARY KEY (site_id, production_date)
+);
+
+-- Each piece of equipment's working windows of a production day as the OEE report adds them up (OeeWindowFigures as JSON): time by use
+-- and reason, output by product, unrated runs. An empty array for equipment with none that day.
 CREATE TABLE ts.oee_rollup (
-    id                      uuid NOT NULL DEFAULT uuidv7(),
-    bucket_start            timestamptz NOT NULL,
-    bucket_end              timestamptz NOT NULL,
-    equipment_id            uuid NOT NULL REFERENCES core.equipment(id),
-    shift_instance_id       uuid REFERENCES core.shift_instance(id),
-    run_id                  uuid,
-    material_id             uuid REFERENCES core.material(id),
-    -- time, milliseconds
-    calendar_ms             bigint NOT NULL,
-    not_scheduled_ms        bigint NOT NULL DEFAULT 0,          -- no shift, calendar exception, non-production mode
-    planned_downtime_ms     bigint NOT NULL DEFAULT 0,          -- planned jobs and 'planned' reasons
-    producing_ms            bigint NOT NULL DEFAULT 0,
-    waiting_external_ms     bigint NOT NULL DEFAULT 0,
-    held_internal_ms        bigint NOT NULL DEFAULT 0,
-    stopped_faulted_ms      bigint NOT NULL DEFAULT 0,
-    ready_transitioning_ms  bigint NOT NULL DEFAULT 0,
-    no_signal_ms            bigint NOT NULL DEFAULT 0,
-    -- events
-    stop_count              integer NOT NULL DEFAULT 0,
-    micro_stop_count        integer NOT NULL DEFAULT 0,
-    -- quantities, in the run's uom
-    good_qty                core.qty NOT NULL DEFAULT 0,
-    scrap_qty               core.qty NOT NULL DEFAULT 0,
-    ideal_qty               core.qty NOT NULL DEFAULT 0,
-    uom_id                  uuid REFERENCES core.uom(id),
-    -- labor
-    labor_ms                bigint NOT NULL DEFAULT 0,
-    computed_at             timestamptz NOT NULL DEFAULT now(),
-    policy_version          integer NOT NULL DEFAULT 1,         -- bump when category mapping changes
-    PRIMARY KEY (id, bucket_start),
-    CONSTRAINT oee_rollup_segment_uq UNIQUE NULLS NOT DISTINCT (equipment_id, bucket_start, run_id, shift_instance_id),
-    CONSTRAINT oee_rollup_time_ck CHECK (
-        not_scheduled_ms + planned_downtime_ms + producing_ms + waiting_external_ms + held_internal_ms
-        + stopped_faulted_ms + ready_transitioning_ms + no_signal_ms = calendar_ms)
-) PARTITION BY RANGE (bucket_start);
-CREATE INDEX ON ts.oee_rollup (equipment_id, bucket_start);
+    equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
+    production_date     date NOT NULL,
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    rolled_at           timestamptz NOT NULL,
+    windows             jsonb NOT NULL,
+    PRIMARY KEY (equipment_id, production_date)
+);
 
 -- =====================================================================
 -- 14. EVENT LOG AND OUTBOX (schema evt)                [D-004/007/008]
@@ -2177,7 +2163,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0037_stop_adjustments'),
     ('0038_alarms_process_values'),
     ('0039_stop_adjustment_followups'),
-    ('0040_reason_group_rollups');
+    ('0040_reason_group_rollups'),
+    ('0041_oee_rollups');
 
 -- =====================================================================
 -- 17. SEED DATA

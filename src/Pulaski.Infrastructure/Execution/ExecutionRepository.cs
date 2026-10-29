@@ -3,6 +3,7 @@ using Pulaski.Application.Execution;
 using Dapper;
 using Pulaski.Domain.Execution;
 using Pulaski.Domain.Materials;
+using Pulaski.Infrastructure.MachineData;
 using Pulaski.Infrastructure.Persistence;
 
 namespace Pulaski.Infrastructure.Execution;
@@ -217,12 +218,23 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
     public Task<int> NextRunNoAsync(Guid jobId, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<int>(NextRunNo, new { JobId = jobId }, cancellationToken);
 
-    public Task InsertRunAsync(JobRun run, CancellationToken cancellationToken) => session.ExecuteAsync(InsertRun, run, cancellationToken);
+    public async Task InsertRunAsync(JobRun run, CancellationToken cancellationToken)
+    {
+        await session.ExecuteAsync(InsertRun, run, cancellationToken);
+        await OeeRollupMarks.MarkAsync(session, run.EquipmentId, run.StartedAt, run.EndedAt ?? DateTimeOffset.UtcNow, cancellationToken);
+    }
 
-    public Task UpdateRunAsync(JobRun run, CancellationToken cancellationToken) => session.ExecuteAsync(UpdateRun, run, cancellationToken);
+    public async Task UpdateRunAsync(JobRun run, CancellationToken cancellationToken)
+    {
+        await session.ExecuteAsync(UpdateRun, run, cancellationToken);
+        await OeeRollupMarks.MarkAsync(session, run.EquipmentId, run.StartedAt, run.EndedAt ?? DateTimeOffset.UtcNow, cancellationToken);
+    }
 
-    public Task InsertCountAsync(ProductionCountRow count, CancellationToken cancellationToken) =>
-        session.ExecuteAsync(InsertCount, count, cancellationToken);
+    public async Task InsertCountAsync(ProductionCountRow count, CancellationToken cancellationToken)
+    {
+        await session.ExecuteAsync(InsertCount, count, cancellationToken);
+        await OeeRollupMarks.MarkAsync(session, count.EquipmentId, count.OccurredAt, count.OccurredAt, cancellationToken);
+    }
 
     public async Task<ExecutionPolicy> GetPolicyAsync(Guid siteId, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<PolicyRow>(ExecutionSql.Policy, new { SiteId = siteId }, cancellationToken) is { } r

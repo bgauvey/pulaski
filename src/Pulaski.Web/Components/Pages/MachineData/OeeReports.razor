@@ -27,13 +27,17 @@
         }
     </select>
     <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="LoadAsync">Show</button>
-    <span class="ms-auto small text-muted">Production days; at most @MaxDays days.</span>
+    <span class="ms-auto small text-muted">Production days; at most @MaxDays. Over @OnReadDays, from the daily rollups.</span>
 </div>
 
 <ProblemAlert Error="_error" />
 
 @if (_report is { } report)
 {
+    @if (report.FromRollups)
+    {
+        <p class="small text-muted mb-1">From the daily rollups (today, yesterday and any day not rolled yet worked out now), by day rather than by shift.</p>
+    }
     @foreach (var note in report.Notes)
     {
         <p class="small text-warning-strong mb-1">@note</p>
@@ -80,7 +84,7 @@
 
     <section class="inv-section" aria-labelledby="oee-shifts">
         <div class="inv-section-head">
-            <h2 id="oee-shifts">By shift</h2>
+            <h2 id="oee-shifts">@(report.ByDay ? "By day" : "By shift")</h2>
             <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(ShiftRows.Count == 0)" @onclick="ExportShiftsAsync">Export CSV</button>
         </div>
         @if (ShiftRows.Count == 0)
@@ -97,7 +101,7 @@
                         {
                             <tr @key="(s.EquipmentId, s.Start)">
                                 <td>@s.ProductionDate.ToString("ddd d MMM", CultureInfo.InvariantCulture)</td>
-                                <td>@(s.ShiftCode is null ? "Whole day" : $"{s.ShiftCode} {s.ShiftName}")</td>
+                                <td>@(s.ShiftCode is not null ? $"{s.ShiftCode} {s.ShiftName}" : report.ByDay ? "All shifts" : "Whole day")</td>
                                 <td>@s.CrewCode</td>
                                 <td class="fw-semibold">@s.EquipmentCode</td>
                                 @FiguresCells(s.Figures)
@@ -263,7 +267,8 @@ else if (_error is null)
 }
 
 @code {
-    private const int MaxDays = 31;
+    private const int MaxDays = 366;
+    private const int OnReadDays = 31;
 
     [Parameter, EditorRequired]
     public Guid SiteId { get; set; }
@@ -342,7 +347,8 @@ else if (_error is null)
         {
             _report = await Api.GetOeeReportAsync(SiteId, _from, _to, _equipment, _shift);
             (_from, _to) = (_report.From, _report.To);
-            if (_shift is null)
+            // A report by day names no shifts: the ones offered stay those of the last report by shift.
+            if (_shift is null && !_report.ByDay)
             {
                 // The shifts worked, to choose from: kept while one is chosen, whose report names only it.
                 _shiftChoices = StopPareto.Shifts(_report);

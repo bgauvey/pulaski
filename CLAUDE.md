@@ -181,12 +181,16 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   code, else first state on the way with one); `equipment_live_state.open_downtime_*` points at the open stop. Operators code
   (`CodeDowntimeCommand`, `downtime.code`; offered reasons in `StopSql.CodingReasons`); Operate → Machines (`machines.view`) is the
   board (`GetMachineStatusHandler` derives series/parallel/constraint lines via `LineStates`) and the stops to code.
-- Utilization and OEE reports (D-052, proposed): computed on read, never stored (`GetOeeReportHandler`, `GET /machines/oee`, at most 31
-  production days). `Utilization.Classify` (unit mode, planned-downtime job, stop reason class, Execute; no signal = down), `Combine` for
+- Utilization and OEE reports (D-052, proposed): computed on read (`GetOeeReportHandler`, `GET /machines/oee`; up to 31 production days, longer
+  from rollups, D-072). `Utilization.Classify` (unit mode, planned-downtime job, stop reason class, Execute; no signal = down), `Combine` for
   derived lines, `Windows`/`Slice` to shifts and runs, `OeeTally` for A × P × Q with output weighed by ideal rate (earned hours). Output is
   production reports only, never machine counts. Machines → Utilization and OEE tab; the Overview uses its current-shift rows.
   `shiftCode` keeps one shift's windows (#21); the stop Pareto (`StopPareto`, web) ranks the report's own use/reason rows of the top
   equipment, so it can't disagree with it.
+- Daily OEE rollups (D-072, proposed): `OeeFigurer` → `OeeWindowFigures` per equipment and window, shared by the on-read report and the rollups
+  (a count belongs to one production day). `OeeRollupService` (API) rolls each site's final days (to today − 2, 366 back) into `ts.oee_rollup`
+  (jsonb per equipment + day), `ts.oee_rollup_day`, `ts.oee_rollup_site.generation`. Repositories mark days on history writes and bump the
+  generation on settings writes (`OeeRollupMarks`). Reports over 31 days (to 366) or `FromRollups` use current days + ≤ 31 on read, by day.
 - Lot attributes and certificates (D-056, proposed): typed `core.lot_attribute` definitions per site (all materials or classes via
   `lot_attribute_class.is_applied`), values in `lot_attribute_value` beside the lot (never touch `core.lot`/`ts.lot_event`);
   `LotAttributeDefinition.Parse` reads values. `lot_document` = file (bytes in `lot_document_content`, insert-only, sniffed PDF/PNG/JPEG

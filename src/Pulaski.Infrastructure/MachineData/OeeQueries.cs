@@ -12,6 +12,8 @@ namespace Pulaski.Infrastructure.MachineData;
 /// <summary>Read side for the utilization and OEE report (D-052): the machine history of a period, as recorded.</summary>
 internal sealed class OeeQueries(NpgsqlDataSource dataSource) : IOeeReadStore
 {
+    private const string Materials = "SELECT id, code, name FROM core.material WHERE id = ANY(@Ids)";
+
     private const string TimeZone = "SELECT time_zone FROM core.equipment WHERE id = @Id AND level = 'site'";
 
     // Tree order; each row's parent is the nearest equipment above it that tracks state, as on the Machines board.
@@ -203,6 +205,25 @@ internal sealed class OeeQueries(NpgsqlDataSource dataSource) : IOeeReadStore
                 .ToDictionary(g => g.Id, g => new ReasonGroupDto(g.Id, g.Code, g.Name));
         return [.. rows.Select(r => new OeeReasonRecord(r.Id, r.Code, r.Name, r.UtilizationClass,
             [.. (r.GroupIds ?? []).Where(groups.ContainsKey).Select(g => groups[g])]))];
+    }
+
+    public async Task<IReadOnlyList<OeeMaterialRecord>> ListMaterialsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
+    {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. (await connection.QueryAsync<MaterialRow>(new CommandDefinition(Materials, new { Ids = ids.ToArray() }, cancellationToken: cancellationToken)))
+            .Select(m => new OeeMaterialRecord(m.Id, m.Code, m.Name))];
+    }
+
+    private sealed class MaterialRow
+    {
+        public Guid Id { get; init; }
+        public string Code { get; init; } = "";
+        public string Name { get; init; } = "";
     }
 
     private sealed class EquipmentRow

@@ -59,6 +59,7 @@ if (builder.Configuration.GetValue("Pulaski:DatabaseMaintenance", true))
     builder.Services.AddHostedService<PartitionMaintenance>();
     builder.Services.AddHostedService<BootstrapAdministrator>();
     builder.Services.AddHostedService<ErpDeliveryService>();
+    builder.Services.AddHostedService<OeeRollupService>();
 }
 
 // The ERP feed (D-061): its settings for screens, and the HTTP client it sends with.

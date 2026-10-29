@@ -4,6 +4,8 @@ using Pulaski.Domain.Materials;
 using Pulaski.Domain.Scheduling;
 using Pulaski.Infrastructure.Persistence;
 
+using Pulaski.Infrastructure.MachineData;
+
 namespace Pulaski.Infrastructure.Materials;
 
 /// <summary>Write side for capabilities and the run standards they seed (D-020, D-034). Every statement runs in the command's transaction.</summary>
@@ -101,11 +103,19 @@ internal sealed class CapabilityRepository(DbSession session) : ICapabilityRepos
         [.. (await session.QueryAsync<CapabilityRow>(ListOnLine, new { EquipmentId = equipmentId, MaterialId = materialId }, cancellationToken))
             .Select(r => r.ToDomain())];
 
-    public Task<long> InsertAsync(Capability capability, CancellationToken cancellationToken) =>
-        session.ExecuteScalarAsync<long>(Insert, capability, cancellationToken);
+    public async Task<long> InsertAsync(Capability capability, CancellationToken cancellationToken)
+    {
+        var version = await session.ExecuteScalarAsync<long>(Insert, capability, cancellationToken);
+        await OeeRollupMarks.SiteOfEquipmentChangedAsync(session, capability.EquipmentId, cancellationToken);
+        return version;
+    }
 
-    public Task<long> UpdateAsync(Capability capability, CancellationToken cancellationToken) =>
-        session.ExecuteScalarAsync<long>(Update, capability, cancellationToken);
+    public async Task<long> UpdateAsync(Capability capability, CancellationToken cancellationToken)
+    {
+        var version = await session.ExecuteScalarAsync<long>(Update, capability, cancellationToken);
+        await OeeRollupMarks.SiteOfEquipmentChangedAsync(session, capability.EquipmentId, cancellationToken);
+        return version;
+    }
 
     public async Task<Versioned<RunStandard>?> GetRunStandardForUpdateAsync(Guid equipmentId, Guid materialId, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<RunStandardRow>(

@@ -151,8 +151,13 @@ internal sealed class MachineDataRepository(DbSession session) : IMachineDataRep
             ? new ConstraintCandidate(r.EquipmentId, r.Code, r.TracksState, r.IsBelow)
             : null;
 
-    public Task<long> UpdateEquipmentMachineDataAsync(EquipmentMachineDataRecord e, DateTimeOffset at, CancellationToken cancellationToken) =>
-        session.ExecuteScalarAsync<long>(SetMachineData, new { e.EquipmentId, e.MachineProfileId, e.StateDerivation, e.ConstraintEquipmentId, e.MicroStopThreshold, At = at }, cancellationToken);
+    public async Task<long> UpdateEquipmentMachineDataAsync(EquipmentMachineDataRecord e, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var version = await session.ExecuteScalarAsync<long>(SetMachineData,
+            new { e.EquipmentId, e.MachineProfileId, e.StateDerivation, e.ConstraintEquipmentId, e.MicroStopThreshold, At = at }, cancellationToken);
+        await OeeRollupMarks.SiteOfEquipmentChangedAsync(session, e.EquipmentId, cancellationToken);
+        return version;
+    }
 
     public Task<long> TouchEquipmentAsync(Guid equipmentId, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(Touch, new { Id = equipmentId, At = at }, cancellationToken);

@@ -287,6 +287,7 @@ internal sealed class StopRepository(Persistence.DbSession session) : IStopRepos
         UPDATE ts.downtime
         SET operator_reason_code_id = @ReasonCodeId, comment = @Comment, coded_by = @CodedBy, coded_by_user_id = @CodedByUserId, coded_at = @At
         WHERE id = @Id AND started_at = @StartedAt
+        RETURNING equipment_id, started_at, coalesce(ended_at, started_at) AS ended_at
         """;
 
     public async Task<StopRecord?> GetStopForUpdateAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken) =>
@@ -298,10 +299,21 @@ internal sealed class StopRepository(Persistence.DbSession session) : IStopRepos
     public async Task<IReadOnlyList<CodingReason>> ListCodingReasonsAsync(Guid equipmentId, CancellationToken cancellationToken) =>
         [.. (await session.QueryAsync<ReasonCodeDto>(StopSql.CodingReasons, new { Id = equipmentId }, cancellationToken)).Select(r => new CodingReason(r.Id, r.RequiresComment))];
 
-    public Task CodeStopAsync(Guid id, DateTimeOffset startedAt, Guid reasonCodeId, string? comment, string codedBy, Guid? codedByUserId, DateTimeOffset at,
-        CancellationToken cancellationToken) =>
-        session.ExecuteAsync(Code, new { Id = id, StartedAt = startedAt, ReasonCodeId = reasonCodeId, Comment = comment, CodedBy = codedBy, CodedByUserId = codedByUserId, At = at },
+    public async Task CodeStopAsync(Guid id, DateTimeOffset startedAt, Guid reasonCodeId, string? comment, string codedBy, Guid? codedByUserId, DateTimeOffset at,
+        CancellationToken cancellationToken)
+    {
+        var coded = await session.QueryAsync<CodedStop>(Code,
+            new { Id = id, StartedAt = startedAt, ReasonCodeId = reasonCodeId, Comment = comment, CodedBy = codedBy, CodedByUserId = codedByUserId, At = at },
             cancellationToken);
+        await OeeRollupMarks.MarkAsync(session, coded.Select(c => (c.EquipmentId, c.StartedAt, c.EndedAt)), cancellationToken);
+    }
+
+    private sealed class CodedStop
+    {
+        public Guid EquipmentId { get; init; }
+        public DateTimeOffset StartedAt { get; init; }
+        public DateTimeOffset EndedAt { get; init; }
+    }
 
     private sealed class Row
     {

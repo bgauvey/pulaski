@@ -944,7 +944,7 @@ A stop's reason comes from its first-out code through the profile; with no code,
 
 **Line state** (answers the open question). Each line sets how its state comes from its machines: `series` (sequential process, the worst machine state), `parallel` (parallel operations, the best), `constraint_machine`, or `own_tags`. From worst to best: no signal, stopped or faulted, held, waiting, ready or transitioning, producing.
 
-**OEE.** Availability × performance × quality by equipment, line, shift and product, computed on read from the raw history; performance uses the ideal rate of the run standard (D-034). Rollups (`ts.oee_rollup`) come later and key on production date, schedule and shift code like labor (D-038, D-040), not `shift_instance`.
+**OEE.** Availability × performance × quality by equipment, line, shift and product, computed on read from the raw history; performance uses the ideal rate of the run standard (D-034). Daily rollups (`ts.oee_rollup`) came with D-072, keyed on equipment and production date, with each window's shift code, not `shift_instance`.
 
 **Events.** State changes, counts and stops land in `ts` tables, not the audit log (telemetry boundary above). Operator coding, profile, binding and reason changes are events as usual: `pulaski.machine_profile.created.v1`, `…updated.v1`, `…state_set.v1`, `…code_set.v1`, `…reasons_set.v1`, `…imported.v1`, `pulaski.equipment.machine_data_set.v1`, `pulaski.equipment.stop_reason_override_set.v1`.
 
@@ -992,7 +992,7 @@ Utilization and OEE by equipment, line, shift and product (charter v1 item 6), w
 
 **Rows.** By equipment (every active piece that tracks state, in tree order; equipment that runs no jobs has availability only); by shift (each equipment × working window); by product (material and job unit, over the time inside its runs, with good and scrap in the job's unit); and the time of each equipment by use and reason, with the stops that started in the period. A stop already going on when the period began isn't counted again.
 
-**Bounds.** Stops are read back 35 days before the period; one older than that still shows as down, uncoded. Rollups (`ts.oee_rollup`) stay for later, keyed on production date, schedule and shift code (D-050), once reading on demand is too slow.
+**Bounds.** Stops are read back 35 days before the period; one older than that still shows as down, uncoded. Periods over 31 days come from daily rollups (D-072).
 
 **One shift, and the stop Pareto** (issue #21). `shiftCode` keeps only that shift's windows: their time and stops, and the output reported in them (a count belongs to the window it was made in, else the last one before it, so a count between two shifts goes with the earlier one). Equipment without shifts has none then. The stop Pareto is worked out on screen (`StopPareto`) from the report's own time-by-use-and-reason rows, so it shares their classification, period, equipment and shift by construction. It adds up the top equipment shown (a line's time already includes its machines', so they aren't counted again), ranks down time by reason (Uncoded and No signal named as such), optionally with planned stops and micro-stops, by time or by number of stops, with each reason's share and the running total. It is exported as CSV; there is no chart yet (#67).
 
@@ -1594,6 +1594,45 @@ monthly partitions older than `Retention:ProcessValueDays` (90), on the API's 12
 **Not yet:** OPC UA events and alarms-and-conditions (alarms come from code-valued tags), OPC UA reverse connect, writing to
 machines, EtherNet/IP tag browsing and arrays, text process values, charts of process values, and statistical process control
 on them (#65).
+
+## Daily OEE rollups (D-072, proposed)
+
+Issue #66. The OEE report (D-052) was worked out from the history on every view and covered at most 31 days.
+
+**One figuring, kept by day.** `OeeFigurer` works out each piece of equipment's working windows (`OeeWindowFigures`: a tally of times in ticks
+and output, time by use and reason, output by product with its runs, runs without an ideal rate). The on-read report and the rollups both
+use it, and one assembler adds windows up into the report's tables, so a day's rollup gives exactly what the history gives. Windows add up:
+a period's report is the sum of its days.
+
+**Each count belongs to one day.** A count belongs to the window it was made in, else the last that started before it on its own site-local
+day or the day before; with neither, to its day outside every window (in the day's totals, in no shift). Before, a report's totals took
+every count up to the end of the day after its last day, so two adjoining periods counted some output twice.
+
+**Storage.** Not partitioned, updated in place, never deleted (`pulaski_app` has SELECT/INSERT/UPDATE): `ts.oee_rollup` (equipment + production
+day → the windows as `jsonb`, an empty array for none), `ts.oee_rollup_day` (site + day: rolled at, rolled generation, `dirty_at`),
+`ts.oee_rollup_site` (generation). It replaces the planned hourly `ts.oee_rollup`, which nothing wrote. Names of reasons, groups and
+materials are looked up when the report is read, so renames and regrouping never need a re-roll.
+
+**Rolling.** `OeeRollupService` (API hosted service; `Rollups:Oee:Enabled`, `PollSeconds` 60, `DaysPerRound` 31) calls `OeeRollups.RollAsync`:
+days of every active site with equipment that tracks state, from 366 days back (no earlier than 35 days before the site was made) to the
+day before yesterday, newest first, that were never rolled, are marked, or were rolled at an older generation. Each day is worked out for
+the whole site, then saved with the generation and `dirty_at` seen before; the saved day stays marked if `dirty_at` changed meanwhile, so a
+change made while rolling is never lost.
+
+**Re-rolling.** In the transaction of the change, in the repositories:
+- *History* marks days (`OeeRollupMarks.MarkAsync`; from the day before the change's first day, to its last, never later than the day before
+  yesterday, so live data marks nothing): stops from ingest, entered, adjusted, superseded or coded; state changes (from their time to now);
+  runs started, ended or changed; reported output and its corrections.
+- *Settings* move the site to a new generation (`SiteChangedAsync`): equipment created or changed (tree, flags, time zone), machine-data
+  settings (derivation, constraint, micro-stop threshold), equipment calendars, shift schedules and overrides, capabilities (ideal rates),
+  and a utilization reason changed (every site for an enterprise-wide one). Unit conversions move every site on.
+
+**Reading.** Up to 31 days the report is worked out from the history, as before. Longer (to 366 days), or with `FromRollups`, current days
+come from rollups and the rest (today, yesterday, marked or out-of-date days) from the history, newest first and at most 31 of them; any
+older ones are left out, listed in `LeftOutDays` and a note. Such a report has `FromRollups` and `ByDay` (by-shift rows become one row per
+equipment and day; with a shift chosen, that shift's day rows).
+
+**Not covered.** Changes to a job after its runs (material, unit, planned-downtime flag) don't re-roll; they don't happen in the app today.
 
 ## Application architecture
 

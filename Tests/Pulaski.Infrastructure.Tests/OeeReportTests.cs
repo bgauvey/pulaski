@@ -99,4 +99,69 @@ public sealed class OeeReportTests(DatabaseFixture db)
         Assert.Empty(report.Notes);
         Assert.NotEmpty(report.Shifts);
     }
+
+    [Fact]
+    public async Task Daily_rollups_give_the_report_the_history_gives_and_roll_again_after_late_changes_and_settings()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "RENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "RS-" + _s, "Site", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse line = await db.SendAsync(new CreateEquipmentCommand(site.Id, "RL-" + _s, "Pack line", null, "work_center", "production_line", true, true, false, null));
+        CreatedResponse jam = await db.SendAsync(new CreateReasonCodeCommand(site.Id, "utilization", "RJAM-" + _s, "Jam", false, 10, UtilizationClasses.Downtime));
+        CreatedResponse setup = await db.SendAsync(new CreateReasonCodeCommand(site.Id, "utilization", "RSET-" + _s, "Setup", false, 20, UtilizationClasses.Planned));
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        DateTimeOffset At(int daysBack, double hours) => new DateTimeOffset(today.AddDays(-daysBack).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddHours(hours);
+        await db.SendAsync(new EnterStopCommand(line.Id, At(5, 10), At(5, 10.5), jam.Id, "Jammed"));
+        await db.SendAsync(new EnterStopCommand(line.Id, At(4, 8), At(4, 9), setup.Id, "Size change"));
+
+        async Task<int> RollAsync()
+        {
+            await using var scope = db.Services.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<OeeRollups>().RollAsync(100, CancellationToken.None, site.Id);
+        }
+
+        async Task<IReadOnlySet<DateOnly>> CurrentAsync()
+        {
+            await using var scope = db.Services.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<IOeeRollupStore>().ListCurrentDaysAsync(site.Id, today.AddDays(-40), today, CancellationToken.None);
+        }
+
+        async Task SameAsync()
+        {
+            var onRead = await QueryAsync<GetOeeReportQuery, OeeReportDto>(new GetOeeReportQuery(site.Id, today.AddDays(-6), today.AddDays(-3), null));
+            var rolled = await QueryAsync<GetOeeReportQuery, OeeReportDto>(new GetOeeReportQuery(site.Id, today.AddDays(-6), today.AddDays(-3), null, FromRollups: true));
+            Assert.Equal(onRead.Equipment.Select(e => e.Figures), rolled.Equipment.Select(e => e.Figures));
+            Assert.Equal(onRead.Utilization.Select(u => (u.Use, u.ReasonCodeId, u.NoSignal, u.Hours, u.SharePct, u.Stops)),
+                rolled.Utilization.Select(u => (u.Use, u.ReasonCodeId, u.NoSignal, u.Hours, u.SharePct, u.Stops)));
+            Assert.Empty(rolled.LeftOutDays);
+        }
+
+        // Every final day since the history can begin, up to the day before yesterday, is rolled; today and yesterday never are.
+        Assert.True(await RollAsync() >= 30);
+        var current = await CurrentAsync();
+        Assert.Contains(today.AddDays(-2), current);
+        Assert.DoesNotContain(today.AddDays(-1), current);
+        Assert.Equal(0, await RollAsync());
+        await SameAsync();
+        var jammed = (await QueryAsync<GetOeeReportQuery, OeeReportDto>(new GetOeeReportQuery(site.Id, today.AddDays(-40), today, null)))
+            .Utilization.Single(u => u.ReasonCodeId == jam.Id);
+        Assert.Equal(0.5m, jammed.Hours);
+
+        // A stop entered late marks its day (and the day before, whose shifts may reach into it); they're worked out from the history until rolled again.
+        await db.SendAsync(new EnterStopCommand(line.Id, At(5, 14), At(5, 15), jam.Id, "Jammed again"));
+        current = await CurrentAsync();
+        Assert.DoesNotContain(today.AddDays(-5), current);
+        Assert.DoesNotContain(today.AddDays(-6), current);
+        Assert.Contains(today.AddDays(-4), current);
+        await SameAsync();
+        Assert.Equal(2, await RollAsync());
+        await SameAsync();
+
+        // A setting that decides how time counts rolls every day of the site again.
+        var lineNow = await QueryAsync<GetEquipmentQuery, EquipmentDto>(new GetEquipmentQuery(line.Id));
+        await db.SendAsync(new SetEquipmentMachineDataCommand(line.Id, lineNow.Version, null, StateDerivations.OwnTags, null, 600));
+        Assert.Empty(await CurrentAsync());
+        Assert.True(await RollAsync() >= 30);
+        await SameAsync();
+    }
 }

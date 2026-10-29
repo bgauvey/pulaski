@@ -3,6 +3,8 @@ using Pulaski.Application.Units;
 using Pulaski.Domain.Units;
 using Pulaski.Infrastructure.Persistence;
 
+using Pulaski.Infrastructure.MachineData;
+
 namespace Pulaski.Infrastructure.Units;
 
 /// <summary>Write side for units and material conversions (D-026). Every statement runs in the command's transaction.</summary>
@@ -63,16 +65,28 @@ internal sealed class UnitRepository(DbSession session) : IUnitRepository
     public async Task<bool> LockMaterialAsync(Guid materialId, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<bool?>(LockMaterial, new { Id = materialId }, cancellationToken) == true;
 
-    public Task SetConversionAsync(Guid materialId, MaterialConversion conversion, DateTimeOffset at, CancellationToken cancellationToken) =>
-        session.ExecuteAsync(
+    // A conversion decides how reported output weighs against ideal rates, so every site's OEE rollups roll again (#66).
+    public async Task SetConversionAsync(Guid materialId, MaterialConversion conversion, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        await session.ExecuteAsync(
             SetConversion,
             new { MaterialId = materialId, conversion.FromUomId, conversion.ToUomId, conversion.Factor, At = at },
             cancellationToken);
+        await OeeRollupMarks.SiteChangedAsync(session, null, cancellationToken);
+    }
 
     public async Task<bool> DeactivateConversionAsync(
-        Guid materialId, Guid fromUomId, Guid toUomId, DateTimeOffset at, CancellationToken cancellationToken) =>
-        await session.ExecuteAsync(
+        Guid materialId, Guid fromUomId, Guid toUomId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var changed = await session.ExecuteAsync(
             Deactivate, new { MaterialId = materialId, FromUomId = fromUomId, ToUomId = toUomId, At = at }, cancellationToken) > 0;
+        if (changed)
+        {
+            await OeeRollupMarks.SiteChangedAsync(session, null, cancellationToken);
+        }
+
+        return changed;
+    }
 
     private sealed class UomRow
     {

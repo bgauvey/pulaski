@@ -4,17 +4,26 @@ namespace Pulaski.Contracts.MachineData;
 
 /// <summary>
 /// Utilization and OEE between two production days (D-052): by equipment, by shift and by product, and where each piece of
-/// equipment's time went. Worked out on read from the machine history.
+/// equipment's time went. Worked out on read from the machine history; a period longer than 31 days from the daily rollups (#66).
 /// </summary>
 public sealed record OeeReportDto
 {
     public DateOnly From { get; init; }
     public DateOnly To { get; init; }
 
+    /// <summary>Worked out from the daily rollups (#66), with the days not rolled yet from the machine history.</summary>
+    public bool FromRollups { get; init; }
+
+    /// <summary><see cref="Shifts"/> has a row per equipment and production day, not per shift.</summary>
+    public bool ByDay { get; init; }
+
+    /// <summary>Days of the period left out because their rollups are being worked out again; empty when every day is in.</summary>
+    public IReadOnlyList<DateOnly> LeftOutDays { get; init; } = [];
+
     /// <summary>Equipment that tracks state, in tree order (the one asked for and everything below it, or all of the site).</summary>
     public IReadOnlyList<OeeEquipmentRowDto> Equipment { get; init; } = [];
 
-    /// <summary>Each piece of equipment's shifts (whole days for equipment without shifts), in time order.</summary>
+    /// <summary>Each piece of equipment's shifts (whole days for equipment without shifts), in time order; by day when <see cref="ByDay"/>.</summary>
     public IReadOnlyList<OeeShiftRowDto> Shifts { get; init; } = [];
 
     /// <summary>Each material made in the period, over the runs of it.</summary>

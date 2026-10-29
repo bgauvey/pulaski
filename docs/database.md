@@ -1568,34 +1568,35 @@ Variables store the values and their statistics; attributes store inspected and 
 
 ## 13. Utilization and OEE rollup
 
-### ts.oee_rollup — OEE components per bucket · *Planned*
+Daily rollups of the OEE report (D-072, #66), kept by `OeeRollupService` in the API. Not partitioned; rows are updated in place and never deleted.
 
-Components, not percentages. One row per equipment per hour, split further at shift and run boundaries, and rebuildable from history. The time columns must add up to `calendar_ms`.
-
-- Planned production = calendar − not scheduled − planned downtime
-- Availability = producing ÷ planned production
-- Performance = (good + scrap) ÷ ideal quantity, where ideal = producing hours × ideal rate
-- Quality = good ÷ (good + scrap)
+### ts.oee_rollup_site — a site's rollup generation · *In use*
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `id` | uuid | no | Primary key with `bucket_start`. |
-| `bucket_start`, `bucket_end` | timestamptz | no | The bucket. `bucket_start` is the partition key. |
-| `equipment_id` | uuid → equipment | no | The equipment. Unique with bucket, run and shift. |
-| `shift_instance_id` | uuid → shift_instance | yes | The shift. |
-| `run_id` | uuid | yes | The run. |
-| `material_id` | uuid → material | yes | The material running. |
-| `calendar_ms` | bigint | no | Bucket length. |
-| `not_scheduled_ms` | bigint | no | No shift, calendar exception or non-production mode. |
-| `planned_downtime_ms` | bigint | no | Planned jobs and reasons with `planned` impact. |
-| `producing_ms` | bigint | no | Time in producing states. |
-| `waiting_external_ms`, `held_internal_ms`, `stopped_faulted_ms`, `ready_transitioning_ms`, `no_signal_ms` | bigint | no | Time in each other OEE category. |
-| `stop_count`, `micro_stop_count` | integer | no | Stops and micro-stops in the bucket. |
-| `good_qty`, `scrap_qty`, `ideal_qty` | qty | no | Quantities in the run's unit. |
-| `uom_id` | uuid → uom | yes | That unit. |
-| `labor_ms` | bigint | no | Labor time booked. |
-| `computed_at` | timestamptz | no | When calculated. |
-| `policy_version` | integer | no | Bumped when the category mapping changes, so stale rows can be found. |
+| `site_id` | uuid → equipment | no | Primary key. The site. |
+| `generation` | bigint | no | Moves on whenever a setting that decides how past time counts changes (shifts, equipment, reason classes, ideal rates, conversions); a site without a row is at 0. |
+| `changed_at` | timestamptz | no | When it last moved on. |
+
+### ts.oee_rollup_day — a site's production day · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key with `production_date`. |
+| `production_date` | date | no | The production day. |
+| `rolled_generation` | bigint | yes | The site's generation when it was rolled; null if never. The day is current when this equals the site's generation and `dirty_at` is null. |
+| `rolled_at` | timestamptz | yes | When it was last rolled. |
+| `dirty_at` | timestamptz | yes | Set by a late write to the day's history (or the next day's); cleared by rolling it, unless set again meanwhile. |
+
+### ts.oee_rollup — each piece of equipment's windows of a day · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `equipment_id` | uuid → equipment | no | Primary key with `production_date`. Equipment that tracks state. |
+| `production_date` | date | no | The production day. |
+| `site_id` | uuid → equipment | no | Its site. |
+| `rolled_at` | timestamptz | no | When it was rolled. |
+| `windows` | jsonb | no | An array of `OeeWindowFigures`: each working window (production date, shift code and name, crew, start, end; no start for output outside every window), its tally (times in ticks, stops, good, scrap, earned hours), time by use and reason, output by material and unit with the runs, and runs without an ideal rate. Empty when it had no windows. |
 
 ## 14. Event log and outbox (`evt`)
 

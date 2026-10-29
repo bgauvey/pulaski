@@ -408,5 +408,56 @@ public sealed class OeeTally
         }
     }
 
+    /// <summary>Adds another tally's time, stops and output: tallies of separate working time add up exactly (#66).</summary>
+    public void Add(OeeTally other)
+    {
+        Scheduled += other.Scheduled;
+        NonProduction += other.NonProduction;
+        PlannedStop += other.PlannedStop;
+        Run += other.Run;
+        Down += other.Down;
+        Uncoded += other.Uncoded;
+        NoSignal += other.NoSignal;
+        MicroStop += other.MicroStop;
+        RunWithoutJob += other.RunWithoutJob;
+        RunWithRate += other.RunWithRate;
+        Stops += other.Stops;
+        MicroStops += other.MicroStops;
+        Good += other.Good;
+        Scrap += other.Scrap;
+        EarnedHours += other.EarnedHours;
+        EarnedGoodHours += other.EarnedGoodHours;
+    }
+
+    /// <summary>Everything it adds up, to keep in a rollup (#66).</summary>
+    public OeeTallyParts Parts => new(
+        Scheduled.Ticks, NonProduction.Ticks, PlannedStop.Ticks, Run.Ticks, Down.Ticks, Uncoded.Ticks, NoSignal.Ticks, MicroStop.Ticks,
+        RunWithoutJob.Ticks, RunWithRate.Ticks, Stops, MicroStops, Good, Scrap, EarnedHours, EarnedGoodHours);
+
+    public static OeeTally From(OeeTallyParts parts) => new()
+    {
+        Scheduled = new TimeSpan(parts.Scheduled),
+        NonProduction = new TimeSpan(parts.NonProduction),
+        PlannedStop = new TimeSpan(parts.PlannedStop),
+        Run = new TimeSpan(parts.Run),
+        Down = new TimeSpan(parts.Down),
+        Uncoded = new TimeSpan(parts.Uncoded),
+        NoSignal = new TimeSpan(parts.NoSignal),
+        MicroStop = new TimeSpan(parts.MicroStop),
+        RunWithoutJob = new TimeSpan(parts.RunWithoutJob),
+        RunWithRate = new TimeSpan(parts.RunWithRate),
+        Stops = parts.Stops,
+        MicroStops = parts.MicroStops,
+        Good = parts.Good,
+        Scrap = parts.Scrap,
+        EarnedHours = parts.EarnedHours,
+        EarnedGoodHours = parts.EarnedGoodHours,
+    };
+
     public static decimal Hours(TimeSpan span) => (decimal)span.Ticks / TimeSpan.TicksPerHour;
 }
+
+/// <summary>An <see cref="OeeTally"/> as numbers, times in ticks: what a rollup keeps (#66).</summary>
+public sealed record OeeTallyParts(
+    long Scheduled, long NonProduction, long PlannedStop, long Run, long Down, long Uncoded, long NoSignal, long MicroStop,
+    long RunWithoutJob, long RunWithRate, int Stops, int MicroStops, decimal Good, decimal Scrap, decimal EarnedHours, decimal EarnedGoodHours);
