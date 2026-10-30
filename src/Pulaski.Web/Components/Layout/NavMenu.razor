@@ -5,7 +5,7 @@
 <nav class="side-nav" aria-label="Main">
     @foreach (var group in Groups)
     {
-        var links = group.Links.Where(l => User.Can(l.Permission)).ToList();
+        var links = group.Links.Where(l => User.Can(l.Permission) || (l.OrPermission is { } other && User.Can(other))).ToList();
         @if (links.Count > 0)
         {
             <div class="nav-group">
@@ -22,7 +22,7 @@
 </nav>
 
 @code {
-    private sealed record Link(string Href, string Icon, string Text, string Title, string Permission);
+    private sealed record Link(string Href, string Icon, string Text, string Title, string Permission, string? OrPermission = null);
 
     private sealed record Group(string Label, IReadOnlyList<Link> Links);
 
@@ -49,7 +49,8 @@
             new("units", "units", "Units", "Units and conversions", PermissionCodes.UnitsView),
             new("reasons", "info", "Reasons", "Reason codes", PermissionCodes.ReasonsView),
             new("shifts", "clock", "Shifts", "Shift schedules", PermissionCodes.ShiftsView),
-            new("site-settings", "calendar", "Site settings", "Changeovers, reporting tolerances, holidays and shutdowns", PermissionCodes.SiteSettingsView),
+            new("changeovers", "refresh", "Changeovers", "Changeover rules: how long each change of material takes", PermissionCodes.ScheduleView, PermissionCodes.MaterialsView),
+            new("site-settings", "calendar", "Site settings", "Changeover mode, reporting tolerances, OEE targets, holidays and shutdowns", PermissionCodes.SiteSettingsView),
             new("integrations", "signal", "Integrations", "Integrations: events sent to the ERP and failed deliveries", PermissionCodes.IntegrationsView),
             new("people", "user", "People", "People and crews", PermissionCodes.People),
             new("terminals", "plug", "Terminals", "Shop-floor terminals for badging", PermissionCodes.Terminals),

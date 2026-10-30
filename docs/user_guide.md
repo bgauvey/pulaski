@@ -1549,13 +1549,13 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | Role | Can change |
 | --- | --- |
 | **Administrator** | Everything, at every site, including users and roles. |
-| **Planner** | The schedule (place, sequence, pin, assign and cancel jobs, and replace one with a partial batch); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; materials; allocating lots to jobs. |
+| **Planner** | The schedule (place, sequence, pin, assign and cancel jobs, and replace one with a partial batch); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; changeover rules; materials; allocating lots to jobs. |
 | **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops, and enter, split and merge them; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches. |
 | **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off. |
 | **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements. |
 | **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; lot attribute definitions; the site's settings. |
 | **Auditor** | Correct inventory, including reversing consumption, splits, merges and transfers; reverse production reports; stock counts; back-date inventory movements. Can't plan or run jobs. |
-| **Process engineer** | Processes, BOMs and which lines can run each material. |
+| **Process engineer** | Processes, BOMs, which lines can run each material, and changeover rules. |
 | **Edge node** | Nothing on screen: it is for the user a Pulaski Edge node signs in as, to read its configuration and forward machine data. |
 
 Equipment (with machine profiles and edge nodes), units and retrying or skipping deliveries to the ERP (**Integrations**) belong to the Administrator. Someone with two roles can do what either allows.
@@ -1569,11 +1569,11 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 | Role | Sees |
 | --- | --- |
 | **Administrator**, **Auditor**, **Manager** | Every screen (Users only for Administrator). |
-| **Planner** | Overview, Work orders, Schedule, Floor, Machines, Inventory, Materials, Processes and BOMs, Site settings (to look at). |
+| **Planner** | Overview, Work orders, Schedule, Floor, Machines, Inventory, Materials, Processes and BOMs, Changeovers, Site settings (to look at). |
 | **Supervisor** | Overview, Work orders (to look at), Floor, Machines, Inventory, Labor, Site settings (to look at). |
 | **Operator** | Overview, Work orders (to look at), Floor, Machines, Inventory. |
 | **Quality** | Overview, Floor, Machines, Inventory, Materials. |
-| **Process engineer** | Equipment, Materials, Processes and BOMs, Units. |
+| **Process engineer** | Equipment, Materials, Processes and BOMs, Units, Schedule, Changeovers. |
 
 - **Start page.** After signing in you land on the Overview, or, if you can't see it, the first screen in the menu you can.
 - **A screen you can't see** isn't in the menu, links to it show as plain text and buttons for it are left out. Typing its address shows **Page not found**.
@@ -1849,6 +1849,23 @@ Import the same file, or next week's, as often as you like: people are matched o
 4. To stop a target, click **End today**: from today, equipment follows the site's targets again (or, for the site's, there are none).
 
 **In detail:** a new start day ends the targets before it the day before; starting on the same day as the latest targets changes them instead. Targets can't start before the latest ones already set, and they are never deleted, so the report always measures a day against the targets it had. Each figure is above 0 and at most 100, with one decimal at most. A machine's own targets replace the site's whole: a figure left blank there has no target, even if the site has one.
+
+### Changeover rules
+
+**Configure → Changeovers** holds the times the schedule uses when a line changes from one material to another. Everyone who sees the schedule or the materials sees it; changing it needs permission to maintain changeover rules (Planners and Process engineers start with it).
+
+1. Open **Configure → Changeovers**. With more than one site, choose the site at the top. The list shows the rules switched on; tick **Switched off too** for the rest, choose a line, or type part of a material or class code to narrow it.
+2. To add a rule, under **Add a rule** choose the **Line** (or **All lines**), what it changes **From** and **To** (*Anything*, a *Material* by its code, or a *Class*), the **Minutes** it takes and a **Note** if you like, then click **Add rule**.
+3. To change a rule's time or note, click **Change**, edit them and click **Save**. To stop using it, click **Switch off**; **Switch on** brings it back.
+4. To load many rules, click **Import from a file**, pick a CSV file and check what it would do, then click **Import**. **Download a template** gives the columns. **Export CSV** saves the site's rules in the same columns, so you can edit them in a spreadsheet and import them back.
+
+**In detail**
+
+- **Which rule applies.** For each change on a line, the most specific rule that fits wins: a material beats a class, which beats *Anything*, counted on both sides; then the side being changed *to*; then a rule for this line over one for all lines; and at a tie, the longer time. With no rule, the line's **Standard changeover** for the incoming material (on the material's capability) applies; with neither, the change takes no time.
+- **One rule per pattern.** Only one rule may be switched on for the same line, from and to; Pulaski refuses another and names the one there. What a rule matches can't change: switch it off and add another. Rules are never deleted, and every change is recorded as an event.
+- **The checks.** Each side is a material or a class, not both; a material to itself is refused (the line just keeps running); the time is whole minutes from 0 to 7 days; the line must be an active line of the site that runs jobs.
+- **The file.** One rule per row: `line` (blank for every line), `from_material` or `from_class`, `to_material` or `to_class` (blank for anything), `minutes` (required), `note`, `active` (*no* switches the rule off). A row changes the site's rule with the same line and sides, or adds one. A blank `note` cell clears the note; leave the column out to keep notes as they are. Nothing is saved until every row is valid.
+- **The schedule** works changeovers out every time it is shown, so a change appears on its next refresh.
 
 ### Calendar exceptions: holidays and shutdowns
 
@@ -2173,7 +2190,7 @@ An order can count in several tiles (starting today *and* behind, for example).
 
 ### Changeovers
 
-Between two production jobs on different materials, a line needs a changeover. Pulaski sizes it from the plant's changeover rules (for example *white to grey: 30 minutes*, *grey to white: 2 hours*), or from the line's standard changeover for the incoming material. By default Pulaski inserts these automatically as placeholders and recalculates them as you resequence. A plant can instead choose to have planners place changeover jobs themselves; Pulaski then warns where one is missing. A manager chooses which on [Site settings](#17-site-settings).
+Between two production jobs on different materials, a line needs a changeover. Pulaski sizes it from the plant's [changeover rules](#changeover-rules) (for example *white to grey: 30 minutes*, *grey to white: 2 hours*), or from the line's standard changeover for the incoming material. By default Pulaski inserts these automatically as placeholders and recalculates them as you resequence. A plant can instead choose to have planners place changeover jobs themselves; Pulaski then warns where one is missing. A manager chooses which on [Site settings](#17-site-settings).
 
 ---
 
@@ -2181,7 +2198,6 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
-- **No screen yet for the changeover rules** (how long each material change takes): they are set up in the database.
 - **Labor:** people come from HR or the ERP only as a file you import: nothing fetches them on a timer, someone missing from a file isn't switched off (send them with `active` = no), and qualifications aren't imported. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
 - **Materials import** from CSV or B2MML files, from an OData v4 connection on demand, or one item at a time through the API. Nothing fetches items on a timer, other kinds of service (plain REST, SOAP, a database) have no connection yet, and there are no adapters for label printing. Capabilities import from CSV only, and only for now: a future or past period is set on the material page. B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.

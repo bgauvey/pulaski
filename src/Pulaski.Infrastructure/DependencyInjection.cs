@@ -79,6 +79,7 @@ public static class DependencyInjection
         services.AddSingleton<IOeeReadStore, OeeQueries>();
         services.AddSingleton<IOeeRollupStore, OeeRollupQueries>();
         services.AddSingleton<IOeeTargetReadStore, OeeTargetQueries>();
+        services.AddSingleton<Application.Scheduling.IChangeoverRuleReadStore, Scheduling.ChangeoverRuleQueries>();
         services.AddSingleton<IMachineHistoryReadStore, MachineHistoryQueries>();
         services.AddSingleton<IOverviewReadStore, OverviewQueries>();
 
@@ -117,6 +118,7 @@ public static class DependencyInjection
         services.AddScoped<IStopAdjustmentRepository, StopAdjustmentRepository>();
         services.AddScoped<IOeeRollupRepository, OeeRollupRepository>();
         services.AddScoped<IOeeTargetRepository, OeeTargetRepository>();
+        services.AddScoped<Application.Scheduling.IChangeoverRuleRepository, Scheduling.ChangeoverRuleRepository>();
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
 
         return services;

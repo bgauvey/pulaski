@@ -268,6 +268,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   polled). Alarm/warning tags are code-valued (0 = none), several per machine; ingest raises/clears `ts.equipment_alarm` per tag
   (`AlarmRules`). Process values and levels go to `ts.process_value` (scaled, deadband at the edge, 1-min heartbeat), dropped by month
   after `Retention:ProcessValueDays` (90) via `ts.drop_old_process_values`. Machines → Alarms and Process values.
+- Changeover rules (D-074, proposed): Configure → Changeovers maintains `core.changeover_rule` (`changeovers.manage`, Planner and Process engineer;
+  seen with `schedule.view`/`materials.view`). `ChangeoverRules` checks sides, minutes (≤ 7 days) and one active rule per pattern (fixed once
+  made; switched off, never deleted). Writes lock the site's row first; CSV import (`ChangeoverRuleCsv`) is all or nothing with a dry run.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

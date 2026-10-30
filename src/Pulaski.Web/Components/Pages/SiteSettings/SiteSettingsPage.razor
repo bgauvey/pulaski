@@ -75,6 +75,7 @@ else
             <p class="small text-muted mt-2 mb-2">
                 @(_scheduling.IsDefault ? "This site uses the default, automatic." : "")
                 The schedule shows a change on its next refresh, for every line in the site.
+                How long each changeover takes is set on <ScreenLink Href="changeovers" Permission="@PermissionCodes.ScheduleView">Changeovers</ScreenLink>.
             </p>
             @if (CanManage)
             {

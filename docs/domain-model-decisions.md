@@ -1658,6 +1658,30 @@ day's (`Target`). Targets are read when the report is, never kept in rollups (D-
 The points are the report's own shift (or day) rows (`OeeTrend.Points`); a day of shifts adds their hours up (`OeeTrend.Combine`), so the
 chart can't disagree with the tables. The stop Pareto stays a table (#21).
 
+## Changeover rules screen (D-074, proposed)
+
+Issue #69. The changeover matrix (`core.changeover_rule`, D-015) had no screen: rules were set up in the database.
+
+**Configure → Changeovers.** A site's rules, filtered by line and material; add, change time and note, switch off or on; CSV import (dry run
+first, all or nothing) and export in the same columns. Seen with `schedule.view` or `materials.view`; changed with a new permission,
+`changeovers.manage` (Configuration; implies those views), which the Planner and Process engineer roles start with (migration 0043 grants
+it to the system roles of an existing database).
+
+**Rules.** `ChangeoverRules` (domain): each side a material or a class or anything, never both; not a material to itself; whole minutes, 0 to
+7 days; note at most 500. A rule's pattern (line, from, to) is fixed once made: switch it off and add another. Only one rule per pattern may be
+on (`ChangeoverRules.Duplicate`, as the partial unique index): an exact duplicate is refused naming the one there. Other overlaps are not
+errors: the matrix's specificity order (D-015) decides between them. The line must be an active line of the site that runs jobs. Rules are
+never deleted.
+
+**Writes.** `CreateChangeoverRuleCommand`, `UpdateChangeoverRuleCommand` (`POST/PUT /api/changeover-rules`), `ImportChangeoverRulesCommand`
+(`POST /api/changeover-rules/import/csv?siteId=&dryRun=`; `ChangeoverRuleCsv`: line, from_material, from_class, to_material, to_class, minutes,
+note, active; a row matches the rule with the same pattern, else adds one; a blank note clears it, a missing column keeps it). Each locks the
+site's row (`FOR NO KEY UPDATE`), then reads its rules, so concurrent changes at a site serialize. Events `pulaski.changeover_rule.created.v1`
+/ `.updated.v1` (reason "CSV import" when imported).
+
+**The projection** already reads the active rules on every read (`LinePlanLoader`), so nothing else changes: a rule shows on the schedule's
+next refresh.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
