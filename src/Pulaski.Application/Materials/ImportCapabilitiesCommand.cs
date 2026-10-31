@@ -136,7 +136,8 @@ internal sealed class ImportCapabilitiesHandler(
             row.IsPreferred?.Value ?? current?.IsPreferred ?? false,
             current?.EffectiveFrom ?? now,
             current?.EffectiveTo,
-            row.BatchSize is { } batch ? batch.Value : current?.BatchSize);
+            row.BatchSize is { } batch ? batch.Value : current?.BatchSize,
+            row.BatchTolerancePct is { } tolerance ? tolerance.Value : current?.BatchTolerancePct);
         await writes.MaterialForRateAsync(material.Id, unit.Id, current?.RateUomId, cancellationToken);
         var unitCode = await AddCapabilityHandler.UnitCodeAsync(units, unit.Id, cancellationToken);
 
@@ -168,7 +169,7 @@ internal sealed class ImportCapabilitiesHandler(
             return new ImportRowResultDto { Line = row.Line, Code = label, Action = Unchanged };
         }
 
-        await writes.CheckBatchSizeAsync(updated, current.BatchSize, material, line.Line.Code, cancellationToken);
+        await writes.CheckBatchSizeAsync(updated, current, material, line.Line.Code, cancellationToken);
         var changed = events.Create(EventTypes.CapabilityChanged, "equipment_capability", updated.Id, new { Before = current, After = updated }, command.Source);
         await capabilities.UpdateAsync(updated, cancellationToken);
         await eventLog.AppendAsync(changed, cancellationToken);
@@ -233,6 +234,7 @@ internal sealed class ImportCapabilitiesHandler(
         Add(before.StandardCrewSize != after.StandardCrewSize, "crew_size");
         Add(before.IsPreferred != after.IsPreferred, "preferred");
         Add(before.BatchSize != after.BatchSize, "batch_size");
+        Add(before.BatchTolerancePct != after.BatchTolerancePct, "batch_tolerance");
         return changes;
     }
 

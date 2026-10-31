@@ -501,7 +501,8 @@ The list of which material can run on which equipment. A production job may only
 | `standard_changeover` | interval | yes | Changeover time into this material when no changeover rule matches (D-015). 0 to 7 days. |
 | `standard_crew_size` | numeric(6,2) | yes | The labor estimate: people needed to run it. |
 | `is_preferred` | boolean | no | Marks the preferred line for the material. Informational; Pulaski never picks a line (D-014). |
-| `batch_size` | qty | yes | The line's own batch size in the material's base unit (D-065); null uses the material's `batch_size`. Set only for a material made in batches; the rule and tolerance stay the material's. Planning, moves, replacements and reports on the line use it. |
+| `batch_size` | qty | yes | The line's own batch size in the material's base unit (D-065); null uses the material's `batch_size`. Set only for a material made in batches; the rule stays the material's. Planning, moves, replacements and reports on the line use it. |
+| `batch_tolerance_pct` | numeric(5,2) | yes | The line's own batch tolerance, 0 to 50 percent (#85, D-075); null uses the material's `batch_tolerance_pct`. Set only for a material made in batches; counts under the near rule. Reports and partial batches on the line use it. |
 | `effective_from` | timestamptz | no | When the capability starts (included). |
 | `effective_to` | timestamptz | yes | When it stops applying (not included); null means open-ended. Later than `effective_from`. Periods for the same equipment and material may not overlap (`capability_no_overlap`). |
 
@@ -994,7 +995,7 @@ The rate the projection uses: runtime = remaining quantity ÷ effective rate. Hi
 
 ### core.changeover_rule — the changeover matrix (D-015) · *In use*
 
-Each side matches a material, a material class or anything. The most specific active rule wins. With no match, the capability's `standard_changeover` applies.
+Each side matches a material, a material class or anything. The most specific active rule wins. With no match, the capability's `standard_changeover` applies. Maintained on Configure → Changeovers (D-074, `changeovers.manage`): switched off rather than deleted, and the pattern (line and sides) is fixed once made.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1005,8 +1006,8 @@ Each side matches a material, a material class or anything. The most specific ac
 | `from_material_class_id` | uuid → material_class | yes | …or class. At most one; both null means anything. |
 | `to_material_id` | uuid → material | yes | Incoming material… |
 | `to_material_class_id` | uuid → material_class | yes | …or class. At most one; both null means anything. |
-| `duration` | interval | no | Changeover time. Zero or more. |
-| `note` | text | yes | Free text. |
+| `duration` | interval | no | Changeover time. Zero or more; the screen and import take whole minutes up to 7 days. |
+| `note` | text | yes | Free text, at most 500 characters on the screen. |
 | `is_active` | boolean | no | Inactive rules are ignored. Active rules are unique by site, line and both sides. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 

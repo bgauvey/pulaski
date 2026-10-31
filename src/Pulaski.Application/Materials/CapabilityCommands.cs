@@ -20,7 +20,8 @@ public sealed record AddCapabilityCommand(
     bool IsPreferred,
     DateTimeOffset? EffectiveFrom,
     DateTimeOffset? EffectiveTo,
-    decimal? BatchSize = null) : ICommand<CapabilityResponse>;
+    decimal? BatchSize = null,
+    decimal? BatchTolerancePct = null) : ICommand<CapabilityResponse>;
 
 /// <summary>New values for a capability; a new ideal rate recalculates the planning rate while it is still based on it.</summary>
 public sealed record UpdateCapabilityCommand(
@@ -33,7 +34,8 @@ public sealed record UpdateCapabilityCommand(
     bool IsPreferred,
     DateTimeOffset EffectiveFrom,
     DateTimeOffset? EffectiveTo,
-    decimal? BatchSize = null) : ICommand<CapabilityResponse>;
+    decimal? BatchSize = null,
+    decimal? BatchTolerancePct = null) : ICommand<CapabilityResponse>;
 
 /// <summary>Stops a capability now. It is never deleted.</summary>
 public sealed record EndCapabilityCommand(Guid Id, long ExpectedVersion) : ICommand<CapabilityResponse>;
@@ -51,7 +53,7 @@ internal sealed class CapabilityWrites(
 
     public static CapabilityChange Change(
         decimal rate, Guid rateUomId, int? changeoverMinutes, decimal? crewSize, bool isPreferred, DateTimeOffset from, DateTimeOffset? to,
-        decimal? batchSize = null)
+        decimal? batchSize = null, decimal? batchTolerancePct = null)
     {
         new Validator()
             .Require(rate > 0, "IdealRatePerHour", "Must be greater than zero.")
@@ -60,9 +62,10 @@ internal sealed class CapabilityWrites(
             .Require(crewSize is null or (> 0 and <= Capability.MaxCrewSize), "StandardCrewSize", "Greater than 0 and at most 9999.99, or blank.")
             .Require(to is null || to > from, "EffectiveTo", "Must be after the start.")
             .Require(batchSize is null or > 0, "BatchSize", "Greater than zero, or blank for the material's batch size.")
+            .Require(batchTolerancePct is null or (>= 0 and <= 50), "BatchTolerancePct", "Between 0 and 50 percent, or blank for the material's tolerance.")
             .ThrowIfInvalid();
         return new CapabilityChange(
-            rate, rateUomId, changeoverMinutes is { } m ? TimeSpan.FromMinutes(m) : null, crewSize, isPreferred, from, to, batchSize);
+            rate, rateUomId, changeoverMinutes is { } m ? TimeSpan.FromMinutes(m) : null, crewSize, isPreferred, from, to, batchSize, batchTolerancePct);
     }
 
     /// <summary>The line, locked first (D-017), so the change serializes with the scheduling commands that check eligibility.</summary>
@@ -98,25 +101,36 @@ internal sealed class CapabilityWrites(
     }
 
     /// <summary>
-    /// A line's own batch size only for a material made in batches (D-065); the rule and tolerance stay the material's. A note says what
-    /// the size means, and that open jobs keep their quantity.
+    /// A line's own batch size and tolerance only for a material made in batches (D-065, #85); the rule stays the material's. A note says
+    /// what they mean, and that open jobs keep their quantity.
     /// </summary>
-    public async Task<string?> CheckBatchSizeAsync(Capability capability, decimal? before, Material material, string lineCode, CancellationToken cancellationToken)
+    public async Task<string?> CheckBatchSizeAsync(Capability capability, Capability? before, Material material, string lineCode, CancellationToken cancellationToken)
     {
-        if (capability.BatchSize is not { } size)
+        if (capability.BatchSize is null && capability.BatchTolerancePct is null)
         {
-            return before is null ? null : $"{lineCode} now uses {material.Code}'s own batch size.";
+            return before is { BatchSize: null, BatchTolerancePct: null } or null ? null : $"{lineCode} now uses {material.Code}'s own batch size and tolerance.";
         }
 
         var batching = await materials.GetBatchingAsync(material.Id, cancellationToken);
         if (batching.Size is null)
         {
-            throw new DomainRuleException($"{material.Code} isn't made in batches; give it a batch size before giving {lineCode} one of its own.");
+            throw new DomainRuleException($"{material.Code} isn't made in batches; give it a batch size before giving {lineCode} a batch size or tolerance of its own.");
         }
 
-        return before == size
-            ? null
-            : $"{lineCode} makes {material.Code} in batches of {Qty(size)} (the material's are {Qty(batching.Size.Value)}). Open jobs keep their quantity; new jobs, moves and reports use the new size.";
+        var notes = new List<string>();
+        if (capability.BatchSize is { } size && before?.BatchSize != size)
+        {
+            notes.Add($"{lineCode} makes {material.Code} in batches of {Qty(size)} (the material's are {Qty(batching.Size.Value)}). Open jobs keep their quantity; new jobs, moves and reports use the new size.");
+        }
+
+        if (capability.BatchTolerancePct is { } tolerance && before?.BatchTolerancePct != tolerance)
+        {
+            notes.Add(batching.Rule == BatchRule.Exact
+                ? $"{material.Code} is made to the exact rule, so every batch is exactly its size and the tolerance on {lineCode} counts only if the rule changes to near."
+                : $"On {lineCode} a batch of {material.Code} may be {Qty(tolerance)}% from its size (the material's tolerance is {Qty(batching.TolerancePct)}%).");
+        }
+
+        return notes.Count == 0 ? null : string.Join(" ", notes);
     }
 
     /// <summary>Two periods of the same material on the same line can't overlap, so eligibility always has one answer.</summary>
@@ -198,7 +212,7 @@ internal sealed class AddCapabilityHandler(
         var now = timeProvider.GetUtcNow();
         var change = CapabilityWrites.Change(
             command.IdealRatePerHour, command.RateUomId, command.StandardChangeoverMinutes, command.StandardCrewSize, command.IsPreferred,
-            command.EffectiveFrom ?? now, command.EffectiveTo, command.BatchSize);
+            command.EffectiveFrom ?? now, command.EffectiveTo, command.BatchSize, command.BatchTolerancePct);
         var writes = new CapabilityWrites(capabilities, materials, units, eventLog, events, ids);
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -249,7 +263,7 @@ internal sealed class UpdateCapabilityHandler(
         var now = timeProvider.GetUtcNow();
         var change = CapabilityWrites.Change(
             command.IdealRatePerHour, command.RateUomId, command.StandardChangeoverMinutes, command.StandardCrewSize, command.IsPreferred,
-            command.EffectiveFrom, command.EffectiveTo, command.BatchSize);
+            command.EffectiveFrom, command.EffectiveTo, command.BatchSize, command.BatchTolerancePct);
         var writes = new CapabilityWrites(capabilities, materials, units, eventLog, events, ids);
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -262,7 +276,7 @@ internal sealed class UpdateCapabilityHandler(
         }
 
         await writes.EnsureNoOverlapAsync(updated, line.Code, material.Code, cancellationToken);
-        var batchNote = await writes.CheckBatchSizeAsync(updated, current.Value.BatchSize, material, line.Code, cancellationToken);
+        var batchNote = await writes.CheckBatchSizeAsync(updated, current.Value, material, line.Code, cancellationToken);
         var envelope = events.Create(EventTypes.CapabilityChanged, "equipment_capability", updated.Id, new { Before = current.Value, After = updated });
         var version = await capabilities.UpdateAsync(updated, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);

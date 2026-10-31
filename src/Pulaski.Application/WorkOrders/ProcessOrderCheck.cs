@@ -27,6 +27,12 @@ public sealed record OrderEquipmentRow
     /// <summary>A capability in effect on the line, or on a line under the department that can run jobs.</summary>
     public bool CanRunMaterial { get; init; }
 
+    /// <summary>The operation's share of the order on this equipment, in percent.</summary>
+    public decimal SharePercent { get; init; }
+
+    /// <summary>The line's own batch size for the material (D-065); null for the material's, and for a department.</summary>
+    public decimal? LineBatchSize { get; init; }
+
     public bool IsDepartment => IsSchedulable && !CanRunJob;
 }
 
@@ -119,6 +125,7 @@ internal sealed class CheckProcessForOrderHandler(IProcessReadStore processes, I
             ProcessVersionId = released.Id,
             Problems = problems,
             DepartmentOperations = ProcessOrderRules.DepartmentOperations(rows),
+            Equipment = [.. rows.Select(r => new OrderEquipmentBatchDto(r.OperationNumber, r.EquipmentCode, r.SharePercent, r.IsDepartment, r.LineBatchSize))],
         };
     }
 }

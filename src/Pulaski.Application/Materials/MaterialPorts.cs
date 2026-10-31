@@ -79,6 +79,9 @@ public sealed record SiteLine(CapabilityLine Line, Guid? SiteId, string? SiteCod
 public interface ILineBatchSizes
 {
     Task<IReadOnlyDictionary<Guid, decimal>> GetAsync(Guid materialId, IReadOnlyCollection<Guid> equipmentIds, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>The lines' own batch tolerances in percent (#85), for those whose capability in effect has one.</summary>
+    Task<IReadOnlyDictionary<Guid, decimal>> GetTolerancesAsync(Guid materialId, IReadOnlyCollection<Guid> equipmentIds, DateTimeOffset at, CancellationToken cancellationToken);
 }
 
 public interface ICapabilityRepository

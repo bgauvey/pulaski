@@ -19,7 +19,7 @@ internal sealed class MaterialQueries(NpgsqlDataSource dataSource) : IMaterialRe
     private const string Capabilities = """
         SELECT c.id, c.equipment_id, e.code AS equipment_code, e.name AS equipment_name, site.time_zone AS site_time_zone,
                c.ideal_rate_per_hour, c.rate_uom_id, u.code AS rate_uom_code,
-               c.standard_changeover, c.standard_crew_size, c.is_preferred, c.effective_from, c.effective_to, c.batch_size,
+               c.standard_changeover, c.standard_crew_size, c.is_preferred, c.effective_from, c.effective_to, c.batch_size, c.batch_tolerance_pct,
                (c.effective_from <= now() AND (c.effective_to IS NULL OR c.effective_to > now())) AS is_in_effect,
                c.xmin::text::bigint AS version,
                rs.id AS run_standard_id, rs.xmin::text::bigint AS run_standard_version, rs.calculated_rate_per_hour, rs.calculation_basis,

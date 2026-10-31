@@ -16,7 +16,16 @@ public sealed record ProcessOrderCheckDto
 
     /// <summary>Operations on a department; their jobs finish by the order's due date, so the order needs one (D-022).</summary>
     public IReadOnlyList<int> DepartmentOperations { get; init; } = [];
+
+    /// <summary>Where each operation's share of the order would go, with each line's own batch size (#85), for the form's batch hint.</summary>
+    public IReadOnlyList<OrderEquipmentBatchDto> Equipment { get; init; } = [];
 }
+
+/// <summary>
+/// One equipment of an operation: its share of the order and, on a line with one, its own batch size (D-065) in the material's base unit;
+/// null for the material's size. A department plans in the material's size until a line is chosen.
+/// </summary>
+public sealed record OrderEquipmentBatchDto(int OperationNumber, string EquipmentCode, decimal SharePercent, bool IsDepartment, decimal? LineBatchSize);
 
 /// <summary>
 /// Why one operation can't run where the process says. <see cref="Code"/> is

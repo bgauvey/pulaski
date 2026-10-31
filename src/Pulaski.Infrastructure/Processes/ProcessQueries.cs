@@ -167,7 +167,15 @@ internal sealed class ProcessQueries(NpgsqlDataSource dataSource) : IProcessRead
                         JOIN core.equipment_capability c ON c.equipment_id = l.id
                         WHERE cl.ancestor_id = e.id AND cl.depth > 0 AND c.material_id = m.id
                           AND c.effective_from <= @At AND (c.effective_to IS NULL OR c.effective_to > @At))
-               END AS can_run_material
+               END AS can_run_material,
+               oe.share_percent,
+               -- A line's own batch size for the material (D-065), shown on the order form (#85); a department has none.
+               CASE WHEN e.can_run_job THEN (
+                        SELECT c.batch_size FROM core.equipment_capability c
+                        WHERE c.equipment_id = e.id AND c.material_id = m.id AND c.batch_size IS NOT NULL
+                          AND c.effective_from <= @At AND (c.effective_to IS NULL OR c.effective_to > @At)
+                        LIMIT 1)
+               END AS line_batch_size
         FROM core.process_operation o
         JOIN core.process_operation_equipment oe ON oe.operation_id = o.id
         JOIN core.equipment e ON e.id = oe.equipment_id

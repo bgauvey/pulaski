@@ -97,7 +97,7 @@ internal static class SchedulingEndpoints
             ICommandHandler<CancelJobCommand, CancelJobResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new CancelJobCommand(id, request.Version, request.Reason, request.Replace, request.ReplaceExact), ct)))
+                new CancelJobCommand(id, request.Version, request.Reason, request.Replace, request.ReplaceExact, request.RoundDown), ct)))
         .RequirePermission(Permissions.SchedulePlan, Site.Of(SiteOf.Job))
         .RequireWhen<CancelJobRequest>(r => r.Replace && r.ReplaceExact, Permissions.SchedulePlanPartial, Site.Of(SiteOf.Job),
             "You may not replace a job with a partial batch at this site: it needs permission to plan partial batches.");
@@ -151,6 +151,50 @@ internal static class SchedulingEndpoints
                 new SetSchedulingPolicyCommand(siteId, request.Version, request.ChangeoverMode), ct)))
         .RequirePermission(Permissions.SiteSettings, Site.Route());
 
+        // Changeover rules (D-015, D-074): the site's matrix, maintained with changeovers.manage; seen with the schedule or the materials.
+        var changeovers = routes.MapGroup("/changeover-rules").WithTags("Scheduling");
+        changeovers.MapGet("", async Task<Ok<IReadOnlyList<ChangeoverRuleDto>>> (
+            Guid siteId, IQueryHandler<ListChangeoverRulesQuery, IReadOnlyList<ChangeoverRuleDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListChangeoverRulesQuery(siteId), ct)))
+        .RequireAny(Site.Query(), Permissions.ScheduleView, Permissions.MaterialsView);
+
+        changeovers.MapPost("", async Task<Ok<CreatedResponse>> (
+            CreateChangeoverRuleRequest request, ICommandHandler<CreateChangeoverRuleCommand, CreatedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CreateChangeoverRuleCommand(request.SiteId, request.EquipmentId, request.FromMaterialId,
+                request.FromMaterialClassId, request.ToMaterialId, request.ToMaterialClassId, request.DurationMinutes, request.Note), ct)))
+        .RequirePermission(Permissions.Changeovers, Site.FromBody<CreateChangeoverRuleRequest>(SiteOf.Equipment, r => r.SiteId));
+
+        changeovers.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (
+            Guid id, UpdateChangeoverRuleRequest request, ICommandHandler<UpdateChangeoverRuleCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new UpdateChangeoverRuleCommand(id, request.Version, request.DurationMinutes, request.Note, request.IsActive), ct)))
+        .RequirePermission(Permissions.Changeovers, Site.Of(SiteOf.ChangeoverRule));
+
+        // All or nothing; ?dryRun=true checks and reports without saving.
+        changeovers.MapPost("/import/csv", async Task<Ok<Pulaski.Contracts.Materials.ImportMaterialsResponse>> (
+            HttpContext http, Guid siteId, bool? dryRun,
+            ICommandHandler<ImportChangeoverRulesCommand, Pulaski.Contracts.Materials.ImportMaterialsResponse> handler, CancellationToken ct) =>
+        {
+            using var reader = new StreamReader(http.Request.Body);
+            var text = http.Request.ContentLength > MaxFileBytes ? null : await reader.ReadToEndAsync(ct);
+            if (text is null || text.Length > MaxFileBytes)
+            {
+                throw new Pulaski.Application.Errors.ValidationException(new Dictionary<string, string[]>
+                {
+                    ["file"] = [$"The file is larger than {MaxFileBytes / 1024 / 1024} MB; split it."],
+                });
+            }
+
+            return TypedResults.Ok(await handler.HandleAsync(new ImportChangeoverRulesCommand(siteId, ChangeoverRuleCsv.Parse(text), dryRun ?? false), ct));
+        })
+        .RequirePermission(Permissions.Changeovers, Site.Query())
+        .Accepts<string>("text/csv", "text/plain");
+
+        changeovers.MapGet("/import/template", () =>
+            TypedResults.File(System.Text.Encoding.UTF8.GetBytes(ChangeoverRuleCsv.Template + "\r\n"), "text/csv", "changeover-rules.csv"))
+        .RequireAny(null, Permissions.ScheduleView, Permissions.MaterialsView);
+
         return routes;
     }
+
+    private const int MaxFileBytes = 5 * 1024 * 1024;
 }

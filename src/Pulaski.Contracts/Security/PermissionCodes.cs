@@ -52,6 +52,7 @@ public static class PermissionCodes
     public const string Equipment = "equipment.manage";
     public const string SiteSettings = "site_settings.manage";
     public const string Shifts = "shifts.manage";
+    public const string Changeovers = "changeovers.manage";
     public const string LaborRecordOwn = "labor.record_own";
     public const string LaborRecord = "labor.record";
     public const string LaborApprove = "labor.approve";

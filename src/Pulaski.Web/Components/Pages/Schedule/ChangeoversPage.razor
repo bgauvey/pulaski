@@ -1,0 +1,401 @@
+@page "/changeovers"
+@attribute [RequiresView(PermissionCodes.ScheduleView, PermissionCodes.MaterialsView)]
+@using System.Globalization
+@using Pulaski.Web.Services.Scheduling
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+@inject Downloads Downloads
+
+@* A site's changeover matrix (D-015, D-074): how long each change of material takes on a line. The schedule works changeovers out from
+   these rules every time it is shown; a rule is switched off, never deleted. *@
+<PageTitle>Changeovers · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Changeovers</h1>
+        <p class="text-muted mb-0">How long a line needs to change from one material to another. The schedule uses the most specific rule that fits.</p>
+    </div>
+    <div class="inv-head-tools">
+        @if (Sites.Sites.Count > 1)
+        {
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+        @if (CanManage)
+        {
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _importing = !_importing">Import from a file</button>
+        }
+        <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@(_rules is not { Count: > 0 })" @onclick="ExportAsync">Export CSV</button>
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Changeovers" What="change changeover rules" SiteId="Sites.SiteId" />
+
+@if (_message is { } message)
+{
+    <div class="alert alert-success d-flex align-items-center gap-2" role="status">
+        <span>@message</span>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">Dismiss</button>
+    </div>
+}
+
+@if (Sites.SiteId is null)
+{
+    <p class="text-muted">There is no site yet.</p>
+}
+else
+{
+    @if (_importing && CanManage)
+    {
+        <section class="inv-facts mb-3" aria-labelledby="co-import">
+            <h2 class="h6" id="co-import">Import from a file</h2>
+            <p class="small text-muted mb-2">
+                One rule per row; minutes is required. line is a line's code, blank for every line. Each side names a material (from_material, to_material),
+                a class (from_class, to_class), or neither for anything. A row changes the site's rule with the same line and sides, else adds one;
+                active = no switches it off. Nothing is saved until every row is valid.
+                <a href="@TemplateHref" download="changeover-rules.csv">Download a template</a>
+            </p>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <InputFile OnChange="PickAsync" accept=".csv,text/csv,text/plain" class="form-control" style="max-width: 28rem" aria-label="Changeover rules file" disabled="@_saving" />
+                <button type="button" class="btn btn-primary btn-sm" disabled="@(_saving || _check is not { Errors: 0, Applied: false } || _check.Created + _check.Updated == 0)"
+                        @onclick="ImportAsync">Import</button>
+            </div>
+            @if (_check is { } c)
+            {
+                <p class="small mt-2 mb-1 @(c.Errors > 0 ? "text-danger" : "")">
+                    @(c.FileProblems.Count > 0 ? string.Join(" ", c.FileProblems)
+                        : c.Errors > 0 ? $"{c.Errors} rows have errors, so nothing can be imported yet. Fix them and pick the file again."
+                        : $"{(c.Applied ? "Imported" : "Ready")}: {c.Created} to add, {c.Updated} to change, {c.Unchanged} unchanged.")
+                </p>
+                @foreach (var row in c.Rows.Where(r => r.Action == "error"))
+                {
+                    <div class="small text-danger">Line @row.Line, @row.Code: @row.Message</div>
+                }
+            }
+        </section>
+    }
+
+    @if (CanManage)
+    {
+        <section class="inv-facts mb-3" aria-labelledby="co-add">
+            <h2 class="h6" id="co-add">Add a rule</h2>
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-2">
+                    <label class="form-label small fw-semibold" for="co-line">Line</label>
+                    <select id="co-line" class="form-select form-select-sm" value="@(_lineId?.ToString() ?? "")" @onchange="@(e => _lineId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
+                        <option value="">All lines</option>
+                        @foreach (var l in _lines)
+                        {
+                            <option value="@l.Id">@l.Code · @l.Name</option>
+                        }
+                    </select>
+                </div>
+                @Side("From", "co-from", _fromKind, v => (_fromKind, _fromId) = (v, null), _fromId, v => _fromId = v)
+                @Side("To", "co-to", _toKind, v => (_toKind, _toId) = (v, null), _toId, v => _toId = v)
+                <div class="col-6 col-md-1">
+                    <label class="form-label small fw-semibold" for="co-minutes">Minutes</label>
+                    <input id="co-minutes" type="number" class="form-control form-control-sm" min="0" max="@ChangeoverRulesView.MaxMinutes" step="1"
+                           value="@_minutes" @oninput="@(e => _minutes = int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var m) ? m : null)" />
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label small fw-semibold" for="co-note">Note <span class="text-muted">(optional)</span></label>
+                    <input id="co-note" class="form-control form-control-sm" maxlength="500" @bind="_note" />
+                </div>
+                <div class="col-12">
+                    @if (ChangeoverRulesView.Problem(_fromKind, _fromId, _toKind, _toId, _minutes) is { } problem)
+                    {
+                        <p class="small text-muted mb-1">@problem</p>
+                    }
+                    <button type="button" class="btn btn-primary btn-sm" disabled="@(_saving || ChangeoverRulesView.Problem(_fromKind, _fromId, _toKind, _toId, _minutes) is not null)"
+                            @onclick="AddAsync">Add rule</button>
+                </div>
+            </div>
+            <datalist id="co-materials">
+                @foreach (var m in _materials)
+                {
+                    <option value="@m.Code">@m.Name</option>
+                }
+            </datalist>
+        </section>
+    }
+
+    <section class="inv-section" aria-labelledby="co-list">
+        <div class="inv-section-head">
+            <h2 id="co-list">Rules</h2>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <select class="form-select form-select-sm w-auto" aria-label="Show rules for line" value="@(_filterLine?.ToString() ?? "")"
+                        @onchange="@(e => _filterLine = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
+                    <option value="">Every line</option>
+                    @foreach (var l in _lines)
+                    {
+                        <option value="@l.Id">@l.Code</option>
+                    }
+                </select>
+                <input class="form-control form-control-sm w-auto" placeholder="Material or class" aria-label="Find a material or class" @bind="_search" @bind:event="oninput" />
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="co-off" @bind="_includeOff" />
+                    <label class="form-check-label small" for="co-off">Switched off too</label>
+                </div>
+            </div>
+        </div>
+        @if (_rules is null)
+        {
+            <p class="small text-muted">Loading…</p>
+        }
+        else if (Shown.Count == 0)
+        {
+            <p class="small text-muted">No rules@(_rules.Count > 0 ? " match" : " yet"). Without one, a line uses its standard changeover for the incoming material (set on the material's capability).</p>
+        }
+        else
+        {
+            <div class="table-panel">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Line</th><th>From</th><th>To</th><th class="inv-num">Time</th><th>Note</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var r in Shown)
+                        {
+                            <tr @key="r.Id" class="@(r.IsActive ? "" : "text-muted")">
+                                <td>@ChangeoverRulesView.Line(r)</td>
+                                <td title="@r.FromMaterialName">@ChangeoverRulesView.From(r)</td>
+                                <td title="@r.ToMaterialName">@ChangeoverRulesView.To(r)</td>
+                                @if (_editing == r.Id)
+                                {
+                                    <td class="inv-num"><input type="number" class="form-control form-control-sm d-inline-block" style="width: 6rem" min="0" max="@ChangeoverRulesView.MaxMinutes"
+                                                              aria-label="Minutes" value="@_editMinutes" @oninput="@(e => _editMinutes = int.TryParse(e.Value?.ToString(), out var m) ? m : null)" /> min</td>
+                                    <td><input class="form-control form-control-sm" maxlength="500" aria-label="Note" @bind="_editNote" /></td>
+                                    <td class="text-end text-nowrap">
+                                        <button type="button" class="btn btn-sm btn-primary" disabled="@(_saving || _editMinutes is not (>= 0 and <= ChangeoverRulesView.MaxMinutes))" @onclick="() => SaveAsync(r, r.IsActive)">Save</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _editing = null">Cancel</button>
+                                    </td>
+                                }
+                                else
+                                {
+                                    <td class="inv-num">@ChangeoverRulesView.Duration(r.DurationMinutes)</td>
+                                    <td class="small">@r.Note@(r.IsActive ? "" : " (switched off)")</td>
+                                    <td class="text-end text-nowrap">
+                                        @if (CanManage)
+                                        {
+                                            @if (r.IsActive)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => Edit(r)">Change</button>
+                                            }
+                                            <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => SwitchAsync(r)">@(r.IsActive ? "Switch off" : "Switch on")</button>
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    private IReadOnlyList<ChangeoverRuleDto>? _rules;
+    private IReadOnlyList<EquipmentDto> _lines = [];
+    private IReadOnlyList<MaterialDto> _materials = [];
+    private IReadOnlyList<MaterialClassDto> _classes = [];
+    private Guid? _lineId;
+    private string _fromKind = ChangeoverRulesView.Anything;
+    private Guid? _fromId;
+    private string _toKind = ChangeoverRulesView.Material;
+    private Guid? _toId;
+    private int? _minutes;
+    private string? _note;
+    private Guid? _filterLine;
+    private string? _search;
+    private bool _includeOff;
+    private Guid? _editing;
+    private int? _editMinutes;
+    private string? _editNote;
+    private bool _importing;
+    private string? _csv;
+    private ImportMaterialsResponse? _check;
+    private bool _saving;
+    private ApiException? _error;
+    private string? _message;
+
+    private bool CanManage => User.Can(PermissionCodes.Changeovers, Sites.SiteId);
+
+    private IReadOnlyList<ChangeoverRuleDto> Shown => _rules is null ? [] : ChangeoverRulesView.Filter(_rules, _filterLine, _search, _includeOff);
+
+    private static string TemplateHref => $"data:text/csv;charset=utf-8,{Uri.EscapeDataString(ChangeoverRuleCsvFormat.Header + "\r\n")}";
+
+    // A side of the form: Anything, a material (typed, from the list) or a class.
+    private RenderFragment Side(string label, string id, string kind, Action<string> setKind, Guid? value, Action<Guid?> setValue) =>
+        @<div class="col-12 col-md-3">
+            <label class="form-label small fw-semibold" for="@id">@label</label>
+            <div class="input-group input-group-sm">
+                <select class="form-select" style="max-width: 7.5rem" aria-label="@($"{label}: anything, a material or a class")" value="@kind" @onchange="@(e => setKind(e.Value?.ToString() ?? ChangeoverRulesView.Anything))">
+                    <option value="@ChangeoverRulesView.Anything">Anything</option>
+                    <option value="@ChangeoverRulesView.Material">Material</option>
+                    <option value="@ChangeoverRulesView.Class">Class</option>
+                </select>
+                @if (kind == ChangeoverRulesView.Material)
+                {
+                    <input id="@id" class="form-control" list="co-materials" placeholder="Material code" aria-label="@($"{label} material")"
+                           value="@_materials.FirstOrDefault(m => m.Id == value)?.Code"
+                           @onchange="@(e => setValue(_materials.FirstOrDefault(m => string.Equals(m.Code, e.Value?.ToString()?.Trim(), StringComparison.OrdinalIgnoreCase))?.Id))" />
+                }
+                else if (kind == ChangeoverRulesView.Class)
+                {
+                    <select id="@id" class="form-select" aria-label="@($"{label} class")" value="@(value?.ToString() ?? "")" @onchange="@(e => setValue(Guid.TryParse(e.Value?.ToString(), out var c) ? c : null))">
+                        <option value="">Choose…</option>
+                        @foreach (var c in _classes.Where(c => c.IsActive))
+                        {
+                            <option value="@c.Id">@c.Code · @c.Name</option>
+                        }
+                    </select>
+                }
+            </div>
+        </div>;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        (_rules, _lineId, _filterLine, _check, _message) = (null, null, null, null, null);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            return;
+        }
+
+        try
+        {
+            _rules = await Api.ListChangeoverRulesAsync(site);
+            _lines = [.. (await Api.ListEquipmentAsync(site)).Where(e => e.IsActive && e.CanRunJob && e.Id != site).OrderBy(e => e.Code, StringComparer.Ordinal)];
+            if (CanManage && _materials.Count == 0)
+            {
+                _materials = await Api.ListMaterialsAsync();
+                _classes = await Api.ListMaterialClassesAsync();
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private void Edit(ChangeoverRuleDto rule) => (_editing, _editMinutes, _editNote) = (rule.Id, rule.DurationMinutes, rule.Note);
+
+    private async Task AddAsync() => await RunAsync(async site =>
+    {
+        await Api.CreateChangeoverRuleAsync(new CreateChangeoverRuleRequest
+        {
+            SiteId = site,
+            EquipmentId = _lineId,
+            FromMaterialId = _fromKind == ChangeoverRulesView.Material ? _fromId : null,
+            FromMaterialClassId = _fromKind == ChangeoverRulesView.Class ? _fromId : null,
+            ToMaterialId = _toKind == ChangeoverRulesView.Material ? _toId : null,
+            ToMaterialClassId = _toKind == ChangeoverRulesView.Class ? _toId : null,
+            DurationMinutes = _minutes!.Value,
+            Note = _note,
+        });
+        (_minutes, _note) = (null, null);
+        return "Added the rule. The schedule uses it on its next refresh.";
+    });
+
+    private async Task SaveAsync(ChangeoverRuleDto rule, bool active) => await RunAsync(async _ =>
+    {
+        await Api.UpdateChangeoverRuleAsync(rule.Id, new UpdateChangeoverRuleRequest
+        {
+            Version = rule.Version,
+            DurationMinutes = _editing == rule.Id ? _editMinutes!.Value : rule.DurationMinutes,
+            Note = _editing == rule.Id ? _editNote : rule.Note,
+            IsActive = active,
+        });
+        _editing = null;
+        return $"Saved {ChangeoverRulesView.From(rule)} → {ChangeoverRulesView.To(rule)}{(active ? "" : ": switched off")}.";
+    });
+
+    private Task SwitchAsync(ChangeoverRuleDto rule) => SaveAsync(rule, !rule.IsActive);
+
+    private async Task PickAsync(InputFileChangeEventArgs e)
+    {
+        (_check, _csv, _error) = (null, null, null);
+        if (e.File.Size > MaxFileBytes)
+        {
+            _message = $"{e.File.Name} is larger than 5 MB; split it.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(MaxFileBytes));
+            _csv = await reader.ReadToEndAsync();
+            _check = await Api.ImportChangeoverRulesCsvAsync(Sites.SiteId!.Value, _csv, dryRun: true);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ImportAsync() => await RunAsync(async site =>
+    {
+        _check = await Api.ImportChangeoverRulesCsvAsync(site, _csv!, dryRun: false);
+        return _check.Applied ? $"Imported: {_check.Created} added, {_check.Updated} changed, {_check.Unchanged} unchanged." : "Nothing was imported.";
+    });
+
+    private Task ExportAsync() => Downloads.CsvAsync("changeover-rules.csv", Csv.Write(
+        ChangeoverRuleCsvFormat.Header.Split(','),
+        _rules!.Select(r => (IReadOnlyList<object?>)[r.EquipmentCode, r.FromMaterialCode, r.FromMaterialClassCode, r.ToMaterialCode, r.ToMaterialClassCode,
+            r.DurationMinutes, r.Note, r.IsActive ? "yes" : "no"]))).AsTask();
+
+    private const long MaxFileBytes = 5 * 1024 * 1024;
+
+    private async Task RunAsync(Func<Guid, Task<string>> action)
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        try
+        {
+            _message = await action(site);
+            _rules = await Api.ListChangeoverRulesAsync(site);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

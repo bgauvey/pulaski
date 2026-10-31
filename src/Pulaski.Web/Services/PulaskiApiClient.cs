@@ -1117,6 +1117,28 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ExecutionPolicyDto> SetExecutionPolicyAsync(Guid siteId, SetExecutionPolicyRequest request, CancellationToken ct = default) =>
         SendAsync<ExecutionPolicyDto>(HttpMethod.Put, $"api/execution/sites/{siteId}/policy", request, ct);
 
+    // Changeover rules (D-015, D-074)
+
+    public Task<IReadOnlyList<ChangeoverRuleDto>> ListChangeoverRulesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ChangeoverRuleDto>>($"api/changeover-rules?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> CreateChangeoverRuleAsync(CreateChangeoverRuleRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/changeover-rules", request, ct);
+
+    public Task<VersionResponse> UpdateChangeoverRuleAsync(Guid id, UpdateChangeoverRuleRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/changeover-rules/{id}", request, ct);
+
+    /// <summary>Checks (<paramref name="dryRun"/>) or imports a site's changeover rules from CSV, all or nothing (D-074).</summary>
+    public async Task<ImportMaterialsResponse> ImportChangeoverRulesCsvAsync(Guid siteId, string csv, bool dryRun, CancellationToken ct = default)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/changeover-rules/import/csv?siteId={siteId}&dryRun={(dryRun ? "true" : "false")}")
+        {
+            Content = new StringContent(csv, System.Text.Encoding.UTF8, "text/csv"),
+        };
+        using var response = await SendCoreAsync(request, ct);
+        return await ReadAsync<ImportMaterialsResponse>(response, ct);
+    }
+
     // OEE targets (D-073)
 
     public Task<IReadOnlyList<OeeTargetDto>> ListOeeTargetsAsync(Guid siteId, CancellationToken ct = default) =>

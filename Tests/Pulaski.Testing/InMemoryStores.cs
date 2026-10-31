@@ -94,6 +94,8 @@ public sealed class InMemoryStores
 
     public InMemoryOeeTargets OeeTargets { get; } = new();
 
+    public InMemoryChangeoverRules ChangeoverRules { get; } = new();
+
     public InMemoryOverview Overview { get; } = new();
 
     public InMemoryMachineHistory MachineHistory { get; } = new();
@@ -166,6 +168,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IOeeRollupRepository>();
         services.RemoveAll<IOeeTargetRepository>();
         services.RemoveAll<IOeeTargetReadStore>();
+        services.RemoveAll<Application.Scheduling.IChangeoverRuleRepository>();
+        services.RemoveAll<Application.Scheduling.IChangeoverRuleReadStore>();
         services.RemoveAll<IOverviewReadStore>();
         services.RemoveAll<IMachineHistoryReadStore>();
         services.RemoveAll<IQualificationRepository>();
@@ -233,6 +237,8 @@ public sealed class InMemoryStores
         services.AddSingleton<IOeeRollupRepository>(OeeRollups);
         services.AddSingleton<IOeeTargetRepository>(OeeTargets);
         services.AddSingleton<IOeeTargetReadStore>(OeeTargets);
+        services.AddSingleton<Application.Scheduling.IChangeoverRuleRepository>(ChangeoverRules);
+        services.AddSingleton<Application.Scheduling.IChangeoverRuleReadStore>(ChangeoverRules);
         services.AddSingleton<IOverviewReadStore>(Overview);
         services.AddSingleton<IMachineHistoryReadStore>(MachineHistory);
         services.AddSingleton<IQualificationRepository>(Labor);

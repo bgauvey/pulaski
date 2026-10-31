@@ -43,6 +43,9 @@ public sealed record MaterialCapabilityDto
     /// <summary>The line's own batch size in the material's base unit (D-065); null: the material's.</summary>
     public decimal? BatchSize { get; init; }
 
+    /// <summary>The line's own batch tolerance in percent (#85); null: the material's.</summary>
+    public decimal? BatchTolerancePct { get; init; }
+
     /// <summary>True when it applies now: jobs for the material can be placed on the line.</summary>
     public bool IsInEffect { get; init; }
 
@@ -78,6 +81,9 @@ public sealed record AddCapabilityRequest
     /// <summary>The line's own batch size (D-065), in the material's base unit; blank for the material's.</summary>
     public decimal? BatchSize { get; init; }
 
+    /// <summary>The line's own batch tolerance in percent, 0 to 50 (#85); blank for the material's.</summary>
+    public decimal? BatchTolerancePct { get; init; }
+
     /// <summary>When it starts; now when left out.</summary>
     public DateTimeOffset? EffectiveFrom { get; init; }
 
@@ -99,6 +105,9 @@ public sealed record UpdateCapabilityRequest
 
     /// <summary>The line's own batch size (D-065); blank for the material's.</summary>
     public decimal? BatchSize { get; init; }
+
+    /// <summary>The line's own batch tolerance in percent, 0 to 50 (#85); blank for the material's.</summary>
+    public decimal? BatchTolerancePct { get; init; }
 }
 
 public sealed record EndCapabilityRequest
@@ -266,5 +275,5 @@ public sealed record SetBatchingRequest
 /// <summary>The capabilities CSV file (D-055): its header line with every column, for a template.</summary>
 public static class CapabilityCsvFormat
 {
-    public const string Header = "material,site,line,ideal_rate,rate_unit,changeover_minutes,crew_size,preferred,batch_size,active";
+    public const string Header = "material,site,line,ideal_rate,rate_unit,changeover_minutes,crew_size,preferred,batch_size,batch_tolerance,active";
 }

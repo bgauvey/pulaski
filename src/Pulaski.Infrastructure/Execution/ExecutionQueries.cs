@@ -35,7 +35,10 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
                             WHERE c.equipment_id = j.equipment_id AND c.material_id = j.material_id AND c.batch_size IS NOT NULL
                               AND c.effective_from <= now() AND (c.effective_to IS NULL OR c.effective_to > now())
                             LIMIT 1), m.batch_size) END AS batch_size,
-        m.batch_tolerance_pct, m.batch_rule, m.base_uom_id, bu.code AS base_uom_code,
+        coalesce((SELECT c.batch_tolerance_pct FROM core.equipment_capability c
+                  WHERE c.equipment_id = j.equipment_id AND c.material_id = j.material_id AND c.batch_tolerance_pct IS NOT NULL
+                    AND c.effective_from <= now() AND (c.effective_to IS NULL OR c.effective_to > now())
+                  LIMIT 1), m.batch_tolerance_pct) AS batch_tolerance_pct, m.batch_rule, m.base_uom_id, bu.code AS base_uom_code,
         coalesce((SELECT sum(r.good_qty) FROM core.job_run r WHERE r.job_id = j.id), 0) AS good_qty,
         coalesce((SELECT sum(r.scrap_qty) FROM core.job_run r WHERE r.job_id = j.id), 0) AS scrap_qty
         """;

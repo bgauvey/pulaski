@@ -149,10 +149,14 @@ public sealed record Batching(decimal Size, decimal TolerancePct, string Rule)
     }
 
     /// <summary>
-    /// The batching on one line (D-065): the line's own batch size from its capability when it has one, else the material's. The rule
-    /// and tolerance are always the material's: they describe the product, not the equipment.
+    /// The batching on one line (D-065): the line's own batch size and tolerance from its capability where it has them (#85), else the
+    /// material's. The rule is always the material's: it describes the product, not the equipment.
     /// </summary>
-    public Batching OnLine(decimal? lineSize) => lineSize is { } size && size > 0 ? this with { Size = size } : this;
+    public Batching OnLine(decimal? lineSize, decimal? lineTolerancePct = null) => this with
+    {
+        Size = lineSize is > 0 ? lineSize.Value : Size,
+        TolerancePct = lineTolerancePct is >= 0 and <= 50 ? lineTolerancePct.Value : TolerancePct,
+    };
 
     /// <summary>
     /// Shares <paramref name="quantity"/> between equipment whose batch sizes may differ (D-065): each gets whole batches of its own
@@ -234,6 +238,9 @@ public sealed record Batching(decimal Size, decimal TolerancePct, string Rule)
 
     /// <summary>The fewest whole batches that hold <paramref name="quantity"/>.</summary>
     public decimal RoundUp(decimal quantity) => quantity <= 0 ? Size : Math.Ceiling(quantity / Size - Epsilon) * Size;
+
+    /// <summary>Whole batches at most <paramref name="quantity"/> (#85); 0 when it is less than a batch.</summary>
+    public decimal RoundDown(decimal quantity) => quantity <= 0 ? 0 : Math.Floor(quantity / Size + Epsilon) * Size;
 
     public static string Qty(decimal value) => Math.Round(value, 3).ToString("#,0.###", CultureInfo.InvariantCulture);
 }

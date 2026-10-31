@@ -172,10 +172,13 @@ internal sealed class ProductionReporter(
         var jobUom = job.UomId ?? throw new DomainRuleException($"{job.JobNumber} has no unit.");
         var converter = await RunReporting.ConverterAsync(units, material.Id, cancellationToken);
 
-        // Batches of the size on the run's line (D-065): its own where its capability gives one, else the material's.
+        // Batches of the size and tolerance on the run's line (D-065, #85): its own where its capability gives them, else the material's.
         var lineBatching = material.Batching is { } materialBatching
-            ? materialBatching.OnLine(lineBatches is null ? null
-                : (await lineBatches.GetAsync(material.Id, [run.EquipmentId], now, cancellationToken)).TryGetValue(run.EquipmentId, out var lineSize) ? lineSize : null)
+            ? lineBatches is null
+                ? materialBatching
+                : materialBatching.OnLine(
+                    (await lineBatches.GetAsync(material.Id, [run.EquipmentId], now, cancellationToken)).TryGetValue(run.EquipmentId, out var lineSize) ? lineSize : null,
+                    (await lineBatches.GetTolerancesAsync(material.Id, [run.EquipmentId], now, cancellationToken)).TryGetValue(run.EquipmentId, out var lineTolerance) ? lineTolerance : null)
             : null;
 
         // What was made, in the entered unit: the quantities, or for a batch material the batches in its base unit.

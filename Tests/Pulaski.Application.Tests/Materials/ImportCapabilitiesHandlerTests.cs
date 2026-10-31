@@ -108,6 +108,16 @@ public class ImportCapabilitiesHandlerTests
     }
 
     [Fact]
+    public async Task A_lines_batch_tolerance_is_read_and_refused_for_a_material_not_made_in_batches()
+    {
+        var row = Assert.Single(CapabilityCsv.Parse("material,line,ideal_rate,rate_unit,batch_tolerance\nPRF-1,EXT-01,900,m,5\n").Rows);
+        Assert.Equal(5m, row.BatchTolerancePct!.Value);
+
+        var result = await RunAsync("material,line,ideal_rate,rate_unit,batch_tolerance\nPRF-1,EXT-01,900,m,5\n");
+        Assert.Contains("isn't made in batches", Assert.Single(result.Rows).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_dry_run_reports_without_committing()
     {
         var result = await RunAsync(Header + "PRF-1,EXT-01,900,m,,,,\n", dryRun: true);

@@ -510,6 +510,7 @@ CREATE TABLE core.equipment_capability (
     standard_crew_size      numeric(6,2),
     is_preferred            boolean NOT NULL DEFAULT false,
     batch_size              core.qty CHECK (batch_size > 0),    -- this line's batch size in the material's base unit (D-065); null: the material's
+    batch_tolerance_pct     numeric(5,2) CHECK (batch_tolerance_pct >= 0 AND batch_tolerance_pct <= 50),  -- this line's batch tolerance (#85); null: the material's
     effective_from          timestamptz NOT NULL,
     effective_to            timestamptz,
     CONSTRAINT capability_no_overlap EXCLUDE USING gist (
@@ -2184,7 +2185,9 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0039_stop_adjustment_followups'),
     ('0040_reason_group_rollups'),
     ('0041_oee_rollups'),
-    ('0042_oee_targets');
+    ('0042_oee_targets'),
+    ('0043_changeover_rules'),
+    ('0044_line_batch_tolerance');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2238,6 +2241,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('equipment.manage', 'Maintain equipment: sites, lines, locations, machine profiles, edge nodes and tags'),
     ('site_settings.manage', 'Set a site''s changeover mode, reporting tolerances, OEE targets and calendar exceptions'),
     ('shifts.manage', 'Maintain shift schedules and choose which one equipment follows'),
+    ('changeovers.manage', 'Maintain changeover rules: how long each change of material takes on a line'),
     ('people.manage', 'Maintain people and crews'),
     ('terminals.manage', 'Register and enrol shop-floor terminals'),
     ('lot_attributes.manage', 'Maintain lot attribute definitions'),
@@ -2250,13 +2254,13 @@ ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 -- The administrator has no rows: the code gives it every permission.
 INSERT INTO sec.role (code, name, description, is_system) VALUES
     ('administrator', 'Administrator', 'Everything, everywhere, including users and roles.', true),
-    ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes.', true),
+    ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates, changeover times and materials. Sees the floor, inventory and processes.', true),
     ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops. Doesn''t correct inventory.', true),
     ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops.', true),
     ('quality', 'Quality', 'Holds and releases lots, corrects inventory, decides on partial batches, and keeps lot attributes and certificates.', true),
     ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people, lot attributes and the site''s settings.', true),
     ('auditor', 'Auditor', 'Views everything, corrects inventory and reverses production reports; counts stock. Doesn''t plan or run jobs.', true),
-    ('process_engineer', 'Process engineer', 'Maintains processes, BOMs and capabilities. Sees equipment, materials and units.', true),
+    ('process_engineer', 'Process engineer', 'Maintains processes, BOMs, capabilities and changeover times. Sees equipment, materials, units and the schedule.', true),
     ('edge_node', 'Edge node', 'For the service user a Pulaski Edge node signs in as: reads its configuration and forwards machine data. Sees no screens.', true)
 ON CONFLICT (code) DO NOTHING;
 
@@ -2278,6 +2282,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('planner', 'rate.modify'),
     ('planner', 'materials.manage'),
     ('planner', 'lot.allocate'),
+    ('planner', 'changeovers.manage'),
     ('supervisor', 'overview.view'),
     ('supervisor', 'floor.view'),
     ('supervisor', 'site_settings.view'),
@@ -2371,6 +2376,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('process_engineer', 'processes.view'),
     ('process_engineer', 'units.view'),
     ('process_engineer', 'processes.manage'),
+    ('process_engineer', 'changeovers.manage'),
     ('edge_node', 'edge.ingest')
 ) AS v(role_code, permission_code)
 JOIN sec.role r ON r.code = v.role_code

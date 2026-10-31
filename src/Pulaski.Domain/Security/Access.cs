@@ -51,6 +51,7 @@ public static class Permissions
     public const string Equipment = "equipment.manage";
     public const string SiteSettings = "site_settings.manage";
     public const string Shifts = "shifts.manage";
+    public const string Changeovers = "changeovers.manage";
     public const string LaborRecordOwn = "labor.record_own";
     public const string LaborRecord = "labor.record";
     public const string LaborApprove = "labor.approve";
@@ -114,6 +115,7 @@ public static class Permissions
         new(Equipment, "Configuration", "Maintain equipment: sites, lines, locations, machine profiles, edge nodes and tags"),
         new(SiteSettings, "Configuration", "Set a site's changeover mode, reporting tolerances, OEE targets and calendar exceptions"),
         new(Shifts, "Configuration", "Maintain shift schedules and choose which one equipment follows"),
+        new(Changeovers, "Configuration", "Maintain changeover rules: how long each change of material takes on a line"),
         new(People, "Configuration", "Maintain people and crews"),
         new(Terminals, "Configuration", "Register and enrol shop-floor terminals"),
         new(LotAttributes, "Configuration", "Maintain lot attribute definitions"),
@@ -165,6 +167,8 @@ public static class Permissions
         [Equipment] = [EquipmentView],
         [Shifts] = [ShiftsView, EquipmentView],
         [SiteSettings] = [SiteSettingsView],
+        // The rules name lines and materials, and shape the schedule.
+        [Changeovers] = [ScheduleView, MaterialsView],
         // Clocking on is done from the floor; recording, approving and maintaining people from the Labor screens.
         [LaborRecordOwn] = [FloorView],
         [LaborRecord] = [LaborView, FloorView],
@@ -211,8 +215,8 @@ public static class Roles
             [Permissions.OverviewView, Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.FloorView, Permissions.InventoryView,
              Permissions.MaterialsView, Permissions.ProcessesView, Permissions.MachinesView, Permissions.SiteSettingsView,
              Permissions.SchedulePlan, Permissions.SchedulePlanPartial, Permissions.WorkOrderManage, Permissions.WorkOrderClose, Permissions.RateModify, Permissions.Materials,
-             Permissions.LotAllocate],
-            "Plans and sequences jobs, manages work orders, planning rates and materials. Sees the floor, inventory and processes."),
+             Permissions.LotAllocate, Permissions.Changeovers],
+            "Plans and sequences jobs, manages work orders, planning rates, changeover times and materials. Sees the floor, inventory and processes."),
         new(Supervisor, "Supervisor", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView, Permissions.SiteSettingsView,
              Permissions.JobExecute, Permissions.JobReopen, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove,
@@ -238,8 +242,8 @@ public static class Roles
             [.. Permissions.Views, Permissions.InventoryCorrect, Permissions.StockCount, Permissions.InventoryBackdate, Permissions.ProductionCorrect],
             "Views everything, corrects inventory and reverses production reports; counts stock. Doesn't plan or run jobs."),
         new(ProcessEngineer, "Process engineer", false,
-            [Permissions.EquipmentView, Permissions.MaterialsView, Permissions.ProcessesView, Permissions.UnitsView, Permissions.Processes],
-            "Maintains processes, BOMs and capabilities. Sees equipment, materials and units."),
+            [Permissions.EquipmentView, Permissions.MaterialsView, Permissions.ProcessesView, Permissions.UnitsView, Permissions.Processes, Permissions.Changeovers],
+            "Maintains processes, BOMs, capabilities and changeover times. Sees equipment, materials, units and the schedule."),
         new(EdgeNode, "Edge node", false, [Permissions.EdgeIngest],
             "For the service user a Pulaski Edge node signs in as: reads its configuration and forwards machine data. Sees no screens."),
     ];
