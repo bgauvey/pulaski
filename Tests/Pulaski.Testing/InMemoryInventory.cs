@@ -623,8 +623,40 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
     public Task<IReadOnlyList<ReasonCodeAdminDto>> ListAllReasonCodesAsync(Guid? siteId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<ReasonCodeAdminDto>>([]);
 
-    public Task<IReadOnlyList<StockOnDateDto>> StockOnDateAsync(Guid siteId, DateTimeOffset at, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<StockOnDateDto>>([]);
+    // Past states (#77) are covered against the real schema; in memory, the lots' own movements are enough for the checks.
+    public Task<IReadOnlyList<PastLotRow>> ListPastLotsAsync(Guid siteId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<PastLotRow>>([]);
+
+    public Task<LotPastSource?> GetLotPastAsync(Guid lotId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_lots.TryGetValue(lotId, out var lot)
+                ? new LotPastSource(lotId, lot.Value.SiteId, "", LotNow.Of(lot.Value), PastEventsOf(lotId))
+                : null);
+        }
+    }
+
+    public Task<IReadOnlyDictionary<Guid, string>> ListCodesAsync(IReadOnlyCollection<Guid> locationOrContainerIds, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyDictionary<Guid, string>>(locationOrContainerIds.Where(_locations.ContainsKey).ToDictionary(id => id, id => _locations[id].Code));
+        }
+    }
+
+    public Task<IReadOnlyList<PastEvent>> ListPastEventsAsync(Guid lotId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(PastEventsOf(lotId));
+        }
+    }
+
+    private IReadOnlyList<PastEvent> PastEventsOf(Guid lotId) =>
+        [.. _events.Where(e => e.Row.LotId == lotId).Select(e => new PastEvent(
+            e.Row.Id, e.Row.EffectiveAt ?? e.At, e.At, e.Row.Movement.Kind, e.Row.Movement.QtyDelta, e.Row.Movement.FromLocationId, e.Row.Movement.ToLocationId,
+            e.Row.Movement.FromStatus, e.Row.Movement.ToStatus, null))];
 
     public Task<IReadOnlyList<AgingRowDto>> AgingAsync(Guid siteId, DateTimeOffset now, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<AgingRowDto>>([]);

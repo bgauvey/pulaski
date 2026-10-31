@@ -76,7 +76,7 @@ public class ComminglingHandlerTests
 
         var held = await Receive("R-6", 10m, _stores.Id);
         var hold = Inventory.AddReason(ReasonKinds.Hold, "QA");
-        var onHold = await new ChangeLotStatusHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events, _f.Ids)
+        var onHold = await new ChangeLotStatusHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events, _f.Ids, _f.Time)
             .HandleAsync(new ChangeLotStatusCommand(held.LotId, held.Version, LotStatus.OnHold, hold.Id), CancellationToken.None);
         await Assert.ThrowsAsync<DomainRuleException>(() =>
             move.HandleAsync(new MoveLotCommand(held.LotId, onHold.Version, _silo.Id), CancellationToken.None));

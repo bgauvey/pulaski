@@ -36,14 +36,17 @@ public sealed record WriteOffLotCommand(
     Guid LotId, long ExpectedVersion, decimal? Quantity, Guid? UomId, Guid ReasonCodeId, string? Comment = null, DateTimeOffset? EffectiveAt = null)
     : ICommand<LotTransactionResponse>;
 
-/// <summary>Moves a lot to another location; a bulk balance moves <see cref="Quantity"/> of itself.</summary>
+/// <summary>
+/// Moves a lot to another location; a bulk balance moves <see cref="Quantity"/> of itself. Back-dated to <see cref="EffectiveAt"/> (D-076), a
+/// whole lot's move must be its latest movement, and a balance's transfer must fit both balances' stock then.
+/// </summary>
 public sealed record MoveLotCommand(
-    Guid LotId, long ExpectedVersion, Guid ToLocationId, decimal? Quantity = null, Guid? UomId = null, string? Comment = null)
+    Guid LotId, long ExpectedVersion, Guid ToLocationId, decimal? Quantity = null, Guid? UomId = null, string? Comment = null, DateTimeOffset? EffectiveAt = null)
     : ICommand<LotTransactionResponse>;
 
-/// <summary>Holds, quarantines (a hold reason is required) or releases a lot.</summary>
+/// <summary>Holds, quarantines (a hold reason is required) or releases a lot; back-dated (D-076), only as its latest movement.</summary>
 public sealed record ChangeLotStatusCommand(
-    Guid LotId, long ExpectedVersion, string Status, Guid? ReasonCodeId = null, string? Comment = null)
+    Guid LotId, long ExpectedVersion, string Status, Guid? ReasonCodeId = null, string? Comment = null, DateTimeOffset? EffectiveAt = null)
     : ICommand<LotTransactionResponse>;
 
 /// <summary>
@@ -328,14 +331,24 @@ internal sealed class MoveLotHandler(
         var lot = await InventoryRules.LotAsync(inventory, command.LotId, command.ExpectedVersion, cancellationToken);
         var to = await InventoryRules.LocationAsync(inventory, command.ToLocationId, lot.SiteId, cancellationToken);
         await InventoryRules.EnsureAcceptsAsync(inventory, to, lot.MaterialId, cancellationToken);
+        var now = timeProvider.GetUtcNow();
+        var effective = Backdating.EffectiveAt(command.EffectiveAt, now, comment);
+        var backdated = MovementTime.Backdated(effective, now);
+        if (backdated is not null && to.ComminglesLots)
+        {
+            throw new DomainRuleException($"Lots mix at {to.Code}, so a move there can't count from earlier: it joins the balance as it is now.");
+        }
 
         if (!lot.IsBulk)
         {
+            await Backdating.EnsureLatestAsync(inventory, lot, effective, now, "A move", cancellationToken);
             var (moved, movement) = lot.MoveTo(to.Id);
             var envelope = events.Create(
-                EventTypes.LotMoved, "lot", lot.Id, new { lot.LotNumber, FromLocationId = lot.LocationId, ToLocationId = to.Id, lot.Quantity, Comment = comment });
+                EventTypes.LotMoved, "lot", lot.Id,
+                new { lot.LotNumber, FromLocationId = lot.LocationId, ToLocationId = to.Id, lot.Quantity, EffectiveAt = backdated, Comment = comment });
             var version = await inventory.UpdateLotAsync(moved, envelope.OccurredAt, cancellationToken);
-            await inventory.InsertEventAsync(new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, Comment: comment), envelope.OccurredAt, cancellationToken);
+            await inventory.InsertEventAsync(new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, Comment: comment, EffectiveAt: backdated),
+                envelope.OccurredAt, cancellationToken);
             await eventLog.AppendAsync(envelope, cancellationToken);
 
             // Moved where lots mix, the lot joins the balance there (D-031).
@@ -362,6 +375,8 @@ internal sealed class MoveLotHandler(
 
         var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
         var quantity = await InventoryRules.ToBaseAsync(units, material, entered, command.UomId!.Value, cancellationToken);
+        await Backdating.EnsureUnchangedSinceAsync(inventory, lot, effective, now, cancellationToken);
+        await Backdating.EnsureFitsAsync(inventory, lot, -quantity, effective, now, material.BaseUomCode, cancellationToken);
         var (source, outgoing) = lot.TransferOut(quantity, to.Id, material.BaseUomCode);
         var (target, isNewTarget) = await Commingling.BalanceAsync(
             inventory, ids, lot.SiteId, lot.MaterialId, lot.UomId, to.Id, LotOrigin.Received, cancellationToken, lot.Status);
@@ -371,14 +386,20 @@ internal sealed class MoveLotHandler(
                 $"The balance at {to.Code} is {target.Status.Replace('_', ' ')} and this one is {lot.Status.Replace('_', ' ')}; stock moves between balances in the same status.");
         }
 
+        if (!isNewTarget)
+        {
+            await Backdating.EnsureUnchangedSinceAsync(inventory, target, effective, now, cancellationToken);
+            await Backdating.EnsureFitsAsync(inventory, target, quantity, effective, now, material.BaseUomCode, cancellationToken);
+        }
+
         var (destination, incoming) = target.TransferIn(quantity, lot.LocationId!.Value);
 
         var sent = events.Create(
             EventTypes.LotMoved, "lot", source.Id,
-            new { source.LotNumber, FromLocationId = lot.LocationId, ToLocationId = to.Id, Quantity = quantity, QuantityAfter = source.Quantity, ToLotId = destination.Id, Comment = comment });
+            new { source.LotNumber, FromLocationId = lot.LocationId, ToLocationId = to.Id, Quantity = quantity, QuantityAfter = source.Quantity, ToLotId = destination.Id, EffectiveAt = backdated, Comment = comment });
         var arrived = events.Create(
             EventTypes.LotMoved, "lot", destination.Id,
-            new { destination.LotNumber, FromLocationId = lot.LocationId, ToLocationId = to.Id, Quantity = quantity, QuantityAfter = destination.Quantity, FromLotId = source.Id, Comment = comment });
+            new { destination.LotNumber, FromLocationId = lot.LocationId, ToLocationId = to.Id, Quantity = quantity, QuantityAfter = destination.Quantity, FromLotId = source.Id, EffectiveAt = backdated, Comment = comment });
         var sourceVersion = await inventory.UpdateLotAsync(source, sent.OccurredAt, cancellationToken);
         if (isNewTarget)
         {
@@ -390,9 +411,9 @@ internal sealed class MoveLotHandler(
         }
 
         await inventory.InsertEventAsync(
-            new LotEventRow(ids.NewId(), source.Id, outgoing, lot.UomId, sent.ActorId, Comment: comment, RelatedLotId: destination.Id), sent.OccurredAt, cancellationToken);
+            new LotEventRow(ids.NewId(), source.Id, outgoing, lot.UomId, sent.ActorId, Comment: comment, RelatedLotId: destination.Id, EffectiveAt: backdated), sent.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
-            new LotEventRow(ids.NewId(), destination.Id, incoming, lot.UomId, arrived.ActorId, Comment: comment, RelatedLotId: source.Id), arrived.OccurredAt, cancellationToken);
+            new LotEventRow(ids.NewId(), destination.Id, incoming, lot.UomId, arrived.ActorId, Comment: comment, RelatedLotId: source.Id, EffectiveAt: backdated), arrived.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(sent, cancellationToken);
         await eventLog.AppendAsync(arrived, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -406,7 +427,8 @@ internal sealed class ChangeLotStatusHandler(
     IInventoryRepository inventory,
     IEventLog eventLog,
     IEventFactory events,
-    IIdGenerator ids) : ICommandHandler<ChangeLotStatusCommand, LotTransactionResponse>
+    IIdGenerator ids,
+    TimeProvider timeProvider) : ICommandHandler<ChangeLotStatusCommand, LotTransactionResponse>
 {
     public async Task<LotTransactionResponse> HandleAsync(ChangeLotStatusCommand command, CancellationToken cancellationToken)
     {
@@ -424,16 +446,20 @@ internal sealed class ChangeLotStatusHandler(
             ? await InventoryRules.ReasonAsync(inventory, reasonId, ReasonKinds.Hold, lot.SiteId, comment, cancellationToken)
             : null;
 
+        var now = timeProvider.GetUtcNow();
+        var effective = Backdating.EffectiveAt(command.EffectiveAt, now, comment);
+        var backdated = MovementTime.Backdated(effective, now);
+        await Backdating.EnsureLatestAsync(inventory, lot, effective, now, holding ? "A hold" : "A release", cancellationToken);
         var (after, movement) = lot.ChangeStatus(command.Status);
         var envelope = events.Create(
             EventTypes.LotStatusChanged,
             "lot",
             lot.Id,
-            new { lot.LotNumber, From = lot.Status, To = after.Status, ReasonCodeId = reason?.Id, Comment = comment },
+            new { lot.LotNumber, From = lot.Status, To = after.Status, ReasonCodeId = reason?.Id, EffectiveAt = backdated, Comment = comment },
             reason?.Code);
         var version = await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
-            new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, ReasonCodeId: reason?.Id, Comment: comment),
+            new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, ReasonCodeId: reason?.Id, Comment: comment, EffectiveAt: backdated),
             envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);

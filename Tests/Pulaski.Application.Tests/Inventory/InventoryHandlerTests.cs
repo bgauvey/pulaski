@@ -168,7 +168,7 @@ public class InventoryHandlerTests
     public async Task A_hold_needs_a_hold_reason_and_a_held_lot_cant_be_consumed()
     {
         var lot = (await Receive("R-1", 100m)).Value;
-        var status = new ChangeLotStatusHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events, _f.Ids);
+        var status = new ChangeLotStatusHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
 
         await Assert.ThrowsAsync<ValidationException>(() =>
             status.HandleAsync(new ChangeLotStatusCommand(lot.LotId, lot.Version, LotStatus.OnHold), CancellationToken.None));

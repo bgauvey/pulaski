@@ -7,18 +7,19 @@ using Pulaski.Domain.Inventory;
 
 namespace Pulaski.Application.Inventory;
 
-/// <summary>Splits part of a lot into a new lot (D-030); returns the new lot.</summary>
+/// <summary>Splits part of a lot into a new lot (D-030); returns the new lot. Back-dated (D-076), the new lot exists from then.</summary>
 public sealed record SplitLotCommand(
-    Guid LotId, long ExpectedVersion, decimal Quantity, Guid UomId, string? NewLotNumber = null, Guid? ToLocationId = null, string? Comment = null)
+    Guid LotId, long ExpectedVersion, decimal Quantity, Guid UomId, string? NewLotNumber = null, Guid? ToLocationId = null, string? Comment = null,
+    DateTimeOffset? EffectiveAt = null)
     : ICommand<LotTransactionResponse>;
 
-/// <summary>Merges the source lots into the target lot (D-030); returns the target.</summary>
-public sealed record MergeLotsCommand(Guid TargetLotId, long ExpectedVersion, IReadOnlyList<Guid> SourceLotIds, string? Comment = null)
+/// <summary>Merges the source lots into the target lot (D-030); returns the target. Back-dated (D-076), each emptied lot's latest movement.</summary>
+public sealed record MergeLotsCommand(Guid TargetLotId, long ExpectedVersion, IReadOnlyList<Guid> SourceLotIds, string? Comment = null, DateTimeOffset? EffectiveAt = null)
     : ICommand<LotTransactionResponse>;
 
-/// <summary>Ships quantity of an available lot out of the site; a null quantity ships it all.</summary>
+/// <summary>Ships quantity of an available lot out of the site; a null quantity ships it all. Back-dated (D-076), within the stock then.</summary>
 public sealed record ShipLotCommand(
-    Guid LotId, long ExpectedVersion, decimal? Quantity, Guid? UomId, string Reference, string? Comment = null)
+    Guid LotId, long ExpectedVersion, decimal? Quantity, Guid? UomId, string Reference, string? Comment = null, DateTimeOffset? EffectiveAt = null)
     : ICommand<LotTransactionResponse>;
 
 /// <summary>Corrects a lot's number, supplier lot and expiry, saying why.</summary>
@@ -65,6 +66,16 @@ internal sealed class SplitLotHandler(
             ?? lot.LocationId ?? throw new DomainRuleException($"{lot.Name} has no location; choose where the new lot goes.");
         var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
         var quantity = await InventoryRules.ToBaseAsync(units, material, command.Quantity, command.UomId, cancellationToken);
+        var now = timeProvider.GetUtcNow();
+        var effective = Backdating.EffectiveAt(command.EffectiveAt, now, comment);
+        var backdated = MovementTime.Backdated(effective, now);
+        if (backdated is not null && destination is { ComminglesLots: true })
+        {
+            throw new DomainRuleException($"Lots mix at {destination.Code}, so a split there can't count from earlier: the new lot joins the balance as it is now.");
+        }
+
+        await Backdating.EnsureUnchangedSinceAsync(inventory, lot, effective, now, cancellationToken);
+        await Backdating.EnsureFitsAsync(inventory, lot, -quantity, effective, now, material.BaseUomCode, cancellationToken);
 
         if (number is not null)
         {
@@ -86,18 +97,18 @@ internal sealed class SplitLotHandler(
         var (source, outgoing, part, incoming) = lot.Split(quantity, ids.NewId(), number, locationId, material.BaseUomCode);
         var sent = events.Create(
             EventTypes.LotSplit, "lot", source.Id,
-            new { source.LotNumber, NewLotId = part.Id, NewLotNumber = part.LotNumber, Quantity = quantity, QuantityAfter = source.Quantity, ToLocationId = locationId, Comment = comment });
+            new { source.LotNumber, NewLotId = part.Id, NewLotNumber = part.LotNumber, Quantity = quantity, QuantityAfter = source.Quantity, ToLocationId = locationId, EffectiveAt = backdated, Comment = comment });
         var made = events.Create(
             EventTypes.LotSplit, "lot", part.Id,
-            new { part.LotNumber, FromLotId = source.Id, FromLotNumber = source.LotNumber, Quantity = quantity, LocationId = locationId, Comment = comment });
+            new { part.LotNumber, FromLotId = source.Id, FromLotNumber = source.LotNumber, Quantity = quantity, LocationId = locationId, EffectiveAt = backdated, Comment = comment });
 
         await inventory.UpdateLotAsync(source, sent.OccurredAt, cancellationToken);
         var version = await inventory.InsertLotAsync(part, made.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
-            new LotEventRow(ids.NewId(), source.Id, outgoing, lot.UomId, sent.ActorId, Comment: comment, RelatedLotId: part.Id), sent.OccurredAt, cancellationToken);
+            new LotEventRow(ids.NewId(), source.Id, outgoing, lot.UomId, sent.ActorId, Comment: comment, RelatedLotId: part.Id, EffectiveAt: backdated), sent.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
-            new LotEventRow(ids.NewId(), part.Id, incoming, lot.UomId, made.ActorId, Comment: comment, RelatedLotId: source.Id), made.OccurredAt, cancellationToken);
-        await inventory.InsertGenealogyAsync([new GenealogyEdge(ids.NewId(), source.Id, part.Id, null, GenealogyEdge.Split)], made.OccurredAt, cancellationToken);
+            new LotEventRow(ids.NewId(), part.Id, incoming, lot.UomId, made.ActorId, Comment: comment, RelatedLotId: source.Id, EffectiveAt: backdated), made.OccurredAt, cancellationToken);
+        await inventory.InsertGenealogyAsync([new GenealogyEdge(ids.NewId(), source.Id, part.Id, null, GenealogyEdge.Split)], made.OccurredAt, cancellationToken, backdated);
 
         // A part of the lot is the same material: its certificates and attributes go with it (D-056).
         await inventory.CarryLotRecordsAsync(source.Id, part.Id, "split", withAttributes: true, made.ActorId, made.OccurredAt, cancellationToken);
@@ -108,7 +119,7 @@ internal sealed class SplitLotHandler(
         if (destination is { ComminglesLots: true })
         {
             var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(
-                inventory, eventLog, events, ids, part, destination.Code, comment, timeProvider.GetUtcNow(), cancellationToken);
+                inventory, eventLog, events, ids, part, destination.Code, comment, now, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return InventoryRules.Response(balance, balanceVersion, [note]);
         }
@@ -160,10 +171,25 @@ internal sealed class MergeLotsHandler(
 
         var target = targetRow.Lot;
         var now = timeProvider.GetUtcNow();
-        InventoryRules.EnsureNotExpired(target, now, "merged into");
+        var effective = Backdating.EffectiveAt(command.EffectiveAt, now, comment);
+        var backdated = MovementTime.Backdated(effective, now);
+        InventoryRules.EnsureNotExpired(target, effective, "merged into");
         foreach (var id in sources)
         {
-            InventoryRules.EnsureNotExpired(locked[id].Lot, now, "merged");
+            InventoryRules.EnsureNotExpired(locked[id].Lot, effective, "merged");
+        }
+
+        // Back-dated (D-076): each emptied lot's latest movement, and the target as it was then, with room for all of it.
+        if (backdated is not null)
+        {
+            var unitCode = (await InventoryRules.MaterialAsync(inventory, target.MaterialId, cancellationToken)).BaseUomCode;
+            foreach (var id in sources)
+            {
+                await Backdating.EnsureLatestAsync(inventory, locked[id].Lot, effective, now, "A merge", cancellationToken);
+            }
+
+            await Backdating.EnsureUnchangedSinceAsync(inventory, target, effective, now, cancellationToken);
+            await Backdating.EnsureFitsAsync(inventory, target, sources.Sum(id => locked[id].Lot.Quantity), effective, now, unitCode, cancellationToken);
         }
         var merged = new List<(Lot Source, LotMovement Out, LotMovement In)>();
         foreach (var source in sources.Select(id => locked[id].Lot).OrderBy(l => l.LotNumber, StringComparer.Ordinal))
@@ -177,21 +203,23 @@ internal sealed class MergeLotsHandler(
         {
             var envelope = events.Create(
                 EventTypes.LotMerged, "lot", source.Id,
-                new { source.LotNumber, IntoLotId = target.Id, IntoLotNumber = target.LotNumber, Quantity = -outgoing.QtyDelta!.Value, Comment = comment });
+                new { source.LotNumber, IntoLotId = target.Id, IntoLotNumber = target.LotNumber, Quantity = -outgoing.QtyDelta!.Value, EffectiveAt = backdated, Comment = comment });
             await inventory.UpdateLotAsync(source, envelope.OccurredAt, cancellationToken);
             await inventory.InsertEventAsync(
-                new LotEventRow(ids.NewId(), source.Id, outgoing, source.UomId, envelope.ActorId, Comment: comment, RelatedLotId: target.Id), envelope.OccurredAt, cancellationToken);
+                new LotEventRow(ids.NewId(), source.Id, outgoing, source.UomId, envelope.ActorId, Comment: comment, RelatedLotId: target.Id, EffectiveAt: backdated),
+                envelope.OccurredAt, cancellationToken);
             await inventory.InsertEventAsync(
-                new LotEventRow(ids.NewId(), target.Id, incoming, target.UomId, envelope.ActorId, Comment: comment, RelatedLotId: source.Id), envelope.OccurredAt, cancellationToken);
+                new LotEventRow(ids.NewId(), target.Id, incoming, target.UomId, envelope.ActorId, Comment: comment, RelatedLotId: source.Id, EffectiveAt: backdated),
+                envelope.OccurredAt, cancellationToken);
             await eventLog.AppendAsync(envelope, cancellationToken);
         }
 
         var summary = events.Create(
             EventTypes.LotMerged, "lot", target.Id,
-            new { target.LotNumber, FromLotIds = merged.Select(m => m.Source.Id), QuantityAfter = target.Quantity, target.ExpiresAt, Comment = comment });
+            new { target.LotNumber, FromLotIds = merged.Select(m => m.Source.Id), QuantityAfter = target.Quantity, target.ExpiresAt, EffectiveAt = backdated, Comment = comment });
         var version = await inventory.UpdateLotAsync(target, summary.OccurredAt, cancellationToken);
         await inventory.InsertGenealogyAsync(
-            [.. merged.Select(m => new GenealogyEdge(ids.NewId(), m.Source.Id, target.Id, null, GenealogyEdge.Merge))], summary.OccurredAt, cancellationToken);
+            [.. merged.Select(m => new GenealogyEdge(ids.NewId(), m.Source.Id, target.Id, null, GenealogyEdge.Merge))], summary.OccurredAt, cancellationToken, backdated);
 
         // The merged lot now holds what each lot was, so it carries their certificates; its own attributes stay (D-056).
         foreach (var (source, _, _) in merged)
@@ -227,7 +255,10 @@ internal sealed class ShipLotHandler(
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var lot = await InventoryRules.LotAsync(inventory, command.LotId, command.ExpectedVersion, cancellationToken);
-        InventoryRules.EnsureNotExpired(lot, timeProvider.GetUtcNow(), "shipped");
+        var now = timeProvider.GetUtcNow();
+        var effective = Backdating.EffectiveAt(command.EffectiveAt, now, comment);
+        var backdated = MovementTime.Backdated(effective, now);
+        InventoryRules.EnsureNotExpired(lot, effective, "shipped");
         var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
         var quantity = command.Quantity is { } entered
             ? await InventoryRules.ToBaseAsync(units, material, entered, command.UomId!.Value, cancellationToken)
@@ -237,13 +268,25 @@ internal sealed class ShipLotHandler(
             throw new DomainRuleException($"{lot.Name} is empty; there is nothing to ship.");
         }
 
+        // Shipping it all ends the lot, so then it must be its latest movement (D-076).
+        if (quantity == lot.Quantity && !lot.IsBulk)
+        {
+            await Backdating.EnsureLatestAsync(inventory, lot, effective, now, "Shipping all of it", cancellationToken);
+        }
+        else
+        {
+            await Backdating.EnsureUnchangedSinceAsync(inventory, lot, effective, now, cancellationToken);
+        }
+
+        await Backdating.EnsureFitsAsync(inventory, lot, -quantity, effective, now, material.BaseUomCode, cancellationToken);
         var (after, movement) = lot.Take(quantity, LotEventKind.Shipped, material.BaseUomCode);
         var envelope = events.Create(
             EventTypes.LotShipped, "lot", lot.Id,
-            new { lot.LotNumber, Reference = reference, Quantity = quantity, QuantityAfter = after.Quantity, LocationId = lot.LocationId, Comment = comment });
+            new { lot.LotNumber, Reference = reference, Quantity = quantity, QuantityAfter = after.Quantity, LocationId = lot.LocationId, EffectiveAt = backdated, Comment = comment });
         var version = await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
-            new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, Comment: comment, Reference: reference), envelope.OccurredAt, cancellationToken);
+            new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, Comment: comment, Reference: reference, EffectiveAt: backdated),
+            envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 

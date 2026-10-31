@@ -920,6 +920,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> ConvertReasonCodeAsync(Guid id, ConvertReasonCodeRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/reason-codes/{id}/group", request, ct);
 
+    /// <summary>A lot's quantity, location, container and status at a past time (#77).</summary>
+    public Task<LotStateAtDto> GetLotStateAtAsync(Guid lotId, DateTimeOffset at, CancellationToken ct = default) =>
+        GetAsync<LotStateAtDto>(Query($"api/lots/{lotId}/at", ("at", Iso(at))), ct);
+
     public Task<IReadOnlyList<StockOnDateDto>> StockOnDateAsync(Guid siteId, DateTimeOffset at, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<StockOnDateDto>>(Query("api/inventory/reports/stock-on-date", ("siteId", siteId), ("at", Iso(at))), ct);
 

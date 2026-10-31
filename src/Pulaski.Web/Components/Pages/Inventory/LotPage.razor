@@ -215,6 +215,31 @@
         </section>
     }
 
+    <section class="inv-section" aria-labelledby="asof-title">
+        <h2 id="asof-title">As it was</h2>
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+            <label class="small text-muted" for="lot-asof">On</label>
+            <input id="lot-asof" type="datetime-local" class="form-control form-control-sm w-auto" @bind="_asOf" />
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(_asOf is null || _asOfBusy)" @onclick="ShowAsOfAsync">Show</button>
+            <span class="small text-muted">Its quantity, place and status then, in the order its movements count (back-dated ones at their time).</span>
+        </div>
+        @if (_asOfState is { } then)
+        {
+            @if (!then.Existed)
+            {
+                <p class="small mb-0">It didn't exist yet on @Display.SiteTime(then.At, tz).</p>
+            }
+            else
+            {
+                <dl class="facts small mb-0">
+                    <dt>Quantity</dt><dd>@InventoryView.Qty(then.Quantity) @then.UomCode</dd>
+                    <dt>Where</dt><dd>@(then.LocationCode ?? "—")@(then.ContainerCode is { } container ? $" · in {container}" : "")</dd>
+                    <dt>Status</dt><dd><span class="@InventoryView.StatusChip(then.Status)">@Display.Label(then.Status)</span></dd>
+                </dl>
+            }
+        }
+    </section>
+
     <section class="inv-section" aria-labelledby="history-title">
         <h2 id="history-title">History</h2>
         <div class="table-panel">
@@ -306,6 +331,9 @@ else if (_error is null)
     public Guid LotId { get; set; }
 
     private LotDto? _lot;
+    private DateTime? _asOf;
+    private LotStateAtDto? _asOfState;
+    private bool _asOfBusy;
     private IReadOnlyList<TraceRow>? _trace;
     private bool _traceForward;
     private ApiException? _error;
@@ -346,6 +374,28 @@ else if (_error is null)
 
     // Only the latest movement, once, and only one that touched this lot alone (D-030).
     // The site the inventory screens show; lots belong to it (D-027, D-037).
+    private async Task ShowAsOfAsync()
+    {
+        if (Display.FromSiteLocal(_asOf, _lot?.SiteTimeZone) is not { } at)
+        {
+            return;
+        }
+
+        _asOfBusy = true;
+        try
+        {
+            _asOfState = await Api.GetLotStateAtAsync(LotId, at);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _asOfBusy = false;
+        }
+    }
+
     private bool May(LotAction action) => User.Can(LotActions.Permission(action), Sites.SiteId);
 
     private static bool CanReverse(LotDto lot, LotEventDto e) =>

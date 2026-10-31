@@ -234,6 +234,9 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal(1, result.Adjusted);
         var lot = await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(a.LotId));
         Assert.Equal((95m, LotEventKind.Scrapped, counted.Count.CountNumber), (lot.Lot.Quantity, lot.History[0].Kind, lot.History[0].Reference));
+
+        // The difference counts from when the lot was counted, not when the count was posted (#77).
+        Assert.True(lot.History[0].IsBackdated);
         var listed = await QueryAsync<ListStockCountsQuery, IReadOnlyList<StockCountSummaryDto>>(new ListStockCountsQuery(plant.Site));
         Assert.Equal(("posted", 2), (Assert.Single(listed).Status, listed[0].CountedLines));
 
@@ -428,6 +431,57 @@ public sealed class InventoryTests(DatabaseFixture db)
         var history = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId))).History;
         Assert.All(history, h => Assert.True(h.IsBackdated));
         Assert.Equal(15m, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId))).Lot.Quantity);
+    }
+
+    [Fact]
+    public async Task Moves_holds_splits_shipments_and_merges_count_from_earlier_and_a_lot_shows_where_and_how_it_was()
+    {
+        var plant = await CreatePlantAsync();
+        var hold = await ReasonAsync("hold", "QA-HOLD");
+        var now = DateTimeOffset.UtcNow;
+        DateTimeOffset Ago(double hours) => now.AddHours(-hours);
+        async Task<long> V(Guid lot) => await VersionAsync(lot);
+
+        // Received at the stores ten hours ago; moved to staging at six and held at four, both entered now; released now.
+        var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-PA-" + _suffix, 100m, plant.Kg, Comment: "Delivery", EffectiveAt: Ago(10)));
+        await db.SendAsync(new MoveLotCommand(a.LotId, await V(a.LotId), plant.Staging, Comment: "Moved on the night shift", EffectiveAt: Ago(6)));
+        await db.SendAsync(new ChangeLotStatusCommand(a.LotId, await V(a.LotId), LotStatus.OnHold, hold, "Lab call", Ago(4)));
+        await db.SendAsync(new ChangeLotStatusCommand(a.LotId, await V(a.LotId), LotStatus.Available, Comment: "Lab cleared it"));
+
+        // A move can count from earlier only as the lot's latest movement.
+        var refused = await Assert.ThrowsAsync<DomainRuleException>(async () =>
+            await db.SendAsync(new MoveLotCommand(a.LotId, await V(a.LotId), plant.Stores, Comment: "Back again", EffectiveAt: Ago(5))));
+        Assert.Contains("latest movement", refused.Message, StringComparison.Ordinal);
+
+        async Task<LotStateAtDto> At(Guid lot, DateTimeOffset at) => await QueryAsync<GetLotStateAtQuery, LotStateAtDto>(new GetLotStateAtQuery(lot, at));
+        var (early, moved, held) = (await At(a.LotId, Ago(8)), await At(a.LotId, Ago(5)), await At(a.LotId, Ago(3)));
+        Assert.Equal((plant.Stores, LotStatus.Available, 100m), (early.LocationId!.Value, early.Status, early.Quantity));
+        Assert.Equal((plant.Staging, LotStatus.Available), (moved.LocationId!.Value, moved.Status));
+        Assert.Equal(LotStatus.OnHold, held.Status);
+        Assert.False((await At(a.LotId, Ago(11))).Existed);
+
+        // Stock on a date: where it was, and what was on hold, then.
+        async Task<StockOnDateDto> Resin(DateTimeOffset at) =>
+            Assert.Single(await QueryAsync<StockOnDateQuery, IReadOnlyList<StockOnDateDto>>(new StockOnDateQuery(plant.Site, at)), r => r.MaterialId == plant.Resin);
+        Assert.Equal(plant.Staging, Assert.Single((await Resin(Ago(5))).Locations).LocationId);
+        Assert.Equal((100m, 100m), ((await Resin(Ago(3))).Quantity, (await Resin(Ago(3))).OnHoldQuantity));
+
+        // Another lot: 30 split off five hours ago, 20 shipped at four; a third lot merged into it at three, its latest movement.
+        var b = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-PB-" + _suffix, 100m, plant.Kg, Comment: "Delivery", EffectiveAt: Ago(10)));
+        var part = await db.SendAsync(new SplitLotCommand(b.LotId, await V(b.LotId), 30m, plant.Kg, null, plant.Staging, "Split for line 2", Ago(5)));
+        Assert.False((await At(part.LotId, Ago(6))).Existed);
+        Assert.Equal((true, 30m, plant.Staging), ((await At(part.LotId, Ago(4))).Existed, (await At(part.LotId, Ago(4))).Quantity, (await At(part.LotId, Ago(4))).LocationId!.Value));
+        await Assert.ThrowsAsync<DomainRuleException>(async () =>
+            await db.SendAsync(new ShipLotCommand(b.LotId, await V(b.LotId), 80m, plant.Kg, "SO-1", "Too much then", Ago(4))));
+        await db.SendAsync(new ShipLotCommand(b.LotId, await V(b.LotId), 20m, plant.Kg, "SO-2", "Picked earlier", Ago(4)));
+        var c = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-PC-" + _suffix, 10m, plant.Kg, Comment: "Delivery", EffectiveAt: Ago(9)));
+        await db.SendAsync(new MergeLotsCommand(b.LotId, await V(b.LotId), [c.LotId], "Tipped together", Ago(3)));
+        Assert.Equal((50m, 60m), ((await At(b.LotId, Ago(3.5))).Quantity, (await At(b.LotId, Ago(2))).Quantity));
+        Assert.Equal(LotStatus.Consumed, (await At(c.LotId, Ago(2))).Status);
+
+        // Lot A's status changed after two hours ago, so it can't be split as of then.
+        await Assert.ThrowsAsync<DomainRuleException>(async () =>
+            await db.SendAsync(new SplitLotCommand(a.LotId, await V(a.LotId), 10m, plant.Kg, null, null, "Before the release", Ago(2))));
     }
 
     private async Task VersionThenAsync(Func<long, WriteOffLotCommand> command) =>

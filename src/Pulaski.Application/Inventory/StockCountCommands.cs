@@ -152,8 +152,11 @@ internal sealed class PostStockCountHandler(
                 new { lot.LotNumber, CountId = count.Id, CountNumber = count.Number, Counted = adjustment.Line.CountedQty, adjustment.Variance, QuantityAfter = after.Quantity, ReasonCodeId = reason.Id, Comment = comment },
                 reason.Code);
             await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
+            // A count's difference counts from when the lot was counted (#77): the lot hasn't changed since, so its quantity then is its quantity now.
+            var countedAt = adjustment.Line.CountedAt is { } at && at < envelope.OccurredAt ? at : (DateTimeOffset?)null;
             await inventory.InsertEventAsync(
-                new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, ReasonCodeId: reason.Id, Comment: comment, Reference: count.Number),
+                new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, ReasonCodeId: reason.Id, Comment: comment, Reference: count.Number,
+                    EffectiveAt: countedAt),
                 envelope.OccurredAt, cancellationToken);
             await eventLog.AppendAsync(envelope, cancellationToken);
         }

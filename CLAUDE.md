@@ -204,7 +204,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `lot_genealogy.effective_at`. Stock at T = sum of `qty_delta` with `effective_at <= T`, never `qty_after`. Receipt, consumption,
   production, write-up and write-off take `EffectiveAt` (`Backdating.EffectiveAt` / `EnsureFitsAsync`: ≤ 31 days, comment, not before the
   lot's stock or a posted count, never negative in effective order); run and expiry at the effective time; endpoints add
-  `RequireToBackdate` (`inventory.backdate`). Reversals keep the original's effective time.
+  `RequireToBackdate` (`inventory.backdate`). Reversals keep the original's effective time. D-076: moves/holds/releases back-date only as the
+  lot's latest movement (`EnsureLatestAsync`), splits/shipments/merges only if unchanged since (`EnsureUnchangedSinceAsync`); counts at the line's
+  `counted_at`; `LotPastState` works a lot's state at T back from now (`GET /lots/{id}/at`, Stock on a date by location and on hold).
 - Shortages (D-058, proposed): live timing by default (each line projected via `TimelineMapping.Project`, `TimeSource` per line);
   `core.expected_receipt` (screen + idempotent ERP import by system/key; receiving with `ExpectedReceiptId` closes it) counted by
   `ShortageCalculator` after stock, only when due by a job's time (past times count as now). Not MRP.

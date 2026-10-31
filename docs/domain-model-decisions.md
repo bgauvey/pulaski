@@ -1195,7 +1195,7 @@ Issue #35. Movements counted when they were entered (D-027), so a receipt or con
 
 **Screens.** The lot drawer shows **Counts from** for those five movements to whoever may back-date. The lot history lists a back-dated row at its effective time with the record time beneath. The journal lists rows by record time (its range and cursor are record time, as before) with *counts from*, and its export has both columns. Genealogy links show *since …* and *(back-dated)*.
 
-**Not yet.** Back-dating moves, holds, splits, merges and shipments; reconstructing location and status on a past date; a site-set window (31 days is fixed).
+**Not yet.** A site-set window (31 days is fixed). Moves, holds, splits, merges and shipments, and a lot's state on a past date, came with D-076.
 
 ## Shortages with the live schedule and incoming supply (D-058, proposed)
 
@@ -1701,6 +1701,37 @@ from the material's size (`OrderBatchHint`).
 the response's note says how much the order is short. Less than a batch left is refused (nothing to replace). It needs only `schedule.plan`;
 `ReplaceExact` and `RoundDown` together are refused. The schedule drawer offers round up (default), round down, and exact (with
 `schedule.plan_partial`), and shows the server's note in its message.
+
+## Back-dating every movement; a lot's state on a past date (D-076, proposed)
+
+Issue #77. Only quantity movements could be back-dated (D-057), and a lot's location and status on a past date weren't reconstructed.
+
+**A lot's state at a time** (`LotPastState`, domain, pure). Quantity, location and status are worked back from the lot as it is now, undoing
+every movement that counts after the time, latest first, in effective order (record order breaks ties): quantity less `qty_delta`; status
+back to `from_status` where a row changed it (`from_status` and `to_status` set); location back to `from_location` where the row moved the
+whole lot (no quantity, both locations set: a move or a pack with its container). Rows with a quantity name locations but never move the lot (a
+transfer between balances, a split, a receipt, a take). The container is replayed forward, since emptying a lot clears it with no record. The
+lot existed when a movement counts by then. Because it is the journal replayed, the state at any time agrees with it.
+
+**Back-dating the other movements** (same 31 days, comment and `inventory.backdate`; the endpoints add `RequireToBackdate`):
+- *Move, hold, release* (`Backdating.EnsureLatestAsync`): the lot had stock then, and nothing else counts after the movement, because later
+  rows name where the lot was and consumption needs it available. A move into a location where lots mix isn't back-dated.
+- *Split, shipment* (`EnsureUnchangedSinceAsync` + `EnsureFitsAsync`): the lot's status and location haven't changed since, and the stock then
+  allows it; shipping all of a non-balance lot ends it, so it must be the latest movement. A split's new lot and its genealogy count from
+  then; a split to where lots mix isn't back-dated.
+- *Merge*: each lot taken in has nothing after it (it is emptied then), and the target is unchanged since and has room for all of it. Expiry is
+  checked at the effective time.
+- *Transfer between balances*: both balances unchanged since, and the stock fits on both sides.
+- *Counts* aren't back-dated by hand: each difference counts from its line's `counted_at` (the lot hasn't changed since, or posting refuses
+  it, so its quantity then is its quantity now). A posted count blocks back-dating before that line's `counted_at` (was the posting time).
+
+**Reading.** `GET /api/lots/{id}/at?at=` (`GetLotStateAtQuery`, `inventory.view`): existed, quantity, location, container, status. Stock on a
+date (`StockOnDateQuery`) works out each lot that existed then from its movements after the time (`ListPastLotsAsync`), and adds where it
+was (`Locations`) and what was on hold or in quarantine (`OnHoldQuantity`, also per location). Record time stays the partition key; nothing
+is stored or changed for this.
+
+**Screens.** The lot drawer offers **Counts from** for the new movements, with a note of each one's rule. The lot page has **As it was**.
+Stock on a date shows on hold and where, and exports a row per material and location.
 
 ## Application architecture
 

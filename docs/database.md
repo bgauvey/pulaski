@@ -1223,7 +1223,7 @@ Starting a count snapshots the location's on-hand lots into `core.stock_count_li
 | `lot_id` | uuid → lot | no | The lot (or balance) counted. |
 | `expected_qty` | qty | no | What the lot held when the count started. |
 | `counted_qty` | qty | yes | What was counted, in the lot's unit; null until counted. Zero or more. |
-| `counted_at`, `counted_by` | timestamptz, text | yes | When and by whom; set exactly when `counted_qty` is. Posting refuses a lot changed after this time. |
+| `counted_at`, `counted_by` | timestamptz, text | yes | When and by whom; set exactly when `counted_qty` is. Posting refuses a lot changed after this time; the difference it posts counts from this time (#77), and no movement may be back-dated before it once posted. |
 
 ## 10. Labor
 
@@ -1510,7 +1510,7 @@ One row for every job status change, written in the same transaction as the chan
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key with `occurred_at`. |
 | `occurred_at` | timestamptz | no | When it was recorded. Partition key. |
-| `effective_at` | timestamptz | no | When it counts in stock (D-057): `occurred_at`, or up to 31 days earlier for a back-dated receipt, consumption, production, write-up or write-off; a reversal counts when the movement it undoes did. Indexed with `lot_id`. |
+| `effective_at` | timestamptz | no | When it counts in stock (D-057, D-076): `occurred_at`, or up to 31 days earlier for any back-dated movement but a correction, packing or reversal; a count's difference counts from when the lot was counted; a reversal counts when the movement it undoes did. A lot's state at a time is worked out from these in this order. Indexed with `lot_id`. |
 | `lot_id` | uuid → lot | no | The lot. |
 | `event_kind` | text | no | `created`, `received`, `moved`, `loaded`, `consumed`, `produced`, `split`, `merged`, `status_changed`, `adjusted`, `scrapped` or `shipped`. In use: `received`, `produced`, `adjusted` (write-up), `scrapped` (write-off), `consumed`, `moved`, `status_changed`, and (D-030) `split`, `merged`, `shipped`, `corrected` (details changed; no quantity) and `reversed`, and (D-059) `packed` and `unpacked`. A count posts `adjusted` and `scrapped` rows. |
 | `qty_delta` | qty | yes | Quantity change: positive in, negative out; null for a whole-lot move or a status change. |

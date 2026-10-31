@@ -107,8 +107,17 @@ public interface IInventoryReadStore
     /// <summary>Every reason, active or not, enterprise-wide and for the site (or every site when null).</summary>
     Task<IReadOnlyList<ReasonCodeAdminDto>> ListAllReasonCodesAsync(Guid? siteId, CancellationToken cancellationToken);
 
-    /// <summary>Each material's on-hand quantity at <paramref name="at"/>, from each lot's latest movement before it.</summary>
-    Task<IReadOnlyList<StockOnDateDto>> StockOnDateAsync(Guid siteId, DateTimeOffset at, CancellationToken cancellationToken);
+    /// <summary>
+    /// The site's lots that existed at <paramref name="at"/> (a movement counting by then), each as it is now with its movements counting after
+    /// it (#77): enough to work out its quantity, location and status then.
+    /// </summary>
+    Task<IReadOnlyList<PastLotRow>> ListPastLotsAsync(Guid siteId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>One lot as it is now with every movement, to work out its state at a time (#77); null when it doesn't exist.</summary>
+    Task<LotPastSource?> GetLotPastAsync(Guid lotId, CancellationToken cancellationToken);
+
+    /// <summary>Codes of locations and containers, by id, for the ids given.</summary>
+    Task<IReadOnlyDictionary<Guid, string>> ListCodesAsync(IReadOnlyCollection<Guid> locationOrContainerIds, CancellationToken cancellationToken);
 
     /// <summary>Each material's on-hand stock by the age of its lots at <paramref name="now"/>.</summary>
     Task<IReadOnlyList<AgingRowDto>> AgingAsync(Guid siteId, DateTimeOffset now, CancellationToken cancellationToken);
@@ -305,7 +314,10 @@ public interface IInventoryRepository
     /// <summary>The lot's quantity movements in the order they count: by effective time, then record time (D-057).</summary>
     Task<IReadOnlyList<QuantityPoint>> ListQuantityTimelineAsync(Guid lotId, CancellationToken cancellationToken);
 
-    /// <summary>When the latest posted stock count that counted the lot was posted; null when none did.</summary>
+    /// <summary>The lot's movements as its state at a past time is worked out from (#77), in the command's transaction.</summary>
+    Task<IReadOnlyList<PastEvent>> ListPastEventsAsync(Guid lotId, CancellationToken cancellationToken);
+
+    /// <summary>When the lot was counted in the latest posted stock count that counted it (its line's counted time, #77); null when none did.</summary>
     Task<DateTimeOffset?> LatestCountOfLotAsync(Guid lotId, CancellationToken cancellationToken);
 
     /// <summary>
@@ -472,3 +484,10 @@ public static class ReasonKinds
     public const string RunEnd = "run_end";
     public const string Utilization = "utilization";
 }
+
+/// <summary>A lot as Stock on a date works its past out from (#77): what it is now, with its movements counting after the time.</summary>
+public sealed record PastLotRow(
+    Guid LotId, Guid MaterialId, string MaterialCode, string MaterialName, string? MaterialClassName, string UomCode, LotNow Now, IReadOnlyList<PastEvent> EventsAfter);
+
+/// <summary>A lot with every movement, for its state at a time (#77).</summary>
+public sealed record LotPastSource(Guid LotId, Guid SiteId, string UomCode, LotNow Now, IReadOnlyList<PastEvent> Events);

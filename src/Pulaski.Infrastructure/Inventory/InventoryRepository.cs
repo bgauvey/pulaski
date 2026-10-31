@@ -205,12 +205,20 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         ORDER BY e.effective_at, e.occurred_at, e.id
         """;
 
+    // The time the lot was counted: a posted count fixed its quantity then, and its difference counts from then (#77).
     private const string LatestCountOfLot = """
-        SELECT c.posted_at
+        SELECT x.counted_at
         FROM core.stock_count c JOIN core.stock_count_line x ON x.stock_count_id = c.id
         WHERE x.lot_id = @LotId AND c.status = 'posted'
-        ORDER BY c.posted_at DESC
+        ORDER BY x.counted_at DESC
         LIMIT 1
+        """;
+
+    private const string PastEvents = """
+        SELECT id, effective_at, occurred_at, event_kind AS kind, qty_delta, from_location_id, to_location_id, from_status, to_status, container_id
+        FROM ts.lot_event
+        WHERE lot_id = @LotId
+        ORDER BY effective_at, occurred_at
         """;
 
     private const string OnHandAt = $"""
@@ -401,6 +409,9 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     public Task<DateTimeOffset?> LatestCountOfLotAsync(Guid lotId, CancellationToken cancellationToken) =>
         session.QuerySingleOrDefaultAsync<DateTimeOffset?>(LatestCountOfLot, new { LotId = lotId }, cancellationToken);
+
+    public async Task<IReadOnlyList<PastEvent>> ListPastEventsAsync(Guid lotId, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<PastEventRow>(PastEvents, new { LotId = lotId }, cancellationToken)).Select(r => r.ToDomain())];
 
     public async Task CarryLotRecordsAsync(Guid fromLotId, Guid toLotId, string via, bool withAttributes, string actor, DateTimeOffset at, CancellationToken cancellationToken)
     {
@@ -699,5 +710,21 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
             ReasonCodeId = ReasonCodeId,
             ReversedBy = ReversedBy,
         };
+    }
+
+    internal sealed class PastEventRow
+    {
+        public Guid Id { get; init; }
+        public DateTimeOffset EffectiveAt { get; init; }
+        public DateTimeOffset OccurredAt { get; init; }
+        public string Kind { get; init; } = "";
+        public decimal? QtyDelta { get; init; }
+        public Guid? FromLocationId { get; init; }
+        public Guid? ToLocationId { get; init; }
+        public string? FromStatus { get; init; }
+        public string? ToStatus { get; init; }
+        public Guid? ContainerId { get; init; }
+
+        public PastEvent ToDomain() => new(Id, EffectiveAt, OccurredAt, Kind, QtyDelta, FromLocationId, ToLocationId, FromStatus, ToStatus, ContainerId);
     }
 }

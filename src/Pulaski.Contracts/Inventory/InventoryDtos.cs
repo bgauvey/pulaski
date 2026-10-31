@@ -558,6 +558,30 @@ public sealed record StockOnDateDto
     public required string UomCode { get; init; }
     public decimal Quantity { get; init; }
     public int LotCount { get; init; }
+
+    /// <summary>Of <see cref="Quantity"/>, what was on hold or in quarantine then (#77).</summary>
+    public decimal OnHoldQuantity { get; init; }
+
+    /// <summary>Where it was then, by location (#77).</summary>
+    public IReadOnlyList<StockAtLocationDto> Locations { get; init; } = [];
+}
+
+/// <summary>A material's quantity at one location on the date, and of it what was on hold or in quarantine.</summary>
+public sealed record StockAtLocationDto(Guid? LocationId, string LocationCode, decimal Quantity, decimal OnHoldQuantity = 0m);
+
+/// <summary>A lot as it was at a time (#77, D-076): whether it existed yet, and its quantity, location, container and status then.</summary>
+public sealed record LotStateAtDto
+{
+    public required Guid LotId { get; init; }
+    public DateTimeOffset At { get; init; }
+    public bool Existed { get; init; }
+    public decimal Quantity { get; init; }
+    public string UomCode { get; init; } = "";
+    public Guid? LocationId { get; init; }
+    public string? LocationCode { get; init; }
+    public string Status { get; init; } = "";
+    public Guid? ContainerId { get; init; }
+    public string? ContainerCode { get; init; }
 }
 
 /// <summary>A material's on-hand stock by how long ago each lot was received or made.</summary>

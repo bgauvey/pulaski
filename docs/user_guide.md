@@ -958,6 +958,8 @@ The lot page shows its facts (status, quantity, location, where it came from, su
 
 Some reasons ask for a comment; the form says *(required)* when they do.
 
+**As it was.** Under **As it was**, choose a date and time and click **Show** to see the lot then: its quantity, where it was (and in which container), and its status. A lot that didn't exist yet says so. It is worked out from the history in the order movements count, so back-dated movements are in their place and it agrees with the journal.
+
 ### Reverse a movement or a declaration
 
 Something recorded wrongly is put right by reversing it, then recording what really happened. A reversal is a new movement that undoes the old one; the old one stays in the history, marked as reversed, with who reversed it, the reason and the comment.
@@ -1128,9 +1130,9 @@ A **count** checks what is really at a location and puts the records right.
 
 ### Back-date a movement
 
-When a receipt, consumption, production, write-up or write-off is entered late, it can count from when it really happened.
+When a movement is entered late, it can count from when it really happened: a receipt, consumption, production, write-up or write-off, and a move, hold, release, split, merge or shipment.
 
-1. Open the movement as usual (**Receive**, **Consume**, **Write up**, **Write off**, or production on the Jobs tab).
+1. Open the movement as usual (**Receive**, **Consume**, **Write up**, **Write off**, **Move**, **Hold**, **Release**, **Split**, **Merge**, **Ship**, or production on the Jobs tab).
 2. Fill in **Counts from** with the date and time it happened, in the site's time zone. The field shows only if you may back-date.
 3. Write a **comment** saying why it is late (required), and save.
 
@@ -1142,13 +1144,17 @@ When a receipt, consumption, production, write-up or write-off is entered late, 
 - **Expiry** is checked when the movement counts: a lot that was in date then can be consumed then, even if it has expired since. A back-dated receipt's or production's expiry runs from when it counts.
 - **Both times are kept.** The lot's history lists a back-dated movement at the time it counts, with *recorded …* beneath it; the journal lists it when it was recorded, with *counts from …*, and its export has both. Genealogy links made by back-dated consumption or production show *since …* with *(back-dated)*. The event log records it now, with `EffectiveAt` in its data.
 - **Reversing** a back-dated movement undoes it at the time it counted, so every past date comes out as if it had never happened.
-- **Only quantity movements** can be back-dated: moves, holds, splits, merges, shipments and counts always count when they are recorded.
+- **Moves, holds and releases** can count from earlier only as the lot's latest movement: nothing else may count after them, since what happened later says where the lot was and what status it had (Pulaski names the movement in the way). A move to where lots mix can't be back-dated, because the lot joins the balance as it is now.
+- **Splits and shipments** can count from earlier only if the lot's status and location haven't changed since, and within the stock it had then; shipping all of a lot ends it, so then it must be its latest movement too. A split's new lot exists from then.
+- **Merges** can count from earlier only if each lot taken in has nothing counting after it, and the lot they go into hasn't changed status or location since.
+- **Counts** aren't back-dated by hand: each difference a count posts counts from when that lot was counted, since it hasn't changed since (the count refuses a lot that has).
+- **Corrections, packing and reversals** always count when they are recorded (a reversal at the time of what it undoes).
 
 ### Reports and exports
 
 **Inventory → Reports** has two reports:
 
-- **Stock on a date:** each material's on-hand quantity at the end of the day you choose. It adds up every movement that counts by then, including [back-dated](#back-date-a-movement) ones entered later, so a past date can change after a correction, and gives the same answer whatever order movements were entered in. Older dates take longer. Held stock is included: a lot's status at that time isn't reconstructed.
+- **Stock on a date:** each material's on-hand quantity at the end of the day you choose, **where** it was then (by location) and how much of it was **on hold** or in quarantine then. Each lot is worked out as it was, from every movement that counts by then, including [back-dated](#back-date-a-movement) ones entered later, so a past date can change after a correction, gives the same answer whatever order movements were entered in, and agrees with the journal. Older dates take longer. The export has a row per material and location.
 - **Aging:** on-hand stock by how long ago each lot was received or made (from when its first movement counts, so a back-dated receipt ages from its real day): up to 30 days, 31–90, 91–180 and over 180 (in amber). Balances of materials that aren't lot-tracked aren't aged, and a split lot counts from the day it was split.
 
 **Export CSV** downloads a spreadsheet file from the **Stock** tab (what is on screen, with its filters), the **Lots** tab (every matching lot, up to 10,000), the **Journal** (every matching movement, up to 10,000) and both reports. Lot search shows 200 at a time: click **Show more** for the next.
@@ -2209,7 +2215,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
-- **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, and scanning 2D codes or supplier barcodes beyond reading their text. Moves, holds, splits, merges, shipments and counts can't be back-dated (only quantity movements can, by up to 31 days), and a lot's location and status on a past date aren't reconstructed. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
+- **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, and scanning 2D codes or supplier barcodes beyond reading their text. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
 - **Reversing:** moves, holds and shipments only when they are the lot's latest movement; corrections of lot details, packing and unpacking aren't reversed (put them right with another movement). A lot that joined a balance where lots mix can't be taken back out as itself. Reversal is one movement at a time: there is no undoing a chain of dependent movements in one step.
 - **Genealogy through a silo is an estimate** from the declared movements: a level tag can be bound to a silo, but its readings aren't used yet to confirm when it was empty or how it flowed. A reversed movement and its reversal are left out of the estimate, as if neither happened.
 - **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
