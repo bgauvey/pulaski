@@ -3,13 +3,20 @@ using Pulaski.Infrastructure.Persistence;
 
 namespace Pulaski.Infrastructure.Materials;
 
-/// <summary>Lines' own batch sizes (D-065), from the capability in effect, in the command's transaction.</summary>
+/// <summary>Lines' own batch sizes (D-065) and tolerances (#85), from the capability in effect, in the command's transaction.</summary>
 internal sealed class LineBatchSizes(DbSession session) : ILineBatchSizes
 {
     private const string Sizes = """
         SELECT c.equipment_id, c.batch_size
         FROM core.equipment_capability c
         WHERE c.material_id = @MaterialId AND c.equipment_id = ANY(@Ids) AND c.batch_size IS NOT NULL
+          AND c.effective_from <= @At AND (c.effective_to IS NULL OR c.effective_to > @At)
+        """;
+
+    private const string Tolerances = """
+        SELECT c.equipment_id, c.batch_tolerance_pct
+        FROM core.equipment_capability c
+        WHERE c.material_id = @MaterialId AND c.equipment_id = ANY(@Ids) AND c.batch_tolerance_pct IS NOT NULL
           AND c.effective_from <= @At AND (c.effective_to IS NULL OR c.effective_to > @At)
         """;
 
@@ -23,6 +30,24 @@ internal sealed class LineBatchSizes(DbSession session) : ILineBatchSizes
 
         var rows = await session.QueryAsync<Row>(Sizes, new { MaterialId = materialId, Ids = equipmentIds.ToArray(), At = at }, cancellationToken);
         return rows.ToDictionary(r => r.EquipmentId, r => r.BatchSize);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, decimal>> GetTolerancesAsync(
+        Guid materialId, IReadOnlyCollection<Guid> equipmentIds, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        if (equipmentIds.Count == 0)
+        {
+            return new Dictionary<Guid, decimal>();
+        }
+
+        var rows = await session.QueryAsync<ToleranceRow>(Tolerances, new { MaterialId = materialId, Ids = equipmentIds.ToArray(), At = at }, cancellationToken);
+        return rows.ToDictionary(r => r.EquipmentId, r => r.BatchTolerancePct);
+    }
+
+    private sealed class ToleranceRow
+    {
+        public Guid EquipmentId { get; init; }
+        public decimal BatchTolerancePct { get; init; }
     }
 
     private sealed class Row

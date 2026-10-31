@@ -134,6 +134,60 @@ public class LineBatchSizeHandlerTests : SchedulingHandlerTestBase
     }
 }
 
+/// <summary>Replacing a job with only the whole batches left, leaving the order short (#85).</summary>
+public class RoundDownReplacementHandlerTests : SchedulingHandlerTestBase
+{
+    public RoundDownReplacementHandlerTests() => F.Stores.Boms.AddMaterial(White, Metre, batchSize: 50m);
+
+    private CancelJobHandler Cancel() => new(
+        F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Processes, F.Stores.Boms, F.Stores.Units, F.Stores.Events, F.Events, F.Ids, F.Time,
+        F.Stores.LineBatchSizes);
+
+    private async Task<global::Pulaski.Domain.Scheduling.Job> StartedAsync(SchedulingLine line, decimal planned, decimal made)
+    {
+        var wo = await WorkOrderAsync(White, WorkOrderStatus.InProgress);
+        var job = F.Stores.Scheduling.AddJob(global::Pulaski.Domain.Scheduling.Job.CreateProduction(
+            Guid.CreateVersion7(), Site, wo.Id, "J-" + Guid.NewGuid().ToString("N")[..4], line.Id, White, planned, Metre, 1m, null) with
+        { Status = JobStatus.Running });
+        F.Stores.Scheduling.SetGoodQty(job.Id, made);
+        return job;
+    }
+
+    [Fact]
+    public async Task What_is_left_is_rounded_down_to_whole_batches_of_the_lines_size_and_says_the_order_is_short()
+    {
+        var line = Line();
+        var job = await StartedAsync(line, planned: 200m, made: 75m);
+
+        var result = await Cancel().HandleAsync(new CancelJobCommand(job.Id, Version(job.Id), "Line down", Replace: true, RoundDown: true), CancellationToken.None);
+
+        // 125 left: two batches of 50, 25 short.
+        var replacement = F.Stores.Scheduling.FindJob(result.ReplacementJobId!.Value)!.Value;
+        Assert.Equal((100m, false), (replacement.PlannedQty, replacement.PartialBatchPlanned));
+        Assert.Contains("short 25", result.Note, StringComparison.Ordinal);
+
+        // On a line of 200 kg batches, 250 left is one batch of 200.
+        var big = Line();
+        F.Stores.LineBatchSizes.Sizes[(big.Id, White)] = 200m;
+        var bigJob = await StartedAsync(big, planned: 400m, made: 150m);
+        var bigResult = await Cancel().HandleAsync(new CancelJobCommand(bigJob.Id, Version(bigJob.Id), null, Replace: true, RoundDown: true), CancellationToken.None);
+        Assert.Equal(200m, F.Stores.Scheduling.FindJob(bigResult.ReplacementJobId!.Value)!.Value.PlannedQty);
+    }
+
+    [Fact]
+    public async Task Less_than_a_batch_left_or_asking_for_exact_too_is_refused()
+    {
+        var line = Line();
+        var job = await StartedAsync(line, planned: 100m, made: 75m);
+
+        var ex = await Assert.ThrowsAsync<DomainRuleException>(() =>
+            Cancel().HandleAsync(new CancelJobCommand(job.Id, Version(job.Id), null, Replace: true, RoundDown: true), CancellationToken.None));
+        Assert.Contains("Less than a batch", ex.Message, StringComparison.Ordinal);
+        await Assert.ThrowsAsync<Errors.ValidationException>(() =>
+            Cancel().HandleAsync(new CancelJobCommand(job.Id, Version(job.Id), null, Replace: true, ReplaceExact: true, RoundDown: true), CancellationToken.None));
+    }
+}
+
 /// <summary>Setting a material's batching (D-036).</summary>
 public class SetBatchingHandlerTests
 {

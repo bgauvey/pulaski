@@ -510,6 +510,7 @@ CREATE TABLE core.equipment_capability (
     standard_crew_size      numeric(6,2),
     is_preferred            boolean NOT NULL DEFAULT false,
     batch_size              core.qty CHECK (batch_size > 0),    -- this line's batch size in the material's base unit (D-065); null: the material's
+    batch_tolerance_pct     numeric(5,2) CHECK (batch_tolerance_pct >= 0 AND batch_tolerance_pct <= 50),  -- this line's batch tolerance (#85); null: the material's
     effective_from          timestamptz NOT NULL,
     effective_to            timestamptz,
     CONSTRAINT capability_no_overlap EXCLUDE USING gist (
@@ -2185,7 +2186,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0040_reason_group_rollups'),
     ('0041_oee_rollups'),
     ('0042_oee_targets'),
-    ('0043_changeover_rules');
+    ('0043_changeover_rules'),
+    ('0044_line_batch_tolerance');
 
 -- =====================================================================
 -- 17. SEED DATA

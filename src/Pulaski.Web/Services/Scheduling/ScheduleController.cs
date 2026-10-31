@@ -309,11 +309,20 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
         return Task.CompletedTask;
     }
 
-    public Task CancelJobAsync(BoardItem item, bool replace, string? reason, bool exact = false) =>
+    public Task CancelJobAsync(BoardItem item, bool replace, string? reason, bool exact = false, bool roundDown = false) =>
         RunAsync(
             item.Key,
-            replace ? $"{item.Segment.JobNumber} cancelled and replaced for {(exact ? "exactly" : "")} the rest of its quantity." : $"{item.Segment.JobNumber} cancelled.",
-            () => api.CancelJobAsync(item.JobId, new CancelJobRequest { Version = item.Segment.Version ?? 0, Replace = replace, ReplaceExact = exact, Reason = reason }));
+            !replace ? $"{item.Segment.JobNumber} cancelled."
+                : roundDown ? $"{item.Segment.JobNumber} cancelled and replaced for the whole batches left; the order may end short."
+                : $"{item.Segment.JobNumber} cancelled and replaced for {(exact ? "exactly " : "")}the rest of its quantity.",
+            async () => (await api.CancelJobAsync(item.JobId, new CancelJobRequest
+            {
+                Version = item.Segment.Version ?? 0,
+                Replace = replace,
+                ReplaceExact = exact,
+                RoundDown = roundDown,
+                Reason = reason,
+            })).Note);
 
     /// <summary>
     /// What placing the order's unplaced quantity on a line would do, projected by the API and
@@ -403,7 +412,15 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
     public bool ExpireToasts() => _toasts.RemoveAll(t => t.Expires <= Now) > 0;
 
     /// <summary>Sends one edit, then re-reads the board whatever happened: after a conflict the planner needs the current state.</summary>
-    private async Task RunAsync(string key, string success, Func<Task> send, bool orders = false)
+    private Task RunAsync(string key, string success, Func<Task> send, bool orders = false) =>
+        RunAsync(key, success, async () =>
+        {
+            await send();
+            return null;
+        }, orders);
+
+    // The server's note, when it sends one (a partial batch, an order left short), is added to the success message.
+    private async Task RunAsync(string key, string success, Func<Task<string?>> send, bool orders = false)
     {
         if (orders ? OrdersReadOnly : ReadOnly)
         {
@@ -414,8 +431,8 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
         _saving.Add(key);
         try
         {
-            await send();
-            Toast("success", success);
+            var note = await send();
+            Toast("success", note is null ? success : $"{success} {note}");
         }
         catch (ApiException ex)
         {

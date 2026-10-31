@@ -237,8 +237,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`AllocationUse`), into another warns. `LotRecommendation` (FEFO, then FIFO; only available, unexpired at need time, free stock; every
   pick and exclusion explained); `AllocationPlanner` shared by `GetJobAllocationsQuery` and the commands. Refresh is on demand (job or
   site); locks job → lots → allocations in id order. Permission `lot.allocate`.
-- Line batch sizes (D-065, proposed): `core.equipment_capability.batch_size` (null = the material's; only for a batch material; rule and
-  tolerance stay the material's, `Batching.OnLine`). `ILineBatchSizes` (in-transaction) feeds order creation (`Batching.ShareBySize`: whole
+- Line batch sizes (D-065, proposed): `core.equipment_capability.batch_size` (null = the material's; only for a batch material; rule stays the
+  material's, `Batching.OnLine`; a line tolerance too since D-075, `batch_tolerance_pct`, `ILineBatchSizes.GetTolerancesAsync`). `ILineBatchSizes` (in-transaction) feeds order creation (`Batching.ShareBySize`: whole
   batches of each line's size adding up exactly, else refused with the nearest quantities), job create/move/assign/start-on-line checks
   (`BatchPlanning`), replacements, and reports/partial batches (`ProductionReporter`). Department jobs use the material's size.
 - ERP work orders (D-066, proposed): `POST /work-orders/import` (`ImportWorkOrdersCommand`, one transaction per order, idempotent on external
@@ -248,7 +248,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`ErpOrderWriter.ReplanAsync` re-shares jobs in place, scales components), else `erp_pending_change` for Accept/Reject.
 - Partial replacements (D-067, proposed): `CancelJobCommand.ReplaceExact` plans exactly what is left; not whole batches → `job.partial_batch_planned`
   (needs `schedule.plan_partial`, via the conditional `RequireWhen<TRequest>` filter). Such a job skips whole-batch checks on move/assign/start
-  and reports its partial batch without a stop reason; the material's rule (exact → approval) still applies.
+  and reports its partial batch without a stop reason; the material's rule (exact → approval) still applies. `RoundDown` (D-075, `schedule.plan`) plans
+  the whole batches that fit and notes the shortfall; the order form's hint lists each line's size (`CheckProcessForOrderQuery.Equipment`).
 - Material connections (D-068, proposed): `core.material_connection` = an OData v4 source (URL, entity set, filter, external system, field map
   canonical field → property path). `ODataMaterialRows.Read` (pure) → `MaterialImportRow`s via `MaterialImportFields.ToRow`, then the unchanged
   `ImportMaterialsCommand`. `ODataMaterialFetcher` (API; `$select`, `@odata.nextLink`, ≤ 5000 items; credentials from `MaterialConnections:<code>`,

@@ -50,10 +50,12 @@ public sealed record AssignJobCommand(Guid Id, long ExpectedVersion, Guid Target
 
 /// <summary>Cancels a job; with <see cref="Replace"/>, a new job takes its slot for the quantity it did not make (D-019).</summary>
 /// <summary>
-/// Cancels a job (D-019), with a replacement for what is left when <paramref name="Replace"/>: rounded up to whole batches, or with
-/// <paramref name="ReplaceExact"/> exactly what is left, a partial last batch included (D-067).
+/// Cancels a job (D-019), with a replacement for what is left when <paramref name="Replace"/>: rounded up to whole batches, with
+/// <paramref name="ReplaceExact"/> exactly what is left, a partial last batch included (D-067), or with <paramref name="RoundDown"/> the
+/// whole batches that fit in what is left, leaving the order short (#85).
 /// </summary>
-public sealed record CancelJobCommand(Guid Id, long ExpectedVersion, string? Reason, bool Replace, bool ReplaceExact = false) : ICommand<CancelJobResponse>;
+public sealed record CancelJobCommand(Guid Id, long ExpectedVersion, string? Reason, bool Replace, bool ReplaceExact = false, bool RoundDown = false)
+    : ICommand<CancelJobResponse>;
 
 internal sealed class CreateJobHandler(
     IUnitOfWork unitOfWork,
@@ -380,6 +382,7 @@ internal sealed class CancelJobHandler(
     {
         new Validator()
             .Require(command.Reason is null || command.Reason.Length <= 500, nameof(command.Reason), "At most 500 characters.")
+            .Require(!(command.ReplaceExact && command.RoundDown), nameof(command.RoundDown), "Replace exactly what is left, or round it down, not both.")
             .ThrowIfInvalid();
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -402,7 +405,7 @@ internal sealed class CancelJobHandler(
             var remaining = (job.PlannedQty ?? 0m) - await scheduling.GetGoodQtyAsync(job.Id, cancellationToken);
 
             // What is left of a batch material is planned in whole batches, rounded up to meet the order (D-036); or, when asked, exactly
-            // what is left, with a partial last batch (D-067).
+            // what is left, with a partial last batch (D-067), or the whole batches that fit, leaving the order short (#85).
             var partial = false;
             if (remaining > 0 && job.MaterialId is { } materialId && job.UomId is { } uomId)
             {
@@ -410,6 +413,22 @@ internal sealed class CancelJobHandler(
                 {
                     partial = !await BatchPlanning.IsWholeAsync(boms, units, materialId, remaining, uomId, lineBatches, job.EquipmentId, at, cancellationToken);
                     note = partial ? await BatchPlanning.PartialNoteAsync(boms, units, materialId, remaining, uomId, lineBatches, job.EquipmentId, at, cancellationToken) : null;
+                }
+                else if (command.RoundDown)
+                {
+                    var unitCode = (await units.GetUnitsAsync(cancellationToken)).FirstOrDefault(u => u.Id == uomId)?.Code ?? "";
+                    string Qty(decimal value) => $"{value.ToString("#,0.###", System.Globalization.CultureInfo.InvariantCulture)} {unitCode}";
+                    var left = remaining;
+                    remaining = await BatchPlanning.RoundDownAsync(boms, units, materialId, remaining, uomId, lineBatches, job.EquipmentId, at, cancellationToken);
+                    if (remaining <= 0)
+                    {
+                        throw new DomainRuleException(
+                            $"Less than a batch of {job.JobNumber} is left ({Qty(left)}), so rounding down leaves nothing to replace. Replace exactly what is left (a partial batch), round up, or cancel it without a replacement.");
+                    }
+
+                    note = remaining < left
+                        ? $"Rounded down to whole batches: the replacement plans {Qty(remaining)} of the {Qty(left)} left, so the order is short {Qty(left - remaining)}."
+                        : null;
                 }
                 else
                 {
@@ -563,10 +582,11 @@ internal static class BatchPlanning
             return null;
         }
 
-        if (lineBatches is not null && lineId is { } line
-            && (await lineBatches.GetAsync(materialId, [line], at, cancellationToken)).TryGetValue(line, out var size))
+        if (lineBatches is not null && lineId is { } line)
         {
-            batching = batching.OnLine(size);
+            batching = batching.OnLine(
+                (await lineBatches.GetAsync(materialId, [line], at, cancellationToken)).TryGetValue(line, out var size) ? size : null,
+                (await lineBatches.GetTolerancesAsync(materialId, [line], at, cancellationToken)).TryGetValue(line, out var tolerance) ? tolerance : null);
         }
 
         return (batching, material);
@@ -640,5 +660,19 @@ internal static class BatchPlanning
 
         var converter = UnitConversions.For(materialId, await units.GetUnitsAsync(cancellationToken), await units.GetConversionsAsync([materialId], cancellationToken));
         return converter.Convert(batching.RoundUp(converter.Convert(quantity, uomId, material.BaseUomId)), material.BaseUomId, uomId);
+    }
+
+    /// <summary>The whole batches of the line's size that fit in <paramref name="quantity"/> (#85), in its unit; 0 when it is less than a batch.</summary>
+    public static async Task<decimal> RoundDownAsync(
+        IBomRepository boms, IUnitRepository units, Guid materialId, decimal quantity, Guid uomId,
+        ILineBatchSizes? lineBatches, Guid? lineId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        if (await OnLineAsync(boms, lineBatches, materialId, lineId, at, cancellationToken) is not var (batching, material))
+        {
+            return quantity;
+        }
+
+        var converter = UnitConversions.For(materialId, await units.GetUnitsAsync(cancellationToken), await units.GetConversionsAsync([materialId], cancellationToken));
+        return converter.Convert(batching.RoundDown(converter.Convert(quantity, uomId, material.BaseUomId)), material.BaseUomId, uomId);
     }
 }

@@ -91,7 +91,21 @@ else
                 <InputNumber id="qty" class="form-control" @bind-Value="_form.PlannedQty" min="0" step="any" />
                 @if (_materials?.FirstOrDefault(m => m.Id == _form.MaterialId) is { BatchSize: { } batch } batchMaterial)
                 {
-                    <div class="form-text">Made in batches of @batch.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) @batchMaterial.BaseUomCode: plan whole batches.</div>
+                    var perLine = OrderBatchHint.Operations(SelectedCheck, batch, batchMaterial.BaseUomCode);
+                    @if (perLine.Count == 0)
+                    {
+                        <div class="form-text">Made in batches of @batch.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) @batchMaterial.BaseUomCode: plan whole batches.</div>
+                    }
+                    else
+                    {
+                        <div class="form-text">
+                            Each line plans whole batches of its own size, so the order must share into them exactly:
+                            @foreach (var phrase in perLine)
+                            {
+                                <div>@phrase</div>
+                            }
+                        </div>
+                    }
                 }
             </div>
             <div class="col-sm-6">

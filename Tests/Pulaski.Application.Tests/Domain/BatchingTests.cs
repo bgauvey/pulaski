@@ -80,12 +80,19 @@ public class BatchingTests
     }
 
     [Fact]
-    public void A_line_changes_only_the_size_and_shares_of_one_size_work_as_before()
+    public void A_line_changes_the_size_and_tolerance_not_the_rule_and_shares_of_one_size_work_as_before()
     {
         var material = Batching.Create(50m, 2m, BatchRule.Near);
         var line = material.OnLine(200m);
         Assert.Equal((200m, 2m, BatchRule.Near), (line.Size, line.TolerancePct, line.Rule));
-        Assert.Same(material, material.OnLine(null));
+        Assert.Equal(material, material.OnLine(null));
+
+        // A line's own tolerance (#85): 46 kg is a batch there, not on the material's 2%.
+        var loose = material.OnLine(null, 10m);
+        Assert.Equal((50m, 10m), (loose.Size, loose.TolerancePct));
+        Assert.True(loose.IsBatch(46m));
+        Assert.False(material.IsBatch(46m));
+        Assert.Equal((100m, 0m, 50m), (material.RoundDown(125m), material.RoundDown(49m), material.RoundDown(50m)));
         Assert.Equal(4, line.WholeBatches(800m));
         Assert.Null(line.WholeBatches(850m));
 

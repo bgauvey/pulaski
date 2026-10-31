@@ -26,7 +26,7 @@ internal sealed class CapabilityRepository(DbSession session) : ICapabilityRepos
 
     private const string Columns = """
         id, equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, standard_changeover, standard_crew_size,
-        is_preferred, effective_from, effective_to, batch_size
+        is_preferred, effective_from, effective_to, batch_size, batch_tolerance_pct
         """;
 
     private const string GetForUpdate = $"SELECT {Columns}, xmin::text::bigint AS version FROM core.equipment_capability WHERE id = @Id FOR UPDATE";
@@ -40,9 +40,9 @@ internal sealed class CapabilityRepository(DbSession session) : ICapabilityRepos
 
     private const string Insert = """
         INSERT INTO core.equipment_capability (id, equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, standard_changeover,
-                                               standard_crew_size, is_preferred, effective_from, effective_to, batch_size)
+                                               standard_crew_size, is_preferred, effective_from, effective_to, batch_size, batch_tolerance_pct)
         VALUES (@Id, @EquipmentId, @MaterialId, @IdealRatePerHour, @RateUomId, @StandardChangeover,
-                @StandardCrewSize, @IsPreferred, @EffectiveFrom, @EffectiveTo, @BatchSize)
+                @StandardCrewSize, @IsPreferred, @EffectiveFrom, @EffectiveTo, @BatchSize, @BatchTolerancePct)
         RETURNING xmin::text::bigint
         """;
 
@@ -50,7 +50,7 @@ internal sealed class CapabilityRepository(DbSession session) : ICapabilityRepos
         UPDATE core.equipment_capability
         SET ideal_rate_per_hour = @IdealRatePerHour, rate_uom_id = @RateUomId, standard_changeover = @StandardChangeover,
             standard_crew_size = @StandardCrewSize, is_preferred = @IsPreferred, effective_from = @EffectiveFrom, effective_to = @EffectiveTo,
-            batch_size = @BatchSize
+            batch_size = @BatchSize, batch_tolerance_pct = @BatchTolerancePct
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -167,10 +167,12 @@ internal sealed class CapabilityRepository(DbSession session) : ICapabilityRepos
         public DateTimeOffset EffectiveFrom { get; init; }
         public DateTimeOffset? EffectiveTo { get; init; }
         public decimal? BatchSize { get; init; }
+        public decimal? BatchTolerancePct { get; init; }
         public long Version { get; init; }
 
         public Capability ToDomain() => new(
-            Id, EquipmentId, MaterialId, IdealRatePerHour, RateUomId, StandardChangeover, StandardCrewSize, IsPreferred, EffectiveFrom, EffectiveTo, BatchSize);
+            Id, EquipmentId, MaterialId, IdealRatePerHour, RateUomId, StandardChangeover, StandardCrewSize, IsPreferred, EffectiveFrom, EffectiveTo, BatchSize,
+            BatchTolerancePct);
     }
 
     private sealed class RunStandardRow

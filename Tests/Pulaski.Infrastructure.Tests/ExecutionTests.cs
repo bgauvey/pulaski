@@ -285,8 +285,9 @@ public sealed class ExecutionTests(DatabaseFixture db)
             new AddCapabilityCommand(material.Id, big.Id, 400m, db.UomId, null, null, false, DateTimeOffset.UtcNow.AddDays(-1), null, BatchSize: 200m)));
         var materialVersion = await ScalarAsync<long>("SELECT xmin::text::bigint FROM core.material WHERE id = @Id", new { Id = material.Id });
         await db.SendAsync(new SetBatchingCommand(material.Id, materialVersion, 50m, 2m, null));
+        var from = DateTimeOffset.UtcNow.AddDays(-1);
         var capability = await db.SendAsync(
-            new AddCapabilityCommand(material.Id, big.Id, 400m, db.UomId, null, null, false, DateTimeOffset.UtcNow.AddDays(-1), null, BatchSize: 200m));
+            new AddCapabilityCommand(material.Id, big.Id, 400m, db.UomId, null, null, false, from, null, BatchSize: 200m));
         Assert.Contains(capability.Notes, n => n.Contains("batches of 200", StringComparison.Ordinal));
 
         Guid order = Guid.CreateVersion7(), job = Guid.CreateVersion7();
@@ -314,6 +315,15 @@ public sealed class ExecutionTests(DatabaseFixture db)
         var reported = await db.SendAsync(new ReportProductionCommand(job, null, 0m, 0m, null, null, staging.Id) { GoodBatches = [200m] });
         Assert.Single(reported.Lots);
         Assert.Equal(200m, (await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(job))).BatchSize!.Value);
+
+        // The line's own tolerance (#85): 190 is 5% short, not a batch on the material's 2%, but a batch on the line's 10%.
+        await Assert.ThrowsAsync<DomainRuleException>(() =>
+            db.SendAsync(new ReportProductionCommand(job, null, 0m, 0m, null, null, staging.Id) { GoodBatches = [190m] }));
+        var loosened = await db.SendAsync(new UpdateCapabilityCommand(
+            capability.Id, capability.Version, 400m, db.UomId, null, null, false, from, null, BatchSize: 200m, BatchTolerancePct: 10m));
+        Assert.Contains(loosened.Notes, n => n.Contains("10% from its size", StringComparison.Ordinal));
+        await db.SendAsync(new ReportProductionCommand(job, null, 0m, 0m, null, null, staging.Id) { GoodBatches = [190m] });
+        Assert.Equal(10m, (await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(job))).BatchTolerancePct);
     }
 
     [Fact]
