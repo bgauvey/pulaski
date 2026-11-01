@@ -204,7 +204,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `lot_genealogy.effective_at`. Stock at T = sum of `qty_delta` with `effective_at <= T`, never `qty_after`. Receipt, consumption,
   production, write-up and write-off take `EffectiveAt` (`Backdating.EffectiveAt` / `EnsureFitsAsync`: ≤ 31 days, comment, not before the
   lot's stock or a posted count, never negative in effective order); run and expiry at the effective time; endpoints add
-  `RequireToBackdate` (`inventory.backdate`). Reversals keep the original's effective time.
+  `RequireToBackdate` (`inventory.backdate`). Reversals keep the original's effective time. D-076: moves/holds/releases back-date only as the
+  lot's latest movement (`EnsureLatestAsync`), splits/shipments/merges only if unchanged since (`EnsureUnchangedSinceAsync`); counts at the line's
+  `counted_at`; `LotPastState` works a lot's state at T back from now (`GET /lots/{id}/at`, Stock on a date by location and on hold).
 - Shortages (D-058, proposed): live timing by default (each line projected via `TimelineMapping.Project`, `TimeSource` per line);
   `core.expected_receipt` (screen + idempotent ERP import by system/key; receiving with `ExpectedReceiptId` closes it) counted by
   `ShortageCalculator` after stock, only when due by a job's time (past times count as now). Not MRP.
@@ -232,6 +234,18 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `LotEventSql.NotReversed` hides reversed declarations from job totals/lots/genealogy. Reports have `report_id` (processed row id, on
   counts and produced lot rows); `ReverseProductionReportCommand` (`production.correct`) offsets counts with `correction` rows, `JobRun.Remove`,
   takes back its lots (out of a commingled balance first), partial batch → `reversed`.
+- Lifting reversal limits (D-077, proposed): any standing movement reverses when what it changed hasn't changed since (`ListStandingAfterAsync`, effective
+  order): latest move / latest status change, quantity via `EnsureFitsAsync`; packing (`Lot.ReversePacking`), corrections (`ts.lot_event.details`,
+  `Lot.RevertCorrection`), balance merges too. A reversal is any row with `reverses_event_id`. `ReverseChainCommand` (`/lots/{id}/reverse-chain?dryRun=`)
+  undoes a movement, the lot's later ones and those of lots split off it, latest first in one transaction; the dry run rolls back.
+- Per-lot genealogy (D-078, proposed): job links stay stored; `LotPairing.Pair` pairs on read by declaration time (a used lot is in use until the next
+  lot of its material; exact = only lot, else estimated, unpairable = possible). Picks are `made_from` links (`SetMadeFromCommand`, `PUT /lots/{id}/made-from`,
+  `ReportProductionCommand.MadeFromLotIds`) and replace pairing for that lot (`JobLinkPairs`, used by traces and lot links). Level readings (`BalanceLevels`):
+  `equipment.empty_level` sets aside parcels, `level_tolerance` compares stock before withdrawals; exact → `confirmed`, disagreement → possible.
+- Feed point automation (D-079, proposed): loads are worked out from `ts.lot_event` (`FeedLoads.From`: arrival or `loaded`, until it leaves, runs out or
+  the next lot of its material); `core.material_load` is unused. Reports backflush / share time-window components (`FeedAutomation.OnReportAsync`); a feed
+  point's consumed counter posts after ingest commits (`FeedCounterPoster`, job first). Rows carry `auto_source` + `source_ref`; never below zero; what isn't
+  covered is a `core.feed_shortfall` (resolve with a lot / dismiss). Report reversal puts automated consumption back.
 - Lot allocations (D-064, proposed): `core.lot_allocation` (active / consumed / released; one active per job + lot) sets a lot's stock aside for a
   job's planned component; other jobs (recommendations, shortages) see it as taken; consumption into its job uses it up
   (`AllocationUse`), into another warns. `LotRecommendation` (FEFO, then FIFO; only available, unexpired at need time, free stock; every

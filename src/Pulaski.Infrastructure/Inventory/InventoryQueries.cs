@@ -2,6 +2,7 @@ using Dapper;
 using Npgsql;
 using Pulaski.Application.Inventory;
 using Pulaski.Contracts.Inventory;
+using Pulaski.Domain.Inventory;
 
 namespace Pulaski.Infrastructure.Inventory;
 
@@ -46,7 +47,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         WHERE m.id = @MaterialId
         """;
 
-    private const string LotColumns = """
+    internal const string LotColumns = """
         l.id, l.site_id, l.lot_number, l.is_bulk, l.material_id, m.code AS material_code, m.name AS material_name,
         l.status, l.quantity, l.uom_id, u.code AS uom_code,
         l.location_equipment_id AS location_id, loc.code AS location_code, loc.name AS location_name,
@@ -55,7 +56,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         l.created_at, l.updated_at, l.xmin::text::bigint AS version
         """;
 
-    private const string LotFrom = """
+    internal const string LotFrom = """
         FROM core.lot l
         JOIN core.material m ON m.id = l.material_id
         JOIN core.uom u ON u.id = l.uom_id
@@ -121,7 +122,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         fl.code AS from_location_code, tl.code AS to_location_code, e.from_status, e.to_status,
         e.job_id, ej.job_number, r.code AS reason_code, r.name AS reason_name, rt.group_path AS reason_group_path, e.comment, e.actor_id,
         e.related_lot_id, rl.lot_number AS related_lot_number, rll.code AS related_lot_location_code, e.reference, e.reverses_event_id,
-        e.container_id, ec.code AS container_code, e.report_id,
+        e.container_id, ec.code AS container_code, e.report_id, e.auto_source,
         EXISTS (SELECT 1 FROM ts.lot_event rv WHERE rv.lot_id = e.lot_id AND rv.reverses_event_id = e.id) AS is_reversed
         """;
 
@@ -169,7 +170,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
 
     private const string LinkColumns = """
         o.id AS lot_id, o.lot_number, o.is_bulk, loc.code AS location_code, m.code AS material_code, m.name AS material_name,
-        o.status, o.quantity, u.code AS uom_code, g.link_basis, j.job_number, g.effective_at, g.derived_at
+        o.status, o.quantity, u.code AS uom_code, g.link_basis, g.job_id, j.job_number, g.effective_at, g.derived_at
         """;
 
     private const string LinkJoins = """
@@ -228,10 +229,54 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
 
     // A balance's quantity movements in the order they count (D-057), with its location's flow settings (D-060).
     private const string BalanceSettingsSql = """
-        SELECT l.id AS lot_id, coalesce(loc.flow_model, 'mixed') AS flow_model, loc.min_residence
+        SELECT l.id AS lot_id, coalesce(loc.flow_model, 'mixed') AS flow_model, loc.min_residence,
+               l.material_id, m.base_uom_id, loc.empty_level, loc.level_tolerance, t.id AS level_tag_id, t.uom_id AS level_uom_id
         FROM core.lot l
+        JOIN core.material m ON m.id = l.material_id
         LEFT JOIN core.equipment loc ON loc.id = l.location_equipment_id
+        LEFT JOIN core.equipment_tag t ON t.equipment_id = loc.id AND t.tag_role = 'level' AND t.is_active
         WHERE l.id = @Id AND l.is_bulk
+        """;
+
+    // The first good reading of each stretch at or below empty (#81), with the last reading above empty before it.
+    private const string EmptyPointsSql = """
+        SELECT r.at, r.clears_before
+        FROM (
+            SELECT p.occurred_at AS at, p.value_num <= @EmptyLevel AS is_empty,
+                   lag(p.value_num <= @EmptyLevel) OVER w AS was_empty,
+                   max(p.occurred_at) FILTER (WHERE p.value_num > @EmptyLevel) OVER (w ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS clears_before
+            FROM ts.process_value p
+            WHERE p.equipment_tag_id = @TagId AND p.occurred_at >= @From AND p.value_num IS NOT NULL AND p.quality >= 192
+            WINDOW w AS (ORDER BY p.occurred_at)) r
+        WHERE r.is_empty AND r.was_empty IS DISTINCT FROM true
+        ORDER BY r.at
+        """;
+
+    // The last good level reading in the 15 minutes before each standing withdrawal (#81).
+    private const string ReadingsBeforeSql = $"""
+        SELECT e.id AS event_id, pv.value_num AS value
+        FROM ts.lot_event e
+        CROSS JOIN LATERAL (
+            SELECT p.value_num FROM ts.process_value p
+            WHERE p.equipment_tag_id = @TagId AND p.occurred_at < e.effective_at AND p.occurred_at >= e.effective_at - interval '15 minutes'
+              AND p.value_num IS NOT NULL AND p.quality >= 192
+            ORDER BY p.occurred_at DESC
+            LIMIT 1) pv
+        WHERE e.lot_id = @Id AND e.qty_delta < 0 AND e.reverses_event_id IS NULL AND {LotEventSql.NotReversed}
+        """;
+
+    private const string LinksToSql = """
+        SELECT parent_lot_id, child_lot_id, link_basis AS basis, job_id
+        FROM core.lot_genealogy
+        WHERE child_lot_id = ANY(@Ids) AND superseded_at IS NULL
+        """;
+
+    private const string JobDeclarationsSql = $"""
+        SELECT e.job_id, e.lot_id, l.material_id, e.event_kind = 'produced' AS produced, e.effective_at AS at, e.occurred_at AS recorded_at
+        FROM ts.lot_event e
+        JOIN core.lot l ON l.id = e.lot_id
+        WHERE e.job_id = ANY(@Ids) AND e.event_kind IN ('consumed','produced') AND e.reverses_event_id IS NULL AND {LotEventSql.NotReversed}
+        ORDER BY e.effective_at, e.occurred_at, e.id
         """;
 
     private const string BalanceMovementsSql = $"""
@@ -305,7 +350,8 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
 
     private const string LocationsSql = $"""
         SELECT e.id, e.site_id, e.code, e.name, e.equipment_role, p.code AS parent_code, e.is_active, e.commingles_lots, e.single_material,
-               e.flow_model, (extract(epoch FROM e.min_residence) / 60)::int AS min_residence_minutes, e.xmin::text::bigint AS version,
+               e.flow_model, (extract(epoch FROM e.min_residence) / 60)::int AS min_residence_minutes, e.empty_level, e.level_tolerance,
+               e.xmin::text::bigint AS version,
                coalesce(s.lot_count, 0) AS lot_count, coalesce(s.material_count, 0) AS material_count
         FROM core.equipment e
         LEFT JOIN core.equipment p ON p.id = e.parent_id
@@ -377,6 +423,15 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         {LotFrom}
         WHERE l.id IN (SELECT e.lot_id FROM ts.lot_event e WHERE e.job_id = @Id AND e.event_kind = 'produced' AND {LotEventSql.NotReversed})
         ORDER BY l.lot_number
+        """;
+
+    // What the job used and still stands (#81), for picking what a lot was made from.
+    private const string UsedLotsSql = $"""
+        SELECT {LotColumns}
+        {LotFrom}
+        WHERE l.id IN (SELECT e.lot_id FROM ts.lot_event e
+                       WHERE e.job_id = @Id AND e.event_kind = 'consumed' AND e.reverses_event_id IS NULL AND {LotEventSql.NotReversed})
+        ORDER BY m.code, l.lot_number
         """;
 
     private const string ProducedQtySql = $"""
@@ -465,24 +520,43 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         ORDER BY r.reason_kind, t.sort_key
         """;
 
-    // Each lot's quantity at the time: its movements that count by then, by effective time, whenever they were recorded (D-057),
-    // so a back-dated movement changes the past the same way whatever order things were entered in. Lots at zero then don't count.
-    private const string StockOnDateSql = """
-        SELECT m.id AS material_id, m.code, m.name, c.name AS material_class_name, u.code AS uom_code,
-               sum(x.quantity) AS quantity, count(*)::int AS lot_count
-        FROM (
-            SELECT e.lot_id, sum(e.qty_delta) AS quantity
-            FROM ts.lot_event e
-            JOIN core.lot l ON l.id = e.lot_id
-            WHERE l.site_id = @SiteId AND e.effective_at <= @At AND e.qty_delta IS NOT NULL
-            GROUP BY e.lot_id) x
-        JOIN core.lot l ON l.id = x.lot_id
+    // The site's lots that existed at the time (#77): a movement counting by then. Their state then is worked back from now in the
+    // application (LotPastState), from the movements counting after it, so it agrees with the journal.
+    private const string PastLotsSql = """
+        SELECT l.id AS lot_id, l.material_id, m.code AS material_code, m.name AS material_name, c.name AS material_class_name, u.code AS uom_code,
+               l.quantity, l.location_equipment_id AS location_id, l.status, l.is_bulk
+        FROM core.lot l
         JOIN core.material m ON m.id = l.material_id
         JOIN core.uom u ON u.id = m.base_uom_id
         LEFT JOIN core.material_class c ON c.id = m.material_class_id
-        WHERE x.quantity > 0
-        GROUP BY m.id, m.code, m.name, c.name, u.code
-        ORDER BY c.name NULLS LAST, m.code
+        WHERE l.site_id = @SiteId
+          AND EXISTS (SELECT 1 FROM ts.lot_event e WHERE e.lot_id = l.id AND e.effective_at <= @At)
+        """;
+
+    private const string EventsAfterSql = """
+        SELECT e.lot_id, e.id, e.effective_at, e.occurred_at, e.event_kind AS kind, e.qty_delta, e.from_location_id, e.to_location_id, e.from_status,
+               e.to_status, e.container_id
+        FROM ts.lot_event e
+        JOIN core.lot l ON l.id = e.lot_id
+        WHERE l.site_id = @SiteId AND e.effective_at > @At
+        """;
+
+    private const string LotNowSql = """
+        SELECT l.id AS lot_id, l.site_id, u.code AS uom_code, l.quantity, l.location_equipment_id AS location_id, l.status, l.is_bulk
+        FROM core.lot l JOIN core.material m ON m.id = l.material_id JOIN core.uom u ON u.id = m.base_uom_id
+        WHERE l.id = @LotId
+        """;
+
+    private const string LotEventsSql = """
+        SELECT e.lot_id, e.id, e.effective_at, e.occurred_at, e.event_kind AS kind, e.qty_delta, e.from_location_id, e.to_location_id, e.from_status,
+               e.to_status, e.container_id
+        FROM ts.lot_event e WHERE e.lot_id = @LotId
+        """;
+
+    private const string CodesSql = """
+        SELECT id, code FROM core.equipment WHERE id = ANY(@Ids)
+        UNION ALL
+        SELECT id, code FROM core.container WHERE id = ANY(@Ids)
         """;
 
     // Balances aren't aged: a balance's creation is only its first receipt. A lot is as old as its first movement counts (D-057),
@@ -591,8 +665,38 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
             return null;
         }
 
-        var movements = await connection.QueryAsync<BalanceMovementRow>(new CommandDefinition(BalanceMovementsSql, args, cancellationToken: cancellationToken));
-        return new BalanceHistory(settings.LotId, settings.FlowModel, settings.MinResidence, movements.AsList());
+        var movements = (await connection.QueryAsync<BalanceMovementRow>(new CommandDefinition(BalanceMovementsSql, args, cancellationToken: cancellationToken))).AsList();
+        BalanceLevelData? levels = null;
+        if (settings.LevelTagId is { } tagId && movements.Count > 0)
+        {
+            var empties = settings.EmptyLevel is { } emptyLevel
+                ? (await connection.QueryAsync<EmptyPointRow>(new CommandDefinition(
+                    EmptyPointsSql, new { TagId = tagId, EmptyLevel = (double)emptyLevel, From = movements[0].At }, cancellationToken: cancellationToken)))
+                    .Select(r => new EmptyPoint(r.At, r.ClearsBefore ?? DateTimeOffset.MinValue)).ToList()
+                : [];
+            var readings = settings.LevelTolerance is null
+                ? []
+                : (await connection.QueryAsync<(Guid EventId, double Value)>(new CommandDefinition(
+                    ReadingsBeforeSql, new { Id = lotId, TagId = tagId }, cancellationToken: cancellationToken)))
+                    .ToDictionary(r => r.EventId, r => (decimal)r.Value);
+            levels = new BalanceLevelData(settings.MaterialId, settings.BaseUomId, settings.LevelUomId, settings.EmptyLevel, settings.LevelTolerance, empties, readings);
+        }
+
+        return new BalanceHistory(settings.LotId, settings.FlowModel, settings.MinResidence, movements, levels);
+    }
+
+    public async Task<IReadOnlyList<GenealogyLink>> ListLinksToAsync(IReadOnlyCollection<Guid> childLotIds, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<LinkRow>(new CommandDefinition(LinksToSql, new { Ids = childLotIds.ToArray() }, cancellationToken: cancellationToken));
+        return [.. rows.Select(r => new GenealogyLink(r.ParentLotId, r.ChildLotId, r.Basis, r.JobId))];
+    }
+
+    public async Task<IReadOnlyList<JobDeclaration>> ListJobDeclarationsAsync(IReadOnlyCollection<Guid> jobIds, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<DeclarationRow>(new CommandDefinition(JobDeclarationsSql, new { Ids = jobIds.ToArray() }, cancellationToken: cancellationToken));
+        return [.. rows.Select(r => new JobDeclaration(r.JobId, r.LotId, r.MaterialId, r.Produced, r.At, r.RecordedAt))];
     }
 
     private sealed class BalanceSettingsRow
@@ -600,6 +704,36 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         public Guid LotId { get; init; }
         public string FlowModel { get; init; } = "mixed";
         public TimeSpan? MinResidence { get; init; }
+        public Guid MaterialId { get; init; }
+        public Guid BaseUomId { get; init; }
+        public decimal? EmptyLevel { get; init; }
+        public decimal? LevelTolerance { get; init; }
+        public Guid? LevelTagId { get; init; }
+        public Guid? LevelUomId { get; init; }
+    }
+
+    private sealed class LinkRow
+    {
+        public Guid ParentLotId { get; init; }
+        public Guid ChildLotId { get; init; }
+        public string Basis { get; init; } = "";
+        public Guid? JobId { get; init; }
+    }
+
+    private sealed class DeclarationRow
+    {
+        public Guid JobId { get; init; }
+        public Guid LotId { get; init; }
+        public Guid MaterialId { get; init; }
+        public bool Produced { get; init; }
+        public DateTimeOffset At { get; init; }
+        public DateTimeOffset RecordedAt { get; init; }
+    }
+
+    private sealed class EmptyPointRow
+    {
+        public DateTimeOffset At { get; init; }
+        public DateTimeOffset? ClearsBefore { get; init; }
     }
 
     public async Task<WhereUsedDto?> WhereUsedAsync(Guid materialId, CancellationToken cancellationToken)
@@ -649,6 +783,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         var planned = (await connection.QueryAsync<ComponentRow>(new CommandDefinition(PlannedComponentsSql, args, cancellationToken: cancellationToken))).AsList();
         var consumed = (await connection.QueryAsync<ComponentRow>(new CommandDefinition(ConsumedSql, args, cancellationToken: cancellationToken))).AsList();
         var produced = await connection.QueryAsync<LotSummaryDto>(new CommandDefinition(ProducedLotsSql, args, cancellationToken: cancellationToken));
+        var used = await connection.QueryAsync<LotSummaryDto>(new CommandDefinition(UsedLotsSql, args, cancellationToken: cancellationToken));
         var producedQty = await connection.ExecuteScalarAsync<decimal>(new CommandDefinition(ProducedQtySql, args, cancellationToken: cancellationToken));
         var producedUom = await connection.QuerySingleOrDefaultAsync<string>(
             new CommandDefinition(BaseUomCodeSql, new { job.MaterialId }, cancellationToken: cancellationToken));
@@ -658,6 +793,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
             Job = job,
             Components = MergeComponents(planned, consumed),
             Produced = produced.AsList(),
+            Used = used.AsList(),
             ProducedQty = producedQty,
             ProducedUomCode = producedUom,
         };
@@ -786,11 +922,82 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         return rows.AsList();
     }
 
-    public async Task<IReadOnlyList<StockOnDateDto>> StockOnDateAsync(Guid siteId, DateTimeOffset at, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<PastLotRow>> ListPastLotsAsync(Guid siteId, DateTimeOffset at, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        var rows = await connection.QueryAsync<StockOnDateDto>(new CommandDefinition(StockOnDateSql, new { SiteId = siteId, At = at }, cancellationToken: cancellationToken));
-        return rows.AsList();
+        var args = new { SiteId = siteId, At = at };
+        var lots = await connection.QueryAsync<PastLotDbRow>(new CommandDefinition(PastLotsSql, args, cancellationToken: cancellationToken));
+        var after = (await connection.QueryAsync<PastEventDbRow>(new CommandDefinition(EventsAfterSql, args, cancellationToken: cancellationToken)))
+            .ToLookup(e => e.LotId, e => e.ToDomain());
+        return [.. lots.Select(l => new PastLotRow(
+            l.LotId, l.MaterialId, l.MaterialCode, l.MaterialName, l.MaterialClassName, l.UomCode, new LotNow(l.Quantity, l.LocationId, l.Status, l.IsBulk), [.. after[l.LotId]]))];
+    }
+
+    public async Task<LotPastSource?> GetLotPastAsync(Guid lotId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var lot = await connection.QuerySingleOrDefaultAsync<LotNowDbRow>(new CommandDefinition(LotNowSql, new { LotId = lotId }, cancellationToken: cancellationToken));
+        if (lot is null)
+        {
+            return null;
+        }
+
+        var events = await connection.QueryAsync<PastEventDbRow>(new CommandDefinition(LotEventsSql, new { LotId = lotId }, cancellationToken: cancellationToken));
+        return new LotPastSource(lot.LotId, lot.SiteId, lot.UomCode, new LotNow(lot.Quantity, lot.LocationId, lot.Status, lot.IsBulk), [.. events.Select(e => e.ToDomain())]);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, string>> ListCodesAsync(IReadOnlyCollection<Guid> locationOrContainerIds, CancellationToken cancellationToken)
+    {
+        if (locationOrContainerIds.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return (await connection.QueryAsync<(Guid Id, string Code)>(new CommandDefinition(CodesSql, new { Ids = locationOrContainerIds.ToArray() }, cancellationToken: cancellationToken)))
+            .ToDictionary(r => r.Id, r => r.Code);
+    }
+
+    private sealed class PastLotDbRow
+    {
+        public Guid LotId { get; init; }
+        public Guid MaterialId { get; init; }
+        public string MaterialCode { get; init; } = "";
+        public string MaterialName { get; init; } = "";
+        public string? MaterialClassName { get; init; }
+        public string UomCode { get; init; } = "";
+        public decimal Quantity { get; init; }
+        public Guid? LocationId { get; init; }
+        public string Status { get; init; } = "";
+        public bool IsBulk { get; init; }
+    }
+
+    private sealed class LotNowDbRow
+    {
+        public Guid LotId { get; init; }
+        public Guid SiteId { get; init; }
+        public string UomCode { get; init; } = "";
+        public decimal Quantity { get; init; }
+        public Guid? LocationId { get; init; }
+        public string Status { get; init; } = "";
+        public bool IsBulk { get; init; }
+    }
+
+    private sealed class PastEventDbRow
+    {
+        public Guid LotId { get; init; }
+        public Guid Id { get; init; }
+        public DateTimeOffset EffectiveAt { get; init; }
+        public DateTimeOffset OccurredAt { get; init; }
+        public string Kind { get; init; } = "";
+        public decimal? QtyDelta { get; init; }
+        public Guid? FromLocationId { get; init; }
+        public Guid? ToLocationId { get; init; }
+        public string? FromStatus { get; init; }
+        public string? ToStatus { get; init; }
+        public Guid? ContainerId { get; init; }
+
+        public PastEvent ToDomain() => new(Id, EffectiveAt, OccurredAt, Kind, QtyDelta, FromLocationId, ToLocationId, FromStatus, ToStatus, ContainerId);
     }
 
     public async Task<IReadOnlyList<AgingRowDto>> AgingAsync(Guid siteId, DateTimeOffset now, CancellationToken cancellationToken)

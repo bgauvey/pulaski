@@ -43,8 +43,11 @@ public sealed record AdjustLotRequest : IMayBackdate
 /// Moves a lot to another location. A lot moves whole; a balance of a material that isn't
 /// lot-tracked takes the quantity to move.
 /// </summary>
-public sealed record MoveLotRequest
+public sealed record MoveLotRequest : IMayBackdate
 {
+    /// <summary>When it counts, to back-date it (D-057, D-076): at most 31 days back, with a comment; needs <c>inventory.backdate</c>. Null: now.</summary>
+    public DateTimeOffset? EffectiveAt { get; init; }
+
     public long Version { get; init; }
     public Guid ToLocationId { get; init; }
     public decimal? Quantity { get; init; }
@@ -53,8 +56,11 @@ public sealed record MoveLotRequest
 }
 
 /// <summary>Holds, quarantines (reason of kind <c>hold</c> required) or releases a lot.</summary>
-public sealed record ChangeLotStatusRequest
+public sealed record ChangeLotStatusRequest : IMayBackdate
 {
+    /// <summary>When it counts, to back-date it (D-057, D-076): at most 31 days back, with a comment; needs <c>inventory.backdate</c>. Null: now.</summary>
+    public DateTimeOffset? EffectiveAt { get; init; }
+
     public long Version { get; init; }
 
     /// <summary><c>available</c>, <c>on_hold</c> or <c>quarantine</c>.</summary>
@@ -99,8 +105,11 @@ public sealed record ProduceLotRequest : IMayBackdate
 }
 
 /// <summary>Splits part of a lot into a new lot (D-030). A blank number becomes <c>&lt;lot&gt;-1</c>, <c>-2</c>…</summary>
-public sealed record SplitLotRequest
+public sealed record SplitLotRequest : IMayBackdate
 {
+    /// <summary>When it counts, to back-date it (D-057, D-076): at most 31 days back, with a comment; needs <c>inventory.backdate</c>. Null: now.</summary>
+    public DateTimeOffset? EffectiveAt { get; init; }
+
     public long Version { get; init; }
     public decimal Quantity { get; init; }
     public Guid UomId { get; init; }
@@ -112,16 +121,22 @@ public sealed record SplitLotRequest
 }
 
 /// <summary>Merges the source lots into the lot in the URL.</summary>
-public sealed record MergeLotsRequest
+public sealed record MergeLotsRequest : IMayBackdate
 {
+    /// <summary>When it counts, to back-date it (D-057, D-076): at most 31 days back, with a comment; needs <c>inventory.backdate</c>. Null: now.</summary>
+    public DateTimeOffset? EffectiveAt { get; init; }
+
     public long Version { get; init; }
     public IReadOnlyList<Guid> SourceLotIds { get; init; } = [];
     public string? Comment { get; init; }
 }
 
 /// <summary>Ships quantity of an available lot out of the site; a blank quantity ships it all.</summary>
-public sealed record ShipLotRequest
+public sealed record ShipLotRequest : IMayBackdate
 {
+    /// <summary>When it counts, to back-date it (D-057, D-076): at most 31 days back, with a comment; needs <c>inventory.backdate</c>. Null: now.</summary>
+    public DateTimeOffset? EffectiveAt { get; init; }
+
     public long Version { get; init; }
     public decimal? Quantity { get; init; }
     public Guid? UomId { get; init; }
@@ -150,6 +165,18 @@ public sealed record ReverseMovementRequest
     public Guid EventId { get; init; }
     public Guid ReasonCodeId { get; init; }
     public string? Comment { get; init; }
+}
+
+/// <summary>
+/// Undoes a movement with everything after it that depends on it (#79). Check first (<c>?dryRun=true</c>), then confirm with the steps the
+/// check returned in <see cref="ExpectedSteps"/>; it is refused if they have changed.
+/// </summary>
+public sealed record ReverseChainRequest
+{
+    public Guid EventId { get; init; }
+    public Guid ReasonCodeId { get; init; }
+    public string? Comment { get; init; }
+    public IReadOnlyList<Guid>? ExpectedSteps { get; init; }
 }
 
 /// <summary>A material's shelf life in days; null clears it (D-032).</summary>

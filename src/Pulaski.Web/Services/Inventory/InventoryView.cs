@@ -95,6 +95,11 @@ public static class InventoryView
         "split" => "The split comes apart: the new lot is cancelled and its quantity goes back to the lot it came from. The new lot must be just as it was split off.",
         "merged" => "The merge comes apart: the lot that was merged gets its quantity and status back, and the lot it joined goes down by that much.",
         "moved" when movement.RelatedLotId is not null => "The quantity goes back to the balance it came from; the receiving balance must still hold it.",
+        "moved" => "The lot goes back to where it was. Only while this is its latest move: a later move is reversed first.",
+        "status_changed" => "The lot goes back to the status it had. Only while this is its latest status change.",
+        "packed" => "The lot comes out of the container (back into any it was in before, and back to where it was if packing moved it).",
+        "unpacked" => "The lot goes back into the container, which must still be where the lot is.",
+        "corrected" => "The lot number, supplier lot and expiry go back to what they were, unless corrected again since.",
         _ when movement.Kind == "received" && lot.Quantity == movement.QtyDelta && !lot.IsBulk => "The lot goes back to how it was before it: empty, so it is cancelled.",
         _ => "The lot goes back to how it was before it. A reversal counts when the movement did, so stock at every time is as if it never happened.",
     };
@@ -108,6 +113,7 @@ public static class InventoryView
         "scrapped" => "Written off",
         "consumed" => "Consumed",
         "moved" => "Moved",
+        "loaded" => "Loaded",
         "status_changed" => "Status changed",
         _ => Display.Label(kind),
     };

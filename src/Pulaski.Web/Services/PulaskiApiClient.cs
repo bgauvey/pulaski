@@ -700,6 +700,24 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> SetFlowAsync(Guid locationId, SetFlowRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/inventory/locations/{locationId}/flow", request, ct);
 
+    public Task<LotTransactionResponse> LoadLotAsync(Guid lotId, LoadLotRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{lotId}/load", request, ct);
+
+    public Task<IReadOnlyList<FeedPointDto>> ListFeedPointsAsync(Guid? siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<FeedPointDto>>(Query("api/inventory/feed-points", ("siteId", siteId)), ct);
+
+    public Task<IReadOnlyList<FeedShortfallDto>> ListFeedShortfallsAsync(Guid? siteId, string status = "open", CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<FeedShortfallDto>>(Query("api/inventory/feed-shortfalls", ("siteId", siteId), ("status", status)), ct);
+
+    public Task<VersionResponse> ResolveFeedShortfallAsync(Guid id, ResolveShortfallRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/feed-shortfalls/{id}/resolve", request, ct);
+
+    public Task<VersionResponse> DismissFeedShortfallAsync(Guid id, DismissShortfallRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/feed-shortfalls/{id}/dismiss", request, ct);
+
+    public Task<VersionResponse> SetMadeFromAsync(Guid lotId, SetMadeFromRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/lots/{lotId}/made-from", request, ct);
+
     public Task<BalanceAllocationDto> GetBalanceAllocationAsync(Guid lotId, CancellationToken ct = default) =>
         GetAsync<BalanceAllocationDto>($"api/lots/{lotId}/allocation", ct);
 
@@ -887,6 +905,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<LotTransactionResponse> ReverseMovementAsync(Guid id, ReverseMovementRequest request, CancellationToken ct = default) =>
         SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{id}/reverse", request, ct);
 
+    /// <summary>Checks (<paramref name="dryRun"/>) or does a chain undo of a movement and what depends on it (#79).</summary>
+    public Task<ChainReversalDto> ReverseChainAsync(Guid id, ReverseChainRequest request, bool dryRun, CancellationToken ct = default) =>
+        SendAsync<ChainReversalDto>(HttpMethod.Post, $"api/lots/{id}/reverse-chain?dryRun={(dryRun ? "true" : "false")}", request, ct);
+
     public Task<IReadOnlyList<StockCountSummaryDto>> ListStockCountsAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<StockCountSummaryDto>>($"api/inventory/counts?siteId={siteId}", ct);
 
@@ -919,6 +941,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<VersionResponse> ConvertReasonCodeAsync(Guid id, ConvertReasonCodeRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/reason-codes/{id}/group", request, ct);
+
+    /// <summary>A lot's quantity, location, container and status at a past time (#77).</summary>
+    public Task<LotStateAtDto> GetLotStateAtAsync(Guid lotId, DateTimeOffset at, CancellationToken ct = default) =>
+        GetAsync<LotStateAtDto>(Query($"api/lots/{lotId}/at", ("at", Iso(at))), ct);
 
     public Task<IReadOnlyList<StockOnDateDto>> StockOnDateAsync(Guid siteId, DateTimeOffset at, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<StockOnDateDto>>(Query("api/inventory/reports/stock-on-date", ("siteId", siteId), ("at", Iso(at))), ct);

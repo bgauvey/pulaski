@@ -42,6 +42,9 @@ public sealed record ReportProductionCommand(
 
     /// <summary>A partial batch in the base unit: as the line stops, or later into a run that ended with a reason.</summary>
     public decimal? PartialQty { get; init; }
+
+    /// <summary>The lots the job used that every lot this report makes was made from (#81); empty: they pair by time.</summary>
+    public IReadOnlyList<Guid> MadeFromLotIds { get; init; } = [];
 }
 
 /// <summary>The run a report or a consumption belongs to, and the rules every report shares (D-035).</summary>
@@ -115,12 +118,13 @@ internal sealed class ReportProductionHandler(
     IEventFactory events,
     IIdGenerator ids,
     TimeProvider timeProvider,
-    ILineBatchSizes? lineBatches = null) : ICommandHandler<ReportProductionCommand, ReportProductionResponse>
+    ILineBatchSizes? lineBatches = null,
+    IFeedRepository? feeds = null) : ICommandHandler<ReportProductionCommand, ReportProductionResponse>
 {
     public async Task<ReportProductionResponse> HandleAsync(ReportProductionCommand command, CancellationToken cancellationToken)
     {
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
-        var result = await new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches)
+        var result = await new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds)
             .ReportAsync(command, onStop: false, timeProvider.GetUtcNow(), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return result;
@@ -139,7 +143,8 @@ internal sealed class ProductionReporter(
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    ILineBatchSizes? lineBatches = null)
+    ILineBatchSizes? lineBatches = null,
+    IFeedRepository? feeds = null)
 {
     /// <param name="command">The report.</param>
     /// <param name="onStop">The report is the partial batch of a run being ended now, by a pause or completion with a reason.</param>
@@ -160,6 +165,7 @@ internal sealed class ProductionReporter(
             .Require(command.ScrapQty == 0 && command.ScrapBatches.Count == 0 || command.ScrapReasonCodeId is not null, nameof(command.ScrapReasonCodeId), "Choose why it was scrapped.")
             .Require(command.GoodQty == 0 && command.GoodBatches.Count == 0 && command.PartialQty is null || command.LocationId is not null, nameof(command.LocationId), "Choose where the good output goes.")
             .RequireLotNumber(lotNumber, nameof(command.LotNumber))
+            .Require(command.MadeFromLotIds.Count <= SetMadeFromHandler.MaxParents, nameof(command.MadeFromLotIds), $"At most {SetMadeFromHandler.MaxParents} lots.")
             .RequireComment(command.Comment)
             .ThrowIfInvalid();
 
@@ -288,6 +294,13 @@ internal sealed class ProductionReporter(
         }
 
         warnings.AddRange(lots.SelectMany(l => l.Warnings));
+
+        // Components taken automatically (#33): backflushed, or shared among the lots loaded at the line's feed points while it was made.
+        if (feeds is not null)
+        {
+            warnings.AddRange(await new FeedAutomation(inventory, units, feeds, eventLog, events, ids).OnReportAsync(job, run, reportId, good + scrap, occurredAt, now, cancellationToken));
+        }
+
         return new ReportProductionResponse
         {
             ReportId = reportId,
@@ -350,7 +363,7 @@ internal sealed class ProductionReporter(
         CancellationToken cancellationToken) =>
         ProductionOutput.ProduceAsync(
             inventory, units, eventLog, events, ids, job, command.LocationId!.Value, quantity, unit, lotNumber, command.ExpiresAt, comment, run.Id, now,
-            MovementTime.Backdated(Backdating.EffectiveAt(command.EffectiveAt, now, comment), now), reportId, cancellationToken);
+            MovementTime.Backdated(Backdating.EffectiveAt(command.EffectiveAt, now, comment), now), reportId, command.MadeFromLotIds, cancellationToken);
 
     /// <summary>The partial batch's record; under the exact rule its lot goes on hold until someone approves it (D-036).</summary>
     private async Task<InventoryWarningDto> RecordPartialAsync(

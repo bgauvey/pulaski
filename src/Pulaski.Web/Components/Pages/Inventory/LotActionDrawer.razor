@@ -149,6 +149,25 @@
                         @ReasonField()
                         break;
 
+                    case LotAction.Load:
+                        <div class="mb-3">
+                            <label class="form-label" for="lot-feed">Feed point</label>
+                            <select id="lot-feed" class="form-select" @bind="_locationId">
+                                <option value="@Guid.Empty">@(_feedPoints.Count == 0 ? "No feed points at this site" : "Choose a feed point…")</option>
+                                @foreach (var f in _feedPoints)
+                                {
+                                    <option value="@f.Id">@f.Code · @f.Name@(f.LineCode is { } line ? $" ({line})" : "")</option>
+                                }
+                            </select>
+                        </div>
+                        <p class="small text-muted">
+                            @(_locationId == Lot!.LocationId
+                                ? "It is there already: it feeds from now, and the lot of its material loaded before it stops feeding."
+                                : $"The whole lot moves there, all {InventoryView.Qty(Lot.Quantity)} {Lot.UomCode}, and feeds from now.")
+                            Automated consumption (backflush, time window, a counter) takes from it while it is loaded.
+                        </p>
+                        break;
+
                     case LotAction.Move:
                         @LocationField(Lot!.LocationId)
                         @if (Lot.IsBulk)
@@ -267,6 +286,27 @@
                                 <dd>@Display.SiteTime(undo.OccurredAt, Sites.Site?.TimeZone)</dd>
                             </dl>
                             <p class="small text-muted">@InventoryView.ReversalNote(undo, Lot!)</p>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="lot-chain" checked="@_chain" @onchange="e => { _chain = e.Value is true; _chainCheck = null; }" />
+                                <label class="form-check-label" for="lot-chain">With everything after it that depends on it</label>
+                                <div class="form-text">Every later movement of this lot, and of lots split off it since, is reversed first, latest first. Check shows the list before anything is done.</div>
+                            </div>
+                            @if (_chainCheck is { } check)
+                            {
+                                <div class="small mb-2">
+                                    <div class="fw-semibold">@(check.Reversible ? $"It reverses {check.Steps.Count} {(check.Steps.Count == 1 ? "movement" : "movements")}, latest first:" : "It can't all be reversed:")</div>
+                                    <ol class="mb-1">
+                                        @foreach (var step in check.Steps)
+                                        {
+                                            <li>@step.LotName: @InventoryView.EventLabel(step.Kind).ToLowerInvariant()@(step.Quantity is { } q ? $" {InventoryView.Delta(q)}" : "")@(step.JobNumber is { } job ? $" ({job})" : ""), @Display.SiteTime(step.EffectiveAt, Sites.Site?.TimeZone)</li>
+                                        }
+                                    </ol>
+                                    @if (check.Problem is { } problem)
+                                    {
+                                        <div class="text-danger">@problem</div>
+                                    }
+                                </div>
+                            }
                         }
                         @ReasonField()
                         break;
@@ -280,6 +320,9 @@
                         <div class="form-text">
                             To back-date it, up to 31 days, to when it was really done; it is recorded now as well. A comment saying why is required.
                             @(Action is LotAction.Consume or LotAction.Produce ? "It goes into the run going on then." : "")
+                            @(Action is LotAction.Move or LotAction.Hold or LotAction.Release ? "Only as the lot's latest movement: nothing else may count after it." : "")
+                            @(Action is LotAction.Split or LotAction.Ship ? "Only if the lot's status and location haven't changed since." : "")
+                            @(Action is LotAction.Merge ? "The lots taken in must have nothing counting after it." : "")
                         </div>
                     </div>
                 }
@@ -336,6 +379,7 @@
     private IReadOnlyList<UomDto> _uoms = [];
     private IReadOnlyList<MaterialDto> _materials = [];
     private IReadOnlyList<InventoryLocationDto> _locations = [];
+    private IReadOnlyList<FeedPointDto> _feedPoints = [];
     private IReadOnlyList<ReasonCodeDto> _reasons = [];
     private IReadOnlyList<DeclarableJobDto> _jobs = [];
     private IReadOnlyList<JobComponentUseDto> _components = [];
@@ -360,9 +404,10 @@
     private IReadOnlyList<ExpectedReceiptDto> _expected = [];
     private Guid _expectedId;
 
-    // Back-dating (D-057) is for quantity movements, and only for those allowed it at the site.
+    // Back-dating (D-057, D-076): every movement but a correction, a reversal and packing, and only for those allowed it at the site.
     private bool CanBackdate =>
         Action is LotAction.Receive or LotAction.Produce or LotAction.Consume or LotAction.WriteUp or LotAction.WriteOff
+            or LotAction.Move or LotAction.Hold or LotAction.Release or LotAction.Split or LotAction.Merge or LotAction.Ship
         && User.Can(PermissionCodes.InventoryBackdate, Sites.SiteId);
 
     private DateTimeOffset? EffectiveAt => CanBackdate ? Display.FromSiteLocal(_effective, Sites.Site?.TimeZone) : null;
@@ -388,7 +433,14 @@
         ? $"{lot.MaterialCode} · {InventoryView.LotLabel(lot.LotNumber, lot.IsBulk, lot.LocationCode)}"
         : Job is { } job ? $"{job.JobNumber} · {job.MaterialCode}" : Sites.Site?.Code ?? "";
 
-    private string SubmitLabel => Action switch
+    private bool _chain;
+    private ChainReversalDto? _chainCheck;
+
+    private string SubmitLabel => Action == LotAction.Reverse && _chain
+        ? _chainCheck is { Reversible: true } check ? $"Undo {check.Steps.Count} {(check.Steps.Count == 1 ? "movement" : "movements")}" : "Check"
+        : PlainSubmitLabel;
+
+    private string PlainSubmitLabel => Action switch
     {
         LotAction.Receive => "Receive",
         LotAction.Produce => "Record production",
@@ -396,6 +448,7 @@
         LotAction.WriteUp => "Write up",
         LotAction.WriteOff => "Write off",
         LotAction.Move => "Move",
+        LotAction.Load => "Load",
         LotAction.Hold => _holdStatus == "quarantine" ? "Quarantine" : "Hold",
         LotAction.Release => "Release",
         LotAction.Split => "Split",
@@ -414,6 +467,7 @@
         LotAction.WriteUp => _quantity > 0 && _reasonId != Guid.Empty,
         LotAction.WriteOff => _reasonId != Guid.Empty,
         LotAction.Move => _locationId != Guid.Empty && (Lot?.IsBulk != true || _quantity > 0),
+        LotAction.Load => _locationId != Guid.Empty,
         LotAction.Hold => _reasonId != Guid.Empty,
         LotAction.Split => _quantity > 0 && _uomId != Guid.Empty,
         LotAction.Merge => _mergeIds.Count > 0,
@@ -485,6 +539,10 @@
                     break;
                 case LotAction.Move when Lot is not null:
                     _uomId = Lot.UomId;
+                    break;
+                case LotAction.Load when Lot is not null:
+                    _feedPoints = await Api.ListFeedPointsAsync(Lot.SiteId);
+                    _locationId = _feedPoints.FirstOrDefault(f => f.Id == Lot.LocationId)?.Id ?? Guid.Empty;
                     break;
                 case LotAction.Hold when Lot?.Status == "on_hold":
                     _holdStatus = "quarantine";
@@ -640,6 +698,17 @@
         var comment = string.IsNullOrWhiteSpace(_comment) ? null : _comment.Trim();
         try
         {
+            // A chain undo's first click only checks; the drawer stays open with the list.
+            (LotTransactionResponse, string)? chained = null;
+            if (action == LotAction.Reverse && _chain)
+            {
+                chained = await ChainAsync(comment);
+                if (chained is null)
+                {
+                    return;
+                }
+            }
+
             var (response, message) = action switch
             {
                 LotAction.Receive => await ReceiveAsync(comment),
@@ -655,17 +724,21 @@
                         Quantity = Lot.IsBulk ? _quantity : null,
                         UomId = Lot.IsBulk ? _uomId : null,
                         Comment = comment,
+                        EffectiveAt = EffectiveAt,
                     }),
                     $"{(Lot.IsBulk ? QtyText + " " : "")}moved to {LocationCode(_locationId)}"),
+                LotAction.Load => Done(
+                    await Api.LoadLotAsync(Lot!.Id, new LoadLotRequest { Version = Lot.Version, FeedPointId = _locationId, Comment = comment }),
+                    $"loaded at {_feedPoints.FirstOrDefault(f => f.Id == _locationId)?.Code}"),
                 LotAction.Hold => Done(
-                    await Api.ChangeLotStatusAsync(Lot!.Id, new ChangeLotStatusRequest { Version = Lot.Version, Status = _holdStatus, ReasonCodeId = _reasonId, Comment = comment }),
+                    await Api.ChangeLotStatusAsync(Lot!.Id, new ChangeLotStatusRequest { Version = Lot.Version, Status = _holdStatus, ReasonCodeId = _reasonId, Comment = comment, EffectiveAt = EffectiveAt }),
                     _holdStatus == "quarantine" ? "quarantined" : "put on hold"),
                 LotAction.Release => Done(
-                    await Api.ChangeLotStatusAsync(Lot!.Id, new ChangeLotStatusRequest { Version = Lot.Version, Status = "available", Comment = comment }),
+                    await Api.ChangeLotStatusAsync(Lot!.Id, new ChangeLotStatusRequest { Version = Lot.Version, Status = "available", Comment = comment, EffectiveAt = EffectiveAt }),
                     "released"),
                 LotAction.Split => await SplitAsync(comment),
                 LotAction.Merge => Done(
-                    await Api.MergeLotsAsync(Lot!.Id, new MergeLotsRequest { Version = Lot.Version, SourceLotIds = [.. _mergeIds], Comment = comment }),
+                    await Api.MergeLotsAsync(Lot!.Id, new MergeLotsRequest { Version = Lot.Version, SourceLotIds = [.. _mergeIds], Comment = comment, EffectiveAt = EffectiveAt }),
                     $"took in {_mergeIds.Count} {(_mergeIds.Count == 1 ? "lot" : "lots")}"),
                 LotAction.Ship => Done(
                     await Api.ShipLotAsync(Lot!.Id, new ShipLotRequest
@@ -675,6 +748,7 @@
                         UomId = _quantity is null ? null : _uomId,
                         Reference = _reference!.Trim(),
                         Comment = comment,
+                        EffectiveAt = EffectiveAt,
                     }),
                     $"{(_quantity is null ? "" : QtyText + " ")}shipped on {_reference!.Trim()}"),
                 LotAction.Correct => Done(
@@ -687,9 +761,10 @@
                         Comment = comment!,
                     }),
                     "corrected"),
+                LotAction.Reverse when chained is { } done => done,
                 LotAction.Reverse => Done(
                     await Api.ReverseMovementAsync(Lot!.Id, new ReverseMovementRequest { Version = Lot.Version, EventId = Movement!.Id, ReasonCodeId = _reasonId, Comment = comment }),
-                    $"had its latest movement ({InventoryView.EventLabel(Movement.Kind).ToLowerInvariant()}) reversed"),
+                    $"had a movement ({InventoryView.EventLabel(Movement.Kind).ToLowerInvariant()}) reversed"),
                 _ => throw new InvalidOperationException(),
             };
             await OnDone.InvokeAsync(new LotActionResult(response, message));
@@ -755,6 +830,22 @@
         return (response, $"{QtyText} of {InventoryView.LotLabel(lot.LotNumber, lot.IsBulk, lot.LocationCode)} consumed by {job.JobNumber}");
     }
 
+    // A chain undo (#79): the first click checks and lists what it would reverse; the second does it, refused if the chain changed meanwhile.
+    private async Task<(LotTransactionResponse, string)?> ChainAsync(string? comment)
+    {
+        var request = new ReverseChainRequest { EventId = Movement!.Id, ReasonCodeId = _reasonId, Comment = comment, ExpectedSteps = _chainCheck?.Steps.Select(s => s.EventId).ToList() };
+        if (_chainCheck is not { Reversible: true })
+        {
+            _chainCheck = await Api.ReverseChainAsync(Lot!.Id, request with { ExpectedSteps = null }, dryRun: true);
+            return null;
+        }
+
+        var done = await Api.ReverseChainAsync(Lot!.Id, request, dryRun: false);
+        _chainCheck = null;
+        return (new LotTransactionResponse { LotId = Lot.Id, LotNumber = Lot.LotNumber, Quantity = Lot.Quantity, Status = Lot.Status, Version = Lot.Version },
+            $"had {done.Steps.Count} {(done.Steps.Count == 1 ? "movement" : "movements")} reversed, latest first");
+    }
+
     private async Task<(LotTransactionResponse, string)> SplitAsync(string? comment)
     {
         var response = await Api.SplitLotAsync(Lot!.Id, new SplitLotRequest
@@ -765,6 +856,7 @@
             NewLotNumber = string.IsNullOrWhiteSpace(_lotNumber) ? null : _lotNumber.Trim(),
             ToLocationId = _locationId == Guid.Empty ? null : _locationId,
             Comment = comment,
+            EffectiveAt = EffectiveAt,
         });
         return (response, $"{QtyText} split off {Lot.LotNumber} into {response.LotNumber}.");
     }

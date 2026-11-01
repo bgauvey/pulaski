@@ -111,8 +111,9 @@ public sealed class MigrationTests(DatabaseFixture db)
         Assert.True(created > 0);
         Assert.Equal(0, await Maintenance.EnsurePartitionsAsync(6, CancellationToken.None));
 
-        var lastMonth = DateTime.UtcNow.AddMonths(5).ToString("yyyyMM", System.Globalization.CultureInfo.InvariantCulture);
+        // The month as the server counts it: partitions are made from its current_date, which near a month's end may differ from UTC's.
         await using var connection = await db.AdminDataSource.OpenConnectionAsync();
+        var lastMonth = await connection.ExecuteScalarAsync<string>("SELECT to_char(current_date + interval '5 months', 'YYYYMM')");
         var parentsWithoutIt = await connection.QueryAsync<string>(
             """
             SELECT pt.partrelid::regclass::text

@@ -65,6 +65,12 @@ public interface IInventoryReadStore
     /// </summary>
     Task<BalanceHistory?> GetBalanceHistoryAsync(Guid lotId, CancellationToken cancellationToken);
 
+    /// <summary>Every current genealogy link into the lots (all their parents), for pairing them (#81).</summary>
+    Task<IReadOnlyList<GenealogyLink>> ListLinksToAsync(IReadOnlyCollection<Guid> childLotIds, CancellationToken cancellationToken);
+
+    /// <summary>The jobs' standing consumption and production (neither reversed nor reversals), in the order they count (#81).</summary>
+    Task<IReadOnlyList<JobDeclaration>> ListJobDeclarationsAsync(IReadOnlyCollection<Guid> jobIds, CancellationToken cancellationToken);
+
     /// <summary>Released and draft BOMs listing the material, and open jobs planned to consume it; null when it doesn't exist.</summary>
     Task<WhereUsedDto?> WhereUsedAsync(Guid materialId, CancellationToken cancellationToken);
 
@@ -107,8 +113,17 @@ public interface IInventoryReadStore
     /// <summary>Every reason, active or not, enterprise-wide and for the site (or every site when null).</summary>
     Task<IReadOnlyList<ReasonCodeAdminDto>> ListAllReasonCodesAsync(Guid? siteId, CancellationToken cancellationToken);
 
-    /// <summary>Each material's on-hand quantity at <paramref name="at"/>, from each lot's latest movement before it.</summary>
-    Task<IReadOnlyList<StockOnDateDto>> StockOnDateAsync(Guid siteId, DateTimeOffset at, CancellationToken cancellationToken);
+    /// <summary>
+    /// The site's lots that existed at <paramref name="at"/> (a movement counting by then), each as it is now with its movements counting after
+    /// it (#77): enough to work out its quantity, location and status then.
+    /// </summary>
+    Task<IReadOnlyList<PastLotRow>> ListPastLotsAsync(Guid siteId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>One lot as it is now with every movement, to work out its state at a time (#77); null when it doesn't exist.</summary>
+    Task<LotPastSource?> GetLotPastAsync(Guid lotId, CancellationToken cancellationToken);
+
+    /// <summary>Codes of locations and containers, by id, for the ids given.</summary>
+    Task<IReadOnlyDictionary<Guid, string>> ListCodesAsync(IReadOnlyCollection<Guid> locationOrContainerIds, CancellationToken cancellationToken);
 
     /// <summary>Each material's on-hand stock by the age of its lots at <paramref name="now"/>.</summary>
     Task<IReadOnlyList<AgingRowDto>> AgingAsync(Guid siteId, DateTimeOffset now, CancellationToken cancellationToken);
@@ -228,6 +243,12 @@ public interface IInventoryRepository
     /// <summary>A lot's movements recorded after <paramref name="after"/>, oldest first: what has happened to it since.</summary>
     Task<IReadOnlyList<LotEventDetail>> ListEventsAfterAsync(Guid lotId, LotEventDetail after, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The lot's movements that count after <paramref name="after"/> and still stand (#79): not reversed and not reversals themselves, in
+    /// effective order. What a reversal must not contradict, and what a chain undo takes back.
+    /// </summary>
+    Task<IReadOnlyList<LotEventDetail>> ListStandingAfterAsync(Guid lotId, LotEventDetail after, CancellationToken cancellationToken);
+
     /// <summary>The lot movements a production report recorded (D-063), oldest first.</summary>
     Task<IReadOnlyList<LotEventDetail>> ListReportEventsAsync(Guid reportId, CancellationToken cancellationToken);
 
@@ -293,6 +314,9 @@ public interface IInventoryRepository
     /// <summary>The job locked <c>FOR UPDATE</c>, so declarations on one job serialize (D-027).</summary>
     Task<InventoryJob?> GetJobForUpdateAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>Locks the jobs <c>FOR UPDATE</c> in id order, in SQL (#79: a chain undo takes its jobs before its lots, D-027).</summary>
+    Task LockJobsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
     /// <summary>The lots the job has produced (<c>core.lot.produced_by_job_id</c>).</summary>
     Task<IReadOnlyList<Guid>> ListLotsProducedByJobAsync(Guid jobId, CancellationToken cancellationToken);
 
@@ -305,7 +329,13 @@ public interface IInventoryRepository
     /// <summary>The lot's quantity movements in the order they count: by effective time, then record time (D-057).</summary>
     Task<IReadOnlyList<QuantityPoint>> ListQuantityTimelineAsync(Guid lotId, CancellationToken cancellationToken);
 
-    /// <summary>When the latest posted stock count that counted the lot was posted; null when none did.</summary>
+    /// <summary>Where the container is now; null when it doesn't exist (#79, putting a lot back into it).</summary>
+    Task<Guid?> GetContainerLocationAsync(Guid containerId, CancellationToken cancellationToken);
+
+    /// <summary>The lot's movements as its state at a past time is worked out from (#77), in the command's transaction.</summary>
+    Task<IReadOnlyList<PastEvent>> ListPastEventsAsync(Guid lotId, CancellationToken cancellationToken);
+
+    /// <summary>When the lot was counted in the latest posted stock count that counted it (its line's counted time, #77); null when none did.</summary>
     Task<DateTimeOffset?> LatestCountOfLotAsync(Guid lotId, CancellationToken cancellationToken);
 
     /// <summary>
@@ -337,7 +367,10 @@ public sealed record LotEventRow(
     Guid? RunId = null,
     DateTimeOffset? EffectiveAt = null,
     Guid? ContainerId = null,
-    Guid? ReportId = null);
+    Guid? ReportId = null,
+    string? Details = null,
+    string? AutoSource = null,
+    Guid? SourceRef = null);
 
 /// <summary>
 /// One movement of a lot as reversing it needs it (D-063): what it did, what it belonged to, and the reversal of it, if any.
@@ -358,12 +391,24 @@ public sealed record LotEventDetail
 
     /// <summary>The reversal that undid it; null while it stands.</summary>
     public Guid? ReversedBy { get; init; }
+
+    /// <summary>The movement it reverses, when it is a reversal (whatever its kind, #79).</summary>
+    public Guid? ReversesEventId { get; init; }
+
+    /// <summary>The container it packed into, unpacked from or moved with (D-059).</summary>
+    public Guid? ContainerId { get; init; }
+
+    /// <summary>A correction's lot details before and after it, as JSON (#79); null for other movements and older corrections.</summary>
+    public string? Details { get; init; }
 }
 
 /// <summary>A parent-to-child lot edge: <c>declared</c> by a job, or from a <c>split</c> or <c>merge</c> (D-030, no job).</summary>
 public sealed record GenealogyEdge(Guid Id, Guid ParentLotId, Guid ChildLotId, Guid? JobId, string Basis = GenealogyEdge.Declared)
 {
     public const string Declared = "declared";
+
+    /// <summary>Picked as what a made lot was made from, out of the lots its job used (#81).</summary>
+    public const string MadeFrom = "made_from";
     public const string Split = "split";
     public const string Merge = "merge";
 }
@@ -375,8 +420,24 @@ public sealed record LockedLot(Lot Lot, long Version, DateTimeOffset UpdatedAt);
 /// <summary>A lot movement as reversing it needs it; <c>EffectiveAt</c> is when it counts in stock (D-057), its record time unless back-dated.</summary>
 public sealed record LotEventRecord(Guid Id, DateTimeOffset OccurredAt, LotMovement Movement, Guid? RelatedLotId, DateTimeOffset? EffectiveAt = null);
 
-/// <summary>A balance's movements and how its location flows (D-060).</summary>
-public sealed record BalanceHistory(Guid LotId, string FlowModel, TimeSpan? MinResidence, IReadOnlyList<BalanceMovementRow> Movements);
+/// <summary>A balance's movements and how its location flows (D-060), with its location's level readings (#81) when it has a level tag.</summary>
+public sealed record BalanceHistory(Guid LotId, string FlowModel, TimeSpan? MinResidence, IReadOnlyList<BalanceMovementRow> Movements, BalanceLevelData? Levels = null);
+
+/// <summary>
+/// A balance's location's level readings (#81), in the level tag's unit: when it read empty (at or below <c>EmptyLevel</c>, from the
+/// first reading of each empty stretch) and, with a tolerance set, the last good reading in the 15 minutes before each withdrawal.
+/// </summary>
+public sealed record BalanceLevelData(
+    Guid MaterialId,
+    Guid BaseUomId,
+    Guid? LevelUomId,
+    decimal? EmptyLevel,
+    decimal? Tolerance,
+    IReadOnlyList<EmptyPoint> Empties,
+    IReadOnlyDictionary<Guid, decimal> ReadingBefore);
+
+/// <summary>A current genealogy link to a lot: its parent, its basis (<see cref="GenealogyEdge"/>) and the job that made it.</summary>
+public sealed record GenealogyLink(Guid ParentLotId, Guid ChildLotId, string Basis, Guid? JobId);
 
 /// <summary>One movement of a balance, with the names screens show.</summary>
 public sealed record BalanceMovementRow
@@ -392,7 +453,9 @@ public sealed record BalanceMovementRow
 }
 
 /// <summary>A location's flow settings (D-060), as changing them needs them.</summary>
-public sealed record FlowSettings(Guid EquipmentId, Guid? SiteId, string Code, bool HoldsInventory, string FlowModel, TimeSpan? MinResidence);
+/// <remarks><c>EmptyLevel</c> and <c>LevelTolerance</c> are in the level tag's unit (#81): a reading at or below empty means empty; null tolerance = not compared.</remarks>
+public sealed record FlowSettings(
+    Guid EquipmentId, Guid? SiteId, string Code, bool HoldsInventory, string FlowModel, TimeSpan? MinResidence, decimal? EmptyLevel = null, decimal? LevelTolerance = null);
 
 /// <summary>One quantity movement of a lot, by when it counts and when it was recorded (D-057).</summary>
 public sealed record QuantityPoint(DateTimeOffset EffectiveAt, DateTimeOffset OccurredAt, decimal Delta);
@@ -410,6 +473,9 @@ public sealed record InventoryLocation
     /// <summary>Takes one material at a time (D-032).</summary>
     public bool SingleMaterial { get; init; }
     public bool IsActive { get; init; }
+
+    /// <summary>A feed point (#33): where lots are loaded onto a line.</summary>
+    public bool IsFeedPoint { get; init; }
 }
 
 public sealed record InventoryMaterial
@@ -472,3 +538,10 @@ public static class ReasonKinds
     public const string RunEnd = "run_end";
     public const string Utilization = "utilization";
 }
+
+/// <summary>A lot as Stock on a date works its past out from (#77): what it is now, with its movements counting after the time.</summary>
+public sealed record PastLotRow(
+    Guid LotId, Guid MaterialId, string MaterialCode, string MaterialName, string? MaterialClassName, string UomCode, LotNow Now, IReadOnlyList<PastEvent> EventsAfter);
+
+/// <summary>A lot with every movement, for its state at a time (#77).</summary>
+public sealed record LotPastSource(Guid LotId, Guid SiteId, string UomCode, LotNow Now, IReadOnlyList<PastEvent> Events);

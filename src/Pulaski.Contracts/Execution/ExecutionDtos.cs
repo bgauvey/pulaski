@@ -278,6 +278,9 @@ public sealed record ReportProductionRequest
 
     /// <summary>A partial batch added to a run that ended with a reason, in the base unit.</summary>
     public decimal? PartialQty { get; init; }
+
+    /// <summary>Optional (#81): the lots the job used that what this report makes was made from; left empty, they are paired by time.</summary>
+    public IReadOnlyList<Guid> MadeFromLotIds { get; init; } = [];
 }
 
 /// <summary>What a start, pause, completion or reopening did, with notes such as downstream jobs now ready.</summary>

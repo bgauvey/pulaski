@@ -87,6 +87,8 @@ CREATE TABLE core.equipment (
     commingles_lots         boolean NOT NULL DEFAULT false,         -- lots here mix into one balance per material, like a silo (D-031)
     flow_model              text NOT NULL DEFAULT 'mixed' CHECK (flow_model IN ('mixed','fifo')),   -- how a balance here flows, for genealogy (D-060)
     min_residence           interval CHECK (min_residence IS NULL OR min_residence >= interval '0'), -- the least time material stays before it can leave
+    empty_level             numeric(18,6),                          -- a level reading at or below this (in the level tag's unit) means empty (#81)
+    level_tolerance         numeric(18,6) CONSTRAINT equipment_level_tolerance_ck CHECK (level_tolerance IS NULL OR level_tolerance >= 0), -- level vs declared stock, tag unit; null = not compared
     single_material         boolean NOT NULL DEFAULT false,         -- takes one material at a time (D-032)
     -- machine data (D-050): where its state comes from, and how short a stop is a micro-stop
     state_derivation        text NOT NULL DEFAULT 'own_tags' CHECK (state_derivation IN ('own_tags','series','parallel','constraint_machine')),
@@ -1391,6 +1393,36 @@ CREATE UNIQUE INDEX partial_batch_run_uq ON core.partial_batch (run_id) WHERE st
 CREATE INDEX partial_batch_pending_ix ON core.partial_batch (status) WHERE status = 'pending';
 CREATE INDEX partial_batch_job_ix ON core.partial_batch (job_id);
 
+-- What an automated consumption at a feed point or line couldn't cover (#33): nothing loaded, not enough in the lot, nothing running.
+-- Resolved by consuming from a lot someone picks, or dismissed with a note; never deleted.
+CREATE TABLE core.feed_shortfall (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    equipment_id        uuid NOT NULL REFERENCES core.equipment(id),   -- the feed point, or the line for backflush
+    job_id              uuid REFERENCES core.job(id),                  -- null when nothing was running
+    run_id              uuid REFERENCES core.job_run(id),
+    material_id         uuid REFERENCES core.material(id),             -- null when nothing was loaded to say what it was
+    lot_id              uuid REFERENCES core.lot(id),                  -- the lot that ran short, if any
+    quantity            core.qty NOT NULL CHECK (quantity > 0),
+    uom_id              uuid REFERENCES core.uom(id),
+    source              text NOT NULL CHECK (source IN ('backflush','time_window','counter')),
+    source_ref          uuid NOT NULL,                                 -- the production report or the machine count
+    occurred_at         timestamptz NOT NULL,
+    reason              text NOT NULL CHECK (length(reason) <= 500),
+    status              text NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved','dismissed')),
+    resolved_lot_id     uuid REFERENCES core.lot(id),
+    resolved_by         text,
+    resolved_at         timestamptz,
+    resolution_note     text CHECK (length(resolution_note) <= 1000),
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT feed_shortfall_resolved_ck CHECK ((status = 'open') = (resolved_at IS NULL))
+);
+-- One per source, place and material, so a repeated signal or a retry records nothing twice.
+CREATE UNIQUE INDEX feed_shortfall_source_uq ON core.feed_shortfall (source_ref, equipment_id, material_id) NULLS NOT DISTINCT;
+CREATE INDEX feed_shortfall_open_ix ON core.feed_shortfall (site_id) WHERE status = 'open';
+
+-- Not used: loads at feed points are worked out from ts.lot_event (#33, D-079).
 CREATE TABLE core.material_load (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     lot_id              uuid NOT NULL REFERENCES core.lot(id),
@@ -1412,7 +1444,8 @@ CREATE TABLE core.lot_genealogy (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     parent_lot_id       uuid NOT NULL REFERENCES core.lot(id),
     child_lot_id        uuid NOT NULL REFERENCES core.lot(id),
-    link_basis          text NOT NULL CHECK (link_basis IN ('time_window','declared','split','merge','rework')),
+    link_basis          text NOT NULL CONSTRAINT lot_genealogy_link_basis_check
+                            CHECK (link_basis IN ('time_window','declared','made_from','split','merge','rework')),  -- made_from: picked per lot (#81)
     quantity            core.qty,                               -- estimated for time_window
     uom_id              uuid REFERENCES core.uom(id),
     job_id              uuid REFERENCES core.job(id),           -- the job that consumed the parent and made the child (declared)
@@ -1840,6 +1873,9 @@ CREATE TABLE ts.lot_event (
     reverses_event_id   uuid,                                   -- the movement a reversal undoes, with its time (no FK into history)
     report_id           uuid,                                   -- the production report that made it (D-063): ts.production_count.report_id
     reverses_occurred_at timestamptz,
+    details             jsonb,                                  -- a correction's lot details before and after it (#79), to reverse it
+    auto_source         text CONSTRAINT lot_event_auto_source_ck CHECK (auto_source IN ('backflush','time_window','counter')), -- automated consumption (#33)
+    source_ref          uuid,                                   -- what caused it: the production report, or the machine count (#33)
     actor_user_id       uuid,
     actor_id            text,                                   -- issuer|subject, as on evt.event, until sec.app_user exists
     PRIMARY KEY (id, occurred_at)
@@ -1850,6 +1886,10 @@ CREATE INDEX lot_event_job_id_idx ON ts.lot_event (job_id) WHERE job_id IS NOT N
 CREATE INDEX lot_event_reverses_ix ON ts.lot_event (lot_id, reverses_event_id) WHERE reverses_event_id IS NOT NULL;
 CREATE INDEX lot_event_report_ix ON ts.lot_event (report_id) WHERE report_id IS NOT NULL;
 CREATE INDEX lot_event_occurred_at_brin ON ts.lot_event USING brin (occurred_at);   -- the movement journal reads by time (D-029)
+CREATE INDEX lot_event_source_ref_ix ON ts.lot_event (source_ref) WHERE source_ref IS NOT NULL;
+-- Loads at a feed point are worked out from the movements naming it (#33).
+CREATE INDEX lot_event_to_location_ix ON ts.lot_event (to_location_id, effective_at) WHERE to_location_id IS NOT NULL;
+CREATE INDEX lot_event_from_location_ix ON ts.lot_event (from_location_id, effective_at) WHERE from_location_id IS NOT NULL;
 
 -- One row per subgroup. Variables: values[] plus computed statistics.
 -- Attributes: inspected/defect counts. Limits in force are stamped on.
@@ -2187,7 +2227,10 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0041_oee_rollups'),
     ('0042_oee_targets'),
     ('0043_changeover_rules'),
-    ('0044_line_batch_tolerance');
+    ('0044_line_batch_tolerance'),
+    ('0045_reversal_details'),
+    ('0046_lot_pairing'),
+    ('0047_feed_automation');
 
 -- =====================================================================
 -- 17. SEED DATA

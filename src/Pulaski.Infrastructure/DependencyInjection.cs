@@ -61,6 +61,7 @@ public static class DependencyInjection
         services.AddSingleton<ISecurityReadStore>(sp => sp.GetRequiredService<SecurityQueries>());
         services.AddSingleton<ISiteLookup>(sp => sp.GetRequiredService<SecurityQueries>());
         services.AddSingleton<IInventoryReadStore, InventoryQueries>();
+        services.AddSingleton<IFeedReadStore, FeedQueries>();
         services.AddSingleton<ILotRecordsReadStore, LotRecordsQueries>();
         services.AddSingleton<IExpectedReceiptReadStore, ExpectedReceiptQueries>();
         services.AddSingleton<IContainerReadStore, ContainerQueries>();
@@ -94,6 +95,7 @@ public static class DependencyInjection
         services.AddScoped<IBomRepository, BomRepository>();
         services.AddScoped<IUnitRepository, UnitRepository>();
         services.AddScoped<IInventoryRepository, InventoryRepository>();
+        services.AddScoped<IFeedRepository, FeedRepository>();
         services.AddScoped<IAllocationRepository, AllocationRepository>();
         services.AddScoped<Application.Materials.IMaterialConnectionStore, Materials.MaterialConnectionStore>();
         services.AddScoped<Application.Materials.ILineBatchSizes, Materials.LineBatchSizes>();

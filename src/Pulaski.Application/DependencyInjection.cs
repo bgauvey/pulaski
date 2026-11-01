@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddSingleton<IPeopleSourceAdapter, ScimPeopleSource>();
         services.AddScoped<MachineData.OeeRollups>();
         services.AddScoped<MachineData.OeeTargetWrites>();
+        services.AddScoped<Inventory.FeedCounterPoster>();
 
         var handlerInterfaces = new[] { typeof(ICommandHandler<,>), typeof(IQueryHandler<,>) };
         var handlers = typeof(DependencyInjection).Assembly.GetTypes()

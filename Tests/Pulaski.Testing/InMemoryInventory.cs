@@ -290,7 +290,7 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
 
         lock (_lock)
         {
-            _edges.AddRange(edges.Where(e => !_edges.Any(x => x.ParentLotId == e.ParentLotId && x.ChildLotId == e.ChildLotId)));
+            _edges.AddRange(edges.Where(e => !_edges.Any(x => x.ParentLotId == e.ParentLotId && x.ChildLotId == e.ChildLotId && x.Basis == e.Basis)));
         }
 
         return Task.CompletedTask;
@@ -583,6 +583,21 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
     public Task<BalanceHistory?> GetBalanceHistoryAsync(Guid lotId, CancellationToken cancellationToken) =>
         Task.FromResult(BalanceHistories.GetValueOrDefault(lotId));
 
+    /// <summary>Jobs' standing consumption and production, as a test sets them (#81).</summary>
+    public List<JobDeclaration> JobDeclarations { get; } = [];
+
+    public Task<IReadOnlyList<GenealogyLink>> ListLinksToAsync(IReadOnlyCollection<Guid> childLotIds, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<GenealogyLink>>(
+                [.. _edges.Where(e => childLotIds.Contains(e.ChildLotId)).Select(e => new GenealogyLink(e.ParentLotId, e.ChildLotId, e.Basis, e.JobId))]);
+        }
+    }
+
+    public Task<IReadOnlyList<JobDeclaration>> ListJobDeclarationsAsync(IReadOnlyCollection<Guid> jobIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<JobDeclaration>>([.. JobDeclarations.Where(d => jobIds.Contains(d.JobId))]);
+
     public Task<Versioned<FlowSettings>?> GetFlowSettingsForUpdateAsync(Guid equipmentId, CancellationToken cancellationToken) =>
         Task.FromResult(Flows.GetValueOrDefault(equipmentId));
 
@@ -623,8 +638,47 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
     public Task<IReadOnlyList<ReasonCodeAdminDto>> ListAllReasonCodesAsync(Guid? siteId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<ReasonCodeAdminDto>>([]);
 
-    public Task<IReadOnlyList<StockOnDateDto>> StockOnDateAsync(Guid siteId, DateTimeOffset at, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<StockOnDateDto>>([]);
+    // Past states (#77) are covered against the real schema; in memory, the lots' own movements are enough for the checks.
+    public Task<IReadOnlyList<PastLotRow>> ListPastLotsAsync(Guid siteId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<PastLotRow>>([]);
+
+    public Task<LotPastSource?> GetLotPastAsync(Guid lotId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_lots.TryGetValue(lotId, out var lot)
+                ? new LotPastSource(lotId, lot.Value.SiteId, "", LotNow.Of(lot.Value), PastEventsOf(lotId))
+                : null);
+        }
+    }
+
+    public Task<IReadOnlyDictionary<Guid, string>> ListCodesAsync(IReadOnlyCollection<Guid> locationOrContainerIds, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyDictionary<Guid, string>>(locationOrContainerIds.Where(_locations.ContainsKey).ToDictionary(id => id, id => _locations[id].Code));
+        }
+    }
+
+    public Dictionary<Guid, Guid> ContainerLocations { get; } = [];
+
+    public Task LockJobsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task<Guid?> GetContainerLocationAsync(Guid containerId, CancellationToken cancellationToken) =>
+        Task.FromResult(ContainerLocations.TryGetValue(containerId, out var at) ? at : (Guid?)null);
+
+    public Task<IReadOnlyList<PastEvent>> ListPastEventsAsync(Guid lotId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(PastEventsOf(lotId));
+        }
+    }
+
+    private IReadOnlyList<PastEvent> PastEventsOf(Guid lotId) =>
+        [.. _events.Where(e => e.Row.LotId == lotId).Select(e => new PastEvent(
+            e.Row.Id, e.Row.EffectiveAt ?? e.At, e.At, e.Row.Movement.Kind, e.Row.Movement.QtyDelta, e.Row.Movement.FromLocationId, e.Row.Movement.ToLocationId,
+            e.Row.Movement.FromStatus, e.Row.Movement.ToStatus, null))];
 
     public Task<IReadOnlyList<AgingRowDto>> AgingAsync(Guid siteId, DateTimeOffset now, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<AgingRowDto>>([]);
@@ -666,6 +720,9 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         ReportId = e.Row.ReportId,
         ReasonCodeId = e.Row.ReasonCodeId,
         ReversedBy = _events.FirstOrDefault(r => r.Row.LotId == e.Row.LotId && r.Row.ReversesEventId == e.Row.Id).Row?.Id,
+        ReversesEventId = e.Row.ReversesEventId,
+        ContainerId = e.Row.ContainerId,
+        Details = e.Row.Details,
     };
 
     public Task<LotEventDetail?> GetEventAsync(Guid lotId, Guid eventId, CancellationToken cancellationToken)
@@ -694,6 +751,18 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         {
             var index = _events.FindIndex(e => e.Row.Id == after.Id);
             return Task.FromResult<IReadOnlyList<LotEventDetail>>([.. _events.Skip(index + 1).Where(e => e.Row.LotId == lotId).Select(Detail)]);
+        }
+    }
+
+    public Task<IReadOnlyList<LotEventDetail>> ListStandingAfterAsync(Guid lotId, LotEventDetail after, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<LotEventDetail>>([.. _events
+                .Where(e => e.Row.LotId == lotId && e.Row.Id != after.Id && e.Row.ReversesEventId is null)
+                .Select(Detail)
+                .Where(d => d.ReversedBy is null && (d.EffectiveAt, d.OccurredAt).CompareTo((after.EffectiveAt, after.OccurredAt)) > 0)
+                .OrderBy(d => d.EffectiveAt).ThenBy(d => d.OccurredAt)]);
         }
     }
 

@@ -22,7 +22,7 @@ public sealed record EquipmentTagRecord(
     decimal? Deadband = null);
 
 /// <summary>Equipment as a tag binding checks it.</summary>
-public sealed record TagEquipment(Guid Id, Guid? SiteId, string Code, bool TracksState);
+public sealed record TagEquipment(Guid Id, Guid? SiteId, string Code, bool TracksState, bool HoldsInventory = false);
 
 /// <summary>An active tag of an edge node, with what applying its signals needs.</summary>
 public sealed record IngestTag(Guid TagId, Guid EquipmentId, string Role, decimal ScaleFactor, decimal ScaleOffset, long? CounterRollover, Guid? MachineProfileId);

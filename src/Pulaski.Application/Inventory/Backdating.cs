@@ -6,8 +6,8 @@ using Pulaski.Domain.Inventory;
 namespace Pulaski.Application.Inventory;
 
 /// <summary>
-/// Back-dated quantity movements (D-057): a receipt, consumption, production, write-up or write-off can count from an earlier time
-/// than it is recorded. The record time is always kept; stock at a time sums movements by when they count, so it is the same
+/// Back-dated movements (D-057, D-076): a receipt, consumption, production, write-up or write-off, and since #77 a move, hold, release,
+/// split, merge or shipment, can count from an earlier time than it is recorded. The record time is always kept; stock at a time sums movements by when they count, so it is the same
 /// whatever order they were entered in. The API lets only holders of <c>inventory.backdate</c> send an effective time.
 /// </summary>
 public static class Backdating
@@ -90,6 +90,68 @@ public static class Backdating
             }
         }
     }
+
+    /// <summary>
+    /// A back-dated move, hold or release, or a lot a merge empties (#77, D-076): the lot existed with stock then, and nothing else counts
+    /// after it, since what happened later names where the lot was and needs its status. Nothing to check when it counts now.
+    /// </summary>
+    /// <exception cref="DomainRuleException">It wasn't there then, or another movement counts after it.</exception>
+    public static async Task EnsureLatestAsync(
+        IInventoryRepository inventory, Lot lot, DateTimeOffset effectiveAt, DateTimeOffset now, string what, CancellationToken cancellationToken)
+    {
+        if (effectiveAt >= now)
+        {
+            return;
+        }
+
+        var events = await inventory.ListPastEventsAsync(lot.Id, cancellationToken);
+        EnsureHadStock(lot, LotPastState.At(LotNow.Of(lot), events, effectiveAt), effectiveAt);
+        if (LotPastState.CountsAfter(events, effectiveAt) is { } later)
+        {
+            throw new DomainRuleException(
+                $"{lot.Name} has a {Kind(later.Kind)} counting from {Time(later.EffectiveAt)}, after {Time(effectiveAt)}. {what} can count from earlier only " +
+                "when it is the lot's latest movement: what happened later says where the lot was and what status it had.");
+        }
+    }
+
+    /// <summary>
+    /// A back-dated split, shipment or merge into the lot (#77, D-076): the lot existed with stock then, and its status and location haven't
+    /// changed since, so the new movement agrees with everything after it. Its quantity is checked by <see cref="EnsureFitsAsync"/>.
+    /// </summary>
+    /// <exception cref="DomainRuleException">It wasn't there then, or its status or location changed since.</exception>
+    public static async Task EnsureUnchangedSinceAsync(IInventoryRepository inventory, Lot lot, DateTimeOffset effectiveAt, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        if (effectiveAt >= now)
+        {
+            return;
+        }
+
+        var events = await inventory.ListPastEventsAsync(lot.Id, cancellationToken);
+        EnsureHadStock(lot, LotPastState.At(LotNow.Of(lot), events, effectiveAt), effectiveAt);
+        if (LotPastState.ChangedAfter(events, effectiveAt) is { } later)
+        {
+            throw new DomainRuleException(
+                $"{lot.Name} was {Kind(later.Kind)} at {Time(later.EffectiveAt)}, after {Time(effectiveAt)}; a movement can count from before a change of its status or location " +
+                "only by reversing that change first.");
+        }
+    }
+
+    private static void EnsureHadStock(Lot lot, LotStateAt state, DateTimeOffset effectiveAt)
+    {
+        if (!state.Existed || state.Quantity <= 0)
+        {
+            throw new DomainRuleException($"{lot.Name} had no stock at {Time(effectiveAt)}; a movement can't count from then.");
+        }
+    }
+
+    private static string Kind(string kind) => kind switch
+    {
+        LotEventKind.StatusChanged => "status change",
+        LotEventKind.Moved => "move",
+        LotEventKind.Packed => "packing",
+        LotEventKind.Unpacked => "unpacking",
+        _ => kind.Replace('_', ' '),
+    };
 
     private static string Time(DateTimeOffset at) => at.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
 

@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-10-29 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-01 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#21-reference) tables give the exact rules.
 
@@ -489,7 +489,7 @@ There can be one BOM per material and process, plus one for any process.
 | **Quantity** | How much is used per the base quantity. |
 | **Unit** | The unit of that quantity. |
 | **Scrap %** | Extra to plan for losses. `2` plans 2% more. |
-| **Consumed by** | How it will be taken from stock once execution is built: **Backflush on count** (automatically, in proportion to good output), **Time window (loaded lot)** (whatever lot is loaded at the feed point while the job runs, typical for resin and blend), **Declared by operator** or **Scanned lot**. |
+| **Consumed by** | How it is taken from stock (see [Feed points](#feed-points)): **Backflush on count** (automatically as production is reported, in proportion to what was made, from the lots at the line's feed points), **Time window (loaded lot)** (shared among the lots loaded at the line's feed points while it was made, typical for resin and blend), **Declared by operator** or **Scanned lot** (both entered by hand). |
 | **Operation** | Only on a BOM for a process: which operation consumes it. **First operation** if you leave it. |
 
 3. Remove a line with its red ×.
@@ -787,6 +787,7 @@ If the material changes on a line in automatic changeover mode, Pulaski starts a
 1. On the running line's card, click **Report**.
 2. The **Run** is the open run. Enter the **Good** quantity and the **Scrap** quantity (either can be zero), in the job's unit.
 3. For good output, choose where it **goes to** and, optionally, a **Lot number**; left blank, Pulaski numbers it after the job (*WO-5001-10-01*, *-02*…).
+   If the job has used lots, you can also tick under **Made from** the ones this output came from. Leave them blank and Pulaski pairs them by time (see [Trace a lot](#trace-a-lot)).
 4. For scrap, choose a **Scrap reason**.
 5. Click **Report**. The card updates with the new totals.
 
@@ -958,6 +959,8 @@ The lot page shows its facts (status, quantity, location, where it came from, su
 
 Some reasons ask for a comment; the form says *(required)* when they do.
 
+**As it was.** Under **As it was**, choose a date and time and click **Show** to see the lot then: its quantity, where it was (and in which container), and its status. A lot that didn't exist yet says so. It is worked out from the history in the order movements count, so back-dated movements are in their place and it agrees with the journal.
+
 ### Reverse a movement or a declaration
 
 Something recorded wrongly is put right by reversing it, then recording what really happened. A reversal is a new movement that undoes the old one; the old one stays in the history, marked as reversed, with who reversed it, the reason and the comment.
@@ -965,18 +968,23 @@ Something recorded wrongly is put right by reversing it, then recording what rea
 1. Open the lot's page and find the movement in its **History**.
 2. Click **Reverse** on its row. Rows that can't be reversed (a reversal, or a movement reversed already) have no button.
 3. Read what the reversal will do, choose an adjustment **Reason** and write a **Comment** saying why. Both are required.
-4. Click **Reverse**. If something since depends on it, Pulaski says what (for example *Since then: consumed into WO-1001-10*) so you can reverse that first.
+4. Click **Reverse**. If something since depends on it, Pulaski says what (for example *Since then: consumed into WO-1001-10*) so you can reverse that first, or undo it all at once (below).
 5. If an amount was wrong rather than the whole movement, record the right amount again as usual.
+
+**Undo a movement with everything after it.** Tick **With everything after it that depends on it**, choose the reason and comment, and click **Check**: the drawer lists every movement it would reverse, latest first (this lot's later movements, and those of lots split off it since). Nothing is done yet. If one of them can't be reversed, it says which and why. Click **Undo N movements** to do them all in one go; if anything changed in between, it asks you to check again.
 
 What can be reversed on a lot's page:
 
 | Movement | What the reversal does | When it can't |
 | --- | --- | --- |
-| The **latest** receipt, write-up, write-off, move, hold or release, or shipment | Puts the lot back as it was; a reversed receipt of a whole lot makes it *cancelled*. | Only the latest, for moves, holds and shipments. |
-| An **earlier** receipt, write-up or write-off | Puts back only the quantity, at the time it counted. | The lot's stock would go below zero at some time since, or a posted count came after it. |
+| A receipt, write-up, write-off or shipment | Puts back the quantity at the time it counted; a reversed receipt of a whole lot makes it *cancelled*, a reversed shipment of all of it makes it available again. | The lot's stock would go below zero at some time since, or a posted count came after it; a whole shipment, once the lot has changed status again. |
+| A **move** | The lot goes back to where it was. | The lot has moved since (reverse that move first), or it moved with its container (move the container back). |
+| A **hold or release** | The lot goes back to the status it had. | Its status has changed again since. |
+| **Packing** or **unpacking** | The lot comes out of the container (back into any it was in before, and back where it was if packing moved it), or goes back into it. | The lot has moved or changed container since, or the container isn't where the lot is any more. |
+| A **correction** | The lot number, supplier lot and expiry go back to what they were. | They have been corrected again since, the old number is taken by another lot, or the correction was made before Pulaski kept what it replaced. |
 | **Consumption** into a job | The quantity goes back to the lot; it stops being a parent of what the job made unless more of it went into that job. | The job is closed or cancelled, or the lot was shipped since. |
 | A **split** | The new lot is cancelled and its quantity goes back to the lot it came from. | Anything has happened to the new lot since. |
-| A **merge** | The lot that was merged gets its quantity and status back; the lot it joined goes down by that much. | It joined a balance where lots mix (write the balance down instead), or the lot it joined no longer holds that much. |
+| A **merge** | The lot that was merged gets its quantity and status back; the lot it joined goes down by that much. A lot that joined a balance where lots mix comes back out as itself, and the balance gives its quantity back. | The lot it joined no longer holds that much at some time since. |
 | A **transfer between balances** | The quantity goes back to the balance it came from. | The receiving balance no longer holds it. |
 | **Production** | Reversed with its production report, on the job's page (below). | — |
 
@@ -1040,11 +1048,36 @@ Allocating sets stock aside for a job before it runs, so the floor knows which l
 
 On a lot's page, **Genealogy** first shows the lots it was **made from** and the lots made from it (**used in**). Click **Trace back** to see everything it was made from, all the way up, or **Trace forward** to see everything made from it, all the way down. Each lot is indented under the one it was reached from; click any lot to open it.
 
+**Lots a job used and made.** A job records every lot it used as a parent of every lot it made. A trace keeps only the pairs that fit by time. A lot the job used counts as in use from when its consumption was declared until the next lot of that material, so a made lot pairs with:
+
+- the lot that was in use when the job's previous output was declared;
+- every lot of that material declared since.
+
+Each kept lot carries a chip (point at it for why):
+
+- **Exact:** the job used only one lot of that material.
+- **Estimated:** paired by time.
+- **Declared:** someone picked it as what the lot was made from.
+- **Possible:** it can't be paired by time, so its job link is kept anyway. Either it was declared after everything the job made, or the lot was made before any lot of that material was declared.
+
+Pairs that don't fit are left out of traces. In the **Made from** and **Used in** lists they stay, marked **Not paired**.
+
+**Pick what a lot was made from.** When you know better than the times, name the lots yourself:
+
+1. Open a lot the job made. Under **Made from**, click **Pick what it was made from…** (you need permission to report production).
+2. Tick the lots it was made from. The list holds the lots its job used.
+3. Optionally add a comment, then click **Save**.
+
+The ticked lots replace the pairing by time for that lot, so tick every material it came from. Untick them all and save to go back to pairing by time. You can also tick them when [reporting production](#report-production).
+
 **Through a silo or tank.** Where lots mix, a trace keeps only the lots that, by how the location [flows](#how-a-silo-flows), went into the withdrawals that matter: back from a lot a job made, the arrivals that fed that job's withdrawals; forward from an arrival, what was made from withdrawals it fed. Each such lot carries a chip saying how sure that is (point at it for why):
 
+- **Confirmed:** exact, and the silo's level backs it: it read empty before the arrival, or it agreed with the declared stock.
 - **Exact:** only one arrival could have been in the silo then.
 - **Estimated:** worked out from the declared quantities by the flow model; likely, not measured.
-- **Possible:** the declared movements don't settle it, for example more was taken than was put in (often after a count correction), or material would have left before the minimum residence time.
+- **Possible:** the declared movements don't settle it. For example, more was taken than was put in (often after a count correction), material would have left before the minimum residence time, or the level disagreed with the declared stock.
+
+A lot reached both through a silo and through a job's link takes the less certain of the two chips.
 
 A balance's own page shows **Where what was taken came from**: every withdrawal with the lots it came from, their quantities and how sure each is.
 
@@ -1055,8 +1088,17 @@ On **Inventory → Locations**, a location where lots mix shows how it flows; cl
 - **Mixed** (the default): everything blends, as in a tank or a mixed silo. A withdrawal takes a share of every arrival still there, by quantity.
 - **First in, first out:** plug flow, as in a mass-flow silo or bin. A withdrawal takes the oldest material first.
 - **Minimum residence** (optional, in minutes): the least time material stays before it can leave. Material taken before then is only *possible*.
+- **Empty at level** (optional): for a silo with a [level tag](#19-edge-nodes-collecting-machine-data), in the tag's unit. A reading at or below this means the silo was empty.
+- **Level tolerance** (optional): in the tag's unit, how far the level may be from the declared stock and still agree. Leave it blank to not compare them.
 
-Everything is worked out from the movements as recorded (by when they count, so [back-dated](#back-date-a-movement) ones fit in), not from measurements: a silo's level isn't read yet. Changing the flow changes every trace through the silo at once; nothing is stored.
+Everything is worked out from the movements as recorded, by when they count, so [back-dated](#back-date-a-movement) ones fit in. Changing these settings changes every trace through the silo at once, because nothing is stored.
+
+**Level readings.** With a level tag and these settings, the estimate is checked against what was measured:
+
+- **Empty.** When the level reads empty, whatever the declared movements still had in the silo is set aside: it was really gone. The withdrawal after that says so. A withdrawal that can only have come from one arrival since then is *confirmed*. An arrival recorded after the last reading above empty isn't set aside, so a delivery the level hasn't caught up with yet isn't lost.
+- **Stock.** With a tolerance, the last good level reading in the 15 minutes before each withdrawal is compared with the declared stock then. If they agree, an exact withdrawal becomes *confirmed*. If they don't, it becomes *possible*. This needs the tag's unit to convert to the material's unit (kg to kg, or with a [conversion](#6-units-and-conversions)). If it doesn't convert, only empty readings are used.
+
+Readings are kept for 90 days by default, so older withdrawals rest on the declared movements alone. The level is taken as this balance's, so the comparison only makes sense when the silo holds one material.
 
 ### Check for shortages
 
@@ -1128,9 +1170,9 @@ A **count** checks what is really at a location and puts the records right.
 
 ### Back-date a movement
 
-When a receipt, consumption, production, write-up or write-off is entered late, it can count from when it really happened.
+When a movement is entered late, it can count from when it really happened: a receipt, consumption, production, write-up or write-off, and a move, hold, release, split, merge or shipment.
 
-1. Open the movement as usual (**Receive**, **Consume**, **Write up**, **Write off**, or production on the Jobs tab).
+1. Open the movement as usual (**Receive**, **Consume**, **Write up**, **Write off**, **Move**, **Hold**, **Release**, **Split**, **Merge**, **Ship**, or production on the Jobs tab).
 2. Fill in **Counts from** with the date and time it happened, in the site's time zone. The field shows only if you may back-date.
 3. Write a **comment** saying why it is late (required), and save.
 
@@ -1142,13 +1184,17 @@ When a receipt, consumption, production, write-up or write-off is entered late, 
 - **Expiry** is checked when the movement counts: a lot that was in date then can be consumed then, even if it has expired since. A back-dated receipt's or production's expiry runs from when it counts.
 - **Both times are kept.** The lot's history lists a back-dated movement at the time it counts, with *recorded …* beneath it; the journal lists it when it was recorded, with *counts from …*, and its export has both. Genealogy links made by back-dated consumption or production show *since …* with *(back-dated)*. The event log records it now, with `EffectiveAt` in its data.
 - **Reversing** a back-dated movement undoes it at the time it counted, so every past date comes out as if it had never happened.
-- **Only quantity movements** can be back-dated: moves, holds, splits, merges, shipments and counts always count when they are recorded.
+- **Moves, holds and releases** can count from earlier only as the lot's latest movement: nothing else may count after them, since what happened later says where the lot was and what status it had (Pulaski names the movement in the way). A move to where lots mix can't be back-dated, because the lot joins the balance as it is now.
+- **Splits and shipments** can count from earlier only if the lot's status and location haven't changed since, and within the stock it had then; shipping all of a lot ends it, so then it must be its latest movement too. A split's new lot exists from then.
+- **Merges** can count from earlier only if each lot taken in has nothing counting after it, and the lot they go into hasn't changed status or location since.
+- **Counts** aren't back-dated by hand: each difference a count posts counts from when that lot was counted, since it hasn't changed since (the count refuses a lot that has).
+- **Corrections, packing and reversals** always count when they are recorded (a reversal at the time of what it undoes).
 
 ### Reports and exports
 
 **Inventory → Reports** has two reports:
 
-- **Stock on a date:** each material's on-hand quantity at the end of the day you choose. It adds up every movement that counts by then, including [back-dated](#back-date-a-movement) ones entered later, so a past date can change after a correction, and gives the same answer whatever order movements were entered in. Older dates take longer. Held stock is included: a lot's status at that time isn't reconstructed.
+- **Stock on a date:** each material's on-hand quantity at the end of the day you choose, **where** it was then (by location) and how much of it was **on hold** or in quarantine then. Each lot is worked out as it was, from every movement that counts by then, including [back-dated](#back-date-a-movement) ones entered later, so a past date can change after a correction, gives the same answer whatever order movements were entered in, and agrees with the journal. Older dates take longer. The export has a row per material and location.
 - **Aging:** on-hand stock by how long ago each lot was received or made (from when its first movement counts, so a back-dated receipt ages from its real day): up to 30 days, 31–90, 91–180 and over 180 (in amber). Balances of materials that aren't lot-tracked aren't aged, and a split lot counts from the day it was split.
 
 **Export CSV** downloads a spreadsheet file from the **Stock** tab (what is on screen, with its filters), the **Lots** tab (every matching lot, up to 10,000), the **Journal** (every matching movement, up to 10,000) and both reports. Lot search shows 200 at a time: click **Show more** for the next.
@@ -1197,6 +1243,39 @@ Pallets, totes, boxes and bins that hold lots. Each lot inside keeps its own num
 - **Mixed contents** are allowed: a container can hold lots of several materials. Balances of materials that aren't lot-tracked can't be packed. No containers inside containers.
 - **History.** Packing, unpacking and moving with a container are ordinary movements in each lot's history (*Packed into …*, *Unpacked out of …*, *Moved with …*), and `pulaski.lot.packed.v1`, `…unpacked.v1` and `pulaski.container.created.v1` / `…moved.v1` / `…retired.v1` in the event log. Genealogy isn't touched: a container isn't a lot.
 - **Who:** containers, packing and unpacking need permission to move lots.
+
+### Feed points
+
+A feed point is a hopper, feeder, doser or unwind where lots enter a line: equipment with the role **Feed point** below the line on the [Equipment](#4-equipment) page, with **Holds inventory** ticked. Pulaski knows which lot is loaded at each, and uses that to consume components without anyone declaring them.
+
+**Load a lot**
+
+1. Open the lot and click **Load** (you need permission to move lots).
+2. Choose the **Feed point**. A lot elsewhere is moved there whole. A lot already there is loaded again: it feeds from now.
+3. Click **Load**.
+
+Receiving, moving or splitting a lot straight to a feed point loads it too. A lot stays loaded until one of three things happens: the next lot of its material is loaded there, it leaves, or it runs out.
+
+**What is consumed automatically.** It depends on the job's components, as their BOM lines say (**Consumed by**):
+
+- **Backflush on count:** each production report takes the component's planned quantity per unit made, times what it reports (good and scrap). It comes from the lots of that material at the line's feed points: the loaded lot first, then the others there, first expiry first.
+- **Time window (loaded lot):** each production report takes the same quantity, shared among the lots of that material loaded at the line's feed points since the run's previous report (or its start), by how long each was loaded.
+- **A consumed counter:** a feed point with a consumed counter tag (see [Bind tags](#bind-tags)) takes each counted amount out of the lot loaded there at that moment. Time-window components at that feed point are left to the counter, so they aren't taken twice.
+
+Each is an ordinary consumption into the job and its run. It shows in the lot's history with a **Backflush**, **Time window** or **Counter** chip, links genealogy, and is sent to the ERP like any other.
+
+**What it couldn't cover.** Automation never takes a lot below zero, never uses a lot on hold or expired, and never refuses a report. Whatever it can't cover is listed on **Inventory → Feed points** under **What automation couldn't consume**, with where, the job, the material, how much and why. A report that left something uncovered says so in its confirmation.
+
+1. To **resolve** one, click **Resolve…**, choose the lot it really came from and click **Consume it**. That consumes the quantity from the lot into the job and run, now. You need permission to report production.
+2. To **dismiss** one, click **Dismiss…**, say why and click **Dismiss**. Nothing is consumed. You need permission to correct inventory.
+
+**In detail**
+
+- **Loads are worked out from the lots' movements**, so a back-dated move or a reversal falls into place. The Feed points page shows what is loaded at each now.
+- **Repeated signals.** Each report and each machine count is posted once. The edge's resent signals are skipped, and a count already consumed or listed is never taken again. Counts are posted just after each batch from the edge is saved. One that wasn't posted (after an error) is taken up with the next batch, for up to 31 days.
+- **Counters.** A counter counts in its tag's unit, or in the material's base unit when the tag has none. It needs one material loaded at its feed point: with lots of two materials loaded, a count is listed rather than guessed. A count with nothing running on the line, or nothing loaded, is listed too.
+- **Reversing a report** puts back everything it consumed automatically, and dismisses what it left open. A shortfall already resolved stays resolved: reverse that consumption on its lot if it was wrong.
+- **Where it is recorded:** the consumption rows carry `auto_source` and `source_ref` (the report or the machine count). Shortfalls are `pulaski.feed_shortfall.recorded.v1`, `…resolved.v1` and `…dismissed.v1`, and loading again is `pulaski.lot.loaded.v1`.
 
 ### Lot, container and location labels
 
@@ -1249,7 +1328,7 @@ Pulaski can send every inventory movement (received, moved, consumed, produced, 
 - **One site per lot.** Moves stay within the lot's site; consumption needs a job in the same site.
 - **Concurrency.** Write up, write off, move, hold and release check that the lot hasn't changed since you opened it; if it has you'll see *"changed by someone else"*: reload and try again. Consumption and production don't check, so several people can declare against a busy line; the no-negative-stock rule still protects them.
 - **Substitutions.** Consuming a material the job has no planned component of is allowed, and recorded as a **substitution** (amber on the job page and in the confirmation).
-- **Genealogy is per job for now.** Every lot consumed into a job is recorded as a parent of every lot the job made, whichever came first. That can link more than really mixed (a resin lot used in the first hour shows as a parent of the last pallet). It narrows to time windows once Pulaski records production from the machines.
+- **Genealogy per lot.** Every lot consumed into a job is recorded as a parent of every lot the job made. Traces then narrow that to the lots that pair by time, or to the lots someone picked (see [Trace a lot](#trace-a-lot)). Pairing goes by when movements were declared, not by machine data, so declaring consumption when a lot is loaded gives the best pairs.
 - **Times** are the moment you click, unless the movement is [back-dated](#back-date-a-movement). A movement recorded into a run that has ended keeps the time you entered it and names the run it belongs to.
 - **What the ERP sees.** Each movement is an event in Pulaski's event log (`pulaski.lot.received.v1`, `…consumed.v1` and so on), sent to the ERP's webhook when that is switched on (see [Send movements to the ERP](#send-movements-to-the-erp)).
 
@@ -1979,7 +2058,7 @@ If one machine's code means something else than on the others with the same prof
 ### Bind tags
 
 1. Once the edge runs, open its **Seen** tab: every metric its brokers have announced and every variable its OPC UA servers offer, with the last value. EtherNet/IP tags appear once they have been read, so type those on the **Tags** tab. Type in **Filter addresses** to find one.
-2. Click **Bind** next to a metric. Pulaski guesses the role from the name; choose the **Equipment** (only equipment of the site that tracks state is offered) and check the **Role**.
+2. Click **Bind** next to a metric. Pulaski guesses the role from the name; choose the **Equipment** (equipment of the site that tracks state is offered; for a consumed counter or a level, equipment that holds inventory too, such as a hopper or a silo) and check the **Role**.
 3. For a count, set the **Scale** (how many units one count is) and, if the counter wraps, its **Rollover** value. For a process value, set the **Scale** (a temperature in tenths: 0.1) and, if you like, a **Deadband**: a change no bigger than that, in scaled units, isn't recorded straight away. Click **Bind tag**.
 4. To type an address instead, use the same form on the **Tags** tab. To change a tag, edit its address, scale, rollover, deadband or **Active** checkbox and click **Save**. To delete a tag completely, whether active or inactive, click **Delete** on its row and confirm.
 
@@ -2208,10 +2287,10 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
-- **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
-- **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, and scanning 2D codes or supplier barcodes beyond reading their text. Moves, holds, splits, merges, shipments and counts can't be back-dated (only quantity movements can, by up to 31 days), and a lot's location and status on a past date aren't reconstructed. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
-- **Reversing:** moves, holds and shipments only when they are the lot's latest movement; corrections of lot details, packing and unpacking aren't reversed (put them right with another movement). A lot that joined a balance where lots mix can't be taken back out as itself. Reversal is one movement at a time: there is no undoing a chain of dependent movements in one step.
-- **Genealogy through a silo is an estimate** from the declared movements: a level tag can be bound to a silo, but its readings aren't used yet to confirm when it was empty or how it flowed. A reversed movement and its reversal are left out of the estimate, as if neither happened.
+- **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines, and automated consumption doesn't use up [allocations](#allocate-lots-to-a-job). Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
+- **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, and scanning 2D codes or supplier barcodes beyond reading their text. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
+- **Reversing:** a chain undo follows a lot and the lots split off it, not merges into other lots, consumption into jobs or the output made from it; corrections made before this version can't be reversed.
+- **Genealogy through a silo is an estimate** from the declared movements. A level tag's readings confirm when it was empty and check the declared stock (see [How a silo flows](#how-a-silo-flows)), but they don't change how much each arrival gave. A reversed movement and its reversal are left out of the estimate, as if neither happened.
 - **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
 - **Allocations are kept up to date by hand:** nothing refreshes them when stock moves or the schedule changes; click **Refresh**. Suggestions don't prefer lots near the line, lots already in a container, or whole lots, and there are no picking lists; a substitution (a material the job doesn't plan) isn't allocated. Allocating doesn't stop another job consuming the stock: it only warns.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP; there are no lead times, purchase suggestions or partial receipts against one delivery (receiving closes it). The live timing is the schedule as projected now, not a forecast of slips.
@@ -2225,6 +2304,9 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 ---
 
 ## 23. Troubleshooting and questions
+
+**A component wasn't consumed when I reported production.**
+Check its **Consumed by** in the BOM: only backflush and time window are automatic. Then check what is loaded on **Inventory → Feed points**: the lot must be at a feed point below the job's line, available and not expired. Anything it couldn't cover is listed there to resolve or dismiss.
 
 **"You may not do this…" or a button I expected isn't there.**
 Your roles don't allow that change, or not at this site. The message names the permission; ask an administrator (see [What each role can change](#what-each-role-can-change)).
@@ -2277,8 +2359,8 @@ Only an **available** lot with stock can be consumed. Release a held lot first; 
 **"Choose an adjustment reason" with an empty list.**
 No reasons are set up: ask your administrator to load `db/seed-reasons.sql`.
 
-**"Only the latest movement … can be reversed when it is a …".**
-A move, hold or shipment is reversed only while it is the lot's latest movement. Reverse the later movements first, newest first, or record a new movement instead.
+**"… has moved since" or "… status has changed since".**
+A move is reversed only while it is the lot's latest move, and a hold or release while it is its latest status change. Reverse the later one first, or tick **With everything after it that depends on it** to undo them together.
 
 **I can't post a count.**
 Every lot must have a count (enter 0 if it isn't there), the counts must be saved, and a lot marked *changed since counted* must be counted again.

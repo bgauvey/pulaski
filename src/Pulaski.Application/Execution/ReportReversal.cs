@@ -22,7 +22,8 @@ internal sealed class ReverseProductionReportHandler(
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    TimeProvider timeProvider) : ICommandHandler<ReverseProductionReportCommand, ReverseProductionResponse>
+    TimeProvider timeProvider,
+    IFeedRepository? feeds = null) : ICommandHandler<ReverseProductionReportCommand, ReverseProductionResponse>
 {
     public async Task<ReverseProductionResponse> HandleAsync(ReverseProductionReportCommand command, CancellationToken cancellationToken)
     {
@@ -98,6 +99,7 @@ internal sealed class ReverseProductionReportHandler(
             if (!await inventory.HasDeclarationAsync(lot.Id, job.Id, LotEventKind.Produced, cancellationToken))
             {
                 await inventory.SupersedeGenealogyAsync(null, lot.Id, GenealogyEdge.Declared, job.Id, now, cancellationToken);
+                await inventory.SupersedeGenealogyAsync(null, lot.Id, GenealogyEdge.MadeFrom, job.Id, now, cancellationToken);
             }
 
             if (await execution.GetPartialBatchOfLotForUpdateAsync(lot.Id, cancellationToken) is { } partial)
@@ -136,11 +138,45 @@ internal sealed class ReverseProductionReportHandler(
                 cancellationToken);
         }
 
+        if (feeds is not null)
+        {
+            await ReverseAutomationAsync(feeds, writer, job, report.ReportId, reason, comment!, now, cancellationToken);
+        }
+
         var runAfter = run.Remove(report.Good, report.Scrap);
         await execution.UpdateRunAsync(runAfter, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return new ReverseProductionResponse { RunId = run.Id, RunGoodQty = runAfter.GoodQty, RunScrapQty = runAfter.ScrapQty, Lots = lots };
+    }
+
+    /// <summary>What the report consumed automatically (#33) goes back to its lots, and what it fell short by no longer needs resolving.</summary>
+    private async Task ReverseAutomationAsync(
+        IFeedRepository feeds, ReversalWriter writer, InventoryJob job, Guid reportId, InventoryReason reason, string comment, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var consumed = await feeds.ListAutoConsumptionsAsync(reportId, cancellationToken);
+        var locked = (await inventory.LockLotsAsync([.. consumed.Select(c => c.LotId).Distinct()], cancellationToken)).ToDictionary(l => l.Lot.Id, l => l.Lot);
+        foreach (var (lotId, eventId) in consumed)
+        {
+            var original = await inventory.GetEventAsync(lotId, eventId, cancellationToken) ?? throw new NotFoundException($"Movement {eventId} not found.");
+            var lot = locked[lotId];
+            var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
+            var (after, movement) = lot.Restore(-original.Movement.QtyDelta!.Value);
+            await writer.WriteAsync(lot, after, movement, original, reason, comment, material.BaseUomCode, cancellationToken);
+            locked[lotId] = after;
+            if (!await inventory.HasDeclarationAsync(lotId, job.Id, LotEventKind.Consumed, cancellationToken))
+            {
+                await inventory.SupersedeGenealogyAsync(lotId, null, GenealogyEdge.Declared, job.Id, now, cancellationToken);
+                await inventory.SupersedeGenealogyAsync(lotId, null, GenealogyEdge.MadeFrom, job.Id, now, cancellationToken);
+            }
+        }
+
+        foreach (var open in await feeds.LockOpenShortfallsOfAsync(reportId, cancellationToken))
+        {
+            var envelope = events.Create(EventTypes.FeedShortfallDismissed, "feed_shortfall", open.Value.Id, new { Comment = "Report reversed: " + comment });
+            await feeds.UpdateShortfallAsync(Shortfalls.Dismiss(open.Value, envelope.ActorId, now, "Report reversed: " + comment), envelope.OccurredAt, cancellationToken);
+            await eventLog.AppendAsync(envelope, cancellationToken);
+        }
     }
 }

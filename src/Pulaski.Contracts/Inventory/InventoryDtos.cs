@@ -147,6 +147,9 @@ public sealed record LotEventDto
     /// <summary>For production, the report that made it (D-063): reversed with the report, on the job's page.</summary>
     public Guid? ReportId { get; init; }
 
+    /// <summary>For an automated consumption (#33): <c>backflush</c>, <c>time_window</c> or <c>counter</c>; null when someone declared it.</summary>
+    public string? AutoSource { get; init; }
+
     /// <summary>The container it was packed into, unpacked from, or moved with (D-059).</summary>
     public Guid? ContainerId { get; init; }
     public string? ContainerCode { get; init; }
@@ -166,9 +169,18 @@ public sealed record LotLinkDto
     public decimal Quantity { get; init; }
     public required string UomCode { get; init; }
 
-    /// <summary><c>declared</c> today; <c>time_window</c>, <c>split</c> and <c>merge</c> come with execution.</summary>
+    /// <summary><c>declared</c> (by a job), <c>made_from</c> (picked per lot, #81), <c>split</c> or <c>merge</c>.</summary>
     public required string LinkBasis { get; init; }
+    public Guid? JobId { get; init; }
     public string? JobNumber { get; init; }
+
+    /// <summary>
+    /// For a job's link (#81): <c>declared</c> (picked), <c>exact</c>, <c>estimated</c> or <c>possible</c> (paired by time), with why; null for a
+    /// split or merge, and for a job link that doesn't pair (<see cref="Unpaired"/>: the lots only met in the job).
+    /// </summary>
+    public string? Precision { get; init; }
+    public string? PrecisionNote { get; init; }
+    public bool Unpaired { get; init; }
 
     /// <summary>When the link took effect (D-057), and when it was recorded; they differ for a back-dated movement.</summary>
     public DateTimeOffset EffectiveAt { get; init; }
@@ -197,8 +209,8 @@ public sealed record LotTraceNodeDto
     public Guid? ProducedByJobId { get; init; }
 
     /// <summary>
-    /// For a link through a balance whose lots mix (D-060): <c>exact</c>, <c>estimated</c> or <c>possible</c>, with why; null for
-    /// an ordinary declared link.
+    /// How sure the link it was reached by is, with why (#81, D-060): <c>confirmed</c> (a level reading backs it), <c>exact</c>, <c>declared</c>
+    /// (picked as made from), <c>estimated</c> (by the flow model or by time) or <c>possible</c>; null for a split or merge.
     /// </summary>
     public string? Precision { get; init; }
     public string? PrecisionNote { get; init; }
@@ -287,6 +299,10 @@ public sealed record InventoryLocationDto
     public string FlowModel { get; init; } = "mixed";
     public int? MinResidenceMinutes { get; init; }
 
+    /// <summary>How its level readings are read (#81), in the level tag's unit; null when not set.</summary>
+    public decimal? EmptyLevel { get; init; }
+    public decimal? LevelTolerance { get; init; }
+
     /// <summary>The equipment's version, to change its flow settings.</summary>
     public long Version { get; init; }
     public int LotCount { get; init; }
@@ -335,6 +351,9 @@ public sealed record JobMaterialsDto
     public required DeclarableJobDto Job { get; init; }
     public IReadOnlyList<JobComponentUseDto> Components { get; init; } = [];
     public IReadOnlyList<LotSummaryDto> Produced { get; init; } = [];
+
+    /// <summary>The lots it used whose consumption stands (#81): what a lot it makes can be picked as made from.</summary>
+    public IReadOnlyList<LotSummaryDto> Used { get; init; } = [];
 
     /// <summary>Everything the job declared produced, in its material's base unit.</summary>
     public decimal ProducedQty { get; init; }
@@ -558,6 +577,30 @@ public sealed record StockOnDateDto
     public required string UomCode { get; init; }
     public decimal Quantity { get; init; }
     public int LotCount { get; init; }
+
+    /// <summary>Of <see cref="Quantity"/>, what was on hold or in quarantine then (#77).</summary>
+    public decimal OnHoldQuantity { get; init; }
+
+    /// <summary>Where it was then, by location (#77).</summary>
+    public IReadOnlyList<StockAtLocationDto> Locations { get; init; } = [];
+}
+
+/// <summary>A material's quantity at one location on the date, and of it what was on hold or in quarantine.</summary>
+public sealed record StockAtLocationDto(Guid? LocationId, string LocationCode, decimal Quantity, decimal OnHoldQuantity = 0m);
+
+/// <summary>A lot as it was at a time (#77, D-076): whether it existed yet, and its quantity, location, container and status then.</summary>
+public sealed record LotStateAtDto
+{
+    public required Guid LotId { get; init; }
+    public DateTimeOffset At { get; init; }
+    public bool Existed { get; init; }
+    public decimal Quantity { get; init; }
+    public string UomCode { get; init; } = "";
+    public Guid? LocationId { get; init; }
+    public string? LocationCode { get; init; }
+    public string Status { get; init; } = "";
+    public Guid? ContainerId { get; init; }
+    public string? ContainerCode { get; init; }
 }
 
 /// <summary>A material's on-hand stock by how long ago each lot was received or made.</summary>
@@ -602,12 +645,25 @@ public sealed record ExpectedReceiptDto
     public long Version { get; init; }
 }
 
+/// <summary>The lots a made lot was made from (#81), out of those its job used; empty goes back to pairing by time.</summary>
+public sealed record SetMadeFromRequest
+{
+    public IReadOnlyList<Guid> ParentLotIds { get; init; } = [];
+    public string? Comment { get; init; }
+}
+
 /// <summary>Sets how a balance at a location flows (D-060).</summary>
 public sealed record SetFlowRequest
 {
     public long Version { get; init; }
     public string FlowModel { get; init; } = "mixed";
     public int? MinResidenceMinutes { get; init; }
+
+    /// <summary>In the level tag's unit (#81): a reading at or below it means empty; blank = level readings don't mark it empty.</summary>
+    public decimal? EmptyLevel { get; init; }
+
+    /// <summary>In the level tag's unit: how far the level may differ from the declared stock and still agree; blank = not compared.</summary>
+    public decimal? LevelTolerance { get; init; }
 }
 
 /// <summary>Where a balance's withdrawals came from (D-060), worked out from its declared movements by its location's flow model.</summary>
@@ -645,3 +701,24 @@ public sealed record AllocationSourceDto
     public decimal Quantity { get; init; }
     public required string Precision { get; init; }
 }
+
+/// <summary>
+/// What a chain undo takes back (#79): every movement, latest first, and whether all of it can be reversed. Applied when it was done; a
+/// check (dry run) does it all and rolls back.
+/// </summary>
+public sealed record ChainReversalDto
+{
+    public bool Applied { get; init; }
+    public bool Reversible { get; init; }
+    public IReadOnlyList<ChainStepDto> Steps { get; init; } = [];
+
+    /// <summary>The step that can't be reversed and why; null when every step can.</summary>
+    public string? Problem { get; init; }
+
+    /// <summary>How many steps, latest first, went through before the problem.</summary>
+    public int DoneBeforeProblem { get; init; }
+}
+
+/// <summary>One movement a chain undo reverses: which lot, what it was, its quantity and when it counted.</summary>
+public sealed record ChainStepDto(Guid LotId, string LotName, Guid EventId, string Kind, decimal? Quantity, DateTimeOffset EffectiveAt, string? JobNumber);
+

@@ -5,11 +5,14 @@ using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Execution;
 using Pulaski.Application.Inventory;
+using Pulaski.Application.MachineData;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Inventory;
+using Pulaski.Contracts.MachineData;
 using Pulaski.Domain;
 using Pulaski.Domain.Inventory;
+using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Infrastructure.Tests;
 
@@ -234,6 +237,9 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal(1, result.Adjusted);
         var lot = await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(a.LotId));
         Assert.Equal((95m, LotEventKind.Scrapped, counted.Count.CountNumber), (lot.Lot.Quantity, lot.History[0].Kind, lot.History[0].Reference));
+
+        // The difference counts from when the lot was counted, not when the count was posted (#77).
+        Assert.True(lot.History[0].IsBackdated);
         var listed = await QueryAsync<ListStockCountsQuery, IReadOnlyList<StockCountSummaryDto>>(new ListStockCountsQuery(plant.Site));
         Assert.Equal(("posted", 2), (Assert.Single(listed).Status, listed[0].CountedLines));
 
@@ -430,6 +436,125 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal(15m, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId))).Lot.Quantity);
     }
 
+    [Fact]
+    public async Task Moves_holds_splits_shipments_and_merges_count_from_earlier_and_a_lot_shows_where_and_how_it_was()
+    {
+        var plant = await CreatePlantAsync();
+        var hold = await ReasonAsync("hold", "QA-HOLD");
+        var now = DateTimeOffset.UtcNow;
+        DateTimeOffset Ago(double hours) => now.AddHours(-hours);
+        async Task<long> V(Guid lot) => await VersionAsync(lot);
+
+        // Received at the stores ten hours ago; moved to staging at six and held at four, both entered now; released now.
+        var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-PA-" + _suffix, 100m, plant.Kg, Comment: "Delivery", EffectiveAt: Ago(10)));
+        await db.SendAsync(new MoveLotCommand(a.LotId, await V(a.LotId), plant.Staging, Comment: "Moved on the night shift", EffectiveAt: Ago(6)));
+        await db.SendAsync(new ChangeLotStatusCommand(a.LotId, await V(a.LotId), LotStatus.OnHold, hold, "Lab call", Ago(4)));
+        await db.SendAsync(new ChangeLotStatusCommand(a.LotId, await V(a.LotId), LotStatus.Available, Comment: "Lab cleared it"));
+
+        // A move can count from earlier only as the lot's latest movement.
+        var refused = await Assert.ThrowsAsync<DomainRuleException>(async () =>
+            await db.SendAsync(new MoveLotCommand(a.LotId, await V(a.LotId), plant.Stores, Comment: "Back again", EffectiveAt: Ago(5))));
+        Assert.Contains("latest movement", refused.Message, StringComparison.Ordinal);
+
+        async Task<LotStateAtDto> At(Guid lot, DateTimeOffset at) => await QueryAsync<GetLotStateAtQuery, LotStateAtDto>(new GetLotStateAtQuery(lot, at));
+        var (early, moved, held) = (await At(a.LotId, Ago(8)), await At(a.LotId, Ago(5)), await At(a.LotId, Ago(3)));
+        Assert.Equal((plant.Stores, LotStatus.Available, 100m), (early.LocationId!.Value, early.Status, early.Quantity));
+        Assert.Equal((plant.Staging, LotStatus.Available), (moved.LocationId!.Value, moved.Status));
+        Assert.Equal(LotStatus.OnHold, held.Status);
+        Assert.False((await At(a.LotId, Ago(11))).Existed);
+
+        // Stock on a date: where it was, and what was on hold, then.
+        async Task<StockOnDateDto> Resin(DateTimeOffset at) =>
+            Assert.Single(await QueryAsync<StockOnDateQuery, IReadOnlyList<StockOnDateDto>>(new StockOnDateQuery(plant.Site, at)), r => r.MaterialId == plant.Resin);
+        Assert.Equal(plant.Staging, Assert.Single((await Resin(Ago(5))).Locations).LocationId);
+        Assert.Equal((100m, 100m), ((await Resin(Ago(3))).Quantity, (await Resin(Ago(3))).OnHoldQuantity));
+
+        // Another lot: 30 split off five hours ago, 20 shipped at four; a third lot merged into it at three, its latest movement.
+        var b = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-PB-" + _suffix, 100m, plant.Kg, Comment: "Delivery", EffectiveAt: Ago(10)));
+        var part = await db.SendAsync(new SplitLotCommand(b.LotId, await V(b.LotId), 30m, plant.Kg, null, plant.Staging, "Split for line 2", Ago(5)));
+        Assert.False((await At(part.LotId, Ago(6))).Existed);
+        Assert.Equal((true, 30m, plant.Staging), ((await At(part.LotId, Ago(4))).Existed, (await At(part.LotId, Ago(4))).Quantity, (await At(part.LotId, Ago(4))).LocationId!.Value));
+        await Assert.ThrowsAsync<DomainRuleException>(async () =>
+            await db.SendAsync(new ShipLotCommand(b.LotId, await V(b.LotId), 80m, plant.Kg, "SO-1", "Too much then", Ago(4))));
+        await db.SendAsync(new ShipLotCommand(b.LotId, await V(b.LotId), 20m, plant.Kg, "SO-2", "Picked earlier", Ago(4)));
+        var c = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-PC-" + _suffix, 10m, plant.Kg, Comment: "Delivery", EffectiveAt: Ago(9)));
+        await db.SendAsync(new MergeLotsCommand(b.LotId, await V(b.LotId), [c.LotId], "Tipped together", Ago(3)));
+        Assert.Equal((50m, 60m), ((await At(b.LotId, Ago(3.5))).Quantity, (await At(b.LotId, Ago(2))).Quantity));
+        Assert.Equal(LotStatus.Consumed, (await At(c.LotId, Ago(2))).Status);
+
+        // Lot A's status changed after two hours ago, so it can't be split as of then.
+        await Assert.ThrowsAsync<DomainRuleException>(async () =>
+            await db.SendAsync(new SplitLotCommand(a.LotId, await V(a.LotId), 10m, plant.Kg, null, null, "Before the release", Ago(2))));
+    }
+
+    [Fact]
+    public async Task Earlier_moves_holds_shipments_packing_corrections_and_silo_merges_are_put_back_and_a_chain_undoes_in_one_step()
+    {
+        var plant = await CreatePlantAsync();
+        var hold = await ReasonAsync("hold", "QA-HOLD");
+        var fix = await ReasonAsync("inventory_adjustment", "COUNT");
+        async Task<long> V(Guid lot) => await VersionAsync(lot);
+        async Task<LotDto> Lot(Guid lot) => await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot));
+        async Task<LotTransactionResponse> Reverse(Guid lot, Guid movement) => await db.SendAsync(new ReverseMovementCommand(lot, await V(lot), movement, fix, "Entered wrongly"));
+        Guid Find(LotDto lot, string kind) => lot.History.First(h => h.Kind == kind && h.ReversesEventId is null && !h.IsReversed).Id;
+
+        // A move with a write-off after it: the move is reversed (the lot hasn't moved since), the write-off stays.
+        var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-RA-" + _suffix, 100m, plant.Kg));
+        await db.SendAsync(new MoveLotCommand(a.LotId, await V(a.LotId), plant.Staging));
+        await db.SendAsync(new WriteOffLotCommand(a.LotId, await V(a.LotId), 5m, plant.Kg, fix, "Spill"));
+        await Reverse(a.LotId, Find(await Lot(a.LotId), LotEventKind.Moved));
+        Assert.Equal((plant.StoresCode, 95m), ((await Lot(a.LotId)).Lot.LocationCode, (await Lot(a.LotId)).Lot.Quantity));
+
+        // Held, then released: the hold isn't the latest status change, so it waits for the release to be reversed first.
+        await db.SendAsync(new ChangeLotStatusCommand(a.LotId, await V(a.LotId), LotStatus.OnHold, hold, "Lab"));
+        await db.SendAsync(new ChangeLotStatusCommand(a.LotId, await V(a.LotId), LotStatus.Available, Comment: "Cleared"));
+        var holdRow = (await Lot(a.LotId)).History.First(h => h.Kind == LotEventKind.StatusChanged && h.ToStatus == LotStatus.OnHold).Id;
+        await Assert.ThrowsAsync<DomainRuleException>(() => Reverse(a.LotId, holdRow));
+
+        // A part shipment with a write-off after it comes back at its time.
+        await db.SendAsync(new ShipLotCommand(a.LotId, await V(a.LotId), 20m, plant.Kg, "SO-9"));
+        await db.SendAsync(new WriteOffLotCommand(a.LotId, await V(a.LotId), 5m, plant.Kg, fix, "Spill"));
+        await Reverse(a.LotId, Find(await Lot(a.LotId), LotEventKind.Shipped));
+        Assert.Equal(90m, (await Lot(a.LotId)).Lot.Quantity);
+
+        // A correction is put back; packing comes undone, and unpacking is undone into the same pallet.
+        await db.SendAsync(new CorrectLotCommand(a.LotId, await V(a.LotId), "R-RA2-" + _suffix, null, null, "Typo"));
+        await Reverse(a.LotId, Find(await Lot(a.LotId), LotEventKind.Corrected));
+        Assert.Equal("R-RA-" + _suffix, (await Lot(a.LotId)).Lot.LotNumber);
+        CreatedResponse pallet = await db.SendAsync(new CreateContainerCommand(plant.Site, null, "pallet", plant.Stores));
+        await db.SendAsync(new PackLotCommand(a.LotId, await V(a.LotId), pallet.Id));
+        await Reverse(a.LotId, Find(await Lot(a.LotId), LotEventKind.Packed));
+        Assert.Null((await Lot(a.LotId)).Lot.ContainerId);
+
+        // A lot that joined a silo comes back out as itself: the balance gives its quantity back.
+        CreatedResponse silo = await db.SendAsync(new CreateEquipmentCommand(
+            plant.Site, "RSILO-" + _suffix, "Silo", null, "work_center", "storage_zone", false, false, true, null, ComminglesLots: true));
+        var s = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-RS-" + _suffix, 40m, plant.Kg));
+        var balance = await db.SendAsync(new MoveLotCommand(s.LotId, await V(s.LotId), silo.Id));
+        await Reverse(s.LotId, Find(await Lot(s.LotId), LotEventKind.Merged));
+        Assert.Equal((40m, LotStatus.Available, 0m), ((await Lot(s.LotId)).Lot.Quantity, (await Lot(s.LotId)).Lot.Status, (await Lot(balance.LotId)).Lot.Quantity));
+
+        // A chain: received, written off, split, the part written off. The receipt alone can't go (its stock was used); its chain can.
+        var c = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-RC-" + _suffix, 100m, plant.Kg));
+        await db.SendAsync(new WriteOffLotCommand(c.LotId, await V(c.LotId), 10m, plant.Kg, fix, "Spill"));
+        var part = await db.SendAsync(new SplitLotCommand(c.LotId, await V(c.LotId), 30m, plant.Kg, null, plant.Staging));
+        await db.SendAsync(new WriteOffLotCommand(part.LotId, await V(part.LotId), 5m, plant.Kg, fix, "Spill"));
+        var receipt = Find(await Lot(c.LotId), LotEventKind.Received);
+        await Assert.ThrowsAsync<DomainRuleException>(() => Reverse(c.LotId, receipt));
+
+        var check = await db.SendAsync(new ReverseChainCommand(c.LotId, receipt, fix, "Wrong delivery", DryRun: true));
+        Assert.Equal((false, true, 4), (check.Applied, check.Reversible, check.Steps.Count));
+        Assert.Equal([LotEventKind.Scrapped, LotEventKind.Split, LotEventKind.Scrapped, LotEventKind.Received], check.Steps.Select(x => x.Kind));
+        Assert.Equal(60m, (await Lot(c.LotId)).Lot.Quantity);
+
+        await Assert.ThrowsAsync<ConflictException>(() =>
+            db.SendAsync(new ReverseChainCommand(c.LotId, receipt, fix, "Wrong delivery", DryRun: false, ExpectedSteps: [.. check.Steps.Skip(1).Select(x => x.EventId)])));
+        var done = await db.SendAsync(new ReverseChainCommand(c.LotId, receipt, fix, "Wrong delivery", DryRun: false, ExpectedSteps: [.. check.Steps.Select(x => x.EventId)]));
+        Assert.True(done.Applied);
+        Assert.Equal((LotStatus.Cancelled, 0m), ((await Lot(c.LotId)).Lot.Status, (await Lot(c.LotId)).Lot.Quantity));
+        Assert.Equal(LotStatus.Cancelled, (await Lot(part.LotId)).Lot.Status);
+    }
+
     private async Task VersionThenAsync(Func<long, WriteOffLotCommand> command) =>
         await db.SendAsync(command(await VersionAsync(command(0).LotId)));
 
@@ -606,6 +731,159 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal(LotStatus.Cancelled, Assert.Single(reversed.Lots).Status);
         var silo = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(balance.LotId))).Lot;
         Assert.Equal(balance.Quantity - 300m, silo.Quantity);
+    }
+
+    [Fact]
+    public async Task A_made_lot_pairs_with_the_lots_in_use_and_keeps_the_ones_picked_and_level_readings_confirm_a_silo()
+    {
+        var plant = await CreatePlantAsync();
+
+        // R1 in use, P1 made, R2 in use, P2 and P3 made: P3 pairs with R2 alone.
+        var r1 = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "PR-1-" + _suffix, 100m, plant.Kg));
+        var r2 = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "PR-2-" + _suffix, 100m, plant.Kg));
+        await db.SendAsync(new ConsumeLotCommand(r1.LotId, plant.Job, 40m, plant.Kg));
+        await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 10m, plant.Metre));
+        await db.SendAsync(new ConsumeLotCommand(r2.LotId, plant.Job, 40m, plant.Kg));
+        await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 10m, plant.Metre));
+        var p3 = await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 10m, plant.Metre));
+
+        async Task<IReadOnlyList<LotTraceNodeDto>> BackAsync(Guid lotId) =>
+            await QueryAsync<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>(new TraceLotQuery(lotId, Forward: false));
+
+        var paired = Assert.Single(await BackAsync(p3.LotId), n => n.Depth == 1);
+        Assert.Equal((r2.LotId, GenealogyPrecision.Estimated), (paired.LotId, paired.Precision));
+        var forward = await QueryAsync<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>(new TraceLotQuery(r1.LotId, Forward: true));
+        Assert.DoesNotContain(forward, n => n.LotId == p3.LotId);
+
+        // Someone names R1 as what P3 was made from: only it is kept, as declared; R2 is listed as not paired.
+        await db.SendAsync(new SetMadeFromCommand(p3.LotId, [r1.LotId], "Hopper not emptied"));
+        var picked = Assert.Single(await BackAsync(p3.LotId), n => n.Depth == 1);
+        Assert.Equal((r1.LotId, GenealogyPrecision.Declared), (picked.LotId, picked.Precision));
+        var parents = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(p3.LotId))).Parents;
+        Assert.Equal(2, parents.Count);
+        Assert.Equal(("made_from", GenealogyPrecision.Declared), (parents.Single(p => p.LotId == r1.LotId).LinkBasis, parents.Single(p => p.LotId == r1.LotId).Precision));
+        Assert.True(parents.Single(p => p.LotId == r2.LotId).Unpaired);
+        var stray = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "PR-X-" + _suffix, 5m, plant.Kg));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new SetMadeFromCommand(p3.LotId, [stray.LotId], null)));
+
+        // A report can name them as it makes the lot; picking none goes back to pairing by time.
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 10m, 0m, plant.Metre, null, plant.Staging) { MadeFromLotIds = [r2.LotId] });
+        Assert.Equal(r2.LotId, Assert.Single(await BackAsync(report.Lot!.LotId), n => n.Depth == 1).LotId);
+        await db.SendAsync(new SetMadeFromCommand(p3.LotId, [], null));
+        Assert.Equal(r2.LotId, Assert.Single(await BackAsync(p3.LotId), n => n.Depth == 1).LotId);
+
+        // A silo with a level tag in kg: it reads empty after A was partly used, so B alone feeds what follows.
+        CreatedResponse silo = await db.SendAsync(new CreateEquipmentCommand(
+            plant.Site, "SILO-L-" + _suffix, "Level silo", null, "work_center", "storage_zone", false, false, true, null, ComminglesLots: true));
+        var tag = Guid.CreateVersion7();
+        await db.ExecuteAsync($"""
+            WITH n AS (INSERT INTO core.edge_node (site_id, code, name) VALUES ('{plant.Site}', 'EDGE-{_suffix}', 'Edge') RETURNING id),
+                 c AS (INSERT INTO core.edge_connection (edge_node_id, code, name, protocol) SELECT id, 'MQTT', 'Broker', 'sparkplug_b' FROM n RETURNING id)
+            INSERT INTO core.equipment_tag (id, equipment_id, tag_role, connection_id, source_address, uom_id)
+            SELECT '{tag}', '{silo.Id}', 'level', id, 'g/n/silo-{_suffix}:level', '{plant.Kg}' FROM c
+            """);
+        var balance = await db.SendAsync(new ReceiveLotCommand(plant.Resin, silo.Id, "PL-A-" + _suffix, 100m, plant.Kg));
+        await db.SendAsync(new ConsumeLotCommand(balance.LotId, plant.Job, 60m, plant.Kg));
+        await db.ExecuteAsync($"INSERT INTO ts.process_value (equipment_tag_id, occurred_at, value_num) VALUES ('{tag}', clock_timestamp(), 35)");
+        await Task.Delay(20);
+        await db.ExecuteAsync($"INSERT INTO ts.process_value (equipment_tag_id, occurred_at, value_num) VALUES ('{tag}', clock_timestamp(), 0)");
+        await Task.Delay(20);
+        await db.SendAsync(new ReceiveLotCommand(plant.Resin, silo.Id, "PL-B-" + _suffix, 80m, plant.Kg));
+        await Task.Delay(20);
+        await db.ExecuteAsync($"INSERT INTO ts.process_value (equipment_tag_id, occurred_at, value_num) VALUES ('{tag}', clock_timestamp(), 79)");
+        await Task.Delay(20);
+        await db.SendAsync(new ConsumeLotCommand(balance.LotId, plant.Job, 30m, plant.Kg));
+
+        async Task<WithdrawalAllocationDto> LastAsync() =>
+            (await QueryAsync<GetBalanceAllocationQuery, BalanceAllocationDto>(new GetBalanceAllocationQuery(balance.LotId))).Withdrawals[0];
+
+        Assert.Equal(GenealogyPrecision.Estimated, (await LastAsync()).Precision);
+        var location = Assert.Single(await QueryAsync<ListInventoryLocationsQuery, IReadOnlyList<InventoryLocationDto>>(new ListInventoryLocationsQuery(plant.Site)), l => l.Id == silo.Id);
+        var set = await db.SendAsync(new SetFlowCommand(silo.Id, location.Version, FlowModels.Mixed, null, EmptyLevel: 1m));
+        var emptied = await LastAsync();
+        Assert.Equal((GenealogyPrecision.Confirmed, "PL-B-" + _suffix), (emptied.Precision, Assert.Single(emptied.Sources).LotNumber));
+        Assert.Contains("set aside", emptied.Reason, StringComparison.Ordinal);
+
+        // With a tolerance the level is also compared with the declared stock: 79 against 80 agrees, within 0.5 it doesn't.
+        await db.SendAsync(new SetFlowCommand(silo.Id, set.Version, FlowModels.Mixed, null, EmptyLevel: 1m, LevelTolerance: 2m));
+        Assert.Equal(GenealogyPrecision.Confirmed, (await LastAsync()).Precision);
+        location = Assert.Single(await QueryAsync<ListInventoryLocationsQuery, IReadOnlyList<InventoryLocationDto>>(new ListInventoryLocationsQuery(plant.Site)), l => l.Id == silo.Id);
+        Assert.Equal((1m, 2m), (location.EmptyLevel, location.LevelTolerance));
+        await db.SendAsync(new SetFlowCommand(silo.Id, location.Version, FlowModels.Mixed, null, EmptyLevel: 1m, LevelTolerance: 0.5m));
+        Assert.Equal(GenealogyPrecision.Possible, (await LastAsync()).Precision);
+    }
+
+    [Fact]
+    public async Task Feed_points_consume_what_reports_backflush_share_by_load_time_and_count_and_flag_what_they_cant_cover()
+    {
+        var plant = await CreatePlantAsync();
+        var count = await ReasonAsync("inventory_adjustment", "COUNT");
+        await using var admin = await db.AdminDataSource.OpenConnectionAsync();
+        var line = await admin.ExecuteScalarAsync<Guid>("SELECT equipment_id FROM core.job WHERE id = @Id", new { Id = plant.Job });
+        var additive = Guid.CreateVersion7();
+        await admin.ExecuteAsync("""
+            INSERT INTO core.material (id, code, name, material_type, base_uom_id, is_lot_tracked) VALUES (@additive, 'ADD-' || @s, 'Additive', 'raw', @kg, true);
+            UPDATE core.job_material SET consumption_method = 'time_window' WHERE job_id = @job;
+            INSERT INTO core.job_material (job_id, material_id, direction, planned_qty, uom_id, consumption_method) VALUES (@job, @additive, 'consume', 10, @kg, 'backflush');
+            """, new { additive, s = _suffix, kg = plant.Kg, job = plant.Job });
+        CreatedResponse hopper = await db.SendAsync(new CreateEquipmentCommand(
+            line, "HOP-" + _suffix, "Resin hopper", null, "equipment_module", "feed_point", false, false, true, null));
+        CreatedResponse doser = await db.SendAsync(new CreateEquipmentCommand(
+            line, "DOS-" + _suffix, "Additive doser", null, "equipment_module", "feed_point", false, false, true, null));
+
+        // Resin loaded from the stores; additive received straight into the doser loads it there.
+        var r1 = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "FR-1-" + _suffix, 100m, plant.Kg));
+        await db.SendAsync(new LoadLotCommand(r1.LotId, r1.Version, hopper.Id));
+        var a1 = await db.SendAsync(new ReceiveLotCommand(additive, doser.Id, "FA-1-" + _suffix, 50m, plant.Kg));
+        var points = await QueryAsync<ListFeedPointsQuery, IReadOnlyList<FeedPointDto>>(new ListFeedPointsQuery(plant.Site));
+        Assert.Equal((a1.LotId, r1.LotId), (Assert.Single(points[0].Loads).LotId, Assert.Single(points[1].Loads).LotId));
+
+        // 100 m made: 1 kg of additive backflushed, 145 kg of resin by time from R1, which holds only 100.
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Metre, null, plant.Staging));
+        Assert.Contains(report.Warnings, w => w.Code == "feed_shortfall");
+        async Task<LotSummaryDto> LotAsync(Guid id) => (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(id))).Lot;
+        Assert.Equal((0m, 49m), ((await LotAsync(r1.LotId)).Quantity, (await LotAsync(a1.LotId)).Quantity));
+        var history = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(r1.LotId))).History;
+        Assert.Equal(AutoSource.TimeWindow, history.First(h => h.Kind == LotEventKind.Consumed).AutoSource);
+        var shortfall = Assert.Single(await QueryAsync<ListShortfallsQuery, IReadOnlyList<FeedShortfallDto>>(new ListShortfallsQuery(plant.Site)));
+        Assert.Equal((45m, hopper.Id, r1.LotId, AutoSource.TimeWindow), (shortfall.Quantity, shortfall.EquipmentId, shortfall.LotId!.Value, shortfall.Source));
+
+        // Resolved from another lot, into the job.
+        var r2 = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "FR-2-" + _suffix, 60m, plant.Kg));
+        await db.SendAsync(new ResolveShortfallCommand(shortfall.Id, shortfall.Version, r2.LotId, "Topped up from the stores"));
+        Assert.Equal(15m, (await LotAsync(r2.LotId)).Quantity);
+        Assert.Empty(await QueryAsync<ListShortfallsQuery, IReadOnlyList<FeedShortfallDto>>(new ListShortfallsQuery(plant.Site)));
+
+        // Reversing the report puts back what it consumed automatically.
+        await db.SendAsync(new ReverseProductionReportCommand(plant.Job, report.ReportId, count, "Wrong job"));
+        Assert.Equal((100m, 50m), ((await LotAsync(r1.LotId)).Quantity, (await LotAsync(a1.LotId)).Quantity));
+
+        // A consumed counter on the hopper: each count comes out of the resin loaded then, once, however often the signal comes.
+        CreatedResponse node = await db.SendAsync(new CreateEdgeNodeCommand(plant.Site, "GW-" + _suffix, "Gateway", null));
+        CreatedResponse connection = await db.SendAsync(new CreateEdgeConnectionCommand(node.Id, "BROKER", "Broker", EdgeProtocols.SparkplugB,
+            new Dictionary<string, string> { ["host"] = "localhost", ["groupId"] = "Plant1" }));
+        CreatedResponse counter = await db.SendAsync(new CreateEquipmentTagCommand(hopper.Id, TagRoles.ConsumedCount, connection.Id, $"Plant1/Ext/HOP-{_suffix}:Used", 1, 0, null));
+        await admin.ExecuteAsync("UPDATE core.equipment_tag SET uom_id = @kg WHERE id = @id", new { kg = plant.Kg, id = counter.Id });
+        var stream = Guid.CreateVersion7();
+        var t0 = DateTimeOffset.UtcNow;
+        EdgeSignalDto S(long seq, int seconds, decimal value) => new() { Sequence = seq, TagId = counter.Id, OccurredAt = t0.AddSeconds(seconds), Value = value };
+        var batch = new IngestEdgeSignalsCommand(node.Id, stream, "1.0.0", [S(1, 0, 1000), S(2, 1, 1012)]);
+        await db.SendAsync(batch);
+        await db.SendAsync(batch);
+        Assert.Equal(88m, (await LotAsync(r1.LotId)).Quantity);
+        Assert.Equal(AutoSource.Counter, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(r1.LotId))).History.First(h => h.Kind == LotEventKind.Consumed && !h.IsReversed).AutoSource);
+
+        // With the counter, the hopper's resin isn't shared by time too; more counted than R1 holds is flagged, then dismissed.
+        await db.SendAsync(new ReportProductionCommand(plant.Job, null, 10m, 0m, plant.Metre, null, plant.Staging));
+        Assert.Equal(88m, (await LotAsync(r1.LotId)).Quantity);
+        await db.SendAsync(new IngestEdgeSignalsCommand(node.Id, stream, "1.0.0", [S(3, 2, 1112)]));
+        Assert.Equal(0m, (await LotAsync(r1.LotId)).Quantity);
+        var over = Assert.Single(await QueryAsync<ListShortfallsQuery, IReadOnlyList<FeedShortfallDto>>(new ListShortfallsQuery(plant.Site)));
+        Assert.Equal((12m, AutoSource.Counter), (over.Quantity, over.Source));
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new DismissShortfallCommand(over.Id, over.Version, "")));
+        await db.SendAsync(new DismissShortfallCommand(over.Id, over.Version, "Counter drifted; checked the hopper"));
+        Assert.Equal("Counter drifted; checked the hopper",
+            Assert.Single(await QueryAsync<ListShortfallsQuery, IReadOnlyList<FeedShortfallDto>>(new ListShortfallsQuery(plant.Site, FeedShortfallStatus.Dismissed))).ResolutionNote);
     }
 
     [Fact]

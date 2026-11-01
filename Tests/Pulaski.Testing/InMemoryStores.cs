@@ -56,6 +56,8 @@ public sealed class InMemoryStores
 
     public InMemoryInventory Inventory { get; } = new();
 
+    public InMemoryFeeds Feeds { get; } = new();
+
     public InMemoryExpectedReceipts ExpectedReceipts { get; } = new();
 
     public InMemoryContainers Containers => _containers ??= new InMemoryContainers(Inventory);
@@ -133,6 +135,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IUnitRepository>();
         services.RemoveAll<IInventoryReadStore>();
         services.RemoveAll<IInventoryRepository>();
+        services.RemoveAll<IFeedRepository>();
+        services.RemoveAll<IFeedReadStore>();
         services.RemoveAll<IContainerRepository>();
         services.RemoveAll<IContainerReadStore>();
         services.RemoveAll<IExpectedReceiptRepository>();
@@ -202,6 +206,8 @@ public sealed class InMemoryStores
         services.AddSingleton<IUnitRepository>(Units);
         services.AddSingleton<IInventoryReadStore>(Inventory);
         services.AddSingleton<IInventoryRepository>(Inventory);
+        services.AddSingleton<IFeedRepository>(Feeds);
+        services.AddSingleton<IFeedReadStore>(Feeds);
         services.AddSingleton<IContainerRepository>(Containers);
         services.AddSingleton<IContainerReadStore>(Containers);
         services.AddSingleton<IExpectedReceiptRepository>(ExpectedReceipts);

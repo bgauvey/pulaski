@@ -63,7 +63,7 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         """;
 
     private const string TagEquipment = """
-        SELECT id, CASE WHEN level = 'site' THEN id ELSE site_id END AS site_id, code, tracks_state FROM core.equipment WHERE id = @Id
+        SELECT id, CASE WHEN level = 'site' THEN id ELSE site_id END AS site_id, code, tracks_state, holds_inventory FROM core.equipment WHERE id = @Id
         """;
 
     private const string GetTag = """
@@ -255,7 +255,7 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
 
     public async Task<TagEquipment?> GetTagEquipmentAsync(Guid equipmentId, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<EquipmentRow>(TagEquipment, new { Id = equipmentId }, cancellationToken) is { } r
-            ? new TagEquipment(r.Id, r.SiteId, r.Code, r.TracksState)
+            ? new TagEquipment(r.Id, r.SiteId, r.Code, r.TracksState, r.HoldsInventory)
             : null;
 
     public async Task<Versioned<EquipmentTagRecord>?> GetTagForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
@@ -535,6 +535,7 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         public Guid? SiteId { get; init; }
         public string Code { get; init; } = "";
         public bool TracksState { get; init; }
+        public bool HoldsInventory { get; init; }
     }
 
     private sealed class TagRow

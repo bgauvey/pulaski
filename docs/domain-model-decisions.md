@@ -67,7 +67,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-057 | Back-dated inventory movements: a receipt, consumption, production, write-up or write-off may count from up to 31 days earlier (`effective_at`), with a comment and permission `inventory.backdate`; its record time (`occurred_at`) and append-only history stay. Stock at a time sums movements by effective time, so it is deterministic whatever the order of entry. A back-dated movement may not count before the lot had stock or before a posted count of it, nor take it below zero at any time; expiry and the run are taken at the effective time | Proposed | 2026-10-24 |
 | D-058 | Shortages with the live schedule and supply on its way: jobs are timed by the schedule's projection now by default (published times on request); `core.expected_receipt` records deliveries entered by people or sent by the ERP (idempotent by external key), counted beside stock only for jobs needing the material after they are due, and closed by receiving a lot against them. Still not MRP: no suggestions, lead times or ordering | Proposed | 2026-10-24 |
 | D-059 | Containers, labels and scanning: a container (pallet, tote, box, bin) holds whole lots that keep their own identity; packing, unpacking and moving with a container are ordinary lot movements linked to it, and a lot moved, split off or used up alone leaves it. Labels are 4 × 6 in PDFs with a Code 128 barcode of a short Pulaski code (`PUL1L`/`PUL1C` + a never-reused label number, `PUL1E:` + a location code); a scan resolves to exactly one thing at the site, or offers the matches when free text is ambiguous | Proposed | 2026-10-24 |
-| D-060 | Genealogy through commingled balances: each location where lots mix has a flow model (`mixed`: a withdrawal takes every arrival's share; `fifo`: oldest first) and an optional minimum residence time. Which arrivals fed each withdrawal is worked out on read from the declared movements (by effective time) and narrows traces through the balance; every such link is exact (one arrival possible), estimated (by the model) or possible (quantities don't add up, residence not met), with the reason and the basis. A `level` tag role can be bound; reading it waits for process values | Proposed | 2026-10-24 |
+| D-060 | Genealogy through commingled balances: each location where lots mix has a flow model (`mixed`: a withdrawal takes every arrival's share; `fifo`: oldest first) and an optional minimum residence time. Which arrivals fed each withdrawal is worked out on read from the declared movements (by effective time) and narrows traces through the balance; every such link is exact (one arrival possible), estimated (by the model) or possible (quantities don't add up, residence not met), with the reason and the basis. A `level` tag role can be bound; its readings confirm empty points and declared stock since D-078 | Proposed | 2026-10-24 |
 
 ## Order hierarchy
 
@@ -1195,7 +1195,7 @@ Issue #35. Movements counted when they were entered (D-027), so a receipt or con
 
 **Screens.** The lot drawer shows **Counts from** for those five movements to whoever may back-date. The lot history lists a back-dated row at its effective time with the record time beneath. The journal lists rows by record time (its range and cursor are record time, as before) with *counts from*, and its export has both columns. Genealogy links show *since …* and *(back-dated)*.
 
-**Not yet.** Back-dating moves, holds, splits, merges and shipments; reconstructing location and status on a past date; a site-set window (31 days is fixed).
+**Not yet.** A site-set window (31 days is fixed). Moves, holds, splits, merges and shipments, and a lot's state on a past date, came with D-076.
 
 ## Shortages with the live schedule and incoming supply (D-058, proposed)
 
@@ -1294,7 +1294,7 @@ A balance emptied to zero starts afresh, so the next withdrawals can be exact. N
 - The starting lot, if itself a balance, isn't narrowed.
 - `GET /api/lots/{id}/allocation` gives a balance's withdrawals with their sources, which the balance's page shows.
 
-**Machine data.** Process values aren't recorded yet (D-050), so the model can't be confirmed by measurement and says so. A `level` tag role can be bound now (`TagRoles.Bindable`) and is ignored by ingest. Once level readings are kept, they can confirm a silo was empty (making links exact) or flag declared stock that disagrees with the level (making them possible).
+**Machine data.** Process values aren't recorded yet (D-050), so the model can't be confirmed by measurement and says so. A `level` tag role can be bound now (`TagRoles.Bindable`) and is ignored by ingest. Once level readings are kept, they can confirm a silo was empty (making links exact) or flag declared stock that disagrees with the level (making them possible). Both came with D-078 (#81).
 
 **Approximations.** The SQL trace keeps each lot once, by its nearest path, so a lot reachable both through a dropped arrival and another way may be dropped. A reversal into a balance is replayed as a withdrawal of the oldest stock.
 
@@ -1391,7 +1391,7 @@ The job page lists the report as reversed (correction rows aren't listed). Repor
 
 **Also fixed.** Production by shift (D-044) now leaves out machine counts, as D-050 intended.
 
-**Not done.** Reversing moves, holds and shipments that aren't the latest movement, lot corrections, packing; undoing a chain of dependent movements in one step; editing a report in place.
+**Not done.** Editing a report in place. Earlier moves, holds and shipments, corrections, packing, balance merges and chain undo came with D-077.
 
 ## Lot allocations and recommendations (D-064, proposed)
 
@@ -1701,6 +1701,181 @@ from the material's size (`OrderBatchHint`).
 the response's note says how much the order is short. Less than a batch left is refused (nothing to replace). It needs only `schedule.plan`;
 `ReplaceExact` and `RoundDown` together are refused. The schedule drawer offers round up (default), round down, and exact (with
 `schedule.plan_partial`), and shows the server's note in its message.
+
+## Back-dating every movement; a lot's state on a past date (D-076, proposed)
+
+Issue #77. Only quantity movements could be back-dated (D-057), and a lot's location and status on a past date weren't reconstructed.
+
+**A lot's state at a time** (`LotPastState`, domain, pure). Quantity, location and status are worked back from the lot as it is now, undoing
+every movement that counts after the time, latest first, in effective order (record order breaks ties): quantity less `qty_delta`; status
+back to `from_status` where a row changed it (`from_status` and `to_status` set); location back to `from_location` where the row moved the
+whole lot (no quantity, both locations set: a move or a pack with its container). Rows with a quantity name locations but never move the lot (a
+transfer between balances, a split, a receipt, a take). The container is replayed forward, since emptying a lot clears it with no record. The
+lot existed when a movement counts by then. Because it is the journal replayed, the state at any time agrees with it.
+
+**Back-dating the other movements** (same 31 days, comment and `inventory.backdate`; the endpoints add `RequireToBackdate`):
+- *Move, hold, release* (`Backdating.EnsureLatestAsync`): the lot had stock then, and nothing else counts after the movement, because later
+  rows name where the lot was and consumption needs it available. A move into a location where lots mix isn't back-dated.
+- *Split, shipment* (`EnsureUnchangedSinceAsync` + `EnsureFitsAsync`): the lot's status and location haven't changed since, and the stock then
+  allows it; shipping all of a non-balance lot ends it, so it must be the latest movement. A split's new lot and its genealogy count from
+  then; a split to where lots mix isn't back-dated.
+- *Merge*: each lot taken in has nothing after it (it is emptied then), and the target is unchanged since and has room for all of it. Expiry is
+  checked at the effective time.
+- *Transfer between balances*: both balances unchanged since, and the stock fits on both sides.
+- *Counts* aren't back-dated by hand: each difference counts from its line's `counted_at` (the lot hasn't changed since, or posting refuses
+  it, so its quantity then is its quantity now). A posted count blocks back-dating before that line's `counted_at` (was the posting time).
+
+**Reading.** `GET /api/lots/{id}/at?at=` (`GetLotStateAtQuery`, `inventory.view`): existed, quantity, location, container, status. Stock on a
+date (`StockOnDateQuery`) works out each lot that existed then from its movements after the time (`ListPastLotsAsync`), and adds where it
+was (`Locations`) and what was on hold or in quarantine (`OnHoldQuantity`, also per location). Record time stays the partition key; nothing
+is stored or changed for this.
+
+**Screens.** The lot drawer offers **Counts from** for the new movements, with a note of each one's rule. The lot page has **As it was**.
+Stock on a date shows on hold and where, and exports a row per material and location.
+
+## Lifting reversal limits (D-077, proposed)
+
+Issue #79. Moves, holds and shipments were reversed only as the lot's latest movement; corrections and packing weren't reversed; a lot that
+joined a balance where lots mix couldn't come back out; and dependent movements were undone one at a time.
+
+**What hasn't changed since** (`ListStandingAfterAsync`: the lot's movements after it, in effective order, that stand: not reversed and not
+reversals). A movement is reversed (a compensating row at its effective time, as D-063) when what it changed hasn't changed again:
+- a move: no later standing move of the lot (`Lot.Reverse` also checks the lot is where it moved it); a move made with its container isn't
+  reversed alone;
+- a hold or release, or a shipment that ended the lot: no later standing status change (and the lot is in the status it set);
+- any quantity: it fits the lot's history from then on (`EnsureFitsAsync`), so a part shipment or a write-off behaves like a receipt.
+
+**Packing** (`Lot.ReversePacking`): undoing a pack takes the lot out (back into the container it was in just before, from its history, and
+back to where it was if the pack moved it); undoing an unpack puts it back into the container, which must be where the lot is. The rows are
+`packed`/`unpacked` naming the container they leave it in, with `reverses_event_id`, so a lot's container at a past time still follows.
+
+**Corrections**: `ts.lot_event.details` (jsonb, migration 0045) keeps a correction's lot details before and after (`CorrectionDetails`).
+Reversing writes a `corrected` row putting the earlier ones back (`Lot.RevertCorrection`), refused when they were corrected again since or the
+old number is taken. Corrections from before 0045 have no details and stay irreversible.
+
+**Balances**: a merge into a balance where lots mix is reversed like any merge: the balance gives the quantity back if it holds it at every
+time since, and the lot gets its quantity and status back.
+
+**Whether a row is a reversal** is `reverses_event_id`, whatever its kind; such rows aren't reversed.
+
+**Chain undo** (`ReverseChainCommand`, `POST /api/lots/{id}/reverse-chain?dryRun=`, `inventory.correct`): the movement, every standing movement
+of the lot after it, and every standing movement of a lot split off it since (found from the split's other half), recursively; reversed latest
+first through the same single reversal (`ReverseMovementHandler.ReverseAsync`, inside one transaction). Jobs and then lots are locked first, in
+id order in SQL (D-027); a pair's other half on a lot outside the chain is locked by its step. A dry run does everything and rolls back, so the
+check is exactly what confirming does; it reports the steps and the first that can't be reversed, with why. Confirming sends the steps
+(`ExpectedSteps`) and is refused (409) if they changed. At most 200 steps. It doesn't follow merges into other lots, consumption into jobs or
+their output.
+
+**Screens.** Every standing movement on a lot's page has **Reverse**. The drawer explains each kind and offers **With everything after it that
+depends on it**: **Check** lists the chain, **Undo N movements** does it.
+
+## Per-lot genealogy and silo level readings (D-078, proposed)
+
+Issue #81. Every lot a job used was a parent of every lot it made (D-027), and genealogy through a silo was an estimate from declared
+movements alone (D-060), though level readings are now kept (D-071).
+
+**Pairing by time** (`LotPairing.Pair`, pure, in the domain): a job's standing consumption and production (`ListJobDeclarationsAsync`: neither
+reversed nor reversals) in the order they count (`effective_at`, then record time).
+- A used lot is in use from its consumption until the next lot of that material on the job.
+- A made lot pairs, per material, with the lot in use when the job's previous output was declared, plus every lot of that material declared
+  since, up to its own output.
+- Precision is `exact` when the job used only one lot of the material, else `estimated`.
+- A lot used after everything was made, and a material none of whose lots came before an output, can't be paired. The job link is kept for
+  every made lot, `possible`, with why.
+- Nothing is stored: the stored job links (`declared`) stay as they were, and pairing narrows them on read.
+
+**Picking** (`SetMadeFromCommand`, `PUT /api/lots/{id}/made-from`, `production.report`; or `ReportProductionCommand.MadeFromLotIds`): a made
+lot names the lots it came from.
+- Only lots its job used, standing, can be picked.
+- The picks are stored as `made_from` links with the job (`core.lot_genealogy.link_basis`, migration 0046) beside the `declared` ones.
+- Picking again supersedes the earlier picks; an empty pick goes back to pairing by time.
+- The job is locked first, then the lot (D-027); the lot's job is read before the locks, since it never changes. The event is
+  `pulaski.lot.made_from_set.v1`.
+- Reversing the consumption or production supersedes the `made_from` links with the `declared` ones.
+
+**Where it applies** (`JobLinkPairs`, application): for a job's link from parent to child:
+- if the child has picks for that job, the parent is kept `declared` when picked, else left out;
+- otherwise the pairing decides;
+- splits and merges aren't judged.
+
+`TraceNarrowing` drops a lot whose link doesn't pair, and what was reached only through it, before narrowing through balances. A lot reached
+through both takes the worse precision. A lot's **Made from** and **Used in** lists keep every stored link: a `declared` link with a pick
+twin isn't listed twice, and one that doesn't pair is `Unpaired`, with why.
+
+**Level readings** (`BalanceLevels`, input to `BalanceAllocation.Allocate`). They come from the location's active `level` tag, read on demand
+(`core.equipment.empty_level`, `level_tolerance`, in the tag's unit; set with the flow, `SetFlowCommand`).
+
+- **Empty points:** the first good reading (quality ≥ 192) of each stretch at or below `empty_level` sets aside every parcel that arrived
+  before the last reading above empty. An arrival the level hasn't caught up with yet survives.
+  - What was set aside is noted on the next withdrawal.
+  - If nothing is left, a withdrawal from a single arrival after that is `confirmed`, until the declared movements empty the balance
+    themselves.
+- **Stock:** with `level_tolerance`, the last good reading in the 15 minutes before each withdrawal is compared with the declared stock
+  just before it.
+  - Within tolerance, `exact` sources become `confirmed`; outside it, the withdrawal and its sources become `possible`.
+  - This needs the tag's unit to convert to the material's base unit (`IUnitReadStore`, material conversions included). Otherwise only empty
+    points are used.
+- The level is taken as the balance's own, so it fits a silo holding one material. Readings outlive their retention only as the
+  declared movements.
+
+**Precision**, from most to least sure: `confirmed`, `exact`, `declared`, `estimated`, `possible` (`GenealogyPrecision`).
+
+**Not done:**
+- pairing from machine data (feed-point loading, consumption by time window: #33);
+- quantities on pairs;
+- a level that changes how much each arrival gave.
+
+## Automated consumption at feed points (D-079, proposed)
+
+Issue #33. Inventory was declared by hand. BOM lines already said how each component is taken (`consumption_method`: `backflush`,
+`time_window`, `declared`, `scan`), but nothing acted on it.
+
+**Feed points and loads.** A feed point is equipment with role `feed_point` (holding inventory) below a line, which is its nearest parent
+that runs jobs (`core.equipment_closure`). Loads are worked out on read (`FeedLoads.From`, pure) from the standing movements that name the
+feed point. Nothing is stored, so back-dated movements and reversals fall into place; `core.material_load` stays unused.
+- A lot is loaded when it arrives there (received, moved, split or made there) or is loaded again (`LoadLotCommand`, a `loaded` row with no
+  quantity).
+- It stays loaded until it leaves (a relocation from there), runs out (`qty_after` reaches zero), or the next lot of its material is loaded
+  there.
+- `LoadLotCommand` (`POST /api/lots/{id}/load`, `lot.move`) moves a lot elsewhere whole, through `MoveLotHandler`.
+
+**On a production report** (`ProductionReporter`, after its counts and lots, in its transaction; `FeedAutomation.OnReportAsync`): for each
+job component with `backflush` or `time_window`, the quantity is planned × (good + scrap) ÷ the job's planned quantity, in the component's
+base unit.
+- **Backflush:** taken from the lots of that material at the line's feed points: the loaded ones first, then the others, first expiry first.
+- **Time window:** shared among that material's loads at the line's feed points over the report's period (the run's previous standing report,
+  or its start, to this one), by overlap (`FeedLoads.ShareByTime`). Feed points with a consumed counter are left to it.
+
+**Counters** (`FeedCounterPoster`, after ingest commits): each machine `consumed` count at a feed point is taken from the lot loaded then,
+into the job running on its line then, in the counter tag's unit (else the base unit).
+- Each count is posted in its own transaction, the job locked first, so ingest's own locks (node, then equipment) never wait on lots.
+- Counts not yet posted (no consumption and no shortfall with that `source_ref`) are retried with every batch, for up to 31 days.
+- With lots of two materials loaded, a counter can't say which it counted, so the count is a shortfall.
+- `consumed_count` and `level` tags may now be bound to equipment that holds inventory, not only to equipment that tracks state.
+
+**Each consumption** is an ordinary `consumed` row into the job and run, with genealogy and `pulaski.lot.consumed.v1`.
+- It carries `ts.lot_event.auto_source` and `source_ref` (the report or the count; migration 0047).
+- Back-dated to when the report or count counted, it must fit the lot's history (`EnsureFitsAsync`).
+- It never goes below zero, and never uses a lot that is held, expired or in another site.
+
+**Shortfalls** (`core.feed_shortfall`): whatever wasn't covered is added up per source, place and material and recorded once
+(unique `source_ref`, place, material).
+- A report says so in a warning; a report or ingest is never refused.
+- `ResolveShortfallCommand` (`production.report`) consumes the quantity from a picked lot into its job and run, now, locking the job, then
+  the lot, then the shortfall.
+- `DismissShortfallCommand` (`inventory.correct`) needs a comment.
+- Inventory → Feed points lists the loads and shortfalls.
+
+**Reversing a report** puts back its automated consumptions (`Lot.Restore`, through `ReversalWriter`) and dismisses its open shortfalls.
+
+**Idempotent:** a report posts once in its own transaction. A machine count is posted once: resent signals are skipped by ingest (D-050), and
+`IsPostedAsync` is checked again under the job's lock.
+
+**Not done:**
+- machine production counts into lots;
+- automated consumption using up allocations (D-064);
+- residence time between a feed point and the line;
+- scan-to-consume beyond the Scan page's existing Consume.
 
 ## Application architecture
 

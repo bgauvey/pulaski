@@ -52,6 +52,7 @@ internal static class ExecutionEndpoints
                     GoodBatches = request.GoodBatches,
                     ScrapBatches = request.ScrapBatches,
                     PartialQty = request.PartialQty,
+                    MadeFromLotIds = request.MadeFromLotIds,
                 },
                 ct)))
         .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.Job));

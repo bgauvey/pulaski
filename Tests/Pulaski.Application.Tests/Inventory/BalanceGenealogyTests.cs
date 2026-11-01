@@ -80,7 +80,7 @@ public class BalanceGenealogyTests
             Node(supplierOfA, LotA, 3, null),
         ];
 
-        var trace = await new TraceLotHandler(f.Stores.Inventory).HandleAsync(new TraceLotQuery(made, Forward: false), CancellationToken.None);
+        var trace = await new TraceLotHandler(f.Stores.Inventory, f.Stores.Units).HandleAsync(new TraceLotQuery(made, Forward: false), CancellationToken.None);
 
         // Job 2 took only B under first in, first out; A and what A came from are left out.
         Assert.Equal([made, balance, LotB], trace.Select(n => n.LotId));

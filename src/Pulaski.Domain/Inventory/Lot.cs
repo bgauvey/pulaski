@@ -39,8 +39,14 @@ public static class LotEventKind
     public const string Packed = "packed";
     public const string Unpacked = "unpacked";
 
+    /// <summary>Loaded at a feed point it is already at (#33): no quantity, the feed point as where it went.</summary>
+    public const string Loaded = "loaded";
+
     /// <summary>The single-lot movements <see cref="Lot.Reverse"/> undoes (D-030).</summary>
     public static IReadOnlyList<string> Reversible { get; } = [Received, Adjusted, Scrapped, Moved, StatusChanged, Shipped];
+
+    /// <summary>Also put back, each its own way (#79): packing, unpacking and corrections.</summary>
+    public static IReadOnlyList<string> PutBack { get; } = [Packed, Unpacked, Corrected];
 
     /// <summary>Of those, the ones that change only the quantity, so an earlier one can be reversed too when the stock allows (D-063).</summary>
     public static IReadOnlyList<string> QuantityOnly { get; } = [Received, Adjusted, Scrapped];
@@ -69,6 +75,9 @@ public sealed record LotMovement(
     Guid? ToLocationId = null,
     string? FromStatus = null,
     string? ToStatus = null);
+
+/// <summary>The details a correction changes (D-030): number, supplier lot and expiry.</summary>
+public sealed record LotDetails(string? LotNumber, string? SupplierLot, DateTimeOffset? ExpiresAt);
 
 /// <summary>
 /// A lot of one material at one location in a site (D-027). <see cref="Quantity"/> is in the
@@ -402,8 +411,9 @@ public sealed record Lot(
     }
 
     /// <summary>
-    /// Undoes <paramref name="original"/>, the lot's latest movement (D-030): the quantity, location
-    /// and status go back to before it. A reversed receipt that leaves a lot at zero cancels it.
+    /// Undoes <paramref name="original"/> (D-030, #79): the quantity, location and status go back to before it. It need not be the latest
+    /// movement, but what it changed must not have changed since: the lot is still where it moved it and in the status it set. A reversed
+    /// receipt that leaves a lot at zero cancels it.
     /// </summary>
     /// <exception cref="DomainRuleException">The movement can't be reversed.</exception>
     public (Lot Lot, LotMovement Movement) Reverse(LotMovement original)
@@ -425,6 +435,16 @@ public sealed record Lot(
             throw new DomainRuleException($"{Name} no longer holds what that movement added.");
         }
 
+        if (original.Kind == LotEventKind.Moved && original.QtyDelta is null && original.ToLocationId is { } movedTo && movedTo != LocationId)
+        {
+            throw new DomainRuleException($"{Name} has moved on since; reverse that move first.");
+        }
+
+        if (original.FromStatus is not null && original.ToStatus is { } setTo && setTo != Status)
+        {
+            throw new DomainRuleException($"{Name} is {Label(Status)} now, not {Label(setTo)}; reverse what changed it first.");
+        }
+
         var location = original.Kind == LotEventKind.Moved ? original.FromLocationId ?? LocationId : LocationId;
         var status = original.ToStatus is not null ? original.FromStatus ?? Status : Status;
         if (original.Kind == LotEventKind.Received && quantity == 0 && !IsBulk)
@@ -441,6 +461,62 @@ public sealed record Lot(
             location == LocationId ? null : location,
             status == Status ? null : Status,
             status == Status ? null : status));
+    }
+
+    /// <summary>
+    /// Undoes packing or unpacking (#79). Undoing a pack takes the lot out of <paramref name="container"/> and back into
+    /// <paramref name="containerBefore"/> (where it was, if anywhere), and back to where it was if the pack moved it; undoing an unpack puts
+    /// it back into <paramref name="container"/>, which must be where the lot is. The row is a pack or unpack naming the container it leaves
+    /// it in, so a lot's container at a past time still follows from its history.
+    /// </summary>
+    /// <exception cref="DomainRuleException">The lot is no longer in, or out of, that container, or the container is elsewhere.</exception>
+    public (Lot Lot, LotMovement Movement, Guid? Container) ReversePacking(LotMovement original, Guid container, Guid? containerBefore, Guid? containerLocationId)
+    {
+        EnsureOnHand("put back");
+        if (original.Kind == LotEventKind.Packed)
+        {
+            if (ContainerId != container)
+            {
+                throw new DomainRuleException($"{Name} isn't in that container any more; reverse what took it out first.");
+            }
+
+            var location = original.FromLocationId ?? LocationId;
+            var moves = location != LocationId;
+            var after = this with { ContainerId = containerBefore, LocationId = location };
+            var movement = new LotMovement(containerBefore is null ? LotEventKind.Unpacked : LotEventKind.Packed, null, Quantity,
+                moves ? LocationId : null, moves ? location : null);
+            return (after, movement, containerBefore ?? container);
+        }
+
+        if (original.Kind != LotEventKind.Unpacked)
+        {
+            throw new DomainRuleException("Only packing or unpacking is put back this way.");
+        }
+
+        if (ContainerId is not null)
+        {
+            throw new DomainRuleException($"{Name} is in a container again; reverse that first.");
+        }
+
+        if (containerLocationId != LocationId)
+        {
+            throw new DomainRuleException($"That container isn't where {Name.ToLowerInvariant()} is any more; move one of them first.");
+        }
+
+        return (this with { ContainerId = container }, new LotMovement(LotEventKind.Packed, null, Quantity), container);
+    }
+
+    /// <summary>Puts back the lot details a correction replaced (#79), when they are still what it set.</summary>
+    /// <exception cref="DomainRuleException">They have been corrected again since.</exception>
+    public (Lot Lot, LotMovement Movement) RevertCorrection(LotDetails before, LotDetails after)
+    {
+        if (new LotDetails(LotNumber, SupplierLot, ExpiresAt) != after)
+        {
+            throw new DomainRuleException($"{Name}'s details have been corrected again since; reverse that correction first.");
+        }
+
+        return (this with { LotNumber = before.LotNumber, SupplierLot = before.SupplierLot, ExpiresAt = before.ExpiresAt },
+            new LotMovement(LotEventKind.Corrected, null, Quantity));
     }
 
     /// <summary>

@@ -18,10 +18,13 @@ public sealed record ReportEdgeMetricsCommand(Guid EdgeNodeId, IReadOnlyList<Edg
 
 internal sealed class IngestEdgeSignalsHandler(
     IUnitOfWork unitOfWork, IEdgeRepository edge, IStopAdjustmentRepository adjustments, IEventLog eventLog, IEventFactory events, IRequestContext request,
-    IIdGenerator ids, TimeProvider time)
+    IIdGenerator ids, TimeProvider time, Inventory.FeedCounterPoster? feedCounts = null)
     : ICommandHandler<IngestEdgeSignalsCommand, EdgeSignalBatchResponse>
 {
     public const int MaxSignals = 5000;
+
+    // Equipment that counted material consumed in this batch: feed points among them post it to inventory once it commits (#33).
+    private readonly HashSet<Guid> _consumedAt = [];
 
     public async Task<EdgeSignalBatchResponse> HandleAsync(IngestEdgeSignalsCommand command, CancellationToken cancellationToken)
     {
@@ -54,6 +57,11 @@ internal sealed class IngestEdgeSignalsHandler(
             node with { StreamId = command.StreamId, LastSequence = lastSequence, LastSeenAt = now, AgentVersion = command.AgentVersion ?? node.AgentVersion },
             now, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        if (feedCounts is not null)
+        {
+            await feedCounts.PostAsync(_consumedAt, cancellationToken);
+        }
+
         return new EdgeSignalBatchResponse { LastSequence = lastSequence, Applied = applied, Skipped = command.Signals.Count - applied };
     }
 
@@ -202,6 +210,10 @@ internal sealed class IngestEdgeSignalsHandler(
                     if (delta > 0)
                     {
                         counts.Add(new MachineCountRow(ids.NewId(), signal.OccurredAt, equipment, run?.RunId, run?.JobId, kind, delta * tag.ScaleFactor, value));
+                        if (role == TagRoles.ConsumedCount)
+                        {
+                            _consumedAt.Add(equipment);
+                        }
                     }
 
                     break;

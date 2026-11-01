@@ -36,7 +36,7 @@
         {
             <div class="table-panel">
                 <table class="table table-sm align-middle">
-                    <thead><tr><th>Material</th><th>Class</th><th class="inv-num">On hand</th><th class="inv-num">Lots</th></tr></thead>
+                    <thead><tr><th>Material</th><th>Class</th><th class="inv-num">On hand</th><th class="inv-num">Of it on hold</th><th>Where</th><th class="inv-num">Lots</th></tr></thead>
                     <tbody>
                         @foreach (var r in rows)
                         {
@@ -44,13 +44,15 @@
                                 <td><a class="fw-semibold" href="inventory/materials/@r.MaterialId">@r.Code</a> <span class="small text-muted">@r.Name</span></td>
                                 <td>@(r.MaterialClassName ?? "No class")</td>
                                 <td class="inv-num">@InventoryView.Qty(r.Quantity) <span class="small text-muted">@r.UomCode</span></td>
+                                <td class="inv-num">@(r.OnHoldQuantity > 0 ? InventoryView.Qty(r.OnHoldQuantity) : "—")</td>
+                                <td class="small">@string.Join(", ", r.Locations.Select(l => $"{(l.LocationCode.Length > 0 ? l.LocationCode : "no location")} {InventoryView.Qty(l.Quantity)}"))</td>
                                 <td class="inv-num">@r.LotCount</td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
-            <p class="small text-muted mt-2">Quantities come from each lot's last movement up to then. Held stock is included: a lot's status at the time isn't reconstructed.</p>
+            <p class="small text-muted mt-2">Each lot as it was then: its quantity, where it was and whether it was on hold, from its movements in the order they count (back-dated ones at their time), so it agrees with the journal.</p>
         }
     }
 </section>
@@ -170,8 +172,9 @@
     private Task ExportOnDateAsync() =>
         Downloads.CsvAsync(
             Csv.FileName($"stock-{_date:yyyyMMdd}", Sites.Site?.Code, Time.GetUtcNow()),
-            Csv.Write(["Material", "Name", "Class", "On hand", "Unit", "Lots"],
-                _onDate!.Select(r => (IReadOnlyList<object?>)[r.Code, r.Name, r.MaterialClassName, r.Quantity, r.UomCode, r.LotCount]))).AsTask();
+            Csv.Write(["Material", "Name", "Class", "Location", "On hand", "Unit", "Of it on hold", "Lots"],
+                _onDate!.SelectMany(r => r.Locations.Select(l => (IReadOnlyList<object?>)[
+                    r.Code, r.Name, r.MaterialClassName, l.LocationCode, l.Quantity, r.UomCode, l.OnHoldQuantity, r.LotCount])))).AsTask();
 
     private Task ExportAgingAsync() =>
         Downloads.CsvAsync(

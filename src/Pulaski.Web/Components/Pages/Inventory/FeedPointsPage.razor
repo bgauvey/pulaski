@@ -1,0 +1,261 @@
+@page "/inventory/feed-points"
+@attribute [RequiresView(PermissionCodes.InventoryView, PermissionCodes.FloorView)]
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+
+@* Feed points (#33): what is loaded where, and what automated consumption couldn't cover, to resolve with a lot or dismiss. *@
+<PageTitle>Feed points · Inventory · Pulaski</PageTitle>
+
+<InventoryHeader Title="Feed points" SiteChanged="LoadAsync">
+    <Description>
+        Hoppers, feeders and unwinds where lots enter a line. A lot loaded here feeds the line until the next lot of its material is loaded, it leaves or it runs out.
+        Components marked backflush or time window in a BOM are consumed from here as production is reported, and a feed point's consumed counter takes what it counts.
+    </Description>
+</InventoryHeader>
+
+<ProblemAlert Error="_error" />
+
+@if (_points is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+else if (_points.Count == 0)
+{
+    <p class="text-muted">No feed points at this site. Add equipment with the role <em>Feed point</em> below a line on the Equipment screen.</p>
+}
+else
+{
+    <div class="table-panel mb-4">
+        <table class="table align-middle">
+            <thead>
+                <tr><th>Feed point</th><th>Line</th><th>Loaded now</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _points)
+                {
+                    <tr @key="p.Id">
+                        <td>
+                            <span class="fw-semibold">@p.Code</span> <div class="small text-muted">@p.Name</div>
+                            @if (p.HasCounter)
+                            {
+                                <span class="chip" title="Its consumed counter takes what it counts out of the lot loaded then">Counter</span>
+                            }
+                        </td>
+                        <td>@(p.LineCode ?? "—")</td>
+                        <td>
+                            @if (p.Loads.Count == 0)
+                            {
+                                <span class="text-muted">Nothing</span>
+                            }
+                            @foreach (var load in p.Loads)
+                            {
+                                <div @key="load.LotId">
+                                    <a class="fw-semibold" href="inventory/lots/@load.LotId">@InventoryView.LotLabel(load.LotNumber, load.IsBulk, load.LocationCode)</a>
+                                    <span class="small">@load.MaterialCode</span>
+                                    <span class="small text-muted">@InventoryView.Qty(load.Quantity) @load.UomCode · since @Display.SiteTime(load.LoadedAt, Sites.Site?.TimeZone)</span>
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<section aria-labelledby="shortfalls-title">
+    <div class="inv-section-head">
+        <h2 id="shortfalls-title" class="h5">What automation couldn't consume</h2>
+        <select class="form-select form-select-sm w-auto" aria-label="Status" @bind="_status" @bind:after="LoadShortfallsAsync">
+            <option value="open">Open</option>
+            <option value="resolved">Resolved</option>
+            <option value="dismissed">Dismissed</option>
+        </select>
+    </div>
+    @if (_shortfalls.Count == 0)
+    {
+        <p class="text-muted">@(_status == "open" ? "Nothing open: every automated consumption was covered." : "None.")</p>
+    }
+    else
+    {
+        <div class="table-panel">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr><th>When</th><th>Where</th><th>Job</th><th>Material</th><th class="inv-num">Short</th><th>From</th><th>Why</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _shortfalls)
+                    {
+                        <tr @key="s.Id">
+                            <td class="small">@Display.SiteTime(s.OccurredAt, Sites.Site?.TimeZone)</td>
+                            <td>@s.EquipmentCode</td>
+                            <td>@(s.JobNumber ?? "—")</td>
+                            <td>@(s.MaterialCode ?? "—")@(s.LotNumber is { } lot ? $" · {lot}" : "")</td>
+                            <td class="inv-num">@InventoryView.Qty(s.Quantity) @s.UomCode</td>
+                            <td class="small">@SourceLabel(s.Source)</td>
+                            <td class="small">
+                                @s.Reason
+                                @if (s.Status != "open")
+                                {
+                                    <div class="text-muted">
+                                        @Display.Label(s.Status)@(s.ResolvedLotNumber is { } used ? $" from {used}" : "")@(s.ResolutionNote is { } note ? $": {note}" : "")
+                                    </div>
+                                }
+                            </td>
+                            <td class="text-end">
+                                @if (s.Status == "open" && _acting?.Id != s.Id)
+                                {
+                                    @if (s.JobId is not null && User.Can(PermissionCodes.ProductionReport, s.SiteId))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => StartAsync(s, resolve: true)">Resolve…</button>
+                                    }
+                                    @if (User.Can(PermissionCodes.InventoryCorrect, s.SiteId))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => StartAsync(s, resolve: false)">Dismiss…</button>
+                                    }
+                                }
+                            </td>
+                        </tr>
+                        @if (_acting?.Id == s.Id)
+                        {
+                            <tr>
+                                <td colspan="8">
+                                    <form class="d-flex flex-wrap gap-2" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+                                        @if (_resolve)
+                                        {
+                                            <select class="form-select form-select-sm w-auto" aria-label="Lot to consume from" @bind="_lotId">
+                                                <option value="@Guid.Empty">Choose the lot it came from</option>
+                                                @foreach (var l in _lots)
+                                                {
+                                                    <option value="@l.Id">@InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode) · @InventoryView.Qty(l.Quantity) @l.UomCode</option>
+                                                }
+                                            </select>
+                                        }
+                                        <input class="form-control form-control-sm" style="max-width: 24rem" maxlength="1000"
+                                               placeholder="@(_resolve ? "Comment (optional)" : "Why it is dismissed (required)")" aria-label="Comment" @bind="_comment" @bind:event="oninput" />
+                                        <button type="submit" class="btn btn-sm btn-primary"
+                                                disabled="@(_busy || (_resolve ? _lotId == Guid.Empty : string.IsNullOrWhiteSpace(_comment)))">@(_resolve ? "Consume it" : "Dismiss")</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _acting = null">Cancel</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<FeedPointDto>? _points;
+    private IReadOnlyList<FeedShortfallDto> _shortfalls = [];
+    private IReadOnlyList<LotSummaryDto> _lots = [];
+    private string _status = "open";
+    private FeedShortfallDto? _acting;
+    private bool _resolve;
+    private Guid _lotId;
+    private string? _comment;
+    private bool _busy;
+    private ApiException? _error;
+
+    public static string SourceLabel(string source) => source switch
+    {
+        "backflush" => "Backflush",
+        "time_window" => "Time window",
+        "counter" => "Counter",
+        _ => source,
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _points = await Api.ListFeedPointsAsync(Sites.SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            _points = [];
+        }
+
+        await LoadShortfallsAsync();
+    }
+
+    private async Task LoadShortfallsAsync()
+    {
+        try
+        {
+            _shortfalls = await Api.ListFeedShortfallsAsync(Sites.SiteId, _status);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task StartAsync(FeedShortfallDto shortfall, bool resolve)
+    {
+        (_acting, _resolve, _lotId, _comment, _lots) = (shortfall, resolve, Guid.Empty, null, []);
+        if (resolve)
+        {
+            try
+            {
+                _lots = await Api.SearchLotsAsync(shortfall.SiteId, materialId: shortfall.MaterialId, status: "available");
+            }
+            catch (ApiException ex)
+            {
+                _error = ex;
+            }
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_acting is not { } shortfall)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var comment = string.IsNullOrWhiteSpace(_comment) ? null : _comment;
+            if (_resolve)
+            {
+                await Api.ResolveFeedShortfallAsync(shortfall.Id, new ResolveShortfallRequest { Version = shortfall.Version, LotId = _lotId, Comment = comment });
+            }
+            else
+            {
+                await Api.DismissFeedShortfallAsync(shortfall.Id, new DismissShortfallRequest { Version = shortfall.Version, Comment = comment ?? "" });
+            }
+
+            _acting = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

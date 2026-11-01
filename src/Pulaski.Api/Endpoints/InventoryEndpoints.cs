@@ -234,8 +234,9 @@ internal static class InventoryEndpoints
             ICommandHandler<MoveLotCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new MoveLotCommand(id, request.Version, request.ToLocationId, request.Quantity, request.UomId, request.Comment), ct)))
-        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Lot));
+                new MoveLotCommand(id, request.Version, request.ToLocationId, request.Quantity, request.UomId, request.Comment, request.EffectiveAt), ct)))
+        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Lot))
+        .RequireToBackdate(Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/status", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -243,8 +244,9 @@ internal static class InventoryEndpoints
             ICommandHandler<ChangeLotStatusCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new ChangeLotStatusCommand(id, request.Version, request.Status, request.ReasonCodeId, request.Comment), ct)))
-        .RequirePermission(Permissions.LotHold, Site.Of(SiteOf.Lot));
+                new ChangeLotStatusCommand(id, request.Version, request.Status, request.ReasonCodeId, request.Comment, request.EffectiveAt), ct)))
+        .RequirePermission(Permissions.LotHold, Site.Of(SiteOf.Lot))
+        .RequireToBackdate(Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/consume", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -263,18 +265,20 @@ internal static class InventoryEndpoints
             CancellationToken ct) =>
         {
             var part = await handler.HandleAsync(
-                new SplitLotCommand(id, request.Version, request.Quantity, request.UomId, request.NewLotNumber, request.ToLocationId, request.Comment), ct);
+                new SplitLotCommand(id, request.Version, request.Quantity, request.UomId, request.NewLotNumber, request.ToLocationId, request.Comment, request.EffectiveAt), ct);
             return TypedResults.Created($"/api/lots/{part.LotId}", part);
         })
-        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
+        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot))
+        .RequireToBackdate(Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/merge", async Task<Ok<LotTransactionResponse>> (
             Guid id,
             MergeLotsRequest request,
             ICommandHandler<MergeLotsCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new MergeLotsCommand(id, request.Version, request.SourceLotIds, request.Comment), ct)))
-        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
+            TypedResults.Ok(await handler.HandleAsync(new MergeLotsCommand(id, request.Version, request.SourceLotIds, request.Comment, request.EffectiveAt), ct)))
+        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot))
+        .RequireToBackdate(Site.Of(SiteOf.Lot));
 
         lots.MapPost("/{id:guid}/ship", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -282,8 +286,15 @@ internal static class InventoryEndpoints
             ICommandHandler<ShipLotCommand, LotTransactionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new ShipLotCommand(id, request.Version, request.Quantity, request.UomId, request.Reference, request.Comment), ct)))
-        .RequirePermission(Permissions.LotShip, Site.Of(SiteOf.Lot));
+                new ShipLotCommand(id, request.Version, request.Quantity, request.UomId, request.Reference, request.Comment, request.EffectiveAt), ct)))
+        .RequirePermission(Permissions.LotShip, Site.Of(SiteOf.Lot))
+        .RequireToBackdate(Site.Of(SiteOf.Lot));
+
+        // A lot as it was at a time (#77, D-076): its quantity, location, container and status then, from its movements by effective time.
+        lots.MapGet("/{id:guid}/at", async Task<Ok<LotStateAtDto>> (
+            Guid id, DateTimeOffset at, IQueryHandler<GetLotStateAtQuery, LotStateAtDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetLotStateAtQuery(id, at), ct)))
+        .RequireAny(Site.Of(SiteOf.Lot), Permissions.InventoryView);
 
         lots.MapPost("/{id:guid}/correct", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -302,6 +313,35 @@ internal static class InventoryEndpoints
             TypedResults.Ok(await handler.HandleAsync(
                 new ReverseMovementCommand(id, request.Version, request.EventId, request.ReasonCodeId, request.Comment), ct)))
         .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
+
+        // A movement with everything after it that depends on it (#79): ?dryRun=true does it all and rolls back, to show what it would reverse.
+        lots.MapPost("/{id:guid}/reverse-chain", async Task<Ok<ChainReversalDto>> (
+            Guid id,
+            bool? dryRun,
+            ReverseChainRequest request,
+            ICommandHandler<ReverseChainCommand, ChainReversalDto> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new ReverseChainCommand(id, request.EventId, request.ReasonCodeId, request.Comment, dryRun ?? false, request.ExpectedSteps), ct)))
+        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
+
+        // Loads a lot at a feed point (#33): moved there if it is elsewhere, else loaded again so it feeds from now.
+        lots.MapPost("/{id:guid}/load", async Task<Ok<LotTransactionResponse>> (
+            Guid id,
+            LoadLotRequest request,
+            ICommandHandler<LoadLotCommand, LotTransactionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new LoadLotCommand(id, request.Version, request.FeedPointId, request.Comment), ct)))
+        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Lot));
+
+        // The lots a made lot was made from, out of those its job used (#81); none goes back to pairing by time.
+        lots.MapPut("/{id:guid}/made-from", async Task<Ok<VersionResponse>> (
+            Guid id,
+            SetMadeFromRequest request,
+            ICommandHandler<SetMadeFromCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetMadeFromCommand(id, request.ParentLotIds, request.Comment), ct)))
+        .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.Lot));
 
         // ---- Containers, labels and scanning (D-059) ----
         lots.MapPost("/{id:guid}/pack", async Task<Ok<LotTransactionResponse>> (
@@ -396,13 +436,45 @@ internal static class InventoryEndpoints
         })
         .RequireAny(Site.Query(), Permissions.InventoryView);
 
+        // ---- Feed points (#33): what is loaded where, and what automated consumption couldn't cover ----
+        inventory.MapGet("/feed-points", async Task<Ok<IReadOnlyList<FeedPointDto>>> (
+            Guid? siteId,
+            IQueryHandler<ListFeedPointsQuery, IReadOnlyList<FeedPointDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListFeedPointsQuery(siteId), ct)))
+        .RequireAnyAtSite(Site.Query(), Permissions.InventoryView, Permissions.FloorView);
+
+        inventory.MapGet("/feed-shortfalls", async Task<Ok<IReadOnlyList<FeedShortfallDto>>> (
+            Guid? siteId,
+            string? status,
+            IQueryHandler<ListShortfallsQuery, IReadOnlyList<FeedShortfallDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListShortfallsQuery(siteId, status ?? FeedShortfallStatus.Open), ct)))
+        .RequireAnyAtSite(Site.Query(), Permissions.InventoryView, Permissions.FloorView);
+
+        inventory.MapPost("/feed-shortfalls/{id:guid}/resolve", async Task<Ok<VersionResponse>> (
+            Guid id,
+            ResolveShortfallRequest request,
+            ICommandHandler<ResolveShortfallCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ResolveShortfallCommand(id, request.Version, request.LotId, request.Comment), ct)))
+        .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.FeedShortfall));
+
+        inventory.MapPost("/feed-shortfalls/{id:guid}/dismiss", async Task<Ok<VersionResponse>> (
+            Guid id,
+            DismissShortfallRequest request,
+            ICommandHandler<DismissShortfallCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new DismissShortfallCommand(id, request.Version, request.Comment), ct)))
+        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.FeedShortfall));
+
         // How a balance at a location flows, for genealogy through it (D-060); an equipment setting.
         inventory.MapPut("/locations/{id:guid}/flow", async Task<Ok<VersionResponse>> (
             Guid id,
             SetFlowRequest request,
             ICommandHandler<SetFlowCommand, VersionResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new SetFlowCommand(id, request.Version, request.FlowModel, request.MinResidenceMinutes), ct)))
+            TypedResults.Ok(await handler.HandleAsync(new SetFlowCommand(id, request.Version, request.FlowModel, request.MinResidenceMinutes, request.EmptyLevel, request.LevelTolerance), ct)))
         .RequirePermission(Permissions.Equipment, Site.Of(SiteOf.Equipment));
 
         // Where a balance's withdrawals came from, by its location's flow model (D-060).

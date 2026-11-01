@@ -36,6 +36,10 @@
                 {
                     <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Move">Move</button>
                 }
+                @if (May(LotAction.Load) && !lot.IsBulk)
+                {
+                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Load">Load</button>
+                }
                 @if (!lot.IsBulk)
                 {
                     @if (May(LotAction.Split))
@@ -186,6 +190,10 @@
             else
             {
                 @LinkTable("Made from", detail.Parents, "Not made from other lots.", tz)
+                @if (l.ProducedByJobId is { } madeBy && User.Can(PermissionCodes.ProductionReport, l.SiteId))
+                {
+                    <MadeFromPicker @key="l.Id" LotId="l.Id" JobId="madeBy" Parents="detail.Parents" OnChanged="LoadAsync" />
+                }
                 @LinkTable("Used in", detail.Children, "Nothing made from it yet.", tz)
             }
         </section>
@@ -214,6 +222,31 @@
             <p class="small text-muted mb-0">Other jobs can still consume it, with a warning; consuming it into its job uses the allocation up.</p>
         </section>
     }
+
+    <section class="inv-section" aria-labelledby="asof-title">
+        <h2 id="asof-title">As it was</h2>
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+            <label class="small text-muted" for="lot-asof">On</label>
+            <input id="lot-asof" type="datetime-local" class="form-control form-control-sm w-auto" @bind="_asOf" />
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(_asOf is null || _asOfBusy)" @onclick="ShowAsOfAsync">Show</button>
+            <span class="small text-muted">Its quantity, place and status then, in the order its movements count (back-dated ones at their time).</span>
+        </div>
+        @if (_asOfState is { } then)
+        {
+            @if (!then.Existed)
+            {
+                <p class="small mb-0">It didn't exist yet on @Display.SiteTime(then.At, tz).</p>
+            }
+            else
+            {
+                <dl class="facts small mb-0">
+                    <dt>Quantity</dt><dd>@InventoryView.Qty(then.Quantity) @then.UomCode</dd>
+                    <dt>Where</dt><dd>@(then.LocationCode ?? "—")@(then.ContainerCode is { } container ? $" · in {container}" : "")</dd>
+                    <dt>Status</dt><dd><span class="@InventoryView.StatusChip(then.Status)">@Display.Label(then.Status)</span></dd>
+                </dl>
+            }
+        }
+    </section>
 
     <section class="inv-section" aria-labelledby="history-title">
         <h2 id="history-title">History</h2>
@@ -245,6 +278,10 @@
                             </td>
                             <td>
                                 @InventoryView.EventLabel(e.Kind)
+                                @if (e.AutoSource is { } auto)
+                                {
+                                    <span class="chip ms-1" title="Consumed automatically, not declared by hand">@FeedPointsPage.SourceLabel(auto)</span>
+                                }
                                 @if (e.ToStatus is { } to)
                                 {
                                     <div class="small text-muted">@Display.Label(e.FromStatus) → @Display.Label(to)</div>
@@ -306,6 +343,9 @@ else if (_error is null)
     public Guid LotId { get; set; }
 
     private LotDto? _lot;
+    private DateTime? _asOf;
+    private LotStateAtDto? _asOfState;
+    private bool _asOfBusy;
     private IReadOnlyList<TraceRow>? _trace;
     private bool _traceForward;
     private ApiException? _error;
@@ -314,6 +354,7 @@ else if (_error is null)
     private LotEventDto? _movement;
 
     private static readonly HashSet<string> Reversible = ["received", "adjusted", "scrapped", "moved", "status_changed", "shipped"];
+    private static readonly HashSet<string> PutBack = ["packed", "unpacked", "corrected"];
 
     // Changes of quantity alone, reversed even when later movements followed, if the stock allows (D-063).
     private static readonly HashSet<string> QuantityOnly = ["received", "adjusted", "scrapped"];
@@ -346,14 +387,38 @@ else if (_error is null)
 
     // Only the latest movement, once, and only one that touched this lot alone (D-030).
     // The site the inventory screens show; lots belong to it (D-027, D-037).
+    private async Task ShowAsOfAsync()
+    {
+        if (Display.FromSiteLocal(_asOf, _lot?.SiteTimeZone) is not { } at)
+        {
+            return;
+        }
+
+        _asOfBusy = true;
+        try
+        {
+            _asOfState = await Api.GetLotStateAtAsync(LotId, at);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _asOfBusy = false;
+        }
+    }
+
     private bool May(LotAction action) => User.Can(LotActions.Permission(action), Sites.SiteId);
 
+    // Any movement that still stands (#79); the drawer says what reversing it does, and the API refuses one something later depends on,
+    // offering to undo the chain.
     private static bool CanReverse(LotDto lot, LotEventDto e) =>
-        !e.IsReversed && e.Kind != "reversed" && (
-            (lot.History.Count > 0 && lot.History[0].Id == e.Id && Reversible.Contains(e.Kind))
+        !e.IsReversed && e.ReversesEventId is null && e.Kind != "reversed" && (
+            Reversible.Contains(e.Kind)
             || QuantityOnly.Contains(e.Kind)
             || Declarations.Contains(e.Kind)
-            || (e.Kind == "moved" && e.RelatedLotId is not null)
+            || PutBack.Contains(e.Kind)
             || (e.Kind == "produced" && e.ReportId is null));
 
     private void Reverse(LotEventDto e)
@@ -418,6 +483,14 @@ else if (_error is null)
                                 <td><span class="@InventoryView.StatusChip(link.Status)">@Display.Label(link.Status)</span></td>
                                 <td class="small">
                                     @(link.JobNumber is null ? Display.Label(link.LinkBasis) : $"via {link.JobNumber}")
+                                    @if (link.Precision is { } precision)
+                                    {
+                                        <span class="@BalanceAllocationPanel.PrecisionChip(precision) ms-1" title="@link.PrecisionNote">@BalanceAllocationPanel.PrecisionLabel(precision)</span>
+                                    }
+                                    else if (link.Unpaired)
+                                    {
+                                        <span class="chip ms-1 text-muted" title="@link.PrecisionNote">Not paired</span>
+                                    }
                                     <div class="text-muted" title="@(link.EffectiveAt < link.DerivedAt.AddMinutes(-1) ? $"Back-dated; recorded {Display.SiteTime(link.DerivedAt, tz)}" : null)">
                                         since @Display.SiteTime(link.EffectiveAt, tz)@(link.EffectiveAt < link.DerivedAt.AddMinutes(-1) ? " (back-dated)" : "")
                                     </div>
