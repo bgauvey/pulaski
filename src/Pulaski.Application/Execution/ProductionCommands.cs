@@ -42,6 +42,9 @@ public sealed record ReportProductionCommand(
 
     /// <summary>A partial batch in the base unit: as the line stops, or later into a run that ended with a reason.</summary>
     public decimal? PartialQty { get; init; }
+
+    /// <summary>The lots the job used that every lot this report makes was made from (#81); empty: they pair by time.</summary>
+    public IReadOnlyList<Guid> MadeFromLotIds { get; init; } = [];
 }
 
 /// <summary>The run a report or a consumption belongs to, and the rules every report shares (D-035).</summary>
@@ -160,6 +163,7 @@ internal sealed class ProductionReporter(
             .Require(command.ScrapQty == 0 && command.ScrapBatches.Count == 0 || command.ScrapReasonCodeId is not null, nameof(command.ScrapReasonCodeId), "Choose why it was scrapped.")
             .Require(command.GoodQty == 0 && command.GoodBatches.Count == 0 && command.PartialQty is null || command.LocationId is not null, nameof(command.LocationId), "Choose where the good output goes.")
             .RequireLotNumber(lotNumber, nameof(command.LotNumber))
+            .Require(command.MadeFromLotIds.Count <= SetMadeFromHandler.MaxParents, nameof(command.MadeFromLotIds), $"At most {SetMadeFromHandler.MaxParents} lots.")
             .RequireComment(command.Comment)
             .ThrowIfInvalid();
 
@@ -350,7 +354,7 @@ internal sealed class ProductionReporter(
         CancellationToken cancellationToken) =>
         ProductionOutput.ProduceAsync(
             inventory, units, eventLog, events, ids, job, command.LocationId!.Value, quantity, unit, lotNumber, command.ExpiresAt, comment, run.Id, now,
-            MovementTime.Backdated(Backdating.EffectiveAt(command.EffectiveAt, now, comment), now), reportId, cancellationToken);
+            MovementTime.Backdated(Backdating.EffectiveAt(command.EffectiveAt, now, comment), now), reportId, command.MadeFromLotIds, cancellationToken);
 
     /// <summary>The partial batch's record; under the exact rule its lot goes on hold until someone approves it (D-036).</summary>
     private async Task<InventoryWarningDto> RecordPartialAsync(

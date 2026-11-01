@@ -182,6 +182,7 @@ public static class EventTypes
     public const string LotStatusChanged = "pulaski.lot.status_changed.v1";
     public const string LotConsumed = "pulaski.lot.consumed.v1";
     public const string LotProduced = "pulaski.lot.produced.v1";
+    public const string LotMadeFromSet = "pulaski.lot.made_from_set.v1";
     public const string LotSplit = "pulaski.lot.split.v1";
     public const string LotMerged = "pulaski.lot.merged.v1";
     public const string LotShipped = "pulaski.lot.shipped.v1";

@@ -238,6 +238,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   order): latest move / latest status change, quantity via `EnsureFitsAsync`; packing (`Lot.ReversePacking`), corrections (`ts.lot_event.details`,
   `Lot.RevertCorrection`), balance merges too. A reversal is any row with `reverses_event_id`. `ReverseChainCommand` (`/lots/{id}/reverse-chain?dryRun=`)
   undoes a movement, the lot's later ones and those of lots split off it, latest first in one transaction; the dry run rolls back.
+- Per-lot genealogy (D-078, proposed): job links stay stored; `LotPairing.Pair` pairs on read by declaration time (a used lot is in use until the next
+  lot of its material; exact = only lot, else estimated, unpairable = possible). Picks are `made_from` links (`SetMadeFromCommand`, `PUT /lots/{id}/made-from`,
+  `ReportProductionCommand.MadeFromLotIds`) and replace pairing for that lot (`JobLinkPairs`, used by traces and lot links). Level readings (`BalanceLevels`):
+  `equipment.empty_level` sets aside parcels, `level_tolerance` compares stock before withdrawals; exact → `confirmed`, disagreement → possible.
 - Lot allocations (D-064, proposed): `core.lot_allocation` (active / consumed / released; one active per job + lot) sets a lot's stock aside for a
   job's planned component; other jobs (recommendations, shortages) see it as taken; consumption into its job uses it up
   (`AllocationUse`), into another warns. `LotRecommendation` (FEFO, then FIFO; only available, unexpired at need time, free stock; every

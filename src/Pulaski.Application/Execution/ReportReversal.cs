@@ -98,6 +98,7 @@ internal sealed class ReverseProductionReportHandler(
             if (!await inventory.HasDeclarationAsync(lot.Id, job.Id, LotEventKind.Produced, cancellationToken))
             {
                 await inventory.SupersedeGenealogyAsync(null, lot.Id, GenealogyEdge.Declared, job.Id, now, cancellationToken);
+                await inventory.SupersedeGenealogyAsync(null, lot.Id, GenealogyEdge.MadeFrom, job.Id, now, cancellationToken);
             }
 
             if (await execution.GetPartialBatchOfLotForUpdateAsync(lot.Id, cancellationToken) is { } partial)

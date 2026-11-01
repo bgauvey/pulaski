@@ -700,6 +700,9 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> SetFlowAsync(Guid locationId, SetFlowRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/inventory/locations/{locationId}/flow", request, ct);
 
+    public Task<VersionResponse> SetMadeFromAsync(Guid lotId, SetMadeFromRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/lots/{lotId}/made-from", request, ct);
+
     public Task<BalanceAllocationDto> GetBalanceAllocationAsync(Guid lotId, CancellationToken ct = default) =>
         GetAsync<BalanceAllocationDto>($"api/lots/{lotId}/allocation", ct);
 

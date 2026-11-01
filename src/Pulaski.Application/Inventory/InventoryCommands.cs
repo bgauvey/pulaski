@@ -633,6 +633,7 @@ internal static class ProductionOutput
         DateTimeOffset now,
         DateTimeOffset? effectiveAt,
         Guid? reportId,
+        IReadOnlyList<Guid> madeFrom,
         CancellationToken cancellationToken)
     {
         var location = await InventoryRules.LocationAsync(inventory, locationId, job.SiteId, cancellationToken);
@@ -710,6 +711,7 @@ internal static class ProductionOutput
                 Quantity = quantity,
                 QuantityAfter = after.Quantity,
                 ParentLotIds = edges.Select(e => e.ParentLotId),
+                MadeFromLotIds = after.IsBulk ? [] : madeFrom,
                 RunId = runId,
                 EffectiveAt = MovementTime.Backdated(effective, now),
                 Comment = comment,
@@ -722,6 +724,11 @@ internal static class ProductionOutput
                 ReportId: reportId),
             envelope.OccurredAt, cancellationToken);
         await inventory.InsertGenealogyAsync(edges, envelope.OccurredAt, cancellationToken, MovementTime.Backdated(effective, now));
+        if (madeFrom.Count > 0 && !after.IsBulk)
+        {
+            await MadeFrom.SetAsync(inventory, ids, job.Id, job.JobNumber, after, madeFrom, envelope.OccurredAt, cancellationToken);
+        }
+
         await eventLog.AppendAsync(envelope, cancellationToken);
 
         if (location.ComminglesLots && !after.IsBulk)

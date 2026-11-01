@@ -731,6 +731,86 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_made_lot_pairs_with_the_lots_in_use_and_keeps_the_ones_picked_and_level_readings_confirm_a_silo()
+    {
+        var plant = await CreatePlantAsync();
+
+        // R1 in use, P1 made, R2 in use, P2 and P3 made: P3 pairs with R2 alone.
+        var r1 = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "PR-1-" + _suffix, 100m, plant.Kg));
+        var r2 = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "PR-2-" + _suffix, 100m, plant.Kg));
+        await db.SendAsync(new ConsumeLotCommand(r1.LotId, plant.Job, 40m, plant.Kg));
+        await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 10m, plant.Metre));
+        await db.SendAsync(new ConsumeLotCommand(r2.LotId, plant.Job, 40m, plant.Kg));
+        await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 10m, plant.Metre));
+        var p3 = await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 10m, plant.Metre));
+
+        async Task<IReadOnlyList<LotTraceNodeDto>> BackAsync(Guid lotId) =>
+            await QueryAsync<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>(new TraceLotQuery(lotId, Forward: false));
+
+        var paired = Assert.Single(await BackAsync(p3.LotId), n => n.Depth == 1);
+        Assert.Equal((r2.LotId, GenealogyPrecision.Estimated), (paired.LotId, paired.Precision));
+        var forward = await QueryAsync<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>(new TraceLotQuery(r1.LotId, Forward: true));
+        Assert.DoesNotContain(forward, n => n.LotId == p3.LotId);
+
+        // Someone names R1 as what P3 was made from: only it is kept, as declared; R2 is listed as not paired.
+        await db.SendAsync(new SetMadeFromCommand(p3.LotId, [r1.LotId], "Hopper not emptied"));
+        var picked = Assert.Single(await BackAsync(p3.LotId), n => n.Depth == 1);
+        Assert.Equal((r1.LotId, GenealogyPrecision.Declared), (picked.LotId, picked.Precision));
+        var parents = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(p3.LotId))).Parents;
+        Assert.Equal(2, parents.Count);
+        Assert.Equal(("made_from", GenealogyPrecision.Declared), (parents.Single(p => p.LotId == r1.LotId).LinkBasis, parents.Single(p => p.LotId == r1.LotId).Precision));
+        Assert.True(parents.Single(p => p.LotId == r2.LotId).Unpaired);
+        var stray = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "PR-X-" + _suffix, 5m, plant.Kg));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new SetMadeFromCommand(p3.LotId, [stray.LotId], null)));
+
+        // A report can name them as it makes the lot; picking none goes back to pairing by time.
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 10m, 0m, plant.Metre, null, plant.Staging) { MadeFromLotIds = [r2.LotId] });
+        Assert.Equal(r2.LotId, Assert.Single(await BackAsync(report.Lot!.LotId), n => n.Depth == 1).LotId);
+        await db.SendAsync(new SetMadeFromCommand(p3.LotId, [], null));
+        Assert.Equal(r2.LotId, Assert.Single(await BackAsync(p3.LotId), n => n.Depth == 1).LotId);
+
+        // A silo with a level tag in kg: it reads empty after A was partly used, so B alone feeds what follows.
+        CreatedResponse silo = await db.SendAsync(new CreateEquipmentCommand(
+            plant.Site, "SILO-L-" + _suffix, "Level silo", null, "work_center", "storage_zone", false, false, true, null, ComminglesLots: true));
+        var tag = Guid.CreateVersion7();
+        await db.ExecuteAsync($"""
+            WITH n AS (INSERT INTO core.edge_node (site_id, code, name) VALUES ('{plant.Site}', 'EDGE-{_suffix}', 'Edge') RETURNING id),
+                 c AS (INSERT INTO core.edge_connection (edge_node_id, code, name, protocol) SELECT id, 'MQTT', 'Broker', 'sparkplug_b' FROM n RETURNING id)
+            INSERT INTO core.equipment_tag (id, equipment_id, tag_role, connection_id, source_address, uom_id)
+            SELECT '{tag}', '{silo.Id}', 'level', id, 'g/n/silo-{_suffix}:level', '{plant.Kg}' FROM c
+            """);
+        var balance = await db.SendAsync(new ReceiveLotCommand(plant.Resin, silo.Id, "PL-A-" + _suffix, 100m, plant.Kg));
+        await db.SendAsync(new ConsumeLotCommand(balance.LotId, plant.Job, 60m, plant.Kg));
+        await db.ExecuteAsync($"INSERT INTO ts.process_value (equipment_tag_id, occurred_at, value_num) VALUES ('{tag}', clock_timestamp(), 35)");
+        await Task.Delay(20);
+        await db.ExecuteAsync($"INSERT INTO ts.process_value (equipment_tag_id, occurred_at, value_num) VALUES ('{tag}', clock_timestamp(), 0)");
+        await Task.Delay(20);
+        await db.SendAsync(new ReceiveLotCommand(plant.Resin, silo.Id, "PL-B-" + _suffix, 80m, plant.Kg));
+        await Task.Delay(20);
+        await db.ExecuteAsync($"INSERT INTO ts.process_value (equipment_tag_id, occurred_at, value_num) VALUES ('{tag}', clock_timestamp(), 79)");
+        await Task.Delay(20);
+        await db.SendAsync(new ConsumeLotCommand(balance.LotId, plant.Job, 30m, plant.Kg));
+
+        async Task<WithdrawalAllocationDto> LastAsync() =>
+            (await QueryAsync<GetBalanceAllocationQuery, BalanceAllocationDto>(new GetBalanceAllocationQuery(balance.LotId))).Withdrawals[0];
+
+        Assert.Equal(GenealogyPrecision.Estimated, (await LastAsync()).Precision);
+        var location = Assert.Single(await QueryAsync<ListInventoryLocationsQuery, IReadOnlyList<InventoryLocationDto>>(new ListInventoryLocationsQuery(plant.Site)), l => l.Id == silo.Id);
+        var set = await db.SendAsync(new SetFlowCommand(silo.Id, location.Version, FlowModels.Mixed, null, EmptyLevel: 1m));
+        var emptied = await LastAsync();
+        Assert.Equal((GenealogyPrecision.Confirmed, "PL-B-" + _suffix), (emptied.Precision, Assert.Single(emptied.Sources).LotNumber));
+        Assert.Contains("set aside", emptied.Reason, StringComparison.Ordinal);
+
+        // With a tolerance the level is also compared with the declared stock: 79 against 80 agrees, within 0.5 it doesn't.
+        await db.SendAsync(new SetFlowCommand(silo.Id, set.Version, FlowModels.Mixed, null, EmptyLevel: 1m, LevelTolerance: 2m));
+        Assert.Equal(GenealogyPrecision.Confirmed, (await LastAsync()).Precision);
+        location = Assert.Single(await QueryAsync<ListInventoryLocationsQuery, IReadOnlyList<InventoryLocationDto>>(new ListInventoryLocationsQuery(plant.Site)), l => l.Id == silo.Id);
+        Assert.Equal((1m, 2m), (location.EmptyLevel, location.LevelTolerance));
+        await db.SendAsync(new SetFlowCommand(silo.Id, location.Version, FlowModels.Mixed, null, EmptyLevel: 1m, LevelTolerance: 0.5m));
+        Assert.Equal(GenealogyPrecision.Possible, (await LastAsync()).Precision);
+    }
+
+    [Fact]
     public async Task Allocations_set_stock_aside_first_expiry_first_are_used_up_by_consumption_and_refresh_as_stock_changes()
     {
         var plant = await CreatePlantAsync();

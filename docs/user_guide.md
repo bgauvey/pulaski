@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-10-29 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-10-31 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#21-reference) tables give the exact rules.
 
@@ -787,6 +787,7 @@ If the material changes on a line in automatic changeover mode, Pulaski starts a
 1. On the running line's card, click **Report**.
 2. The **Run** is the open run. Enter the **Good** quantity and the **Scrap** quantity (either can be zero), in the job's unit.
 3. For good output, choose where it **goes to** and, optionally, a **Lot number**; left blank, Pulaski numbers it after the job (*WO-5001-10-01*, *-02*…).
+   If the job has used lots, you can also tick under **Made from** the ones this output came from. Leave them blank and Pulaski pairs them by time (see [Trace a lot](#trace-a-lot)).
 4. For scrap, choose a **Scrap reason**.
 5. Click **Report**. The card updates with the new totals.
 
@@ -1047,11 +1048,36 @@ Allocating sets stock aside for a job before it runs, so the floor knows which l
 
 On a lot's page, **Genealogy** first shows the lots it was **made from** and the lots made from it (**used in**). Click **Trace back** to see everything it was made from, all the way up, or **Trace forward** to see everything made from it, all the way down. Each lot is indented under the one it was reached from; click any lot to open it.
 
+**Lots a job used and made.** A job records every lot it used as a parent of every lot it made. A trace keeps only the pairs that fit by time. A lot the job used counts as in use from when its consumption was declared until the next lot of that material, so a made lot pairs with:
+
+- the lot that was in use when the job's previous output was declared;
+- every lot of that material declared since.
+
+Each kept lot carries a chip (point at it for why):
+
+- **Exact:** the job used only one lot of that material.
+- **Estimated:** paired by time.
+- **Declared:** someone picked it as what the lot was made from.
+- **Possible:** it can't be paired by time, so its job link is kept anyway. Either it was declared after everything the job made, or the lot was made before any lot of that material was declared.
+
+Pairs that don't fit are left out of traces. In the **Made from** and **Used in** lists they stay, marked **Not paired**.
+
+**Pick what a lot was made from.** When you know better than the times, name the lots yourself:
+
+1. Open a lot the job made. Under **Made from**, click **Pick what it was made from…** (you need permission to report production).
+2. Tick the lots it was made from. The list holds the lots its job used.
+3. Optionally add a comment, then click **Save**.
+
+The ticked lots replace the pairing by time for that lot, so tick every material it came from. Untick them all and save to go back to pairing by time. You can also tick them when [reporting production](#report-production).
+
 **Through a silo or tank.** Where lots mix, a trace keeps only the lots that, by how the location [flows](#how-a-silo-flows), went into the withdrawals that matter: back from a lot a job made, the arrivals that fed that job's withdrawals; forward from an arrival, what was made from withdrawals it fed. Each such lot carries a chip saying how sure that is (point at it for why):
 
+- **Confirmed:** exact, and the silo's level backs it: it read empty before the arrival, or it agreed with the declared stock.
 - **Exact:** only one arrival could have been in the silo then.
 - **Estimated:** worked out from the declared quantities by the flow model; likely, not measured.
-- **Possible:** the declared movements don't settle it, for example more was taken than was put in (often after a count correction), or material would have left before the minimum residence time.
+- **Possible:** the declared movements don't settle it. For example, more was taken than was put in (often after a count correction), material would have left before the minimum residence time, or the level disagreed with the declared stock.
+
+A lot reached both through a silo and through a job's link takes the less certain of the two chips.
 
 A balance's own page shows **Where what was taken came from**: every withdrawal with the lots it came from, their quantities and how sure each is.
 
@@ -1062,8 +1088,17 @@ On **Inventory → Locations**, a location where lots mix shows how it flows; cl
 - **Mixed** (the default): everything blends, as in a tank or a mixed silo. A withdrawal takes a share of every arrival still there, by quantity.
 - **First in, first out:** plug flow, as in a mass-flow silo or bin. A withdrawal takes the oldest material first.
 - **Minimum residence** (optional, in minutes): the least time material stays before it can leave. Material taken before then is only *possible*.
+- **Empty at level** (optional): for a silo with a [level tag](#19-edge-nodes-collecting-machine-data), in the tag's unit. A reading at or below this means the silo was empty.
+- **Level tolerance** (optional): in the tag's unit, how far the level may be from the declared stock and still agree. Leave it blank to not compare them.
 
-Everything is worked out from the movements as recorded (by when they count, so [back-dated](#back-date-a-movement) ones fit in), not from measurements: a silo's level isn't read yet. Changing the flow changes every trace through the silo at once; nothing is stored.
+Everything is worked out from the movements as recorded, by when they count, so [back-dated](#back-date-a-movement) ones fit in. Changing these settings changes every trace through the silo at once, because nothing is stored.
+
+**Level readings.** With a level tag and these settings, the estimate is checked against what was measured:
+
+- **Empty.** When the level reads empty, whatever the declared movements still had in the silo is set aside: it was really gone. The withdrawal after that says so. A withdrawal that can only have come from one arrival since then is *confirmed*. An arrival recorded after the last reading above empty isn't set aside, so a delivery the level hasn't caught up with yet isn't lost.
+- **Stock.** With a tolerance, the last good level reading in the 15 minutes before each withdrawal is compared with the declared stock then. If they agree, an exact withdrawal becomes *confirmed*. If they don't, it becomes *possible*. This needs the tag's unit to convert to the material's unit (kg to kg, or with a [conversion](#6-units-and-conversions)). If it doesn't convert, only empty readings are used.
+
+Readings are kept for 90 days by default, so older withdrawals rest on the declared movements alone. The level is taken as this balance's, so the comparison only makes sense when the silo holds one material.
 
 ### Check for shortages
 
@@ -1260,7 +1295,7 @@ Pulaski can send every inventory movement (received, moved, consumed, produced, 
 - **One site per lot.** Moves stay within the lot's site; consumption needs a job in the same site.
 - **Concurrency.** Write up, write off, move, hold and release check that the lot hasn't changed since you opened it; if it has you'll see *"changed by someone else"*: reload and try again. Consumption and production don't check, so several people can declare against a busy line; the no-negative-stock rule still protects them.
 - **Substitutions.** Consuming a material the job has no planned component of is allowed, and recorded as a **substitution** (amber on the job page and in the confirmation).
-- **Genealogy is per job for now.** Every lot consumed into a job is recorded as a parent of every lot the job made, whichever came first. That can link more than really mixed (a resin lot used in the first hour shows as a parent of the last pallet). It narrows to time windows once Pulaski records production from the machines.
+- **Genealogy per lot.** Every lot consumed into a job is recorded as a parent of every lot the job made. Traces then narrow that to the lots that pair by time, or to the lots someone picked (see [Trace a lot](#trace-a-lot)). Pairing goes by when movements were declared, not by machine data, so declaring consumption when a lot is loaded gives the best pairs.
 - **Times** are the moment you click, unless the movement is [back-dated](#back-date-a-movement). A movement recorded into a run that has ended keeps the time you entered it and names the run it belongs to.
 - **What the ERP sees.** Each movement is an event in Pulaski's event log (`pulaski.lot.received.v1`, `…consumed.v1` and so on), sent to the ERP's webhook when that is switched on (see [Send movements to the ERP](#send-movements-to-the-erp)).
 
@@ -2219,10 +2254,10 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
-- **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
+- **Inventory is declared by hand.** Consumption and production are entered by people. Loading lots at feed points, backflush and scanning aren't built. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
 - **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, and scanning 2D codes or supplier barcodes beyond reading their text. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
 - **Reversing:** a chain undo follows a lot and the lots split off it, not merges into other lots, consumption into jobs or the output made from it; corrections made before this version can't be reversed.
-- **Genealogy through a silo is an estimate** from the declared movements: a level tag can be bound to a silo, but its readings aren't used yet to confirm when it was empty or how it flowed. A reversed movement and its reversal are left out of the estimate, as if neither happened.
+- **Genealogy through a silo is an estimate** from the declared movements. A level tag's readings confirm when it was empty and check the declared stock (see [How a silo flows](#how-a-silo-flows)), but they don't change how much each arrival gave. A reversed movement and its reversal are left out of the estimate, as if neither happened.
 - **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
 - **Allocations are kept up to date by hand:** nothing refreshes them when stock moves or the schedule changes; click **Refresh**. Suggestions don't prefer lots near the line, lots already in a container, or whole lots, and there are no picking lists; a substitution (a material the job doesn't plan) isn't allocated. Allocating doesn't stop another job consuming the stock: it only warns.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP; there are no lead times, purchase suggestions or partial receipts against one delivery (receiving closes it). The live timing is the schedule as projected now, not a forecast of slips.

@@ -290,7 +290,7 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
 
         lock (_lock)
         {
-            _edges.AddRange(edges.Where(e => !_edges.Any(x => x.ParentLotId == e.ParentLotId && x.ChildLotId == e.ChildLotId)));
+            _edges.AddRange(edges.Where(e => !_edges.Any(x => x.ParentLotId == e.ParentLotId && x.ChildLotId == e.ChildLotId && x.Basis == e.Basis)));
         }
 
         return Task.CompletedTask;
@@ -582,6 +582,21 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
 
     public Task<BalanceHistory?> GetBalanceHistoryAsync(Guid lotId, CancellationToken cancellationToken) =>
         Task.FromResult(BalanceHistories.GetValueOrDefault(lotId));
+
+    /// <summary>Jobs' standing consumption and production, as a test sets them (#81).</summary>
+    public List<JobDeclaration> JobDeclarations { get; } = [];
+
+    public Task<IReadOnlyList<GenealogyLink>> ListLinksToAsync(IReadOnlyCollection<Guid> childLotIds, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<GenealogyLink>>(
+                [.. _edges.Where(e => childLotIds.Contains(e.ChildLotId)).Select(e => new GenealogyLink(e.ParentLotId, e.ChildLotId, e.Basis, e.JobId))]);
+        }
+    }
+
+    public Task<IReadOnlyList<JobDeclaration>> ListJobDeclarationsAsync(IReadOnlyCollection<Guid> jobIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<JobDeclaration>>([.. JobDeclarations.Where(d => jobIds.Contains(d.JobId))]);
 
     public Task<Versioned<FlowSettings>?> GetFlowSettingsForUpdateAsync(Guid equipmentId, CancellationToken cancellationToken) =>
         Task.FromResult(Flows.GetValueOrDefault(equipmentId));

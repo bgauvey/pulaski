@@ -52,7 +52,7 @@ else
                             {
                                 <span class="chip ms-1" title="Lots here mix into one balance per material">Mixes lots</span>
                                 <div class="small text-muted">
-                                    @(l.FlowModel == "fifo" ? "First in, first out" : "Mixed")@(l.MinResidenceMinutes is { } m ? $", at least {m} min" : "")
+                                    @(l.FlowModel == "fifo" ? "First in, first out" : "Mixed")@(l.MinResidenceMinutes is { } m ? $", at least {m} min" : "")@(l.EmptyLevel is { } e ? $", empty at ≤ {InventoryView.Qty(e)}" : "")@(l.LevelTolerance is { } t ? $", level ± {InventoryView.Qty(t)}" : "")
                                     @if (User.Can(PermissionCodes.Equipment, l.SiteId))
                                     {
                                         <button type="button" class="btn btn-sm btn-link p-0 ms-1" @onclick="() => EditFlow(l)">Change</button>
@@ -66,6 +66,8 @@ else
                                             <option value="fifo">First in, first out</option>
                                         </select>
                                         <input type="number" min="0" class="form-control form-control-sm" style="width: 9rem" placeholder="Min. minutes" aria-label="Minimum residence in minutes" @bind="_residence" />
+                                        <input type="number" step="any" class="form-control form-control-sm" style="width: 9rem" placeholder="Empty at level" aria-label="Level reading at or below which it is empty" title="In the level tag's unit: a reading at or below this means empty" @bind="_emptyLevel" />
+                                        <input type="number" min="0" step="any" class="form-control form-control-sm" style="width: 9rem" placeholder="Level tolerance" aria-label="How far the level may differ from declared stock" title="In the level tag's unit; blank: the level isn't compared with declared stock" @bind="_levelTolerance" />
                                         <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save</button>
                                         <button type="button" class="btn btn-sm btn-link" @onclick="() => _flow = null">Cancel</button>
                                     </form>
@@ -114,10 +116,13 @@ else
     private InventoryLocationDto? _flow;
     private string _flowModel = "mixed";
     private int? _residence;
+    private decimal? _emptyLevel;
+    private decimal? _levelTolerance;
     private bool _saving;
 
     // How a silo or tank flows (D-060), for which arrivals a trace through it keeps.
-    private void EditFlow(InventoryLocationDto location) => (_flow, _flowModel, _residence) = (location, location.FlowModel, location.MinResidenceMinutes);
+    private void EditFlow(InventoryLocationDto location) =>
+        (_flow, _flowModel, _residence, _emptyLevel, _levelTolerance) = (location, location.FlowModel, location.MinResidenceMinutes, location.EmptyLevel, location.LevelTolerance);
 
     private async Task SaveFlowAsync()
     {
@@ -125,7 +130,10 @@ else
         _error = null;
         try
         {
-            await Api.SetFlowAsync(_flow!.Id, new SetFlowRequest { Version = _flow.Version, FlowModel = _flowModel, MinResidenceMinutes = _residence });
+            await Api.SetFlowAsync(_flow!.Id, new SetFlowRequest
+            {
+                Version = _flow.Version, FlowModel = _flowModel, MinResidenceMinutes = _residence, EmptyLevel = _emptyLevel, LevelTolerance = _levelTolerance,
+            });
             _flow = null;
             await LoadAsync();
         }

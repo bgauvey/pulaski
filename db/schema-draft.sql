@@ -87,6 +87,8 @@ CREATE TABLE core.equipment (
     commingles_lots         boolean NOT NULL DEFAULT false,         -- lots here mix into one balance per material, like a silo (D-031)
     flow_model              text NOT NULL DEFAULT 'mixed' CHECK (flow_model IN ('mixed','fifo')),   -- how a balance here flows, for genealogy (D-060)
     min_residence           interval CHECK (min_residence IS NULL OR min_residence >= interval '0'), -- the least time material stays before it can leave
+    empty_level             numeric(18,6),                          -- a level reading at or below this (in the level tag's unit) means empty (#81)
+    level_tolerance         numeric(18,6) CONSTRAINT equipment_level_tolerance_ck CHECK (level_tolerance IS NULL OR level_tolerance >= 0), -- level vs declared stock, tag unit; null = not compared
     single_material         boolean NOT NULL DEFAULT false,         -- takes one material at a time (D-032)
     -- machine data (D-050): where its state comes from, and how short a stop is a micro-stop
     state_derivation        text NOT NULL DEFAULT 'own_tags' CHECK (state_derivation IN ('own_tags','series','parallel','constraint_machine')),
@@ -1412,7 +1414,8 @@ CREATE TABLE core.lot_genealogy (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     parent_lot_id       uuid NOT NULL REFERENCES core.lot(id),
     child_lot_id        uuid NOT NULL REFERENCES core.lot(id),
-    link_basis          text NOT NULL CHECK (link_basis IN ('time_window','declared','split','merge','rework')),
+    link_basis          text NOT NULL CONSTRAINT lot_genealogy_link_basis_check
+                            CHECK (link_basis IN ('time_window','declared','made_from','split','merge','rework')),  -- made_from: picked per lot (#81)
     quantity            core.qty,                               -- estimated for time_window
     uom_id              uuid REFERENCES core.uom(id),
     job_id              uuid REFERENCES core.job(id),           -- the job that consumed the parent and made the child (declared)
@@ -2189,7 +2192,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0042_oee_targets'),
     ('0043_changeover_rules'),
     ('0044_line_batch_tolerance'),
-    ('0045_reversal_details');
+    ('0045_reversal_details'),
+    ('0046_lot_pairing');
 
 -- =====================================================================
 -- 17. SEED DATA

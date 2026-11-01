@@ -299,12 +299,12 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         """;
 
     private const string GetFlow = """
-        SELECT id AS equipment_id, site_id, code, holds_inventory, flow_model, min_residence, xmin::text::bigint AS version
+        SELECT id AS equipment_id, site_id, code, holds_inventory, flow_model, min_residence, empty_level, level_tolerance, xmin::text::bigint AS version
         FROM core.equipment WHERE id = @Id FOR UPDATE
         """;
 
     private const string UpdateFlow = """
-        UPDATE core.equipment SET flow_model = @FlowModel, min_residence = @MinResidence, updated_at = @At
+        UPDATE core.equipment SET flow_model = @FlowModel, min_residence = @MinResidence, empty_level = @EmptyLevel, level_tolerance = @LevelTolerance, updated_at = @At
         WHERE id = @EquipmentId
         RETURNING xmin::text::bigint
         """;
@@ -571,11 +571,11 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     public async Task<Versioned<FlowSettings>?> GetFlowSettingsForUpdateAsync(Guid equipmentId, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<FlowRow>(GetFlow, new { Id = equipmentId }, cancellationToken) is { } r
-            ? new Versioned<FlowSettings>(new FlowSettings(r.EquipmentId, r.SiteId, r.Code, r.HoldsInventory, r.FlowModel, r.MinResidence), r.Version)
+            ? new Versioned<FlowSettings>(new FlowSettings(r.EquipmentId, r.SiteId, r.Code, r.HoldsInventory, r.FlowModel, r.MinResidence, r.EmptyLevel, r.LevelTolerance), r.Version)
             : null;
 
     public Task<long> UpdateFlowSettingsAsync(FlowSettings settings, DateTimeOffset at, CancellationToken cancellationToken) =>
-        session.ExecuteScalarAsync<long>(UpdateFlow, new { settings.EquipmentId, settings.FlowModel, settings.MinResidence, At = at }, cancellationToken);
+        session.ExecuteScalarAsync<long>(UpdateFlow, new { settings.EquipmentId, settings.FlowModel, settings.MinResidence, settings.EmptyLevel, settings.LevelTolerance, At = at }, cancellationToken);
 
     private sealed class FlowRow
     {
@@ -585,6 +585,8 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         public bool HoldsInventory { get; init; }
         public string FlowModel { get; init; } = "mixed";
         public TimeSpan? MinResidence { get; init; }
+        public decimal? EmptyLevel { get; init; }
+        public decimal? LevelTolerance { get; init; }
         public long Version { get; init; }
     }
 

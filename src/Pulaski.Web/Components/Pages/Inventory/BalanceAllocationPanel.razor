@@ -85,7 +85,9 @@
 
     public static string PrecisionLabel(string? precision) => precision switch
     {
+        "confirmed" => "Confirmed",
         "exact" => "Exact",
+        "declared" => "Declared",
         "estimated" => "Estimated",
         "possible" => "Possible",
         _ => "",
@@ -93,7 +95,7 @@
 
     public static string PrecisionChip(string? precision) => precision switch
     {
-        "exact" => "chip chip-strong",
+        "confirmed" or "exact" or "declared" => "chip chip-strong",
         "possible" => "chip chip-warning",
         _ => "chip",
     };

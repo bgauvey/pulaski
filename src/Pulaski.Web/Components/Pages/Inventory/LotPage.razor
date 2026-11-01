@@ -186,6 +186,10 @@
             else
             {
                 @LinkTable("Made from", detail.Parents, "Not made from other lots.", tz)
+                @if (l.ProducedByJobId is { } madeBy && User.Can(PermissionCodes.ProductionReport, l.SiteId))
+                {
+                    <MadeFromPicker @key="l.Id" LotId="l.Id" JobId="madeBy" Parents="detail.Parents" OnChanged="LoadAsync" />
+                }
                 @LinkTable("Used in", detail.Children, "Nothing made from it yet.", tz)
             }
         </section>
@@ -471,6 +475,14 @@ else if (_error is null)
                                 <td><span class="@InventoryView.StatusChip(link.Status)">@Display.Label(link.Status)</span></td>
                                 <td class="small">
                                     @(link.JobNumber is null ? Display.Label(link.LinkBasis) : $"via {link.JobNumber}")
+                                    @if (link.Precision is { } precision)
+                                    {
+                                        <span class="@BalanceAllocationPanel.PrecisionChip(precision) ms-1" title="@link.PrecisionNote">@BalanceAllocationPanel.PrecisionLabel(precision)</span>
+                                    }
+                                    else if (link.Unpaired)
+                                    {
+                                        <span class="chip ms-1 text-muted" title="@link.PrecisionNote">Not paired</span>
+                                    }
                                     <div class="text-muted" title="@(link.EffectiveAt < link.DerivedAt.AddMinutes(-1) ? $"Back-dated; recorded {Display.SiteTime(link.DerivedAt, tz)}" : null)">
                                         since @Display.SiteTime(link.EffectiveAt, tz)@(link.EffectiveAt < link.DerivedAt.AddMinutes(-1) ? " (back-dated)" : "")
                                     </div>

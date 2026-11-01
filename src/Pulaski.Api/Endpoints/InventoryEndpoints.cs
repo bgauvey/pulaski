@@ -325,6 +325,15 @@ internal static class InventoryEndpoints
                 new ReverseChainCommand(id, request.EventId, request.ReasonCodeId, request.Comment, dryRun ?? false, request.ExpectedSteps), ct)))
         .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
 
+        // The lots a made lot was made from, out of those its job used (#81); none goes back to pairing by time.
+        lots.MapPut("/{id:guid}/made-from", async Task<Ok<VersionResponse>> (
+            Guid id,
+            SetMadeFromRequest request,
+            ICommandHandler<SetMadeFromCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetMadeFromCommand(id, request.ParentLotIds, request.Comment), ct)))
+        .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.Lot));
+
         // ---- Containers, labels and scanning (D-059) ----
         lots.MapPost("/{id:guid}/pack", async Task<Ok<LotTransactionResponse>> (
             Guid id,
@@ -424,7 +433,7 @@ internal static class InventoryEndpoints
             SetFlowRequest request,
             ICommandHandler<SetFlowCommand, VersionResponse> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new SetFlowCommand(id, request.Version, request.FlowModel, request.MinResidenceMinutes), ct)))
+            TypedResults.Ok(await handler.HandleAsync(new SetFlowCommand(id, request.Version, request.FlowModel, request.MinResidenceMinutes, request.EmptyLevel, request.LevelTolerance), ct)))
         .RequirePermission(Permissions.Equipment, Site.Of(SiteOf.Equipment));
 
         // Where a balance's withdrawals came from, by its location's flow model (D-060).

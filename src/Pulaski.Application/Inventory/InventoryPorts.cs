@@ -65,6 +65,12 @@ public interface IInventoryReadStore
     /// </summary>
     Task<BalanceHistory?> GetBalanceHistoryAsync(Guid lotId, CancellationToken cancellationToken);
 
+    /// <summary>Every current genealogy link into the lots (all their parents), for pairing them (#81).</summary>
+    Task<IReadOnlyList<GenealogyLink>> ListLinksToAsync(IReadOnlyCollection<Guid> childLotIds, CancellationToken cancellationToken);
+
+    /// <summary>The jobs' standing consumption and production (neither reversed nor reversals), in the order they count (#81).</summary>
+    Task<IReadOnlyList<JobDeclaration>> ListJobDeclarationsAsync(IReadOnlyCollection<Guid> jobIds, CancellationToken cancellationToken);
+
     /// <summary>Released and draft BOMs listing the material, and open jobs planned to consume it; null when it doesn't exist.</summary>
     Task<WhereUsedDto?> WhereUsedAsync(Guid materialId, CancellationToken cancellationToken);
 
@@ -398,6 +404,9 @@ public sealed record LotEventDetail
 public sealed record GenealogyEdge(Guid Id, Guid ParentLotId, Guid ChildLotId, Guid? JobId, string Basis = GenealogyEdge.Declared)
 {
     public const string Declared = "declared";
+
+    /// <summary>Picked as what a made lot was made from, out of the lots its job used (#81).</summary>
+    public const string MadeFrom = "made_from";
     public const string Split = "split";
     public const string Merge = "merge";
 }
@@ -409,8 +418,24 @@ public sealed record LockedLot(Lot Lot, long Version, DateTimeOffset UpdatedAt);
 /// <summary>A lot movement as reversing it needs it; <c>EffectiveAt</c> is when it counts in stock (D-057), its record time unless back-dated.</summary>
 public sealed record LotEventRecord(Guid Id, DateTimeOffset OccurredAt, LotMovement Movement, Guid? RelatedLotId, DateTimeOffset? EffectiveAt = null);
 
-/// <summary>A balance's movements and how its location flows (D-060).</summary>
-public sealed record BalanceHistory(Guid LotId, string FlowModel, TimeSpan? MinResidence, IReadOnlyList<BalanceMovementRow> Movements);
+/// <summary>A balance's movements and how its location flows (D-060), with its location's level readings (#81) when it has a level tag.</summary>
+public sealed record BalanceHistory(Guid LotId, string FlowModel, TimeSpan? MinResidence, IReadOnlyList<BalanceMovementRow> Movements, BalanceLevelData? Levels = null);
+
+/// <summary>
+/// A balance's location's level readings (#81), in the level tag's unit: when it read empty (at or below <c>EmptyLevel</c>, from the
+/// first reading of each empty stretch) and, with a tolerance set, the last good reading in the 15 minutes before each withdrawal.
+/// </summary>
+public sealed record BalanceLevelData(
+    Guid MaterialId,
+    Guid BaseUomId,
+    Guid? LevelUomId,
+    decimal? EmptyLevel,
+    decimal? Tolerance,
+    IReadOnlyList<EmptyPoint> Empties,
+    IReadOnlyDictionary<Guid, decimal> ReadingBefore);
+
+/// <summary>A current genealogy link to a lot: its parent, its basis (<see cref="GenealogyEdge"/>) and the job that made it.</summary>
+public sealed record GenealogyLink(Guid ParentLotId, Guid ChildLotId, string Basis, Guid? JobId);
 
 /// <summary>One movement of a balance, with the names screens show.</summary>
 public sealed record BalanceMovementRow
@@ -426,7 +451,9 @@ public sealed record BalanceMovementRow
 }
 
 /// <summary>A location's flow settings (D-060), as changing them needs them.</summary>
-public sealed record FlowSettings(Guid EquipmentId, Guid? SiteId, string Code, bool HoldsInventory, string FlowModel, TimeSpan? MinResidence);
+/// <remarks><c>EmptyLevel</c> and <c>LevelTolerance</c> are in the level tag's unit (#81): a reading at or below empty means empty; null tolerance = not compared.</remarks>
+public sealed record FlowSettings(
+    Guid EquipmentId, Guid? SiteId, string Code, bool HoldsInventory, string FlowModel, TimeSpan? MinResidence, decimal? EmptyLevel = null, decimal? LevelTolerance = null);
 
 /// <summary>One quantity movement of a lot, by when it counts and when it was recorded (D-057).</summary>
 public sealed record QuantityPoint(DateTimeOffset EffectiveAt, DateTimeOffset OccurredAt, decimal Delta);

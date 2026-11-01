@@ -67,7 +67,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-057 | Back-dated inventory movements: a receipt, consumption, production, write-up or write-off may count from up to 31 days earlier (`effective_at`), with a comment and permission `inventory.backdate`; its record time (`occurred_at`) and append-only history stay. Stock at a time sums movements by effective time, so it is deterministic whatever the order of entry. A back-dated movement may not count before the lot had stock or before a posted count of it, nor take it below zero at any time; expiry and the run are taken at the effective time | Proposed | 2026-10-24 |
 | D-058 | Shortages with the live schedule and supply on its way: jobs are timed by the schedule's projection now by default (published times on request); `core.expected_receipt` records deliveries entered by people or sent by the ERP (idempotent by external key), counted beside stock only for jobs needing the material after they are due, and closed by receiving a lot against them. Still not MRP: no suggestions, lead times or ordering | Proposed | 2026-10-24 |
 | D-059 | Containers, labels and scanning: a container (pallet, tote, box, bin) holds whole lots that keep their own identity; packing, unpacking and moving with a container are ordinary lot movements linked to it, and a lot moved, split off or used up alone leaves it. Labels are 4 × 6 in PDFs with a Code 128 barcode of a short Pulaski code (`PUL1L`/`PUL1C` + a never-reused label number, `PUL1E:` + a location code); a scan resolves to exactly one thing at the site, or offers the matches when free text is ambiguous | Proposed | 2026-10-24 |
-| D-060 | Genealogy through commingled balances: each location where lots mix has a flow model (`mixed`: a withdrawal takes every arrival's share; `fifo`: oldest first) and an optional minimum residence time. Which arrivals fed each withdrawal is worked out on read from the declared movements (by effective time) and narrows traces through the balance; every such link is exact (one arrival possible), estimated (by the model) or possible (quantities don't add up, residence not met), with the reason and the basis. A `level` tag role can be bound; reading it waits for process values | Proposed | 2026-10-24 |
+| D-060 | Genealogy through commingled balances: each location where lots mix has a flow model (`mixed`: a withdrawal takes every arrival's share; `fifo`: oldest first) and an optional minimum residence time. Which arrivals fed each withdrawal is worked out on read from the declared movements (by effective time) and narrows traces through the balance; every such link is exact (one arrival possible), estimated (by the model) or possible (quantities don't add up, residence not met), with the reason and the basis. A `level` tag role can be bound; its readings confirm empty points and declared stock since D-078 | Proposed | 2026-10-24 |
 
 ## Order hierarchy
 
@@ -1294,7 +1294,7 @@ A balance emptied to zero starts afresh, so the next withdrawals can be exact. N
 - The starting lot, if itself a balance, isn't narrowed.
 - `GET /api/lots/{id}/allocation` gives a balance's withdrawals with their sources, which the balance's page shows.
 
-**Machine data.** Process values aren't recorded yet (D-050), so the model can't be confirmed by measurement and says so. A `level` tag role can be bound now (`TagRoles.Bindable`) and is ignored by ingest. Once level readings are kept, they can confirm a silo was empty (making links exact) or flag declared stock that disagrees with the level (making them possible).
+**Machine data.** Process values aren't recorded yet (D-050), so the model can't be confirmed by measurement and says so. A `level` tag role can be bound now (`TagRoles.Bindable`) and is ignored by ingest. Once level readings are kept, they can confirm a silo was empty (making links exact) or flag declared stock that disagrees with the level (making them possible). Both came with D-078 (#81).
 
 **Approximations.** The SQL trace keeps each lot once, by its nearest path, so a lot reachable both through a dropped arrival and another way may be dropped. A reversal into a balance is replayed as a withdrawal of the oldest stock.
 
@@ -1768,6 +1768,62 @@ their output.
 
 **Screens.** Every standing movement on a lot's page has **Reverse**. The drawer explains each kind and offers **With everything after it that
 depends on it**: **Check** lists the chain, **Undo N movements** does it.
+
+## Per-lot genealogy and silo level readings (D-078, proposed)
+
+Issue #81. Every lot a job used was a parent of every lot it made (D-027), and genealogy through a silo was an estimate from declared
+movements alone (D-060), though level readings are now kept (D-071).
+
+**Pairing by time** (`LotPairing.Pair`, pure, in the domain): a job's standing consumption and production (`ListJobDeclarationsAsync`: neither
+reversed nor reversals) in the order they count (`effective_at`, then record time).
+- A used lot is in use from its consumption until the next lot of that material on the job.
+- A made lot pairs, per material, with the lot in use when the job's previous output was declared, plus every lot of that material declared
+  since, up to its own output.
+- Precision is `exact` when the job used only one lot of the material, else `estimated`.
+- A lot used after everything was made, and a material none of whose lots came before an output, can't be paired. The job link is kept for
+  every made lot, `possible`, with why.
+- Nothing is stored: the stored job links (`declared`) stay as they were, and pairing narrows them on read.
+
+**Picking** (`SetMadeFromCommand`, `PUT /api/lots/{id}/made-from`, `production.report`; or `ReportProductionCommand.MadeFromLotIds`): a made
+lot names the lots it came from.
+- Only lots its job used, standing, can be picked.
+- The picks are stored as `made_from` links with the job (`core.lot_genealogy.link_basis`, migration 0046) beside the `declared` ones.
+- Picking again supersedes the earlier picks; an empty pick goes back to pairing by time.
+- The job is locked first, then the lot (D-027); the lot's job is read before the locks, since it never changes. The event is
+  `pulaski.lot.made_from_set.v1`.
+- Reversing the consumption or production supersedes the `made_from` links with the `declared` ones.
+
+**Where it applies** (`JobLinkPairs`, application): for a job's link from parent to child:
+- if the child has picks for that job, the parent is kept `declared` when picked, else left out;
+- otherwise the pairing decides;
+- splits and merges aren't judged.
+
+`TraceNarrowing` drops a lot whose link doesn't pair, and what was reached only through it, before narrowing through balances. A lot reached
+through both takes the worse precision. A lot's **Made from** and **Used in** lists keep every stored link: a `declared` link with a pick
+twin isn't listed twice, and one that doesn't pair is `Unpaired`, with why.
+
+**Level readings** (`BalanceLevels`, input to `BalanceAllocation.Allocate`). They come from the location's active `level` tag, read on demand
+(`core.equipment.empty_level`, `level_tolerance`, in the tag's unit; set with the flow, `SetFlowCommand`).
+
+- **Empty points:** the first good reading (quality ≥ 192) of each stretch at or below `empty_level` sets aside every parcel that arrived
+  before the last reading above empty. An arrival the level hasn't caught up with yet survives.
+  - What was set aside is noted on the next withdrawal.
+  - If nothing is left, a withdrawal from a single arrival after that is `confirmed`, until the declared movements empty the balance
+    themselves.
+- **Stock:** with `level_tolerance`, the last good reading in the 15 minutes before each withdrawal is compared with the declared stock
+  just before it.
+  - Within tolerance, `exact` sources become `confirmed`; outside it, the withdrawal and its sources become `possible`.
+  - This needs the tag's unit to convert to the material's base unit (`IUnitReadStore`, material conversions included). Otherwise only empty
+    points are used.
+- The level is taken as the balance's own, so it fits a silo holding one material. Readings outlive their retention only as the
+  declared movements.
+
+**Precision**, from most to least sure: `confirmed`, `exact`, `declared`, `estimated`, `possible` (`GenealogyPrecision`).
+
+**Not done:**
+- pairing from machine data (feed-point loading, consumption by time window: #33);
+- quantities on pairs;
+- a level that changes how much each arrival gave.
 
 ## Application architecture
 

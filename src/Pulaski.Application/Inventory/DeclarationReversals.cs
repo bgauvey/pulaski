@@ -129,6 +129,7 @@ internal sealed class ReverseMovementHandler(
         if (!await inventory.HasDeclarationAsync(lot.Id, job.Id, LotEventKind.Consumed, cancellationToken))
         {
             await inventory.SupersedeGenealogyAsync(lot.Id, null, GenealogyEdge.Declared, job.Id, timeProvider.GetUtcNow(), cancellationToken);
+            await inventory.SupersedeGenealogyAsync(lot.Id, null, GenealogyEdge.MadeFrom, job.Id, timeProvider.GetUtcNow(), cancellationToken);
         }
 
         return InventoryRules.Response(after, version);
@@ -155,6 +156,7 @@ internal sealed class ReverseMovementHandler(
         if (!await inventory.HasDeclarationAsync(lot.Id, job.Id, LotEventKind.Produced, cancellationToken))
         {
             await inventory.SupersedeGenealogyAsync(null, lot.Id, GenealogyEdge.Declared, job.Id, timeProvider.GetUtcNow(), cancellationToken);
+            await inventory.SupersedeGenealogyAsync(null, lot.Id, GenealogyEdge.MadeFrom, job.Id, timeProvider.GetUtcNow(), cancellationToken);
         }
 
         return InventoryRules.Response(after, version,

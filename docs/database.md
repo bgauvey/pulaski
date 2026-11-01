@@ -103,6 +103,8 @@ One self-referencing table holds enterprise, sites, areas, work centers (lines),
 | `commingles_lots` | boolean | no | Lots here mix and can't be told apart, like a silo or tank (D-031): every arrival joins one balance per material. Needs `holds_inventory`. |
 | `flow_model` | text | no | How a balance here flows, for genealogy (D-060): `mixed` (default; a withdrawal takes a share of every arrival still there) or `fifo` (plug flow, oldest first). |
 | `min_residence` | interval | yes | The least time material stays before it can leave (D-060); taken sooner, an arrival is only possible. |
+| `empty_level` | numeric(18,6) | yes | In its level tag's unit (#81, D-078): a good reading at or below it means the balance here was empty. Null: readings don't mark it empty. |
+| `level_tolerance` | numeric(18,6) | yes | In its level tag's unit, zero or more (`equipment_level_tolerance_ck`): how far the level may differ from declared stock and still agree. Null: not compared. |
 | `state_derivation` | text | no | Where its state comes from (D-050): `own_tags` (default, its own state tag), `series` (the worst state of its machines), `parallel` (the best) or `constraint_machine`. Set on the Equipment screen; nothing reads it until machine data is collected. |
 | `constraint_equipment_id` | uuid → equipment | yes | The constraint machine: set exactly when `state_derivation = 'constraint_machine'` (`equipment_derivation_ck`), and equipment below this one that tracks state. |
 | `micro_stop_threshold` | interval | no | Stops shorter than this are micro-stops (D-050): logged, not queued for coding, not availability loss. 0 to 60 minutes (`equipment_micro_stop_ck`), default 5. |
@@ -1169,14 +1171,14 @@ Windows may overlap: a silo can hold several lots at once. Time-window consumpti
 
 ### core.lot_genealogy — parent and child lots · *In use*
 
-Derived edges can be recalculated when windows or residence times change; the old edge is marked superseded, never deleted. Declared consumption and production (D-027) link every lot consumed into a job to every lot it produced (`declared`, with `job_id`). A split links the lot to the lot split off it, and a merge each source to the target (`split`, `merge`, no job; D-030). A current edge is unique per parent, child and basis (`lot_genealogy_edge_uq`).
+Derived edges can be recalculated when windows or residence times change; the old edge is marked superseded, never deleted. Declared consumption and production (D-027) link every lot consumed into a job to every lot it produced (`declared`, with `job_id`). A split links the lot to the lot split off it, and a merge each source to the target (`split`, `merge`, no job; D-030). A made lot's picked parents (#81, D-078) are `made_from` edges with the job, beside its `declared` ones; picking again supersedes them. A current edge is unique per parent, child and basis (`lot_genealogy_edge_uq`).
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
 | `parent_lot_id` | uuid → lot | no | The input lot. |
 | `child_lot_id` | uuid → lot | no | The output lot; differs from the parent. |
-| `link_basis` | text | no | `time_window`, `declared`, `split`, `merge` or `rework`. |
+| `link_basis` | text | no | `time_window`, `declared`, `made_from` (picked per lot, #81), `split`, `merge` or `rework` (`lot_genealogy_link_basis_check`). |
 | `quantity` | qty | yes | Quantity carried over; estimated for `time_window`. |
 | `uom_id` | uuid → uom | yes | Its unit. |
 | `job_id` | uuid → job | yes | The job that consumed the parent and made the child (declared edges). |

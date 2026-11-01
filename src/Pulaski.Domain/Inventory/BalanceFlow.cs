@@ -12,26 +12,41 @@ public static class FlowModels
     public static IReadOnlyList<string> All { get; } = [Mixed, Fifo];
 }
 
-/// <summary>How sure a genealogy link through a balance is (D-060).</summary>
+/// <summary>How sure a genealogy link is: through a balance (D-060), or between what a job used and what it made (#81).</summary>
 public static class GenealogyPrecision
 {
-    /// <summary>Only one arrival could have been there: certain from the declared movements.</summary>
+    /// <summary>Exact from the declared movements, and a level reading backs it: the balance was measured empty, or held what was declared.</summary>
+    public const string Confirmed = "confirmed";
+
+    /// <summary>Only one arrival could have been there, or the job used only one lot of the material: certain from the declared movements.</summary>
     public const string Exact = "exact";
 
-    /// <summary>Worked out by the flow model from the declared quantities: likely, not measured.</summary>
+    /// <summary>Someone named the lots it was made from.</summary>
+    public const string Declared = "declared";
+
+    /// <summary>Worked out by the flow model, or by when lots were used and made: likely, not measured.</summary>
     public const string Estimated = "estimated";
 
-    /// <summary>The declared movements don't settle it (they don't add up, or the residence time wasn't met): it may be, or not.</summary>
+    /// <summary>The declared movements don't settle it (they don't add up, the residence time wasn't met, or a level disagrees): it may be, or not.</summary>
     public const string Possible = "possible";
 
     /// <summary>The least certain of two.</summary>
     public static string Worst(string a, string b) => Rank(a) >= Rank(b) ? a : b;
 
+    /// <summary>The most certain of two.</summary>
+    public static string Best(string a, string b) => Rank(a) <= Rank(b) ? a : b;
+
+    /// <summary>The least certain of several; exact when there are none.</summary>
+    public static string WorstOf(IEnumerable<string> precisions) =>
+        precisions.Aggregate((string?)null, (worst, p) => worst is null ? p : Worst(worst, p)) ?? Exact;
+
     private static int Rank(string precision) => precision switch
     {
-        Exact => 0,
-        Estimated => 1,
-        _ => 2,
+        Confirmed => 0,
+        Exact => 1,
+        Declared => 2,
+        Estimated => 3,
+        _ => 4,
     };
 }
 
@@ -47,22 +62,54 @@ public sealed record Contribution(Guid? SourceLotId, Guid? SourceEventId, decima
 /// <summary>Where one withdrawal's stock came from, how sure that is, and why.</summary>
 public sealed record WithdrawalAllocation(BalanceMovement Withdrawal, IReadOnlyList<Contribution> Sources, string Precision, string Reason);
 
+/// <summary>A level reading at or below empty (#81): from <see cref="At"/> the balance was measured empty of what arrived before <see cref="ClearsBefore"/>,
+/// the last reading above empty, so an arrival the level hadn't caught up with yet isn't cleared.</summary>
+public sealed record EmptyPoint(DateTimeOffset At, DateTimeOffset ClearsBefore);
+
 /// <summary>
-/// Which arrivals into a balance fed each withdrawal from it (D-060), worked out from the declared movements alone. A mixed balance
+/// What the level readings of a balance's location say (#81): when it was measured empty, and, when the level's unit converts to the
+/// material's, the stock it read just before each withdrawal (by withdrawal event, in the base unit), compared within <see cref="Tolerance"/>.
+/// </summary>
+public sealed record BalanceLevels(IReadOnlyList<EmptyPoint> Empties, IReadOnlyDictionary<Guid, decimal> StockBefore, decimal? Tolerance)
+{
+    public static BalanceLevels None { get; } = new([], new Dictionary<Guid, decimal>(), null);
+}
+
+/// <summary>
+/// Which arrivals into a balance fed each withdrawal from it (D-060), worked out from the declared movements. A mixed balance
 /// gives every withdrawal a share of each arrival still in it; a first-in, first-out one takes the oldest first, and with a minimum
 /// residence time only material that has been in that long. It never claims more than the movements show: a withdrawal is exact
-/// only when one arrival could have been there, and possible when the declared quantities don't account for it. Pure.
+/// only when one arrival could have been there, and possible when the declared quantities don't account for it. Level readings (#81)
+/// clear what a measured empty shows was gone, confirm an exact withdrawal the level backs, and make one it contradicts possible. Pure.
 /// </summary>
 public static class BalanceAllocation
 {
     private const int Decimals = 6;
 
-    public static IReadOnlyList<WithdrawalAllocation> Allocate(IEnumerable<BalanceMovement> movements, string model, TimeSpan? minResidence)
+    public static IReadOnlyList<WithdrawalAllocation> Allocate(
+        IEnumerable<BalanceMovement> movements, string model, TimeSpan? minResidence, BalanceLevels? levels = null)
     {
+        levels ??= BalanceLevels.None;
+        var empties = new Queue<EmptyPoint>(levels.Empties.OrderBy(e => e.At));
         var parcels = new List<Parcel>();
         var result = new List<WithdrawalAllocation>();
+        var measuredEmpty = false;
+        string? note = null;
         foreach (var movement in movements.OrderBy(m => m.At))
         {
+            while (empties.TryPeek(out var empty) && empty.At < movement.At)
+            {
+                empties.Dequeue();
+                var cleared = parcels.Where(p => p.ArrivedAt < empty.ClearsBefore).ToList();
+                var left = cleared.Sum(p => p.Remaining);
+                parcels.RemoveAll(cleared.Contains);
+                measuredEmpty = parcels.Count == 0;
+                if (left > (levels.Tolerance ?? 0m))
+                {
+                    note = $" The level read empty at {empty.At:u} while the declared movements still had {left:0.######} in; that was set aside.";
+                }
+            }
+
             if (movement.Delta > 0)
             {
                 parcels.Add(new Parcel(movement.SourceLotId, movement.EventId, movement.At, movement.Delta));
@@ -71,13 +118,51 @@ public static class BalanceAllocation
 
             if (movement.Delta < 0)
             {
-                result.Add(model == FlowModels.Fifo ? TakeFifo(parcels, movement, minResidence) : TakeMixed(parcels, movement));
+                var declared = parcels.Sum(p => p.Remaining);
+                var single = parcels.Count == 1;
+                var allocation = model == FlowModels.Fifo ? TakeFifo(parcels, movement, minResidence) : TakeMixed(parcels, movement);
+                if (note is not null)
+                {
+                    allocation = allocation with { Reason = allocation.Reason + note };
+                    note = null;
+                }
+
+                if (levels.Tolerance is { } tolerance && levels.StockBefore.TryGetValue(movement.EventId, out var level))
+                {
+                    allocation = Math.Abs(level - declared) <= tolerance
+                        ? Upgrade(allocation, $" The level read {level:0.######}, agreeing with the declared {declared:0.######}.")
+                        : Downgrade(allocation, $" The level read {level:0.######} but the declared movements had {declared:0.######}: they disagree, so this is only possible.");
+                }
+                else if (measuredEmpty && single)
+                {
+                    allocation = Upgrade(allocation, " The level showed the balance empty before it arrived.");
+                }
+
+                result.Add(allocation);
                 parcels.RemoveAll(p => p.Remaining <= 0);
+                if (parcels.Count == 0)
+                {
+                    measuredEmpty = false;
+                }
             }
         }
 
         return result;
     }
+
+    /// <summary>Exact sources become confirmed; anything less certain stays as it was.</summary>
+    private static WithdrawalAllocation Upgrade(WithdrawalAllocation allocation, string reason)
+    {
+        var sources = allocation.Sources.Select(s => s.Precision == GenealogyPrecision.Exact ? s with { Precision = GenealogyPrecision.Confirmed } : s).ToList();
+        return allocation with { Sources = sources, Precision = GenealogyPrecision.WorstOf(sources.Select(s => s.Precision)), Reason = allocation.Reason + reason };
+    }
+
+    private static WithdrawalAllocation Downgrade(WithdrawalAllocation allocation, string reason) => allocation with
+    {
+        Sources = [.. allocation.Sources.Select(s => s with { Precision = GenealogyPrecision.Possible })],
+        Precision = GenealogyPrecision.Possible,
+        Reason = allocation.Reason + reason,
+    };
 
     private static WithdrawalAllocation TakeMixed(List<Parcel> parcels, BalanceMovement withdrawal)
     {
@@ -149,8 +234,7 @@ public static class BalanceAllocation
             reason += $" More was taken than the declared movements put in; where {unaccounted:0.######} came from isn't known.";
         }
 
-        var precision = sources.Aggregate(GenealogyPrecision.Exact, (worst, s) => GenealogyPrecision.Worst(worst, s.Precision));
-        return new WithdrawalAllocation(withdrawal, sources, precision, reason);
+        return new WithdrawalAllocation(withdrawal, sources, GenealogyPrecision.WorstOf(sources.Select(s => s.Precision)), reason);
     }
 
     private static WithdrawalAllocation Unaccounted(BalanceMovement withdrawal, decimal need, string reason) =>

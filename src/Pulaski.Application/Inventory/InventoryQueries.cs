@@ -1,5 +1,6 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Units;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Domain;
 using Pulaski.Domain.Inventory;
@@ -95,18 +96,24 @@ internal sealed class GetLotHandler(IInventoryReadStore store, IAllocationReadSt
     public async Task<LotDto> HandleAsync(GetLotQuery query, CancellationToken cancellationToken)
     {
         var lot = await store.GetLotAsync(query.Id, cancellationToken) ?? throw new NotFoundException($"Lot {query.Id} not found.");
+        var pairs = await JobLinkPairs.LoadAsync(store, [lot.Lot.Id, .. lot.Children.Select(c => c.LotId).Distinct()], cancellationToken);
+        lot = lot with
+        {
+            Parents = pairs.Annotate(lot.Parents, p => (p.LotId, lot.Lot.Id)),
+            Children = pairs.Annotate(lot.Children, c => (lot.Lot.Id, c.LotId)),
+        };
         return allocations is null ? lot : lot with { Allocations = await allocations.ListOfLotAsync(query.Id, cancellationToken) };
     }
 }
 
-internal sealed class TraceLotHandler(IInventoryReadStore store) : IQueryHandler<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>
+internal sealed class TraceLotHandler(IInventoryReadStore store, IUnitReadStore units) : IQueryHandler<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>
 {
     public async Task<IReadOnlyList<LotTraceNodeDto>> HandleAsync(TraceLotQuery query, CancellationToken cancellationToken)
     {
         var nodes = await store.TraceAsync(query.LotId, query.Forward, cancellationToken);
         return nodes.Count == 0
             ? throw new NotFoundException($"Lot {query.LotId} not found.")
-            : await TraceNarrowing.ApplyAsync(nodes, query.Forward, query.LotId, store, cancellationToken);
+            : await TraceNarrowing.ApplyAsync(nodes, query.Forward, query.LotId, store, units, cancellationToken);
     }
 }
 
