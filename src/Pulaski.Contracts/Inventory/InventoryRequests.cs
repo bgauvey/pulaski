@@ -167,6 +167,18 @@ public sealed record ReverseMovementRequest
     public string? Comment { get; init; }
 }
 
+/// <summary>
+/// Undoes a movement with everything after it that depends on it (#79). Check first (<c>?dryRun=true</c>), then confirm with the steps the
+/// check returned in <see cref="ExpectedSteps"/>; it is refused if they have changed.
+/// </summary>
+public sealed record ReverseChainRequest
+{
+    public Guid EventId { get; init; }
+    public Guid ReasonCodeId { get; init; }
+    public string? Comment { get; init; }
+    public IReadOnlyList<Guid>? ExpectedSteps { get; init; }
+}
+
 /// <summary>A material's shelf life in days; null clears it (D-032).</summary>
 public sealed record SetShelfLifeRequest
 {

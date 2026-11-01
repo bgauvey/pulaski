@@ -1840,6 +1840,7 @@ CREATE TABLE ts.lot_event (
     reverses_event_id   uuid,                                   -- the movement a reversal undoes, with its time (no FK into history)
     report_id           uuid,                                   -- the production report that made it (D-063): ts.production_count.report_id
     reverses_occurred_at timestamptz,
+    details             jsonb,                                  -- a correction's lot details before and after it (#79), to reverse it
     actor_user_id       uuid,
     actor_id            text,                                   -- issuer|subject, as on evt.event, until sec.app_user exists
     PRIMARY KEY (id, occurred_at)
@@ -2187,7 +2188,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0041_oee_rollups'),
     ('0042_oee_targets'),
     ('0043_changeover_rules'),
-    ('0044_line_batch_tolerance');
+    ('0044_line_batch_tolerance'),
+    ('0045_reversal_details');
 
 -- =====================================================================
 -- 17. SEED DATA

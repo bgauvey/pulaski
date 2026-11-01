@@ -10,7 +10,7 @@ namespace Pulaski.Infrastructure.Persistence;
 public sealed class DatabaseMaintenance(NpgsqlDataSource dataSource)
 {
     /// <summary>The newest file in <c>db/migrations</c>, without <c>.sql</c>. This build needs it applied.</summary>
-    public const string RequiredMigration = "0044_line_batch_tolerance";
+    public const string RequiredMigration = "0045_reversal_details";
 
     private const string HasMigrationSql = "SELECT EXISTS (SELECT 1 FROM public.schema_migration WHERE version = @Version)";
 

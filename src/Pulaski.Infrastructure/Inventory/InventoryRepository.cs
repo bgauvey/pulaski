@@ -65,17 +65,18 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         INSERT INTO ts.lot_event (id, occurred_at, lot_id, event_kind, qty_delta, qty_after, uom_id,
                                   from_location_id, to_location_id, related_lot_id, job_id,
                                   from_status, to_status, reason_code_id, comment, actor_id,
-                                  reference, reverses_event_id, reverses_occurred_at, run_id, effective_at, container_id, report_id)
+                                  reference, reverses_event_id, reverses_occurred_at, run_id, effective_at, container_id, report_id, details)
         VALUES (@Id, @At, @LotId, @Kind, @QtyDelta, @QtyAfter, @UomId,
                 @FromLocationId, @ToLocationId, @RelatedLotId, @JobId,
                 @FromStatus, @ToStatus, @ReasonCodeId, @Comment, @ActorId,
-                @Reference, @ReversesEventId, @ReversesOccurredAt, @RunId, coalesce(@EffectiveAt, @At), @ContainerId, @ReportId)
+                @Reference, @ReversesEventId, @ReversesOccurredAt, @RunId, coalesce(@EffectiveAt, @At), @ContainerId, @ReportId, @Details::jsonb)
         """;
 
     private const string DetailColumns = """
         e.id, e.lot_id, e.occurred_at, e.effective_at, e.event_kind AS kind, e.qty_delta, e.qty_after, e.from_location_id, e.to_location_id,
         e.from_status, e.to_status, e.related_lot_id, e.job_id, j.job_number, e.run_id, e.report_id, e.reason_code_id,
-        (SELECT r.id FROM ts.lot_event r WHERE r.lot_id = e.lot_id AND r.reverses_event_id = e.id LIMIT 1) AS reversed_by
+        (SELECT r.id FROM ts.lot_event r WHERE r.lot_id = e.lot_id AND r.reverses_event_id = e.id LIMIT 1) AS reversed_by,
+        e.reverses_event_id, e.container_id, e.details::text AS details
         """;
 
     private const string GetEventDetail = $"""
@@ -94,6 +95,13 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         SELECT {DetailColumns} FROM ts.lot_event e LEFT JOIN core.job j ON j.id = e.job_id
         WHERE e.lot_id = @LotId AND (e.occurred_at, e.id) > (@OccurredAt, @Id)
         ORDER BY e.occurred_at, e.id
+        """;
+
+    private const string StandingAfter = $"""
+        SELECT {DetailColumns} FROM ts.lot_event e LEFT JOIN core.job j ON j.id = e.job_id
+        WHERE e.lot_id = @LotId AND (e.effective_at, e.occurred_at, e.id) > (@EffectiveAt, @OccurredAt, @Id)
+          AND e.reverses_event_id IS NULL AND {LotEventSql.NotReversed}
+        ORDER BY e.effective_at, e.occurred_at, e.id
         """;
 
     private const string ReportEvents = $"""
@@ -377,6 +385,7 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
                 row.ReversesOccurredAt,
                 row.RunId,
                 row.ReportId,
+                row.Details,
             },
             cancellationToken);
 
@@ -409,6 +418,13 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     public Task<DateTimeOffset?> LatestCountOfLotAsync(Guid lotId, CancellationToken cancellationToken) =>
         session.QuerySingleOrDefaultAsync<DateTimeOffset?>(LatestCountOfLot, new { LotId = lotId }, cancellationToken);
+
+    public Task LockJobsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+        ids.Count == 0 ? Task.CompletedTask
+            : session.QueryAsync<Guid>("SELECT id FROM core.job WHERE id = ANY(@Ids) ORDER BY id FOR UPDATE", new { Ids = ids.ToArray() }, cancellationToken);
+
+    public Task<Guid?> GetContainerLocationAsync(Guid containerId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<Guid?>("SELECT location_equipment_id FROM core.container WHERE id = @Id", new { Id = containerId }, cancellationToken);
 
     public async Task<IReadOnlyList<PastEvent>> ListPastEventsAsync(Guid lotId, CancellationToken cancellationToken) =>
         [.. (await session.QueryAsync<PastEventRow>(PastEvents, new { LotId = lotId }, cancellationToken)).Select(r => r.ToDomain())];
@@ -455,6 +471,9 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     public async Task<IReadOnlyList<LotEventDetail>> ListEventsAfterAsync(Guid lotId, LotEventDetail after, CancellationToken cancellationToken) =>
         [.. (await session.QueryAsync<DetailRow>(EventsAfter, new { LotId = lotId, after.OccurredAt, after.Id }, cancellationToken)).Select(r => r.ToDetail())];
+
+    public async Task<IReadOnlyList<LotEventDetail>> ListStandingAfterAsync(Guid lotId, LotEventDetail after, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<DetailRow>(StandingAfter, new { LotId = lotId, after.EffectiveAt, after.OccurredAt, after.Id }, cancellationToken)).Select(r => r.ToDetail())];
 
     public async Task<IReadOnlyList<LotEventDetail>> ListReportEventsAsync(Guid reportId, CancellationToken cancellationToken) =>
         [.. (await session.QueryAsync<DetailRow>(ReportEvents, new { ReportId = reportId }, cancellationToken)).Select(r => r.ToDetail())];
@@ -694,6 +713,9 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         public Guid? ReportId { get; init; }
         public Guid? ReasonCodeId { get; init; }
         public Guid? ReversedBy { get; init; }
+        public Guid? ReversesEventId { get; init; }
+        public Guid? ContainerId { get; init; }
+        public string? Details { get; init; }
 
         public LotEventDetail ToDetail() => new()
         {
@@ -709,6 +731,9 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
             ReportId = ReportId,
             ReasonCodeId = ReasonCodeId,
             ReversedBy = ReversedBy,
+            ReversesEventId = ReversesEventId,
+            ContainerId = ContainerId,
+            Details = Details,
         };
     }
 

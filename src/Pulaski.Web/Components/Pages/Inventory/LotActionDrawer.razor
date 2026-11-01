@@ -267,6 +267,27 @@
                                 <dd>@Display.SiteTime(undo.OccurredAt, Sites.Site?.TimeZone)</dd>
                             </dl>
                             <p class="small text-muted">@InventoryView.ReversalNote(undo, Lot!)</p>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="lot-chain" checked="@_chain" @onchange="e => { _chain = e.Value is true; _chainCheck = null; }" />
+                                <label class="form-check-label" for="lot-chain">With everything after it that depends on it</label>
+                                <div class="form-text">Every later movement of this lot, and of lots split off it since, is reversed first, latest first. Check shows the list before anything is done.</div>
+                            </div>
+                            @if (_chainCheck is { } check)
+                            {
+                                <div class="small mb-2">
+                                    <div class="fw-semibold">@(check.Reversible ? $"It reverses {check.Steps.Count} {(check.Steps.Count == 1 ? "movement" : "movements")}, latest first:" : "It can't all be reversed:")</div>
+                                    <ol class="mb-1">
+                                        @foreach (var step in check.Steps)
+                                        {
+                                            <li>@step.LotName: @InventoryView.EventLabel(step.Kind).ToLowerInvariant()@(step.Quantity is { } q ? $" {InventoryView.Delta(q)}" : "")@(step.JobNumber is { } job ? $" ({job})" : ""), @Display.SiteTime(step.EffectiveAt, Sites.Site?.TimeZone)</li>
+                                        }
+                                    </ol>
+                                    @if (check.Problem is { } problem)
+                                    {
+                                        <div class="text-danger">@problem</div>
+                                    }
+                                </div>
+                            }
                         }
                         @ReasonField()
                         break;
@@ -392,7 +413,14 @@
         ? $"{lot.MaterialCode} · {InventoryView.LotLabel(lot.LotNumber, lot.IsBulk, lot.LocationCode)}"
         : Job is { } job ? $"{job.JobNumber} · {job.MaterialCode}" : Sites.Site?.Code ?? "";
 
-    private string SubmitLabel => Action switch
+    private bool _chain;
+    private ChainReversalDto? _chainCheck;
+
+    private string SubmitLabel => Action == LotAction.Reverse && _chain
+        ? _chainCheck is { Reversible: true } check ? $"Undo {check.Steps.Count} {(check.Steps.Count == 1 ? "movement" : "movements")}" : "Check"
+        : PlainSubmitLabel;
+
+    private string PlainSubmitLabel => Action switch
     {
         LotAction.Receive => "Receive",
         LotAction.Produce => "Record production",
@@ -644,6 +672,17 @@
         var comment = string.IsNullOrWhiteSpace(_comment) ? null : _comment.Trim();
         try
         {
+            // A chain undo's first click only checks; the drawer stays open with the list.
+            (LotTransactionResponse, string)? chained = null;
+            if (action == LotAction.Reverse && _chain)
+            {
+                chained = await ChainAsync(comment);
+                if (chained is null)
+                {
+                    return;
+                }
+            }
+
             var (response, message) = action switch
             {
                 LotAction.Receive => await ReceiveAsync(comment),
@@ -693,9 +732,10 @@
                         Comment = comment!,
                     }),
                     "corrected"),
+                LotAction.Reverse when chained is { } done => done,
                 LotAction.Reverse => Done(
                     await Api.ReverseMovementAsync(Lot!.Id, new ReverseMovementRequest { Version = Lot.Version, EventId = Movement!.Id, ReasonCodeId = _reasonId, Comment = comment }),
-                    $"had its latest movement ({InventoryView.EventLabel(Movement.Kind).ToLowerInvariant()}) reversed"),
+                    $"had a movement ({InventoryView.EventLabel(Movement.Kind).ToLowerInvariant()}) reversed"),
                 _ => throw new InvalidOperationException(),
             };
             await OnDone.InvokeAsync(new LotActionResult(response, message));
@@ -759,6 +799,22 @@
             EffectiveAt = EffectiveAt,
         });
         return (response, $"{QtyText} of {InventoryView.LotLabel(lot.LotNumber, lot.IsBulk, lot.LocationCode)} consumed by {job.JobNumber}");
+    }
+
+    // A chain undo (#79): the first click checks and lists what it would reverse; the second does it, refused if the chain changed meanwhile.
+    private async Task<(LotTransactionResponse, string)?> ChainAsync(string? comment)
+    {
+        var request = new ReverseChainRequest { EventId = Movement!.Id, ReasonCodeId = _reasonId, Comment = comment, ExpectedSteps = _chainCheck?.Steps.Select(s => s.EventId).ToList() };
+        if (_chainCheck is not { Reversible: true })
+        {
+            _chainCheck = await Api.ReverseChainAsync(Lot!.Id, request with { ExpectedSteps = null }, dryRun: true);
+            return null;
+        }
+
+        var done = await Api.ReverseChainAsync(Lot!.Id, request, dryRun: false);
+        _chainCheck = null;
+        return (new LotTransactionResponse { LotId = Lot.Id, LotNumber = Lot.LotNumber, Quantity = Lot.Quantity, Status = Lot.Status, Version = Lot.Version },
+            $"had {done.Steps.Count} {(done.Steps.Count == 1 ? "movement" : "movements")} reversed, latest first");
     }
 
     private async Task<(LotTransactionResponse, string)> SplitAsync(string? comment)

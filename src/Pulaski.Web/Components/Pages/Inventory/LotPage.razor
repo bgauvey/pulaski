@@ -342,6 +342,7 @@ else if (_error is null)
     private LotEventDto? _movement;
 
     private static readonly HashSet<string> Reversible = ["received", "adjusted", "scrapped", "moved", "status_changed", "shipped"];
+    private static readonly HashSet<string> PutBack = ["packed", "unpacked", "corrected"];
 
     // Changes of quantity alone, reversed even when later movements followed, if the stock allows (D-063).
     private static readonly HashSet<string> QuantityOnly = ["received", "adjusted", "scrapped"];
@@ -398,12 +399,14 @@ else if (_error is null)
 
     private bool May(LotAction action) => User.Can(LotActions.Permission(action), Sites.SiteId);
 
+    // Any movement that still stands (#79); the drawer says what reversing it does, and the API refuses one something later depends on,
+    // offering to undo the chain.
     private static bool CanReverse(LotDto lot, LotEventDto e) =>
-        !e.IsReversed && e.Kind != "reversed" && (
-            (lot.History.Count > 0 && lot.History[0].Id == e.Id && Reversible.Contains(e.Kind))
+        !e.IsReversed && e.ReversesEventId is null && e.Kind != "reversed" && (
+            Reversible.Contains(e.Kind)
             || QuantityOnly.Contains(e.Kind)
             || Declarations.Contains(e.Kind)
-            || (e.Kind == "moved" && e.RelatedLotId is not null)
+            || PutBack.Contains(e.Kind)
             || (e.Kind == "produced" && e.ReportId is null));
 
     private void Reverse(LotEventDto e)

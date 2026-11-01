@@ -314,6 +314,17 @@ internal static class InventoryEndpoints
                 new ReverseMovementCommand(id, request.Version, request.EventId, request.ReasonCodeId, request.Comment), ct)))
         .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
 
+        // A movement with everything after it that depends on it (#79): ?dryRun=true does it all and rolls back, to show what it would reverse.
+        lots.MapPost("/{id:guid}/reverse-chain", async Task<Ok<ChainReversalDto>> (
+            Guid id,
+            bool? dryRun,
+            ReverseChainRequest request,
+            ICommandHandler<ReverseChainCommand, ChainReversalDto> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new ReverseChainCommand(id, request.EventId, request.ReasonCodeId, request.Comment, dryRun ?? false, request.ExpectedSteps), ct)))
+        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
+
         // ---- Containers, labels and scanning (D-059) ----
         lots.MapPost("/{id:guid}/pack", async Task<Ok<LotTransactionResponse>> (
             Guid id,

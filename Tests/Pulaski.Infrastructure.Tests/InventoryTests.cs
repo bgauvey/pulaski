@@ -484,6 +484,74 @@ public sealed class InventoryTests(DatabaseFixture db)
             await db.SendAsync(new SplitLotCommand(a.LotId, await V(a.LotId), 10m, plant.Kg, null, null, "Before the release", Ago(2))));
     }
 
+    [Fact]
+    public async Task Earlier_moves_holds_shipments_packing_corrections_and_silo_merges_are_put_back_and_a_chain_undoes_in_one_step()
+    {
+        var plant = await CreatePlantAsync();
+        var hold = await ReasonAsync("hold", "QA-HOLD");
+        var fix = await ReasonAsync("inventory_adjustment", "COUNT");
+        async Task<long> V(Guid lot) => await VersionAsync(lot);
+        async Task<LotDto> Lot(Guid lot) => await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot));
+        async Task<LotTransactionResponse> Reverse(Guid lot, Guid movement) => await db.SendAsync(new ReverseMovementCommand(lot, await V(lot), movement, fix, "Entered wrongly"));
+        Guid Find(LotDto lot, string kind) => lot.History.First(h => h.Kind == kind && h.ReversesEventId is null && !h.IsReversed).Id;
+
+        // A move with a write-off after it: the move is reversed (the lot hasn't moved since), the write-off stays.
+        var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-RA-" + _suffix, 100m, plant.Kg));
+        await db.SendAsync(new MoveLotCommand(a.LotId, await V(a.LotId), plant.Staging));
+        await db.SendAsync(new WriteOffLotCommand(a.LotId, await V(a.LotId), 5m, plant.Kg, fix, "Spill"));
+        await Reverse(a.LotId, Find(await Lot(a.LotId), LotEventKind.Moved));
+        Assert.Equal((plant.StoresCode, 95m), ((await Lot(a.LotId)).Lot.LocationCode, (await Lot(a.LotId)).Lot.Quantity));
+
+        // Held, then released: the hold isn't the latest status change, so it waits for the release to be reversed first.
+        await db.SendAsync(new ChangeLotStatusCommand(a.LotId, await V(a.LotId), LotStatus.OnHold, hold, "Lab"));
+        await db.SendAsync(new ChangeLotStatusCommand(a.LotId, await V(a.LotId), LotStatus.Available, Comment: "Cleared"));
+        var holdRow = (await Lot(a.LotId)).History.First(h => h.Kind == LotEventKind.StatusChanged && h.ToStatus == LotStatus.OnHold).Id;
+        await Assert.ThrowsAsync<DomainRuleException>(() => Reverse(a.LotId, holdRow));
+
+        // A part shipment with a write-off after it comes back at its time.
+        await db.SendAsync(new ShipLotCommand(a.LotId, await V(a.LotId), 20m, plant.Kg, "SO-9"));
+        await db.SendAsync(new WriteOffLotCommand(a.LotId, await V(a.LotId), 5m, plant.Kg, fix, "Spill"));
+        await Reverse(a.LotId, Find(await Lot(a.LotId), LotEventKind.Shipped));
+        Assert.Equal(90m, (await Lot(a.LotId)).Lot.Quantity);
+
+        // A correction is put back; packing comes undone, and unpacking is undone into the same pallet.
+        await db.SendAsync(new CorrectLotCommand(a.LotId, await V(a.LotId), "R-RA2-" + _suffix, null, null, "Typo"));
+        await Reverse(a.LotId, Find(await Lot(a.LotId), LotEventKind.Corrected));
+        Assert.Equal("R-RA-" + _suffix, (await Lot(a.LotId)).Lot.LotNumber);
+        CreatedResponse pallet = await db.SendAsync(new CreateContainerCommand(plant.Site, null, "pallet", plant.Stores));
+        await db.SendAsync(new PackLotCommand(a.LotId, await V(a.LotId), pallet.Id));
+        await Reverse(a.LotId, Find(await Lot(a.LotId), LotEventKind.Packed));
+        Assert.Null((await Lot(a.LotId)).Lot.ContainerId);
+
+        // A lot that joined a silo comes back out as itself: the balance gives its quantity back.
+        CreatedResponse silo = await db.SendAsync(new CreateEquipmentCommand(
+            plant.Site, "RSILO-" + _suffix, "Silo", null, "work_center", "storage_zone", false, false, true, null, ComminglesLots: true));
+        var s = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-RS-" + _suffix, 40m, plant.Kg));
+        var balance = await db.SendAsync(new MoveLotCommand(s.LotId, await V(s.LotId), silo.Id));
+        await Reverse(s.LotId, Find(await Lot(s.LotId), LotEventKind.Merged));
+        Assert.Equal((40m, LotStatus.Available, 0m), ((await Lot(s.LotId)).Lot.Quantity, (await Lot(s.LotId)).Lot.Status, (await Lot(balance.LotId)).Lot.Quantity));
+
+        // A chain: received, written off, split, the part written off. The receipt alone can't go (its stock was used); its chain can.
+        var c = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-RC-" + _suffix, 100m, plant.Kg));
+        await db.SendAsync(new WriteOffLotCommand(c.LotId, await V(c.LotId), 10m, plant.Kg, fix, "Spill"));
+        var part = await db.SendAsync(new SplitLotCommand(c.LotId, await V(c.LotId), 30m, plant.Kg, null, plant.Staging));
+        await db.SendAsync(new WriteOffLotCommand(part.LotId, await V(part.LotId), 5m, plant.Kg, fix, "Spill"));
+        var receipt = Find(await Lot(c.LotId), LotEventKind.Received);
+        await Assert.ThrowsAsync<DomainRuleException>(() => Reverse(c.LotId, receipt));
+
+        var check = await db.SendAsync(new ReverseChainCommand(c.LotId, receipt, fix, "Wrong delivery", DryRun: true));
+        Assert.Equal((false, true, 4), (check.Applied, check.Reversible, check.Steps.Count));
+        Assert.Equal([LotEventKind.Scrapped, LotEventKind.Split, LotEventKind.Scrapped, LotEventKind.Received], check.Steps.Select(x => x.Kind));
+        Assert.Equal(60m, (await Lot(c.LotId)).Lot.Quantity);
+
+        await Assert.ThrowsAsync<ConflictException>(() =>
+            db.SendAsync(new ReverseChainCommand(c.LotId, receipt, fix, "Wrong delivery", DryRun: false, ExpectedSteps: [.. check.Steps.Skip(1).Select(x => x.EventId)])));
+        var done = await db.SendAsync(new ReverseChainCommand(c.LotId, receipt, fix, "Wrong delivery", DryRun: false, ExpectedSteps: [.. check.Steps.Select(x => x.EventId)]));
+        Assert.True(done.Applied);
+        Assert.Equal((LotStatus.Cancelled, 0m), ((await Lot(c.LotId)).Lot.Status, (await Lot(c.LotId)).Lot.Quantity));
+        Assert.Equal(LotStatus.Cancelled, (await Lot(part.LotId)).Lot.Status);
+    }
+
     private async Task VersionThenAsync(Func<long, WriteOffLotCommand> command) =>
         await db.SendAsync(command(await VersionAsync(command(0).LotId)));
 

@@ -237,6 +237,12 @@ public interface IInventoryRepository
     /// <summary>A lot's movements recorded after <paramref name="after"/>, oldest first: what has happened to it since.</summary>
     Task<IReadOnlyList<LotEventDetail>> ListEventsAfterAsync(Guid lotId, LotEventDetail after, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The lot's movements that count after <paramref name="after"/> and still stand (#79): not reversed and not reversals themselves, in
+    /// effective order. What a reversal must not contradict, and what a chain undo takes back.
+    /// </summary>
+    Task<IReadOnlyList<LotEventDetail>> ListStandingAfterAsync(Guid lotId, LotEventDetail after, CancellationToken cancellationToken);
+
     /// <summary>The lot movements a production report recorded (D-063), oldest first.</summary>
     Task<IReadOnlyList<LotEventDetail>> ListReportEventsAsync(Guid reportId, CancellationToken cancellationToken);
 
@@ -302,6 +308,9 @@ public interface IInventoryRepository
     /// <summary>The job locked <c>FOR UPDATE</c>, so declarations on one job serialize (D-027).</summary>
     Task<InventoryJob?> GetJobForUpdateAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>Locks the jobs <c>FOR UPDATE</c> in id order, in SQL (#79: a chain undo takes its jobs before its lots, D-027).</summary>
+    Task LockJobsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
     /// <summary>The lots the job has produced (<c>core.lot.produced_by_job_id</c>).</summary>
     Task<IReadOnlyList<Guid>> ListLotsProducedByJobAsync(Guid jobId, CancellationToken cancellationToken);
 
@@ -313,6 +322,9 @@ public interface IInventoryRepository
 
     /// <summary>The lot's quantity movements in the order they count: by effective time, then record time (D-057).</summary>
     Task<IReadOnlyList<QuantityPoint>> ListQuantityTimelineAsync(Guid lotId, CancellationToken cancellationToken);
+
+    /// <summary>Where the container is now; null when it doesn't exist (#79, putting a lot back into it).</summary>
+    Task<Guid?> GetContainerLocationAsync(Guid containerId, CancellationToken cancellationToken);
 
     /// <summary>The lot's movements as its state at a past time is worked out from (#77), in the command's transaction.</summary>
     Task<IReadOnlyList<PastEvent>> ListPastEventsAsync(Guid lotId, CancellationToken cancellationToken);
@@ -349,7 +361,8 @@ public sealed record LotEventRow(
     Guid? RunId = null,
     DateTimeOffset? EffectiveAt = null,
     Guid? ContainerId = null,
-    Guid? ReportId = null);
+    Guid? ReportId = null,
+    string? Details = null);
 
 /// <summary>
 /// One movement of a lot as reversing it needs it (D-063): what it did, what it belonged to, and the reversal of it, if any.
@@ -370,6 +383,15 @@ public sealed record LotEventDetail
 
     /// <summary>The reversal that undid it; null while it stands.</summary>
     public Guid? ReversedBy { get; init; }
+
+    /// <summary>The movement it reverses, when it is a reversal (whatever its kind, #79).</summary>
+    public Guid? ReversesEventId { get; init; }
+
+    /// <summary>The container it packed into, unpacked from or moved with (D-059).</summary>
+    public Guid? ContainerId { get; init; }
+
+    /// <summary>A correction's lot details before and after it, as JSON (#79); null for other movements and older corrections.</summary>
+    public string? Details { get; init; }
 }
 
 /// <summary>A parent-to-child lot edge: <c>declared</c> by a job, or from a <c>split</c> or <c>merge</c> (D-030, no job).</summary>

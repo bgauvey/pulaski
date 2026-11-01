@@ -967,18 +967,23 @@ Something recorded wrongly is put right by reversing it, then recording what rea
 1. Open the lot's page and find the movement in its **History**.
 2. Click **Reverse** on its row. Rows that can't be reversed (a reversal, or a movement reversed already) have no button.
 3. Read what the reversal will do, choose an adjustment **Reason** and write a **Comment** saying why. Both are required.
-4. Click **Reverse**. If something since depends on it, Pulaski says what (for example *Since then: consumed into WO-1001-10*) so you can reverse that first.
+4. Click **Reverse**. If something since depends on it, Pulaski says what (for example *Since then: consumed into WO-1001-10*) so you can reverse that first, or undo it all at once (below).
 5. If an amount was wrong rather than the whole movement, record the right amount again as usual.
+
+**Undo a movement with everything after it.** Tick **With everything after it that depends on it**, choose the reason and comment, and click **Check**: the drawer lists every movement it would reverse, latest first (this lot's later movements, and those of lots split off it since). Nothing is done yet. If one of them can't be reversed, it says which and why. Click **Undo N movements** to do them all in one go; if anything changed in between, it asks you to check again.
 
 What can be reversed on a lot's page:
 
 | Movement | What the reversal does | When it can't |
 | --- | --- | --- |
-| The **latest** receipt, write-up, write-off, move, hold or release, or shipment | Puts the lot back as it was; a reversed receipt of a whole lot makes it *cancelled*. | Only the latest, for moves, holds and shipments. |
-| An **earlier** receipt, write-up or write-off | Puts back only the quantity, at the time it counted. | The lot's stock would go below zero at some time since, or a posted count came after it. |
+| A receipt, write-up, write-off or shipment | Puts back the quantity at the time it counted; a reversed receipt of a whole lot makes it *cancelled*, a reversed shipment of all of it makes it available again. | The lot's stock would go below zero at some time since, or a posted count came after it; a whole shipment, once the lot has changed status again. |
+| A **move** | The lot goes back to where it was. | The lot has moved since (reverse that move first), or it moved with its container (move the container back). |
+| A **hold or release** | The lot goes back to the status it had. | Its status has changed again since. |
+| **Packing** or **unpacking** | The lot comes out of the container (back into any it was in before, and back where it was if packing moved it), or goes back into it. | The lot has moved or changed container since, or the container isn't where the lot is any more. |
+| A **correction** | The lot number, supplier lot and expiry go back to what they were. | They have been corrected again since, the old number is taken by another lot, or the correction was made before Pulaski kept what it replaced. |
 | **Consumption** into a job | The quantity goes back to the lot; it stops being a parent of what the job made unless more of it went into that job. | The job is closed or cancelled, or the lot was shipped since. |
 | A **split** | The new lot is cancelled and its quantity goes back to the lot it came from. | Anything has happened to the new lot since. |
-| A **merge** | The lot that was merged gets its quantity and status back; the lot it joined goes down by that much. | It joined a balance where lots mix (write the balance down instead), or the lot it joined no longer holds that much. |
+| A **merge** | The lot that was merged gets its quantity and status back; the lot it joined goes down by that much. A lot that joined a balance where lots mix comes back out as itself, and the balance gives its quantity back. | The lot it joined no longer holds that much at some time since. |
 | A **transfer between balances** | The quantity goes back to the balance it came from. | The receiving balance no longer holds it. |
 | **Production** | Reversed with its production report, on the job's page (below). | — |
 
@@ -2216,7 +2221,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Inventory is declared by hand.** Consumption and production are entered by people; loading lots at feed points, consumption by time window, backflush and scanning aren't built. Genealogy is per job (see [Inventory, in detail](#in-detail-5)).
 - **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, and scanning 2D codes or supplier barcodes beyond reading their text. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
-- **Reversing:** moves, holds and shipments only when they are the lot's latest movement; corrections of lot details, packing and unpacking aren't reversed (put them right with another movement). A lot that joined a balance where lots mix can't be taken back out as itself. Reversal is one movement at a time: there is no undoing a chain of dependent movements in one step.
+- **Reversing:** a chain undo follows a lot and the lots split off it, not merges into other lots, consumption into jobs or the output made from it; corrections made before this version can't be reversed.
 - **Genealogy through a silo is an estimate** from the declared movements: a level tag can be bound to a silo, but its readings aren't used yet to confirm when it was empty or how it flowed. A reversed movement and its reversal are left out of the estimate, as if neither happened.
 - **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
 - **Allocations are kept up to date by hand:** nothing refreshes them when stock moves or the schedule changes; click **Refresh**. Suggestions don't prefer lots near the line, lots already in a container, or whole lots, and there are no picking lists; a substitution (a material the job doesn't plan) isn't allocated. Allocating doesn't stop another job consuming the stock: it only warns.
@@ -2283,8 +2288,8 @@ Only an **available** lot with stock can be consumed. Release a held lot first; 
 **"Choose an adjustment reason" with an empty list.**
 No reasons are set up: ask your administrator to load `db/seed-reasons.sql`.
 
-**"Only the latest movement … can be reversed when it is a …".**
-A move, hold or shipment is reversed only while it is the lot's latest movement. Reverse the later movements first, newest first, or record a new movement instead.
+**"… has moved since" or "… status has changed since".**
+A move is reversed only while it is the lot's latest move, and a hold or release while it is its latest status change. Reverse the later one first, or tick **With everything after it that depends on it** to undo them together.
 
 **I can't post a count.**
 Every lot must have a count (enter 0 if it isn't there), the counts must be saved, and a lot marked *changed since counted* must be counted again.

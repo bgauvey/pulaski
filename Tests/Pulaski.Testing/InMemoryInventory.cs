@@ -645,6 +645,13 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         }
     }
 
+    public Dictionary<Guid, Guid> ContainerLocations { get; } = [];
+
+    public Task LockJobsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task<Guid?> GetContainerLocationAsync(Guid containerId, CancellationToken cancellationToken) =>
+        Task.FromResult(ContainerLocations.TryGetValue(containerId, out var at) ? at : (Guid?)null);
+
     public Task<IReadOnlyList<PastEvent>> ListPastEventsAsync(Guid lotId, CancellationToken cancellationToken)
     {
         lock (_lock)
@@ -698,6 +705,9 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         ReportId = e.Row.ReportId,
         ReasonCodeId = e.Row.ReasonCodeId,
         ReversedBy = _events.FirstOrDefault(r => r.Row.LotId == e.Row.LotId && r.Row.ReversesEventId == e.Row.Id).Row?.Id,
+        ReversesEventId = e.Row.ReversesEventId,
+        ContainerId = e.Row.ContainerId,
+        Details = e.Row.Details,
     };
 
     public Task<LotEventDetail?> GetEventAsync(Guid lotId, Guid eventId, CancellationToken cancellationToken)
@@ -726,6 +736,18 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         {
             var index = _events.FindIndex(e => e.Row.Id == after.Id);
             return Task.FromResult<IReadOnlyList<LotEventDetail>>([.. _events.Skip(index + 1).Where(e => e.Row.LotId == lotId).Select(Detail)]);
+        }
+    }
+
+    public Task<IReadOnlyList<LotEventDetail>> ListStandingAfterAsync(Guid lotId, LotEventDetail after, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<LotEventDetail>>([.. _events
+                .Where(e => e.Row.LotId == lotId && e.Row.Id != after.Id && e.Row.ReversesEventId is null)
+                .Select(Detail)
+                .Where(d => d.ReversedBy is null && (d.EffectiveAt, d.OccurredAt).CompareTo((after.EffectiveAt, after.OccurredAt)) > 0)
+                .OrderBy(d => d.EffectiveAt).ThenBy(d => d.OccurredAt)]);
         }
     }
 

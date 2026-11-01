@@ -330,10 +330,27 @@ internal sealed class CorrectLotHandler(
                 Comment = comment,
             });
         var version = await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
-        await inventory.InsertEventAsync(new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, Comment: comment), envelope.OccurredAt, cancellationToken);
+        // The details before and after are kept on the row, so the correction can be reversed (#79).
+        var details = CorrectionDetails.Write(new LotDetails(lot.LotNumber, lot.SupplierLot, lot.ExpiresAt), new LotDetails(after.LotNumber, after.SupplierLot, after.ExpiresAt));
+        await inventory.InsertEventAsync(new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, Comment: comment, Details: details),
+            envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return InventoryRules.Response(after, version);
     }
+}
+
+/// <summary>A correction's lot details before and after it, as kept on its row (#79).</summary>
+internal static class CorrectionDetails
+{
+    private static readonly System.Text.Json.JsonSerializerOptions Json = new(System.Text.Json.JsonSerializerDefaults.Web);
+
+    public static string Write(LotDetails before, LotDetails after) => System.Text.Json.JsonSerializer.Serialize(new Pair(before, after), Json);
+
+    /// <returns>Null for a row without them (a correction made before they were kept).</returns>
+    public static (LotDetails Before, LotDetails After)? Read(string? json) =>
+        json is null ? null : System.Text.Json.JsonSerializer.Deserialize<Pair>(json, Json) is { } pair ? (pair.Before, pair.After) : null;
+
+    private sealed record Pair(LotDetails Before, LotDetails After);
 }

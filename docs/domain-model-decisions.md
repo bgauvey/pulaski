@@ -1391,7 +1391,7 @@ The job page lists the report as reversed (correction rows aren't listed). Repor
 
 **Also fixed.** Production by shift (D-044) now leaves out machine counts, as D-050 intended.
 
-**Not done.** Reversing moves, holds and shipments that aren't the latest movement, lot corrections, packing; undoing a chain of dependent movements in one step; editing a report in place.
+**Not done.** Editing a report in place. Earlier moves, holds and shipments, corrections, packing, balance merges and chain undo came with D-077.
 
 ## Lot allocations and recommendations (D-064, proposed)
 
@@ -1732,6 +1732,42 @@ is stored or changed for this.
 
 **Screens.** The lot drawer offers **Counts from** for the new movements, with a note of each one's rule. The lot page has **As it was**.
 Stock on a date shows on hold and where, and exports a row per material and location.
+
+## Lifting reversal limits (D-077, proposed)
+
+Issue #79. Moves, holds and shipments were reversed only as the lot's latest movement; corrections and packing weren't reversed; a lot that
+joined a balance where lots mix couldn't come back out; and dependent movements were undone one at a time.
+
+**What hasn't changed since** (`ListStandingAfterAsync`: the lot's movements after it, in effective order, that stand: not reversed and not
+reversals). A movement is reversed (a compensating row at its effective time, as D-063) when what it changed hasn't changed again:
+- a move: no later standing move of the lot (`Lot.Reverse` also checks the lot is where it moved it); a move made with its container isn't
+  reversed alone;
+- a hold or release, or a shipment that ended the lot: no later standing status change (and the lot is in the status it set);
+- any quantity: it fits the lot's history from then on (`EnsureFitsAsync`), so a part shipment or a write-off behaves like a receipt.
+
+**Packing** (`Lot.ReversePacking`): undoing a pack takes the lot out (back into the container it was in just before, from its history, and
+back to where it was if the pack moved it); undoing an unpack puts it back into the container, which must be where the lot is. The rows are
+`packed`/`unpacked` naming the container they leave it in, with `reverses_event_id`, so a lot's container at a past time still follows.
+
+**Corrections**: `ts.lot_event.details` (jsonb, migration 0045) keeps a correction's lot details before and after (`CorrectionDetails`).
+Reversing writes a `corrected` row putting the earlier ones back (`Lot.RevertCorrection`), refused when they were corrected again since or the
+old number is taken. Corrections from before 0045 have no details and stay irreversible.
+
+**Balances**: a merge into a balance where lots mix is reversed like any merge: the balance gives the quantity back if it holds it at every
+time since, and the lot gets its quantity and status back.
+
+**Whether a row is a reversal** is `reverses_event_id`, whatever its kind; such rows aren't reversed.
+
+**Chain undo** (`ReverseChainCommand`, `POST /api/lots/{id}/reverse-chain?dryRun=`, `inventory.correct`): the movement, every standing movement
+of the lot after it, and every standing movement of a lot split off it since (found from the split's other half), recursively; reversed latest
+first through the same single reversal (`ReverseMovementHandler.ReverseAsync`, inside one transaction). Jobs and then lots are locked first, in
+id order in SQL (D-027); a pair's other half on a lot outside the chain is locked by its step. A dry run does everything and rolls back, so the
+check is exactly what confirming does; it reports the steps and the first that can't be reversed, with why. Confirming sends the steps
+(`ExpectedSteps`) and is refused (409) if they changed. At most 200 steps. It doesn't follow merges into other lots, consumption into jobs or
+their output.
+
+**Screens.** Every standing movement on a lot's page has **Reverse**. The drawer explains each kind and offers **With everything after it that
+depends on it**: **Check** lists the chain, **Undo N movements** does it.
 
 ## Application architecture
 

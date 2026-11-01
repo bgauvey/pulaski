@@ -887,6 +887,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<LotTransactionResponse> ReverseMovementAsync(Guid id, ReverseMovementRequest request, CancellationToken ct = default) =>
         SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{id}/reverse", request, ct);
 
+    /// <summary>Checks (<paramref name="dryRun"/>) or does a chain undo of a movement and what depends on it (#79).</summary>
+    public Task<ChainReversalDto> ReverseChainAsync(Guid id, ReverseChainRequest request, bool dryRun, CancellationToken ct = default) =>
+        SendAsync<ChainReversalDto>(HttpMethod.Post, $"api/lots/{id}/reverse-chain?dryRun={(dryRun ? "true" : "false")}", request, ct);
+
     public Task<IReadOnlyList<StockCountSummaryDto>> ListStockCountsAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<StockCountSummaryDto>>($"api/inventory/counts?siteId={siteId}", ct);
 

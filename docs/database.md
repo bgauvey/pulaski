@@ -1527,6 +1527,7 @@ One row for every job status change, written in the same transaction as the chan
 | `reference` | text | yes | A shipment's delivery number, or the count a count adjustment came from (D-030). At most 100 characters. |
 | `reverses_event_id`, `reverses_occurred_at` | uuid, timestamptz | yes | For a reversal, the movement it undoes and that movement's time (no FK into history, D-010). Indexed with `lot_id`. A movement some row reverses counts as never made wherever a job's consumption, produced lots or genealogy are read (D-063). |
 | `report_id` | uuid | yes | For production, and the reversals of a report: the production report (`ts.production_count.report_id`, D-063). Indexed. |
+| `details` | jsonb | yes | A correction's lot details before and after it (number, supplier lot, expiry), so it can be reversed (#79, D-077); null for other movements and for corrections before migration 0045. |
 | `actor_user_id` | uuid | yes | Who, once `sec.app_user` exists. |
 | `actor_id` | text | yes | Who, as on `evt.event` (`issuer\|subject`, `anonymous` until sign-in). |
 

@@ -669,3 +669,24 @@ public sealed record AllocationSourceDto
     public decimal Quantity { get; init; }
     public required string Precision { get; init; }
 }
+
+/// <summary>
+/// What a chain undo takes back (#79): every movement, latest first, and whether all of it can be reversed. Applied when it was done; a
+/// check (dry run) does it all and rolls back.
+/// </summary>
+public sealed record ChainReversalDto
+{
+    public bool Applied { get; init; }
+    public bool Reversible { get; init; }
+    public IReadOnlyList<ChainStepDto> Steps { get; init; } = [];
+
+    /// <summary>The step that can't be reversed and why; null when every step can.</summary>
+    public string? Problem { get; init; }
+
+    /// <summary>How many steps, latest first, went through before the problem.</summary>
+    public int DoneBeforeProblem { get; init; }
+}
+
+/// <summary>One movement a chain undo reverses: which lot, what it was, its quantity and when it counted.</summary>
+public sealed record ChainStepDto(Guid LotId, string LotName, Guid EventId, string Kind, decimal? Quantity, DateTimeOffset EffectiveAt, string? JobNumber);
+
