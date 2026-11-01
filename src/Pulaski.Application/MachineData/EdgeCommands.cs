@@ -473,9 +473,12 @@ internal sealed class CreateEquipmentTagHandler(IUnitOfWork unitOfWork, IEdgeRep
         }
 
         var equipment = await edge.GetTagEquipmentAsync(command.EquipmentId, cancellationToken) ?? throw new NotFoundException($"Equipment {command.EquipmentId} not found.");
-        if (equipment.SiteId != node.SiteId || !equipment.TracksState)
+        // A hopper's consumed counter or a silo's level (#33, D-060) goes on equipment that holds inventory; everything else on equipment with a state.
+        var stocked = equipment.HoldsInventory && command.Role is TagRoles.ConsumedCount or TagRoles.Level;
+        if (equipment.SiteId != node.SiteId || !(equipment.TracksState || stocked))
         {
-            throw new DomainRuleException($"Bind tags to equipment of {node.Code}'s site that tracks state; {equipment.Code} doesn't qualify.");
+            throw new DomainRuleException(
+                $"Bind tags to equipment of {node.Code}'s site that tracks state (a consumed counter or a level may go on one that holds inventory); {equipment.Code} doesn't qualify.");
         }
 
         var tag = new EquipmentTagRecord(

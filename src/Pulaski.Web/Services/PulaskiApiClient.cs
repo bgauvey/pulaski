@@ -700,6 +700,21 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> SetFlowAsync(Guid locationId, SetFlowRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/inventory/locations/{locationId}/flow", request, ct);
 
+    public Task<LotTransactionResponse> LoadLotAsync(Guid lotId, LoadLotRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{lotId}/load", request, ct);
+
+    public Task<IReadOnlyList<FeedPointDto>> ListFeedPointsAsync(Guid? siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<FeedPointDto>>(Query("api/inventory/feed-points", ("siteId", siteId)), ct);
+
+    public Task<IReadOnlyList<FeedShortfallDto>> ListFeedShortfallsAsync(Guid? siteId, string status = "open", CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<FeedShortfallDto>>(Query("api/inventory/feed-shortfalls", ("siteId", siteId), ("status", status)), ct);
+
+    public Task<VersionResponse> ResolveFeedShortfallAsync(Guid id, ResolveShortfallRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/feed-shortfalls/{id}/resolve", request, ct);
+
+    public Task<VersionResponse> DismissFeedShortfallAsync(Guid id, DismissShortfallRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/feed-shortfalls/{id}/dismiss", request, ct);
+
     public Task<VersionResponse> SetMadeFromAsync(Guid lotId, SetMadeFromRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/lots/{lotId}/made-from", request, ct);
 

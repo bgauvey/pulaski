@@ -118,12 +118,13 @@ internal sealed class ReportProductionHandler(
     IEventFactory events,
     IIdGenerator ids,
     TimeProvider timeProvider,
-    ILineBatchSizes? lineBatches = null) : ICommandHandler<ReportProductionCommand, ReportProductionResponse>
+    ILineBatchSizes? lineBatches = null,
+    IFeedRepository? feeds = null) : ICommandHandler<ReportProductionCommand, ReportProductionResponse>
 {
     public async Task<ReportProductionResponse> HandleAsync(ReportProductionCommand command, CancellationToken cancellationToken)
     {
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
-        var result = await new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches)
+        var result = await new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds)
             .ReportAsync(command, onStop: false, timeProvider.GetUtcNow(), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return result;
@@ -142,7 +143,8 @@ internal sealed class ProductionReporter(
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    ILineBatchSizes? lineBatches = null)
+    ILineBatchSizes? lineBatches = null,
+    IFeedRepository? feeds = null)
 {
     /// <param name="command">The report.</param>
     /// <param name="onStop">The report is the partial batch of a run being ended now, by a pause or completion with a reason.</param>
@@ -292,6 +294,13 @@ internal sealed class ProductionReporter(
         }
 
         warnings.AddRange(lots.SelectMany(l => l.Warnings));
+
+        // Components taken automatically (#33): backflushed, or shared among the lots loaded at the line's feed points while it was made.
+        if (feeds is not null)
+        {
+            warnings.AddRange(await new FeedAutomation(inventory, units, feeds, eventLog, events, ids).OnReportAsync(job, run, reportId, good + scrap, occurredAt, now, cancellationToken));
+        }
+
         return new ReportProductionResponse
         {
             ReportId = reportId,

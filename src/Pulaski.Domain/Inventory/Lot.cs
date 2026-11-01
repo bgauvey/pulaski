@@ -39,6 +39,9 @@ public static class LotEventKind
     public const string Packed = "packed";
     public const string Unpacked = "unpacked";
 
+    /// <summary>Loaded at a feed point it is already at (#33): no quantity, the feed point as where it went.</summary>
+    public const string Loaded = "loaded";
+
     /// <summary>The single-lot movements <see cref="Lot.Reverse"/> undoes (D-030).</summary>
     public static IReadOnlyList<string> Reversible { get; } = [Received, Adjusted, Scrapped, Moved, StatusChanged, Shipped];
 

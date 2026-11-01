@@ -368,7 +368,9 @@ public sealed record LotEventRow(
     DateTimeOffset? EffectiveAt = null,
     Guid? ContainerId = null,
     Guid? ReportId = null,
-    string? Details = null);
+    string? Details = null,
+    string? AutoSource = null,
+    Guid? SourceRef = null);
 
 /// <summary>
 /// One movement of a lot as reversing it needs it (D-063): what it did, what it belonged to, and the reversal of it, if any.
@@ -471,6 +473,9 @@ public sealed record InventoryLocation
     /// <summary>Takes one material at a time (D-032).</summary>
     public bool SingleMaterial { get; init; }
     public bool IsActive { get; init; }
+
+    /// <summary>A feed point (#33): where lots are loaded onto a line.</summary>
+    public bool IsFeedPoint { get; init; }
 }
 
 public sealed record InventoryMaterial

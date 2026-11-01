@@ -149,6 +149,25 @@
                         @ReasonField()
                         break;
 
+                    case LotAction.Load:
+                        <div class="mb-3">
+                            <label class="form-label" for="lot-feed">Feed point</label>
+                            <select id="lot-feed" class="form-select" @bind="_locationId">
+                                <option value="@Guid.Empty">@(_feedPoints.Count == 0 ? "No feed points at this site" : "Choose a feed point…")</option>
+                                @foreach (var f in _feedPoints)
+                                {
+                                    <option value="@f.Id">@f.Code · @f.Name@(f.LineCode is { } line ? $" ({line})" : "")</option>
+                                }
+                            </select>
+                        </div>
+                        <p class="small text-muted">
+                            @(_locationId == Lot!.LocationId
+                                ? "It is there already: it feeds from now, and the lot of its material loaded before it stops feeding."
+                                : $"The whole lot moves there, all {InventoryView.Qty(Lot.Quantity)} {Lot.UomCode}, and feeds from now.")
+                            Automated consumption (backflush, time window, a counter) takes from it while it is loaded.
+                        </p>
+                        break;
+
                     case LotAction.Move:
                         @LocationField(Lot!.LocationId)
                         @if (Lot.IsBulk)
@@ -360,6 +379,7 @@
     private IReadOnlyList<UomDto> _uoms = [];
     private IReadOnlyList<MaterialDto> _materials = [];
     private IReadOnlyList<InventoryLocationDto> _locations = [];
+    private IReadOnlyList<FeedPointDto> _feedPoints = [];
     private IReadOnlyList<ReasonCodeDto> _reasons = [];
     private IReadOnlyList<DeclarableJobDto> _jobs = [];
     private IReadOnlyList<JobComponentUseDto> _components = [];
@@ -428,6 +448,7 @@
         LotAction.WriteUp => "Write up",
         LotAction.WriteOff => "Write off",
         LotAction.Move => "Move",
+        LotAction.Load => "Load",
         LotAction.Hold => _holdStatus == "quarantine" ? "Quarantine" : "Hold",
         LotAction.Release => "Release",
         LotAction.Split => "Split",
@@ -446,6 +467,7 @@
         LotAction.WriteUp => _quantity > 0 && _reasonId != Guid.Empty,
         LotAction.WriteOff => _reasonId != Guid.Empty,
         LotAction.Move => _locationId != Guid.Empty && (Lot?.IsBulk != true || _quantity > 0),
+        LotAction.Load => _locationId != Guid.Empty,
         LotAction.Hold => _reasonId != Guid.Empty,
         LotAction.Split => _quantity > 0 && _uomId != Guid.Empty,
         LotAction.Merge => _mergeIds.Count > 0,
@@ -517,6 +539,10 @@
                     break;
                 case LotAction.Move when Lot is not null:
                     _uomId = Lot.UomId;
+                    break;
+                case LotAction.Load when Lot is not null:
+                    _feedPoints = await Api.ListFeedPointsAsync(Lot.SiteId);
+                    _locationId = _feedPoints.FirstOrDefault(f => f.Id == Lot.LocationId)?.Id ?? Guid.Empty;
                     break;
                 case LotAction.Hold when Lot?.Status == "on_hold":
                     _holdStatus = "quarantine";
@@ -701,6 +727,9 @@
                         EffectiveAt = EffectiveAt,
                     }),
                     $"{(Lot.IsBulk ? QtyText + " " : "")}moved to {LocationCode(_locationId)}"),
+                LotAction.Load => Done(
+                    await Api.LoadLotAsync(Lot!.Id, new LoadLotRequest { Version = Lot.Version, FeedPointId = _locationId, Comment = comment }),
+                    $"loaded at {_feedPoints.FirstOrDefault(f => f.Id == _locationId)?.Code}"),
                 LotAction.Hold => Done(
                     await Api.ChangeLotStatusAsync(Lot!.Id, new ChangeLotStatusRequest { Version = Lot.Version, Status = _holdStatus, ReasonCodeId = _reasonId, Comment = comment, EffectiveAt = EffectiveAt }),
                     _holdStatus == "quarantine" ? "quarantined" : "put on hold"),

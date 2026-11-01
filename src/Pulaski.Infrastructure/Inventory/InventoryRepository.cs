@@ -65,11 +65,13 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         INSERT INTO ts.lot_event (id, occurred_at, lot_id, event_kind, qty_delta, qty_after, uom_id,
                                   from_location_id, to_location_id, related_lot_id, job_id,
                                   from_status, to_status, reason_code_id, comment, actor_id,
-                                  reference, reverses_event_id, reverses_occurred_at, run_id, effective_at, container_id, report_id, details)
+                                  reference, reverses_event_id, reverses_occurred_at, run_id, effective_at, container_id, report_id, details,
+                                  auto_source, source_ref)
         VALUES (@Id, @At, @LotId, @Kind, @QtyDelta, @QtyAfter, @UomId,
                 @FromLocationId, @ToLocationId, @RelatedLotId, @JobId,
                 @FromStatus, @ToStatus, @ReasonCodeId, @Comment, @ActorId,
-                @Reference, @ReversesEventId, @ReversesOccurredAt, @RunId, coalesce(@EffectiveAt, @At), @ContainerId, @ReportId, @Details::jsonb)
+                @Reference, @ReversesEventId, @ReversesOccurredAt, @RunId, coalesce(@EffectiveAt, @At), @ContainerId, @ReportId, @Details::jsonb,
+                @AutoSource, @SourceRef)
         """;
 
     private const string DetailColumns = """
@@ -124,7 +126,8 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         """;
 
     private const string GetLocation = """
-        SELECT id, code, site_id, holds_inventory, commingles_lots, single_material, is_active FROM core.equipment WHERE id = @Id FOR SHARE
+        SELECT id, code, site_id, holds_inventory, commingles_lots, single_material, is_active, equipment_role = 'feed_point' AS is_feed_point
+        FROM core.equipment WHERE id = @Id FOR SHARE
         """;
 
     private const string GetMaterial = """
@@ -386,6 +389,8 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
                 row.RunId,
                 row.ReportId,
                 row.Details,
+                row.AutoSource,
+                row.SourceRef,
             },
             cancellationToken);
 

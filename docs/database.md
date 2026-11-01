@@ -1153,9 +1153,9 @@ A stored file, a reference, or both (`lot_document_source_ck`). Never deleted: w
 | `from_lot_id` | uuid → lot | yes | The lot it was carried from; set exactly when not `attached` (`lot_document_link_from_ck`). |
 | `linked_at` | timestamptz | no | |
 
-### core.material_load — a lot present at a feed point · *Planned*
+### core.material_load — a lot present at a feed point · *Not used*
 
-Windows may overlap: a silo can hold several lots at once. Time-window consumption and genealogy come from these windows plus residence time.
+Kept from the first draft. Loads at feed points are worked out from `ts.lot_event` instead (#33, D-079), so back-dated movements and reversals fall into place; nothing writes this table.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1168,6 +1168,31 @@ Windows may overlap: a silo can hold several lots at once. Time-window consumpti
 | `uom_id` | uuid → uom | yes | Its unit. |
 | `load_method` | text | no | `scan`, `declared`, `erp_issue` or `auto`. |
 | `loaded_by_person_id` | uuid → person | yes | Who loaded it. |
+
+### core.feed_shortfall — what automated consumption couldn't cover · *In use*
+
+A backflush, time-window or counter consumption (#33, D-079) that found nothing loaded, not enough in the lot, nothing running, or a counter with two materials loaded. Resolved by consuming from a lot someone picks, or dismissed with a note; never deleted.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The site. |
+| `equipment_id` | uuid → equipment | no | The feed point, or the line for backflush and for time-window components nothing was loaded for. |
+| `job_id` | uuid → job | yes | The job it was for; null when nothing was running (a counter). |
+| `run_id` | uuid → job_run | yes | Its run. |
+| `material_id` | uuid → material | yes | What fell short; null when nothing loaded said which material it was. |
+| `lot_id` | uuid → lot | yes | The lot that ran short, if one did. |
+| `quantity` | qty | no | How much wasn't consumed, above zero. |
+| `uom_id` | uuid → uom | yes | Its unit: the material's base unit, or the counter's or component's when it didn't convert. |
+| `source` | text | no | `backflush`, `time_window` or `counter`. |
+| `source_ref` | uuid | no | The production report or the machine count (`ts.production_count.id`). With the place and material, unique (`feed_shortfall_source_uq`, nulls not distinct), so a retry records nothing twice. |
+| `occurred_at` | timestamptz | no | When the report or count counted. |
+| `reason` | text | no | Why, in words; at most 500 characters. |
+| `status` | text | no | `open`, `resolved` or `dismissed`. |
+| `resolved_lot_id` | uuid → lot | yes | The lot it was consumed from when resolved. |
+| `resolved_by`, `resolved_at` | text, timestamptz | yes | Who resolved or dismissed it, and when; `resolved_at` is set exactly when it isn't open (`feed_shortfall_resolved_ck`). |
+| `resolution_note` | text | yes | The comment, required to dismiss; at most 1000 characters. |
+| `created_at`, `updated_at` | timestamptz | no | |
 
 ### core.lot_genealogy — parent and child lots · *In use*
 
@@ -1514,7 +1539,7 @@ One row for every job status change, written in the same transaction as the chan
 | `occurred_at` | timestamptz | no | When it was recorded. Partition key. |
 | `effective_at` | timestamptz | no | When it counts in stock (D-057, D-076): `occurred_at`, or up to 31 days earlier for any back-dated movement but a correction, packing or reversal; a count's difference counts from when the lot was counted; a reversal counts when the movement it undoes did. A lot's state at a time is worked out from these in this order. Indexed with `lot_id`. |
 | `lot_id` | uuid → lot | no | The lot. |
-| `event_kind` | text | no | `created`, `received`, `moved`, `loaded`, `consumed`, `produced`, `split`, `merged`, `status_changed`, `adjusted`, `scrapped` or `shipped`. In use: `received`, `produced`, `adjusted` (write-up), `scrapped` (write-off), `consumed`, `moved`, `status_changed`, and (D-030) `split`, `merged`, `shipped`, `corrected` (details changed; no quantity) and `reversed`, and (D-059) `packed` and `unpacked`. A count posts `adjusted` and `scrapped` rows. |
+| `event_kind` | text | no | `created`, `received`, `moved`, `loaded`, `consumed`, `produced`, `split`, `merged`, `status_changed`, `adjusted`, `scrapped` or `shipped`. In use: `received`, `produced`, `adjusted` (write-up), `scrapped` (write-off), `consumed`, `moved`, `status_changed`, and (D-030) `split`, `merged`, `shipped`, `corrected` (details changed; no quantity) and `reversed`, (D-059) `packed` and `unpacked`, and (#33) `loaded` (loaded again at the feed point it is at; no quantity, the feed point as `to_location_id`). A count posts `adjusted` and `scrapped` rows. |
 | `qty_delta` | qty | yes | Quantity change: positive in, negative out; null for a whole-lot move or a status change. |
 | `qty_after` | qty | yes | The lot's quantity once this row was recorded (in record order, so not the balance at `effective_at` for a back-dated row). |
 | `uom_id` | uuid → uom | yes | Its unit. |
@@ -1530,6 +1555,8 @@ One row for every job status change, written in the same transaction as the chan
 | `reverses_event_id`, `reverses_occurred_at` | uuid, timestamptz | yes | For a reversal, the movement it undoes and that movement's time (no FK into history, D-010). Indexed with `lot_id`. A movement some row reverses counts as never made wherever a job's consumption, produced lots or genealogy are read (D-063). |
 | `report_id` | uuid | yes | For production, and the reversals of a report: the production report (`ts.production_count.report_id`, D-063). Indexed. |
 | `details` | jsonb | yes | A correction's lot details before and after it (number, supplier lot, expiry), so it can be reversed (#79, D-077); null for other movements and for corrections before migration 0045. |
+| `auto_source` | text | yes | An automated consumption (#33, D-079): `backflush`, `time_window` or `counter` (`lot_event_auto_source_ck`); null when someone declared it. |
+| `source_ref` | uuid | yes | What caused it: the production report, or the machine count (`ts.production_count.id`); for a shortfall's resolution, the shortfall. Indexed. Loads at feed points read this table by `to_location_id` and `from_location_id` (indexed with `effective_at`). |
 | `actor_user_id` | uuid | yes | Who, once `sec.app_user` exists. |
 | `actor_id` | text | yes | Who, as on `evt.event` (`issuer\|subject`, `anonymous` until sign-in). |
 

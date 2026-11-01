@@ -325,6 +325,15 @@ internal static class InventoryEndpoints
                 new ReverseChainCommand(id, request.EventId, request.ReasonCodeId, request.Comment, dryRun ?? false, request.ExpectedSteps), ct)))
         .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.Lot));
 
+        // Loads a lot at a feed point (#33): moved there if it is elsewhere, else loaded again so it feeds from now.
+        lots.MapPost("/{id:guid}/load", async Task<Ok<LotTransactionResponse>> (
+            Guid id,
+            LoadLotRequest request,
+            ICommandHandler<LoadLotCommand, LotTransactionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new LoadLotCommand(id, request.Version, request.FeedPointId, request.Comment), ct)))
+        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Lot));
+
         // The lots a made lot was made from, out of those its job used (#81); none goes back to pairing by time.
         lots.MapPut("/{id:guid}/made-from", async Task<Ok<VersionResponse>> (
             Guid id,
@@ -426,6 +435,38 @@ internal static class InventoryEndpoints
             return TypedResults.File(renderer.Render([InventoryLabels.ForLocation(location)]), "application/pdf", $"label-{InventoryLabels.FileName(location.Code)}.pdf");
         })
         .RequireAny(Site.Query(), Permissions.InventoryView);
+
+        // ---- Feed points (#33): what is loaded where, and what automated consumption couldn't cover ----
+        inventory.MapGet("/feed-points", async Task<Ok<IReadOnlyList<FeedPointDto>>> (
+            Guid? siteId,
+            IQueryHandler<ListFeedPointsQuery, IReadOnlyList<FeedPointDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListFeedPointsQuery(siteId), ct)))
+        .RequireAnyAtSite(Site.Query(), Permissions.InventoryView, Permissions.FloorView);
+
+        inventory.MapGet("/feed-shortfalls", async Task<Ok<IReadOnlyList<FeedShortfallDto>>> (
+            Guid? siteId,
+            string? status,
+            IQueryHandler<ListShortfallsQuery, IReadOnlyList<FeedShortfallDto>> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListShortfallsQuery(siteId, status ?? FeedShortfallStatus.Open), ct)))
+        .RequireAnyAtSite(Site.Query(), Permissions.InventoryView, Permissions.FloorView);
+
+        inventory.MapPost("/feed-shortfalls/{id:guid}/resolve", async Task<Ok<VersionResponse>> (
+            Guid id,
+            ResolveShortfallRequest request,
+            ICommandHandler<ResolveShortfallCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ResolveShortfallCommand(id, request.Version, request.LotId, request.Comment), ct)))
+        .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.FeedShortfall));
+
+        inventory.MapPost("/feed-shortfalls/{id:guid}/dismiss", async Task<Ok<VersionResponse>> (
+            Guid id,
+            DismissShortfallRequest request,
+            ICommandHandler<DismissShortfallCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new DismissShortfallCommand(id, request.Version, request.Comment), ct)))
+        .RequirePermission(Permissions.InventoryCorrect, Site.Of(SiteOf.FeedShortfall));
 
         // How a balance at a location flows, for genealogy through it (D-060); an equipment setting.
         inventory.MapPut("/locations/{id:guid}/flow", async Task<Ok<VersionResponse>> (

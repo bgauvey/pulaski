@@ -147,6 +147,9 @@ public sealed record LotEventDto
     /// <summary>For production, the report that made it (D-063): reversed with the report, on the job's page.</summary>
     public Guid? ReportId { get; init; }
 
+    /// <summary>For an automated consumption (#33): <c>backflush</c>, <c>time_window</c> or <c>counter</c>; null when someone declared it.</summary>
+    public string? AutoSource { get; init; }
+
     /// <summary>The container it was packed into, unpacked from, or moved with (D-059).</summary>
     public Guid? ContainerId { get; init; }
     public string? ContainerCode { get; init; }

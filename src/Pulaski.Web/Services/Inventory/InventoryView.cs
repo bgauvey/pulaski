@@ -113,6 +113,7 @@ public static class InventoryView
         "scrapped" => "Written off",
         "consumed" => "Consumed",
         "moved" => "Moved",
+        "loaded" => "Loaded",
         "status_changed" => "Status changed",
         _ => Display.Label(kind),
     };

@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-10-31 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-01 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#21-reference) tables give the exact rules.
 
@@ -489,7 +489,7 @@ There can be one BOM per material and process, plus one for any process.
 | **Quantity** | How much is used per the base quantity. |
 | **Unit** | The unit of that quantity. |
 | **Scrap %** | Extra to plan for losses. `2` plans 2% more. |
-| **Consumed by** | How it will be taken from stock once execution is built: **Backflush on count** (automatically, in proportion to good output), **Time window (loaded lot)** (whatever lot is loaded at the feed point while the job runs, typical for resin and blend), **Declared by operator** or **Scanned lot**. |
+| **Consumed by** | How it is taken from stock (see [Feed points](#feed-points)): **Backflush on count** (automatically as production is reported, in proportion to what was made, from the lots at the line's feed points), **Time window (loaded lot)** (shared among the lots loaded at the line's feed points while it was made, typical for resin and blend), **Declared by operator** or **Scanned lot** (both entered by hand). |
 | **Operation** | Only on a BOM for a process: which operation consumes it. **First operation** if you leave it. |
 
 3. Remove a line with its red ×.
@@ -1243,6 +1243,39 @@ Pallets, totes, boxes and bins that hold lots. Each lot inside keeps its own num
 - **Mixed contents** are allowed: a container can hold lots of several materials. Balances of materials that aren't lot-tracked can't be packed. No containers inside containers.
 - **History.** Packing, unpacking and moving with a container are ordinary movements in each lot's history (*Packed into …*, *Unpacked out of …*, *Moved with …*), and `pulaski.lot.packed.v1`, `…unpacked.v1` and `pulaski.container.created.v1` / `…moved.v1` / `…retired.v1` in the event log. Genealogy isn't touched: a container isn't a lot.
 - **Who:** containers, packing and unpacking need permission to move lots.
+
+### Feed points
+
+A feed point is a hopper, feeder, doser or unwind where lots enter a line: equipment with the role **Feed point** below the line on the [Equipment](#4-equipment) page, with **Holds inventory** ticked. Pulaski knows which lot is loaded at each, and uses that to consume components without anyone declaring them.
+
+**Load a lot**
+
+1. Open the lot and click **Load** (you need permission to move lots).
+2. Choose the **Feed point**. A lot elsewhere is moved there whole. A lot already there is loaded again: it feeds from now.
+3. Click **Load**.
+
+Receiving, moving or splitting a lot straight to a feed point loads it too. A lot stays loaded until one of three things happens: the next lot of its material is loaded there, it leaves, or it runs out.
+
+**What is consumed automatically.** It depends on the job's components, as their BOM lines say (**Consumed by**):
+
+- **Backflush on count:** each production report takes the component's planned quantity per unit made, times what it reports (good and scrap). It comes from the lots of that material at the line's feed points: the loaded lot first, then the others there, first expiry first.
+- **Time window (loaded lot):** each production report takes the same quantity, shared among the lots of that material loaded at the line's feed points since the run's previous report (or its start), by how long each was loaded.
+- **A consumed counter:** a feed point with a consumed counter tag (see [Bind tags](#bind-tags)) takes each counted amount out of the lot loaded there at that moment. Time-window components at that feed point are left to the counter, so they aren't taken twice.
+
+Each is an ordinary consumption into the job and its run. It shows in the lot's history with a **Backflush**, **Time window** or **Counter** chip, links genealogy, and is sent to the ERP like any other.
+
+**What it couldn't cover.** Automation never takes a lot below zero, never uses a lot on hold or expired, and never refuses a report. Whatever it can't cover is listed on **Inventory → Feed points** under **What automation couldn't consume**, with where, the job, the material, how much and why. A report that left something uncovered says so in its confirmation.
+
+1. To **resolve** one, click **Resolve…**, choose the lot it really came from and click **Consume it**. That consumes the quantity from the lot into the job and run, now. You need permission to report production.
+2. To **dismiss** one, click **Dismiss…**, say why and click **Dismiss**. Nothing is consumed. You need permission to correct inventory.
+
+**In detail**
+
+- **Loads are worked out from the lots' movements**, so a back-dated move or a reversal falls into place. The Feed points page shows what is loaded at each now.
+- **Repeated signals.** Each report and each machine count is posted once. The edge's resent signals are skipped, and a count already consumed or listed is never taken again. Counts are posted just after each batch from the edge is saved. One that wasn't posted (after an error) is taken up with the next batch, for up to 31 days.
+- **Counters.** A counter counts in its tag's unit, or in the material's base unit when the tag has none. It needs one material loaded at its feed point: with lots of two materials loaded, a count is listed rather than guessed. A count with nothing running on the line, or nothing loaded, is listed too.
+- **Reversing a report** puts back everything it consumed automatically, and dismisses what it left open. A shortfall already resolved stays resolved: reverse that consumption on its lot if it was wrong.
+- **Where it is recorded:** the consumption rows carry `auto_source` and `source_ref` (the report or the machine count). Shortfalls are `pulaski.feed_shortfall.recorded.v1`, `…resolved.v1` and `…dismissed.v1`, and loading again is `pulaski.lot.loaded.v1`.
 
 ### Lot, container and location labels
 
@@ -2025,7 +2058,7 @@ If one machine's code means something else than on the others with the same prof
 ### Bind tags
 
 1. Once the edge runs, open its **Seen** tab: every metric its brokers have announced and every variable its OPC UA servers offer, with the last value. EtherNet/IP tags appear once they have been read, so type those on the **Tags** tab. Type in **Filter addresses** to find one.
-2. Click **Bind** next to a metric. Pulaski guesses the role from the name; choose the **Equipment** (only equipment of the site that tracks state is offered) and check the **Role**.
+2. Click **Bind** next to a metric. Pulaski guesses the role from the name; choose the **Equipment** (equipment of the site that tracks state is offered; for a consumed counter or a level, equipment that holds inventory too, such as a hopper or a silo) and check the **Role**.
 3. For a count, set the **Scale** (how many units one count is) and, if the counter wraps, its **Rollover** value. For a process value, set the **Scale** (a temperature in tenths: 0.1) and, if you like, a **Deadband**: a change no bigger than that, in scaled units, isn't recorded straight away. Click **Bind tag**.
 4. To type an address instead, use the same form on the **Tags** tab. To change a tag, edit its address, scale, rollover, deadband or **Active** checkbox and click **Save**. To delete a tag completely, whether active or inactive, click **Delete** on its row and confirm.
 
@@ -2254,7 +2287,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
-- **Inventory is declared by hand.** Consumption and production are entered by people. Loading lots at feed points, backflush and scanning aren't built. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
+- **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines, and automated consumption doesn't use up [allocations](#allocate-lots-to-a-job). Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
 - **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, and scanning 2D codes or supplier barcodes beyond reading their text. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
 - **Reversing:** a chain undo follows a lot and the lots split off it, not merges into other lots, consumption into jobs or the output made from it; corrections made before this version can't be reversed.
 - **Genealogy through a silo is an estimate** from the declared movements. A level tag's readings confirm when it was empty and check the declared stock (see [How a silo flows](#how-a-silo-flows)), but they don't change how much each arrival gave. A reversed movement and its reversal are left out of the estimate, as if neither happened.
@@ -2271,6 +2304,9 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 ---
 
 ## 23. Troubleshooting and questions
+
+**A component wasn't consumed when I reported production.**
+Check its **Consumed by** in the BOM: only backflush and time window are automatic. Then check what is loaded on **Inventory → Feed points**: the lot must be at a feed point below the job's line, available and not expired. Anything it couldn't cover is listed there to resolve or dismiss.
 
 **"You may not do this…" or a button I expected isn't there.**
 Your roles don't allow that change, or not at this site. The message names the permission; ask an administrator (see [What each role can change](#what-each-role-can-change)).

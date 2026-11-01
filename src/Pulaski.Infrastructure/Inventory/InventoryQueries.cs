@@ -47,7 +47,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         WHERE m.id = @MaterialId
         """;
 
-    private const string LotColumns = """
+    internal const string LotColumns = """
         l.id, l.site_id, l.lot_number, l.is_bulk, l.material_id, m.code AS material_code, m.name AS material_name,
         l.status, l.quantity, l.uom_id, u.code AS uom_code,
         l.location_equipment_id AS location_id, loc.code AS location_code, loc.name AS location_name,
@@ -56,7 +56,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         l.created_at, l.updated_at, l.xmin::text::bigint AS version
         """;
 
-    private const string LotFrom = """
+    internal const string LotFrom = """
         FROM core.lot l
         JOIN core.material m ON m.id = l.material_id
         JOIN core.uom u ON u.id = l.uom_id
@@ -122,7 +122,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
         fl.code AS from_location_code, tl.code AS to_location_code, e.from_status, e.to_status,
         e.job_id, ej.job_number, r.code AS reason_code, r.name AS reason_name, rt.group_path AS reason_group_path, e.comment, e.actor_id,
         e.related_lot_id, rl.lot_number AS related_lot_number, rll.code AS related_lot_location_code, e.reference, e.reverses_event_id,
-        e.container_id, ec.code AS container_code, e.report_id,
+        e.container_id, ec.code AS container_code, e.report_id, e.auto_source,
         EXISTS (SELECT 1 FROM ts.lot_event rv WHERE rv.lot_id = e.lot_id AND rv.reverses_event_id = e.id) AS is_reversed
         """;
 

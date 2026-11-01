@@ -36,6 +36,10 @@
                 {
                     <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Move">Move</button>
                 }
+                @if (May(LotAction.Load) && !lot.IsBulk)
+                {
+                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Load">Load</button>
+                }
                 @if (!lot.IsBulk)
                 {
                     @if (May(LotAction.Split))
@@ -274,6 +278,10 @@
                             </td>
                             <td>
                                 @InventoryView.EventLabel(e.Kind)
+                                @if (e.AutoSource is { } auto)
+                                {
+                                    <span class="chip ms-1" title="Consumed automatically, not declared by hand">@FeedPointsPage.SourceLabel(auto)</span>
+                                }
                                 @if (e.ToStatus is { } to)
                                 {
                                     <div class="small text-muted">@Display.Label(e.FromStatus) → @Display.Label(to)</div>

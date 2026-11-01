@@ -242,6 +242,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   lot of its material; exact = only lot, else estimated, unpairable = possible). Picks are `made_from` links (`SetMadeFromCommand`, `PUT /lots/{id}/made-from`,
   `ReportProductionCommand.MadeFromLotIds`) and replace pairing for that lot (`JobLinkPairs`, used by traces and lot links). Level readings (`BalanceLevels`):
   `equipment.empty_level` sets aside parcels, `level_tolerance` compares stock before withdrawals; exact → `confirmed`, disagreement → possible.
+- Feed point automation (D-079, proposed): loads are worked out from `ts.lot_event` (`FeedLoads.From`: arrival or `loaded`, until it leaves, runs out or
+  the next lot of its material); `core.material_load` is unused. Reports backflush / share time-window components (`FeedAutomation.OnReportAsync`); a feed
+  point's consumed counter posts after ingest commits (`FeedCounterPoster`, job first). Rows carry `auto_source` + `source_ref`; never below zero; what isn't
+  covered is a `core.feed_shortfall` (resolve with a lot / dismiss). Report reversal puts automated consumption back.
 - Lot allocations (D-064, proposed): `core.lot_allocation` (active / consumed / released; one active per job + lot) sets a lot's stock aside for a
   job's planned component; other jobs (recommendations, shortages) see it as taken; consumption into its job uses it up
   (`AllocationUse`), into another warns. `LotRecommendation` (FEFO, then FIFO; only available, unexpired at need time, free stock; every

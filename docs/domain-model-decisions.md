@@ -1825,6 +1825,58 @@ twin isn't listed twice, and one that doesn't pair is `Unpaired`, with why.
 - quantities on pairs;
 - a level that changes how much each arrival gave.
 
+## Automated consumption at feed points (D-079, proposed)
+
+Issue #33. Inventory was declared by hand. BOM lines already said how each component is taken (`consumption_method`: `backflush`,
+`time_window`, `declared`, `scan`), but nothing acted on it.
+
+**Feed points and loads.** A feed point is equipment with role `feed_point` (holding inventory) below a line, which is its nearest parent
+that runs jobs (`core.equipment_closure`). Loads are worked out on read (`FeedLoads.From`, pure) from the standing movements that name the
+feed point. Nothing is stored, so back-dated movements and reversals fall into place; `core.material_load` stays unused.
+- A lot is loaded when it arrives there (received, moved, split or made there) or is loaded again (`LoadLotCommand`, a `loaded` row with no
+  quantity).
+- It stays loaded until it leaves (a relocation from there), runs out (`qty_after` reaches zero), or the next lot of its material is loaded
+  there.
+- `LoadLotCommand` (`POST /api/lots/{id}/load`, `lot.move`) moves a lot elsewhere whole, through `MoveLotHandler`.
+
+**On a production report** (`ProductionReporter`, after its counts and lots, in its transaction; `FeedAutomation.OnReportAsync`): for each
+job component with `backflush` or `time_window`, the quantity is planned × (good + scrap) ÷ the job's planned quantity, in the component's
+base unit.
+- **Backflush:** taken from the lots of that material at the line's feed points: the loaded ones first, then the others, first expiry first.
+- **Time window:** shared among that material's loads at the line's feed points over the report's period (the run's previous standing report,
+  or its start, to this one), by overlap (`FeedLoads.ShareByTime`). Feed points with a consumed counter are left to it.
+
+**Counters** (`FeedCounterPoster`, after ingest commits): each machine `consumed` count at a feed point is taken from the lot loaded then,
+into the job running on its line then, in the counter tag's unit (else the base unit).
+- Each count is posted in its own transaction, the job locked first, so ingest's own locks (node, then equipment) never wait on lots.
+- Counts not yet posted (no consumption and no shortfall with that `source_ref`) are retried with every batch, for up to 31 days.
+- With lots of two materials loaded, a counter can't say which it counted, so the count is a shortfall.
+- `consumed_count` and `level` tags may now be bound to equipment that holds inventory, not only to equipment that tracks state.
+
+**Each consumption** is an ordinary `consumed` row into the job and run, with genealogy and `pulaski.lot.consumed.v1`.
+- It carries `ts.lot_event.auto_source` and `source_ref` (the report or the count; migration 0047).
+- Back-dated to when the report or count counted, it must fit the lot's history (`EnsureFitsAsync`).
+- It never goes below zero, and never uses a lot that is held, expired or in another site.
+
+**Shortfalls** (`core.feed_shortfall`): whatever wasn't covered is added up per source, place and material and recorded once
+(unique `source_ref`, place, material).
+- A report says so in a warning; a report or ingest is never refused.
+- `ResolveShortfallCommand` (`production.report`) consumes the quantity from a picked lot into its job and run, now, locking the job, then
+  the lot, then the shortfall.
+- `DismissShortfallCommand` (`inventory.correct`) needs a comment.
+- Inventory → Feed points lists the loads and shortfalls.
+
+**Reversing a report** puts back its automated consumptions (`Lot.Restore`, through `ReversalWriter`) and dismisses its open shortfalls.
+
+**Idempotent:** a report posts once in its own transaction. A machine count is posted once: resent signals are skipped by ingest (D-050), and
+`IsPostedAsync` is checked again under the job's lock.
+
+**Not done:**
+- machine production counts into lots;
+- automated consumption using up allocations (D-064);
+- residence time between a feed point and the line;
+- scan-to-consume beyond the Scan page's existing Consume.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

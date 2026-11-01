@@ -355,7 +355,9 @@ else
     private Uri ApiUrl => Uri.TryCreate(Configuration["PulaskiApi:BaseUrl"], UriKind.Absolute, out var url) ? url : new Uri("http://localhost:5080/");
 
     /// <summary>Equipment of the node's site that tracks state: what tags can be bound to.</summary>
-    private IEnumerable<EquipmentDto> Bindable => _equipment.Where(e => e.SiteId == _detail?.Node.SiteId && e.TracksState && e.IsActive);
+    // A consumed counter or a level also goes on equipment that holds inventory: a hopper or a silo (#33, D-060).
+    private IEnumerable<EquipmentDto> Bindable => _equipment.Where(e => e.SiteId == _detail?.Node.SiteId && e.IsActive
+        && (e.TracksState || (e.HoldsInventory && _bindRole is "consumed_count" or "level")));
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 

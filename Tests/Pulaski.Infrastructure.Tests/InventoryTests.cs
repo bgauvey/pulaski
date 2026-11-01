@@ -5,11 +5,14 @@ using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Execution;
 using Pulaski.Application.Inventory;
+using Pulaski.Application.MachineData;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Inventory;
+using Pulaski.Contracts.MachineData;
 using Pulaski.Domain;
 using Pulaski.Domain.Inventory;
+using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Infrastructure.Tests;
 
@@ -808,6 +811,79 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal((1m, 2m), (location.EmptyLevel, location.LevelTolerance));
         await db.SendAsync(new SetFlowCommand(silo.Id, location.Version, FlowModels.Mixed, null, EmptyLevel: 1m, LevelTolerance: 0.5m));
         Assert.Equal(GenealogyPrecision.Possible, (await LastAsync()).Precision);
+    }
+
+    [Fact]
+    public async Task Feed_points_consume_what_reports_backflush_share_by_load_time_and_count_and_flag_what_they_cant_cover()
+    {
+        var plant = await CreatePlantAsync();
+        var count = await ReasonAsync("inventory_adjustment", "COUNT");
+        await using var admin = await db.AdminDataSource.OpenConnectionAsync();
+        var line = await admin.ExecuteScalarAsync<Guid>("SELECT equipment_id FROM core.job WHERE id = @Id", new { Id = plant.Job });
+        var additive = Guid.CreateVersion7();
+        await admin.ExecuteAsync("""
+            INSERT INTO core.material (id, code, name, material_type, base_uom_id, is_lot_tracked) VALUES (@additive, 'ADD-' || @s, 'Additive', 'raw', @kg, true);
+            UPDATE core.job_material SET consumption_method = 'time_window' WHERE job_id = @job;
+            INSERT INTO core.job_material (job_id, material_id, direction, planned_qty, uom_id, consumption_method) VALUES (@job, @additive, 'consume', 10, @kg, 'backflush');
+            """, new { additive, s = _suffix, kg = plant.Kg, job = plant.Job });
+        CreatedResponse hopper = await db.SendAsync(new CreateEquipmentCommand(
+            line, "HOP-" + _suffix, "Resin hopper", null, "equipment_module", "feed_point", false, false, true, null));
+        CreatedResponse doser = await db.SendAsync(new CreateEquipmentCommand(
+            line, "DOS-" + _suffix, "Additive doser", null, "equipment_module", "feed_point", false, false, true, null));
+
+        // Resin loaded from the stores; additive received straight into the doser loads it there.
+        var r1 = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "FR-1-" + _suffix, 100m, plant.Kg));
+        await db.SendAsync(new LoadLotCommand(r1.LotId, r1.Version, hopper.Id));
+        var a1 = await db.SendAsync(new ReceiveLotCommand(additive, doser.Id, "FA-1-" + _suffix, 50m, plant.Kg));
+        var points = await QueryAsync<ListFeedPointsQuery, IReadOnlyList<FeedPointDto>>(new ListFeedPointsQuery(plant.Site));
+        Assert.Equal((a1.LotId, r1.LotId), (Assert.Single(points[0].Loads).LotId, Assert.Single(points[1].Loads).LotId));
+
+        // 100 m made: 1 kg of additive backflushed, 145 kg of resin by time from R1, which holds only 100.
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Metre, null, plant.Staging));
+        Assert.Contains(report.Warnings, w => w.Code == "feed_shortfall");
+        async Task<LotSummaryDto> LotAsync(Guid id) => (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(id))).Lot;
+        Assert.Equal((0m, 49m), ((await LotAsync(r1.LotId)).Quantity, (await LotAsync(a1.LotId)).Quantity));
+        var history = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(r1.LotId))).History;
+        Assert.Equal(AutoSource.TimeWindow, history.First(h => h.Kind == LotEventKind.Consumed).AutoSource);
+        var shortfall = Assert.Single(await QueryAsync<ListShortfallsQuery, IReadOnlyList<FeedShortfallDto>>(new ListShortfallsQuery(plant.Site)));
+        Assert.Equal((45m, hopper.Id, r1.LotId, AutoSource.TimeWindow), (shortfall.Quantity, shortfall.EquipmentId, shortfall.LotId!.Value, shortfall.Source));
+
+        // Resolved from another lot, into the job.
+        var r2 = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "FR-2-" + _suffix, 60m, plant.Kg));
+        await db.SendAsync(new ResolveShortfallCommand(shortfall.Id, shortfall.Version, r2.LotId, "Topped up from the stores"));
+        Assert.Equal(15m, (await LotAsync(r2.LotId)).Quantity);
+        Assert.Empty(await QueryAsync<ListShortfallsQuery, IReadOnlyList<FeedShortfallDto>>(new ListShortfallsQuery(plant.Site)));
+
+        // Reversing the report puts back what it consumed automatically.
+        await db.SendAsync(new ReverseProductionReportCommand(plant.Job, report.ReportId, count, "Wrong job"));
+        Assert.Equal((100m, 50m), ((await LotAsync(r1.LotId)).Quantity, (await LotAsync(a1.LotId)).Quantity));
+
+        // A consumed counter on the hopper: each count comes out of the resin loaded then, once, however often the signal comes.
+        CreatedResponse node = await db.SendAsync(new CreateEdgeNodeCommand(plant.Site, "GW-" + _suffix, "Gateway", null));
+        CreatedResponse connection = await db.SendAsync(new CreateEdgeConnectionCommand(node.Id, "BROKER", "Broker", EdgeProtocols.SparkplugB,
+            new Dictionary<string, string> { ["host"] = "localhost", ["groupId"] = "Plant1" }));
+        CreatedResponse counter = await db.SendAsync(new CreateEquipmentTagCommand(hopper.Id, TagRoles.ConsumedCount, connection.Id, $"Plant1/Ext/HOP-{_suffix}:Used", 1, 0, null));
+        await admin.ExecuteAsync("UPDATE core.equipment_tag SET uom_id = @kg WHERE id = @id", new { kg = plant.Kg, id = counter.Id });
+        var stream = Guid.CreateVersion7();
+        var t0 = DateTimeOffset.UtcNow;
+        EdgeSignalDto S(long seq, int seconds, decimal value) => new() { Sequence = seq, TagId = counter.Id, OccurredAt = t0.AddSeconds(seconds), Value = value };
+        var batch = new IngestEdgeSignalsCommand(node.Id, stream, "1.0.0", [S(1, 0, 1000), S(2, 1, 1012)]);
+        await db.SendAsync(batch);
+        await db.SendAsync(batch);
+        Assert.Equal(88m, (await LotAsync(r1.LotId)).Quantity);
+        Assert.Equal(AutoSource.Counter, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(r1.LotId))).History.First(h => h.Kind == LotEventKind.Consumed && !h.IsReversed).AutoSource);
+
+        // With the counter, the hopper's resin isn't shared by time too; more counted than R1 holds is flagged, then dismissed.
+        await db.SendAsync(new ReportProductionCommand(plant.Job, null, 10m, 0m, plant.Metre, null, plant.Staging));
+        Assert.Equal(88m, (await LotAsync(r1.LotId)).Quantity);
+        await db.SendAsync(new IngestEdgeSignalsCommand(node.Id, stream, "1.0.0", [S(3, 2, 1112)]));
+        Assert.Equal(0m, (await LotAsync(r1.LotId)).Quantity);
+        var over = Assert.Single(await QueryAsync<ListShortfallsQuery, IReadOnlyList<FeedShortfallDto>>(new ListShortfallsQuery(plant.Site)));
+        Assert.Equal((12m, AutoSource.Counter), (over.Quantity, over.Source));
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new DismissShortfallCommand(over.Id, over.Version, "")));
+        await db.SendAsync(new DismissShortfallCommand(over.Id, over.Version, "Counter drifted; checked the hopper"));
+        Assert.Equal("Counter drifted; checked the hopper",
+            Assert.Single(await QueryAsync<ListShortfallsQuery, IReadOnlyList<FeedShortfallDto>>(new ListShortfallsQuery(plant.Site, FeedShortfallStatus.Dismissed))).ResolutionNote);
     }
 
     [Fact]
