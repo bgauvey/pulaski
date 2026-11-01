@@ -79,6 +79,7 @@ else
                         <td class="inv-num">@c.LotCount</td>
                         <td class="text-end text-nowrap">
                             <button type="button" class="btn btn-sm btn-link" @onclick="() => LabelAsync(c)">Label</button>
+                            <PrintLabelControl Kind="container" Id="c.Id" SiteId="c.SiteId" ButtonClass="btn btn-sm btn-link" />
                             @if (CanManage && c.IsActive)
                             {
                                 <button type="button" class="btn btn-sm btn-link" @onclick="() => { _moving = c; _toId = Guid.Empty; }">Move…</button>

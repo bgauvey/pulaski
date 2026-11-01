@@ -1281,7 +1281,10 @@ Each is an ordinary consumption into the job and its run. It shows in the lot's 
 
 **Print label** on a lot's page, **Label** on a container or location, or on the Scan page, gives a PDF label 4 × 6 in (about A6) to print on any printer: the lot or container number, a barcode, the same code in text beneath it (to type if the barcode won't scan), and the material, quantity, supplier lot and expiry for a lot.
 
+When the site has [label printers](#labels-and-printers), **Print to…** beside it sends the label straight to one: choose the printer (the site's default is chosen first) and the number of copies, then click **Print**.
+
 - The barcode is Code 128 and holds a short Pulaski code: `PUL1L` and a number for a lot, `PUL1C` and a number for a container, `PUL1E:` and the code for a location. Each lot and container keeps its number for good, so a scan always names exactly that one.
+- **GS1 labels.** When the site's label format is GS1-128 or GS1 DataMatrix, a lot whose material has a GTIN gets a GS1 barcode first: (01) GTIN, (17) expiry, the net weight for a lot kept in kg or lb, and (10) lot number. The elements are printed in brackets beneath it. A container with an SSCC gets (00) SSCC. The Pulaski code stays, smaller, at the foot. A lot without a GTIN (or whose number has characters GS1 doesn't allow, or is longer than 20), a container without an SSCC, and every location get Pulaski's label.
 - A label shows the lot as it was when printed; print a new one after a change you want on it.
 
 ### Scan labels
@@ -1291,7 +1294,7 @@ The **Scan** tab is for a barcode scanner that types like a keyboard (most USB a
 1. Open **Inventory → Scan**; the box is ready for a scan. Scan a lot, container or location label, or type a lot, supplier lot or container number and press **Enter**.
 2. If more than one thing matches typed text (say a lot and a container with the same number), choose the one you mean. A Pulaski label always matches exactly one.
 3. Choose what to do:
-   - **A lot:** **Move** (then scan where it goes), **Pack** (then scan the container), **Unpack**, **Consume…** (into a job), or **Open lot**.
+   - **A lot:** **Move** (then scan where it goes), **Pack** (then scan the container), **Unpack**, **Consume…** (into a job), **Load** (then scan the [feed point](#feed-points)), or **Open lot**.
    - **A container:** **Move with its lots** (then scan where), or **Open container**.
    - **A location:** **Receive here…** (the receive form opens with the location filled in), or **What is here**.
 4. A green message confirms each movement; scan the next thing, or **Start again**.
@@ -1299,6 +1302,10 @@ The **Scan** tab is for a barcode scanner that types like a keyboard (most USB a
 **In detail**
 
 - A scan that names nothing at this site says so: a Pulaski label from another site, or a lot used up, isn't found. Scanned typed text matches lots on hand by lot or supplier lot number, active containers by code, and locations by code, ignoring case.
+- **GS1 and supplier barcodes.** A GS1 barcode (GS1-128, GS1 DataMatrix or a GS1 QR code, as the scanner sends it, or typed in brackets like `(01)…(10)…`) is read for its parts. So is a supplier barcode in one of the site's [supplier formats](#labels-and-printers).
+  - An SSCC finds its container.
+  - A lot number finds the lots on hand with it as their lot or supplier lot number, of the material its GTIN or material code names.
+  - When nothing is here yet but the material is known, the Scan page shows what the barcode said and offers **Receive it…**, with the material, lot, supplier lot, quantity and expiry filled in. A GTIN no material has says so: set it on the material's page.
 - When a second scan is asked for (where to move, or which container), only that kind counts; scanning something else says so.
 - Every movement made by scanning is the same as one made from the lot's or container's page, with the same rules, history and permissions.
 
@@ -1567,10 +1574,12 @@ From then on orders and jobs must be whole batches and production is reported ba
 | Lot-tracked | While none of it is on hand | Same |
 | Description, class, shelf life, active | Always | Same |
 | Batch size, rule, tolerance | Always; open orders keep their quantity | Same |
+| GTIN | Always | Same |
 
 - **Base unit.** Quantities are stored in the base unit, so it can't change once the material is in use, not even from the ERP: an import that tries is refused.
 - **Lot-tracked.** Switching between lots and balances needs no stock on hand: use, move out or write off what is there first.
 - **Shelf life** applies to lots that arrive from now on; lots already on hand keep their expiry.
+- **GTIN** (GS1 trade item number): 8, 12, 13 or 14 digits with a right check digit, kept as 14; one material per GTIN. It goes on GS1 lot labels and lets a scanned GS1 or supplier barcode find the material (see [Scan labels](#scan-labels)). Leave it blank to clear it.
 - **Switching a material off** (setting **Active** to *false*) is always allowed. Afterwards it can't be received, put on new orders or added to BOMs, but what already uses it carries on. A yellow notice lists what still uses it, for example *a capability on 3 lines*. Pulaski never deletes a material.
 
 ### Classes
@@ -1907,6 +1916,30 @@ Import the same file, or next week's, as often as you like: people are matched o
 - **Reporting tolerances** keep production reports believable. The output tolerance is a **limit**: a report that would take a run past its length × the line's ideal rate × the tolerance is refused. The consumption tolerance is a **warning**: using more of a component than planned × the tolerance is recorded, with a warning to check it. Both are 110% to start with.
 - **OEE targets** say what availability, performance, quality and OEE should reach. The site's targets apply to all its equipment; a machine or line can have targets of its own, which replace the site's. Each set of targets applies from a day on, so earlier days keep the targets they had. The OEE report shows each figure against its target.
 - **Calendar exceptions** take time out of the calendar: a holiday, a planned shutdown, a week with no demand. One set on the site covers everything in it; one on an area or line covers that and everything below it, whichever [shift schedule](#15-shift-schedules) it follows. Planning places no work in it.
+
+### Labels and printers
+
+Under **Labels** on Site settings (you need permission to change site settings):
+
+1. **Label format:** *Pulaski* (Code 128 only), *GS1-128* or *GS1 DataMatrix*. See [Lot, container and location labels](#lot-container-and-location-labels).
+2. **GS1 company prefix** (6 to 12 digits, as GS1 issued it) and **SSCC extension digit**: once set, every new container gets an SSCC. The line beneath says which serial the next one takes.
+3. **Default printer**, chosen first when someone prints. Click **Save**.
+
+**Printers.** Click **Add a printer**: a code and name, then how it **Sends**:
+
+- **Raw TCP:** the label goes straight to the printer's **Host** and **Port** (label printers usually listen on 9100). The API server must be able to reach it.
+- **Drop folder:** the label is written as a file into a folder the API is configured with, for label software (BarTender and the like) that watches it. The choice lists the folders in the API's configuration; the path never comes from the screen.
+
+and the **Templates** it uses: a set of template files on the API server (*zpl* for 4 × 6 in labels at 203 dpi, *csv* for label software, or your own). **Change** a printer to edit it or switch it off.
+
+**Supplier barcodes.** GS1 barcodes are always read. For a supplier's own, click **Add a supplier format**:
+
+1. Give a code and name.
+2. Write the **Pattern**: a regular expression whose named parts say what each piece is: `lot`, `supplier_lot`, `material` (a material code), `gtin`, `qty` and `expiry`. For example, `(?<material>[A-Z0-9-]+)\|(?<supplier_lot>\w+)\|(?<qty>\d+)` reads `PVC-K67|B4471|500`.
+3. Give the **Expiry format** when it has an expiry, such as `yyMMdd`.
+4. Scan or type a sample under **Try it on a scan** and click **Try** to see what it reads. Click **Save format**.
+
+Formats are tried in their **Order**, after GS1; the whole scan must match.
 
 ### Choose who places changeovers
 
@@ -2288,7 +2321,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines, and automated consumption doesn't use up [allocations](#allocate-lots-to-a-job). Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
-- **Not in inventory yet:** containers inside containers, GS1 labels (SSCC, GTIN) and printing straight to a label printer without a PDF, and scanning 2D codes or supplier barcodes beyond reading their text. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
+- **Not in inventory yet:** containers inside containers. GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
 - **Reversing:** a chain undo follows a lot and the lots split off it, not merges into other lots, consumption into jobs or the output made from it; corrections made before this version can't be reversed.
 - **Genealogy through a silo is an estimate** from the declared movements. A level tag's readings confirm when it was empty and check the declared stock (see [How a silo flows](#how-a-silo-flows)), but they don't change how much each arrival gave. A reversed movement and its reversal are left out of the estimate, as if neither happened.
 - **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.

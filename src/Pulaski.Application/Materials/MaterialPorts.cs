@@ -17,6 +17,12 @@ public interface IMaterialAdminRepository
 {
     Task<Versioned<Material>?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>The code of the material with this GTIN (#75), other than <paramref name="exceptId"/>; null when none has it.</summary>
+    Task<string?> FindCodeByGtinAsync(string gtin, Guid exceptId, CancellationToken cancellationToken);
+
+    /// <summary>Sets a material's GTIN (null clears it); returns its new version.</summary>
+    Task<long> SetGtinAsync(Guid id, string? gtin, DateTimeOffset at, CancellationToken cancellationToken);
+
     /// <summary>The material with this code, locked; null when there is none.</summary>
     Task<Versioned<Material>?> FindByCodeForUpdateAsync(string code, CancellationToken cancellationToken);
 

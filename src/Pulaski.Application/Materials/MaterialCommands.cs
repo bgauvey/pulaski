@@ -31,6 +31,9 @@ public sealed record ImportMaterialCommand(
     string ExternalSystem, string ExternalKey, string? ExternalVersion, string Code, string Name, string BaseUomCode, string MaterialType)
     : ICommand<ImportMaterialResponse>;
 
+/// <summary>Sets or clears a material's GTIN (#75): 8, 12, 13 or 14 digits with a right check digit, kept as 14; one material per GTIN.</summary>
+public sealed record SetMaterialGtinCommand(Guid Id, long ExpectedVersion, string? Gtin) : ICommand<VersionResponse>;
+
 public sealed record CreateMaterialClassCommand(string Code, string Name) : ICommand<CreatedResponse>;
 
 public sealed record UpdateMaterialClassCommand(Guid Id, long ExpectedVersion, string Name, bool IsActive) : ICommand<VersionResponse>;
@@ -149,6 +152,37 @@ internal sealed class UpdateMaterialHandler(
         await transaction.CommitAsync(cancellationToken);
 
         return new UpdateMaterialResponse(version, stillUsedBy);
+    }
+}
+
+internal sealed class SetMaterialGtinHandler(IUnitOfWork unitOfWork, IMaterialAdminRepository materials, IEventLog eventLog, IEventFactory events)
+    : ICommandHandler<SetMaterialGtinCommand, VersionResponse>
+{
+    public async Task<VersionResponse> HandleAsync(SetMaterialGtinCommand command, CancellationToken cancellationToken)
+    {
+        var entered = MaterialRules.Text(command.Gtin);
+        var gtin = entered is null ? null : Domain.Inventory.Gs1.NormalizeGtin(entered);
+        new Validator()
+            .Require(entered is null || gtin is not null, nameof(command.Gtin), "A GTIN of 8, 12, 13 or 14 digits whose last digit is its check digit.")
+            .ThrowIfInvalid();
+
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var current = await materials.GetForUpdateAsync(command.Id, cancellationToken) ?? throw new NotFoundException($"Material {command.Id} not found.");
+        if (current.Version != command.ExpectedVersion)
+        {
+            throw new ConflictException($"{current.Value.Code} was changed by someone else. Reload and try again.");
+        }
+
+        if (gtin is not null && await materials.FindCodeByGtinAsync(gtin, current.Value.Id, cancellationToken) is { } other)
+        {
+            throw new ConflictException($"{other} already has GTIN {gtin}.");
+        }
+
+        var envelope = events.Create(EventTypes.MaterialUpdated, "material", current.Value.Id, new { current.Value.Code, Gtin = gtin });
+        var version = await materials.SetGtinAsync(current.Value.Id, gtin, envelope.OccurredAt, cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new VersionResponse(version);
     }
 }
 

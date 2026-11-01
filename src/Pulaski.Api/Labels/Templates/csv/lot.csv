@@ -1,0 +1,2 @@
+Kind,Title,Code,LotNumber,MaterialCode,MaterialName,Quantity,Uom,SupplierLot,Expiry,Gtin,Location,Gs1Hri
+{{Kind}},{{Title}},{{Code}},{{LotNumber}},{{MaterialCode}},{{MaterialName}},{{Quantity}},{{Uom}},{{SupplierLot}},{{Expiry}},{{Gtin}},{{Location}},{{Gs1Hri}}

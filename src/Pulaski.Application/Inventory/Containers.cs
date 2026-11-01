@@ -17,7 +17,8 @@ public interface IContainerRepository
     /// <summary>The next label number, so a code made from it matches the label.</summary>
     Task<long> NextLabelNoAsync(CancellationToken cancellationToken);
 
-    Task<long> InsertAsync(Container container, long labelNo, DateTimeOffset at, CancellationToken cancellationToken);
+    /// <summary>Inserts a container with its label number and, when its site numbers containers with one, its GS1 SSCC (#75).</summary>
+    Task<long> InsertAsync(Container container, long labelNo, string? sscc, DateTimeOffset at, CancellationToken cancellationToken);
 
     Task<long> UpdateAsync(Container container, DateTimeOffset at, CancellationToken cancellationToken);
 
@@ -35,6 +36,12 @@ public interface IContainerReadStore
 
     /// <summary>Everything at the site the scan could name: by label number, by location code, or by lot, supplier lot or container code.</summary>
     Task<IReadOnlyList<ScanMatchDto>> FindAsync(Guid siteId, ScanCode code, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// What a GS1 or supplier code names at the site (#75): the container with its SSCC, or the lots on hand with its lot (as lot or supplier
+    /// lot number), of its material when the code says which; and that material, found by GTIN or code.
+    /// </summary>
+    Task<(IReadOnlyList<ScanMatchDto> Matches, Guid? MaterialId, string? MaterialCode)> FindScannedAsync(Guid siteId, ScannedLot read, CancellationToken cancellationToken);
 }
 
 public sealed record ListContainersQuery(Guid SiteId, string? Search = null, bool IncludeRetired = false) : IQuery<IReadOnlyList<ContainerDto>>;
@@ -102,13 +109,44 @@ internal sealed class GetContainerHandler(IContainerReadStore store) : IQueryHan
         await store.GetAsync(query.Id, cancellationToken) ?? throw new NotFoundException($"Container {query.Id} not found.");
 }
 
-internal sealed class ResolveScanHandler(IContainerReadStore store) : IQueryHandler<ResolveScanQuery, ScanResultDto>
+internal sealed class ResolveScanHandler(IContainerReadStore store, ILabelReadStore? labels = null, TimeProvider? time = null)
+    : IQueryHandler<ResolveScanQuery, ScanResultDto>
 {
     public async Task<ScanResultDto> HandleAsync(ResolveScanQuery query, CancellationToken cancellationToken)
     {
         var text = query.Code.Trim();
         new Validator().RequireText(text, "Code", 200).ThrowIfInvalid();
         var code = ScanCode.Parse(text);
+
+        // A GS1 code, or a supplier's in one of the site's formats (#75), says what it is; anything else is matched as a label or text.
+        if (code.Kind == ScanCode.FreeText && await ReadAsync(query.SiteId, text, cancellationToken) is { } read)
+        {
+            var (found, materialId, materialCode) = await store.FindScannedAsync(query.SiteId, read, cancellationToken);
+            var parsed = LabelRules.ToDto(read) with { MaterialId = materialId, MaterialCode = materialCode ?? read.MaterialCode };
+            var what = read.Source == "gs1" ? "GS1 code" : $"{read.Source} code";
+            return found.Count switch
+            {
+                1 => new ScanResultDto { Code = text, Status = "found", Matches = found, Parsed = parsed },
+                > 1 => new ScanResultDto { Code = text, Status = "ambiguous", Matches = found, Parsed = parsed, Message = $"{found.Count} things match this {what}; choose one." },
+                _ when materialId is not null => new ScanResultDto
+                {
+                    Code = text,
+                    Status = "receivable",
+                    Parsed = parsed,
+                    Message = $"A {what} for {materialCode}{LotText(read)}, not at this site yet: receive it?",
+                },
+                _ => new ScanResultDto
+                {
+                    Code = text,
+                    Status = "not_found",
+                    Parsed = parsed,
+                    Message = read.Gtin is { } gtin && read.MaterialCode is null
+                        ? $"No material has GTIN {gtin}; set it on the material's page."
+                        : $"Nothing at this site matches this {what}.",
+                },
+            };
+        }
+
         var matches = await store.FindAsync(query.SiteId, code, cancellationToken);
         return matches.Count switch
         {
@@ -124,6 +162,31 @@ internal sealed class ResolveScanHandler(IContainerReadStore store) : IQueryHand
             _ => new ScanResultDto { Code = text, Status = "ambiguous", Matches = matches, Message = $"{matches.Count} things match {text}; choose one." },
         };
     }
+
+    private static string LotText(ScannedLot read) => (read.LotNumber ?? read.SupplierLot) is { } lot ? $", lot {lot}" : "";
+
+    private async Task<ScannedLot?> ReadAsync(Guid siteId, string text, CancellationToken cancellationToken)
+    {
+        if (Gs1.LooksLikeGs1(text) && Gs1.Parse(text) is { } elements)
+        {
+            return ScannedLot.FromGs1(Gs1.Read(elements, DateOnly.FromDateTime((time ?? TimeProvider.System).GetUtcNow().UtcDateTime)));
+        }
+
+        if (labels is null)
+        {
+            return null;
+        }
+
+        foreach (var format in await labels.ListActiveFormatsAsync(siteId, cancellationToken))
+        {
+            if (SupplierBarcodes.TryRead(text, format.Pattern, format.ExpiryFormat, format.Code) is { } read)
+            {
+                return read;
+            }
+        }
+
+        return null;
+    }
 }
 
 internal sealed class CreateContainerHandler(
@@ -134,7 +197,8 @@ internal sealed class CreateContainerHandler(
     IEventFactory events,
     IIdGenerator ids,
     IRequestContext request,
-    TimeProvider timeProvider) : ICommandHandler<CreateContainerCommand, CreatedResponse>
+    TimeProvider timeProvider,
+    ILabelRepository? labels = null) : ICommandHandler<CreateContainerCommand, CreatedResponse>
 {
     public async Task<CreatedResponse> HandleAsync(CreateContainerCommand command, CancellationToken cancellationToken)
     {
@@ -155,8 +219,10 @@ internal sealed class CreateContainerHandler(
         }
 
         var container = Container.Create(ids.NewId(), command.SiteId, code, command.Kind, location.Id, timeProvider.GetUtcNow(), request.ActorId);
-        var envelope = events.Create(EventTypes.ContainerCreated, "container", container.Id, new { After = container, LabelNo = labelNo });
-        var version = await containers.InsertAsync(container, labelNo, envelope.OccurredAt, cancellationToken);
+        // An SSCC from the site's GS1 company prefix, when it has one (#75).
+        var sscc = labels is null ? null : await LabelRules.NextSsccAsync(labels, command.SiteId, container.CreatedAt, cancellationToken);
+        var envelope = events.Create(EventTypes.ContainerCreated, "container", container.Id, new { After = container, LabelNo = labelNo, Sscc = sscc });
+        var version = await containers.InsertAsync(container, labelNo, sscc, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new CreatedResponse(container.Id, version);

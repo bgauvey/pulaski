@@ -49,7 +49,7 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
 
     internal const string LotColumns = """
         l.id, l.site_id, l.lot_number, l.is_bulk, l.material_id, m.code AS material_code, m.name AS material_name,
-        l.status, l.quantity, l.uom_id, u.code AS uom_code,
+        l.status, l.quantity, l.uom_id, u.code AS uom_code, m.gtin AS material_gtin,
         l.location_equipment_id AS location_id, loc.code AS location_code, loc.name AS location_name,
         l.origin, l.supplier_lot, l.expires_at, l.produced_by_job_id, pj.job_number AS produced_by_job_number,
         l.container_id, ct.code AS container_code, l.label_no,

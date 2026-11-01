@@ -323,6 +323,7 @@ CREATE TABLE core.material (
     base_uom_id         uuid NOT NULL REFERENCES core.uom(id),
     is_lot_tracked      boolean NOT NULL DEFAULT true,
     shelf_life_days     integer CHECK (shelf_life_days > 0),    -- a new lot expires this long after it arrives (D-032)
+    gtin                text CONSTRAINT material_gtin_ck CHECK (gtin ~ '^[0-9]{14}$'),  -- GS1 trade item number, as 14 digits (#75)
     batch_size          numeric(18,6) CHECK (batch_size > 0),  -- made in batches of this many base units (D-036); null: continuous
     batch_tolerance_pct numeric(5,2) NOT NULL DEFAULT 2 CHECK (batch_tolerance_pct >= 0 AND batch_tolerance_pct <= 50),  -- 'near' batches may differ by this much
     batch_rule          text CHECK (batch_rule IN ('exact','near')),  -- exact: every batch the batch size, partials approved; near: within the tolerance
@@ -338,6 +339,7 @@ CREATE TABLE core.material (
     CONSTRAINT material_batch_ck CHECK ((batch_size IS NULL) = (batch_rule IS NULL))
 );
 CREATE UNIQUE INDEX material_external_uq ON core.material (external_system, external_key) WHERE external_key IS NOT NULL;
+CREATE UNIQUE INDEX material_gtin_uq ON core.material (gtin) WHERE gtin IS NOT NULL;
 
 ALTER TABLE core.residence_time
     ADD CONSTRAINT residence_time_material_fk FOREIGN KEY (material_id) REFERENCES core.material(id);
@@ -1176,11 +1178,59 @@ CREATE TABLE core.container (
     kind                    text NOT NULL CHECK (kind IN ('pallet','tote','box','bin','other')),
     location_equipment_id   uuid NOT NULL REFERENCES core.equipment(id),
     label_no                bigint NOT NULL DEFAULT nextval('core.label_seq') UNIQUE,
+    sscc                    text CONSTRAINT container_sscc_ck CHECK (sscc ~ '^[0-9]{18}$'),  -- GS1 SSCC from the site's company prefix (#75)
     is_active               boolean NOT NULL DEFAULT true,
     created_at              timestamptz NOT NULL DEFAULT now(),
     created_by              text NOT NULL,
     updated_at              timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT container_uq UNIQUE (site_id, code)
+);
+CREATE UNIQUE INDEX container_sscc_uq ON core.container (sscc) WHERE sscc IS NOT NULL;
+
+-- A label printer (#75, D-080): sent ZPL (or any printer language) over raw TCP, or a file written to a drop folder named in the API's
+-- configuration (Labels:DropFolders) for label software such as BarTender. The label is rendered from the template set's files.
+CREATE TABLE core.label_printer (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    code                text NOT NULL CHECK (code ~ '^[A-Z0-9][A-Z0-9_-]{0,29}$'),
+    name                text NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
+    method              text NOT NULL CHECK (method IN ('raw_tcp','drop_folder')),
+    host                text CHECK (length(host) <= 255),
+    port                integer CHECK (port BETWEEN 1 AND 65535),
+    drop_folder         text CHECK (drop_folder ~ '^[A-Za-z0-9_-]{1,50}$'),   -- a name in Labels:DropFolders, never a path
+    template_set        text NOT NULL CHECK (template_set ~ '^[A-Za-z0-9_-]{1,50}$'), -- a folder under Labels:TemplateDirectory
+    is_active           boolean NOT NULL DEFAULT true,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT label_printer_uq UNIQUE (site_id, code),
+    CONSTRAINT label_printer_target_ck CHECK (CASE method WHEN 'raw_tcp' THEN host IS NOT NULL AND port IS NOT NULL AND drop_folder IS NULL
+                                                          ELSE drop_folder IS NOT NULL AND host IS NULL AND port IS NULL END)
+);
+
+-- A site's labels (#75): the format, its GS1 company prefix and the next SSCC serial (locked to give one out), and its default printer.
+CREATE TABLE core.label_settings (
+    site_id             uuid PRIMARY KEY REFERENCES core.equipment(id),
+    label_format        text NOT NULL DEFAULT 'pulaski' CHECK (label_format IN ('pulaski','gs1_128','gs1_datamatrix')),
+    gs1_company_prefix  text CHECK (gs1_company_prefix ~ '^[0-9]{6,12}$'),
+    sscc_extension      smallint NOT NULL DEFAULT 0 CHECK (sscc_extension BETWEEN 0 AND 9),
+    sscc_next_serial    bigint NOT NULL DEFAULT 1 CHECK (sscc_next_serial >= 0),
+    default_printer_id  uuid REFERENCES core.label_printer(id),
+    updated_at          timestamptz NOT NULL DEFAULT now()
+);
+
+-- How a supplier's barcodes read (#75): a regular expression with named parts (lot, supplier_lot, material, gtin, qty, expiry).
+CREATE TABLE core.supplier_barcode_format (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    code                text NOT NULL CHECK (code ~ '^[A-Z0-9][A-Z0-9_-]{0,29}$'),
+    name                text NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
+    pattern             text NOT NULL CHECK (length(pattern) BETWEEN 1 AND 500),
+    expiry_format       text CHECK (length(expiry_format) <= 30),
+    sort_order          integer NOT NULL DEFAULT 0,
+    is_active           boolean NOT NULL DEFAULT true,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT supplier_barcode_format_uq UNIQUE (site_id, code)
 );
 
 CREATE TABLE core.lot (
@@ -2230,7 +2280,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0044_line_batch_tolerance'),
     ('0045_reversal_details'),
     ('0046_lot_pairing'),
-    ('0047_feed_automation');
+    ('0047_feed_automation'),
+    ('0048_gs1_labels');
 
 -- =====================================================================
 -- 17. SEED DATA

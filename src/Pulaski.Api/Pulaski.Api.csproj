@@ -17,4 +17,12 @@
     <EmbeddedResource Include="Assets\Roboto\Roboto-Variable.ttf" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Pulaski.Api.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Labels\Templates\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

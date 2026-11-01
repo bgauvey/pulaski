@@ -29,6 +29,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<EquipmentSelection>();
 builder.Services.AddScoped<SiteSelection>();
 builder.Services.AddScoped<Downloads>();
+builder.Services.AddScoped<Pulaski.Web.Services.Inventory.LabelPrinters>();
 builder.Services.AddScoped<ApiSession>();
 builder.Services.AddScoped<CurrentUser>();
 builder.Services.AddHttpClient<PulaskiApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl));

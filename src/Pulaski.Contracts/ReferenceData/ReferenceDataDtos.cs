@@ -63,6 +63,9 @@ public sealed record MaterialDto
     public string? ExternalSystem { get; init; }
     public string? ExternalKey { get; init; }
     public string? ExternalVersion { get; init; }
+
+    /// <summary>Its GS1 trade item number as 14 digits (#75); null when it has none. Lot labels carry it as (01).</summary>
+    public string? Gtin { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
 
     /// <summary>Concurrency token; send it back when changing the material.</summary>

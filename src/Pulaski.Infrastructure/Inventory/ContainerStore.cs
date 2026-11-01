@@ -22,8 +22,8 @@ internal sealed class ContainerRepository(DbSession session) : IContainerReposit
     private const string NextLabel = "SELECT nextval('core.label_seq')";
 
     private const string Insert = """
-        INSERT INTO core.container (id, site_id, code, kind, location_equipment_id, label_no, is_active, created_at, created_by, updated_at)
-        VALUES (@Id, @SiteId, @Code, @Kind, @LocationId, @LabelNo, @IsActive, @CreatedAt, @CreatedBy, @At)
+        INSERT INTO core.container (id, site_id, code, kind, location_equipment_id, label_no, sscc, is_active, created_at, created_by, updated_at)
+        VALUES (@Id, @SiteId, @Code, @Kind, @LocationId, @LabelNo, @Sscc, @IsActive, @CreatedAt, @CreatedBy, @At)
         RETURNING xmin::text::bigint
         """;
 
@@ -49,10 +49,23 @@ internal sealed class ContainerRepository(DbSession session) : IContainerReposit
 
     public Task<long> NextLabelNoAsync(CancellationToken cancellationToken) => session.ExecuteScalarAsync<long>(NextLabel, null, cancellationToken);
 
-    public Task<long> InsertAsync(Container container, long labelNo, DateTimeOffset at, CancellationToken cancellationToken) =>
+    public Task<long> InsertAsync(Container container, long labelNo, string? sscc, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(
             Insert,
-            new { container.Id, container.SiteId, container.Code, container.Kind, container.LocationId, LabelNo = labelNo, container.IsActive, container.CreatedAt, container.CreatedBy, At = at },
+            new
+            {
+                container.Id,
+                container.SiteId,
+                container.Code,
+                container.Kind,
+                container.LocationId,
+                LabelNo = labelNo,
+                Sscc = sscc,
+                container.IsActive,
+                container.CreatedAt,
+                container.CreatedBy,
+                At = at,
+            },
             cancellationToken);
 
     public Task<long> UpdateAsync(Container container, DateTimeOffset at, CancellationToken cancellationToken) =>
@@ -82,7 +95,7 @@ internal sealed class ContainerQueries(NpgsqlDataSource dataSource, IInventoryRe
 
     private const string ContainerSelect = $"""
         SELECT c.id, c.site_id, c.code, c.kind, c.location_equipment_id AS location_id, loc.code AS location_code, c.is_active, c.label_no,
-               'PUL1C' || c.label_no AS barcode,
+               'PUL1C' || c.label_no AS barcode, c.sscc,
                (SELECT count(*)::int FROM core.lot l WHERE l.container_id = c.id AND l.quantity > 0 AND l.status IN {OnHand}) AS lot_count,
                c.created_at, c.created_by, c.xmin::text::bigint AS version
         FROM core.container c
@@ -153,5 +166,60 @@ internal sealed class ContainerQueries(NpgsqlDataSource dataSource, IInventoryRe
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         return [.. await connection.QueryAsync<ScanMatchDto>(new CommandDefinition(
             Find, new { SiteId = siteId, code.Kind, LabelNo = code.LabelNo ?? -1, Text = code.Text ?? "" }, cancellationToken: cancellationToken))];
+    }
+    // A GS1 or supplier code (#75): its material by GTIN, else by code.
+    private const string ScannedMaterial = """
+        SELECT id, code FROM core.material
+        WHERE (@Gtin::text IS NOT NULL AND gtin = @Gtin) OR (@Code::text IS NOT NULL AND upper(code) = upper(@Code))
+        ORDER BY (gtin = @Gtin::text) DESC NULLS LAST
+        LIMIT 1
+        """;
+
+    // Its container by SSCC, or its lots on hand by lot or supplier lot number, of its material when it is known.
+    private const string ScannedThings = $"""
+        SELECT 'container' AS kind, c.id, c.code AS label,
+               loc.code || ' · ' || (SELECT count(*) FROM core.lot l WHERE l.container_id = c.id AND l.quantity > 0 AND l.status IN {OnHand}) || ' lots' AS detail,
+               'SSCC' AS matched_by
+        FROM core.container c
+        JOIN core.equipment loc ON loc.id = c.location_equipment_id
+        WHERE c.site_id = @SiteId AND c.is_active AND @Sscc::text IS NOT NULL AND c.sscc = @Sscc
+        UNION ALL
+        SELECT 'lot', l.id, coalesce(l.lot_number, loc.code),
+               m.code || ' · ' || trim(to_char(l.quantity, 'FM999999999990.######')) || ' ' || u.code || coalesce(' · ' || loc.code, '')
+                   || coalesce(' · in ' || ct.code, ''),
+               CASE WHEN lower(l.lot_number) = lower(@Lot) THEN 'lot number' ELSE 'supplier lot' END
+        FROM core.lot l
+        JOIN core.material m ON m.id = l.material_id
+        JOIN core.uom u ON u.id = l.uom_id
+        LEFT JOIN core.equipment loc ON loc.id = l.location_equipment_id
+        LEFT JOIN core.container ct ON ct.id = l.container_id
+        WHERE l.site_id = @SiteId AND l.status IN {OnHand} AND @Sscc::text IS NULL
+          AND (@MaterialId::uuid IS NULL OR l.material_id = @MaterialId)
+          AND (lower(l.lot_number) = lower(@Lot) OR lower(l.supplier_lot) = lower(@Lot) OR lower(l.supplier_lot) = lower(@SupplierLot))
+        ORDER BY 1, 3
+        LIMIT 20
+        """;
+
+    public async Task<(IReadOnlyList<ScanMatchDto> Matches, Guid? MaterialId, string? MaterialCode)> FindScannedAsync(
+        Guid siteId, ScannedLot read, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var material = read.Gtin is null && read.MaterialCode is null
+            ? null
+            : await connection.QuerySingleOrDefaultAsync<MaterialRow>(new CommandDefinition(
+                ScannedMaterial, new { read.Gtin, Code = read.MaterialCode }, cancellationToken: cancellationToken));
+        var matches = read.Sscc is null && read.LotNumber is null && read.SupplierLot is null
+            ? []
+            : (await connection.QueryAsync<ScanMatchDto>(new CommandDefinition(
+                ScannedThings,
+                new { SiteId = siteId, read.Sscc, MaterialId = material?.Id, Lot = read.LotNumber ?? read.SupplierLot, read.SupplierLot },
+                cancellationToken: cancellationToken))).AsList();
+        return (matches, material?.Id, material?.Code);
+    }
+
+    private sealed class MaterialRow
+    {
+        public Guid Id { get; init; }
+        public string Code { get; init; } = "";
     }
 }

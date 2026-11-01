@@ -52,7 +52,7 @@ public sealed class InMemoryContainers(InMemoryInventory inventory) : IContainer
         }
     }
 
-    public Task<long> InsertAsync(Container container, long labelNo, DateTimeOffset at, CancellationToken cancellationToken)
+    public Task<long> InsertAsync(Container container, long labelNo, string? sscc, DateTimeOffset at, CancellationToken cancellationToken)
     {
         lock (_lock)
         {
@@ -84,6 +84,10 @@ public sealed class InMemoryContainers(InMemoryInventory inventory) : IContainer
     public Task<ContainerDto?> GetAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult<ContainerDto?>(null);
 
     /// <summary>Lots and containers by label number only; enough for the scan handler's tests.</summary>
+    public Task<(IReadOnlyList<ScanMatchDto> Matches, Guid? MaterialId, string? MaterialCode)> FindScannedAsync(
+        Guid siteId, ScannedLot read, CancellationToken cancellationToken) =>
+        Task.FromResult<(IReadOnlyList<ScanMatchDto>, Guid?, string?)>(([], null, null));
+
     public Task<IReadOnlyList<ScanMatchDto>> FindAsync(Guid siteId, ScanCode code, CancellationToken cancellationToken)
     {
         lock (_lock)

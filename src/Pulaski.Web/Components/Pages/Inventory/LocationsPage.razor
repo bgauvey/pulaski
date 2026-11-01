@@ -85,6 +85,7 @@ else
                             <a class="btn btn-sm btn-outline-secondary" href="inventory?locationId=@l.Id">Stock</a>
                             <a class="btn btn-sm btn-outline-secondary" href="inventory/lots?locationId=@l.Id">Lots</a>
                             <button type="button" class="btn btn-sm btn-outline-secondary" title="A label to scan when moving stock here" @onclick="() => LabelAsync(l)">Label</button>
+                            <PrintLabelControl Kind="location" Id="l.Id" SiteId="l.SiteId" ButtonClass="btn btn-sm btn-outline-secondary" />
                         </td>
                     </tr>
                 }

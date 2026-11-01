@@ -1,0 +1,450 @@
+@inject PulaskiApiClient Api
+
+@* Labels (#75): the site's label format and GS1 numbering, its label printers and how its suppliers' barcodes read. *@
+<section class="inv-facts mb-3" id="labels" aria-labelledby="labels-heading">
+    <h2 class="h6" id="labels-heading">Labels</h2>
+    <p class="small text-muted">
+        How lot and container labels are printed. A GS1 format adds a GS1 barcode for lots whose material has a GTIN and for containers with an SSCC;
+        every label keeps Pulaski's own code, so a scan in Pulaski always finds exactly that one.
+    </p>
+    <ProblemAlert Error="_error" />
+
+    @if (_setup is null)
+    {
+        <p class="small text-muted mb-0">Loading…</p>
+    }
+    else
+    {
+        <form class="row g-2 align-items-end mb-3" @onsubmit="SaveSettingsAsync" @onsubmit:preventDefault>
+                <div class="col-sm-3">
+                    <label class="form-label small" for="label-format">Label format</label>
+                    <select id="label-format" class="form-select form-select-sm" disabled="@(!CanManage)" @bind="_format">
+                        <option value="pulaski">Pulaski (Code 128)</option>
+                        <option value="gs1_128">GS1-128</option>
+                        <option value="gs1_datamatrix">GS1 DataMatrix</option>
+                    </select>
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label small" for="gs1-prefix">GS1 company prefix</label>
+                    <input id="gs1-prefix" class="form-control form-control-sm" disabled="@(!CanManage)" inputmode="numeric" maxlength="12" placeholder="None" @bind="_prefix" />
+                </div>
+                <div class="col-sm-2">
+                    <label class="form-label small" for="sscc-ext">SSCC extension digit</label>
+                    <input id="sscc-ext" type="number" min="0" max="9" class="form-control form-control-sm" disabled="@(!CanManage)" @bind="_extension" />
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label small" for="default-printer">Default printer</label>
+                    <select id="default-printer" class="form-select form-select-sm" disabled="@(!CanManage)" @bind="_defaultPrinter">
+                        <option value="@Guid.Empty">None</option>
+                        @foreach (var p in _setup.Printers.Where(p => p.IsActive))
+                        {
+                            <option value="@p.Id">@p.Code · @p.Name</option>
+                        }
+                    </select>
+                </div>
+            @if (CanManage)
+            {
+                <div class="col-sm-1"><button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save</button></div>
+            }
+            <div class="col-12 small text-muted">
+                @(_setup.Gs1CompanyPrefix is null
+                    ? "Without a company prefix, containers get no SSCC."
+                    : $"New containers get SSCCs from serial {_setup.SsccNextSerial}.")
+            </div>
+        </form>
+
+        <h3 class="h6">Printers</h3>
+        @if (_setup.Printers.Count == 0)
+        {
+            <p class="small text-muted">No printers yet: labels print as PDF.</p>
+        }
+        else
+        {
+            <div class="table-panel mb-2">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Printer</th><th>Sends</th><th>Templates</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _setup.Printers)
+                        {
+                            <tr @key="p.Id" class="@(p.IsActive ? "" : "text-muted")">
+                                <td><span class="fw-semibold">@p.Code</span> <div class="small">@p.Name@(p.IsActive ? "" : " · off")</div></td>
+                                <td class="small">@(p.Method == "raw_tcp" ? $"Raw TCP to {p.Host}:{p.Port}" : $"Files to the '{p.DropFolder}' drop folder")</td>
+                                <td class="small">@p.TemplateSet</td>
+                                <td class="text-end">
+                                    @if (CanManage)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => EditPrinter(p)">Change</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        @if (CanManage)
+        {
+            @if (_printer is null)
+            {
+                <button type="button" class="btn btn-sm btn-link px-0 mb-3" @onclick="() => EditPrinter(null)">Add a printer</button>
+            }
+            else
+            {
+                <form class="row g-2 align-items-end mb-3" @onsubmit="SavePrinterAsync" @onsubmit:preventDefault>
+                    <div class="col-sm-2">
+                        <label class="form-label small" for="prn-code">Code</label>
+                        <input id="prn-code" class="form-control form-control-sm" maxlength="30" disabled="@(_printerId is not null)" @bind="_printer.Code" />
+                    </div>
+                    <div class="col-sm-3">
+                        <label class="form-label small" for="prn-name">Name</label>
+                        <input id="prn-name" class="form-control form-control-sm" maxlength="100" @bind="_printer.Name" />
+                    </div>
+                    <div class="col-sm-2">
+                        <label class="form-label small" for="prn-method">Sends</label>
+                        <select id="prn-method" class="form-select form-select-sm" @bind="_printer.Method">
+                            <option value="raw_tcp">Raw TCP</option>
+                            <option value="drop_folder">Drop folder</option>
+                        </select>
+                    </div>
+                    @if (_printer.Method == "raw_tcp")
+                    {
+                        <div class="col-sm-2">
+                            <label class="form-label small" for="prn-host">Host</label>
+                            <input id="prn-host" class="form-control form-control-sm" maxlength="255" @bind="_printer.Host" />
+                        </div>
+                        <div class="col-sm-1">
+                            <label class="form-label small" for="prn-port">Port</label>
+                            <input id="prn-port" type="number" min="1" max="65535" class="form-control form-control-sm" @bind="_printer.Port" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="col-sm-3">
+                            <label class="form-label small" for="prn-folder">Drop folder</label>
+                            <select id="prn-folder" class="form-select form-select-sm" @bind="_printer.DropFolder">
+                                <option value="">@(_options.DropFolders.Count == 0 ? "None configured (Labels:DropFolders)" : "Choose…")</option>
+                                @foreach (var f in _options.DropFolders)
+                                {
+                                    <option value="@f">@f</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    <div class="col-sm-2">
+                        <label class="form-label small" for="prn-set">Templates</label>
+                        <select id="prn-set" class="form-select form-select-sm" @bind="_printer.TemplateSet">
+                            @foreach (var t in _options.TemplateSets)
+                            {
+                                <option value="@t">@t</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-12 d-flex gap-2 align-items-center">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="prn-active" @bind="_printer.IsActive" />
+                            <label class="form-check-label small" for="prn-active">Active</label>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save printer</button>
+                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _printer = null">Cancel</button>
+                    </div>
+                </form>
+            }
+        }
+
+        <h3 class="h6">Supplier barcodes</h3>
+        <p class="small text-muted">
+            GS1 barcodes are always read. For a supplier's own barcodes, add a pattern (a regular expression) naming its parts:
+            <code>(?&lt;lot&gt;…)</code>, <code>(?&lt;supplier_lot&gt;…)</code>, <code>(?&lt;material&gt;…)</code>, <code>(?&lt;gtin&gt;…)</code>,
+            <code>(?&lt;qty&gt;…)</code> and <code>(?&lt;expiry&gt;…)</code>. The whole scan must match; formats are tried in order.
+        </p>
+        @if (_setup.SupplierFormats.Count > 0)
+        {
+            <div class="table-panel mb-2">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Format</th><th>Pattern</th><th>Expiry</th><th class="text-end">Order</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var f in _setup.SupplierFormats)
+                        {
+                            <tr @key="f.Id" class="@(f.IsActive ? "" : "text-muted")">
+                                <td><span class="fw-semibold">@f.Code</span> <div class="small">@f.Name@(f.IsActive ? "" : " · off")</div></td>
+                                <td class="small"><code>@f.Pattern</code></td>
+                                <td class="small">@(f.ExpiryFormat ?? "yyyy-MM-dd")</td>
+                                <td class="text-end">@f.SortOrder</td>
+                                <td class="text-end">
+                                    @if (CanManage)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => EditFormat(f)">Change</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        @if (CanManage)
+        {
+            @if (_supplier is null)
+            {
+                <button type="button" class="btn btn-sm btn-link px-0" @onclick="() => EditFormat(null)">Add a supplier format</button>
+            }
+            else
+            {
+                <form class="row g-2 align-items-end" @onsubmit="SaveFormatAsync" @onsubmit:preventDefault>
+                    <div class="col-sm-2">
+                        <label class="form-label small" for="fmt-code">Code</label>
+                        <input id="fmt-code" class="form-control form-control-sm" maxlength="30" disabled="@(_formatId is not null)" @bind="_supplier.Code" />
+                    </div>
+                    <div class="col-sm-3">
+                        <label class="form-label small" for="fmt-name">Name</label>
+                        <input id="fmt-name" class="form-control form-control-sm" maxlength="100" @bind="_supplier.Name" />
+                    </div>
+                    <div class="col-sm-2">
+                        <label class="form-label small" for="fmt-expiry">Expiry format</label>
+                        <input id="fmt-expiry" class="form-control form-control-sm" maxlength="30" placeholder="yyyy-MM-dd" @bind="_supplier.ExpiryFormat" />
+                    </div>
+                    <div class="col-sm-1">
+                        <label class="form-label small" for="fmt-order">Order</label>
+                        <input id="fmt-order" type="number" class="form-control form-control-sm" @bind="_supplier.SortOrder" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small" for="fmt-pattern">Pattern</label>
+                        <input id="fmt-pattern" class="form-control form-control-sm font-monospace" maxlength="500" @bind="_supplier.Pattern" />
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="fmt-sample">Try it on a scan</label>
+                        <div class="d-flex gap-2">
+                            <input id="fmt-sample" class="form-control form-control-sm" maxlength="200" placeholder="Scan or type a sample barcode" @bind="_sample" />
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="TestAsync">Try</button>
+                        </div>
+                        @if (_test is { } test)
+                        {
+                            <div class="small mt-1">
+                                @if (test.Problems.Count > 0)
+                                {
+                                    <span class="text-danger">@string.Join(" ", test.Problems)</span>
+                                }
+                                else if (test.Read is { } read)
+                                {
+                                    <span>Reads @Read(read)</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">The sample doesn't match the pattern.</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="col-12 d-flex gap-2 align-items-center">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="fmt-active" @bind="_supplier.IsActive" />
+                            <label class="form-check-label small" for="fmt-active">Active</label>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save format</button>
+                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _supplier = null">Cancel</button>
+                    </div>
+                </form>
+            }
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Guid SiteId { get; set; }
+
+    [Parameter] public bool CanManage { get; set; }
+
+    /// <summary>Says what was saved, in the page's message.</summary>
+    [Parameter] public EventCallback<string> Saved { get; set; }
+
+    private LabelSetupDto? _setup;
+    private LabelOptionsDto _options = new();
+    private Guid? _loadedFor;
+    private string _format = "pulaski";
+    private string? _prefix;
+    private int _extension;
+    private Guid _defaultPrinter;
+    private Guid? _printerId;
+    private PrinterForm? _printer;
+    private Guid? _formatId;
+    private FormatForm? _supplier;
+    private string? _sample;
+    private SupplierFormatTestDto? _test;
+    private bool _saving;
+    private ApiException? _error;
+
+    private sealed class PrinterForm
+    {
+        public long Version { get; set; }
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Method { get; set; } = "raw_tcp";
+        public string? Host { get; set; }
+        public int? Port { get; set; } = 9100;
+        public string? DropFolder { get; set; }
+        public string TemplateSet { get; set; } = "zpl";
+        public bool IsActive { get; set; } = true;
+    }
+
+    private sealed class FormatForm
+    {
+        public long Version { get; set; }
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Pattern { get; set; } = "";
+        public string? ExpiryFormat { get; set; }
+        public int SortOrder { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == SiteId)
+        {
+            return;
+        }
+
+        _loadedFor = SiteId;
+        await LoadAsync();
+        try
+        {
+            _options = await Api.GetLabelOptionsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _setup = await Api.GetLabelSetupAsync(SiteId);
+            (_format, _prefix, _extension, _defaultPrinter) = (_setup.LabelFormat, _setup.Gs1CompanyPrefix, _setup.SsccExtension, _setup.DefaultPrinterId ?? Guid.Empty);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private static string Read(ScannedLotDto read) => string.Join(", ", new[]
+    {
+        read.LotNumber is { } lot ? $"lot {lot}" : null,
+        read.SupplierLot is { } supplier ? $"supplier lot {supplier}" : null,
+        read.MaterialCode is { } material ? $"material {material}" : null,
+        read.Gtin is { } gtin ? $"GTIN {gtin}" : null,
+        read.Quantity is { } qty ? $"quantity {qty}" : null,
+        read.Expiry is { } expiry ? $"expiry {expiry:yyyy-MM-dd}" : null,
+    }.Where(x => x is not null)) is { Length: > 0 } text ? text + "." : "nothing Pulaski uses.";
+
+    private void EditPrinter(LabelPrinterDto? p)
+    {
+        _printerId = p?.Id;
+        _printer = p is null
+            ? new PrinterForm { TemplateSet = _options.TemplateSets.FirstOrDefault() ?? "zpl" }
+            : new PrinterForm
+            {
+                Version = p.Version,
+                Code = p.Code,
+                Name = p.Name,
+                Method = p.Method,
+                Host = p.Host,
+                Port = p.Port,
+                DropFolder = p.DropFolder,
+                TemplateSet = p.TemplateSet,
+                IsActive = p.IsActive,
+            };
+    }
+
+    private void EditFormat(SupplierBarcodeFormatDto? f)
+    {
+        (_formatId, _sample, _test) = (f?.Id, null, null);
+        _supplier = f is null
+            ? new FormatForm()
+            : new FormatForm { Version = f.Version, Code = f.Code, Name = f.Name, Pattern = f.Pattern, ExpiryFormat = f.ExpiryFormat, SortOrder = f.SortOrder, IsActive = f.IsActive };
+    }
+
+    private Task SaveSettingsAsync() => RunAsync(
+        () => Api.SetLabelSettingsAsync(SiteId, new SetLabelSettingsRequest
+        {
+            Version = _setup!.Version,
+            LabelFormat = _format,
+            Gs1CompanyPrefix = string.IsNullOrWhiteSpace(_prefix) ? null : _prefix.Trim(),
+            SsccExtension = _extension,
+            DefaultPrinterId = _defaultPrinter == Guid.Empty ? null : _defaultPrinter,
+        }),
+        "Label settings saved.");
+
+    private Task SavePrinterAsync()
+    {
+        var p = _printer!;
+        var request = new SaveLabelPrinterRequest
+        {
+            Version = p.Version,
+            Code = p.Code,
+            Name = p.Name,
+            Method = p.Method,
+            Host = p.Host,
+            Port = p.Port,
+            DropFolder = string.IsNullOrEmpty(p.DropFolder) ? null : p.DropFolder,
+            TemplateSet = p.TemplateSet,
+            IsActive = p.IsActive,
+        };
+        return RunAsync(
+            async () => { _ = _printerId is { } id ? await Api.UpdateLabelPrinterAsync(id, request) : await Api.AddLabelPrinterAsync(SiteId, request); _printer = null; },
+            $"Printer {p.Code} saved.");
+    }
+
+    private Task SaveFormatAsync()
+    {
+        var f = _supplier!;
+        var request = new SaveSupplierFormatRequest
+        {
+            Version = f.Version,
+            Code = f.Code,
+            Name = f.Name,
+            Pattern = f.Pattern,
+            ExpiryFormat = string.IsNullOrWhiteSpace(f.ExpiryFormat) ? null : f.ExpiryFormat,
+            SortOrder = f.SortOrder,
+            IsActive = f.IsActive,
+        };
+        return RunAsync(
+            async () => { _ = _formatId is { } id ? await Api.UpdateSupplierFormatAsync(id, SiteId, request) : await Api.AddSupplierFormatAsync(SiteId, request); _supplier = null; },
+            $"Supplier format {f.Code} saved.");
+    }
+
+    private async Task TestAsync()
+    {
+        _error = null;
+        try
+        {
+            _test = await Api.TestSupplierFormatAsync(new TestSupplierFormatRequest { Pattern = _supplier!.Pattern, ExpiryFormat = _supplier.ExpiryFormat, Sample = _sample ?? "" });
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action, string message)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await action();
+            await LoadAsync();
+            await Saved.InvokeAsync(message);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

@@ -151,6 +151,9 @@ public sealed record ContainerDto
     /// <summary>What its label's barcode carries: <c>PUL1C</c> + this.</summary>
     public long LabelNo { get; init; }
     public string Barcode { get; init; } = "";
+
+    /// <summary>Its GS1 SSCC (#75): given when it was made, if its site had a GS1 company prefix then.</summary>
+    public string? Sscc { get; init; }
     public int LotCount { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public string CreatedBy { get; init; } = "";
@@ -195,10 +198,16 @@ public sealed record ScanResultDto
 {
     public required string Code { get; init; }
 
-    /// <summary><c>found</c> (one match), <c>ambiguous</c> (choose one) or <c>not_found</c>.</summary>
+    /// <summary>
+    /// <c>found</c> (one match), <c>ambiguous</c> (choose one), <c>receivable</c> (a GS1 or supplier code for a known material with nothing
+    /// at the site yet: offer to receive it, #75) or <c>not_found</c>.
+    /// </summary>
     public required string Status { get; init; }
     public IReadOnlyList<ScanMatchDto> Matches { get; init; } = [];
     public string? Message { get; init; }
+
+    /// <summary>What a GS1 or supplier code said (#75); null for a Pulaski label or plain text.</summary>
+    public ScannedLotDto? Parsed { get; init; }
 }
 
 public sealed record ScanMatchDto

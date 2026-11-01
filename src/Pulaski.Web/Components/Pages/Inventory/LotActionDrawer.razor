@@ -357,6 +357,10 @@
     [Parameter]
     public Guid? LocationId { get; set; }
 
+    /// <summary>A scanned GS1 or supplier barcode (#75) to fill in a receipt from: material, lot, quantity and expiry.</summary>
+    [Parameter]
+    public ScannedLotDto? Scanned { get; set; }
+
     /// <summary>The job to declare against, pre-selected.</summary>
     [Parameter]
     public DeclarableJobDto? Job { get; set; }
@@ -528,6 +532,18 @@
 
             switch (action)
             {
+                case LotAction.Receive when Scanned is { MaterialId: { } scannedMaterial } scanned:
+                    await SelectMaterialAsync(scannedMaterial);
+                    _lotNumber = scanned.LotNumber ?? scanned.SupplierLot;
+                    _supplierLot = scanned.SupplierLot ?? scanned.LotNumber;
+                    _quantity = scanned.Quantity;
+                    if (scanned.QuantityUnit is { } unit && _uoms.FirstOrDefault(u => string.Equals(u.Code, unit, StringComparison.OrdinalIgnoreCase)) is { } uom)
+                    {
+                        _uomId = uom.Id;
+                    }
+
+                    _expires = scanned.Expiry?.ToDateTime(TimeOnly.MinValue);
+                    break;
                 case LotAction.Receive when MaterialId is { } materialId:
                     await SelectMaterialAsync(materialId);
                     break;

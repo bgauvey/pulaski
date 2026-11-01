@@ -89,6 +89,13 @@ internal sealed class MaterialAdminRepository(DbSession session) : IMaterialAdmi
     public Task<long> InsertAsync(Material material, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(Insert, Args(material, at), cancellationToken);
 
+    public Task<string?> FindCodeByGtinAsync(string gtin, Guid exceptId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<string?>("SELECT code FROM core.material WHERE gtin = @Gtin AND id <> @Id", new { Gtin = gtin, Id = exceptId }, cancellationToken);
+
+    public Task<long> SetGtinAsync(Guid id, string? gtin, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(
+            "UPDATE core.material SET gtin = @Gtin, updated_at = @At WHERE id = @Id RETURNING xmin::text::bigint", new { Id = id, Gtin = gtin, At = at }, cancellationToken);
+
     public Task<long> UpdateAsync(Material material, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(Update, Args(material, at), cancellationToken);
 

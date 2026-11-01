@@ -105,6 +105,15 @@ internal static class MaterialEndpoints
         .RequirePermission(Permissions.Materials)
         .Accepts<string>("text/csv", "text/plain", "application/xml", "text/xml");
 
+        // Its GS1 trade item number, or none (#75).
+        materials.MapPut("/{id:guid}/gtin", async Task<Ok<VersionResponse>> (
+            Guid id,
+            SetMaterialGtinRequest request,
+            ICommandHandler<SetMaterialGtinCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetMaterialGtinCommand(id, request.Version, request.Gtin), ct)))
+        .RequirePermission(Permissions.Materials);
+
         // Made in batches, or continuously again with a blank size (D-036).
         materials.MapPut("/{id:guid}/batching", async Task<Ok<UpdateMaterialResponse>> (
             Guid id,
