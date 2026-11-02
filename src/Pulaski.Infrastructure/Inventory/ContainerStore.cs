@@ -13,7 +13,7 @@ internal sealed class ContainerRepository(DbSession session) : IContainerReposit
 {
     private const string Columns = """
         id, site_id, code, kind, location_equipment_id AS location_id, is_active, created_at, created_by, parent_container_id AS parent_id,
-        xmin::text::bigint AS version
+        mixes_lots, flow_model, min_residence, xmin::text::bigint AS version
         """;
 
     private const string LockMany = $"SELECT {Columns} FROM core.container WHERE id = ANY(@Ids) ORDER BY id FOR UPDATE";
@@ -25,7 +25,7 @@ internal sealed class ContainerRepository(DbSession session) : IContainerReposit
             UNION ALL
             SELECT c.id, b.depth + 1 FROM core.container c JOIN below b ON c.parent_container_id = b.id WHERE c.is_active AND b.depth < 10)
         SELECT c.id, c.site_id, c.code, c.kind, c.location_equipment_id AS location_id, c.is_active, c.created_at, c.created_by,
-               c.parent_container_id AS parent_id, c.xmin::text::bigint AS version, b.depth
+               c.parent_container_id AS parent_id, c.mixes_lots, c.flow_model, c.min_residence, c.xmin::text::bigint AS version, b.depth
         FROM core.container c JOIN below b ON b.id = c.id
         ORDER BY c.id
         FOR UPDATE OF c
@@ -52,13 +52,15 @@ internal sealed class ContainerRepository(DbSession session) : IContainerReposit
     private const string NextLabel = "SELECT nextval('core.label_seq')";
 
     private const string Insert = """
-        INSERT INTO core.container (id, site_id, code, kind, location_equipment_id, label_no, sscc, is_active, created_at, created_by, updated_at)
-        VALUES (@Id, @SiteId, @Code, @Kind, @LocationId, @LabelNo, @Sscc, @IsActive, @CreatedAt, @CreatedBy, @At)
+        INSERT INTO core.container (id, site_id, code, kind, location_equipment_id, label_no, sscc, is_active, created_at, created_by, updated_at,
+                                    mixes_lots, flow_model, min_residence)
+        VALUES (@Id, @SiteId, @Code, @Kind, @LocationId, @LabelNo, @Sscc, @IsActive, @CreatedAt, @CreatedBy, @At, @MixesLots, @FlowModel, @MinResidence)
         RETURNING xmin::text::bigint
         """;
 
     private const string Update = """
-        UPDATE core.container SET location_equipment_id = @LocationId, is_active = @IsActive, parent_container_id = @ParentId, updated_at = @At
+        UPDATE core.container SET location_equipment_id = @LocationId, is_active = @IsActive, parent_container_id = @ParentId,
+            mixes_lots = @MixesLots, flow_model = @FlowModel, min_residence = @MinResidence, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -95,11 +97,17 @@ internal sealed class ContainerRepository(DbSession session) : IContainerReposit
                 container.CreatedAt,
                 container.CreatedBy,
                 At = at,
+                container.MixesLots,
+                container.FlowModel,
+                container.MinResidence,
             },
             cancellationToken);
 
     public Task<long> UpdateAsync(Container container, DateTimeOffset at, CancellationToken cancellationToken) =>
-        session.ExecuteScalarAsync<long>(Update, new { container.Id, container.LocationId, container.IsActive, container.ParentId, At = at }, cancellationToken);
+        session.ExecuteScalarAsync<long>(
+            Update,
+            new { container.Id, container.LocationId, container.IsActive, container.ParentId, container.MixesLots, container.FlowModel, container.MinResidence, At = at },
+            cancellationToken);
 
     public Task<IReadOnlyList<Guid>> ListLotIdsAsync(Guid containerId, CancellationToken cancellationToken) =>
         session.QueryAsync<Guid>(LotIds, new { Id = containerId }, cancellationToken);
@@ -117,7 +125,7 @@ internal sealed class ContainerRepository(DbSession session) : IContainerReposit
         session.QueryAsync<Guid>(Ancestors, new { Id = id }, cancellationToken);
 
     private static Versioned<Container> Map(Row r) =>
-        new(new Container(r.Id, r.SiteId, r.Code, r.Kind, r.LocationId, r.IsActive, r.CreatedAt, r.CreatedBy, r.ParentId), r.Version);
+        new(new Container(r.Id, r.SiteId, r.Code, r.Kind, r.LocationId, r.IsActive, r.CreatedAt, r.CreatedBy, r.ParentId, r.MixesLots, r.FlowModel, r.MinResidence), r.Version);
 
     private sealed class Row
     {
@@ -130,6 +138,9 @@ internal sealed class ContainerRepository(DbSession session) : IContainerReposit
         public DateTimeOffset CreatedAt { get; init; }
         public string CreatedBy { get; init; } = "";
         public Guid? ParentId { get; init; }
+        public bool MixesLots { get; init; }
+        public string FlowModel { get; init; } = "mixed";
+        public TimeSpan? MinResidence { get; init; }
         public long Version { get; init; }
         public int Depth { get; init; }
     }
@@ -143,6 +154,7 @@ internal sealed class ContainerQueries(NpgsqlDataSource dataSource, IInventoryRe
     private const string ContainerSelect = $"""
         SELECT c.id, c.site_id, c.code, c.kind, c.location_equipment_id AS location_id, loc.code AS location_code, c.is_active, c.label_no,
                'PUL1C' || c.label_no AS barcode, c.sscc, c.parent_container_id, pc.code AS parent_container_code,
+               c.mixes_lots, c.flow_model, (extract(epoch FROM c.min_residence) / 60)::int AS min_residence_minutes,
                (SELECT count(*)::int FROM core.lot l WHERE l.container_id = c.id AND l.quantity > 0 AND l.status IN {OnHand}) AS lot_count,
                (SELECT count(*)::int FROM core.container k WHERE k.parent_container_id = c.id AND k.is_active) AS container_count,
                c.created_at, c.created_by, c.xmin::text::bigint AS version

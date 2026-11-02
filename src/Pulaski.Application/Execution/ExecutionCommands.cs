@@ -349,7 +349,8 @@ internal sealed class PauseJobHandler(
     IIdGenerator ids,
     TimeProvider timeProvider,
     ILineBatchSizes? lineBatches = null,
-    Inventory.IFeedRepository? feeds = null) : ICommandHandler<PauseJobCommand, ExecutionResponse>
+    Inventory.IFeedRepository? feeds = null,
+    Inventory.IAllocationRepository? allocations = null) : ICommandHandler<PauseJobCommand, ExecutionResponse>
 {
     public async Task<ExecutionResponse> HandleAsync(PauseJobCommand command, CancellationToken cancellationToken)
     {
@@ -376,7 +377,7 @@ internal sealed class PauseJobHandler(
         if (command.PartialBatch is { } partial)
         {
             notes.AddRange(await ExecutionWrites.ReportPartialAsync(
-                new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds), job, run, partial, comment, now, cancellationToken));
+                new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds, allocations), job, run, partial, comment, now, cancellationToken));
             run = (await execution.GetRunForUpdateAsync(run.Id, cancellationToken))!;
         }
 
@@ -405,7 +406,8 @@ internal sealed class CompleteJobHandler(
     IIdGenerator ids,
     TimeProvider timeProvider,
     ILineBatchSizes? lineBatches = null,
-    Inventory.IFeedRepository? feeds = null) : ICommandHandler<CompleteJobCommand, ExecutionResponse>
+    Inventory.IFeedRepository? feeds = null,
+    Inventory.IAllocationRepository? allocations = null) : ICommandHandler<CompleteJobCommand, ExecutionResponse>
 {
     public async Task<ExecutionResponse> HandleAsync(CompleteJobCommand command, CancellationToken cancellationToken)
     {
@@ -436,7 +438,7 @@ internal sealed class CompleteJobHandler(
             }
 
             notes.AddRange(await ExecutionWrites.ReportPartialAsync(
-                new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds), job, run, partial, comment, now, cancellationToken));
+                new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds, allocations), job, run, partial, comment, now, cancellationToken));
             run = await execution.GetRunForUpdateAsync(run.Id, cancellationToken);
         }
 

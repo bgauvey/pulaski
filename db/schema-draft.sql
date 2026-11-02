@@ -324,6 +324,7 @@ CREATE TABLE core.material (
     is_lot_tracked      boolean NOT NULL DEFAULT true,
     shelf_life_days     integer CHECK (shelf_life_days > 0),    -- a new lot expires this long after it arrives (D-032)
     gtin                text CONSTRAINT material_gtin_ck CHECK (gtin ~ '^[0-9]{14}$'),  -- GS1 trade item number, as 14 digits (#75)
+    lead_time_days      integer CONSTRAINT material_lead_time_ck CHECK (lead_time_days BETWEEN 1 AND 3650), -- how long supply takes to come (#83)
     batch_size          numeric(18,6) CHECK (batch_size > 0),  -- made in batches of this many base units (D-036); null: continuous
     batch_tolerance_pct numeric(5,2) NOT NULL DEFAULT 2 CHECK (batch_tolerance_pct >= 0 AND batch_tolerance_pct <= 50),  -- 'near' batches may differ by this much
     batch_rule          text CHECK (batch_rule IN ('exact','near')),  -- exact: every batch the batch size, partials approved; near: within the tolerance
@@ -500,6 +501,16 @@ CREATE TABLE core.bom_item (
     CONSTRAINT bom_item_uq UNIQUE (bom_version_id, line_no)
 );
 CREATE INDEX bom_item_component_ix ON core.bom_item (component_material_id);
+
+-- Approved alternates for a BOM line (#82): ratio = the alternate's base units per base unit of the component; tried by priority.
+CREATE TABLE core.bom_item_alternate (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    bom_item_id         uuid NOT NULL REFERENCES core.bom_item(id),
+    material_id         uuid NOT NULL REFERENCES core.material(id),
+    ratio               numeric(18,6) NOT NULL CHECK (ratio > 0),
+    priority            integer NOT NULL DEFAULT 1 CHECK (priority > 0),
+    CONSTRAINT bom_item_alternate_uq UNIQUE (bom_item_id, material_id)
+);
 
 -- What a work center / unit can run, and how fast (D-020). A job may only be
 -- placed on a line with a current row for its material. ideal_rate drives OEE
@@ -1180,6 +1191,9 @@ CREATE TABLE core.container (
     label_no                bigint NOT NULL DEFAULT nextval('core.label_seq') UNIQUE,
     sscc                    text CONSTRAINT container_sscc_ck CHECK (sscc ~ '^[0-9]{18}$'),  -- GS1 SSCC from the site's company prefix (#75)
     parent_container_id     uuid REFERENCES core.container(id),     -- the container it is inside, at its location (#76); no cycles, at most 5 deep
+    mixes_lots              boolean NOT NULL DEFAULT false,         -- lots put in join its balance of their material (#93); changed only while empty
+    flow_model              text NOT NULL DEFAULT 'mixed' CONSTRAINT container_flow_model_ck CHECK (flow_model IN ('mixed','fifo')), -- for genealogy (D-060)
+    min_residence           interval CONSTRAINT container_min_residence_ck CHECK (min_residence IS NULL OR min_residence >= interval '0'),
     is_active               boolean NOT NULL DEFAULT true,
     created_at              timestamptz NOT NULL DEFAULT now(),
     created_by              text NOT NULL,
@@ -1269,8 +1283,10 @@ CREATE INDEX lot_container_ix ON core.lot (container_id) WHERE container_id IS N
 CREATE INDEX lot_material_ix ON core.lot (material_id, site_id) WHERE status IN ('available','on_hold','quarantine');
 CREATE INDEX lot_run_ix ON core.lot (produced_by_run_id);
 CREATE INDEX lot_job_ix ON core.lot (produced_by_job_id) WHERE produced_by_job_id IS NOT NULL;
--- One bulk balance per material and location.
-CREATE UNIQUE INDEX lot_bulk_uq ON core.lot (material_id, location_equipment_id) WHERE is_bulk;
+-- Balances (D-031): one per material and location, outside containers.
+-- A location's balance outside containers, and a mixing container's (#93), each one per material.
+CREATE UNIQUE INDEX lot_bulk_uq ON core.lot (material_id, location_equipment_id) WHERE is_bulk AND container_id IS NULL;
+CREATE UNIQUE INDEX lot_bulk_container_uq ON core.lot (material_id, container_id) WHERE is_bulk AND container_id IS NOT NULL;
 
 -- Supply known to be on its way (D-058): a purchase or transfer the ERP or a person says will arrive, so the shortage check can
 -- show it beside stock. Not a purchase order: Pulaski doesn't place, price or plan them. Receiving a lot against one closes it.
@@ -1285,17 +1301,28 @@ CREATE TABLE core.expected_receipt (
     supplier            text,
     note                text,
     status              text NOT NULL DEFAULT 'open' CHECK (status IN ('open','received','cancelled')),
-    received_lot_id     uuid REFERENCES core.lot(id),               -- the lot received against it
+    received_lot_id     uuid REFERENCES core.lot(id),               -- the latest lot received against it; all of them: expected_receipt_lot
+    received_qty        core.qty NOT NULL DEFAULT 0 CONSTRAINT expected_receipt_received_qty_ck CHECK (received_qty >= 0), -- arrived so far, in its unit (#83)
     external_system     text,                                       -- the ERP that sent it; with the key, matched by every import
     external_key        text,
     created_at          timestamptz NOT NULL DEFAULT now(),
     created_by          text NOT NULL,
     updated_at          timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT expected_receipt_external_ck CHECK ((external_system IS NULL) = (external_key IS NULL)),
-    CONSTRAINT expected_receipt_received_ck CHECK (received_lot_id IS NULL OR status = 'received')
+    CONSTRAINT expected_receipt_external_ck CHECK ((external_system IS NULL) = (external_key IS NULL))
 );
 CREATE UNIQUE INDEX expected_receipt_external_uq ON core.expected_receipt (external_system, external_key) WHERE external_key IS NOT NULL;
 CREATE INDEX expected_receipt_open_ix ON core.expected_receipt (site_id, material_id, expected_at) WHERE status = 'open';
+
+-- Each lot received against an expected receipt (#83), with how much of it counted, in the receipt's unit.
+CREATE TABLE core.expected_receipt_lot (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    expected_receipt_id uuid NOT NULL REFERENCES core.expected_receipt(id),
+    lot_id              uuid NOT NULL REFERENCES core.lot(id),
+    quantity            core.qty NOT NULL CHECK (quantity > 0),
+    received_at         timestamptz NOT NULL,
+    received_by         text NOT NULL
+);
+CREATE INDEX expected_receipt_lot_receipt_ix ON core.expected_receipt_lot (expected_receipt_id);
 
 -- Lot attributes (D-056): typed properties a site records on its lots, such as melt index or moisture, kept beside the lot so
 -- its identity and movement history never change. A definition is offered for every material, or only for materials in the
@@ -1412,12 +1439,32 @@ CREATE TABLE core.lot_allocation (
     ended_at            timestamptz,
     ended_by            text,
     updated_at          timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT lot_allocation_ended_ck CHECK ((status = 'active') = (ended_at IS NULL))
+    for_material_id     uuid REFERENCES core.material(id),          -- an alternate (#82): the planned component it stands in for
+    ratio               numeric(18,6),                              -- its base units per base unit of that component
+    CONSTRAINT lot_allocation_ended_ck CHECK ((status = 'active') = (ended_at IS NULL)),
+    CONSTRAINT lot_allocation_alternate_ck CHECK ((for_material_id IS NULL) = (ratio IS NULL) AND (ratio IS NULL OR ratio > 0))
 );
 -- One active allocation of a lot per job; more is a top-up of it.
 CREATE UNIQUE INDEX lot_allocation_active_uq ON core.lot_allocation (job_id, lot_id) WHERE status = 'active';
 CREATE INDEX lot_allocation_lot_ix ON core.lot_allocation (lot_id) WHERE status = 'active';
 CREATE INDEX lot_allocation_site_ix ON core.lot_allocation (site_id, material_id) WHERE status = 'active';
+
+-- How a site allocates (#82): keep allocations current in the background, refuse consuming another job's allocation, and the
+-- preferences that order lots expiring the same day.
+CREATE TABLE core.allocation_settings (
+    site_id             uuid PRIMARY KEY REFERENCES core.equipment(id),
+    keep_current        boolean NOT NULL DEFAULT false,
+    hard_reservation    boolean NOT NULL DEFAULT false,
+    preferences         text[] NOT NULL DEFAULT '{}'
+                        CHECK (preferences <@ ARRAY['near_line','in_container','whole_lot','part_lots_first']::text[]),
+    updated_at          timestamptz NOT NULL DEFAULT now()
+);
+
+-- When the background refresh last started for a site (#82); its own row, so a refresh never changes the settings' version.
+CREATE TABLE core.allocation_refresh (
+    site_id             uuid PRIMARY KEY REFERENCES core.equipment(id),
+    refreshed_at        timestamptz NOT NULL
+);
 
 CREATE TABLE core.partial_batch (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -2285,7 +2332,10 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0046_lot_pairing'),
     ('0047_feed_automation'),
     ('0048_gs1_labels'),
-    ('0049_nested_containers');
+    ('0049_nested_containers'),
+    ('0050_mixing_containers'),
+    ('0051_partial_receipts_lead_times'),
+    ('0052_allocation_refinements');
 
 -- =====================================================================
 -- 17. SEED DATA

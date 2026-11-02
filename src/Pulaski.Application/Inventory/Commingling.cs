@@ -23,17 +23,22 @@ internal static class Commingling
         Guid locationId,
         string origin,
         CancellationToken cancellationToken,
-        string status = LotStatus.Available)
+        string status = LotStatus.Available,
+        Guid? containerId = null)
     {
-        var existing = await inventory.FindBulkLotForUpdateAsync(materialId, locationId, cancellationToken);
+        // In a mixing container (#93) the balance is the container's, wherever it stands.
+        var existing = containerId is { } container
+            ? await inventory.FindContainerBulkLotForUpdateAsync(materialId, container, cancellationToken)
+            : await inventory.FindBulkLotForUpdateAsync(materialId, locationId, cancellationToken);
         return existing is { } found
             ? (found.Value, false)
-            : (Lot.Create(ids.NewId(), siteId, materialId, null, baseUomId, locationId, isBulk: true, origin) with { Status = status }, true);
+            : (Lot.Create(ids.NewId(), siteId, materialId, null, baseUomId, locationId, isBulk: true, origin) with { Status = status, ContainerId = containerId }, true);
     }
 
     /// <summary>
     /// Merges <paramref name="arrived"/>, a lot just written at a location whose lots mix, into
-    /// that location's balance (D-031): the lot goes to zero, the balance takes its stock and the
+    /// that location's balance (D-031), or one just packed into a container whose lots mix into that container's (#93,
+    /// <paramref name="containerId"/>): the lot goes to zero, the balance takes its stock and the
     /// earlier expiry, and genealogy links the two, so a trace still reaches the lot.
     /// </summary>
     /// <returns>The balance, its new version, and a note saying where the lot went.</returns>
@@ -46,12 +51,13 @@ internal static class Commingling
         string locationCode,
         string? comment,
         DateTimeOffset now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? containerId = null)
     {
         // An expired lot would make the whole balance expired (D-032).
         InventoryRules.EnsureNotExpired(arrived, now, $"put into the balance at {locationCode}");
         var (balance, isNew) = await BalanceAsync(
-            inventory, ids, arrived.SiteId, arrived.MaterialId, arrived.UomId, arrived.LocationId!.Value, arrived.Origin, cancellationToken, arrived.Status);
+            inventory, ids, arrived.SiteId, arrived.MaterialId, arrived.UomId, arrived.LocationId!.Value, arrived.Origin, cancellationToken, arrived.Status, containerId);
         var (merged, incoming, emptied, outgoing) = balance.Commingle(arrived);
 
         var left = events.Create(
@@ -74,7 +80,7 @@ internal static class Commingling
         await eventLog.AppendAsync(left, cancellationToken);
         await eventLog.AppendAsync(joined, cancellationToken);
 
-        return (merged, version, new InventoryWarningDto("commingled", $"{arrived.Name} joined the balance at {locationCode}, where lots mix."));
+        return (merged, version, new InventoryWarningDto("commingled", $"{arrived.Name} joined the balance {(containerId is null ? "at" : "in")} {locationCode}, where lots mix."));
     }
 
     /// <summary>The earlier of two expiries; mixed stock is only as good as its oldest part.</summary>

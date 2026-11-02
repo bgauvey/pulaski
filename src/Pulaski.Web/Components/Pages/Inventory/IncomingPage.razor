@@ -109,21 +109,34 @@ else
                             @Display.SiteTime(r.ExpectedAt, Sites.Site?.TimeZone)@(r.Status == "open" && r.ExpectedAt < now ? " · late" : "")
                         </td>
                         <td><a href="inventory/materials/@r.MaterialId">@r.MaterialCode</a> <span class="small text-muted">@r.MaterialName</span></td>
-                        <td class="inv-num">@InventoryView.Qty(r.Quantity) <span class="small text-muted">@r.UomCode</span></td>
+                        <td class="inv-num">
+                            @InventoryView.Qty(r.Quantity) <span class="small text-muted">@r.UomCode</span>
+                            @if (r.ReceivedQty > 0)
+                            {
+                                <div class="small text-muted">@InventoryView.Qty(r.ReceivedQty) arrived@(r.Status == "open" ? $", {InventoryView.Qty(r.RemainingQty)} to come" : "")</div>
+                            }
+                        </td>
                         <td class="small">@r.Reference @(r.ExternalSystem is null ? "" : $"· {r.ExternalSystem}")</td>
                         <td class="small">@r.Supplier</td>
                         <td class="small">
-                            @Display.Label(r.Status)
+                            @(r.Status == "open" && r.ReceivedQty > 0 ? "Partly received" : Display.Label(r.Status))
                             @if (r.ReceivedLotId is { } lot)
                             {
-                                <div><a href="inventory/lots/@lot">@r.ReceivedLotNumber</a></div>
+                                <div><a href="inventory/lots/@lot">@r.ReceivedLotNumber</a>@(r.ReceivedLotCount > 1 ? $" and {r.ReceivedLotCount - 1} more" : "")</div>
                             }
                         </td>
                         <td class="text-end text-nowrap">
                             @if (CanManage && r.Status == "open")
                             {
                                 <button type="button" class="btn btn-sm btn-link" @onclick="() => Edit(r)">Change</button>
-                                <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => CancelAsync(r)">Cancel</button>
+                                @if (r.ReceivedQty > 0)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_saving" title="Nothing more is coming" @onclick="() => CompleteAsync(r)">Close as complete</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => CancelAsync(r)">Cancel</button>
+                                }
                             }
                         </td>
                     </tr>
@@ -232,6 +245,8 @@ else
     }
 
     private Task CancelAsync(ExpectedReceiptDto r) => RunAsync(() => Api.CancelExpectedReceiptAsync(r.Id, r.Version));
+
+    private Task CompleteAsync(ExpectedReceiptDto r) => RunAsync(() => Api.CompleteExpectedReceiptAsync(r.Id, r.Version));
 
     private async Task RunAsync(Func<Task> action)
     {

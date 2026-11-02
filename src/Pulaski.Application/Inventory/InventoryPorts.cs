@@ -168,6 +168,9 @@ public sealed record ComponentDemandRow
     public required string MaterialName { get; init; }
     public required Guid BaseUomId { get; init; }
     public required string BaseUomCode { get; init; }
+
+    /// <summary>How many days supply of the material takes to come (#83); null when not set.</summary>
+    public int? LeadTimeDays { get; init; }
     public decimal PlannedQty { get; init; }
     public required Guid UomId { get; init; }
     public required string UomCode { get; init; }
@@ -194,6 +197,9 @@ public interface IInventoryRepository
     Task<Versioned<Lot>?> FindLotForUpdateAsync(Guid siteId, Guid materialId, string lotNumber, CancellationToken cancellationToken);
 
     /// <summary>The bulk balance of a material that isn't lot-tracked at a location, locked.</summary>
+    /// <summary>A mixing container's balance of the material (#93), locked; null when it has none.</summary>
+    Task<Versioned<Lot>?> FindContainerBulkLotForUpdateAsync(Guid materialId, Guid containerId, CancellationToken cancellationToken);
+
     Task<Versioned<Lot>?> FindBulkLotForUpdateAsync(Guid materialId, Guid locationId, CancellationToken cancellationToken);
 
     /// <returns>The new row version.</returns>
@@ -348,6 +354,9 @@ public interface IInventoryRepository
 
     /// <summary>True when the job has a planned component (<c>consume</c>) of the material.</summary>
     Task<bool> PlansComponentAsync(Guid jobId, Guid materialId, CancellationToken cancellationToken);
+
+    /// <summary>The code of the job's planned component this material is an approved alternate for on its BOM line (#82); null when none.</summary>
+    Task<string?> AlternateForAsync(Guid jobId, Guid materialId, CancellationToken cancellationToken);
 }
 
 /// <summary>A row of <c>ts.lot_event</c>: the lot's movement plus who, why and for which job.</summary>

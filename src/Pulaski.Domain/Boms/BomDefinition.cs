@@ -29,7 +29,8 @@ public static class BomVersionStatus
 /// <summary>
 /// One component line: <see cref="QtyPer"/> of the component per the BOM's base quantity, plus
 /// <see cref="ScrapFactor"/> more (0.02 plans 2% extra). <see cref="OperationNumber"/> names the
-/// operation that consumes it on a BOM for a process; null means the first operation.
+/// operation that consumes it on a BOM for a process; null means the first operation. <see cref="Alternates"/> are the materials
+/// approved in its place (#82).
 /// </summary>
 public sealed record BomItem(
     Guid Id,
@@ -39,7 +40,19 @@ public sealed record BomItem(
     Guid UomId,
     decimal ScrapFactor,
     string ConsumptionMethod,
-    int? OperationNumber);
+    int? OperationNumber,
+    IReadOnlyList<BomItemAlternate>? Alternates = null)
+{
+    /// <summary>The alternates, none when there are none.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<BomItemAlternate> AlternateList => Alternates ?? [];
+}
+
+/// <summary>
+/// A material approved in place of a BOM line's component (#82): <see cref="Ratio"/> of its base unit stands for one of the component's
+/// base unit (1.05 = 5% more of it is used). Among a line's alternates, the lowest <see cref="Priority"/> is offered first.
+/// </summary>
+public sealed record BomItemAlternate(Guid MaterialId, decimal Ratio, int Priority);
 
 /// <summary>Something wrong with a BOM, pinned to the item it concerns when there is one.</summary>
 public sealed record BomProblem(string Code, string Message, Guid? ItemId = null);
@@ -92,6 +105,8 @@ public sealed record BomDefinition(decimal BaseQty, Guid BaseUomId, IReadOnlyLis
             {
                 problems.Add(new("operation_number", $"Line {item.LineNo}: operation numbers are positive.", item.Id));
             }
+
+            problems.AddRange(AlternateProblems(item));
         }
 
         foreach (var line in Items.GroupBy(i => i.LineNo).Where(g => g.Count() > 1))
@@ -100,6 +115,32 @@ public sealed record BomDefinition(decimal BaseQty, Guid BaseUomId, IReadOnlyLis
         }
 
         return problems;
+    }
+
+    private static IEnumerable<BomProblem> AlternateProblems(BomItem item)
+    {
+        foreach (var alternate in item.AlternateList)
+        {
+            if (alternate.MaterialId == item.ComponentMaterialId)
+            {
+                yield return new("alternate_self", $"Line {item.LineNo}: a component can't be its own alternate.", item.Id);
+            }
+
+            if (alternate.Ratio <= 0)
+            {
+                yield return new("alternate_ratio", $"Line {item.LineNo}: an alternate's ratio must be greater than zero.", item.Id);
+            }
+
+            if (alternate.Priority <= 0)
+            {
+                yield return new("alternate_priority", $"Line {item.LineNo}: an alternate's priority must be 1 or more.", item.Id);
+            }
+        }
+
+        if (item.AlternateList.GroupBy(a => a.MaterialId).Any(g => g.Count() > 1))
+        {
+            yield return new("alternate_duplicate", $"Line {item.LineNo}: the same alternate is listed twice.", item.Id);
+        }
     }
 
     /// <summary>The operation numbers the items name that aren't in <paramref name="operationNumbers"/>, in order.</summary>

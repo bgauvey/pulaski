@@ -427,6 +427,9 @@ public sealed record ShortageLineDto
     public decimal FromStock { get; init; }
     public decimal FromIncoming { get; init; }
     public decimal Uncovered { get; init; }
+
+    /// <summary>Short, and needed sooner than the material's lead time from now (#83): supply asked for now wouldn't come in time.</summary>
+    public bool CantArriveInTime { get; init; }
 }
 
 /// <summary>A component's open demand against its available stock, quantities in its base unit.</summary>
@@ -451,6 +454,10 @@ public sealed record MaterialShortageDto
     public Guid? FirstShortJobId { get; init; }
     public string? FirstShortJobNumber { get; init; }
     public DateTimeOffset? FirstShortAt { get; init; }
+
+    /// <summary>The material's lead time in days (#83), and whether any of its shortages come sooner than that.</summary>
+    public int? LeadTimeDays { get; init; }
+    public bool CantArriveInTime { get; init; }
     public IReadOnlyList<ShortageLineDto> Lines { get; init; } = [];
 }
 
@@ -637,10 +644,17 @@ public sealed record ExpectedReceiptDto
     public string? Supplier { get; init; }
     public string? Note { get; init; }
 
-    /// <summary><c>open</c>, <c>received</c> or <c>cancelled</c>.</summary>
+    /// <summary><c>open</c> (perhaps partly received), <c>received</c> or <c>cancelled</c>.</summary>
     public required string Status { get; init; }
+
+    /// <summary>The latest lot received against it; <see cref="ReceivedLotCount"/> says how many there were (#83).</summary>
     public Guid? ReceivedLotId { get; init; }
     public string? ReceivedLotNumber { get; init; }
+
+    /// <summary>What has arrived against it, in its unit (#83), and what is still expected (zero once closed).</summary>
+    public decimal ReceivedQty { get; init; }
+    public decimal RemainingQty { get; init; }
+    public int ReceivedLotCount { get; init; }
     public string? ExternalSystem { get; init; }
     public string? ExternalKey { get; init; }
     public DateTimeOffset CreatedAt { get; init; }

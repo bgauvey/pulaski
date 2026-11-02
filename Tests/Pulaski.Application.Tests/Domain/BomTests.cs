@@ -102,4 +102,18 @@ public class BomTests
         Assert.Empty(next.Definition.Items.Select(i => i.Id).Intersect(released.Definition.Items.Select(i => i.Id)));
         Assert.Equal(BomVersionStatus.Obsolete, released.MakeObsolete().Status);
     }
+
+    [Fact]
+    public void Alternates_must_be_another_material_listed_once_with_a_positive_ratio_and_priority()
+    {
+        var other = Guid.CreateVersion7();
+        BomItem With(params BomItemAlternate[] alternates) => Item(10, Blend, 1450m, Kg) with { Alternates = alternates };
+        string[] Codes(BomItem item) => [.. new BomDefinition(1000m, Metre, [item]).StructuralProblems().Select(p => p.Code)];
+
+        Assert.Empty(Codes(With(new BomItemAlternate(other, 1.05m, 1))));
+        Assert.Equal(["alternate_self"], Codes(With(new BomItemAlternate(Blend, 1m, 1))));
+        Assert.Equal(["alternate_ratio", "alternate_priority"], Codes(With(new BomItemAlternate(other, 0m, 0))));
+        Assert.Equal(["alternate_duplicate"], Codes(With(new BomItemAlternate(other, 1m, 1), new BomItemAlternate(other, 2m, 2))));
+        Assert.Empty(Item(10, Blend, 1m, Kg).AlternateList);
+    }
 }

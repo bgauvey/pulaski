@@ -96,6 +96,10 @@ internal sealed class MaterialAdminRepository(DbSession session) : IMaterialAdmi
         session.ExecuteScalarAsync<long>(
             "UPDATE core.material SET gtin = @Gtin, updated_at = @At WHERE id = @Id RETURNING xmin::text::bigint", new { Id = id, Gtin = gtin, At = at }, cancellationToken);
 
+    public Task<long> SetLeadTimeAsync(Guid id, int? days, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(
+            "UPDATE core.material SET lead_time_days = @Days, updated_at = @At WHERE id = @Id RETURNING xmin::text::bigint", new { Id = id, Days = days, At = at }, cancellationToken);
+
     public Task<long> UpdateAsync(Material material, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(Update, Args(material, at), cancellationToken);
 

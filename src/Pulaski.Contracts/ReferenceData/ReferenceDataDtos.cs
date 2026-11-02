@@ -66,6 +66,9 @@ public sealed record MaterialDto
 
     /// <summary>Its GS1 trade item number as 14 digits (#75); null when it has none. Lot labels carry it as (01).</summary>
     public string? Gtin { get; init; }
+
+    /// <summary>How many days supply of it takes to come (#83); shortages needed sooner are flagged. Null when not set.</summary>
+    public int? LeadTimeDays { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
 
     /// <summary>Concurrency token; send it back when changing the material.</summary>

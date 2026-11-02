@@ -307,6 +307,7 @@ Groups materials (e.g. all resins), so processes and changeover rules can match 
 | `base_uom_id` | uuid → uom | no | The unit it is counted in by default. Fixed once the material is in use, whatever its origin (D-033). |
 | `shelf_life_days` | integer | yes | A new lot received or produced without an expiry expires this many days after it arrives (D-032). |
 | `gtin` | text | yes | Its GS1 trade item number as 14 digits (`material_gtin_ck`), unique (`material_gtin_uq`); on GS1 lot labels and for reading scanned GS1 or supplier codes (#75, D-080). |
+| `lead_time_days` | integer | yes | How many days supply of it takes to come, 1 to 3650 (`material_lead_time_ck`); shortages needed sooner are flagged (#83, D-083). |
 | `batch_size` | numeric(18,6) | yes | Made in batches of this many base units (D-036): orders and jobs are whole batches, and production is reported batch by batch. Null for a material made continuously. Pulaski-owned. |
 | `batch_tolerance_pct` | numeric(5,2) | no | Under the `near` rule, how far a batch may be from `batch_size`, 0 to 50. Default 2. |
 | `batch_rule` | text | yes | `exact` (every batch is the batch size; a partial batch waits for approval) or `near` (within the tolerance; a partial batch is accepted). Set exactly when `batch_size` is (`material_batch_ck`); defaults from the type, `exact` for finished goods. |
@@ -327,16 +328,39 @@ A quantity of one lot, in its base unit, kept for one of a job's planned compone
 | `id` | uuid | no | Primary key. |
 | `site_id` | uuid → equipment | no | The job's site. |
 | `job_id` | uuid → job | no | The job it is for. |
-| `material_id` | uuid → material | no | The component (the lot's material). |
+| `material_id` | uuid → material | no | The lot's material: the component, or an approved alternate for it (#82, D-084). |
 | `lot_id` | uuid → lot | no | The lot. One active allocation per job and lot (`lot_allocation_active_uq`); more is a top-up. |
 | `quantity` | qty | no | Still set aside, in the lot's base unit; 0 once used up. |
 | `allocated_qty` | qty | no | As set aside, plus any top-ups. |
 | `status` | text | no | `active`, `consumed` (used up by consumption into its job) or `released`. |
 | `basis` | text | no | `chosen` by a person, or `recommended` (taken from the suggestion). |
 | `note` | text | yes | The suggestion's reason, or why it was released or trimmed; at most 500 characters. |
+| `for_material_id` | uuid → material | yes | For an approved alternate (D-084): the component it stands in for. Null when the lot is the component itself. |
+| `ratio` | numeric(18,6) | yes | For an approved alternate: its base units per one of the component's, from the BOM line when allocated. It covers `quantity ÷ ratio` of the component. Set exactly when `for_material_id` is (`lot_allocation_alternate_ck`). |
 | `created_at`, `created_by` | timestamptz, text | no, yes | When and by whom. |
 | `ended_at`, `ended_by` | timestamptz, text | yes | When and by whom it stopped being active; set exactly when not active (`lot_allocation_ended_ck`). |
 | `updated_at` | timestamptz | no | Last change. |
+
+### core.allocation_settings — how a site allocates (#82, D-084) · *In use*
+
+One row per site, made with the defaults the first time it is saved (Configure → Site settings). No row means everything is off. Version by `xmin`.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key; the site. |
+| `keep_current` | boolean | no | Refresh every open job's allocations in the background a short while after lots, jobs or orders change. Default false. |
+| `hard_reservation` | boolean | no | Refuse consuming stock allocated to another job (automated consumption leaves it alone). Default false: consumed with a warning. |
+| `preferences` | text[] | no | Among lots expiring the same day, in this order: any of `near_line`, `in_container`, `whole_lot`, `part_lots_first`. Default empty. |
+| `updated_at` | timestamptz | no | Last change. |
+
+### core.allocation_refresh — when a site's allocations were last refreshed in the background (D-084) · *In use*
+
+Its own row, so a background refresh never changes the settings' version.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key; the site. |
+| `refreshed_at` | timestamptz | no | When the last background refresh started. Changes recorded after it make the site due again. |
 
 ### core.partial_batch — batches cut short when a line stopped (D-036) · *In use*
 
@@ -489,6 +513,18 @@ Written once, when the version is released; planned components reference them.
 | `scrap_factor` | numeric(9,6) | no | Extra share to plan, from 0 to under 1 (0.02 plans 2 % more). Default 0. |
 | `consumption_method` | text | no | How it will be consumed: `time_window` (lots loaded at a feed point), `declared`, `backflush` (per good count) or `scan`. |
 | `operation_number` | integer | yes | On a BOM for a process, the operation that consumes it; it must exist in the process's released version. Null: the first operation in flow order. |
+
+### core.bom_item_alternate — materials approved in place of a component (#82, D-084) · *In use*
+
+Written with its item when the version is released, from the item's `alternates` in the draft. Allocation suggests them after the component's own lots, by priority.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `bom_item_id` | uuid → bom_item | no | The component line. |
+| `material_id` | uuid → material | no | The alternate; never the component or the BOM's own material. Once per line (`bom_item_alternate_uq`). |
+| `ratio` | numeric(18,6) | no | Its base units per one base unit of the component (1.05 = 5% more). Positive. |
+| `priority` | integer | no | Lowest first among the line's alternates. Positive; default 1. |
 
 ### core.equipment_capability — what can run where (D-020) · *In use*
 
@@ -1032,6 +1068,9 @@ Holds lots that keep their own identity (`core.lot.container_id`); moving it mov
 | `label_no` | bigint | no | Its label number, unique; the barcode carries `PUL1C` + this. |
 | `sscc` | text | yes | Its GS1 SSCC, 18 digits (`container_sscc_ck`), unique (`container_sscc_uq`): given when it is made, from its site's company prefix and next serial, if the site has a prefix then (#75). |
 | `parent_container_id` | uuid → container | yes | The container it is inside, at that one's location (#76, D-081); never itself (`container_parent_ck`) or anything inside it, at most five deep. Indexed. |
+| `mixes_lots` | boolean | no | Lots packed into it join its balance of their material (#93, D-082); changed only while it is empty. Such a container holds no containers. |
+| `flow_model` | text | no | How its balances flow, for genealogy (D-060): `mixed` (default) or `fifo` (`container_flow_model_ck`). |
+| `min_residence` | interval | yes | The least time material stays in it before it can leave (D-060). |
 | `is_active` | boolean | no | False once retired, which needs it empty; never deleted. |
 | `created_at`, `created_by` | timestamptz, text | no | When and by whom. |
 | `updated_at` | timestamptz | no | Last change. |
@@ -1081,7 +1120,7 @@ One row per site, made with the defaults the first time it is changed or a conta
 
 ### core.lot — current state of each lot · *In use*
 
-A balance (`is_bulk`) is the one quantity of a material at a location: for a material that isn't lot-tracked (D-027), or for any material at a location whose lots are indistinguishable (`commingles_lots`, D-031). It has no lot number, is unique per material and location, and stays `available` at zero.
+A balance (`is_bulk`) is the one quantity of a material at a location: for a material that isn't lot-tracked (D-027), or for any material at a location whose lots are indistinguishable (`commingles_lots`, D-031). It has no lot number, is unique per material and location, and stays `available` at zero. A container whose lots mix (#93, D-082) keeps its own balance per material, unique per material and container, which moves with it.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1093,7 +1132,7 @@ A balance (`is_bulk`) is the one quantity of a material at a location: for a mat
 | `quantity` | qty | no | Current quantity; the running result of its lot events. Zero or more, never negative. |
 | `uom_id` | uuid → uom | no | Its unit: the material's base unit. |
 | `location_equipment_id` | uuid → equipment | yes | Where it is now. Required for a bulk lot. |
-| `is_bulk` | boolean | no | The one balance of a material that isn't lot-tracked at its location. |
+| `is_bulk` | boolean | no | A balance: the one of a material at a location outside containers (`lot_bulk_uq`), or in a mixing container (`container_id` set, `lot_bulk_container_uq`, #93). |
 | `produced_by_job_id` | uuid → job | yes | The job that declared it produced (D-027). |
 | `produced_by_run_id` | uuid → job_run | yes | The run that made it; filled once execution exists. |
 | `origin` | text | no | `produced`, `received`, `erp`, `split` or `merge`. A lot split off another is `split` (D-030). |
@@ -1119,11 +1158,22 @@ A purchase or transfer someone (or the ERP) says will arrive, for the shortage c
 | `expected_at` | timestamptz | no | When it is due. Indexed with site and material for open ones (`expected_receipt_open_ix`). |
 | `reference`, `supplier`, `note` | text | yes | A PO, transfer or ASN number; the supplier; a note. |
 | `status` | text | no | `open`, `received` or `cancelled`. Only open ones count. |
-| `received_lot_id` | uuid → lot | yes | The lot received against it; set only when `received` (`expected_receipt_received_ck`). |
+| `received_lot_id` | uuid → lot | yes | The latest lot received against it; every one is in `expected_receipt_lot` (#83). |
+| `received_qty` | qty | no | What has arrived against it so far, in its unit (`expected_receipt_received_qty_ck`, ≥ 0). It stays `open` until this reaches `quantity`, or is closed as complete (#83, D-083). |
 | `external_system`, `external_key` | text | yes | The ERP that sent it and its key there; both or neither (`expected_receipt_external_ck`), unique together (`expected_receipt_external_uq`). |
 | `created_at`, `created_by` | timestamptz, text | no | When and by whom. |
 | `updated_at` | timestamptz | no | Last change. |
 
+
+### core.expected_receipt_lot — lots received against an expected receipt (#83, D-083) · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `expected_receipt_id` | uuid → expected_receipt | no | Indexed. |
+| `lot_id` | uuid → lot | no | The lot received. |
+| `quantity` | qty | no | How much of the receipt counted toward it, in the expected receipt's unit. |
+| `received_at`, `received_by` | timestamptz, text | no | When and by whom. Receipts closed before migration 0051 were filled in with the expected quantity. |
 ### core.lot_attribute — lot attribute definitions (D-056) · *In use*
 
 What a site records on its lots, such as melt index. Kept beside the lot, so recording values never changes `core.lot` or `ts.lot_event`.

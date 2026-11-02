@@ -1,10 +1,16 @@
 @inject PulaskiApiClient Api
 @inject CurrentUser User
+@inject Downloads Downloads
 
 @* A job's allocations and which lots to use next (D-064). Allocating sets stock aside; consumption is still declared as usual. *@
 <section class="inv-section" aria-labelledby="allocations-title">
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
         <h2 id="allocations-title" class="mb-0 me-auto">Allocations and suggested lots</h2>
+        @if (_view is not null && SiteId is not null && _view.Components.Any(c => c.Allocations.Count > 0))
+        {
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="PickingListAsync"
+                    title="The lots allocated to this job that aren't at its line yet, by location, to fetch">Picking list</button>
+        }
         @if (_view is { CanAllocate: true } && CanAllocate)
         {
             <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="RefreshAsync"
@@ -34,7 +40,8 @@
     else
     {
         <p class="small text-muted">
-            Suggestions use the lot that expires first, then the oldest, leaving out stock that is held, would expire before
+            Suggestions use the lot that expires first, then the site's preferences (Configure → Site settings), then the oldest; approved
+            alternates on the BOM line come after the component's own lots. They leave out stock that is held, would expire before
             @Display.SiteTime(_view.NeededBy, TimeZone) (when the job needs it) or is allocated to other jobs. Allocated stock is kept for this
             job: other jobs see it as taken.
         </p>
@@ -61,6 +68,10 @@
                                 <tr @key="a.Id">
                                     <td>
                                         <a href="inventory/lots/@a.LotId">@a.LotLabel</a>
+                                        @if (a.AlternateMaterialCode is { } alternate)
+                                        {
+                                            <div class="small text-muted">@alternate, an approved alternate (@InventoryView.Qty(a.Ratio ?? 1m) per 1)</div>
+                                        }
                                         @if (a.Problem is { } issue)
                                         {
                                             <div class="small text-warning-strong">@issue</div>
@@ -89,9 +100,15 @@
                             @foreach (var r in c.Recommendations)
                             {
                                 <tr @key="r.LotId">
-                                    <td><a href="inventory/lots/@r.LotId">@r.LotLabel</a></td>
+                                    <td>
+                                        <a href="inventory/lots/@r.LotId">@r.LotLabel</a>
+                                        @if (r.AlternateMaterialCode is { } alternate)
+                                        {
+                                            <div class="small text-muted">@alternate, an approved alternate</div>
+                                        }
+                                    </td>
                                     <td>@r.LocationCode</td>
-                                    <td class="inv-num">@InventoryView.Qty(r.Quantity) @c.UomCode</td>
+                                    <td class="inv-num">@InventoryView.Qty(r.Quantity) @r.UomCode</td>
                                     <td class="small">@r.Reason</td>
                                     <td class="text-end">
                                         @if (_view.CanAllocate && CanAllocate)
@@ -158,11 +175,25 @@
     }
 
     private Task AllocateAsync(ComponentAllocationDto component, LotRecommendationDto lot) => RunAsync(() =>
-        Api.AllocateLotAsync(JobId, new AllocateLotRequest { LotId = lot.LotId, Quantity = lot.Quantity, UomId = component.UomId, Note = lot.Reason }));
+        Api.AllocateLotAsync(JobId, new AllocateLotRequest { LotId = lot.LotId, Quantity = lot.Quantity, UomId = lot.UomId == Guid.Empty ? component.UomId : lot.UomId, Note = lot.Reason }));
 
     private Task AllocateSuggestedAsync(Guid? materialId) => RunAsync(() => Api.AllocateRecommendedAsync(JobId, materialId));
 
     private Task RefreshAsync() => RunAsync(() => Api.RefreshAllocationsAsync(JobId));
+
+    private async Task PickingListAsync()
+    {
+        _error = null;
+        try
+        {
+            var (content, type, name) = await Api.GetPickingListPdfAsync(SiteId!.Value, jobId: JobId);
+            await Downloads.FileAsync(name, content, type);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
 
     private Task ReleaseAsync(LotAllocationDto allocation) => RunAsync(() => Api.ReleaseAllocationAsync(JobId, allocation.Id, null));
 

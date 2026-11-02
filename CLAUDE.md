@@ -209,7 +209,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `counted_at`; `LotPastState` works a lot's state at T back from now (`GET /lots/{id}/at`, Stock on a date by location and on hold).
 - Shortages (D-058, proposed): live timing by default (each line projected via `TimelineMapping.Project`, `TimeSource` per line);
   `core.expected_receipt` (screen + idempotent ERP import by system/key; receiving with `ExpectedReceiptId` closes it) counted by
-  `ShortageCalculator` after stock, only when due by a job's time (past times count as now). Not MRP.
+  `ShortageCalculator` after stock, only when due by a job's time (past times count as now). Not MRP. D-083: receipts count toward it in its unit
+  (`received_qty`, `expected_receipt_lot`), open until fully received or `CompleteExpectedReceiptCommand`; shortages count `RemainingQty`;
+  `material.lead_time_days` flags lines needed before now + lead time (`ShortageCalculator.CantArriveInTime`).
 - Containers and labels (D-059, proposed): `core.container` holds whole lots (`lot.container_id`, kept at the container's location by
   `Lot.PackInto`/`MoveWithContainer`; moving alone, splitting or reaching zero clears it). Moving a container locks it, then its lots in
   id order. `core.label_seq` numbers lots and containers; barcodes `PUL1L<n>`/`PUL1C<n>`/`PUL1E:<code>` (Code 128, `LabelPdfRenderer`,
@@ -252,11 +254,22 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   from `Labels:TemplateDirectory/{set}/{kind}[.{format}].{ext}` (`LabelTemplates`, `LabelPrinting`); scans read GS1, then supplier formats (`receivable`).
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
+- Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the
+  container's balance (`is_bulk`, `container_id` set, unique per material + container; location balances are `container_id IS NULL`), which moves with
+  it, never unpacks, and flows by the container's `flow_model` for genealogy.
 - Lot allocations (D-064, proposed): `core.lot_allocation` (active / consumed / released; one active per job + lot) sets a lot's stock aside for a
   job's planned component; other jobs (recommendations, shortages) see it as taken; consumption into its job uses it up
   (`AllocationUse`), into another warns. `LotRecommendation` (FEFO, then FIFO; only available, unexpired at need time, free stock; every
   pick and exclusion explained); `AllocationPlanner` shared by `GetJobAllocationsQuery` and the commands. Refresh is on demand (job or
   site); locks job → lots → allocations in id order. Permission `lot.allocate`.
+- Allocation refinements (D-084, proposed): `core.allocation_settings` per site (`keep_current`, `hard_reservation`, ordered `preferences`
+  near_line / in_container / whole_lot / part_lots_first, ranked after the expiry day in `LotRecommendation`); `site_settings.manage`.
+  `AllocationRefreshService` (API, `Allocations:Refresh:*`) → `AllocationAutoRefresh` refreshes keep-current sites with lot/job/order events
+  since `core.allocation_refresh.refreshed_at`, once quiet. BOM lines carry approved alternates (`BomItem.Alternates`, released to
+  `core.bom_item_alternate`, ratio = alternate base units per component base unit, priority); allocations of them set `for_material_id` +
+  `ratio` and cover `quantity ÷ ratio` (`LotAllocation.Covers`). Hard reservation: `AllocationUse.ConsumeAsync` refuses, naming the jobs;
+  `FeedAutomation` (given `IAllocationRepository`) takes only free stock and uses up the job's own. Picking lists: `GetPickingListQuery`,
+  `/api/inventory/picking-list[.pdf]` (`PickingListPdfRenderer`), lots at the job's line left out.
 - Line batch sizes (D-065, proposed): `core.equipment_capability.batch_size` (null = the material's; only for a batch material; rule stays the
   material's, `Batching.OnLine`; a line tolerance too since D-075, `batch_tolerance_pct`, `ILineBatchSizes.GetTolerancesAsync`). `ILineBatchSizes` (in-transaction) feeds order creation (`Batching.ShareBySize`: whole
   batches of each line's size adding up exactly, else refused with the nearest quantities), job create/move/assign/start-on-line checks

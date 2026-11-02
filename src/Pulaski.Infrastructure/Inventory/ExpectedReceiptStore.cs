@@ -13,7 +13,7 @@ internal sealed class ExpectedReceiptRepository(DbSession session) : IExpectedRe
 {
     private const string Columns = """
         id, site_id, material_id, quantity, uom_id, expected_at, reference, supplier, note, status, received_lot_id,
-        external_system, external_key, created_at, created_by, xmin::text::bigint AS version
+        external_system, external_key, created_at, created_by, received_qty, xmin::text::bigint AS version
         """;
 
     private const string GetById = $"SELECT {Columns} FROM core.expected_receipt WHERE id = @Id FOR UPDATE";
@@ -22,16 +22,16 @@ internal sealed class ExpectedReceiptRepository(DbSession session) : IExpectedRe
 
     private const string Insert = """
         INSERT INTO core.expected_receipt (id, site_id, material_id, quantity, uom_id, expected_at, reference, supplier, note, status,
-                                           received_lot_id, external_system, external_key, created_at, created_by, updated_at)
+                                           received_lot_id, external_system, external_key, created_at, created_by, updated_at, received_qty)
         VALUES (@Id, @SiteId, @MaterialId, @Quantity, @UomId, @ExpectedAt, @Reference, @Supplier, @Note, @Status,
-                @ReceivedLotId, @ExternalSystem, @ExternalKey, @CreatedAt, @CreatedBy, @At)
+                @ReceivedLotId, @ExternalSystem, @ExternalKey, @CreatedAt, @CreatedBy, @At, @ReceivedQty)
         RETURNING xmin::text::bigint
         """;
 
     private const string Update = """
         UPDATE core.expected_receipt
         SET quantity = @Quantity, uom_id = @UomId, expected_at = @ExpectedAt, reference = @Reference, supplier = @Supplier, note = @Note,
-            status = @Status, received_lot_id = @ReceivedLotId, updated_at = @At
+            status = @Status, received_lot_id = @ReceivedLotId, received_qty = @ReceivedQty, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -65,8 +65,17 @@ internal sealed class ExpectedReceiptRepository(DbSession session) : IExpectedRe
         r.ExternalKey,
         r.CreatedAt,
         r.CreatedBy,
+        r.ReceivedQty,
         At = at,
     };
+
+    private const string InsertLot = """
+        INSERT INTO core.expected_receipt_lot (id, expected_receipt_id, lot_id, quantity, received_at, received_by)
+        VALUES (@Id, @ExpectedReceiptId, @LotId, @Quantity, @At, @By)
+        """;
+
+    public Task InsertLotAsync(Guid id, Guid expectedReceiptId, Guid lotId, decimal quantity, string actorId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(InsertLot, new { Id = id, ExpectedReceiptId = expectedReceiptId, LotId = lotId, Quantity = quantity, At = at, By = actorId }, cancellationToken);
 
     private sealed class Row
     {
@@ -85,11 +94,12 @@ internal sealed class ExpectedReceiptRepository(DbSession session) : IExpectedRe
         public string? ExternalKey { get; init; }
         public DateTimeOffset CreatedAt { get; init; }
         public string CreatedBy { get; init; } = "";
+        public decimal ReceivedQty { get; init; }
         public long Version { get; init; }
 
         public Versioned<ExpectedReceipt> ToVersioned() => new(
             new ExpectedReceipt(Id, SiteId, MaterialId, Quantity, UomId, ExpectedAt, Reference, Supplier, Note, Status, ReceivedLotId,
-                ExternalSystem, ExternalKey, CreatedAt, CreatedBy),
+                ExternalSystem, ExternalKey, CreatedAt, CreatedBy, ReceivedQty),
             Version);
     }
 }
@@ -100,7 +110,10 @@ internal sealed class ExpectedReceiptQueries(NpgsqlDataSource dataSource) : IExp
     private const string List = """
         SELECT r.id, r.site_id, r.material_id, m.code AS material_code, m.name AS material_name, r.quantity, r.uom_id, u.code AS uom_code,
                r.expected_at, r.reference, r.supplier, r.note, r.status, r.received_lot_id, l.lot_number AS received_lot_number,
-               r.external_system, r.external_key, r.created_at, r.created_by, r.xmin::text::bigint AS version
+               r.external_system, r.external_key, r.created_at, r.created_by, r.received_qty,
+               CASE WHEN r.status = 'open' THEN greatest(r.quantity - r.received_qty, 0) ELSE 0 END AS remaining_qty,
+               (SELECT count(*)::int FROM core.expected_receipt_lot x WHERE x.expected_receipt_id = r.id) AS received_lot_count,
+               r.xmin::text::bigint AS version
         FROM core.expected_receipt r
         JOIN core.material m ON m.id = r.material_id
         JOIN core.uom u ON u.id = r.uom_id

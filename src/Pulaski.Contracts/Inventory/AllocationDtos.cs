@@ -20,6 +20,10 @@ public sealed record LotAllocationDto
     public decimal AllocatedQty { get; init; }
     public required string UomCode { get; init; }
 
+    /// <summary>The lot's material when it is an approved alternate for the component (#82), at <see cref="Ratio"/> of it per one of the component.</summary>
+    public string? AlternateMaterialCode { get; init; }
+    public decimal? Ratio { get; init; }
+
     /// <summary><c>chosen</c> by a person or <c>recommended</c>.</summary>
     public required string Basis { get; init; }
     public string? Note { get; init; }
@@ -36,7 +40,15 @@ public sealed record LotRecommendationDto
     public required Guid LotId { get; init; }
     public required string LotLabel { get; init; }
     public string? LocationCode { get; init; }
+
+    /// <summary>What to allocate, in <see cref="UomId"/>: the component's base unit, or an alternate's own (#82).</summary>
     public decimal Quantity { get; init; }
+    public Guid UomId { get; init; }
+    public string UomCode { get; init; } = "";
+
+    /// <summary>The lot's material when it is an approved alternate (#82), at <see cref="Ratio"/> of it per one of the component.</summary>
+    public string? AlternateMaterialCode { get; init; }
+    public decimal? Ratio { get; init; }
     public decimal Free { get; init; }
     public DateTimeOffset? ExpiresAt { get; init; }
     public DateTimeOffset ReceivedAt { get; init; }
@@ -120,4 +132,65 @@ public sealed record AllocationChangeResponse
     public int Trimmed { get; init; }
     public int Jobs { get; init; }
     public IReadOnlyList<string> Notes { get; init; } = [];
+}
+
+/// <summary>How a site allocates (#82): keep allocations current, refuse consuming another job's allocation, and the lot preferences in order.</summary>
+public sealed record AllocationSettingsDto
+{
+    public required Guid SiteId { get; init; }
+
+    /// <summary>Refreshed in the background a short while after stock or the schedule changes.</summary>
+    public bool KeepCurrent { get; init; }
+
+    /// <summary>Consuming stock allocated to another job is refused, not only warned about.</summary>
+    public bool HardReservation { get; init; }
+
+    /// <summary>Among lots expiring the same day, in this order: <c>near_line</c>, <c>in_container</c>, <c>whole_lot</c>, <c>part_lots_first</c>.</summary>
+    public IReadOnlyList<string> Preferences { get; init; } = [];
+
+    /// <summary>When the last background refresh started; null when there hasn't been one.</summary>
+    public DateTimeOffset? RefreshedAt { get; init; }
+
+    /// <summary>Version of the settings; 0 while the site has none saved.</summary>
+    public long Version { get; init; }
+}
+
+public sealed record SetAllocationSettingsRequest
+{
+    public long Version { get; init; }
+    public bool KeepCurrent { get; init; }
+    public bool HardReservation { get; init; }
+    public IReadOnlyList<string> Preferences { get; init; } = [];
+}
+
+/// <summary>What to fetch from the stores for open jobs' allocations (#82), nearest location first; stock already at the job's line is left out.</summary>
+public sealed record PickingListDto
+{
+    public required Guid SiteId { get; init; }
+    public required string SiteCode { get; init; }
+    public required string SiteTimeZone { get; init; }
+
+    /// <summary>The job or line it was asked for, or null for every open job at the site.</summary>
+    public string? Scope { get; init; }
+    public IReadOnlyList<PickingLineDto> Lines { get; init; } = [];
+}
+
+/// <summary>One line of a picking list (#82): an active allocation to fetch, by where it is.</summary>
+public sealed record PickingLineDto
+{
+    public required Guid JobId { get; init; }
+    public required string JobNumber { get; init; }
+    public required string LineCode { get; init; }
+    public DateTimeOffset? NeededFrom { get; init; }
+
+    /// <summary>The component it is for; <see cref="MaterialCode"/> is the lot's own, different when it is an approved alternate.</summary>
+    public required string ComponentCode { get; init; }
+    public required string MaterialCode { get; init; }
+    public required string MaterialName { get; init; }
+    public required Guid LotId { get; init; }
+    public required string LotLabel { get; init; }
+    public string? LocationCode { get; init; }
+    public string? ContainerCode { get; init; }
+    public decimal Quantity { get; init; }
+    public required string UomCode { get; init; }
 }

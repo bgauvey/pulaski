@@ -492,8 +492,9 @@ There can be one BOM per material and process, plus one for any process.
 | **Consumed by** | How it is taken from stock (see [Feed points](#feed-points)): **Backflush on count** (automatically as production is reported, in proportion to what was made, from the lots at the line's feed points), **Time window (loaded lot)** (shared among the lots loaded at the line's feed points while it was made, typical for resin and blend), **Declared by operator** or **Scanned lot** (both entered by hand). |
 | **Operation** | Only on a BOM for a process: which operation consumes it. **First operation** if you leave it. |
 
-3. Remove a line with its red ×.
-4. Click **Save draft**. A yellow box lists anything that stops the release, and the lines concerned are highlighted.
+3. **Approved alternates** (optional): under a line, click **Add an approved alternate** for a material that may be used in its place. Choose the material, how much of it **uses** per one of the component (both in their base units: `1.05` uses 5% more), and its **priority** (1 is offered first). Remove one with its red ×.
+4. Remove a line with its red ×.
+5. Click **Save draft**. A yellow box lists anything that stops the release, and the lines concerned are highlighted.
 
 ### Release it
 
@@ -523,6 +524,7 @@ A 2,400 m order, extruded 50/50 on EXT-01 and EXT-02, plans:
 ### In detail
 
 - A material can't be its own component. Components must exist and be active to release.
+- **Alternates** belong to the line and the version: a new version can change them, and orders keep the ones of the version they were planned with. An alternate can't be the component itself or the BOM's own material, is listed once per line, needs a ratio and priority above zero, and must be active to release. Orders still plan only the component; alternates are offered when [allocating lots](#allocate-lots-to-a-job), and consuming one is recorded as an approved alternate rather than a substitution.
 - To release, each component's unit must convert to that component's base unit (so its use can be taken from stock later), and the BOM's unit must convert to the material's base unit. The yellow box says which conversion is missing.
 - Operation numbers must exist in the process's **released** version. A draft may name an operation that isn't released yet, but can't be released until it is.
 - Each component's total is rounded to six decimal places. The jobs of an operation share it in proportion to their quantities, and the last job takes any rounding remainder, so the jobs always add up to the total.
@@ -1031,17 +1033,21 @@ Allocating sets stock aside for a job before it runs, so the floor knows which l
 
 1. Open the job's inventory page (from the **Jobs** tab, or a job on the **Shortages** tab, which lists jobs not started yet too).
 2. Under **Allocations and suggested lots**, each component shows what it needs, what has been consumed and allocated, and what is **still to allocate**.
-3. The **suggested lots** cover what is still needed, the one that expires first first, then the oldest; each says why (*Expires 3 Nov 2026, the earliest; received 12 Oct 2026; 40 kg free*).
+3. The **suggested lots** cover what is still needed: the one that expires first first, then by the site's [preferences](#lot-allocations), then the oldest. Each says why (*Expires 3 Nov 2026, the earliest; received 12 Oct 2026; 40 kg free*). When the component's own lots aren't enough, lots of its **approved alternates** (from the BOM line) follow, marked *an approved alternate*, in their own unit.
 4. Click **Allocate** on a suggestion, or **Allocate all suggested** for every component.
 5. **Release** gives an allocation back. **Refresh** puts the job's allocations right after stock or the schedule has changed (see below).
 6. On the **Shortages** tab, **Refresh allocations** does the same for every open job of the site, the job needed soonest first.
+7. **Picking list** (on the job's panel, or on the **Shortages** tab for every open job, narrowed by the equipment chosen there) downloads a PDF: each lot to fetch, where it is and in which container, how much, for which job and line, and when it is needed, nearest location first, with a box to tick.
 
 **In detail**
 
 - **What is suggested.** Only available lots of the component at the job's site, with stock not set aside for other jobs. Under **lots not suggested**, each other lot says why: on hold or in quarantine, expires before the job needs it, all allocated to other jobs, or not needed because the lots before it cover the need. *When the job needs it* is its planned start, or now once that has passed or it is running.
 - **What allocated means.** The stock stays where it is and can still be moved. Other jobs' suggestions and the **Shortages** tab treat it as taken: it covers its own job first. Consuming the lot into its job uses the allocation up. Consuming it into **another** job is allowed, with a warning naming the job it was allocated to; refresh that job afterwards.
-- **When an allocation goes wrong.** If the lot is put on hold, would expire before the job needs it, or no longer holds what is allocated (written off, shipped, consumed elsewhere), the allocation shows why in amber. Nothing changes until someone clicks **Refresh**. Refresh then releases what can't be used, trims what a lot can only partly give, and allocates what is still needed from the suggestions.
-- One allocation per lot and job: allocating more of the same lot adds to it. Only a job's planned components are allocated, in their base unit, and not to a job that is completed, closed or cancelled.
+- **When an allocation goes wrong.** If the lot is put on hold, would expire before the job needs it, or no longer holds what is allocated (written off, shipped, consumed elsewhere), the allocation shows why in amber. Nothing changes until someone clicks **Refresh**, or, at a site that [keeps allocations current](#lot-allocations), until the background refresh runs a minute or so after things settle. Refresh then releases what can't be used, trims what a lot can only partly give, and allocates what is still needed from the suggestions.
+- **Approved alternates.** An alternate's lot is allocated in its own unit and covers the component at the BOM line's ratio: with a ratio of 1.25, 125 kg of it covers 100 kg of the component. The allocation says so under the lot. The **Shortages** tab counts it against the component's need, and takes it out of the alternate's own stock. A material that isn't the component or one of its approved alternates can't be allocated to the job.
+- **Hard reservation.** At a site that has it on, consuming stock allocated to another job is refused, naming that job: release or move its allocation first. Without it, the consumption goes through with a warning.
+- **Picking lists** leave out lots already at the job's line (or below it, such as its feed points), and list only what is still allocated, at most what the lot holds. The times are site time.
+- One allocation per lot and job: allocating more of the same lot adds to it. Only a job's planned components and their approved alternates are allocated, in the lot's base unit, and not to a job that is completed, closed or cancelled.
 - **Who.** Allocating, releasing and refreshing need *lot.allocate* (Planner, Supervisor and Quality to start with). Anyone who can see inventory sees allocations and suggestions, and a lot's page lists the jobs it is allocated to. Each change is recorded as an event.
 
 ### Trace a lot
@@ -1111,7 +1117,7 @@ The **Shortages** tab answers *"will we have the material for the jobs coming up
 5. Click a component to see each job that needs it, in the order they are needed: what it still needs, how much comes **from stock** and how much **incoming**, whether it is **covered** or how much is short, and when it is needed (*as scheduled now*, *published start*, or *hold-until or window*).
 6. Click a job to open it, or **stock** to open the component.
 
-Each row shows **Needed** (what the jobs still need: planned less consumed), **Available**, **Held** (on hold or quarantine, in amber: releasing it might cover the gap), **Incoming** (open [expected deliveries](#incoming-deliveries), with the next one's time, in red when late), **Short** (in red), and the **first short** job with when it is needed.
+Each row shows **Needed** (what the jobs still need: planned less consumed), **Available**, **Held** (on hold or quarantine, in amber: releasing it might cover the gap), **Incoming** (what open [expected deliveries](#incoming-deliveries) still have to bring, with the next one's time, in red when late), **Short** (in red), and the **first short** job with when it is needed. **Can't arrive in time** (amber) marks a component whose shortage is needed sooner than its lead time from now; the job's line says *within lead time*.
 
 **In detail**
 
@@ -1119,6 +1125,7 @@ Each row shows **Needed** (what the jobs still need: planned less consumed), **A
 - With a horizon, jobs needed after it, and jobs with no time at all, are left out; the horizon uses the same timing.
 - **Allocations.** Stock [allocated](#allocate-lots-to-a-job) to a job covers that job first and isn't free for the others.
 - **Supply.** Each job takes **available** stock first, then incoming deliveries due by the time it needs them. A delivery due after a job needs the material doesn't cover that job, however much arrives. A job already under way needs what it has left from now, and a late delivery counts as arriving now. Held stock isn't counted.
+- **Lead times.** A material can carry a **Lead time** in days (on its page). A job short of it and needed before now plus that time is flagged: supply asked for today wouldn't arrive in time, so it needs something else (another source, a different plan). A job with no time isn't flagged.
 - **Not purchasing.** Nothing is suggested, ordered or rescheduled: deliveries are only what the ERP or a person said is coming, and ordering stays in the ERP.
 - A component planned in a unit that doesn't convert to its base unit is left out, with an amber note naming the job.
 
@@ -1129,14 +1136,16 @@ The **Incoming** tab lists purchases and transfers expected to arrive, for the s
 1. Open **Inventory → Incoming**. Open deliveries are listed by when they are expected; late ones in red.
 2. **Expect a delivery:** choose the **Material**, enter the **Quantity** and **Unit**, when it is **Expected**, and optionally the **Reference** (PO, transfer or ASN number), **Supplier** and a **Note**. Click **Add delivery**.
 3. **Change** an open one when the date or quantity changes, or **Cancel** it if it won't come.
-4. When it arrives, **Receive** the lot as usual and choose it under **Against expected receipt**: it closes, and its row links to the lot. Nothing more is expected of it, whatever quantity arrived; if more is still coming, add another.
-5. Tick **Show received and cancelled** to see closed ones.
+4. When it arrives, **Receive** the lot as usual and choose it under **Against expected receipt** (the quantity still to come is filled in). What arrived counts toward it: once all of it has arrived it closes. Until then it stays open, *partly received*, showing what arrived and what is still to come, and the shortage check counts only the rest.
+5. When nothing more of a partly received delivery is coming, click **Close as complete**. (**Cancel** is only for one where nothing arrived.)
+6. Tick **Show received and cancelled** to see closed ones.
 
 **In detail**
 
 - **Who:** anyone who can see inventory sees them; adding, changing and cancelling needs permission to receive lots.
 - **From the ERP:** `POST /api/inventory/expected-receipts/import` takes one delivery with the ERP's name and its key there, the site, the material and unit codes, the quantity and expected time, the reference and supplier, and whether it is cancelled. Sending the same one again changes nothing; a change updates it while it is open; once received or cancelled in Pulaski it stays so. It is listed with the ERP's name beside the reference.
-- The unit must convert to the material's base unit, so the shortage check can count it.
+- The unit must convert to the material's base unit, so the shortage check can count it. What arrives is counted in the delivery's own unit, so 400 kg against a delivery expected in grams counts 400 000 g.
+- **Partly received.** Its unit can't change, and its quantity can only be changed to more than has arrived. From the ERP, a quantity no more than what arrived, or a cancellation, closes it as complete. More than expected closes it too. Each lot received against it is recorded; the row shows the latest and how many more.
 - **Events:** `pulaski.expected_receipt.created.v1`, `…updated.v1`, `…cancelled.v1` and `…received.v1`.
 
 ### The movement journal
@@ -1230,7 +1239,7 @@ The **Locations** tab lists every piece of equipment that holds inventory, with 
 
 Pallets, totes, boxes and bins that hold lots, and other containers (boxes on a pallet). Each lot inside keeps its own number, history and genealogy; moving the container moves everything in it.
 
-1. Open **Inventory → Containers** and choose the **kind**, an optional **code** (blank makes one such as *PAL-1042*) and **where it is**. Click **Add container**.
+1. Open **Inventory → Containers** and choose the **kind**, an optional **code** (blank makes one such as *PAL-1042*) and **where it is**. Tick **Lots mix in it** for a container whose contents physically blend, such as a gaylord partial bags are tipped into (see below). Click **Add container**.
 2. **Pack a lot** into it from the lot's page (**Container → Pack…**, then choose the container) or by [scanning](#scan-labels). A lot elsewhere is moved to the container's location as it is packed. To pack part of a lot, split it first.
 3. **Move…** a container to move it and everything in it: its lots, the containers inside it and their lots.
 4. **Pack into…** puts a container inside another (a box on a pallet). If the other one is somewhere else, the container and everything in it move there. **Take out of …** takes it off again; it stays where it is.
@@ -1242,6 +1251,13 @@ Pallets, totes, boxes and bins that hold lots, and other containers (boxes on a 
 - **Leaving a container.** A lot moved on its own, split off, or used up (consumed, shipped or written off to zero) leaves its container. A part split off is loose.
 - **Where containers can be:** any location that holds inventory at the site, except one where lots mix into balances (a silo), since a container keeps its lots apart. A location that takes one material at a time only takes a container whose lots are that material.
 - **Mixed contents** are allowed: a container can hold lots of several materials, and containers beside lots. Balances of materials that aren't lot-tracked can't be packed.
+- **Containers where lots mix.** Whole lots keep their identity in containers until they are put into a container where lots mix (**Mixes lots** on the list). There they lose it: each lot packed in joins the container's one balance of its material, and the lot goes to zero, linked to the balance in genealogy, as at a silo.
+  - **What goes in:** only available, unexpired lots. A lot elsewhere is moved to the container first.
+  - **Genealogy:** traces through the balance are narrowed by the container's flow (**Mixing…**: mixed or first in, first out, and a minimum residence), as for a silo; see [How a silo flows](#how-a-silo-flows).
+  - **What comes out:** the balance's stock leaves by consumption, a move of a quantity, or a write-off, never by unpacking. The balance moves with the container.
+  - **Containers:** such a container holds no containers, but it can sit on a pallet and travel with it.
+  - **Changing it:** **Mixing…** switches mixing on or off only while the container is empty, so mixed stock never turns back into whole lots. Its flow can change at any time.
+  - **Recall scope:** a trace forward from a lot tipped in reaches everything taken from the container's balance afterwards.
 - **Containers inside containers.** A container sits inside at most one other, at that one's location, and never inside itself or anything inside it. Nesting goes at most five deep (a pallet of cases of boxes is three). A container moved on its own leaves the one it was in, as a lot moved alone leaves its container. Each lot that moves along records its own movement, naming the container it is in.
 - **History.** Packing, unpacking and moving with a container are ordinary movements in each lot's history (*Packed into …*, *Unpacked out of …*, *Moved with …*), and `pulaski.lot.packed.v1`, `…unpacked.v1` and `pulaski.container.created.v1` / `…moved.v1` / `…packed.v1` / `…unpacked.v1` / `…retired.v1` in the event log. Genealogy isn't touched: a container isn't a lot.
 - **Who:** containers, packing and unpacking need permission to move lots.
@@ -1277,6 +1293,7 @@ Each is an ordinary consumption into the job and its run. It shows in the lot's 
 - **Repeated signals.** Each report and each machine count is posted once. The edge's resent signals are skipped, and a count already consumed or listed is never taken again. Counts are posted just after each batch from the edge is saved. One that wasn't posted (after an error) is taken up with the next batch, for up to 31 days.
 - **Counters.** A counter counts in its tag's unit, or in the material's base unit when the tag has none. It needs one material loaded at its feed point: with lots of two materials loaded, a count is listed rather than guessed. A count with nothing running on the line, or nothing loaded, is listed too.
 - **Reversing a report** puts back everything it consumed automatically, and dismisses what it left open. A shortfall already resolved stays resolved: reverse that consumption on its lot if it was wrong.
+- **Allocations.** Automated consumption uses up the job's own [allocation](#allocate-lots-to-a-job) of a lot. Under the site's **hard reservation**, it takes only what no other job holds; the rest is listed as a shortfall (*…was reserved for another job…*), and resolving it from that lot is refused until the other job's allocation is released or moved.
 - **Where it is recorded:** the consumption rows carry `auto_source` and `source_ref` (the report or the machine count). Shortfalls are `pulaski.feed_shortfall.recorded.v1`, `…resolved.v1` and `…dismissed.v1`, and loading again is `pulaski.lot.loaded.v1`.
 
 ### Lot, container and location labels
@@ -1336,7 +1353,7 @@ Pulaski can send every inventory movement (received, moved, consumed, produced, 
 
 - **One site per lot.** Moves stay within the lot's site; consumption needs a job in the same site.
 - **Concurrency.** Write up, write off, move, hold and release check that the lot hasn't changed since you opened it; if it has you'll see *"changed by someone else"*: reload and try again. Consumption and production don't check, so several people can declare against a busy line; the no-negative-stock rule still protects them.
-- **Substitutions.** Consuming a material the job has no planned component of is allowed, and recorded as a **substitution** (amber on the job page and in the confirmation).
+- **Substitutions.** Consuming a material the job has no planned component of is allowed, and recorded as a **substitution** (amber on the job page and in the confirmation). When the material is an approved alternate on the BOM line, the note says so instead (*used in place of …, as the BOM allows*).
 - **Genealogy per lot.** Every lot consumed into a job is recorded as a parent of every lot the job made. Traces then narrow that to the lots that pair by time, or to the lots someone picked (see [Trace a lot](#trace-a-lot)). Pairing goes by when movements were declared, not by machine data, so declaring consumption when a lot is loaded gives the best pairs.
 - **Times** are the moment you click, unless the movement is [back-dated](#back-date-a-movement). A movement recorded into a run that has ended keeps the time you entered it and names the run it belongs to.
 - **What the ERP sees.** Each movement is an event in Pulaski's event log (`pulaski.lot.received.v1`, `…consumed.v1` and so on), sent to the ERP's webhook when that is switched on (see [Send movements to the ERP](#send-movements-to-the-erp)).
@@ -1576,12 +1593,13 @@ From then on orders and jobs must be whole batches and production is reported ba
 | Lot-tracked | While none of it is on hand | Same |
 | Description, class, shelf life, active | Always | Same |
 | Batch size, rule, tolerance | Always; open orders keep their quantity | Same |
-| GTIN | Always | Same |
+| GTIN, lead time | Always | Same |
 
 - **Base unit.** Quantities are stored in the base unit, so it can't change once the material is in use, not even from the ERP: an import that tries is refused.
 - **Lot-tracked.** Switching between lots and balances needs no stock on hand: use, move out or write off what is there first.
 - **Shelf life** applies to lots that arrive from now on; lots already on hand keep their expiry.
 - **GTIN** (GS1 trade item number): 8, 12, 13 or 14 digits with a right check digit, kept as 14; one material per GTIN. It goes on GS1 lot labels and lets a scanned GS1 or supplier barcode find the material (see [Scan labels](#scan-labels)). Leave it blank to clear it.
+- **Lead time:** how many days supply of it takes to come, 1 to 3650, or blank. The [shortage check](#check-for-shortages) flags shortages needed sooner than that; nothing is ordered.
 - **Switching a material off** (setting **Active** to *false*) is always allowed. Afterwards it can't be received, put on new orders or added to BOMs, but what already uses it carries on. A yellow notice lists what still uses it, for example *a capability on 3 lines*. Pulaski never deletes a material.
 
 ### Classes
@@ -1910,7 +1928,7 @@ Import the same file, or next week's, as often as you like: people are matched o
 
 ## 17. Site settings
 
-**Configure → Site settings.** What applies to a whole site: who places changeovers on the schedule, how far production reports may go, the OEE it aims for, and the holidays and shutdowns when the site doesn't work. Each part has its own **Save** button.
+**Configure → Site settings.** What applies to a whole site: who places changeovers on the schedule, how far production reports may go, the OEE it aims for, its labels, how it allocates lots, and the holidays and shutdowns when the site doesn't work. Each part has its own **Save** button.
 
 ### Ideas to know first
 
@@ -1918,6 +1936,26 @@ Import the same file, or next week's, as often as you like: people are matched o
 - **Reporting tolerances** keep production reports believable. The output tolerance is a **limit**: a report that would take a run past its length × the line's ideal rate × the tolerance is refused. The consumption tolerance is a **warning**: using more of a component than planned × the tolerance is recorded, with a warning to check it. Both are 110% to start with.
 - **OEE targets** say what availability, performance, quality and OEE should reach. The site's targets apply to all its equipment; a machine or line can have targets of its own, which replace the site's. Each set of targets applies from a day on, so earlier days keep the targets they had. The OEE report shows each figure against its target.
 - **Calendar exceptions** take time out of the calendar: a holiday, a planned shutdown, a week with no demand. One set on the site covers everything in it; one on an area or line covers that and everything below it, whichever [shift schedule](#15-shift-schedules) it follows. Planning places no work in it.
+
+### Lot allocations
+
+Under **Lot allocations** on Site settings (you need permission to change site settings to save):
+
+1. **Keep allocations current:** tick it for every open job's allocations to be refreshed on their own, a minute or so after lots, jobs or orders change. Below it, *Last refreshed* says when that last ran.
+2. **Hard reservation:** tick it to refuse consuming stock allocated to another job, instead of only warning.
+3. **Preferences, in order:** tick those that should decide among lots expiring the same day, and put them in order with ↑ and ↓:
+   - *Already at the job's line*;
+   - *In a container* (one move fetches it);
+   - *A lot that covers what is needed alone*;
+   - *Part lots first*, so they get used up.
+4. Click **Save allocation settings**.
+
+**In detail**
+
+- **Expiry always comes first.** Preferences only decide among lots expiring on the same day, or never. The oldest receipt decides after them. *A whole lot* and *part lots first* pull opposite ways; the earlier one in the list wins.
+- **The background refresh** does what **Refresh allocations** on the Shortages tab does, as *system*. It waits until changes have been quiet for a minute, or refreshes anyway when the last refresh is 15 minutes old and changes keep coming. Everything is off to start with.
+- **Hard reservation** has no override: whoever needs the stock releases or moves the other job's allocation first. Automated consumption at feed points takes only the free stock, and lists the rest as a shortfall.
+- Each save is recorded as `pulaski.site.allocation_settings_set.v1`.
 
 ### Labels and printers
 
@@ -2322,13 +2360,13 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
-- **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines, and automated consumption doesn't use up [allocations](#allocate-lots-to-a-job). Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
+- **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
 - **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
 - **Reversing:** a chain undo follows a lot and the lots split off it, not merges into other lots, consumption into jobs or the output made from it; corrections made before this version can't be reversed.
 - **Genealogy through a silo is an estimate** from the declared movements. A level tag's readings confirm when it was empty and check the declared stock (see [How a silo flows](#how-a-silo-flows)), but they don't change how much each arrival gave. A reversed movement and its reversal are left out of the estimate, as if neither happened.
 - **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
-- **Allocations are kept up to date by hand:** nothing refreshes them when stock moves or the schedule changes; click **Refresh**. Suggestions don't prefer lots near the line, lots already in a container, or whole lots, and there are no picking lists; a substitution (a material the job doesn't plan) isn't allocated. Allocating doesn't stop another job consuming the stock: it only warns.
-- **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP; there are no lead times, purchase suggestions or partial receipts against one delivery (receiving closes it). The live timing is the schedule as projected now, not a forecast of slips.
+- **Allocations:** the background refresh is all or nothing for a site, and any change anywhere makes it run. Preferences are per site, not per material. A picking list is printed, not confirmed: fetching the lot is still an ordinary move. Approved alternates show only in allocations and on consumption, not in an order's planned components, and only a BOM's approved alternates can be allocated.
+- **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** has no quality figures or SPC alerts yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
 - **Released product specifications** are not maintained in Pulaski yet. Shop-order sheets flag this gap and require operators to verify the approved specification elsewhere.

@@ -255,9 +255,10 @@ public sealed record Lot(
     }
 
     /// <summary>Takes the lot out of its container (D-059); it stays where it is.</summary>
-    /// <exception cref="DomainRuleException">It isn't in a container.</exception>
-    public (Lot Lot, LotMovement Movement) Unpack() => ContainerId is null
-        ? throw new DomainRuleException($"{Name} isn't in a container.")
+    /// <exception cref="DomainRuleException">It isn't in a container, or it is a container's balance, whose stock leaves by quantity (#93).</exception>
+    public (Lot Lot, LotMovement Movement) Unpack() =>
+        ContainerId is null ? throw new DomainRuleException($"{Name} isn't in a container.")
+        : IsBulk ? throw new DomainRuleException("Lots mix in that container, so its stock can't be unpacked: consume it, move a quantity out, or write it off.")
         : (this with { ContainerId = null }, new LotMovement(LotEventKind.Unpacked, null, Quantity));
 
     /// <summary>Takes <paramref name="quantity"/> out of a bulk balance to send to another location.</summary>
@@ -387,7 +388,7 @@ public sealed record Lot(
             (var a, var b) => a ?? b,
         };
         var target = this with { Quantity = Quantity + source.Quantity, ExpiresAt = expires };
-        var emptied = source with { Quantity = 0m, Status = LotStatus.Consumed };
+        var emptied = source with { Quantity = 0m, Status = LotStatus.Consumed, ContainerId = null }; // reaching zero leaves its container (D-059)
         return (target, new LotMovement(LotEventKind.Merged, source.Quantity, target.Quantity, ToLocationId: LocationId),
             emptied, new LotMovement(LotEventKind.Merged, -source.Quantity, 0m, FromLocationId: LocationId, FromStatus: source.Status, ToStatus: LotStatus.Consumed));
     }

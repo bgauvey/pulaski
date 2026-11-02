@@ -114,6 +114,15 @@ internal static class MaterialEndpoints
             TypedResults.Ok(await handler.HandleAsync(new SetMaterialGtinCommand(id, request.Version, request.Gtin), ct)))
         .RequirePermission(Permissions.Materials);
 
+        // How long supply takes to come, or none (#83).
+        materials.MapPut("/{id:guid}/lead-time", async Task<Ok<VersionResponse>> (
+            Guid id,
+            SetMaterialLeadTimeRequest request,
+            ICommandHandler<SetMaterialLeadTimeCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetMaterialLeadTimeCommand(id, request.Version, request.LeadTimeDays), ct)))
+        .RequirePermission(Permissions.Materials);
+
         // Made in batches, or continuously again with a blank size (D-036).
         materials.MapPut("/{id:guid}/batching", async Task<Ok<UpdateMaterialResponse>> (
             Guid id,

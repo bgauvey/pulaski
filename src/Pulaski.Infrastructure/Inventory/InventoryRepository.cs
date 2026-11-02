@@ -41,7 +41,14 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     private const string FindBulkForUpdate = $"""
         SELECT {LotColumns} FROM core.lot
-        WHERE material_id = @MaterialId AND location_equipment_id = @LocationId AND is_bulk
+        WHERE material_id = @MaterialId AND location_equipment_id = @LocationId AND is_bulk AND container_id IS NULL
+        FOR UPDATE
+        """;
+
+    // A mixing container's balance of a material (#93).
+    private const string FindContainerBulkForUpdate = $"""
+        SELECT {LotColumns} FROM core.lot
+        WHERE material_id = @MaterialId AND container_id = @ContainerId AND is_bulk
         FOR UPDATE
         """;
 
@@ -322,6 +329,16 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         SELECT EXISTS (SELECT 1 FROM core.job_material WHERE job_id = @JobId AND material_id = @MaterialId AND direction = 'consume')
         """;
 
+    private const string AlternateFor = """
+        SELECT m.code
+        FROM core.job_material jm
+        JOIN core.bom_item_alternate a ON a.bom_item_id = jm.bom_item_id AND a.material_id = @MaterialId
+        JOIN core.material m ON m.id = jm.material_id
+        WHERE jm.job_id = @JobId AND jm.direction = 'consume'
+        ORDER BY a.priority, m.code
+        LIMIT 1
+        """;
+
     public async Task<Versioned<Lot>?> GetLotForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<LotRow>(GetLotForUpdate, new { Id = id }, cancellationToken))?.ToVersioned();
 
@@ -332,6 +349,10 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
     public async Task<Versioned<Lot>?> FindBulkLotForUpdateAsync(Guid materialId, Guid locationId, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<LotRow>(
             FindBulkForUpdate, new { MaterialId = materialId, LocationId = locationId }, cancellationToken))?.ToVersioned();
+
+    public async Task<Versioned<Lot>?> FindContainerBulkLotForUpdateAsync(Guid materialId, Guid containerId, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<LotRow>(
+            FindContainerBulkForUpdate, new { MaterialId = materialId, ContainerId = containerId }, cancellationToken))?.ToVersioned();
 
     public Task<long> InsertLotAsync(Lot lot, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(
@@ -603,6 +624,9 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     public Task<bool> IsSiteAsync(Guid id, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(IsSite, new { Id = id }, cancellationToken);
+
+    public Task<string?> AlternateForAsync(Guid jobId, Guid materialId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<string?>(AlternateFor, new { JobId = jobId, MaterialId = materialId }, cancellationToken);
 
     public Task<bool> PlansComponentAsync(Guid jobId, Guid materialId, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(PlansComponent, new { JobId = jobId, MaterialId = materialId }, cancellationToken);

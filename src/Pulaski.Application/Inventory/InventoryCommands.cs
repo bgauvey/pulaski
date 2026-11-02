@@ -173,10 +173,10 @@ internal sealed class ReceiveLotHandler(
             envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
 
-        // What was on its way is here: the expected receipt closes (D-058).
+        // What was on its way is here: it counts toward the expected receipt, which closes once all of it has arrived (D-058, #83).
         if (command.ExpectedReceiptId is { } expected)
         {
-            await ExpectedReceiving.CloseAsync(expectedReceipts, eventLog, events, expected, received, cancellationToken);
+            await ExpectedReceiving.ReceiveAsync(expectedReceipts, units, eventLog, events, ids, expected, received, material, quantity, cancellationToken);
         }
 
         // A numbered receipt where lots mix is kept, for its genealogy, then joins the balance (D-031).
@@ -513,7 +513,10 @@ internal sealed class ConsumeLotHandler(
         List<InventoryWarningDto> warnings = [];
         if (!await inventory.PlansComponentAsync(job.Id, material.Id, cancellationToken))
         {
-            warnings.Add(new("not_planned", $"{job.JobNumber} has no planned component of {material.Code}; it was recorded as a substitution."));
+            // An approved alternate on the job's BOM (#82) is a substitution the BOM allows.
+            warnings.Add(await inventory.AlternateForAsync(job.Id, material.Id, cancellationToken) is { } component
+                ? new("approved_alternate", $"{material.Code} was used in place of {component}, as {job.JobNumber}'s BOM allows.")
+                : new("not_planned", $"{job.JobNumber} has no planned component of {material.Code}; it was recorded as a substitution."));
         }
         else if (await OverPlannedAsync(job, material, quantity, cancellationToken) is { } over)
         {

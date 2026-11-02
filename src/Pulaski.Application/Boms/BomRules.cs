@@ -11,7 +11,15 @@ internal static class BomRules
         dto.BaseQty,
         dto.BaseUomId,
         [.. dto.Items.Select(i => new BomItem(
-            i.Id, i.LineNo, i.ComponentMaterialId, i.QtyPer, i.UomId, i.ScrapFactor, i.ConsumptionMethod?.Trim() ?? "", i.OperationNumber))]);
+            i.Id,
+            i.LineNo,
+            i.ComponentMaterialId,
+            i.QtyPer,
+            i.UomId,
+            i.ScrapFactor,
+            i.ConsumptionMethod?.Trim() ?? "",
+            i.OperationNumber,
+            i.Alternates.Count == 0 ? null : [.. i.Alternates.Select(a => new BomItemAlternate(a.MaterialId, a.Ratio, a.Priority))]))]);
 
     public static BomDefinitionDto ToDto(BomDefinition definition) => new()
     {
@@ -27,12 +35,14 @@ internal static class BomRules
             ScrapFactor = i.ScrapFactor,
             ConsumptionMethod = i.ConsumptionMethod,
             OperationNumber = i.OperationNumber,
+            Alternates = [.. i.AlternateList.Select(a => new BomItemAlternateDto { MaterialId = a.MaterialId, Ratio = a.Ratio, Priority = a.Priority })],
         })],
     };
 
-    /// <summary>The components, and the BOM's own material when given (its base unit is checked too).</summary>
+    /// <summary>The components and their alternates, and the BOM's own material when given (its base unit is checked too).</summary>
     public static IReadOnlyList<Guid> MaterialIds(BomDefinition definition, Guid? bomMaterialId = null) =>
-        [.. definition.Items.Select(i => i.ComponentMaterialId).Append(bomMaterialId ?? Guid.Empty).Where(id => id != Guid.Empty).Distinct()];
+        [.. definition.Items.SelectMany(i => i.AlternateList.Select(a => a.MaterialId).Prepend(i.ComponentMaterialId))
+            .Append(bomMaterialId ?? Guid.Empty).Where(id => id != Guid.Empty).Distinct()];
 
     /// <summary>
     /// What the definition names must make sense for the BOM: real components other than the
@@ -73,6 +83,23 @@ internal static class BomRules
                     "unit_conversion",
                     $"Line {item.LineNo}: {converter.Code(item.UomId)} doesn't convert to {converter.Code(component.BaseUomId)}, the base unit of {component.Code}; add a conversion for {component.Code} on the Units page.",
                     item.Id));
+            }
+
+            foreach (var alternate in item.AlternateList)
+            {
+                var material = byId.GetValueOrDefault(alternate.MaterialId);
+                if (material is null)
+                {
+                    problems.Add(new("unknown_alternate", $"Line {item.LineNo} names an alternate that doesn't exist.", item.Id));
+                }
+                else if (material.Id == bom.MaterialId)
+                {
+                    problems.Add(new("self_alternate", $"Line {item.LineNo}: a material can't be an alternate in its own BOM.", item.Id));
+                }
+                else if (!material.IsActive && !malformedOnly)
+                {
+                    problems.Add(new("inactive_alternate", $"Line {item.LineNo}: the alternate {material.Code} is inactive.", item.Id));
+                }
             }
 
             if (item.OperationNumber is { } number)

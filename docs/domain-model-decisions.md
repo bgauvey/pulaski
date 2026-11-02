@@ -486,7 +486,7 @@ What a plant needs to keep floor stock right without the ERP, beyond receiving a
 - **Aging:** on-hand stock by how long ago each lot was received or made: up to 30, 31–90, 91–180 and over 180 days, per material.
 - **Export:** stock, lots, the journal (up to 10,000 rows) and both reports download as CSV.
 
-**Deferred:** picking lists. Allocation and lot suggestions are D-064. Containers and labels are D-059. Lot attributes and certificates are D-056.
+**Deferred:** nothing here now: picking lists came with D-084. Allocation and lot suggestions are D-064. Containers and labels are D-059. Lot attributes and certificates are D-056.
 
 ## Indistinguishable lots (D-031, proposed)
 
@@ -1215,7 +1215,7 @@ People with `lot.receive` enter and change open ones on Inventory → Incoming. 
 - A change updates the open one, and `Cancelled` cancels it.
 - Once closed in Pulaski it stays closed: a late update from the ERP is ignored.
 
-`ReceiveLotCommand.ExpectedReceiptId` closes one in the receipt's transaction (lot first, then the receipt) and links the lot. Whatever quantity arrived, nothing more is expected; there are no partial receipts. Events are `expected_receipt.created/updated/cancelled/received`.
+`ReceiveLotCommand.ExpectedReceiptId` closes one in the receipt's transaction (lot first, then the receipt) and links the lot. Whatever quantity arrived, nothing more is expected; there are no partial receipts. (Since D-083, receipts count toward it and it stays open for the rest.) Events are `expected_receipt.created/updated/cancelled/received`.
 
 **The calculation.** `ShortageCalculator.Calculate(demand, available, incoming, now)` is still a pure function:
 
@@ -1224,7 +1224,7 @@ People with `lot.receive` enter and change open ones on Inventory → Incoming. 
 - Each line reports `FromStock`, `FromIncoming` and `Uncovered`. The material reports `Incoming` (all open, in the base unit) and the next due time.
 - A receipt whose unit doesn't convert is left out with a problem note.
 
-**Not MRP.** Nothing is suggested, ordered, netted across sites or rescheduled, and there are no lead times. Expected receipts are only what someone said is coming.
+**Not MRP.** Nothing is suggested, ordered, netted across sites or rescheduled, and there are no lead times (they flag shortages since D-083). Expected receipts are only what someone said is coming.
 
 ## Containers, labels and scanning (D-059, proposed)
 
@@ -1421,7 +1421,7 @@ Issue #32. Stock couldn't be set aside for a job, and nothing suggested which lo
 
 Events: `pulaski.lot.allocated.v1`, `…allocation_released.v1`, `…allocation_changed.v1`.
 
-**Not done.** Automatic refresh on stock or schedule changes, preference for locations near the line or whole lots, picking lists, allocating substitutions, hard reservations.
+**Not done.** Automatic refresh, lot preferences, picking lists, approved alternates and hard reservation came with D-084.
 
 ## Batch sizes per line (D-065, proposed)
 
@@ -1873,7 +1873,6 @@ into the job running on its line then, in the counter tag's unit (else the base 
 
 **Not done:**
 - machine production counts into lots;
-- automated consumption using up allocations (D-064);
 - residence time between a feed point and the line;
 - scan-to-consume beyond the Scan page's existing Consume.
 
@@ -1952,6 +1951,130 @@ deadlock; the cycle check then refuses one.
 `Containers`. Scans and labels say what a container is in. The Containers and Scan pages pack and take out.
 
 **Not done:** splitting a container's contents onto several in one step.
+
+## Containers that mix lots (D-082, proposed)
+
+Issue #93. Whole lots kept their identity in every container (D-059, D-081); only fixed locations could mix lots (D-031). But some containers
+physically blend what goes in: partial bags tipped into a gaylord, offcuts into a regrind tote.
+
+**Rule.** Whole lots stay distinct until they are put into a container that mixes lots; from then on they are indistinguishable there.
+
+- **The setting.** `core.container.mixes_lots`, chosen when the container is made. `SetContainerMixingCommand` (`PUT
+  /api/inventory/containers/{id}/mixing`, `lot.move`) changes it only while the container holds no stock and no containers
+  (`Container.SetMixing`); the flow model and minimum residence (as D-060) change at any time.
+- **Arrival.** `PackLotCommand` into a mixing container takes only available stock. It writes the ordinary `packed` row (moving the lot to the
+  container's location), then `Commingling.MergeArrivalAsync` merges it into the container's balance of the material, with merge genealogy,
+  the earliest expiry and lot records carried, exactly as at a mixing location.
+- **Balances per container.** A container's balance has `container_id` set and is unique per material and container
+  (`lot_bulk_container_uq`). A location's balance is now one per material and location outside containers (`lot_bulk_uq … AND container_id IS
+  NULL`; `FindBulkLotForUpdateAsync` ignores container balances). It moves with the container (D-081 carrying), never unpacks (`Lot.Unpack`),
+  and leaves by consumption, a transfer by quantity or a write-off. A lot merged out goes to zero and leaves its container (D-059).
+- **Genealogy.** The balance history reads the container's flow when its balance is in a mixing container (no level tag: that is the
+  location's), so traces are narrowed as through a silo.
+- **Containers.** A mixing container holds no containers (`Container.PackInto` refuses it as the outer one) but may sit inside others.
+- Lock order is unchanged: container, then lot, then balance; moving locks the container, those inside, then their lots and balances in id
+  order. Event `pulaski.container.mixing_set.v1`.
+
+**Not done:** transferring a balance's quantity into a mixing container (only whole lots are packed in).
+
+## Partial receipts and lead times (D-083, proposed)
+
+Issue #83. Receiving against an expected receipt closed it whatever arrived (D-058), and nothing said when a shortage was too close to
+cover.
+
+**Partial receipts.** `core.expected_receipt.received_qty`, in the receipt's own unit, and `core.expected_receipt_lot` (each lot and how
+much of it counted).
+- `ReceiveLotCommand.ExpectedReceiptId` converts the received base quantity into the receipt's unit (`ExpectedReceiving.ReceiveAsync`). It
+  adds that (`ExpectedReceipt.Receive`), records the lot and points `received_lot_id` at it.
+- The receipt is `received` once what arrived reaches the quantity (more closes it too); otherwise it stays `open`, partly received.
+- `CompleteExpectedReceiptCommand` (`POST /api/inventory/expected-receipts/{id}/complete`, `lot.receive`) closes a partly received one: nothing
+  more is coming.
+- `Cancel` is refused once something has arrived. `Change` keeps the unit and needs more than has arrived.
+- From the ERP, a cancellation or a quantity no more than what arrived closes it as complete (event `…received.v1`).
+- The shortage check counts only what is still expected (`RemainingQty`), and receiving pre-fills that quantity.
+- Migration 0051 fills earlier received ones as whole: `received_qty` = quantity, and one `expected_receipt_lot` row.
+
+**Lead times.** `core.material.lead_time_days` (1–3650, optional), set with `SetMaterialLeadTimeCommand` (`PUT /api/materials/{id}/lead-time`,
+`materials.manage`) apart from ERP-owned fields.
+- `ShortageCalculator.CantArriveInTime`: a line still uncovered whose job needs the material before now plus the lead time. A job with no
+  time isn't flagged.
+- Shortage lines and materials carry `CantArriveInTime`, and the material carries `LeadTimeDays`.
+- Nothing is suggested or ordered (not MRP).
+
+**Not done:**
+- lead times per supplier or site;
+- receipt tolerances (closing near enough on its own).
+
+## Allocation refinements (D-084, proposed)
+
+Issue #82. D-064 left out background refresh, preferences beyond expiry, picking lists, substitutes and hard reservation. Automated
+feed-point consumption ignored allocations (D-079).
+
+**Site settings.** `core.allocation_settings`, one row per site, made with the defaults on first save:
+- `keep_current`, `hard_reservation` (both off by default) and `preferences` (`text[]`, ordered);
+- changed on Configure → Site settings (`SetAllocationSettingsCommand`, `site_settings.manage`; read with `site_settings.view` or
+  `inventory.view`);
+- version by `xmin`, 0 while there is no row. A stale version is a conflict.
+
+**Background refresh, per site, opt in.** `AllocationRefreshService` (API hosted service) calls `AllocationAutoRefresh.RefreshDueAsync` every
+`Allocations:Refresh:PollSeconds` (30).
+- A site keeping allocations current is due when it has never been refreshed, or when a lot, job or work order event (allocation events aside,
+  since refreshing writes them) has come since its last refresh. That change must have been quiet for `QuietSeconds` (60), or the last refresh
+  be older than `AtMostSeconds` (900), so a burst of movements refreshes once.
+- Events carry no site, so any change makes every keep-current site due. A refresh with nothing to do changes nothing.
+- It runs `RefreshSiteAllocationsCommand` as `system`. The start time goes into `core.allocation_refresh`, a row of its own so it never changes
+  the settings' version.
+- A site that fails is logged and marked anyway, so it is retried on the next change rather than every round. `Allocations:Refresh:Enabled`
+  switches the service off.
+
+**Preferences rank after the expiry day.** `LotRecommendation.Recommend` orders by expiry (none last), then the expiry's UTC day, then each
+preference in the site's order, then oldest receipt, then label. Expiry always wins.
+- `near_line`: the lot is at or below the job's equipment (closure);
+- `in_container`;
+- `whole_lot`: covers what is still needed alone;
+- `part_lots_first`: the smallest free quantity first.
+
+Each pick's reason names the preference that applied. `whole_lot` and `part_lots_first` pull opposite ways; the earlier one decides.
+
+**Approved alternates per BOM line, versioned with the BOM.** `BomItem.Alternates` (in the draft `jsonb`) are written on release to
+`core.bom_item_alternate` (`bom_item_id`, `material_id`, `ratio`, `priority`).
+- `ratio` is the alternate's base units per one base unit of the component (1.05 = 5% more).
+- Checks: not the component itself or the BOM's material, ratio and priority positive, each material once. On release it must also be active.
+- Jobs reach them through `job_material.bom_item_id`.
+- The planner suggests the component's own lots first. Then each alternate in priority order covers what is left at its ratio: need × ratio of
+  the alternate, with the reason "Alternate for X (r a per c)".
+- `AllocateLotCommand` takes a lot of an approved alternate, the first by priority if it stands in for several. `lot_allocation.for_material_id`
+  (the component) and `ratio` are set together (`lot_allocation_alternate_ck`).
+- An alternate allocation covers `quantity ÷ ratio` of the component (`LotAllocation.Covers`). Shortages take that off the component's need and
+  the raw quantity out of the alternate's own stock.
+- Consuming an approved alternate warns `approved_alternate` instead of `not_planned` (`IInventoryRepository.AlternateForAsync`).
+
+**Hard reservation, opt in per site.** `AllocationUse.ConsumeAsync` refuses, under the site's `hard_reservation`, consuming more of a lot than
+other jobs leave free. The message names those jobs; their allocation is released or moved first. There is no bypass. It applies to every
+consumption that goes through it:
+- declared consumption;
+- shortfall resolution (`ResolveShortfallHandler`);
+- automated feed-point consumption (`FeedAutomation`, given `IAllocationRepository` by the report, pause, complete and counter paths). That
+  path doesn't refuse: it takes only what no other job holds, and the rest is a shortfall ("…was reserved for another job…").
+
+Every consumption into the job uses up its own allocation, automated or not. Off, other jobs' stock is consumed with the
+`allocated_elsewhere` warning as before.
+
+**Picking lists.** `GetPickingListQuery` (`GET /api/inventory/picking-list?siteId=&jobId=&lineId=`, JSON; `/picking-list.pdf`,
+`PickingListPdfRenderer`, landscape Letter, a box to tick per row).
+- It lists the active allocations of open jobs: at most what the lot holds, by location then container.
+- It can be narrowed to one job, or to the jobs of a piece of equipment and what is below it.
+- Lots already at or below the job's line are left out.
+- `inventory.view` or `floor.view`. The job's allocations panel and the Shortages page print it.
+
+**Locking.** Unchanged (D-064): job, then lots, then their allocations. Feed automation locks the lot, then its allocations. Settings writes
+lock the settings row.
+
+**Not done:**
+- per-material or per-class preferences;
+- a site-filtered change feed for the refresh;
+- alternates on the Order form's component plan (they show only in allocations);
+- picking confirmation (a pick is still a move).
 
 ## Application architecture
 

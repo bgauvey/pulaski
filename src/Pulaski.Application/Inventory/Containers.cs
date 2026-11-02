@@ -64,7 +64,10 @@ public sealed record GetContainerQuery(Guid Id) : IQuery<ContainerDto>;
 public sealed record ResolveScanQuery(Guid SiteId, string Code) : IQuery<ScanResultDto>;
 
 /// <summary>A new container at a location (D-059). A blank code is made from the kind and its label number.</summary>
-public sealed record CreateContainerCommand(Guid SiteId, string? Code, string Kind, Guid LocationId) : ICommand<CreatedResponse>;
+public sealed record CreateContainerCommand(Guid SiteId, string? Code, string Kind, Guid LocationId, bool MixesLots = false) : ICommand<CreatedResponse>;
+
+/// <summary>Whether lots mix in a container and how they flow for genealogy (#93); mixing changes only while it is empty.</summary>
+public sealed record SetContainerMixingCommand(Guid Id, long ExpectedVersion, bool MixesLots, string FlowModel, int? MinResidenceMinutes) : ICommand<VersionResponse>;
 
 /// <summary>Moves a container and every lot in it (D-059); each lot records its own movement, linked to the container.</summary>
 public sealed record MoveContainerCommand(Guid Id, long ExpectedVersion, Guid ToLocationId, string? Comment = null) : ICommand<VersionResponse>;
@@ -233,7 +236,10 @@ internal sealed class CreateContainerHandler(
             throw new ConflictException($"The site already has a container {code}.");
         }
 
-        var container = Container.Create(ids.NewId(), command.SiteId, code, command.Kind, location.Id, timeProvider.GetUtcNow(), request.ActorId);
+        var container = Container.Create(ids.NewId(), command.SiteId, code, command.Kind, location.Id, timeProvider.GetUtcNow(), request.ActorId) with
+        {
+            MixesLots = command.MixesLots,
+        };
         // An SSCC from the site's GS1 company prefix, when it has one (#75).
         var sscc = labels is null ? null : await LabelRules.NextSsccAsync(labels, command.SiteId, container.CreatedAt, cancellationToken);
         var envelope = events.Create(EventTypes.ContainerCreated, "container", container.Id, new { After = container, LabelNo = labelNo, Sscc = sscc });
@@ -316,6 +322,34 @@ internal sealed class MoveContainerHandler(
             Comment = comment,
         };
         await eventLog.AppendAsync(envelope with { Data = data }, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new VersionResponse(version);
+    }
+}
+
+internal sealed class SetContainerMixingHandler(IUnitOfWork unitOfWork, IContainerRepository containers, IEventLog eventLog, IEventFactory events)
+    : ICommandHandler<SetContainerMixingCommand, VersionResponse>
+{
+    public async Task<VersionResponse> HandleAsync(SetContainerMixingCommand command, CancellationToken cancellationToken)
+    {
+        new Validator()
+            .Require(command.MinResidenceMinutes is null or (>= 0 and <= BalanceGenealogy.MaxResidenceMinutes), "MinResidenceMinutes", "0 to 129600 minutes (90 days), or blank.")
+            .ThrowIfInvalid();
+
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var current = await ContainerRules.GetAsync(containers, command.Id, command.ExpectedVersion, cancellationToken);
+        var inside = (await containers.LockInsideAsync(current.Value.Id, cancellationToken)).Count(c => c.Depth == 1);
+        var stock = (await containers.ListLotIdsAsync(current.Value.Id, cancellationToken)).Count;
+        var updated = current.Value.SetMixing(
+            command.MixesLots, command.FlowModel, command.MinResidenceMinutes is { } minutes ? TimeSpan.FromMinutes(minutes) : null, stock, inside);
+        if (updated == current.Value)
+        {
+            return new VersionResponse(current.Version);
+        }
+
+        var envelope = events.Create(EventTypes.ContainerMixingSet, "container", updated.Id, new { Before = current.Value, After = updated });
+        var version = await containers.UpdateAsync(updated, envelope.OccurredAt, cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new VersionResponse(version);
     }
@@ -416,6 +450,12 @@ internal sealed class PackLotHandler(
             await InventoryRules.EnsureAcceptsAsync(inventory, location, lot.MaterialId, cancellationToken);
         }
 
+        // Into a container whose lots mix (#93), only available stock goes; it joins the container's balance of the material.
+        if (container.MixesLots && lot.Status != LotStatus.Available)
+        {
+            throw new DomainRuleException($"{lot.Name} is {lot.Status.Replace('_', ' ')}; only available stock goes into {container.Code}, where lots mix.");
+        }
+
         var (after, movement) = lot.PackInto(container.Id, container.LocationId);
         var envelope = events.Create(
             EventTypes.LotPacked, "lot", lot.Id,
@@ -424,6 +464,14 @@ internal sealed class PackLotHandler(
         await inventory.InsertEventAsync(
             new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, envelope.ActorId, Comment: comment, ContainerId: container.Id), envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
+        if (container.MixesLots)
+        {
+            var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(
+                inventory, eventLog, events, ids, after, container.Code, comment, envelope.OccurredAt, cancellationToken, container.Id);
+            await transaction.CommitAsync(cancellationToken);
+            return InventoryRules.Response(balance, balanceVersion, [note]);
+        }
+
         await transaction.CommitAsync(cancellationToken);
         return InventoryRules.Response(after, version);
     }

@@ -152,6 +152,46 @@ else
                             }
                         </td>
                     </tr>
+                    @if (item.Alternates.Count > 0 || !ReadOnly)
+                    {
+                        <tr @key="@($"{item.Id}-alternates")" class="@(Flagged(item.Id) ? "table-warning" : "")">
+                            <td></td>
+                            <td colspan="@(_bom.ProcessId is null ? 6 : 7)" class="pt-0 border-top-0">
+                                @foreach (var alternate in item.Alternates)
+                                {
+                                    <div class="d-flex flex-wrap gap-2 align-items-center small mb-1">
+                                        <span class="text-muted">Alternate</span>
+                                        <select class="form-select form-select-sm" style="max-width: 22rem" aria-label="Alternate material" value="@alternate.MaterialId" disabled="@ReadOnly"
+                                                @onchange="e => Edit(() => alternate.MaterialId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty)">
+                                            <option value="@Guid.Empty">Choose a material…</option>
+                                            @foreach (var m in _materials.Where(m => m.Id != _bom.MaterialId && m.Id != item.ComponentMaterialId))
+                                            {
+                                                <option value="@m.Id">@m.Code · @m.Name</option>
+                                            }
+                                        </select>
+                                        <span class="text-muted">uses</span>
+                                        <input type="number" class="form-control form-control-sm text-end" style="max-width: 7rem" min="0" step="any" aria-label="Ratio"
+                                               value="@Plain(alternate.Ratio)" disabled="@ReadOnly" @onchange="e => Edit(() => alternate.Ratio = Decimal(e))" />
+                                        <span class="text-muted">@BaseUnit(alternate.MaterialId) per @BaseUnit(item.ComponentMaterialId) of the component · priority</span>
+                                        <input type="number" class="form-control form-control-sm text-end" style="max-width: 5rem" min="1" step="1" aria-label="Priority"
+                                               value="@alternate.Priority" disabled="@ReadOnly" @onchange="e => Edit(() => alternate.Priority = (int)Decimal(e))" />
+                                        @if (!ReadOnly)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-link text-danger p-0" title="Remove alternate"
+                                                    @onclick="() => Edit(() => item.Alternates.Remove(alternate))">×</button>
+                                        }
+                                    </div>
+                                }
+                                @if (!ReadOnly)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link p-0 small" @onclick="() => Edit(() => item.Alternates.Add(new AlternateModel { Priority = item.Alternates.Count + 1 }))">
+                                        Add an approved alternate
+                                    </button>
+                                }
+                            </td>
+                            <td></td>
+                        </tr>
+                    }
                 }
                 @if (_items.Count == 0)
                 {
@@ -311,6 +351,10 @@ else
 
     private bool Flagged(Guid itemId) => _problems.Any(p => p.ItemId == itemId);
 
+    // Alternates' ratios are in base units, so name them.
+    private string BaseUnit(Guid materialId) =>
+        _materials.FirstOrDefault(m => m.Id == materialId) is { } material ? _uoms.FirstOrDefault(u => u.Id == material.BaseUomId)?.Code ?? "unit" : "unit";
+
     // numeric(18,6) comes back with trailing zeros; show 1000, not 1000.000000.
     private static string Plain(decimal value) => value.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture);
 
@@ -393,6 +437,7 @@ else
         public decimal ScrapFactor { get; set; }
         public string ConsumptionMethod { get; set; } = "backflush";
         public int? OperationNumber { get; set; }
+        public List<AlternateModel> Alternates { get; init; } = [];
 
         public static ItemModel From(BomItemDto dto) => new()
         {
@@ -404,6 +449,7 @@ else
             ScrapFactor = dto.ScrapFactor,
             ConsumptionMethod = dto.ConsumptionMethod,
             OperationNumber = dto.OperationNumber,
+            Alternates = [.. dto.Alternates.OrderBy(a => a.Priority).Select(a => new AlternateModel { MaterialId = a.MaterialId, Ratio = a.Ratio, Priority = a.Priority })],
         };
 
         public BomItemDto ToDto() => new()
@@ -416,6 +462,14 @@ else
             ScrapFactor = ScrapFactor,
             ConsumptionMethod = ConsumptionMethod,
             OperationNumber = OperationNumber,
+            Alternates = [.. Alternates.Select(a => new BomItemAlternateDto { MaterialId = a.MaterialId, Ratio = a.Ratio, Priority = a.Priority })],
         };
+    }
+
+    private sealed class AlternateModel
+    {
+        public Guid MaterialId { get; set; }
+        public decimal Ratio { get; set; } = 1m;
+        public int Priority { get; set; } = 1;
     }
 }

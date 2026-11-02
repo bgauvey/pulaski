@@ -135,6 +135,15 @@ internal static class InventoryEndpoints
             TypedResults.Ok(await handler.HandleAsync(new CancelExpectedReceiptCommand(id, request.Version), ct)))
         .RequirePermission(Permissions.LotReceive, Site.Of(SiteOf.ExpectedReceipt));
 
+        // A partly received one closed as complete: nothing more is coming (#83).
+        expected.MapPost("/{id:guid}/complete", async Task<Ok<VersionResponse>> (
+            Guid id,
+            CancelExpectedReceiptRequest request,
+            ICommandHandler<CompleteExpectedReceiptCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CompleteExpectedReceiptCommand(id, request.Version), ct)))
+        .RequirePermission(Permissions.LotReceive, Site.Of(SiteOf.ExpectedReceipt));
+
         inventory.MapGet("/movements", async Task<Ok<JournalPageDto>> (
             Guid siteId,
             DateTimeOffset? from,
@@ -393,7 +402,7 @@ internal static class InventoryEndpoints
             ICommandHandler<CreateContainerCommand, CreatedResponse> handler,
             CancellationToken ct) =>
         {
-            var created = await handler.HandleAsync(new CreateContainerCommand(request.SiteId, request.Code, request.Kind, request.LocationId), ct);
+            var created = await handler.HandleAsync(new CreateContainerCommand(request.SiteId, request.Code, request.Kind, request.LocationId, request.MixesLots), ct);
             return TypedResults.Created($"/api/inventory/containers/{created.Id}", created);
         })
         .RequirePermission(Permissions.LotMove, Site.FromBody<CreateContainerRequest>(SiteOf.Equipment, r => r.SiteId));
@@ -412,6 +421,15 @@ internal static class InventoryEndpoints
             ICommandHandler<RetireContainerCommand, VersionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new RetireContainerCommand(id, request.Version), ct)))
+        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Container));
+
+        // Whether lots mix in it (#93), and how they flow for genealogy.
+        containers.MapPut("/{id:guid}/mixing", async Task<Ok<VersionResponse>> (
+            Guid id,
+            SetContainerMixingRequest request,
+            ICommandHandler<SetContainerMixingCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetContainerMixingCommand(id, request.Version, request.MixesLots, request.FlowModel, request.MinResidenceMinutes), ct)))
         .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Container));
 
         // Into another container, or (with none) out of the one it is in (#76).
@@ -781,6 +799,43 @@ internal static class InventoryEndpoints
             TypedResults.Ok(await handler.HandleAsync(new RefreshSiteAllocationsCommand(siteId), ct)))
             .WithTags("Inventory")
         .RequirePermission(Permissions.LotAllocate, Site.Query());
+
+        // How a site allocates (#82), on Configure → Site settings.
+        routes.MapGet("/inventory/allocation-settings/{siteId:guid}", async Task<Ok<AllocationSettingsDto>> (
+            Guid siteId, IQueryHandler<GetAllocationSettingsQuery, AllocationSettingsDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetAllocationSettingsQuery(siteId), ct)))
+            .WithTags("Inventory")
+        .RequireAny(Site.Route(), Permissions.SiteSettingsView, Permissions.InventoryView);
+
+        routes.MapPut("/inventory/allocation-settings/{siteId:guid}", async Task<Ok<VersionResponse>> (
+            Guid siteId, SetAllocationSettingsRequest request, ICommandHandler<SetAllocationSettingsCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new SetAllocationSettingsCommand(siteId, request.Version, request.KeepCurrent, request.HardReservation, request.Preferences), ct)))
+            .WithTags("Inventory")
+        .RequirePermission(Permissions.SiteSettings, Site.Route());
+
+        // Picking lists (#82): what to fetch for open jobs' allocations, for the site, one job or one line.
+        routes.MapGet("/inventory/picking-list", async Task<Ok<PickingListDto>> (
+            Guid siteId, Guid? jobId, Guid? lineId, IQueryHandler<GetPickingListQuery, PickingListDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetPickingListQuery(siteId, jobId, lineId), ct)))
+            .WithTags("Inventory")
+        .RequireAny(Site.Query(), Permissions.InventoryView, Permissions.FloorView);
+
+        routes.MapGet("/inventory/picking-list.pdf", async Task<FileContentHttpResult> (
+            Guid siteId,
+            Guid? jobId,
+            Guid? lineId,
+            IQueryHandler<GetPickingListQuery, PickingListDto> handler,
+            PickingListPdfRenderer renderer,
+            TimeProvider time,
+            CancellationToken ct) =>
+        {
+            var list = await handler.HandleAsync(new GetPickingListQuery(siteId, jobId, lineId), ct);
+            var name = InventoryLabels.FileName(list.Scope ?? list.SiteCode);
+            return TypedResults.File(renderer.Render(list, time.GetUtcNow()), "application/pdf", $"picking-{name}.pdf");
+        })
+            .WithTags("Inventory")
+        .RequireAny(Site.Query(), Permissions.InventoryView, Permissions.FloorView);
 
         routes.MapPost("/jobs/{id:guid}/produce", async Task<Created<LotTransactionResponse>> (
             Guid id,

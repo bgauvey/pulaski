@@ -86,7 +86,8 @@ internal sealed class ResolveShortfallHandler(
     IEventLog eventLog,
     IEventFactory events,
     IIdGenerator ids,
-    TimeProvider timeProvider) : ICommandHandler<ResolveShortfallCommand, VersionResponse>
+    TimeProvider timeProvider,
+    IAllocationRepository? allocations = null) : ICommandHandler<ResolveShortfallCommand, VersionResponse>
 {
     public async Task<VersionResponse> HandleAsync(ResolveShortfallCommand command, CancellationToken cancellationToken)
     {
@@ -124,9 +125,17 @@ internal sealed class ResolveShortfallHandler(
         var quantity = await InventoryRules.ToBaseAsync(units, material, shortfall.Quantity, shortfall.UomId ?? material.BaseUomId, cancellationToken);
         var (after, movement) = lot.Take(quantity, LotEventKind.Consumed, material.BaseUomCode);
         var edges = InventoryRules.Edges(ids, [lot.Id], await inventory.ListLotsProducedByJobAsync(job.Id, cancellationToken), job.Id);
+
         var consumed = events.Create(
             EventTypes.LotConsumed, "lot", lot.Id,
             new { lot.LotNumber, JobId = job.Id, job.JobNumber, Quantity = quantity, QuantityAfter = after.Quantity, ChildLotIds = edges.Select(e => e.ChildLotId), shortfall.RunId, ShortfallId = shortfall.Id, Comment = comment });
+
+        // Like any consumption (D-064, #82): uses up the job's own allocation; under hard reservation, another job's is refused.
+        if (allocations is not null)
+        {
+            await AllocationUse.ConsumeAsync(allocations, lot, job.Id, quantity, consumed.ActorId, consumed.OccurredAt, material.BaseUomCode, cancellationToken);
+        }
+
         await inventory.UpdateLotAsync(after, consumed.OccurredAt, cancellationToken);
         await inventory.InsertEventAsync(
             new LotEventRow(ids.NewId(), lot.Id, movement, lot.UomId, consumed.ActorId, JobId: job.Id, Comment: comment, RunId: shortfall.RunId, SourceRef: shortfall.Id),
@@ -203,7 +212,8 @@ internal sealed class FeedCounterPoster(
     IEventFactory events,
     IIdGenerator ids,
     TimeProvider timeProvider,
-    ILogger<FeedCounterPoster>? logger = null)
+    ILogger<FeedCounterPoster>? logger = null,
+    IAllocationRepository? allocations = null)
 {
     public const int Batch = 500;
 
@@ -222,7 +232,7 @@ internal sealed class FeedCounterPoster(
         }
 
         var posted = 0;
-        var automation = new FeedAutomation(inventory, units, feeds, eventLog, events, ids);
+        var automation = new FeedAutomation(inventory, units, feeds, eventLog, events, ids, allocations);
         foreach (var count in counts)
         {
             try

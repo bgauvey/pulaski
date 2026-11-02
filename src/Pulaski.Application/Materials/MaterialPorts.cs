@@ -23,6 +23,9 @@ public interface IMaterialAdminRepository
     /// <summary>Sets a material's GTIN (null clears it); returns its new version.</summary>
     Task<long> SetGtinAsync(Guid id, string? gtin, DateTimeOffset at, CancellationToken cancellationToken);
 
+    /// <summary>Sets a material's lead time in days (null clears it, #83); returns its new version.</summary>
+    Task<long> SetLeadTimeAsync(Guid id, int? days, DateTimeOffset at, CancellationToken cancellationToken);
+
     /// <summary>The material with this code, locked; null when there is none.</summary>
     Task<Versioned<Material>?> FindByCodeForUpdateAsync(string code, CancellationToken cancellationToken);
 

@@ -307,4 +307,37 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
         var scan = await _client.GetFromJsonAsync<Contracts.Inventory.ScanResultDto>($"/api/inventory/scan?siteId={Guid.CreateVersion7()}&code=PUL1L999");
         Assert.Equal("not_found", scan!.Status);
     }
+
+    [Fact]
+    public void A_picking_list_runs_onto_as_many_landscape_pages_as_it_needs()
+    {
+        var line = new Contracts.Inventory.PickingLineDto
+        {
+            JobId = Guid.CreateVersion7(),
+            JobNumber = "WO-1-10",
+            LineCode = "EXT-01",
+            ComponentCode = "PVC-K67",
+            MaterialCode = "PVC-K68",
+            MaterialName = "PVC compound, second source",
+            LotId = Guid.CreateVersion7(),
+            LotLabel = "R-24-0917",
+            LocationCode = "RM-STORE",
+            Quantity = 312.5m,
+            UomCode = "kg",
+            NeededFrom = DateTimeOffset.UnixEpoch,
+        };
+        var list = new Contracts.Inventory.PickingListDto
+        {
+            SiteId = Guid.CreateVersion7(),
+            SiteCode = "PLANT1",
+            SiteTimeZone = "America/Chicago",
+            Lines = [.. Enumerable.Repeat(line, 40)],
+        };
+
+        using var pdf = PdfReader.Open(new MemoryStream(new Api.WorkOrders.PickingListPdfRenderer().Render(list, DateTimeOffset.UnixEpoch)), PdfDocumentOpenMode.Import);
+        Assert.Equal(2, pdf.PageCount);
+        Assert.Equal((792d, 612d), (pdf.Pages[0].Width.Point, pdf.Pages[0].Height.Point));
+        using var empty = PdfReader.Open(new MemoryStream(new Api.WorkOrders.PickingListPdfRenderer().Render(list with { Lines = [] }, DateTimeOffset.UnixEpoch)), PdfDocumentOpenMode.Import);
+        Assert.Equal(1, empty.PageCount);
+    }
 }

@@ -18,6 +18,9 @@ public interface IExpectedReceiptRepository
     Task<long> InsertAsync(ExpectedReceipt receipt, DateTimeOffset at, CancellationToken cancellationToken);
 
     Task<long> UpdateAsync(ExpectedReceipt receipt, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Records a lot received against it and how much of it counted, in the receipt's unit (#83).</summary>
+    Task InsertLotAsync(Guid id, Guid expectedReceiptId, Guid lotId, decimal quantity, string actorId, DateTimeOffset at, CancellationToken cancellationToken);
 }
 
 /// <summary>Read side for expected receipts (D-058).</summary>
@@ -38,6 +41,9 @@ public sealed record UpdateExpectedReceiptCommand(
     : ICommand<VersionResponse>;
 
 public sealed record CancelExpectedReceiptCommand(Guid Id, long ExpectedVersion) : ICommand<VersionResponse>;
+
+/// <summary>Closes a partly received expected receipt as complete (#83): nothing more is coming.</summary>
+public sealed record CompleteExpectedReceiptCommand(Guid Id, long ExpectedVersion) : ICommand<VersionResponse>;
 
 /// <summary>One expected receipt from the ERP, matched on its system and key (D-058); see <see cref="ImportExpectedReceiptRequest"/>.</summary>
 public sealed record ImportExpectedReceiptCommand(
@@ -245,8 +251,11 @@ internal sealed class ImportExpectedReceiptHandler(
             throw new DomainRuleException($"{system} {key} is for another site or material in Pulaski; send it as a new key.");
         }
 
-        var updated = command.Cancelled
-            ? current.Value.Cancel()
+        // Part of it has arrived (#83): cancelling, or expecting no more than that, closes it as complete.
+        var arrived = current.Value.ReceivedQty > 0;
+        var completes = arrived && (command.Cancelled || (uom == current.Value.UomId && command.Quantity <= current.Value.ReceivedQty));
+        var updated = completes ? current.Value.Complete()
+            : command.Cancelled ? current.Value.Cancel()
             : current.Value.Change(command.Quantity, uom, command.ExpectedAt, reference, supplier, current.Value.Note);
         if (updated == current.Value)
         {
@@ -254,8 +263,8 @@ internal sealed class ImportExpectedReceiptHandler(
         }
 
         var envelope = events.Create(
-            command.Cancelled ? EventTypes.ExpectedReceiptCancelled : EventTypes.ExpectedReceiptUpdated, "expected_receipt", updated.Id,
-            new { Before = current.Value, After = updated }, $"{system} import");
+            completes ? EventTypes.ExpectedReceiptReceived : command.Cancelled ? EventTypes.ExpectedReceiptCancelled : EventTypes.ExpectedReceiptUpdated,
+            "expected_receipt", updated.Id, new { Before = current.Value, After = updated }, $"{system} import");
         var newVersion = await receipts.UpdateAsync(updated, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -263,11 +272,36 @@ internal sealed class ImportExpectedReceiptHandler(
     }
 }
 
-/// <summary>Closing an expected receipt by receiving a lot against it (D-058), inside the receipt's transaction.</summary>
+internal sealed class CompleteExpectedReceiptHandler(IUnitOfWork unitOfWork, IExpectedReceiptRepository receipts, IEventLog eventLog, IEventFactory events)
+    : ICommandHandler<CompleteExpectedReceiptCommand, VersionResponse>
+{
+    public async Task<VersionResponse> HandleAsync(CompleteExpectedReceiptCommand command, CancellationToken cancellationToken)
+    {
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var current = await receipts.GetForUpdateAsync(command.Id, cancellationToken) ?? throw new NotFoundException($"Expected receipt {command.Id} not found.");
+        if (current.Version != command.ExpectedVersion)
+        {
+            throw new ConflictException($"{current.Value.Reference ?? "That expected receipt"} was changed by someone else. Reload and try again.");
+        }
+
+        var completed = current.Value.Complete();
+        var envelope = events.Create(EventTypes.ExpectedReceiptReceived, "expected_receipt", completed.Id, new { Before = current.Value, After = completed, Completed = true });
+        var version = await receipts.UpdateAsync(completed, envelope.OccurredAt, cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new VersionResponse(version);
+    }
+}
+
+/// <summary>
+/// Receiving a lot against an expected receipt (D-058, #83), inside the receipt's transaction: what arrived, in the receipt's unit, counts toward
+/// it, and it closes once all of it has arrived.
+/// </summary>
 internal static class ExpectedReceiving
 {
-    public static async Task CloseAsync(
-        IExpectedReceiptRepository receipts, IEventLog eventLog, IEventFactory events, Guid expectedReceiptId, Lot lot, CancellationToken cancellationToken)
+    public static async Task ReceiveAsync(
+        IExpectedReceiptRepository receipts, IUnitRepository units, IEventLog eventLog, IEventFactory events, IIdGenerator ids, Guid expectedReceiptId, Lot lot,
+        InventoryMaterial material, decimal baseQuantity, CancellationToken cancellationToken)
     {
         var current = await receipts.GetForUpdateAsync(expectedReceiptId, cancellationToken)
             ?? throw new NotFoundException($"Expected receipt {expectedReceiptId} not found.");
@@ -276,9 +310,14 @@ internal static class ExpectedReceiving
             throw new DomainRuleException($"{current.Value.Reference ?? "That expected receipt"} is for another material or site.");
         }
 
-        var received = current.Value.Receive(lot.Id);
-        var envelope = events.Create(EventTypes.ExpectedReceiptReceived, "expected_receipt", received.Id, new { Before = current.Value, After = received, lot.LotNumber });
+        var converter = UnitConversions.For(material.Id, await units.GetUnitsAsync(cancellationToken), await units.GetConversionsAsync([material.Id], cancellationToken));
+        var counted = converter.Convert(baseQuantity, material.BaseUomId, current.Value.UomId);
+        var received = current.Value.Receive(lot.Id, counted);
+        var envelope = events.Create(
+            EventTypes.ExpectedReceiptReceived, "expected_receipt", received.Id,
+            new { Before = current.Value, After = received, lot.LotNumber, Quantity = counted, received.Remaining });
         await receipts.UpdateAsync(received, envelope.OccurredAt, cancellationToken);
+        await receipts.InsertLotAsync(ids.NewId(), received.Id, lot.Id, counted, envelope.ActorId, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
     }
 }
