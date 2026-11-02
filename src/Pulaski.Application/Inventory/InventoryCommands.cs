@@ -513,7 +513,10 @@ internal sealed class ConsumeLotHandler(
         List<InventoryWarningDto> warnings = [];
         if (!await inventory.PlansComponentAsync(job.Id, material.Id, cancellationToken))
         {
-            warnings.Add(new("not_planned", $"{job.JobNumber} has no planned component of {material.Code}; it was recorded as a substitution."));
+            // An approved alternate on the job's BOM (#82) is a substitution the BOM allows.
+            warnings.Add(await inventory.AlternateForAsync(job.Id, material.Id, cancellationToken) is { } component
+                ? new("approved_alternate", $"{material.Code} was used in place of {component}, as {job.JobNumber}'s BOM allows.")
+                : new("not_planned", $"{job.JobNumber} has no planned component of {material.Code}; it was recorded as a substitution."));
         }
         else if (await OverPlannedAsync(job, material, quantity, cancellationToken) is { } over)
         {

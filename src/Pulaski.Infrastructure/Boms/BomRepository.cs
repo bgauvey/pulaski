@@ -7,7 +7,7 @@ using Pulaski.Infrastructure.Processes;
 namespace Pulaski.Infrastructure.Boms;
 
 /// <summary>Write side for bills of materials (D-025). Every statement runs in the command's transaction.</summary>
-internal sealed class BomRepository(DbSession session) : IBomRepository
+internal sealed class BomRepository(DbSession session, IIdGenerator ids) : IBomRepository
 {
     private const string GetForUpdate = """
         SELECT id, material_id, process_id, is_active, xmin::text::bigint AS version
@@ -90,6 +90,11 @@ internal sealed class BomRepository(DbSession session) : IBomRepository
                 @ScrapFactor, @ConsumptionMethod, @OperationNumber)
         """;
 
+    private const string InsertAlternate = """
+        INSERT INTO core.bom_item_alternate (id, bom_item_id, material_id, ratio, priority)
+        VALUES (@Id, @ItemId, @MaterialId, @Ratio, @Priority)
+        """;
+
     internal const string Materials = """
         SELECT id, code, base_uom_id, is_active, material_type, batch_size, batch_tolerance_pct, batch_rule
         FROM core.material
@@ -155,6 +160,13 @@ internal sealed class BomRepository(DbSession session) : IBomRepository
                     item.OperationNumber,
                 },
                 cancellationToken);
+            foreach (var alternate in item.AlternateList)
+            {
+                await session.ExecuteAsync(
+                    InsertAlternate,
+                    new { Id = ids.NewId(), ItemId = item.Id, alternate.MaterialId, alternate.Ratio, alternate.Priority },
+                    cancellationToken);
+            }
         }
     }
 

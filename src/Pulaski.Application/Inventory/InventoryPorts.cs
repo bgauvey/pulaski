@@ -354,6 +354,9 @@ public interface IInventoryRepository
 
     /// <summary>True when the job has a planned component (<c>consume</c>) of the material.</summary>
     Task<bool> PlansComponentAsync(Guid jobId, Guid materialId, CancellationToken cancellationToken);
+
+    /// <summary>The code of the job's planned component this material is an approved alternate for on its BOM line (#82); null when none.</summary>
+    Task<string?> AlternateForAsync(Guid jobId, Guid materialId, CancellationToken cancellationToken);
 }
 
 /// <summary>A row of <c>ts.lot_event</c>: the lot's movement plus who, why and for which job.</summary>

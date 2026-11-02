@@ -1142,6 +1142,20 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<AllocationChangeResponse> RefreshSiteAllocationsAsync(Guid siteId, CancellationToken ct = default) =>
         SendAsync<AllocationChangeResponse>(HttpMethod.Post, $"api/inventory/allocations/refresh?siteId={siteId}", new { }, ct);
 
+    public Task<AllocationSettingsDto> GetAllocationSettingsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<AllocationSettingsDto>($"api/inventory/allocation-settings/{siteId}", ct);
+
+    public Task<VersionResponse> SetAllocationSettingsAsync(Guid siteId, SetAllocationSettingsRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/inventory/allocation-settings/{siteId}", request, ct);
+
+    /// <summary>What to fetch for open jobs' allocations (#82): the site's, one job's (<paramref name="jobId"/>) or one line's.</summary>
+    public Task<PickingListDto> GetPickingListAsync(Guid siteId, Guid? jobId = null, Guid? lineId = null, CancellationToken ct = default) =>
+        GetAsync<PickingListDto>(Query("api/inventory/picking-list", ("siteId", siteId), ("jobId", jobId), ("lineId", lineId)), ct);
+
+    /// <summary>The picking list as a PDF, to hand to the browser.</summary>
+    public Task<(byte[] Content, string ContentType, string FileName)> GetPickingListPdfAsync(Guid siteId, Guid? jobId = null, Guid? lineId = null, CancellationToken ct = default) =>
+        GetFileAsync(Query("api/inventory/picking-list.pdf", ("siteId", siteId), ("jobId", jobId), ("lineId", lineId)), ct);
+
     public Task<ReverseProductionResponse> ReverseProductionReportAsync(Guid jobId, Guid reportId, ReverseProductionRequest request, CancellationToken ct = default) =>
         SendAsync<ReverseProductionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/production/{reportId}/reverse", request, ct);
 

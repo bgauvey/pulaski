@@ -3,6 +3,7 @@
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 @inject CurrentUser User
+@inject Downloads Downloads
 
 <PageTitle>Shortages · Inventory · Pulaski</PageTitle>
 
@@ -17,6 +18,11 @@
         {
             <button type="button" class="btn btn-outline-secondary" disabled="@_refreshing" @onclick="RefreshAllocationsAsync"
                     title="For every open job: release allocations that are no longer usable and allocate what is still needed, earliest job first">Refresh allocations</button>
+        }
+        @if (Sites.SiteId is not null)
+        {
+            <button type="button" class="btn btn-outline-secondary" @onclick="PickingListAsync"
+                    title="What to fetch from the stores for open jobs' allocations, by location; the equipment chosen below narrows it">Picking list</button>
         }
     </Actions>
 </InventoryHeader>
@@ -265,6 +271,21 @@ else
         finally
         {
             _refreshing = false;
+        }
+    }
+
+    // The picking list (#82) of the site, or of the jobs of the equipment chosen.
+    private async Task PickingListAsync()
+    {
+        _error = null;
+        try
+        {
+            var (content, type, name) = await Api.GetPickingListPdfAsync(Sites.SiteId!.Value, lineId: _equipmentId);
+            await Downloads.FileAsync(name, content, type);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
         }
     }
 

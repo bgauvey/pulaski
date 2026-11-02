@@ -93,6 +93,20 @@ public sealed record BomItemDto
     public decimal ScrapFactor { get; init; }
     public string ConsumptionMethod { get; init; } = "backflush";
     public int? OperationNumber { get; init; }
+
+    /// <summary>Materials approved in place of the component (#82).</summary>
+    public IReadOnlyList<BomItemAlternateDto> Alternates { get; init; } = [];
+}
+
+/// <summary>
+/// An approved alternate (#82): <see cref="Ratio"/> of its base unit stands for one of the component's base unit; the lowest
+/// <see cref="Priority"/> is offered first.
+/// </summary>
+public sealed record BomItemAlternateDto
+{
+    public Guid MaterialId { get; init; }
+    public decimal Ratio { get; init; } = 1m;
+    public int Priority { get; init; } = 1;
 }
 
 public sealed record BomProblemDto(string Code, string Message, Guid? ItemId);

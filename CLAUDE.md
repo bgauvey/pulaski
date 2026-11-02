@@ -262,6 +262,14 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`AllocationUse`), into another warns. `LotRecommendation` (FEFO, then FIFO; only available, unexpired at need time, free stock; every
   pick and exclusion explained); `AllocationPlanner` shared by `GetJobAllocationsQuery` and the commands. Refresh is on demand (job or
   site); locks job → lots → allocations in id order. Permission `lot.allocate`.
+- Allocation refinements (D-084, proposed): `core.allocation_settings` per site (`keep_current`, `hard_reservation`, ordered `preferences`
+  near_line / in_container / whole_lot / part_lots_first, ranked after the expiry day in `LotRecommendation`); `site_settings.manage`.
+  `AllocationRefreshService` (API, `Allocations:Refresh:*`) → `AllocationAutoRefresh` refreshes keep-current sites with lot/job/order events
+  since `core.allocation_refresh.refreshed_at`, once quiet. BOM lines carry approved alternates (`BomItem.Alternates`, released to
+  `core.bom_item_alternate`, ratio = alternate base units per component base unit, priority); allocations of them set `for_material_id` +
+  `ratio` and cover `quantity ÷ ratio` (`LotAllocation.Covers`). Hard reservation: `AllocationUse.ConsumeAsync` refuses, naming the jobs;
+  `FeedAutomation` (given `IAllocationRepository`) takes only free stock and uses up the job's own. Picking lists: `GetPickingListQuery`,
+  `/api/inventory/picking-list[.pdf]` (`PickingListPdfRenderer`), lots at the job's line left out.
 - Line batch sizes (D-065, proposed): `core.equipment_capability.batch_size` (null = the material's; only for a batch material; rule stays the
   material's, `Batching.OnLine`; a line tolerance too since D-075, `batch_tolerance_pct`, `ILineBatchSizes.GetTolerancesAsync`). `ILineBatchSizes` (in-transaction) feeds order creation (`Batching.ShareBySize`: whole
   batches of each line's size adding up exactly, else refused with the nearest quantities), job create/move/assign/start-on-line checks

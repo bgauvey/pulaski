@@ -12,10 +12,18 @@ namespace Pulaski.Application.Inventory;
 /// Automated consumption at feed points (#33, D-079), inside the caller's transaction with the job locked first (D-027). A production report
 /// backflushes its components from the lots at the line's feed points, and shares its time-window components among the lots loaded while
 /// it was made; a feed point's consumed counter takes each count out of the lot loaded then. Each is an ordinary consumption, attributed by
-/// <c>auto_source</c> and <c>source_ref</c>, never below zero; what it can't cover is kept as a shortfall to resolve or dismiss.
+/// <c>auto_source</c> and <c>source_ref</c>, never below zero; what it can't cover is kept as a shortfall to resolve or dismiss. With
+/// <paramref name="allocations"/> (#82) it uses up the job's own allocation of a lot, and under the site's hard reservation leaves what other
+/// jobs hold alone (that part becomes a shortfall too).
 /// </summary>
 internal sealed class FeedAutomation(
-    IInventoryRepository inventory, IUnitRepository units, IFeedRepository feeds, IEventLog eventLog, IEventFactory events, IIdGenerator ids)
+    IInventoryRepository inventory,
+    IUnitRepository units,
+    IFeedRepository feeds,
+    IEventLog eventLog,
+    IEventFactory events,
+    IIdGenerator ids,
+    IAllocationRepository? allocations = null)
 {
     /// <summary>
     /// After a report's counts and lots: its backflush and time-window components, from <paramref name="output"/> (good and scrap, in the job's
@@ -72,7 +80,7 @@ internal sealed class FeedAutomation(
                 if (left > 0)
                 {
                     shorts.Add(run.EquipmentId, material, null, left, source,
-                        order.Count == 0 ? $"No lot of {material.Code} was at {job.LineCode}'s feed points." : $"The lots of {material.Code} at {job.LineCode}'s feed points didn't hold enough.");
+                        order.Count == 0 ? $"No lot of {material.Code} was at {job.LineCode}'s feed points." : $"The lots of {material.Code} at {job.LineCode}'s feed points didn't hold enough that wasn't reserved for another job.");
                 }
 
                 continue;
@@ -97,7 +105,7 @@ internal sealed class FeedAutomation(
                 if (taken < share.Quantity)
                 {
                     var feedPoint = loads.First(l => l.LotId == share.LotId).FeedPointId;
-                    shorts.Add(feedPoint, material, share.LotId, share.Quantity - taken, source, "The lot loaded then didn't hold enough, or couldn't be used.");
+                    shorts.Add(feedPoint, material, share.LotId, share.Quantity - taken, source, "The lot loaded then didn't hold enough, was reserved for another job, or couldn't be used.");
                 }
             }
         }
@@ -153,7 +161,7 @@ internal sealed class FeedAutomation(
         var taken = quantity > 0 ? await TakeAsync(job, context.RunId, load.LotId, quantity, AutoSource.Counter, count.Id, count.OccurredAt, now, cancellationToken) : 0m;
         if (taken < quantity)
         {
-            shorts.Add(count.FeedPointId, material, load.LotId, quantity - taken, AutoSource.Counter, "The lot loaded then didn't hold enough, or couldn't be used.");
+            shorts.Add(count.FeedPointId, material, load.LotId, quantity - taken, AutoSource.Counter, "The lot loaded then didn't hold enough, was reserved for another job, or couldn't be used.");
         }
 
         await RecordAsync(shorts, cancellationToken);
@@ -178,6 +186,19 @@ internal sealed class FeedAutomation(
 
         var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
         var quantity = Math.Min(wanted, lot.Quantity);
+
+        // The lot's allocations, locked after the lot (D-064): under hard reservation only stock no other job holds can be taken.
+        var held = allocations is null ? [] : await allocations.LockActiveOfLotsAsync([lot.Id], cancellationToken);
+        if (allocations is not null && held.Any(a => a.Allocation.JobId != job.Id)
+            && (await allocations.GetSettingsAsync(lot.SiteId, cancellationToken)).HardReservation)
+        {
+            quantity = Math.Min(quantity, lot.Quantity - held.Where(a => a.Allocation.JobId != job.Id).Sum(a => a.Allocation.Quantity));
+            if (quantity <= 0)
+            {
+                return 0m;
+            }
+        }
+
         try
         {
             await Backdating.EnsureFitsAsync(inventory, lot, -quantity, at, now, material.BaseUomCode, cancellationToken);
@@ -211,6 +232,11 @@ internal sealed class FeedAutomation(
                 AutoSource: source, SourceRef: sourceRef),
             envelope.OccurredAt, cancellationToken);
         await inventory.InsertGenealogyAsync(edges, envelope.OccurredAt, cancellationToken, backdated);
+        if (allocations is not null && held.FirstOrDefault(a => a.Allocation.JobId == job.Id) is { } own)
+        {
+            await allocations.UpdateAsync(own.Allocation.UseUp(quantity).Allocation, envelope.ActorId, envelope.OccurredAt, cancellationToken);
+        }
+
         await eventLog.AppendAsync(envelope, cancellationToken);
         return quantity;
     }

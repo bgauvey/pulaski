@@ -887,6 +887,47 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Under_hard_reservation_feed_points_leave_another_jobs_allocation_alone_and_use_up_their_own()
+    {
+        var plant = await CreatePlantAsync();
+        await using var admin = await db.AdminDataSource.OpenConnectionAsync();
+        var line = await admin.ExecuteScalarAsync<Guid>("SELECT equipment_id FROM core.job WHERE id = @Id", new { Id = plant.Job });
+        var additive = Guid.CreateVersion7();
+        var other = Guid.CreateVersion7();
+        await admin.ExecuteAsync("""
+            INSERT INTO core.material (id, code, name, material_type, base_uom_id, is_lot_tracked) VALUES (@additive, 'ADD-' || @s, 'Additive', 'raw', @kg, true);
+            DELETE FROM core.job_material WHERE job_id = @job;
+            INSERT INTO core.job_material (job_id, material_id, direction, planned_qty, uom_id, consumption_method) VALUES (@job, @additive, 'consume', 400, @kg, 'backflush');
+            INSERT INTO core.job (id, site_id, work_order_id, job_number, job_type, equipment_id, material_id, planned_qty, uom_id)
+            SELECT @other, site_id, work_order_id, job_number || '-B', 'production', equipment_id, material_id, planned_qty, uom_id FROM core.job WHERE id = @job;
+            INSERT INTO core.job_material (job_id, material_id, direction, planned_qty, uom_id, consumption_method) VALUES (@other, @additive, 'consume', 100, @kg, 'declared');
+            """, new { additive, other, s = _suffix, kg = plant.Kg, job = plant.Job });
+        CreatedResponse doser = await db.SendAsync(new CreateEquipmentCommand(
+            line, "DOS-" + _suffix, "Additive doser", null, "equipment_module", "feed_point", false, false, true, null));
+        var lot = await db.SendAsync(new ReceiveLotCommand(additive, doser.Id, "HR-1-" + _suffix, 50m, plant.Kg));
+
+        // The other job holds 30 kg; this job 10. Hard reservation on.
+        await db.SendAsync(new AllocateLotCommand(other, lot.LotId, 30m, plant.Kg));
+        await db.SendAsync(new AllocateLotCommand(plant.Job, lot.LotId, 10m, plant.Kg));
+        await db.SendAsync(new SetAllocationSettingsCommand(plant.Site, 0, false, true, []));
+
+        // 100 m wants 40 kg backflushed: only the 20 kg no other job holds is taken, the rest is a shortfall; this job's allocation is used up.
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Metre, null, plant.Staging));
+        Assert.Contains(report.Warnings, w => w.Code == "feed_shortfall");
+        var detail = await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId));
+        Assert.Equal(30m, detail.Lot.Quantity);
+        Assert.Equal((other, 30m), (Assert.Single(detail.Allocations).JobId, detail.Allocations[0].Quantity));
+        var shortfall = Assert.Single(await QueryAsync<ListShortfallsQuery, IReadOnlyList<FeedShortfallDto>>(new ListShortfallsQuery(plant.Site)));
+        Assert.Equal(20m, shortfall.Quantity);
+        Assert.Contains("reserved for another job", shortfall.Reason, StringComparison.Ordinal);
+
+        // Resolving it from the same lot would take the other job's stock, so it is refused, naming the job.
+        var refused = await Assert.ThrowsAsync<DomainRuleException>(() =>
+            db.SendAsync(new ResolveShortfallCommand(shortfall.Id, shortfall.Version, lot.LotId, "From the doser")));
+        Assert.Contains(plant.JobNumber + "-B", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Gs1_numbers_containers_and_scans_of_gs1_and_supplier_barcodes_find_lots_or_offer_to_receive_them()
     {
         var plant = await CreatePlantAsync();
@@ -1110,6 +1151,85 @@ public sealed class InventoryTests(DatabaseFixture db)
 
         var site = await db.SendAsync(new RefreshSiteAllocationsCommand(plant.Site));
         Assert.Equal(1, site.Jobs);
+    }
+
+    [Fact]
+    public async Task Approved_alternates_cover_what_the_component_cant_settings_order_lots_and_picking_lists_name_what_to_fetch()
+    {
+        var plant = await CreatePlantAsync();
+        var alternate = Guid.CreateVersion7();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO core.material (id, code, name, material_type, base_uom_id, is_lot_tracked)
+                VALUES (@alternate, 'RESIN2-' || @s, 'Resin, second source', 'raw', @kg, true);
+                INSERT INTO core.bom_item_alternate (id, bom_item_id, material_id, ratio, priority)
+                SELECT @id, bom_item_id, @alternate, 1.25, 1 FROM core.job_material WHERE job_id = @job;
+                """,
+                new { alternate, s = _suffix, kg = plant.Kg, job = plant.Job, id = Guid.CreateVersion7() });
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var whole = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "ALT-WHOLE-" + _suffix, 1000m, plant.Kg, ExpiresAt: now.AddDays(30)));
+        var part = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "ALT-PART-" + _suffix, 200m, plant.Kg, ExpiresAt: now.AddDays(30)));
+        var second = await db.SendAsync(new ReceiveLotCommand(alternate, plant.Stores, "ALT-2ND-" + _suffix, 1000m, plant.Kg));
+
+        // Part lots first: of two lots expiring the same day the smaller is suggested first; what the resin can't cover, the alternate does at its ratio.
+        var settings = await QueryAsync<GetAllocationSettingsQuery, AllocationSettingsDto>(new GetAllocationSettingsQuery(plant.Site));
+        Assert.Equal((0L, false, false), (settings.Version, settings.KeepCurrent, settings.HardReservation));
+        await db.SendAsync(new SetAllocationSettingsCommand(plant.Site, 0, true, true, [AllocationPreferences.PartLotsFirst]));
+        settings = await QueryAsync<GetAllocationSettingsQuery, AllocationSettingsDto>(new GetAllocationSettingsQuery(plant.Site));
+        Assert.Equal((true, true), (settings.KeepCurrent, settings.HardReservation));
+        Assert.Equal([AllocationPreferences.PartLotsFirst], settings.Preferences);
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new SetAllocationSettingsCommand(plant.Site, 0, true, false, [])));
+
+        var view = await QueryAsync<GetJobAllocationsQuery, JobAllocationsDto>(new GetJobAllocationsQuery(plant.Job));
+        var resin = Assert.Single(view.Components);
+        Assert.Equal([(part.LotId, 200m), (whole.LotId, 1000m), (second.LotId, 312.5m)], resin.Recommendations.Select(r => (r.LotId, r.Quantity)));
+        Assert.Equal("RESIN2-" + _suffix, resin.Recommendations[2].AlternateMaterialCode);
+        Assert.StartsWith("Alternate for", resin.Recommendations[2].Reason, StringComparison.Ordinal);
+
+        // Allocated, the alternate covers the rest of the component: 1200 kg of resin and 312.5 kg of the alternate cover 1450 kg.
+        await db.SendAsync(new AllocateRecommendedCommand(plant.Job));
+        view = await QueryAsync<GetJobAllocationsQuery, JobAllocationsDto>(new GetJobAllocationsQuery(plant.Job));
+        Assert.Equal((1450m, 0m), (view.Components[0].AllocatedQty, view.Components[0].RemainingQty));
+        Assert.Equal(1.25m, view.Components[0].Allocations.Single(a => a.LotId == second.LotId).Ratio);
+
+        // Shortages count the alternate's allocation against the component.
+        var shortages = await QueryAsync<GetShortagesQuery, ShortageReportDto>(new GetShortagesQuery(plant.Site));
+        Assert.DoesNotContain(shortages.Materials, m => m.MaterialId == plant.Resin && m.Shortfall > 0);
+
+        // The picking list names all three, by location; nothing is at the line yet.
+        var picking = await QueryAsync<GetPickingListQuery, PickingListDto>(new GetPickingListQuery(plant.Site, JobId: plant.Job));
+        Assert.Equal(plant.JobNumber, picking.Scope);
+        Assert.Equal(3, picking.Lines.Count);
+        Assert.All(picking.Lines, l => Assert.Equal("RESIN-" + _suffix, l.ComponentCode));
+        Assert.Equal(312.5m, picking.Lines.Single(l => l.LotId == second.LotId).Quantity);
+
+        // Consuming the alternate is an approved substitution, and uses up its allocation.
+        var consumed = await db.SendAsync(new ConsumeLotCommand(second.LotId, plant.Job, 100m, plant.Kg));
+        Assert.Contains(consumed.Warnings, w => w.Code == "approved_alternate");
+        Assert.DoesNotContain(consumed.Warnings, w => w.Code == "not_planned");
+        view = await QueryAsync<GetJobAllocationsQuery, JobAllocationsDto>(new GetJobAllocationsQuery(plant.Job));
+        Assert.Equal(212.5m, view.Components[0].Allocations.Single(a => a.LotId == second.LotId).Quantity);
+
+        // A site keeping allocations current that has never been refreshed is due; a refresh marks it.
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            var refresher = scope.ServiceProvider.GetRequiredService<AllocationAutoRefresh>();
+            Assert.True(await refresher.RefreshDueAsync(TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(15), CancellationToken.None) >= 1);
+        }
+
+        settings = await QueryAsync<GetAllocationSettingsQuery, AllocationSettingsDto>(new GetAllocationSettingsQuery(plant.Site));
+        Assert.NotNull(settings.RefreshedAt);
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await using var transaction = await unitOfWork.BeginAsync(CancellationToken.None);
+            var due = await scope.ServiceProvider.GetRequiredService<IAllocationRepository>().ListSitesDueForRefreshAsync(TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(15), CancellationToken.None);
+            Assert.DoesNotContain(plant.Site, due);
+        }
     }
 
     private async Task<Plant> CreatePlantAsync()

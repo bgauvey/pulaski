@@ -19,6 +19,7 @@ var connectionString = builder.Configuration.GetConnectionString("Pulaski")
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddSingleton<ShopOrderPdfRenderer>();
+builder.Services.AddSingleton<PickingListPdfRenderer>();
 builder.Services.AddSingleton<LabelPdfRenderer>();
 builder.Services.Configure<LabelPrintingOptions>(builder.Configuration.GetSection("Labels"));
 builder.Services.AddSingleton<LabelTemplates>();
@@ -64,6 +65,7 @@ if (builder.Configuration.GetValue("Pulaski:DatabaseMaintenance", true))
     builder.Services.AddHostedService<BootstrapAdministrator>();
     builder.Services.AddHostedService<ErpDeliveryService>();
     builder.Services.AddHostedService<OeeRollupService>();
+    builder.Services.AddHostedService<AllocationRefreshService>();
 }
 
 // The ERP feed (D-061): its settings for screens, and the HTTP client it sends with.

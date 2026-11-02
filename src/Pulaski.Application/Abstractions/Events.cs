@@ -188,6 +188,7 @@ public static class EventTypes
     public const string LotMadeFromSet = "pulaski.lot.made_from_set.v1";
     public const string LotLoaded = "pulaski.lot.loaded.v1";
     public const string LabelSettingsSet = "pulaski.site.label_settings_set.v1";
+    public const string AllocationSettingsSet = "pulaski.site.allocation_settings_set.v1";
     public const string LabelPrinterSaved = "pulaski.label_printer.saved.v1";
     public const string SupplierFormatSaved = "pulaski.supplier_barcode_format.saved.v1";
     public const string FeedShortfallRecorded = "pulaski.feed_shortfall.recorded.v1";

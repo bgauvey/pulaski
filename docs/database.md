@@ -328,16 +328,39 @@ A quantity of one lot, in its base unit, kept for one of a job's planned compone
 | `id` | uuid | no | Primary key. |
 | `site_id` | uuid → equipment | no | The job's site. |
 | `job_id` | uuid → job | no | The job it is for. |
-| `material_id` | uuid → material | no | The component (the lot's material). |
+| `material_id` | uuid → material | no | The lot's material: the component, or an approved alternate for it (#82, D-084). |
 | `lot_id` | uuid → lot | no | The lot. One active allocation per job and lot (`lot_allocation_active_uq`); more is a top-up. |
 | `quantity` | qty | no | Still set aside, in the lot's base unit; 0 once used up. |
 | `allocated_qty` | qty | no | As set aside, plus any top-ups. |
 | `status` | text | no | `active`, `consumed` (used up by consumption into its job) or `released`. |
 | `basis` | text | no | `chosen` by a person, or `recommended` (taken from the suggestion). |
 | `note` | text | yes | The suggestion's reason, or why it was released or trimmed; at most 500 characters. |
+| `for_material_id` | uuid → material | yes | For an approved alternate (D-084): the component it stands in for. Null when the lot is the component itself. |
+| `ratio` | numeric(18,6) | yes | For an approved alternate: its base units per one of the component's, from the BOM line when allocated. It covers `quantity ÷ ratio` of the component. Set exactly when `for_material_id` is (`lot_allocation_alternate_ck`). |
 | `created_at`, `created_by` | timestamptz, text | no, yes | When and by whom. |
 | `ended_at`, `ended_by` | timestamptz, text | yes | When and by whom it stopped being active; set exactly when not active (`lot_allocation_ended_ck`). |
 | `updated_at` | timestamptz | no | Last change. |
+
+### core.allocation_settings — how a site allocates (#82, D-084) · *In use*
+
+One row per site, made with the defaults the first time it is saved (Configure → Site settings). No row means everything is off. Version by `xmin`.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key; the site. |
+| `keep_current` | boolean | no | Refresh every open job's allocations in the background a short while after lots, jobs or orders change. Default false. |
+| `hard_reservation` | boolean | no | Refuse consuming stock allocated to another job (automated consumption leaves it alone). Default false: consumed with a warning. |
+| `preferences` | text[] | no | Among lots expiring the same day, in this order: any of `near_line`, `in_container`, `whole_lot`, `part_lots_first`. Default empty. |
+| `updated_at` | timestamptz | no | Last change. |
+
+### core.allocation_refresh — when a site's allocations were last refreshed in the background (D-084) · *In use*
+
+Its own row, so a background refresh never changes the settings' version.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key; the site. |
+| `refreshed_at` | timestamptz | no | When the last background refresh started. Changes recorded after it make the site due again. |
 
 ### core.partial_batch — batches cut short when a line stopped (D-036) · *In use*
 
@@ -490,6 +513,18 @@ Written once, when the version is released; planned components reference them.
 | `scrap_factor` | numeric(9,6) | no | Extra share to plan, from 0 to under 1 (0.02 plans 2 % more). Default 0. |
 | `consumption_method` | text | no | How it will be consumed: `time_window` (lots loaded at a feed point), `declared`, `backflush` (per good count) or `scan`. |
 | `operation_number` | integer | yes | On a BOM for a process, the operation that consumes it; it must exist in the process's released version. Null: the first operation in flow order. |
+
+### core.bom_item_alternate — materials approved in place of a component (#82, D-084) · *In use*
+
+Written with its item when the version is released, from the item's `alternates` in the draft. Allocation suggests them after the component's own lots, by priority.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `bom_item_id` | uuid → bom_item | no | The component line. |
+| `material_id` | uuid → material | no | The alternate; never the component or the BOM's own material. Once per line (`bom_item_alternate_uq`). |
+| `ratio` | numeric(18,6) | no | Its base units per one base unit of the component (1.05 = 5% more). Positive. |
+| `priority` | integer | no | Lowest first among the line's alternates. Positive; default 1. |
 
 ### core.equipment_capability — what can run where (D-020) · *In use*
 

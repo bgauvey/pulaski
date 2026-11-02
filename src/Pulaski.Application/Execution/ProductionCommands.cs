@@ -119,12 +119,13 @@ internal sealed class ReportProductionHandler(
     IIdGenerator ids,
     TimeProvider timeProvider,
     ILineBatchSizes? lineBatches = null,
-    IFeedRepository? feeds = null) : ICommandHandler<ReportProductionCommand, ReportProductionResponse>
+    IFeedRepository? feeds = null,
+    IAllocationRepository? allocations = null) : ICommandHandler<ReportProductionCommand, ReportProductionResponse>
 {
     public async Task<ReportProductionResponse> HandleAsync(ReportProductionCommand command, CancellationToken cancellationToken)
     {
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
-        var result = await new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds)
+        var result = await new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds, allocations)
             .ReportAsync(command, onStop: false, timeProvider.GetUtcNow(), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return result;
@@ -144,7 +145,8 @@ internal sealed class ProductionReporter(
     IEventFactory events,
     IIdGenerator ids,
     ILineBatchSizes? lineBatches = null,
-    IFeedRepository? feeds = null)
+    IFeedRepository? feeds = null,
+    IAllocationRepository? allocations = null)
 {
     /// <param name="command">The report.</param>
     /// <param name="onStop">The report is the partial batch of a run being ended now, by a pause or completion with a reason.</param>
@@ -298,7 +300,7 @@ internal sealed class ProductionReporter(
         // Components taken automatically (#33): backflushed, or shared among the lots loaded at the line's feed points while it was made.
         if (feeds is not null)
         {
-            warnings.AddRange(await new FeedAutomation(inventory, units, feeds, eventLog, events, ids).OnReportAsync(job, run, reportId, good + scrap, occurredAt, now, cancellationToken));
+            warnings.AddRange(await new FeedAutomation(inventory, units, feeds, eventLog, events, ids, allocations).OnReportAsync(job, run, reportId, good + scrap, occurredAt, now, cancellationToken));
         }
 
         return new ReportProductionResponse

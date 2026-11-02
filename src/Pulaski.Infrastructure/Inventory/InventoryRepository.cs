@@ -329,6 +329,16 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
         SELECT EXISTS (SELECT 1 FROM core.job_material WHERE job_id = @JobId AND material_id = @MaterialId AND direction = 'consume')
         """;
 
+    private const string AlternateFor = """
+        SELECT m.code
+        FROM core.job_material jm
+        JOIN core.bom_item_alternate a ON a.bom_item_id = jm.bom_item_id AND a.material_id = @MaterialId
+        JOIN core.material m ON m.id = jm.material_id
+        WHERE jm.job_id = @JobId AND jm.direction = 'consume'
+        ORDER BY a.priority, m.code
+        LIMIT 1
+        """;
+
     public async Task<Versioned<Lot>?> GetLotForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<LotRow>(GetLotForUpdate, new { Id = id }, cancellationToken))?.ToVersioned();
 
@@ -614,6 +624,9 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     public Task<bool> IsSiteAsync(Guid id, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(IsSite, new { Id = id }, cancellationToken);
+
+    public Task<string?> AlternateForAsync(Guid jobId, Guid materialId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<string?>(AlternateFor, new { JobId = jobId, MaterialId = materialId }, cancellationToken);
 
     public Task<bool> PlansComponentAsync(Guid jobId, Guid materialId, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(PlansComponent, new { JobId = jobId, MaterialId = materialId }, cancellationToken);

@@ -502,6 +502,16 @@ CREATE TABLE core.bom_item (
 );
 CREATE INDEX bom_item_component_ix ON core.bom_item (component_material_id);
 
+-- Approved alternates for a BOM line (#82): ratio = the alternate's base units per base unit of the component; tried by priority.
+CREATE TABLE core.bom_item_alternate (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    bom_item_id         uuid NOT NULL REFERENCES core.bom_item(id),
+    material_id         uuid NOT NULL REFERENCES core.material(id),
+    ratio               numeric(18,6) NOT NULL CHECK (ratio > 0),
+    priority            integer NOT NULL DEFAULT 1 CHECK (priority > 0),
+    CONSTRAINT bom_item_alternate_uq UNIQUE (bom_item_id, material_id)
+);
+
 -- What a work center / unit can run, and how fast (D-020). A job may only be
 -- placed on a line with a current row for its material. ideal_rate drives OEE
 -- performance and seeds the run standard; standard_crew_size is the labor estimate.
@@ -1429,12 +1439,32 @@ CREATE TABLE core.lot_allocation (
     ended_at            timestamptz,
     ended_by            text,
     updated_at          timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT lot_allocation_ended_ck CHECK ((status = 'active') = (ended_at IS NULL))
+    for_material_id     uuid REFERENCES core.material(id),          -- an alternate (#82): the planned component it stands in for
+    ratio               numeric(18,6),                              -- its base units per base unit of that component
+    CONSTRAINT lot_allocation_ended_ck CHECK ((status = 'active') = (ended_at IS NULL)),
+    CONSTRAINT lot_allocation_alternate_ck CHECK ((for_material_id IS NULL) = (ratio IS NULL) AND (ratio IS NULL OR ratio > 0))
 );
 -- One active allocation of a lot per job; more is a top-up of it.
 CREATE UNIQUE INDEX lot_allocation_active_uq ON core.lot_allocation (job_id, lot_id) WHERE status = 'active';
 CREATE INDEX lot_allocation_lot_ix ON core.lot_allocation (lot_id) WHERE status = 'active';
 CREATE INDEX lot_allocation_site_ix ON core.lot_allocation (site_id, material_id) WHERE status = 'active';
+
+-- How a site allocates (#82): keep allocations current in the background, refuse consuming another job's allocation, and the
+-- preferences that order lots expiring the same day.
+CREATE TABLE core.allocation_settings (
+    site_id             uuid PRIMARY KEY REFERENCES core.equipment(id),
+    keep_current        boolean NOT NULL DEFAULT false,
+    hard_reservation    boolean NOT NULL DEFAULT false,
+    preferences         text[] NOT NULL DEFAULT '{}'
+                        CHECK (preferences <@ ARRAY['near_line','in_container','whole_lot','part_lots_first']::text[]),
+    updated_at          timestamptz NOT NULL DEFAULT now()
+);
+
+-- When the background refresh last started for a site (#82); its own row, so a refresh never changes the settings' version.
+CREATE TABLE core.allocation_refresh (
+    site_id             uuid PRIMARY KEY REFERENCES core.equipment(id),
+    refreshed_at        timestamptz NOT NULL
+);
 
 CREATE TABLE core.partial_batch (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -2304,7 +2334,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0048_gs1_labels'),
     ('0049_nested_containers'),
     ('0050_mixing_containers'),
-    ('0051_partial_receipts_lead_times');
+    ('0051_partial_receipts_lead_times'),
+    ('0052_allocation_refinements');
 
 -- =====================================================================
 -- 17. SEED DATA

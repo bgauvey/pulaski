@@ -1,6 +1,8 @@
+using Microsoft.Extensions.Logging;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Units;
+using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Domain;
 using Pulaski.Domain.Inventory;
@@ -25,11 +27,33 @@ public sealed record HeldAllocation(LotAllocation Allocation, string JobNumber)
 /// <summary>A lot of one of the job's components at its site, as a candidate, with where it is.</summary>
 public sealed record AllocationLot(Guid MaterialId, AllocationCandidate Candidate, string? LocationCode);
 
-/// <summary>Everything allocating to a job reads (D-064): the job, its components, its allocations and the lots that could feed them.</summary>
-public sealed record JobAllocationSource(AllocationJob Job, IReadOnlyList<AllocationNeedRow> Needs, IReadOnlyList<HeldAllocation> Allocations, IReadOnlyList<AllocationLot> Lots);
+/// <summary>An approved alternate for one of a job's components (#82), from its BOM line: <see cref="Ratio"/> of its base units per one of the component's.</summary>
+public sealed record AllocationAlternate(Guid ComponentId, Guid MaterialId, string MaterialCode, Guid BaseUomId, string BaseUomCode, decimal Ratio, int Priority);
 
-/// <summary>An active allocation's quantity for the shortage calculator, at most what its lot holds and only of available stock.</summary>
-public sealed record AllocatedStock(Guid JobId, Guid MaterialId, decimal Quantity);
+/// <summary>
+/// Everything allocating to a job reads (D-064): the job, its components, its allocations and the lots that could feed them; the components'
+/// approved alternates and the site's lot preferences (#82).
+/// </summary>
+public sealed record JobAllocationSource(
+    AllocationJob Job,
+    IReadOnlyList<AllocationNeedRow> Needs,
+    IReadOnlyList<HeldAllocation> Allocations,
+    IReadOnlyList<AllocationLot> Lots,
+    IReadOnlyList<AllocationAlternate>? Alternates = null,
+    IReadOnlyList<string>? Preferences = null);
+
+/// <summary>
+/// An active allocation for the shortage calculator, at most what its lot holds and only of available stock: what it covers of the job's
+/// component (<see cref="MaterialId"/>, in its base unit), and what it takes out of the lot's own material (<see cref="LotMaterialId"/>).
+/// They differ only for an alternate (#82).
+/// </summary>
+public sealed record AllocatedStock(Guid JobId, Guid MaterialId, decimal Quantity, Guid LotMaterialId, decimal LotQuantity);
+
+/// <summary>How a site allocates (#82).</summary>
+public sealed record AllocationSettings(Guid SiteId, bool KeepCurrent, bool HardReservation, IReadOnlyList<string> Preferences, DateTimeOffset? RefreshedAt = null)
+{
+    public static AllocationSettings Default(Guid siteId) => new(siteId, false, false, []);
+}
 
 /// <summary>Write side of allocations (D-064); runs inside the current <see cref="IUnitOfWork"/>, after the job and lots are locked.</summary>
 public interface IAllocationRepository
@@ -48,6 +72,22 @@ public interface IAllocationRepository
 
     Task InsertAsync(LotAllocation allocation, string actor, DateTimeOffset at, CancellationToken cancellationToken);
 
+    /// <summary>The site's allocation settings as this transaction sees them; the defaults when it has none (#82).</summary>
+    Task<AllocationSettings> GetSettingsAsync(Guid siteId, CancellationToken cancellationToken);
+
+    /// <summary>The site's settings, locked, made with the defaults first when it has none; with their version, 0 when just made.</summary>
+    Task<Versioned<AllocationSettings>> GetSettingsForUpdateAsync(Guid siteId, CancellationToken cancellationToken);
+
+    Task<long> UpdateSettingsAsync(AllocationSettings settings, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Sites keeping allocations current whose stock or schedule changed since their last refresh: the latest such change is older than
+    /// <paramref name="quiet"/>, or the last refresh older than <paramref name="atMost"/>, so a burst of movements refreshes once.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> ListSitesDueForRefreshAsync(TimeSpan quiet, TimeSpan atMost, CancellationToken cancellationToken);
+
+    Task MarkRefreshedAsync(Guid siteId, DateTimeOffset at, CancellationToken cancellationToken);
+
     /// <summary>Writes quantity, status and note; an allocation that is no longer active gets its end time and who ended it.</summary>
     Task UpdateAsync(LotAllocation allocation, string actor, DateTimeOffset at, CancellationToken cancellationToken);
 }
@@ -60,8 +100,14 @@ public interface IAllocationReadStore
     /// <summary>The active allocations of a lot, with their jobs.</summary>
     Task<IReadOnlyList<LotAllocationDto>> ListOfLotAsync(Guid lotId, CancellationToken cancellationToken);
 
-    /// <summary>Active allocations of the materials at the site, for shortages.</summary>
+    /// <summary>Active allocations for the components at the site (as themselves or by an alternate), for shortages.</summary>
     Task<IReadOnlyList<AllocatedStock>> ListAllocatedAsync(Guid siteId, IReadOnlyCollection<Guid> materialIds, CancellationToken cancellationToken);
+
+    /// <summary>The site's allocation settings and their version (0 while it has none saved).</summary>
+    Task<(AllocationSettings Settings, long Version)> GetSettingsAsync(Guid siteId, CancellationToken cancellationToken);
+
+    /// <summary>Active allocations of open jobs at the site, of one job or the jobs of equipment and what is below it, for picking, ordered by location (#82).</summary>
+    Task<PickingListDto> GetPickingListAsync(Guid siteId, Guid? jobId, Guid? lineId, CancellationToken cancellationToken);
 }
 
 /// <summary>One component worked out: need, use, allocations with their problems, and what to suggest.</summary>
@@ -72,9 +118,13 @@ public sealed record ComponentPlan(
     decimal Allocated,
     decimal Remaining,
     IReadOnlyList<(HeldAllocation Allocation, AllocationLot? Lot, string? Problem)> Allocations,
-    IReadOnlyList<(LotPick Pick, AllocationLot Lot)> Picks,
+    IReadOnlyList<(LotPick Pick, AllocationLot Lot, AllocationAlternate? Alternate)> Picks,
     IReadOnlyList<(LotExclusion Exclusion, AllocationLot Lot)> Excluded,
-    string? Problem);
+    string? Problem)
+{
+    /// <summary>What the suggestions cover of the component, in its base unit: an alternate's at its ratio.</summary>
+    public decimal Suggested => Picks.Sum(p => p.Alternate is { } a ? Math.Round(p.Pick.Quantity / a.Ratio, 6, MidpointRounding.AwayFromZero) : p.Pick.Quantity);
+}
 
 /// <summary>Works out a job's components against its allocations and the lots there are (D-064). Shared by the screen and by refresh.</summary>
 internal static class AllocationPlanner
@@ -112,24 +162,48 @@ internal static class AllocationPlanner
             }
 
             var lots = source.Lots.Where(l => l.MaterialId == first.MaterialId).ToList();
-            var byLot = lots.ToDictionary(l => l.Candidate.LotId);
-            var mine = source.Allocations.Where(a => a.Allocation.MaterialId == first.MaterialId).ToList();
-            var allocated = mine.Sum(a => a.Allocation.Quantity);
+            var byLot = source.Lots.GroupBy(l => l.Candidate.LotId).ToDictionary(g => g.Key, g => g.First());
+            var mine = source.Allocations.Where(a => a.Allocation.ComponentId == first.MaterialId).ToList();
+            var allocated = mine.Sum(a => a.Allocation.Covers);
             var remaining = need is { } n ? Math.Max(0m, n - first.ConsumedQty - allocated) : 0m;
             var checkedAllocations = mine.Select(a =>
             {
                 var lot = byLot.GetValueOrDefault(a.Allocation.LotId);
                 var issue = lot is null
                     ? "The lot is no longer on hand."
-                    : LotRecommendation.AllocationProblem(a.Allocation, lot.Candidate, neededBy, first.BaseUomCode);
+                    : LotRecommendation.AllocationProblem(a.Allocation, lot.Candidate, neededBy, a.Allocation.Ratio is null
+                        ? first.BaseUomCode
+                        : source.Alternates?.FirstOrDefault(x => x.MaterialId == a.Allocation.MaterialId)?.BaseUomCode ?? first.BaseUomCode);
                 return (a, lot, issue);
             }).ToList();
             var (picks, excluded) = need is null
                 ? ([], [])
-                : LotRecommendation.Recommend(remaining, lots.Select(l => l.Candidate), neededBy, first.BaseUomCode);
+                : LotRecommendation.Recommend(remaining, lots.Select(l => l.Candidate), neededBy, first.BaseUomCode, source.Preferences);
+            var chosen = picks.Select(p => (p, byLot[p.Lot.LotId], (AllocationAlternate?)null)).ToList();
+
+            // What the planned material can't cover, its approved alternates can (#82), by priority, at their ratio.
+            var left = remaining - picks.Sum(p => p.Quantity);
+            foreach (var alternate in (source.Alternates ?? []).Where(a => a.ComponentId == first.MaterialId).OrderBy(a => a.Priority))
+            {
+                if (left <= 0)
+                {
+                    break;
+                }
+
+                var alternateLots = source.Lots.Where(l => l.MaterialId == alternate.MaterialId).ToList();
+                var (alternatePicks, _) = LotRecommendation.Recommend(
+                    Math.Round(left * alternate.Ratio, 6, MidpointRounding.AwayFromZero), alternateLots.Select(l => l.Candidate), neededBy, alternate.BaseUomCode, source.Preferences);
+                foreach (var pick in alternatePicks)
+                {
+                    chosen.Add((pick with { Reason = $"Alternate for {first.MaterialCode} ({alternate.Ratio:0.######} {alternate.BaseUomCode} per {first.BaseUomCode}): {pick.Reason}" },
+                        byLot[pick.Lot.LotId], alternate));
+                    left -= Math.Round(pick.Quantity / alternate.Ratio, 6, MidpointRounding.AwayFromZero);
+                }
+            }
+
             plans.Add(new ComponentPlan(
                 first, need, first.ConsumedQty, allocated, remaining, checkedAllocations,
-                [.. picks.Select(p => (p, byLot[p.Lot.LotId]))],
+                chosen,
                 [.. excluded.Select(e => (e, byLot[e.Lot.LotId]))],
                 problem));
         }
@@ -159,12 +233,23 @@ public sealed record RefreshAllocationsCommand(Guid JobId) : ICommand<Allocation
 /// <summary>Refreshes every open job of a site that plans components.</summary>
 public sealed record RefreshSiteAllocationsCommand(Guid SiteId) : ICommand<AllocationChangeResponse>;
 
+/// <summary>How a site allocates (#82).</summary>
+public sealed record GetAllocationSettingsQuery(Guid SiteId) : IQuery<AllocationSettingsDto>;
+
+/// <summary>Sets how a site allocates (#82): keep current, hard reservation, and the preferences in order (each at most once).</summary>
+public sealed record SetAllocationSettingsCommand(Guid SiteId, long ExpectedVersion, bool KeepCurrent, bool HardReservation, IReadOnlyList<string> Preferences)
+    : ICommand<VersionResponse>;
+
+/// <summary>What to fetch for one job, or for every open job on a line, or the whole site (#82): active allocations by location.</summary>
+public sealed record GetPickingListQuery(Guid SiteId, Guid? JobId = null, Guid? LineId = null) : IQuery<PickingListDto>;
+
 internal sealed class GetJobAllocationsHandler(IAllocationReadStore store, IUnitReadStore units, TimeProvider time) : IQueryHandler<GetJobAllocationsQuery, JobAllocationsDto>
 {
     public async Task<JobAllocationsDto> HandleAsync(GetJobAllocationsQuery query, CancellationToken cancellationToken)
     {
         var source = await store.LoadAsync(query.JobId, cancellationToken) ?? throw new NotFoundException($"Production job {query.JobId} not found.");
         var now = time.GetUtcNow();
+        var alternates = source.Alternates ?? [];
         var plans = AllocationPlanner.Plan(
             source, await units.GetUnitsAsync(cancellationToken), await units.GetConversionsAsync([.. source.Needs.Select(n => n.MaterialId).Distinct()], cancellationToken), now);
         return new JobAllocationsDto
@@ -198,7 +283,11 @@ internal sealed class GetJobAllocationsHandler(IAllocationReadStore store, IUnit
                     LocationCode = a.Lot?.LocationCode,
                     Quantity = a.Allocation.Allocation.Quantity,
                     AllocatedQty = a.Allocation.Allocation.AllocatedQty,
-                    UomCode = p.Material.BaseUomCode,
+                    UomCode = alternates.FirstOrDefault(x => a.Allocation.Allocation.Ratio is not null && x.MaterialId == a.Allocation.Allocation.MaterialId)?.BaseUomCode
+                        ?? p.Material.BaseUomCode,
+                    AlternateMaterialCode = a.Allocation.Allocation.Ratio is null ? null
+                        : alternates.FirstOrDefault(x => x.MaterialId == a.Allocation.Allocation.MaterialId)?.MaterialCode ?? "an alternate",
+                    Ratio = a.Allocation.Allocation.Ratio,
                     Basis = a.Allocation.Allocation.Basis,
                     Note = a.Allocation.Allocation.Note,
                     CreatedAt = a.Allocation.CreatedAt,
@@ -211,6 +300,10 @@ internal sealed class GetJobAllocationsHandler(IAllocationReadStore store, IUnit
                     LotLabel = x.Lot.Candidate.Label,
                     LocationCode = x.Lot.LocationCode,
                     Quantity = x.Pick.Quantity,
+                    UomId = x.Alternate?.BaseUomId ?? p.Material.BaseUomId,
+                    UomCode = x.Alternate?.BaseUomCode ?? p.Material.BaseUomCode,
+                    AlternateMaterialCode = x.Alternate?.MaterialCode,
+                    Ratio = x.Alternate?.Ratio,
                     Free = x.Lot.Candidate.Free,
                     ExpiresAt = x.Lot.Candidate.ExpiresAt,
                     ReceivedAt = x.Lot.Candidate.ReceivedAt,
@@ -263,13 +356,28 @@ internal sealed class AllocationWriter(
         return (await allocations.LoadAsync(source.Job.Id, cancellationToken))!;
     }
 
-    public async Task AllocateAsync(JobAllocationSource source, Guid materialId, Guid lotId, decimal quantity, string basis, string? note, CancellationToken cancellationToken)
+    /// <summary>Allocates stock of a lot to the job, topping up its allocation of that lot; an approved alternate (#82) names the component it stands in for, and its ratio.</summary>
+    public async Task AllocateAsync(
+        JobAllocationSource source, Guid materialId, Guid lotId, decimal quantity, string basis, string? note, CancellationToken cancellationToken,
+        Guid? forMaterialId = null, decimal? ratio = null)
     {
         var existing = source.Allocations.FirstOrDefault(a => a.Allocation.LotId == lotId)?.Allocation;
         var allocation = existing?.TopUp(quantity)
-            ?? new LotAllocation(ids.NewId(), source.Job.SiteId, source.Job.Id, materialId, lotId, quantity, quantity, AllocationStatus.Active, basis, note);
+            ?? new LotAllocation(ids.NewId(), source.Job.SiteId, source.Job.Id, materialId, lotId, quantity, quantity, AllocationStatus.Active, basis, note,
+                forMaterialId, ratio);
         var envelope = events.Create(EventTypes.LotAllocated, "lot", lotId,
-            new { JobId = source.Job.Id, source.Job.JobNumber, AllocationId = allocation.Id, Quantity = quantity, QuantityAllocated = allocation.Quantity, Basis = basis, Note = note });
+            new
+            {
+                JobId = source.Job.Id,
+                source.Job.JobNumber,
+                AllocationId = allocation.Id,
+                Quantity = quantity,
+                QuantityAllocated = allocation.Quantity,
+                Basis = basis,
+                Note = note,
+                ForMaterialId = forMaterialId,
+                Ratio = ratio,
+            });
         if (existing is null)
         {
             await allocations.InsertAsync(allocation, envelope.ActorId, envelope.OccurredAt, cancellationToken);
@@ -329,15 +437,16 @@ internal sealed class AllocationWriter(
         {
             foreach (var plan in (await PlanAsync(source, cancellationToken)).Where(p => materialId is null || p.Material.MaterialId == materialId))
             {
-                foreach (var (pick, lot) in plan.Picks)
+                foreach (var (pick, lot, alternate) in plan.Picks)
                 {
-                    await AllocateAsync(source, lot.MaterialId, lot.Candidate.LotId, pick.Quantity, AllocationBasis.Recommended, pick.Reason, cancellationToken);
+                    await AllocateAsync(source, lot.MaterialId, lot.Candidate.LotId, pick.Quantity, AllocationBasis.Recommended, pick.Reason, cancellationToken,
+                        alternate?.ComponentId, alternate?.Ratio);
                     allocated++;
                 }
 
-                if (plan.Need is not null && plan.Remaining > plan.Picks.Sum(p => p.Pick.Quantity))
+                if (plan.Need is not null && plan.Remaining > plan.Suggested)
                 {
-                    notes.Add($"{source.Job.JobNumber}: {plan.Material.MaterialCode} is still {Qty(plan.Remaining - plan.Picks.Sum(p => p.Pick.Quantity))} {plan.Material.BaseUomCode} short of free stock.");
+                    notes.Add($"{source.Job.JobNumber}: {plan.Material.MaterialCode} is still {Qty(plan.Remaining - plan.Suggested)} {plan.Material.BaseUomCode} short of free stock.");
                 }
             }
         }
@@ -373,10 +482,11 @@ internal sealed class AllocateLotHandler(
             throw new DomainRuleException($"{lot.Name} is in another site than {source.Job.JobNumber}.");
         }
 
-        if (source.Needs.All(n => n.MaterialId != lot.MaterialId))
-        {
-            throw new DomainRuleException($"{source.Job.JobNumber} doesn't plan to consume that material; only a job's planned components are allocated.");
-        }
+        // A planned component, or an approved alternate for one (#82), the first by priority if it stands in for several.
+        var alternate = source.Needs.Any(n => n.MaterialId == lot.MaterialId)
+            ? null
+            : (source.Alternates ?? []).Where(a => a.MaterialId == lot.MaterialId).OrderBy(a => a.Priority).FirstOrDefault()
+              ?? throw new DomainRuleException($"{source.Job.JobNumber} doesn't plan to consume that material, and it isn't an approved alternate on its BOM.");
 
         var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
         var quantity = await InventoryRules.ToBaseAsync(units, material, command.Quantity, command.UomId, cancellationToken);
@@ -394,7 +504,7 @@ internal sealed class AllocateLotHandler(
                 (candidate.AllocatedToOthers > 0 ? $"; {InventoryRules.Qty(candidate.AllocatedToOthers)} {material.BaseUomCode} is allocated to other jobs." : "."));
         }
 
-        await writer.AllocateAsync(source, lot.MaterialId, lot.Id, quantity, AllocationBasis.Chosen, note, cancellationToken);
+        await writer.AllocateAsync(source, lot.MaterialId, lot.Id, quantity, AllocationBasis.Chosen, note, cancellationToken, alternate?.ComponentId, alternate?.Ratio);
         await transaction.CommitAsync(cancellationToken);
         return new AllocationChangeResponse { Allocated = 1, Jobs = 1 };
     }
@@ -491,12 +601,108 @@ internal sealed class ReleaseAllocationHandler(
 }
 
 /// <summary>What consumption does to allocations (D-064): its own job's allocation of the lot is used up; eating into other jobs' warns.</summary>
+internal sealed class GetAllocationSettingsHandler(IAllocationReadStore store) : IQueryHandler<GetAllocationSettingsQuery, AllocationSettingsDto>
+{
+    public async Task<AllocationSettingsDto> HandleAsync(GetAllocationSettingsQuery query, CancellationToken cancellationToken)
+    {
+        var (settings, version) = await store.GetSettingsAsync(query.SiteId, cancellationToken);
+        return new AllocationSettingsDto
+        {
+            SiteId = query.SiteId,
+            KeepCurrent = settings.KeepCurrent,
+            HardReservation = settings.HardReservation,
+            Preferences = settings.Preferences,
+            RefreshedAt = settings.RefreshedAt,
+            Version = version,
+        };
+    }
+}
+
+internal sealed class SetAllocationSettingsHandler(IUnitOfWork unitOfWork, IAllocationRepository allocations, IEventLog eventLog, IEventFactory events)
+    : ICommandHandler<SetAllocationSettingsCommand, VersionResponse>
+{
+    public async Task<VersionResponse> HandleAsync(SetAllocationSettingsCommand command, CancellationToken cancellationToken)
+    {
+        new Validator()
+            .Require(command.Preferences.All(AllocationPreferences.All.Contains), nameof(command.Preferences), $"Each one of {string.Join(", ", AllocationPreferences.All)}.")
+            .Require(command.Preferences.Distinct().Count() == command.Preferences.Count, nameof(command.Preferences), "Each preference at most once.")
+            .ThrowIfInvalid();
+
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var current = await allocations.GetSettingsForUpdateAsync(command.SiteId, cancellationToken);
+        if (current.Version != command.ExpectedVersion)
+        {
+            throw new ConflictException("The site's allocation settings were changed by someone else. Reload and try again.");
+        }
+
+        var updated = current.Value with { KeepCurrent = command.KeepCurrent, HardReservation = command.HardReservation, Preferences = [.. command.Preferences] };
+        var envelope = events.Create(EventTypes.AllocationSettingsSet, "site", command.SiteId, new { Before = current.Value, After = updated });
+        var version = await allocations.UpdateSettingsAsync(updated, envelope.OccurredAt, cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new VersionResponse(version);
+    }
+}
+
+internal sealed class GetPickingListHandler(IAllocationReadStore store) : IQueryHandler<GetPickingListQuery, PickingListDto>
+{
+    public Task<PickingListDto> HandleAsync(GetPickingListQuery query, CancellationToken cancellationToken) =>
+        store.GetPickingListAsync(query.SiteId, query.JobId, query.LineId, cancellationToken);
+}
+
+/// <summary>
+/// Keeps allocations current (#82) for sites that ask: each site whose stock or schedule changed since its last refresh, once the changes
+/// have settled, is refreshed whole (<see cref="RefreshSiteAllocationsCommand"/>, earliest need first). Run by a background service.
+/// </summary>
+public sealed class AllocationAutoRefresh(
+    IUnitOfWork unitOfWork,
+    IAllocationRepository allocations,
+    ICommandHandler<RefreshSiteAllocationsCommand, AllocationChangeResponse> refresh,
+    TimeProvider time,
+    ILogger<AllocationAutoRefresh>? logger = null)
+{
+    /// <returns>The sites refreshed.</returns>
+    public async Task<int> RefreshDueAsync(TimeSpan quiet, TimeSpan atMost, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<Guid> due;
+        await using (var reading = await unitOfWork.BeginAsync(cancellationToken))
+        {
+            due = await allocations.ListSitesDueForRefreshAsync(quiet, atMost, cancellationToken);
+        }
+
+        foreach (var siteId in due)
+        {
+            // Changes made while it runs come after this time, so they bring the next refresh.
+            var started = time.GetUtcNow();
+            try
+            {
+                await refresh.HandleAsync(new RefreshSiteAllocationsCommand(siteId), cancellationToken);
+            }
+            catch (Exception ex) when (ex is DomainRuleException or ConflictException or NotFoundException)
+            {
+                // Marked anyway, so one site's problem is logged once per change, not every round.
+                logger?.LogWarning(ex, "Couldn't refresh the allocations of site {SiteId}.", siteId);
+            }
+
+            await using var marking = await unitOfWork.BeginAsync(cancellationToken);
+            await allocations.MarkRefreshedAsync(siteId, started, cancellationToken);
+            await marking.CommitAsync(cancellationToken);
+        }
+
+        return due.Count;
+    }
+}
+
 internal static class AllocationUse
 {
-    /// <summary>Runs after the job and lot are locked, before the lot changes.</summary>
+    /// <summary>
+    /// Runs after the job and lot are locked, before the lot changes. Taking what other jobs hold is warned about; under the site's hard
+    /// reservation (#82) it is refused, naming them: whoever allocates releases or moves their allocation first.
+    /// </summary>
     public static async Task<(decimal Used, InventoryWarningDto? Warning)> ConsumeAsync(
         IAllocationRepository allocations, Lot lot, Guid jobId, decimal quantity, string actor, DateTimeOffset at, string unitCode, CancellationToken cancellationToken)
     {
+        var hard = (await allocations.GetSettingsAsync(lot.SiteId, cancellationToken)).HardReservation;
         var held = await allocations.LockActiveOfLotsAsync([lot.Id], cancellationToken);
         var used = 0m;
         if (held.FirstOrDefault(a => a.Allocation.JobId == jobId) is { } own)
@@ -508,6 +714,13 @@ internal static class AllocationUse
 
         var others = held.Where(a => a.Allocation.JobId != jobId).ToList();
         var free = lot.Quantity - others.Sum(a => a.Allocation.Quantity);
+        if (hard && others.Count > 0 && quantity > free)
+        {
+            throw new DomainRuleException(
+                $"{InventoryRules.Qty(quantity - Math.Max(0m, free))} {unitCode} of {lot.Name} is reserved for {string.Join(", ", others.Select(o => o.JobNumber).Distinct())}; " +
+                "release or move their allocation first.");
+        }
+
         return others.Count > 0 && quantity > free
             ? (used, new InventoryWarningDto("allocated_elsewhere",
                 $"{InventoryRules.Qty(quantity - Math.Max(0m, free))} {unitCode} of it was allocated to {string.Join(", ", others.Select(o => o.JobNumber).Distinct())}; it was consumed anyway. Refresh their allocations."))

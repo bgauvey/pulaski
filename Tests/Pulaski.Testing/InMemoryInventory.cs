@@ -312,6 +312,8 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         }
     }
 
+    public Task<string?> AlternateForAsync(Guid jobId, Guid materialId, CancellationToken cancellationToken) => Task.FromResult<string?>(null);
+
     public Task<bool> PlansComponentAsync(Guid jobId, Guid materialId, CancellationToken cancellationToken)
     {
         lock (_lock)

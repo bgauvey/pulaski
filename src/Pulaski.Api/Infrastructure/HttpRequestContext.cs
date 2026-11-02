@@ -21,6 +21,12 @@ internal sealed class HttpRequestContext(IHttpContextAccessor accessor, IIdGener
                 return terminal.ActorId;
             }
 
+            // Background work (no request), such as keeping allocations current (#82), acts as the system.
+            if (accessor.HttpContext is null)
+            {
+                return "system";
+            }
+
             var user = accessor.HttpContext?.User;
             var subject = user?.FindFirst("sub")?.Value;
             var issuer = user?.FindFirst("iss")?.Value;

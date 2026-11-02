@@ -486,7 +486,7 @@ What a plant needs to keep floor stock right without the ERP, beyond receiving a
 - **Aging:** on-hand stock by how long ago each lot was received or made: up to 30, 31–90, 91–180 and over 180 days, per material.
 - **Export:** stock, lots, the journal (up to 10,000 rows) and both reports download as CSV.
 
-**Deferred:** picking lists. Allocation and lot suggestions are D-064. Containers and labels are D-059. Lot attributes and certificates are D-056.
+**Deferred:** nothing here now: picking lists came with D-084. Allocation and lot suggestions are D-064. Containers and labels are D-059. Lot attributes and certificates are D-056.
 
 ## Indistinguishable lots (D-031, proposed)
 
@@ -1421,7 +1421,7 @@ Issue #32. Stock couldn't be set aside for a job, and nothing suggested which lo
 
 Events: `pulaski.lot.allocated.v1`, `…allocation_released.v1`, `…allocation_changed.v1`.
 
-**Not done.** Automatic refresh on stock or schedule changes, preference for locations near the line or whole lots, picking lists, allocating substitutions, hard reservations.
+**Not done.** Automatic refresh, lot preferences, picking lists, approved alternates and hard reservation came with D-084.
 
 ## Batch sizes per line (D-065, proposed)
 
@@ -1873,7 +1873,6 @@ into the job running on its line then, in the counter tag's unit (else the base 
 
 **Not done:**
 - machine production counts into lots;
-- automated consumption using up allocations (D-064);
 - residence time between a feed point and the line;
 - scan-to-consume beyond the Scan page's existing Consume.
 
@@ -2005,6 +2004,77 @@ much of it counted).
 **Not done:**
 - lead times per supplier or site;
 - receipt tolerances (closing near enough on its own).
+
+## Allocation refinements (D-084, proposed)
+
+Issue #82. D-064 left out background refresh, preferences beyond expiry, picking lists, substitutes and hard reservation. Automated
+feed-point consumption ignored allocations (D-079).
+
+**Site settings.** `core.allocation_settings`, one row per site, made with the defaults on first save:
+- `keep_current`, `hard_reservation` (both off by default) and `preferences` (`text[]`, ordered);
+- changed on Configure → Site settings (`SetAllocationSettingsCommand`, `site_settings.manage`; read with `site_settings.view` or
+  `inventory.view`);
+- version by `xmin`, 0 while there is no row. A stale version is a conflict.
+
+**Background refresh, per site, opt in.** `AllocationRefreshService` (API hosted service) calls `AllocationAutoRefresh.RefreshDueAsync` every
+`Allocations:Refresh:PollSeconds` (30).
+- A site keeping allocations current is due when it has never been refreshed, or when a lot, job or work order event (allocation events aside,
+  since refreshing writes them) has come since its last refresh. That change must have been quiet for `QuietSeconds` (60), or the last refresh
+  be older than `AtMostSeconds` (900), so a burst of movements refreshes once.
+- Events carry no site, so any change makes every keep-current site due. A refresh with nothing to do changes nothing.
+- It runs `RefreshSiteAllocationsCommand` as `system`. The start time goes into `core.allocation_refresh`, a row of its own so it never changes
+  the settings' version.
+- A site that fails is logged and marked anyway, so it is retried on the next change rather than every round. `Allocations:Refresh:Enabled`
+  switches the service off.
+
+**Preferences rank after the expiry day.** `LotRecommendation.Recommend` orders by expiry (none last), then the expiry's UTC day, then each
+preference in the site's order, then oldest receipt, then label. Expiry always wins.
+- `near_line`: the lot is at or below the job's equipment (closure);
+- `in_container`;
+- `whole_lot`: covers what is still needed alone;
+- `part_lots_first`: the smallest free quantity first.
+
+Each pick's reason names the preference that applied. `whole_lot` and `part_lots_first` pull opposite ways; the earlier one decides.
+
+**Approved alternates per BOM line, versioned with the BOM.** `BomItem.Alternates` (in the draft `jsonb`) are written on release to
+`core.bom_item_alternate` (`bom_item_id`, `material_id`, `ratio`, `priority`).
+- `ratio` is the alternate's base units per one base unit of the component (1.05 = 5% more).
+- Checks: not the component itself or the BOM's material, ratio and priority positive, each material once. On release it must also be active.
+- Jobs reach them through `job_material.bom_item_id`.
+- The planner suggests the component's own lots first. Then each alternate in priority order covers what is left at its ratio: need × ratio of
+  the alternate, with the reason "Alternate for X (r a per c)".
+- `AllocateLotCommand` takes a lot of an approved alternate, the first by priority if it stands in for several. `lot_allocation.for_material_id`
+  (the component) and `ratio` are set together (`lot_allocation_alternate_ck`).
+- An alternate allocation covers `quantity ÷ ratio` of the component (`LotAllocation.Covers`). Shortages take that off the component's need and
+  the raw quantity out of the alternate's own stock.
+- Consuming an approved alternate warns `approved_alternate` instead of `not_planned` (`IInventoryRepository.AlternateForAsync`).
+
+**Hard reservation, opt in per site.** `AllocationUse.ConsumeAsync` refuses, under the site's `hard_reservation`, consuming more of a lot than
+other jobs leave free. The message names those jobs; their allocation is released or moved first. There is no bypass. It applies to every
+consumption that goes through it:
+- declared consumption;
+- shortfall resolution (`ResolveShortfallHandler`);
+- automated feed-point consumption (`FeedAutomation`, given `IAllocationRepository` by the report, pause, complete and counter paths). That
+  path doesn't refuse: it takes only what no other job holds, and the rest is a shortfall ("…was reserved for another job…").
+
+Every consumption into the job uses up its own allocation, automated or not. Off, other jobs' stock is consumed with the
+`allocated_elsewhere` warning as before.
+
+**Picking lists.** `GetPickingListQuery` (`GET /api/inventory/picking-list?siteId=&jobId=&lineId=`, JSON; `/picking-list.pdf`,
+`PickingListPdfRenderer`, landscape Letter, a box to tick per row).
+- It lists the active allocations of open jobs: at most what the lot holds, by location then container.
+- It can be narrowed to one job, or to the jobs of a piece of equipment and what is below it.
+- Lots already at or below the job's line are left out.
+- `inventory.view` or `floor.view`. The job's allocations panel and the Shortages page print it.
+
+**Locking.** Unchanged (D-064): job, then lots, then their allocations. Feed automation locks the lot, then its allocations. Settings writes
+lock the settings row.
+
+**Not done:**
+- per-material or per-class preferences;
+- a site-filtered change feed for the refresh;
+- alternates on the Order form's component plan (they show only in allocations);
+- picking confirmation (a pick is still a move).
 
 ## Application architecture
 
