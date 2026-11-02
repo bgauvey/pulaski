@@ -209,4 +209,6 @@ internal sealed class TestDeliveryTargets : Application.Integrations.IDeliveryTa
     public const string Sink = "webhook:test";
 
     public Application.Integrations.DeliveryTarget Erp { get; } = new(Sink, true, "erp.test", ["pulaski.lot."]);
+
+    public Application.Integrations.DeliveryTarget? Find(string feed) => feed == "erp" ? Erp : null;
 }

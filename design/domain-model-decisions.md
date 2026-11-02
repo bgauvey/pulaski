@@ -1167,7 +1167,7 @@ The handler parses the bounds in the attribute's type, so `1,5` is a validation 
 
 Screens: the lot page's **Attributes and certificates** section (`LotRecordsPanel`), the attribute filter on Find a lot, and Configure → Materials → **Lot attributes**. Migration `0024_lot_records`.
 
-**Not yet.** Attributes in the lots CSV export or in imports; certificates to or from the ERP or a document system; a retention job. Checking values against specification limits came with D-085: a number attribute may stand for a quality characteristic.
+**Not yet.** A retention job; certificates read from the ERP or a document system. Attribute values in CSV export and import, and certificates sent out, came with D-086. Checking values against specification limits came with D-085: a number attribute may stand for a quality characteristic.
 
 ## Back-dated inventory movements (D-057, proposed)
 
@@ -1308,7 +1308,7 @@ Issue #39. Inventory movements were events in `evt.event` (D-007) with nothing t
 - `X-Pulaski-Timestamp` is Unix seconds.
 - `X-Pulaski-Signature` is `sha256=` + hex HMAC-SHA256(secret, `"{timestamp}.{body}"`).
 
-**Capture.** `ErpDeliveryService` (a hosted service in the API) runs a round every few seconds under a session advisory lock per sink, so several API servers never send at once. Each round copies matching events into `evt.delivery` in `(tx_id, position)` order, only below `pg_snapshot_xmin(pg_current_snapshot())`, and moves `evt.sink_checkpoint` in the same statement. A slow commit is never skipped, and `UNIQUE (sink, event_id)` makes a repeat capture harmless. With `StartFromNow`, the first checkpoint is the latest event, so switching it on doesn't replay history.
+**Capture.** `ErpDeliveryService` (a hosted service in the API; `WebhookDeliveryService`, one per feed, since D-086) runs a round every few seconds under a session advisory lock per sink, so several API servers never send at once. Each round copies matching events into `evt.delivery` in `(tx_id, position)` order, only below `pg_snapshot_xmin(pg_current_snapshot())`, and moves `evt.sink_checkpoint` in the same statement. A slow commit is never skipped, and `UNIQUE (sink, event_id)` makes a repeat capture harmless. With `StartFromNow`, the first checkpoint is the latest event, so switching it on doesn't replay history.
 
 **Sending.** Due rows go in commit order. `DeliveryPolicy.AfterAttempt` (pure) decides the outcome:
 
@@ -1329,7 +1329,7 @@ An outage only delays: rows stay pending.
 
 Each appends `pulaski.delivery.retried.v1` or `pulaski.delivery.skipped.v1`. Routes: `GET /api/integrations/erp`, `GET /api/integrations/erp/deliveries?status=`, `POST …/deliveries/{id}/retry`, `…/{id}/skip`, `…/retry-failed`.
 
-**Not done.** No inbound acknowledgement or reconciliation from the ERP, one sink only (the table and checkpoint are keyed by sink, ready for more), no ERP-specific adapters or message brokers, no retention of delivered rows.
+**Not done.** No inbound acknowledgement or reconciliation from the ERP, no ERP-specific adapters or message brokers, no retention of delivered rows. A second sink, for a document system, came with D-086.
 
 ## Reason trees (D-062, proposed)
 
@@ -2137,6 +2137,50 @@ Quality) and `specs.manage`. Migration 0053 grants them to the starting roles an
 - specifications per site or customer;
 - certificates of analysis generated from results;
 - recording against a job only from its page (the results page has no job picker).
+
+## Lot attribute values in bulk; certificates to a document system (D-086, proposed)
+
+Issue #78. Attribute values (D-056) weren't in the lots export and couldn't be imported, and certificates went nowhere outside Pulaski.
+
+**Values file.** `LotAttributeCsv` (pure) reads a site's values file.
+- Columns: `lot_number`, an optional `material_code` (needed only when two materials share a number), then one column per attribute code of the
+  site, in any order and case. An unknown column refuses the file.
+- Values are read by `LotAttributeDefinition.Parse`, as on the lot page.
+- **A blank cell leaves the value alone** (the user's choice, so a sparse file can't wipe others). `(clear)` clears it.
+- Balances have no lot number, so they are left out.
+
+**Import, all or nothing.** `ImportLotAttributeValuesCommand` (`POST /api/lot-attributes/values/import?siteId=&dryRun=`, `lot_records.manage`).
+- It finds the lots by number in any case (`FindLotsByNumberAsync`) and locks them in id order (`LockLotsAsync`). Then it sets each changed value
+  through `LotAttributeWriter`, the same path as the lot page: active and applies-to-class checks, a `pulaski.lot.attribute_set.v1` event with
+  reason *CSV import*, and a quality result for an attribute standing for a characteristic (D-085).
+- Any row in error, or a dry run, and the transaction ends uncommitted, so the report is exact and nothing is kept.
+- The answer is `ImportMaterialsResponse`: rows `update` or `unchanged` with each change (`CODE: before → after`), or `error` with why.
+
+**Export.** `GET /api/lot-attributes/values.csv?siteId=` is the import's own format (active attributes in their order), so it reads back
+unchanged. `GET /api/lot-attributes/values` lists the same as JSON, and the Lots tab's export adds a column per active attribute from it.
+
+**Certificates to a document system** (the user's choice of a separate sink). The ERP feed (D-061) is generalised into webhook feeds
+(`WebhookFeedOptions`, `WebhookDeliveryService`, `WebhookSender`).
+- `erp` (`Integrations:Erp`, sink `webhook:erp`, unchanged).
+- `documents` (`Integrations:Documents`, sink `webhook:documents`, default event types `pulaski.lot_document.`).
+- Each runs its own relay under its own advisory lock. Routes are `/api/integrations/{erp|documents}/…`, and Configure → Integrations switches
+  between the feeds.
+- The ERP feed can take certificates as well by adding the prefix to its `EventTypes`. A certificate's events are kept in order per document,
+  as a lot's are.
+
+**File inline, per feed** (the user's choice). `IncludeFiles` is on by default for the document feed and off for the ERP feed.
+- When it is on, `pulaski.lot_document.attached.v1` is sent with `data.file`: `fileName`, `contentType`, `sizeBytes`, `sha256` and
+  `contentBase64` (`WebhookSender.WithFile`).
+- The file is read at send time (`DeliveryRelay.GetDocumentFileAsync`); stored files never change.
+- Over 10 MB, a note replaces the bytes. Off, or for a reference-only document, the event carries the reference: number, URL, SHA-256, type and
+  size from the document.
+- Nothing is stored for this; it is all configuration, the secret included (never in the database).
+
+**Not done:**
+- reading certificates from the ERP or a document system;
+- a signed download link instead of inline files;
+- events for documents carried to other lots by split or merge;
+- an import from other sources (B2MML, an API).
 
 ## Application architecture
 

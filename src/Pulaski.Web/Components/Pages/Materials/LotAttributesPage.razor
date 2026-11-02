@@ -167,6 +167,11 @@ else
             </tbody>
         </table>
     </div>
+
+    @if (Sites.SiteId is { } transferSite)
+    {
+        <LotAttributeValuesTransfer @key="transferSite" SiteId="transferSite" Imported="LoadAsync" />
+    }
 }
 
 @code {

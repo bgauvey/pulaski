@@ -216,6 +216,22 @@ public sealed class DeliveryRelay(NpgsqlDataSource dataSource)
         return [.. await connection.QueryAsync<OutboundEvent>(new CommandDefinition(Due, new { Sink = sink, Now = now, Batch = batch }, cancellationToken: cancellationToken))];
     }
 
+    /// <summary>A certificate's stored file (#78), to send with its event; null when the document is a reference only.</summary>
+    public async Task<(string FileName, string ContentType, byte[] Content)?> GetDocumentFileAsync(Guid documentId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var row = await connection.QuerySingleOrDefaultAsync<FileRow>(new CommandDefinition(
+            """
+            SELECT d.file_name, d.content_type, c.content
+            FROM core.lot_document d
+            JOIN core.lot_document_content c ON c.document_id = d.id
+            WHERE d.id = @Id
+            """,
+            new { Id = documentId },
+            cancellationToken: cancellationToken));
+        return row is null ? null : (row.FileName, row.ContentType, row.Content);
+    }
+
     /// <summary>Records an attempt's outcome; a delivery an operator resolved meanwhile is left as they set it.</summary>
     public async Task RecordAsync(Guid deliveryId, DeliveryOutcome outcome, int? statusCode, DateTimeOffset at, CancellationToken cancellationToken)
     {
@@ -243,5 +259,12 @@ public sealed class DeliveryRelay(NpgsqlDataSource dataSource)
         public int Scanned { get; init; }
         public int Captured { get; init; }
         public int Moved { get; init; }
+    }
+
+    private sealed class FileRow
+    {
+        public string FileName { get; init; } = "";
+        public string ContentType { get; init; } = "";
+        public byte[] Content { get; init; } = [];
     }
 }

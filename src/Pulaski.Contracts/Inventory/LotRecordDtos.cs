@@ -56,6 +56,9 @@ public sealed record UpdateLotAttributeRequest
     public Guid? CharacteristicId { get; init; }
 }
 
+/// <summary>One recorded attribute value of a numbered lot at a site, for exports (#78).</summary>
+public sealed record LotAttributeExportDto(Guid LotId, string LotNumber, string MaterialCode, string AttributeCode, string Value);
+
 /// <summary>A lot's attributes and documents (D-056).</summary>
 public sealed record LotRecordsDto
 {

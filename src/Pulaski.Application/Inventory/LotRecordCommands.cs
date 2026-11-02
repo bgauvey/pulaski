@@ -192,9 +192,40 @@ internal sealed class SetLotAttributeHandler(
 
         var value = attribute.Parse(command.Value);
         var before = current?.Value ?? LotAttributeValue.Empty;
-        if (value == before)
+        var written = await new LotAttributeWriter(inventory, records, eventLog, events, quality, ids, request)
+            .SetAsync(lot, context, attribute, before, value, null, cancellationToken);
+        if (written is not { } version)
         {
             return new VersionResponse(command.ExpectedVersion);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return new VersionResponse(version);
+    }
+}
+
+/// <summary>
+/// Sets one attribute value of a locked lot (D-056), shared by the lot page and the CSV import (#78): checks it may be set, writes it with its
+/// event and, for an attribute standing for a quality characteristic (#65), records the result.
+/// </summary>
+internal sealed class LotAttributeWriter(
+    IInventoryRepository inventory,
+    ILotRecordsRepository records,
+    IEventLog eventLog,
+    IEventFactory events,
+    Quality.IQualityRepository? quality,
+    IIdGenerator? ids,
+    IRequestContext? request)
+{
+    /// <returns>The value's new version, or null when it was already that.</returns>
+    /// <exception cref="DomainRuleException">A new value for an attribute that is off or not offered for the lot's material.</exception>
+    public async Task<long?> SetAsync(
+        Lot lot, LotRecordContext context, LotAttributeDefinition attribute, LotAttributeValue before, LotAttributeValue value, string? reason,
+        CancellationToken cancellationToken)
+    {
+        if (value == before)
+        {
+            return null;
         }
 
         // Anything recorded can be cleared; a new value needs an attribute that is on and offered for the material.
@@ -207,7 +238,8 @@ internal sealed class SetLotAttributeHandler(
 
         var envelope = events.Create(
             EventTypes.LotAttributeSet, "lot", lot.Id,
-            new { lot.LotNumber, AttributeId = attribute.Id, attribute.Code, Before = before.Display, After = value.Display });
+            new { lot.LotNumber, AttributeId = attribute.Id, attribute.Code, Before = before.Display, After = value.Display },
+            reason);
         var version = await records.SaveValueAsync(lot.Id, attribute.Id, value, envelope.ActorId, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
 
@@ -220,8 +252,7 @@ internal sealed class SetLotAttributeHandler(
                 Domain.Quality.QualitySources.LotAttribute, $"Lot attribute {attribute.Code}", cancellationToken);
         }
 
-        await transaction.CommitAsync(cancellationToken);
-        return new VersionResponse(version);
+        return version;
     }
 }
 

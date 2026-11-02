@@ -10,13 +10,36 @@ using Pulaski.Infrastructure.Integrations;
 namespace Pulaski.Api.Integrations;
 
 /// <summary>
-/// Sends one event to the ERP's webhook (D-061) as a CloudEvents 1.0 message in structured JSON. The event id is also the
+/// Sends one event to a feed's webhook (D-061) as a CloudEvents 1.0 message in structured JSON. The event id is also the
 /// <c>Idempotency-Key</c>, so a receiver can drop a repeat; the body is signed with the shared secret as
 /// <c>X-Pulaski-Signature: sha256=hex(HMAC(secret, "{timestamp}.{body}"))</c> with the timestamp in <c>X-Pulaski-Timestamp</c>.
 /// </summary>
-public sealed class ErpWebhookSender(HttpClient http)
+public sealed class WebhookSender(HttpClient http)
 {
     public const string ClientName = "erp-webhook";
+
+    /// <summary>The largest file sent with a certificate's event (#78), as stored documents are (D-056).</summary>
+    public const int MaxFileBytes = 10 * 1024 * 1024;
+
+    /// <summary>
+    /// The event with a certificate's file in <c>data.file</c> (#78): name, type, size and the bytes as base64. A file over
+    /// <see cref="MaxFileBytes"/> goes as a note instead, so the receiver knows to fetch it another way.
+    /// </summary>
+    public static OutboundEvent WithFile(OutboundEvent e, string fileName, string contentType, byte[] content)
+    {
+        var data = JsonNode.Parse(e.Data) as JsonObject ?? [];
+        data["file"] = content.Length > MaxFileBytes
+            ? new JsonObject { ["fileName"] = fileName, ["contentType"] = contentType, ["sizeBytes"] = content.Length, ["omitted"] = "larger than 10 MB" }
+            : new JsonObject
+            {
+                ["fileName"] = fileName,
+                ["contentType"] = contentType,
+                ["sizeBytes"] = content.Length,
+                ["sha256"] = Convert.ToHexStringLower(SHA256.HashData(content)),
+                ["contentBase64"] = Convert.ToBase64String(content),
+            };
+        return e with { Data = data.ToJsonString() };
+    }
 
     public static string Body(OutboundEvent e) => new JsonObject
     {
@@ -70,27 +93,28 @@ public sealed class ErpWebhookSender(HttpClient http)
 }
 
 /// <summary>
-/// Relays events to the ERP (D-061): every few seconds, while holding the sink's lock, it copies new matching events into the
+/// Relays events to one feed (D-061, #78), the ERP or a document system: every few seconds, while holding the sink's lock, it copies new matching events into the
 /// delivery queue and sends what is due, in commit order, holding a subject's later events behind an undelivered one. An outage only
 /// delays: everything stays queued and is retried with growing waits, then marked failed for someone to retry or skip.
 /// </summary>
-public sealed class ErpDeliveryService(
+public sealed class WebhookDeliveryService(
     DeliveryRelay relay,
     IHttpClientFactory clients,
     IConfiguration configuration,
     TimeProvider time,
-    ILogger<ErpDeliveryService> logger) : BackgroundService
+    ILogger<WebhookDeliveryService> logger,
+    string feed = WebhookFeedOptions.Erp) : BackgroundService
 {
     private const int Batch = 200;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var options = ErpDeliveryOptions.From(configuration);
+        var options = WebhookFeedOptions.From(configuration, feed);
         if (!options.Enabled || !Uri.TryCreate(options.Url, UriKind.Absolute, out var url) || string.IsNullOrEmpty(options.Secret))
         {
             if (options.Enabled)
             {
-                logger.LogWarning("The ERP feed is enabled but its URL or secret is missing; nothing is delivered.");
+                logger.LogWarning("The {Feed} feed is enabled but its URL or secret is missing; nothing is delivered.", options.Label);
             }
 
             return;
@@ -101,35 +125,41 @@ public sealed class ErpDeliveryService(
         {
             try
             {
-                await relay.WithLockAsync(ErpDeliveryOptions.SinkName, () => RoundAsync(options, url, stoppingToken), stoppingToken);
+                await relay.WithLockAsync(options.Sink, () => RoundAsync(options, url, stoppingToken), stoppingToken);
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
             {
-                logger.LogError(ex, "The ERP feed couldn't read or update its queue; trying again shortly.");
+                logger.LogError(ex, "The {Feed} feed couldn't read or update its queue; trying again shortly.", options.Label);
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
     /// <summary>One round: capture what is new, then send what is due. Public for tests.</summary>
-    public async Task RoundAsync(ErpDeliveryOptions options, Uri url, CancellationToken cancellationToken)
+    public async Task RoundAsync(WebhookFeedOptions options, Uri url, CancellationToken cancellationToken)
     {
         int scanned;
         do
         {
-            (scanned, _) = await relay.CaptureAsync(ErpDeliveryOptions.SinkName, options.EventTypes, options.StartFromNow, Batch, cancellationToken);
+            (scanned, _) = await relay.CaptureAsync(options.Sink, options.EventTypes, options.StartFromNow, Batch, cancellationToken);
         }
         while (scanned == Batch);
 
-        var sender = new ErpWebhookSender(clients.CreateClient(ErpWebhookSender.ClientName));
+        var sender = new WebhookSender(clients.CreateClient(WebhookSender.ClientName));
         var blocked = new HashSet<Guid>();
-        foreach (var e in await relay.DueAsync(ErpDeliveryOptions.SinkName, time.GetUtcNow(), Batch, cancellationToken))
+        foreach (var due in await relay.DueAsync(options.Sink, time.GetUtcNow(), Batch, cancellationToken))
         {
             // A subject whose earlier event just failed waits; the query only knew about earlier rounds.
-            if (blocked.Contains(e.Subject))
+            if (blocked.Contains(due.Subject))
             {
                 continue;
             }
+
+            // A certificate's file goes with it when the feed sends files (#78), read now: stored files never change.
+            var e = options.SendsFiles && due.Type == Application.Abstractions.EventTypes.LotDocumentAttached
+                && await relay.GetDocumentFileAsync(due.Subject, cancellationToken) is { } file
+                ? WebhookSender.WithFile(due, file.FileName, file.ContentType, file.Content)
+                : due;
 
             var now = time.GetUtcNow();
             var (code, error) = await sender.SendAsync(url, options.Secret!, e, now, cancellationToken);
@@ -138,7 +168,7 @@ public sealed class ErpDeliveryService(
             if (outcome.Status != DeliveryStatuses.Delivered)
             {
                 blocked.Add(e.Subject);
-                logger.LogWarning("ERP delivery of {Type} {EventId} {Status}: {Error}", e.Type, e.EventId, outcome.Status, outcome.Error);
+                logger.LogWarning("{Feed} delivery of {Type} {EventId} {Status}: {Error}", options.Label, e.Type, e.EventId, outcome.Status, outcome.Error);
             }
         }
     }

@@ -1809,11 +1809,11 @@ Every command appends its CloudEvents event here in the same transaction as the 
 
 ### evt.sink_checkpoint — outbox progress per adapter (D-061) · *In use*
 
-How far an adapter has read `evt.event`. The ERP webhook (`webhook:erp`) moves it as it copies matching events into `evt.delivery`, in the same statement, so a crash never loses or repeats a capture. Its first row starts at the latest event when `StartFromNow` is on (the default), else at the beginning.
+How far an adapter has read `evt.event`. Each webhook feed (`webhook:erp`, and since D-086 `webhook:documents`) moves it as it copies matching events into `evt.delivery`, in the same statement, so a crash never loses or repeats a capture. Its first row starts at the latest event when `StartFromNow` is on (the default), else at the beginning.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `sink_name` | text | no | Primary key: `webhook:erp`; later `kafka-main`, `mqtt-uns`. |
+| `sink_name` | text | no | Primary key: `webhook:erp` or `webhook:documents`; later `kafka-main`, `mqtt-uns`. |
 | `last_tx_id` | xid8 | no | Last transaction read. |
 | `last_position` | bigint | no | Last position read within it. |
 | `updated_at` | timestamptz | no | Last progress. |
@@ -1825,7 +1825,7 @@ The queue and record of what was sent where. A row is added for each matching ev
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `sink` | text | no | The adapter: `webhook:erp`. |
+| `sink` | text | no | The adapter: `webhook:erp` or `webhook:documents` (D-086). |
 | `event_id` | uuid | no | The event (`evt.event.id`; no FK, it is partitioned). Also the message's `Idempotency-Key`. Unique with `sink`. |
 | `event_recorded_at` | timestamptz | no | The event's `recorded_at`, to find it in its partition. |
 | `tx_id`, `position` | xid8, bigint | no | The event's order, copied so the queue sorts and holds without the join. |

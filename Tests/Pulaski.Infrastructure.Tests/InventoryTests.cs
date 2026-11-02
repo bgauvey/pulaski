@@ -1322,6 +1322,62 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.DoesNotContain(copy.Definition.Items, i => released.Items.Any(r => r.ItemId == i.Id));
     }
 
+    [Fact]
+    public async Task Attribute_values_import_all_or_nothing_export_as_they_import_and_certificates_reach_the_document_feed_with_their_files()
+    {
+        var plant = await CreatePlantAsync();
+        CreatedResponse mfi = await db.SendAsync(new CreateLotAttributeCommand(plant.Site, "MFI", "Melt index", "number", null, [], true, [], 1));
+        CreatedResponse grade = await db.SendAsync(new CreateLotAttributeCommand(plant.Site, "GRADE", "Grade", "choice", null, ["A", "B"], true, [], 2));
+        var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "AV-A-" + _suffix, 100m, plant.Kg));
+        var b = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "AV-B-" + _suffix, 100m, plant.Kg));
+        await db.SendAsync(new SetLotAttributeCommand(b.LotId, grade.Id, 0, "B"));
+
+        // One bad cell: nothing is saved, and the row says why.
+        var csv = $"lot_number,mfi,grade\r\nav-a-{_suffix},11.2,a\r\nAV-B-{_suffix},eleven,\r\n";
+        var bad = await db.SendAsync(new ImportLotAttributeValuesCommand(plant.Site, csv, DryRun: false));
+        Assert.False(bad.Applied);
+        Assert.Contains("MFI", Assert.Single(bad.Rows, r => r.Action == "error").Message, StringComparison.Ordinal);
+        Assert.Empty(await QueryAsync<ListLotAttributeValuesQuery, IReadOnlyList<LotAttributeExportDto>>(new ListLotAttributeValuesQuery(plant.Site))
+            .ContinueWith(t => t.Result.Where(v => v.LotId == a.LotId).ToList()));
+
+        // Unknown columns are refused before any row.
+        var unknown = await db.SendAsync(new ImportLotAttributeValuesCommand(plant.Site, "lot_number,colour\r\nX,red\r\n", DryRun: true));
+        Assert.Contains(unknown.FileProblems, p => p.Contains("colour", StringComparison.Ordinal));
+
+        // A dry run reports and keeps nothing; the real run sets what is given, leaves blank cells alone and clears (clear).
+        csv = $"lot_number,material_code,mfi,grade\r\nAV-A-{_suffix},RESIN-{_suffix},11.2,a\r\nAV-B-{_suffix},,9.5,(clear)\r\n";
+        var dry = await db.SendAsync(new ImportLotAttributeValuesCommand(plant.Site, csv, DryRun: true));
+        Assert.Equal((false, 2, 0), (dry.Applied, dry.Updated, dry.Errors));
+        Assert.Contains("GRADE: B → cleared", dry.Rows[1].Changes);
+        var applied = await db.SendAsync(new ImportLotAttributeValuesCommand(plant.Site, csv, DryRun: false));
+        Assert.True(applied.Applied);
+        var values = await QueryAsync<ListLotAttributeValuesQuery, IReadOnlyList<LotAttributeExportDto>>(new ListLotAttributeValuesQuery(plant.Site));
+        Assert.Equal([("MFI", "11.2"), ("GRADE", "A")], values.Where(v => v.LotId == a.LotId).Select(v => (v.AttributeCode, v.Value)));
+        Assert.Equal([("MFI", "9.5")], values.Where(v => v.LotId == b.LotId).Select(v => (v.AttributeCode, v.Value)));
+        Assert.Equal(0, (await db.SendAsync(new ImportLotAttributeValuesCommand(plant.Site, csv, DryRun: false))).Updated);
+
+        // The export is the import's own format, so it reads back unchanged.
+        var export = await QueryAsync<ExportLotAttributeValuesQuery, string>(new ExportLotAttributeValuesQuery(plant.Site));
+        Assert.StartsWith("lot_number,material_code,MFI,GRADE\r\n", export, StringComparison.Ordinal);
+        Assert.Contains($"AV-A-{_suffix},RESIN-{_suffix},11.2,A", export, StringComparison.Ordinal);
+        Assert.Equal(2, (await db.SendAsync(new ImportLotAttributeValuesCommand(plant.Site, export, DryRun: true))).Unchanged);
+
+        // Certificates: the document feed queues their events, and the stored file is read to go with the attached one.
+        var relay = db.Services.GetRequiredService<Infrastructure.Integrations.DeliveryRelay>();
+        const string Sink = "webhook:documents-test";
+        await relay.CaptureAsync(Sink, ["pulaski.lot_document."], fromNow: true, 1000, CancellationToken.None);
+        byte[] pdf = [.. "%PDF-1.4 certificate"u8];
+        CreatedResponse coa = await db.SendAsync(new AttachLotDocumentCommand(a.LotId, "coa", "CoA", "C-1", "Acme", null, null, "coa.pdf", pdf));
+        await db.SendAsync(new WithdrawLotDocumentCommand(coa.Id, coa.Version, "Superseded by C-2"));
+        Assert.Equal(2, (await relay.CaptureAsync(Sink, ["pulaski.lot_document."], fromNow: true, 1000, CancellationToken.None)).Captured);
+        var due = (await relay.DueAsync(Sink, DateTimeOffset.UtcNow.AddMinutes(1), 1000, CancellationToken.None)).Where(e => e.Subject == coa.Id).ToList();
+        // The withdrawal waits behind the attachment until that is delivered: a certificate's events arrive in order.
+        Assert.Equal(["pulaski.lot_document.attached.v1"], due.Select(e => e.Type));
+        var file = await relay.GetDocumentFileAsync(coa.Id, CancellationToken.None);
+        Assert.Equal(("coa.pdf", "application/pdf"), (file!.Value.FileName, file.Value.ContentType));
+        Assert.Equal(pdf, file.Value.Content);
+    }
+
     private async Task<Plant> CreatePlantAsync()
     {
         CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(

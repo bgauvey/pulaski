@@ -13,7 +13,17 @@ public sealed record DeliveryRecord(Guid Id, string Sink, Guid EventId, string E
 public sealed record DeliveryCounts(int Pending, int Failed, int Held, int DeliveredLastDay, DateTimeOffset? OldestPendingAt, DateTimeOffset? LastDeliveredAt);
 
 /// <summary>The ERP feed's settings as screens may see them: never its address in full or its secret.</summary>
-public sealed record DeliveryTarget(string Sink, bool Enabled, string? TargetHost, IReadOnlyList<string> EventTypes);
+public sealed record DeliveryTarget(string Sink, bool Enabled, string? TargetHost, IReadOnlyList<string> EventTypes)
+{
+    /// <summary>The feed's key in routes: <c>erp</c> or <c>documents</c> (#78).</summary>
+    public string Feed { get; init; } = "erp";
+
+    /// <summary>What it is for, in messages: "ERP", "document system".</summary>
+    public string Label { get; init; } = "ERP";
+
+    /// <summary>A certificate's stored file goes with its event (#78).</summary>
+    public bool IncludesFiles { get; init; }
+}
 
 /// <summary>Operators' side of outbound deliveries (D-061); runs inside the current <see cref="IUnitOfWork"/> for changes.</summary>
 public interface IDeliveryStore
@@ -35,17 +45,26 @@ public interface IDeliveryStore
 public interface IDeliveryTargets
 {
     DeliveryTarget Erp { get; }
+
+    /// <summary>A feed by key (<c>erp</c>, <c>documents</c>); null for one that doesn't exist.</summary>
+    DeliveryTarget? Find(string feed);
 }
 
-public sealed record GetDeliveryStatusQuery : IQuery<DeliveryStatusDto>;
+internal static class DeliveryFeeds
+{
+    public static DeliveryTarget Target(IDeliveryTargets targets, string? feed) =>
+        targets.Find(feed ?? "erp") ?? throw new NotFoundException($"There is no feed '{feed}'.");
+}
 
-public sealed record ListDeliveriesQuery(string? Status = null, int Limit = 200) : IQuery<IReadOnlyList<DeliveryDto>>;
+public sealed record GetDeliveryStatusQuery(string Feed = "erp") : IQuery<DeliveryStatusDto>;
+
+public sealed record ListDeliveriesQuery(string? Status = null, int Limit = 200, string Feed = "erp") : IQuery<IReadOnlyList<DeliveryDto>>;
 
 /// <summary>Tries a failed delivery again now; its attempts carry on counting.</summary>
 public sealed record RetryDeliveryCommand(Guid Id) : ICommand<RetryDeliveriesResponse>;
 
-/// <summary>Tries every failed delivery to the ERP again now.</summary>
-public sealed record RetryFailedDeliveriesCommand : ICommand<RetryDeliveriesResponse>;
+/// <summary>Tries every failed delivery of the feed again now.</summary>
+public sealed record RetryFailedDeliveriesCommand(string Feed = "erp") : ICommand<RetryDeliveriesResponse>;
 
 /// <summary>
 /// Gives up on a delivery, with a reason (D-061): someone has put it right in the ERP by hand, or it should never go. It stops holding
@@ -57,11 +76,14 @@ internal sealed class GetDeliveryStatusHandler(IDeliveryStore store, IDeliveryTa
 {
     public async Task<DeliveryStatusDto> HandleAsync(GetDeliveryStatusQuery query, CancellationToken cancellationToken)
     {
-        var target = targets.Erp;
+        var target = DeliveryFeeds.Target(targets, query.Feed);
         var counts = await store.CountAsync(target.Sink, time.GetUtcNow(), cancellationToken);
         return new DeliveryStatusDto
         {
             Sink = target.Sink,
+            Feed = target.Feed,
+            Label = target.Label,
+            IncludesFiles = target.IncludesFiles,
             Enabled = target.Enabled,
             TargetHost = target.TargetHost,
             EventTypes = target.EventTypes,
@@ -85,7 +107,7 @@ internal sealed class ListDeliveriesHandler(IDeliveryStore store, IDeliveryTarge
             .Require(query.Status is null || Statuses.Contains(query.Status), "Status", "Pending, delivered, failed or skipped.")
             .Require(query.Limit is > 0 and <= 1000, "Limit", "Between 1 and 1000.")
             .ThrowIfInvalid();
-        return store.ListAsync(targets.Erp.Sink, query.Status, query.Limit, cancellationToken);
+        return store.ListAsync(DeliveryFeeds.Target(targets, query.Feed).Sink, query.Status, query.Limit, cancellationToken);
     }
 }
 
@@ -115,10 +137,11 @@ internal sealed class RetryFailedDeliveriesHandler(IUnitOfWork unitOfWork, IDeli
     public async Task<RetryDeliveriesResponse> HandleAsync(RetryFailedDeliveriesCommand command, CancellationToken cancellationToken)
     {
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
-        var retried = await store.RetryFailedAsync(targets.Erp.Sink, request.ActorId, time.GetUtcNow(), cancellationToken);
+        var target = DeliveryFeeds.Target(targets, command.Feed);
+        var retried = await store.RetryFailedAsync(target.Sink, request.ActorId, time.GetUtcNow(), cancellationToken);
         if (retried > 0)
         {
-            var envelope = events.Create(EventTypes.DeliveryRetried, "delivery", Guid.Empty, new { targets.Erp.Sink, Retried = retried, All = true });
+            var envelope = events.Create(EventTypes.DeliveryRetried, "delivery", Guid.Empty, new { target.Sink, Retried = retried, All = true });
             await eventLog.AppendAsync(envelope, cancellationToken);
         }
 

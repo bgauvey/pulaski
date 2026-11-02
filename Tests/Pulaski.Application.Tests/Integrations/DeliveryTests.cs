@@ -77,5 +77,7 @@ public class DeliveryTests
     internal sealed class Targets : IDeliveryTargets
     {
         public DeliveryTarget Erp { get; } = new(Sink, true, "erp.test", ["pulaski.lot."]);
+
+        public DeliveryTarget? Find(string feed) => feed == "erp" ? Erp : null;
     }
 }

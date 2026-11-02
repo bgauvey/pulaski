@@ -618,6 +618,38 @@ internal static class InventoryEndpoints
             TypedResults.Ok(await handler.HandleAsync(new ListLotAttributesQuery(siteId), ct)))
         .RequireAny(Site.Query(), Permissions.InventoryView, Permissions.LotAttributes);
 
+        // Values in bulk (#78): every recorded value of the site's numbered lots, as JSON or as the CSV the import reads.
+        attributes.MapGet("/values", async Task<Ok<IReadOnlyList<LotAttributeExportDto>>> (
+            Guid siteId, IQueryHandler<ListLotAttributeValuesQuery, IReadOnlyList<LotAttributeExportDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListLotAttributeValuesQuery(siteId), ct)))
+        .RequireAny(Site.Query(), Permissions.InventoryView);
+
+        attributes.MapGet("/values.csv", async Task<FileContentHttpResult> (
+            Guid siteId, IQueryHandler<ExportLotAttributeValuesQuery, string> handler, CancellationToken ct) =>
+            TypedResults.File(System.Text.Encoding.UTF8.GetBytes(await handler.HandleAsync(new ExportLotAttributeValuesQuery(siteId), ct)),
+                "text/csv", "lot-attribute-values.csv"))
+        .RequireAny(Site.Query(), Permissions.InventoryView);
+
+        // All or nothing; ?dryRun=true checks and reports without saving. The body is the CSV text.
+        attributes.MapPost("/values/import", async Task<Ok<Pulaski.Contracts.Materials.ImportMaterialsResponse>> (
+            HttpContext http, Guid siteId, bool? dryRun,
+            ICommandHandler<ImportLotAttributeValuesCommand, Pulaski.Contracts.Materials.ImportMaterialsResponse> handler, CancellationToken ct) =>
+        {
+            const int MaxBytes = 5 * 1024 * 1024;
+            using var reader = new StreamReader(http.Request.Body);
+            var text = http.Request.ContentLength > MaxBytes ? null : await reader.ReadToEndAsync(ct);
+            if (text is null || text.Length > MaxBytes)
+            {
+                throw new Pulaski.Application.Errors.ValidationException(new Dictionary<string, string[]>
+                {
+                    ["file"] = ["The file is larger than 5 MB; split it."],
+                });
+            }
+
+            return TypedResults.Ok(await handler.HandleAsync(new ImportLotAttributeValuesCommand(siteId, text, dryRun ?? false), ct));
+        })
+        .RequirePermission(Permissions.LotRecords, Site.Query());
+
         attributes.MapPost("/", async Task<Created<CreatedResponse>> (
             CreateLotAttributeRequest request,
             ICommandHandler<CreateLotAttributeCommand, CreatedResponse> handler,

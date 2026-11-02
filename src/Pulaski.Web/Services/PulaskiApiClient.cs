@@ -349,22 +349,29 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ImportMaterialsResponse> RunMaterialConnectionAsync(Guid id, RunMaterialConnectionRequest request, CancellationToken ct = default) =>
         SendAsync<ImportMaterialsResponse>(HttpMethod.Post, $"api/material-connections/{id}/run", request, ct);
 
-    // Outbound deliveries to the ERP (D-061)
+    // Outbound deliveries (D-061): the ERP feed (erp) and the document system's (documents, #78)
 
-    public Task<DeliveryStatusDto> GetErpDeliveryStatusAsync(CancellationToken ct = default) =>
-        GetAsync<DeliveryStatusDto>("api/integrations/erp", ct);
+    public Task<DeliveryStatusDto> GetDeliveryStatusAsync(string feed, CancellationToken ct = default) =>
+        GetAsync<DeliveryStatusDto>($"api/integrations/{feed}", ct);
 
-    public Task<IReadOnlyList<DeliveryDto>> ListErpDeliveriesAsync(string? status, CancellationToken ct = default) =>
-        GetAsync<IReadOnlyList<DeliveryDto>>(status is null ? "api/integrations/erp/deliveries" : $"api/integrations/erp/deliveries?status={status}", ct);
+    public Task<IReadOnlyList<DeliveryDto>> ListDeliveriesAsync(string feed, string? status, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<DeliveryDto>>(Query($"api/integrations/{feed}/deliveries", ("status", status)), ct);
 
-    public Task<RetryDeliveriesResponse> RetryErpDeliveryAsync(Guid id, CancellationToken ct = default) =>
-        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/erp/deliveries/{id}/retry", new { }, ct);
+    public Task<RetryDeliveriesResponse> RetryDeliveryAsync(string feed, Guid id, CancellationToken ct = default) =>
+        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/{feed}/deliveries/{id}/retry", new { }, ct);
 
-    public Task<RetryDeliveriesResponse> SkipErpDeliveryAsync(Guid id, SkipDeliveryRequest request, CancellationToken ct = default) =>
-        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/erp/deliveries/{id}/skip", request, ct);
+    public Task<RetryDeliveriesResponse> SkipDeliveryAsync(string feed, Guid id, SkipDeliveryRequest request, CancellationToken ct = default) =>
+        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/{feed}/deliveries/{id}/skip", request, ct);
 
-    public Task<RetryDeliveriesResponse> RetryFailedErpDeliveriesAsync(CancellationToken ct = default) =>
-        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, "api/integrations/erp/deliveries/retry-failed", new { }, ct);
+    public Task<RetryDeliveriesResponse> RetryFailedDeliveriesAsync(string feed, CancellationToken ct = default) =>
+        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/{feed}/deliveries/retry-failed", new { }, ct);
+
+    /// <summary>The site's attribute values as the import reads them (#78).</summary>
+    public Task<(byte[] Content, string ContentType, string FileName)> GetLotAttributeValuesCsvAsync(Guid siteId, CancellationToken ct = default) =>
+        GetFileAsync($"api/lot-attributes/values.csv?siteId={siteId}", ct);
+
+    public Task<IReadOnlyList<LotAttributeExportDto>> ListLotAttributeValuesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<LotAttributeExportDto>>($"api/lot-attributes/values?siteId={siteId}", ct);
 
     // Edge nodes, connections and tags (D-050)
 
@@ -1274,6 +1281,17 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public async Task<ImportMaterialsResponse> ImportChangeoverRulesCsvAsync(Guid siteId, string csv, bool dryRun, CancellationToken ct = default)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"api/changeover-rules/import/csv?siteId={siteId}&dryRun={(dryRun ? "true" : "false")}")
+        {
+            Content = new StringContent(csv, System.Text.Encoding.UTF8, "text/csv"),
+        };
+        using var response = await SendCoreAsync(request, ct);
+        return await ReadAsync<ImportMaterialsResponse>(response, ct);
+    }
+
+    /// <summary>Imports lot attribute values (#78); <paramref name="dryRun"/> checks without saving.</summary>
+    public async Task<ImportMaterialsResponse> ImportLotAttributeValuesAsync(Guid siteId, string csv, bool dryRun, CancellationToken ct = default)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/lot-attributes/values/import?siteId={siteId}&dryRun={(dryRun ? "true" : "false")}")
         {
             Content = new StringContent(csv, System.Text.Encoding.UTF8, "text/csv"),
         };

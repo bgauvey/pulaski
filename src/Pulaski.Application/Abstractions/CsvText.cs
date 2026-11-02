@@ -8,6 +8,34 @@ public sealed record CsvRecord(int Line, IReadOnlyList<string> Fields);
 /// <summary>Reads CSV files for the imports (D-034, D-050): a comma or semicolon separates fields, quotes follow RFC 4180.</summary>
 public static class CsvText
 {
+    /// <summary>
+    /// RFC 4180 text for a file people open in a spreadsheet: fields quoted when needed, CRLF line ends, and text that would start a formula
+    /// (=, +, -, @) kept as text with a leading quote mark.
+    /// </summary>
+    public static string Write(IReadOnlyList<string> headers, IEnumerable<IReadOnlyList<string?>> rows)
+    {
+        var text = new System.Text.StringBuilder();
+        void Line(IEnumerable<string?> fields) => text.AppendJoin(',', fields.Select(Field)).Append("\r\n");
+        Line(headers);
+        foreach (var row in rows)
+        {
+            Line(row);
+        }
+
+        return text.ToString();
+    }
+
+    private static string Field(string? value)
+    {
+        var raw = value ?? "";
+        if (raw.Length > 0 && raw[0] is '=' or '+' or '@' || raw.Length > 1 && raw[0] == '-' && !char.IsAsciiDigit(raw[1]))
+        {
+            raw = "'" + raw;
+        }
+
+        return raw.IndexOfAny([',', '"', '\r', '\n']) >= 0 ? "\"" + raw.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"" : raw;
+    }
+
     /// <summary>A header as a column name: trimmed, lower case, spaces and dashes as '_'.</summary>
     public static string Normalize(string header) =>
         header.Trim().ToLowerInvariant().Replace(' ', '_').Replace('-', '_');

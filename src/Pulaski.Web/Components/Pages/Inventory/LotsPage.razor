@@ -255,14 +255,22 @@ else
             while (page.Count == 500 && all.Count < 10_000);
 
             var tz = Sites.Site?.TimeZone;
+
+            // One column per active lot attribute (#78), headed by its code as the attribute import reads it.
+            var codes = Sites.SiteId is { } site
+                ? (await Api.ListLotAttributesAsync(site)).Where(a => a.IsActive).Select(a => a.Code).ToList()
+                : [];
+            IReadOnlyList<LotAttributeExportDto> recorded = codes.Count == 0 || Sites.SiteId is not { } valueSite ? [] : await Api.ListLotAttributeValuesAsync(valueSite);
+            var values = recorded.ToLookup(v => v.LotId);
             await Downloads.CsvAsync(
                 Csv.FileName("lots", Sites.Site?.Code, Time.GetUtcNow()),
                 Csv.Write(
-                    ["Lot", "Material", "Name", "Status", "Quantity", "Unit", "Location", "Supplier lot", "Expires", "Origin", "Made by", "Created", "Updated"],
+                    ["Lot", "Material", "Name", "Status", "Quantity", "Unit", "Location", "Supplier lot", "Expires", "Origin", "Made by", "Created", "Updated", .. codes],
                     all.Select(l => (IReadOnlyList<object?>)[
                         InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode), l.MaterialCode, l.MaterialName, l.Status, l.Quantity, l.UomCode,
                         l.LocationCode, l.SupplierLot, l.ExpiresAt is { } x ? Display.SiteTime(x, tz) : null, l.Origin, l.ProducedByJobNumber,
-                        Display.SiteTime(l.CreatedAt, tz), Display.SiteTime(l.UpdatedAt, tz)])));
+                        Display.SiteTime(l.CreatedAt, tz), Display.SiteTime(l.UpdatedAt, tz),
+                        .. codes.Select(c => (object?)values[l.Id].FirstOrDefault(v => v.AttributeCode == c)?.Value)])));
         }
         catch (ApiException ex)
         {

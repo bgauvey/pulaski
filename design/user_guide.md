@@ -1207,7 +1207,7 @@ When a movement is entered late, it can count from when it really happened: a re
 - **Stock on a date:** each material's on-hand quantity at the end of the day you choose, **where** it was then (by location) and how much of it was **on hold** or in quarantine then. Each lot is worked out as it was, from every movement that counts by then, including [back-dated](#back-date-a-movement) ones entered later, so a past date can change after a correction, gives the same answer whatever order movements were entered in, and agrees with the journal. Older dates take longer. The export has a row per material and location.
 - **Aging:** on-hand stock by how long ago each lot was received or made (from when its first movement counts, so a back-dated receipt ages from its real day): up to 30 days, 31–90, 91–180 and over 180 (in amber). Balances of materials that aren't lot-tracked aren't aged, and a split lot counts from the day it was split.
 
-**Export CSV** downloads a spreadsheet file from the **Stock** tab (what is on screen, with its filters), the **Lots** tab (every matching lot, up to 10,000), the **Journal** (every matching movement, up to 10,000) and both reports. Lot search shows 200 at a time: click **Show more** for the next.
+**Export CSV** downloads a spreadsheet file from the **Stock** tab (what is on screen, with its filters), the **Lots** tab (every matching lot, up to 10,000, with a column per active lot attribute), the **Journal** (every matching movement, up to 10,000) and both reports. Lot search shows 200 at a time: click **Show more** for the next.
 
 ### Reason codes
 
@@ -1329,11 +1329,11 @@ The **Scan** tab is for a barcode scanner that types like a keyboard (most USB a
 - When a second scan is asked for (where to move, or which container), only that kind counts; scanning something else says so.
 - Every movement made by scanning is the same as one made from the lot's or container's page, with the same rules, history and permissions.
 
-### Send movements to the ERP
+### Send movements to the ERP and certificates to a document system
 
-Pulaski can send every inventory movement (received, moved, consumed, produced, written up or off, shipped, held and so on) to your ERP as it happens, so the ERP's stock follows the floor's. It is switched on in the API's configuration by whoever runs Pulaski (see *In detail*); **Configure → Integrations** shows how it is doing and is where failures are put right.
+Pulaski can send every inventory movement (received, moved, consumed, produced, written up or off, shipped, held and so on) to your ERP as it happens, so the ERP's stock follows the floor's. A second feed sends certificates and other lot documents, as they are attached and withdrawn, to a document system, with their files. Each is switched on in the API's configuration by whoever runs Pulaski (see *In detail*); **Configure → Integrations** shows how each is doing and is where failures are put right.
 
-1. Open **Configure → Integrations**. The top panel says whether the ERP webhook is **On** and where it sends, how many movements are waiting, how many have **failed**, and how many were delivered in the last 24 hours.
+1. Open **Configure → Integrations** and choose the feed: **ERP** or **Document system**. The top panel says whether the ERP webhook is **On** and where it sends, how many movements are waiting, how many have **failed**, and how many were delivered in the last 24 hours.
 2. The list starts on **Failed**. Each row shows the movement, the lot, how many attempts were made and the ERP's last answer (its status code and message).
 3. Put the cause right (the ERP rejected an unknown material, say, or a lot it doesn't know), then choose **Retry** on the row, or **Retry all failed** in the panel. It goes again within a few seconds.
 4. If it shouldn't be sent at all (you have booked it in the ERP by hand, for example), choose **Skip…**, give the reason and choose **Skip it**. The ERP won't get that movement.
@@ -1347,7 +1347,8 @@ Pulaski can send every inventory movement (received, moved, consumed, produced, 
 - **Sent twice is safe.** Pulaski may send a movement again if it didn't hear the ERP's answer (at least once). Every message carries the movement's event id as its `Idempotency-Key`; the receiver should ignore an id it has already booked.
 - **The message** is a CloudEvents 1.0 JSON document (`application/cloudevents+json`) holding the event as Pulaski recorded it: its type (`pulaski.lot.received.v1` …), the lot as its subject, the time, who did it, the reason and the movement's details. It is signed: `X-Pulaski-Signature` is `sha256=` and the hex HMAC-SHA256, with the shared secret, of the `X-Pulaski-Timestamp` value, a full stop, and the body. A receiver should check the signature and refuse old timestamps.
 - **Switching it on.** In the API's settings (or environment), section `Integrations:Erp`: `Enabled` true, `Url` (the HTTPS address to post to) and `Secret` (shared with the receiver; keep it in a secret store or environment variable, not in a file in source control). Optional: `EventTypes` (type prefixes to send, default `pulaski.lot.`), `MaxAttempts` (12), `TimeoutSeconds` (15), `PollSeconds` (5) and `StartFromNow` (true: the first time it is switched on, only movements from then on are sent; false sends the whole history). Restart the API after a change.
-- **Several API servers** share the work safely: only one sends at a time.
+- **The document feed.** Section `Integrations:Documents`, with the same settings as the ERP's. It sends `pulaski.lot_document.attached.v1` and `…withdrawn.v1` (default `EventTypes` `pulaski.lot_document.`), each holding the document's kind, title, number, issuer, issue date, URL, file name, type, size and SHA-256 and the lot it was attached to; a withdrawal has the reason. With `IncludeFiles` (on for this feed, off for the ERP's unless set), the attached event also carries the stored file in `data.file`: `fileName`, `contentType`, `sizeBytes`, `sha256` and `contentBase64`. The ERP feed can take certificates too: add `pulaski.lot_document.` to its `EventTypes`. A certificate's later events wait behind an undelivered earlier one, as a lot's do. Documents carried to other lots by a split or merge send nothing of their own.
+- **Several API servers** share the work safely: only one sends each feed at a time.
 - **Who.** Anyone who can see Integrations (Administrator, Manager and Auditor to start with) sees the status and the deliveries; retrying and skipping need *integrations.manage* (Administrator to start with). Each retry and skip is recorded as an event with who did it, and a skip keeps its reason on the delivery.
 
 ### In detail
@@ -1725,6 +1726,20 @@ The properties a site records on its lots, such as melt index, moisture or colou
 6. To change one, click **Change**: its name, unit, characteristic, choices, classes, order and whether it is **Active** can change. Click **Save attribute**.
 
 An attribute is never deleted: untick **Active** to stop it being recorded; values already recorded stay and can be searched. The list shows how many lots have a value of each. Removing a choice doesn't change values already recorded. Maintaining lot attributes needs permission to maintain lot attribute definitions (the Quality and Manager roles have it).
+
+**Values in bulk.** Under the list, **Values in bulk** moves many lots' values at once, for example from a supplier's certificate data:
+
+1. Click **Export values** for a file of every recorded value of the site's numbered lots: `lot_number`, `material_code`, then a column per attribute code.
+2. Edit it in a spreadsheet, or make your own file with those columns. Only `lot_number` and the attribute columns you want are needed; add
+   `material_code` when two materials share a lot number.
+3. Pick the file. Pulaski checks it and says what it would change, row by row, or which rows are wrong.
+4. If every row is valid, click **Import**.
+
+A blank cell leaves the value as it is; type `(clear)` to clear one. Values are read as on the lot page: numbers with a decimal point, dates as
+`yyyy-MM-dd`, yes/no, and choices in any case. A lot number is matched in any case. Nothing is saved unless every row is valid, so fix the rows
+it lists and pick the file again. Balances have no lot number, so they aren't in the file. Each value set is recorded as the lot's
+`pulaski.lot.attribute_set.v1`, with the reason *CSV import*, and an attribute standing for a quality characteristic records its result too.
+Importing needs permission to record lot attributes and certificates.
 
 ### In detail
 
@@ -2463,10 +2478,10 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
-- **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Lot attributes aren't in the lots CSV export and can't be imported; only a number attribute standing for a quality characteristic is checked against specification limits. Certificates aren't sent to the ERP or a document system.
+- **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Only a number attribute standing for a quality characteristic is checked against specification limits. Balances' attribute values aren't in the values file.
 - **Reversing:** a chain undo follows a lot and the lots split off it, not merges into other lots, consumption into jobs or the output made from it; corrections made before this version can't be reversed.
 - **Genealogy through a silo is an estimate** from the declared movements. A level tag's readings confirm when it was empty and check the declared stock (see [How a silo flows](#how-a-silo-flows)), but they don't change how much each arrival gave. A reversed movement and its reversal are left out of the estimate, as if neither happened.
-- **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
+- **Sending to the ERP and a document system** is one HTTPS webhook each, configured in the API's settings (not on a screen). Pulaski doesn't read anything back, so the receivers' answers don't change anything in Pulaski; there is no adapter for a particular ERP's or document system's own API, and no message queue (MQTT, Kafka and the like). A certificate's file goes inline in the event, up to 10 MB; there is no download link for a receiver to fetch it later. The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
 - **Allocations:** the background refresh is all or nothing for a site, and any change anywhere makes it run. Preferences are per site, not per material. A picking list is printed, not confirmed: fetching the lot is still an ordinary move. Approved alternates show only in allocations and on consumption, not in an order's planned components, and only a BOM's approved alternates can be allocated.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** has no quality figures or SPC alerts yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.

@@ -3,16 +3,17 @@
 @inject PulaskiApiClient Api
 @inject CurrentUser User
 
-@* Outbound deliveries to the ERP (D-061): how the feed is doing, what failed, and putting it right. *@
+@* Outbound deliveries (D-061, #78): the ERP feed and the document system's, how each is doing, what failed, and putting it right. *@
 <PageTitle>Integrations · Pulaski</PageTitle>
 
 <div class="inv-head">
     <div>
         <h1 class="mb-1">Integrations</h1>
         <p class="text-muted mb-0">
-            Pulaski sends every inventory movement to the ERP's webhook as it happens, in order, and keeps trying while the ERP is
-            unreachable. A delivery the ERP refuses, or that runs out of attempts, stops here as failed, and holds back that lot's later
-            movements until someone retries it or skips it. Below, material connections read items from your item master.
+            Pulaski sends every inventory movement to the ERP's webhook, and certificates to a document system's, as they happen, in order,
+            and keeps trying while the receiver is unreachable. A delivery that is refused, or runs out of attempts, stops here as failed, and
+            holds back that lot's (or certificate's) later events until someone retries it or skips it. Below, material connections read items
+            from your item master.
         </p>
     </div>
     <div class="inv-head-tools">
@@ -23,13 +24,18 @@
 <ProblemAlert Error="_error" />
 <ViewOnlyNote Permission="@PermissionCodes.Integrations" What="retry or skip deliveries" />
 
+<div class="btn-group mb-3" role="group" aria-label="Feed">
+    <button type="button" class="btn btn-sm @(_feed == "erp" ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => SwitchAsync("erp"))">ERP</button>
+    <button type="button" class="btn btn-sm @(_feed == "documents" ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => SwitchAsync("documents"))">Document system</button>
+</div>
+
 @if (_status is { } s)
 {
     <div class="table-panel mb-3">
         <table class="table align-middle mb-0">
             <tbody>
                 <tr>
-                    <th style="width: 14rem">ERP webhook</th>
+                    <th style="width: 14rem">@(s.Feed == "documents" ? "Document system webhook" : "ERP webhook")</th>
                     <td>
                         @if (s.Enabled)
                         {
@@ -38,11 +44,12 @@
                         else
                         {
                             <span class="chip chip-muted">Off</span>
-                            <span class="text-muted ms-1">Turned on in the API's configuration (Integrations:Erp); nothing is queued while it's off.</span>
+                            <span class="text-muted ms-1">Turned on in the API's configuration (@(s.Feed == "documents" ? "Integrations:Documents" : "Integrations:Erp")); nothing is queued while it's off.</span>
                         }
                     </td>
                 </tr>
                 <tr><th>Events sent</th><td>@string.Join(", ", s.EventTypes.Select(t => t.TrimEnd('.') + "…"))</td></tr>
+                <tr><th>Certificate files</th><td>@(s.IncludesFiles ? "Sent with the certificate's event" : "Not sent: the event carries the reference only")</td></tr>
                 <tr>
                     <th>Waiting</th>
                     <td>
@@ -110,7 +117,7 @@ else
     var now = DateTimeOffset.UtcNow;
     <div class="table-panel">
         <table class="table align-middle">
-            <thead><tr><th>Happened (UTC)</th><th>Event</th><th>Lot</th><th>Status</th><th class="inv-num">Attempts</th><th>Last answer</th>@if (CanManage) { <th></th> }</tr></thead>
+            <thead><tr><th>Happened (UTC)</th><th>Event</th><th>Lot or certificate</th><th>Status</th><th class="inv-num">Attempts</th><th>Last answer</th>@if (CanManage) { <th></th> }</tr></thead>
             <tbody>
                 @foreach (var d in _deliveries)
                 {
@@ -118,7 +125,16 @@ else
                     <tr @key="d.Id">
                         <td class="text-nowrap">@Display.SiteTime(d.OccurredAt, null)</td>
                         <td>@DeliveryView.EventName(d.EventType)</td>
-                        <td><ScreenLink Href="@($"inventory/lots/{d.Subject}")" Permission="@PermissionCodes.InventoryView">@InventoryView.LotLabel(d.LotNumber, d.IsBulk, d.LocationCode)</ScreenLink></td>
+                        <td>
+                            @if (d.EventType.StartsWith("pulaski.lot.", StringComparison.Ordinal))
+                            {
+                                <ScreenLink Href="@($"inventory/lots/{d.Subject}")" Permission="@PermissionCodes.InventoryView">@InventoryView.LotLabel(d.LotNumber, d.IsBulk, d.LocationCode)</ScreenLink>
+                            }
+                            else
+                            {
+                                <span class="small text-muted">@d.Subject.ToString()[..8]…</span>
+                            }
+                        </td>
                         <td>
                             <span class="@css">@text</span>
                             <div class="small text-muted">@DeliveryView.Next(d, now)</div>
@@ -155,7 +171,7 @@ else
                                     <button type="submit" class="btn btn-sm btn-danger" disabled="@(_busy || string.IsNullOrWhiteSpace(_skipReason))">Skip it</button>
                                     <button type="button" class="btn btn-sm btn-link" @onclick="() => _skipping = null">Cancel</button>
                                 </form>
-                                <div class="form-text">The ERP won't get this movement. Put it right there by hand first; this lot's later movements are sent next.</div>
+                                <div class="form-text">The receiver won't get this event. Put it right there by hand first; the later events of the same lot or certificate are sent next.</div>
                             </td>
                         </tr>
                     }
@@ -173,6 +189,7 @@ else
     private ApiException? _error;
     private bool _busy;
     private string? _filter = "failed";
+    private string _feed = "erp";
     private string? _message;
     private DeliveryDto? _skipping;
     private string? _skipReason;
@@ -192,8 +209,8 @@ else
         _error = null;
         try
         {
-            _status = await Api.GetErpDeliveryStatusAsync();
-            _deliveries = await Api.ListErpDeliveriesAsync(_filter);
+            _status = await Api.GetDeliveryStatusAsync(_feed);
+            _deliveries = await Api.ListDeliveriesAsync(_feed, _filter);
         }
         catch (ApiException ex)
         {
@@ -208,6 +225,13 @@ else
         await LoadAsync();
     }
 
+    private async Task SwitchAsync(string feed)
+    {
+        _feed = feed;
+        (_status, _deliveries, _message, _skipping) = (null, null, null, null);
+        await LoadAsync();
+    }
+
     private void StartSkip(DeliveryDto d)
     {
         _skipping = d;
@@ -216,19 +240,19 @@ else
 
     private Task RetryAsync(DeliveryDto d) => RunAsync(async () =>
     {
-        await Api.RetryErpDeliveryAsync(d.Id);
+        await Api.RetryDeliveryAsync(_feed, d.Id);
         _message = $"{DeliveryView.EventName(d.EventType)} goes again on the next round.";
     });
 
     private Task RetryAllAsync() => RunAsync(async () =>
     {
-        var result = await Api.RetryFailedErpDeliveriesAsync();
+        var result = await Api.RetryFailedDeliveriesAsync(_feed);
         _message = result.Retried == 1 ? "1 delivery goes again on the next round." : $"{result.Retried} deliveries go again on the next round.";
     });
 
     private Task SkipAsync() => RunAsync(async () =>
     {
-        await Api.SkipErpDeliveryAsync(_skipping!.Id, new SkipDeliveryRequest { Reason = _skipReason! });
+        await Api.SkipDeliveryAsync(_feed, _skipping!.Id, new SkipDeliveryRequest { Reason = _skipReason! });
         _message = $"{DeliveryView.EventName(_skipping.EventType)} skipped.";
         _skipping = null;
     });
