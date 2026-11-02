@@ -21,14 +21,16 @@ internal sealed class LotRecordsRepository(DbSession session) : ILotRecordsRepos
         """;
 
     private const string InsertAttribute = """
-        INSERT INTO core.lot_attribute (id, site_id, code, name, data_type, uom_id, choices, applies_to_all, sort_order, is_active, created_at, updated_at)
-        VALUES (@Id, @SiteId, @Code, @Name, @DataType, @UomId, @Choices, @AppliesToAll, @SortOrder, @IsActive, @At, @At)
+        INSERT INTO core.lot_attribute (id, site_id, code, name, data_type, uom_id, choices, applies_to_all, sort_order, is_active, characteristic_id,
+                                        created_at, updated_at)
+        VALUES (@Id, @SiteId, @Code, @Name, @DataType, @UomId, @Choices, @AppliesToAll, @SortOrder, @IsActive, @CharacteristicId, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     private const string UpdateAttribute = """
         UPDATE core.lot_attribute
-        SET name = @Name, uom_id = @UomId, choices = @Choices, applies_to_all = @AppliesToAll, sort_order = @SortOrder, is_active = @IsActive, updated_at = @At
+        SET name = @Name, uom_id = @UomId, choices = @Choices, applies_to_all = @AppliesToAll, sort_order = @SortOrder, is_active = @IsActive,
+            characteristic_id = @CharacteristicId, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -82,6 +84,24 @@ internal sealed class LotRecordsRepository(DbSession session) : ILotRecordsRepos
 
     public Task<bool> IsSiteAsync(Guid siteId, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(IsSite, new { Id = siteId }, cancellationToken);
+
+    private const string SiteAttributes = $"SELECT {LotRecordSql.AttributeColumns} FROM core.lot_attribute a WHERE a.site_id = @SiteId ORDER BY a.sort_order, a.code";
+
+    // Lot numbers compare in any case, as people type them.
+    private const string LotsByNumber = """
+        SELECT l.id AS lot_id, l.lot_number, m.code AS material_code, m.id AS material_id, m.material_class_id
+        FROM core.lot l
+        JOIN core.material m ON m.id = l.material_id
+        WHERE l.site_id = @SiteId AND lower(l.lot_number) = ANY(@Numbers)
+        ORDER BY l.lot_number, m.code
+        """;
+
+    public async Task<IReadOnlyList<LotAttributeDefinition>> ListAttributeDefinitionsAsync(Guid siteId, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<LotRecordSql.AttributeRow>(SiteAttributes, new { SiteId = siteId }, cancellationToken)).Select(r => r.ToDomain())];
+
+    public Task<IReadOnlyList<LotByNumber>> FindLotsByNumberAsync(Guid siteId, IReadOnlyCollection<string> lotNumbers, CancellationToken cancellationToken) =>
+        session.QueryAsync<LotByNumber>(
+            LotsByNumber, new { SiteId = siteId, Numbers = lotNumbers.Select(n => n.ToLowerInvariant()).Distinct().ToArray() }, cancellationToken);
 
     public Task<bool> AttributeCodeExistsAsync(Guid siteId, string code, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(CodeExists, new { SiteId = siteId, Code = code }, cancellationToken);
@@ -156,6 +176,7 @@ internal sealed class LotRecordsRepository(DbSession session) : ILotRecordsRepos
         a.AppliesToAll,
         a.SortOrder,
         a.IsActive,
+        a.CharacteristicId,
         At = at,
     };
 

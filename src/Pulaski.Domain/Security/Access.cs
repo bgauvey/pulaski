@@ -23,6 +23,7 @@ public static class Permissions
     public const string MachinesView = "machines.view";
     public const string SiteSettingsView = "site_settings.view";
     public const string IntegrationsView = "integrations.view";
+    public const string QualityView = "quality.view";
 
     // Changing (D-037).
     public const string SchedulePlan = "schedule.plan";
@@ -44,6 +45,8 @@ public static class Permissions
     public const string InventoryBackdate = "inventory.backdate";
     public const string PartialBatchDecide = "partial_batch.decide";
     public const string ProductionCorrect = "production.correct";
+    public const string QualityRecord = "quality.record";
+    public const string QualityDecide = "quality.decide";
     public const string Materials = "materials.manage";
     public const string Processes = "processes.manage";
     public const string Units = "units.manage";
@@ -60,6 +63,7 @@ public static class Permissions
     public const string People = "people.manage";
     public const string Terminals = "terminals.manage";
     public const string LotAttributes = "lot_attributes.manage";
+    public const string Specs = "specs.manage";
     public const string Security = "security.manage";
     public const string Integrations = "integrations.manage";
 
@@ -84,6 +88,7 @@ public static class Permissions
         new(MachinesView, "Viewing", "See machines: their live state and their stops"),
         new(SiteSettingsView, "Viewing", "See a site's settings: changeover mode, reporting tolerances, OEE targets and calendar exceptions"),
         new(IntegrationsView, "Viewing", "See outbound deliveries to the ERP and how they went"),
+        new(QualityView, "Viewing", "See specifications, characteristics and quality results"),
         new(SchedulePlan, "Planning", "Plan jobs: create, sequence, pin, assign to lines and cancel them"),
         new(SchedulePlanPartial, "Planning", "Replace a cancelled job with exactly what is left, even when that isn't whole batches"),
         new(WorkOrderManage, "Planning", "Create work orders, dispatch, un-dispatch and firm them"),
@@ -99,6 +104,8 @@ public static class Permissions
         new(LaborApprove, "Labor", "Approve a shift's labor and correct approved labor"),
         new(DowntimeCode, "Floor", "Code machine stops: confirm or change their reason"),
         new(DowntimeAdjust, "Floor", "Enter machine stops by hand, and split or merge stops"),
+        new(QualityRecord, "Quality", "Record quality results against runs and lots"),
+        new(QualityDecide, "Quality", "Exclude quality results and reject held lots on quality"),
         new(LotReceive, "Inventory", "Receive lots"),
         new(LotMove, "Inventory", "Move lots between locations"),
         new(LotShip, "Inventory", "Ship lots"),
@@ -119,6 +126,7 @@ public static class Permissions
         new(People, "Configuration", "Maintain people and crews"),
         new(Terminals, "Configuration", "Register and enrol shop-floor terminals"),
         new(LotAttributes, "Configuration", "Maintain lot attribute definitions"),
+        new(Specs, "Configuration", "Maintain quality characteristics and material specifications"),
         new(Security, "Administration", "Maintain users, roles and what each role may do"),
         new(Integrations, "Administration", "Retry or skip failed deliveries to the ERP"),
         new(EdgeIngest, "Machine data", "Send machine data as a Pulaski Edge node: read its configuration and forward what it collects"),
@@ -179,6 +187,11 @@ public static class Permissions
         // Terminals are placed on lines; their screen lists the site's equipment.
         [Terminals] = [EquipmentView],
         [Integrations] = [IntegrationsView],
+        // Results are recorded and decided on from the quality screens and the lot page.
+        [QualityRecord] = [QualityView],
+        [QualityDecide] = [QualityView, InventoryView],
+        // Specifications belong to materials.
+        [Specs] = [QualityView, MaterialsView],
     };
 }
 
@@ -215,25 +228,26 @@ public static class Roles
             [Permissions.OverviewView, Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.FloorView, Permissions.InventoryView,
              Permissions.MaterialsView, Permissions.ProcessesView, Permissions.MachinesView, Permissions.SiteSettingsView,
              Permissions.SchedulePlan, Permissions.SchedulePlanPartial, Permissions.WorkOrderManage, Permissions.WorkOrderClose, Permissions.RateModify, Permissions.Materials,
-             Permissions.LotAllocate, Permissions.Changeovers],
+             Permissions.LotAllocate, Permissions.Changeovers, Permissions.QualityView],
             "Plans and sequences jobs, manages work orders, planning rates, changeover times and materials. Sees the floor, inventory and processes."),
         new(Supervisor, "Supervisor", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView, Permissions.SiteSettingsView,
              Permissions.JobExecute, Permissions.JobReopen, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove,
              Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide, Permissions.ProductionCorrect,
              Permissions.LotAllocate, Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode,
-             Permissions.DowntimeAdjust],
-            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops. Doesn't correct inventory."),
+             Permissions.DowntimeAdjust, Permissions.QualityView, Permissions.QualityRecord],
+            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops; records quality results. Doesn't correct inventory."),
         new(Operator, "Operator", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
              Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove, Permissions.LaborRecordOwn,
-             Permissions.MachinesView, Permissions.DowntimeCode],
-            "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops."),
+             Permissions.MachinesView, Permissions.DowntimeCode, Permissions.QualityView, Permissions.QualityRecord],
+            "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops, records quality results."),
         new(Quality, "Quality", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView, Permissions.MachinesView,
              Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide, Permissions.LotRecords, Permissions.LotAttributes,
-             Permissions.InventoryBackdate, Permissions.LotAllocate],
-            "Holds and releases lots, corrects inventory, decides on partial batches, and keeps lot attributes and certificates."),
+             Permissions.InventoryBackdate, Permissions.LotAllocate, Permissions.QualityView, Permissions.QualityRecord, Permissions.QualityDecide,
+             Permissions.Specs],
+            "Holds and releases lots, corrects inventory, decides on partial batches, keeps lot attributes and certificates, maintains specifications, records quality results, excludes them and rejects lots on quality."),
         new(Manager, "Manager", false,
             [.. Permissions.Views, Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts,
              Permissions.People, Permissions.Terminals, Permissions.LaborApprove, Permissions.LotAttributes],
@@ -242,8 +256,9 @@ public static class Roles
             [.. Permissions.Views, Permissions.InventoryCorrect, Permissions.StockCount, Permissions.InventoryBackdate, Permissions.ProductionCorrect],
             "Views everything, corrects inventory and reverses production reports; counts stock. Doesn't plan or run jobs."),
         new(ProcessEngineer, "Process engineer", false,
-            [Permissions.EquipmentView, Permissions.MaterialsView, Permissions.ProcessesView, Permissions.UnitsView, Permissions.Processes, Permissions.Changeovers],
-            "Maintains processes, BOMs, capabilities and changeover times. Sees equipment, materials, units and the schedule."),
+            [Permissions.EquipmentView, Permissions.MaterialsView, Permissions.ProcessesView, Permissions.UnitsView, Permissions.Processes, Permissions.Changeovers,
+             Permissions.QualityView, Permissions.Specs],
+            "Maintains processes, BOMs, capabilities, changeover times and specifications. Sees equipment, materials, units and the schedule."),
         new(EdgeNode, "Edge node", false, [Permissions.EdgeIngest],
             "For the service user a Pulaski Edge node signs in as: reads its configuration and forwards machine data. Sees no screens."),
     ];

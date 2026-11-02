@@ -55,6 +55,7 @@ public static class DependencyInjection
         services.AddSingleton<ISchedulingReadStore, SchedulingQueries>();
         services.AddSingleton<IProcessReadStore, ProcessQueries>();
         services.AddSingleton<IBomReadStore, BomQueries>();
+        services.AddSingleton<Application.Quality.IQualityReadStore, Quality.QualityQueries>();
         services.AddSingleton<IUnitReadStore, UnitQueries>();
         services.AddSingleton<IExecutionReadStore, ExecutionQueries>();
         services.AddSingleton<SecurityQueries>();
@@ -94,6 +95,7 @@ public static class DependencyInjection
         services.AddScoped<ISchedulingRepository, SchedulingRepository>();
         services.AddScoped<IProcessRepository, ProcessRepository>();
         services.AddScoped<IBomRepository, BomRepository>();
+        services.AddScoped<Application.Quality.IQualityRepository, Quality.QualityRepository>();
         services.AddScoped<IUnitRepository, UnitRepository>();
         services.AddScoped<IInventoryRepository, InventoryRepository>();
         services.AddScoped<IFeedRepository, FeedRepository>();

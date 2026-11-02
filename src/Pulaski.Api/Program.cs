@@ -63,7 +63,11 @@ if (builder.Configuration.GetValue("Pulaski:DatabaseMaintenance", true))
     builder.Services.AddHostedService<SchemaVersionCheck>();
     builder.Services.AddHostedService<PartitionMaintenance>();
     builder.Services.AddHostedService<BootstrapAdministrator>();
-    builder.Services.AddHostedService<ErpDeliveryService>();
+    // One relay per feed (D-061, #78): the ERP and the document system.
+    foreach (var feed in WebhookFeedOptions.Feeds)
+    {
+        builder.Services.AddSingleton<IHostedService>(services => ActivatorUtilities.CreateInstance<WebhookDeliveryService>(services, feed));
+    }
     builder.Services.AddHostedService<OeeRollupService>();
     builder.Services.AddHostedService<AllocationRefreshService>();
 }
@@ -72,8 +76,8 @@ if (builder.Configuration.GetValue("Pulaski:DatabaseMaintenance", true))
 builder.Services.AddSingleton<IDeliveryTargets, DeliveryTargets>();
 builder.Services.AddSingleton<Pulaski.Application.Materials.IMaterialConnectionFetcher, ODataMaterialFetcher>();
 builder.Services.AddHttpClient(ODataMaterialFetcher.ClientName, client => client.Timeout = TimeSpan.FromSeconds(60));
-builder.Services.AddHttpClient(ErpWebhookSender.ClientName, (services, client) =>
-    client.Timeout = TimeSpan.FromSeconds(ErpDeliveryOptions.From(services.GetRequiredService<IConfiguration>()).TimeoutSeconds));
+builder.Services.AddHttpClient(WebhookSender.ClientName, (services, client) =>
+    client.Timeout = TimeSpan.FromSeconds(WebhookFeedOptions.From(services.GetRequiredService<IConfiguration>()).TimeoutSeconds));
 
 var app = builder.Build();
 
@@ -108,6 +112,7 @@ api.MapMachineDataEndpoints();
 api.MapEdgeEndpoints();
 api.MapMachineEndpoints();
 api.MapOverviewEndpoints();
+api.MapQualityEndpoints();
 api.MapTerminalAdminEndpoints();
 
 // Shop-floor terminals (D-049) are not users: they authenticate with their own secret, and only here.

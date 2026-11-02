@@ -18,7 +18,7 @@ public sealed class IntegrationEndpointTests(ApiFactory factory) : IClassFixture
     [Fact]
     public async Task Operators_list_retry_and_skip_deliveries_and_viewers_only_look()
     {
-        var failed = factory.Stores.Deliveries.Add(ErpDeliveryOptions.SinkName, DeliveryStatuses.Failed, attempts: 12, error: "503");
+        var failed = factory.Stores.Deliveries.Add(WebhookFeedOptions.SinkName, DeliveryStatuses.Failed, attempts: 12, error: "503");
         var admin = factory.CreateClient();
 
         var status = await admin.GetFromJsonAsync<DeliveryStatusDto>("/api/integrations/erp");
@@ -55,7 +55,7 @@ public sealed class IntegrationEndpointTests(ApiFactory factory) : IClassFixture
             Data = """{"quantity": 10}""",
         };
         var handler = new Capture();
-        var sender = new ErpWebhookSender(new HttpClient(handler));
+        var sender = new WebhookSender(new HttpClient(handler));
 
         var (code, error) = await sender.SendAsync(new Uri("https://erp.test/hook"), "s3cret", e, e.OccurredAt, CancellationToken.None);
 
@@ -83,13 +83,39 @@ public sealed class IntegrationEndpointTests(ApiFactory factory) : IClassFixture
     [Fact]
     public void Configured_event_types_replace_the_default_rather_than_adding_to_it()
     {
-        static ErpDeliveryOptions Bind(params (string Key, string Value)[] settings) => ErpDeliveryOptions.From(
+        static WebhookFeedOptions Bind(params (string Key, string Value)[] settings) => WebhookFeedOptions.From(
             new ConfigurationBuilder()
-                .AddInMemoryCollection(settings.Select(s => new KeyValuePair<string, string?>($"{ErpDeliveryOptions.Section}:{s.Key}", s.Value)))
+                .AddInMemoryCollection(settings.Select(s => new KeyValuePair<string, string?>($"{WebhookFeedOptions.Section}:{s.Key}", s.Value)))
                 .Build());
 
         Assert.Equal(["pulaski.lot."], Bind(("Enabled", "true")).EventTypes);
         Assert.Equal(["pulaski.job.", "pulaski.lot.consumed."], Bind(("EventTypes:0", "pulaski.job."), ("EventTypes:1", "pulaski.lot.consumed.")).EventTypes);
+    }
+
+    [Fact]
+    public void The_document_feed_takes_certificate_events_and_sends_their_files_unless_told_not_to()
+    {
+        static WebhookFeedOptions Documents(params (string Key, string Value)[] settings) => WebhookFeedOptions.From(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(settings.Select(s => new KeyValuePair<string, string?>($"{WebhookFeedOptions.DocumentsSection}:{s.Key}", s.Value)))
+                .Build(),
+            WebhookFeedOptions.Documents);
+
+        var documents = Documents(("Enabled", "true"));
+        Assert.Equal(["pulaski.lot_document."], documents.EventTypes);
+        Assert.Equal((WebhookFeedOptions.DocumentsSinkName, true), (documents.Sink, documents.SendsFiles));
+        Assert.False(Documents(("IncludeFiles", "false")).SendsFiles);
+        Assert.False(WebhookFeedOptions.From(new ConfigurationBuilder().Build()).SendsFiles);
+
+        // The file goes base64 in data.file with its name, type, size and SHA-256; the reference already in the event stays.
+        var e = new OutboundEvent { EventId = Guid.CreateVersion7(), Type = "pulaski.lot_document.attached.v1", Data = """{"lotNumber":"R-1"}""" };
+        var bytes = "%PDF-1.7 test"u8.ToArray();
+        using var data = JsonDocument.Parse(WebhookSender.WithFile(e, "coa.pdf", "application/pdf", bytes).Data);
+        var file = data.RootElement.GetProperty("file");
+        Assert.Equal("R-1", data.RootElement.GetProperty("lotNumber").GetString());
+        Assert.Equal(("coa.pdf", bytes.Length), (file.GetProperty("fileName").GetString(), file.GetProperty("sizeBytes").GetInt32()));
+        Assert.Equal(bytes, Convert.FromBase64String(file.GetProperty("contentBase64").GetString()!));
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(bytes)), file.GetProperty("sha256").GetString());
     }
 
     private sealed class Capture : HttpMessageHandler

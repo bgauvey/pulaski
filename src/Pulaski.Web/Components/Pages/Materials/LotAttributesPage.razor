@@ -69,6 +69,17 @@
                         }
                     </select>
                 </div>
+                <div class="col-sm-3">
+                    <label class="form-label small" for="la-characteristic">Stands for characteristic</label>
+                    <select id="la-characteristic" class="form-select" @bind="_form.CharacteristicId"
+                            title="Setting the attribute records a quality result for the lot, checked against the material's specification">
+                        <option value="">None</option>
+                        @foreach (var c in _characteristics.Where(c => c.DataKind == "variable" && (c.IsActive || c.Id == _form.CharacteristicId)))
+                        {
+                            <option value="@c.Id">@c.Code · @c.Name</option>
+                        }
+                    </select>
+                </div>
             }
             @if (_form.DataType == "choice")
             {
@@ -156,6 +167,11 @@ else
             </tbody>
         </table>
     </div>
+
+    @if (Sites.SiteId is { } transferSite)
+    {
+        <LotAttributeValuesTransfer @key="transferSite" SiteId="transferSite" Imported="LoadAsync" />
+    }
 }
 
 @code {
@@ -168,6 +184,8 @@ else
 
     private bool CanManage => User.Can(PermissionCodes.LotAttributes, Sites.SiteId);
 
+    private IReadOnlyList<CharacteristicDto> _characteristics = [];
+
     protected override async Task OnInitializedAsync()
     {
         try
@@ -175,6 +193,7 @@ else
             await Sites.EnsureAsync(Api);
             _classes = await Api.ListMaterialClassesAsync();
             _units = await Api.ListUomsAsync();
+            _characteristics = await Api.ListCharacteristicsAsync();
         }
         catch (ApiException ex)
         {
@@ -235,6 +254,7 @@ else
         ClassIds = [.. a.ClassIds],
         SortOrder = a.SortOrder,
         IsActive = a.IsActive,
+        CharacteristicId = a.CharacteristicId,
     };
 
     private async Task SaveAsync()
@@ -248,6 +268,7 @@ else
         _error = null;
         var choices = _form.DataType == "choice" ? _form.Choices.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) : [];
         var uomId = _form.DataType == "number" ? _form.UomId : null;
+        var characteristicId = _form.DataType == "number" ? _form.CharacteristicId : null;
         try
         {
             if (_form.Id is { } id)
@@ -262,6 +283,7 @@ else
                     ClassIds = [.. _form.ClassIds],
                     SortOrder = _form.SortOrder,
                     IsActive = _form.IsActive,
+                    CharacteristicId = characteristicId,
                 });
             }
             else
@@ -277,6 +299,7 @@ else
                     AppliesToAll = _form.AppliesToAll,
                     ClassIds = [.. _form.ClassIds],
                     SortOrder = _form.SortOrder,
+                    CharacteristicId = characteristicId,
                 });
             }
 
@@ -315,6 +338,8 @@ else
         public string DataType { get; set; } = "text";
 
         public Guid? UomId { get; set; }
+
+        public Guid? CharacteristicId { get; set; }
 
         public string Choices { get; set; } = "";
 

@@ -110,6 +110,8 @@ public sealed class InMemoryStores
 
     public InMemoryAllocations Allocations { get; } = new();
 
+    public InMemoryQuality Quality { get; } = new();
+
     public InMemoryLineBatchSizes LineBatchSizes { get; } = new();
 
     public InMemoryMaterialConnections MaterialConnections { get; } = new();
@@ -133,6 +135,8 @@ public sealed class InMemoryStores
         services.RemoveAll<IProcessRepository>();
         services.RemoveAll<IBomReadStore>();
         services.RemoveAll<IBomRepository>();
+        services.RemoveAll<Application.Quality.IQualityReadStore>();
+        services.RemoveAll<Application.Quality.IQualityRepository>();
         services.RemoveAll<IUnitReadStore>();
         services.RemoveAll<IUnitRepository>();
         services.RemoveAll<IInventoryReadStore>();
@@ -206,6 +210,8 @@ public sealed class InMemoryStores
         services.AddSingleton<IProcessRepository>(Processes);
         services.AddSingleton<IBomReadStore>(Boms);
         services.AddSingleton<IBomRepository>(Boms);
+        services.AddSingleton<Application.Quality.IQualityReadStore>(Quality);
+        services.AddSingleton<Application.Quality.IQualityRepository>(Quality);
         services.AddSingleton<IUnitReadStore>(Units);
         services.AddSingleton<IUnitRepository>(Units);
         services.AddSingleton<IInventoryReadStore>(Inventory);

@@ -10,7 +10,7 @@ namespace Pulaski.Infrastructure.Inventory;
 internal static class LotRecordSql
 {
     public const string AttributeColumns = """
-        a.id, a.site_id, a.code, a.name, a.data_type, a.uom_id, a.choices, a.applies_to_all, a.sort_order, a.is_active,
+        a.id, a.site_id, a.code, a.name, a.data_type, a.uom_id, a.choices, a.applies_to_all, a.sort_order, a.is_active, a.characteristic_id,
         ARRAY(SELECT c.material_class_id FROM core.lot_attribute_class c WHERE c.attribute_id = a.id AND c.is_applied ORDER BY c.material_class_id) AS class_ids,
         a.xmin::text::bigint AS version
         """;
@@ -43,10 +43,11 @@ internal static class LotRecordSql
         public int SortOrder { get; init; }
         public bool IsActive { get; init; }
         public Guid[] ClassIds { get; init; } = [];
+        public Guid? CharacteristicId { get; init; }
         public long Version { get; init; }
 
         public LotAttributeDefinition ToDomain() =>
-            new(Id, SiteId, Code, Name, DataType, UomId, Choices, AppliesToAll, ClassIds, SortOrder, IsActive);
+            new(Id, SiteId, Code, Name, DataType, UomId, Choices, AppliesToAll, ClassIds, SortOrder, IsActive) { CharacteristicId = CharacteristicId };
     }
 
     internal sealed class ValueRow
@@ -148,6 +149,7 @@ internal sealed class LotRecordsQueries(NpgsqlDataSource dataSource) : ILotRecor
             ClassCodes = r.ClassCodes,
             SortOrder = r.SortOrder,
             IsActive = r.IsActive,
+            CharacteristicId = r.CharacteristicId,
             LotsWithValue = r.LotsWithValue,
             Version = r.Version,
         })];
@@ -178,10 +180,40 @@ internal sealed class LotRecordsQueries(NpgsqlDataSource dataSource) : ILotRecor
             .Select(r => new LinkedDocument(r.ToDomain(), r.Via, r.FromLotId, r.FromLotNumber, r.Version))];
     }
 
+    // Numbered lots only: a balance has no number for a file to name it by.
+    private const string ValuesAtSite = """
+        SELECT l.id AS lot_id, l.lot_number, m.code AS material_code, a.code AS attribute_code,
+               coalesce(v.value_text, v.value_number::text, to_char(v.value_date, 'YYYY-MM-DD'),
+                        CASE WHEN v.value_boolean THEN 'yes' WHEN NOT v.value_boolean THEN 'no' END) AS value
+        FROM core.lot_attribute_value v
+        JOIN core.lot_attribute a ON a.id = v.attribute_id
+        JOIN core.lot l ON l.id = v.lot_id
+        JOIN core.material m ON m.id = l.material_id
+        WHERE a.site_id = @SiteId AND l.lot_number IS NOT NULL
+          AND num_nonnulls(v.value_text, v.value_number, v.value_date, v.value_boolean) > 0
+        ORDER BY l.lot_number, m.code, a.sort_order, a.code
+        """;
+
+    public async Task<IReadOnlyList<LotAttributeValueRow>> ListValuesAtSiteAsync(Guid siteId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<ValueAtSiteRow>(new CommandDefinition(ValuesAtSite, new { SiteId = siteId }, cancellationToken: cancellationToken));
+        return [.. rows.Select(r => new LotAttributeValueRow(r.LotId, r.LotNumber, r.MaterialCode, r.AttributeCode, r.Value))];
+    }
+
     public async Task<LotDocumentContent?> GetContentAsync(Guid documentId, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         return await connection.QuerySingleOrDefaultAsync<LotDocumentContent>(new CommandDefinition(Content, new { Id = documentId }, cancellationToken: cancellationToken));
+    }
+
+    private sealed class ValueAtSiteRow
+    {
+        public Guid LotId { get; init; }
+        public string LotNumber { get; init; } = "";
+        public string MaterialCode { get; init; } = "";
+        public string AttributeCode { get; init; } = "";
+        public string Value { get; init; } = "";
     }
 
     private sealed class AttributeListRow
@@ -199,6 +231,7 @@ internal sealed class LotRecordsQueries(NpgsqlDataSource dataSource) : ILotRecor
         public string[] ClassCodes { get; init; } = [];
         public int SortOrder { get; init; }
         public bool IsActive { get; init; }
+        public Guid? CharacteristicId { get; init; }
         public int LotsWithValue { get; init; }
         public long Version { get; init; }
     }

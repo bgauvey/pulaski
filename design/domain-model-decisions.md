@@ -1167,7 +1167,7 @@ The handler parses the bounds in the attribute's type, so `1,5` is a validation 
 
 Screens: the lot page's **Attributes and certificates** section (`LotRecordsPanel`), the attribute filter on Find a lot, and Configure → Materials → **Lot attributes**. Migration `0024_lot_records`.
 
-**Not yet.** Attributes in the lots CSV export or in imports; checking values against specification limits (with quality); certificates to or from the ERP or a document system; a retention job.
+**Not yet.** A retention job; certificates read from the ERP or a document system. Attribute values in CSV export and import, and certificates sent out, came with D-086. Checking values against specification limits came with D-085: a number attribute may stand for a quality characteristic.
 
 ## Back-dated inventory movements (D-057, proposed)
 
@@ -1308,7 +1308,7 @@ Issue #39. Inventory movements were events in `evt.event` (D-007) with nothing t
 - `X-Pulaski-Timestamp` is Unix seconds.
 - `X-Pulaski-Signature` is `sha256=` + hex HMAC-SHA256(secret, `"{timestamp}.{body}"`).
 
-**Capture.** `ErpDeliveryService` (a hosted service in the API) runs a round every few seconds under a session advisory lock per sink, so several API servers never send at once. Each round copies matching events into `evt.delivery` in `(tx_id, position)` order, only below `pg_snapshot_xmin(pg_current_snapshot())`, and moves `evt.sink_checkpoint` in the same statement. A slow commit is never skipped, and `UNIQUE (sink, event_id)` makes a repeat capture harmless. With `StartFromNow`, the first checkpoint is the latest event, so switching it on doesn't replay history.
+**Capture.** `ErpDeliveryService` (a hosted service in the API; `WebhookDeliveryService`, one per feed, since D-086) runs a round every few seconds under a session advisory lock per sink, so several API servers never send at once. Each round copies matching events into `evt.delivery` in `(tx_id, position)` order, only below `pg_snapshot_xmin(pg_current_snapshot())`, and moves `evt.sink_checkpoint` in the same statement. A slow commit is never skipped, and `UNIQUE (sink, event_id)` makes a repeat capture harmless. With `StartFromNow`, the first checkpoint is the latest event, so switching it on doesn't replay history.
 
 **Sending.** Due rows go in commit order. `DeliveryPolicy.AfterAttempt` (pure) decides the outcome:
 
@@ -1329,7 +1329,7 @@ An outage only delays: rows stay pending.
 
 Each appends `pulaski.delivery.retried.v1` or `pulaski.delivery.skipped.v1`. Routes: `GET /api/integrations/erp`, `GET /api/integrations/erp/deliveries?status=`, `POST …/deliveries/{id}/retry`, `…/{id}/skip`, `…/retry-failed`.
 
-**Not done.** No inbound acknowledgement or reconciliation from the ERP, one sink only (the table and checkpoint are keyed by sink, ready for more), no ERP-specific adapters or message brokers, no retention of delivered rows.
+**Not done.** No inbound acknowledgement or reconciliation from the ERP, no ERP-specific adapters or message brokers, no retention of delivered rows. A second sink, for a document system, came with D-086.
 
 ## Reason trees (D-062, proposed)
 
@@ -2075,6 +2075,112 @@ lock the settings row.
 - a site-filtered change feed for the refresh;
 - alternates on the Order form's component plan (they show only in allocations);
 - picking confirmation (a pick is still a move).
+
+## Quality results and material specifications (D-085, proposed)
+
+Issue #65. Quality wasn't recorded, released product specifications weren't kept in Pulaski (the shop order sheet asked operators to check
+them elsewhere), and lot attributes weren't checked against limits. The drafted SPC tables (`quality_characteristic`, `spec_limit`,
+`ts.quality_sample`) had never been used.
+
+**Characteristics.** `core.quality_characteristic` is reused, enterprise-wide (`site_id` NULL), so any material's specification can name one.
+- `variable` takes measured values with a unit and decimals; `attribute` takes inspected and defective counts.
+- Code and kind are fixed once created; it is switched off, never deleted.
+- The SPC columns stay for charts later; the app sets `chart_type` to `i_mr` or `np`.
+
+**Specifications, versioned like BOMs** (the user's choice over the drafted effective-dated `spec_limit`, which is dropped).
+- `core.material_spec`: one per material.
+- `core.material_spec_version`: a draft edited as one `jsonb` document, released into fixed `core.material_spec_item` rows. Releasing makes the
+  previous version obsolete; a new draft copies the released one with new item ids.
+- Each item: a variable's lower and/or upper limit (inclusive) and optional target, or an attribute's most defects per sample, never both
+  (`SpecDefinition.KindProblems`), plus `hold_on_fail` and an order.
+- Permission `specs.manage` (Configuration; Quality, Process engineer). Specifications aren't per site, like BOMs.
+
+**Results.** `ts.quality_sample`, rebuilt by migration 0053 (it was never written to), one sample per row.
+- Recorded at a site against a lot, a job (its run open at the time) or both. The sample time can be up to 31 days back. Source is `manual` or
+  `lab` (`lot_attribute` and `auto` are set by the app).
+- The material is the lot's, else the job's. The item in force is that material's released specification's item for the characteristic, read
+  `FOR SHARE` (`IQualityRepository.GetItemInForceAsync`).
+- `QualityCheck.Conforms`: every value within the limits, or defects at most allowed; null when no item names the characteristic, which is noted.
+  Statistics (mean, range, sample standard deviation) are stored (`SampleStatistics`).
+- Each row keeps who, when, the sample, the source, the item and whether it conformed. Results are appended only. A wrong one is excluded with a
+  reason of kind `sample_exclusion` and a comment (`ExcludeQualityResultCommand`). The app role may update only the exclusion columns.
+- Events `pulaski.quality_result.recorded.v1` and `…excluded.v1`.
+
+**Out of limits holds per characteristic** (the user's choice). A failing result of an item with `hold_on_fail`, for a lot that is available
+with stock, puts the lot on hold under the existing hold rules. The reason is `OUT-OF-SPEC` (kind `hold`) when it exists, with the failure as
+the comment. Otherwise the result is flagged (warning notes, out-of-spec list), and holding stays a person's decision.
+
+**Lot attributes.** A `number` attribute may name a measured characteristic (`lot_attribute.characteristic_id`). Setting it records a result
+with source `lot_attribute`, checked and held like any other (`SetLotAttributeHandler` → `QualityRecorder`).
+
+**Quality feeds OEE through rejected lots** (the user's choice). `RejectLotCommand` (`POST /api/lots/{id}/reject`, `quality.decide`) takes a held
+lot and writes off what is left as scrap.
+- A lot made in a run: the quantity moves from good to scrap there (`JobRun.Reclassify`), and a `defective` count is added at the
+  declaration's effective time, as a rejected partial batch does (D-036).
+- OEE quality, which reads reports and corrections, and its daily rollups (through `InsertCountAsync`) show it.
+- Locks: job, run, then lot. Results alone never change OEE.
+
+**Permissions.** `quality.view` (Viewing), `quality.record` (Supervisor, Operator, Quality), `quality.decide` (exclude results, reject lots;
+Quality) and `specs.manage`. Migration 0053 grants them to the starting roles and updates their descriptions where unchanged.
+
+**Screens and routes.**
+- Operate → Quality: results, with a record form and filters. Configure → Specifications: specification list, editor, Characteristics.
+- The lot page's Quality panel shows the specification and the lot's results, and offers Record and Reject. The job page links to its results.
+  The shop order sheet prints the released specification. The lot attribute form picks a characteristic.
+- `/api/quality/characteristics`, `/api/quality/specs` (versions, release, drafts), `/api/materials/{id}/specification`,
+  `/api/quality/results` (GET and POST `?siteId=`, `/{id}/exclude`) and `/api/lots/{id}/reject`.
+
+**Not done:**
+- SPC charts, control limits and rule alerts (the drafted tables stay);
+- sampling plans and due samples;
+- automatic results from process values;
+- specifications per site or customer;
+- certificates of analysis generated from results;
+- recording against a job only from its page (the results page has no job picker).
+
+## Lot attribute values in bulk; certificates to a document system (D-086, proposed)
+
+Issue #78. Attribute values (D-056) weren't in the lots export and couldn't be imported, and certificates went nowhere outside Pulaski.
+
+**Values file.** `LotAttributeCsv` (pure) reads a site's values file.
+- Columns: `lot_number`, an optional `material_code` (needed only when two materials share a number), then one column per attribute code of the
+  site, in any order and case. An unknown column refuses the file.
+- Values are read by `LotAttributeDefinition.Parse`, as on the lot page.
+- **A blank cell leaves the value alone** (the user's choice, so a sparse file can't wipe others). `(clear)` clears it.
+- Balances have no lot number, so they are left out.
+
+**Import, all or nothing.** `ImportLotAttributeValuesCommand` (`POST /api/lot-attributes/values/import?siteId=&dryRun=`, `lot_records.manage`).
+- It finds the lots by number in any case (`FindLotsByNumberAsync`) and locks them in id order (`LockLotsAsync`). Then it sets each changed value
+  through `LotAttributeWriter`, the same path as the lot page: active and applies-to-class checks, a `pulaski.lot.attribute_set.v1` event with
+  reason *CSV import*, and a quality result for an attribute standing for a characteristic (D-085).
+- Any row in error, or a dry run, and the transaction ends uncommitted, so the report is exact and nothing is kept.
+- The answer is `ImportMaterialsResponse`: rows `update` or `unchanged` with each change (`CODE: before → after`), or `error` with why.
+
+**Export.** `GET /api/lot-attributes/values.csv?siteId=` is the import's own format (active attributes in their order), so it reads back
+unchanged. `GET /api/lot-attributes/values` lists the same as JSON, and the Lots tab's export adds a column per active attribute from it.
+
+**Certificates to a document system** (the user's choice of a separate sink). The ERP feed (D-061) is generalised into webhook feeds
+(`WebhookFeedOptions`, `WebhookDeliveryService`, `WebhookSender`).
+- `erp` (`Integrations:Erp`, sink `webhook:erp`, unchanged).
+- `documents` (`Integrations:Documents`, sink `webhook:documents`, default event types `pulaski.lot_document.`).
+- Each runs its own relay under its own advisory lock. Routes are `/api/integrations/{erp|documents}/…`, and Configure → Integrations switches
+  between the feeds.
+- The ERP feed can take certificates as well by adding the prefix to its `EventTypes`. A certificate's events are kept in order per document,
+  as a lot's are.
+
+**File inline, per feed** (the user's choice). `IncludeFiles` is on by default for the document feed and off for the ERP feed.
+- When it is on, `pulaski.lot_document.attached.v1` is sent with `data.file`: `fileName`, `contentType`, `sizeBytes`, `sha256` and
+  `contentBase64` (`WebhookSender.WithFile`).
+- The file is read at send time (`DeliveryRelay.GetDocumentFileAsync`); stored files never change.
+- Over 10 MB, a note replaces the bytes. Off, or for a reference-only document, the event carries the reference: number, URL, SHA-256, type and
+  size from the document.
+- Nothing is stored for this; it is all configuration, the secret included (never in the database).
+
+**Not done:**
+- reading certificates from the ERP or a document system;
+- a signed download link instead of inline files;
+- events for documents carried to other lots by split or merge;
+- an import from other sources (B2MML, an API).
 
 ## Application architecture
 

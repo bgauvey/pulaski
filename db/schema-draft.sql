@@ -1716,12 +1716,14 @@ CREATE UNIQUE INDEX labor_break_corrected_once ON core.labor_break (corrects_bre
 -- 11. QUALITY AND SPC (definitions and alert state)
 -- =====================================================================
 
+-- What is measured or inspected (#65, D-085). Enterprise-wide (site_id NULL) for specifications; the SPC columns serve charts later.
 CREATE TABLE core.quality_characteristic (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
-    site_id             uuid NOT NULL REFERENCES core.equipment(id),
-    code                text NOT NULL,
+    site_id             uuid REFERENCES core.equipment(id),     -- NULL: every site (all a specification may name)
+    code                text NOT NULL,                          -- upper case; fixed once created
     name                text NOT NULL,
-    equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
+    description         text,
+    equipment_id        uuid REFERENCES core.equipment(id),     -- where it is measured, when that is one place
     equipment_tag_id    uuid REFERENCES core.equipment_tag(id),  -- set when sampled automatically from process data
     data_kind           text NOT NULL CHECK (data_kind IN ('variable','attribute')),
     chart_type          text NOT NULL CHECK (chart_type IN ('xbar_r','xbar_s','i_mr','p','np','c','u')),
@@ -1730,27 +1732,57 @@ CREATE TABLE core.quality_characteristic (
     uom_id              uuid REFERENCES core.uom(id),
     decimals            smallint NOT NULL DEFAULT 3,
     is_active           boolean NOT NULL DEFAULT true,
-    CONSTRAINT characteristic_uq UNIQUE (site_id, code),
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT characteristic_chart_ck CHECK ((chart_type IN ('p','np','c','u')) = (data_kind = 'attribute')),
     CONSTRAINT characteristic_imr_ck CHECK (chart_type <> 'i_mr' OR subgroup_size = 1)
 );
+CREATE UNIQUE INDEX characteristic_code_uq ON core.quality_characteristic (coalesce(site_id, '00000000-0000-0000-0000-000000000000'::uuid), code);
 
--- Specification limits (engineering): versioned, per product or for all.
-CREATE TABLE core.spec_limit (
+-- A site's number lot attribute may stand for a characteristic: setting it records a result checked against the specification (#65).
+ALTER TABLE core.lot_attribute ADD COLUMN characteristic_id uuid REFERENCES core.quality_characteristic(id);
+ALTER TABLE core.lot_attribute ADD CONSTRAINT lot_attribute_characteristic_ck CHECK (characteristic_id IS NULL OR data_type = 'number');
+
+-- A material's specification (#65, D-085), versioned like a BOM: a draft edited as one document, released into fixed items.
+CREATE TABLE core.material_spec (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    material_id         uuid NOT NULL REFERENCES core.material(id),
+    is_active           boolean NOT NULL DEFAULT true,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT material_spec_uq UNIQUE (material_id)
+);
+
+CREATE TABLE core.material_spec_version (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    spec_id             uuid NOT NULL REFERENCES core.material_spec(id),
+    version_number      integer NOT NULL CHECK (version_number > 0),
+    status              text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','released','obsolete')),
+    definition          jsonb NOT NULL DEFAULT '{"items":[]}',
+    released_at         timestamptz,
+    released_by         text,
+    note                text,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT material_spec_version_uq UNIQUE (spec_id, version_number),
+    CONSTRAINT material_spec_version_released_ck CHECK ((status = 'draft') = (released_at IS NULL))
+);
+CREATE UNIQUE INDEX material_spec_version_draft_uq ON core.material_spec_version (spec_id) WHERE status = 'draft';
+CREATE UNIQUE INDEX material_spec_version_released_uq ON core.material_spec_version (spec_id) WHERE status = 'released';
+
+-- A released version's characteristics and limits; results point at the item they were checked against.
+CREATE TABLE core.material_spec_item (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    spec_version_id     uuid NOT NULL REFERENCES core.material_spec_version(id),
     characteristic_id   uuid NOT NULL REFERENCES core.quality_characteristic(id),
-    material_id         uuid REFERENCES core.material(id),      -- null = all products
-    lsl                 double precision,
-    target              double precision,
-    usl                 double precision,
-    effective_from      timestamptz NOT NULL,
-    effective_to        timestamptz,
-    approved_by_user_id uuid REFERENCES sec.app_user(id),
-    CONSTRAINT spec_limit_order_ck CHECK (lsl IS NULL OR usl IS NULL OR lsl < usl),
-    CONSTRAINT spec_limit_no_overlap EXCLUDE USING gist (
-        characteristic_id WITH =,
-        (coalesce(material_id, '00000000-0000-0000-0000-000000000000'::uuid)) WITH =,
-        tstzrange(effective_from, effective_to) WITH &&)
+    lsl                 numeric,
+    target              numeric,
+    usl                 numeric,
+    max_defects         integer CHECK (max_defects >= 0),       -- an attribute's most defects allowed in a sample
+    hold_on_fail        boolean NOT NULL DEFAULT false,         -- a failing result for a lot holds the lot
+    sort_order          integer NOT NULL DEFAULT 0,
+    CONSTRAINT material_spec_item_uq UNIQUE (spec_version_id, characteristic_id),
+    CONSTRAINT material_spec_item_order_ck CHECK (lsl IS NULL OR usl IS NULL OR lsl <= usl)
 );
 
 -- Control limits (statistical): computed from a baseline then frozen.
@@ -1991,33 +2023,47 @@ CREATE INDEX lot_event_source_ref_ix ON ts.lot_event (source_ref) WHERE source_r
 CREATE INDEX lot_event_to_location_ix ON ts.lot_event (to_location_id, effective_at) WHERE to_location_id IS NOT NULL;
 CREATE INDEX lot_event_from_location_ix ON ts.lot_event (from_location_id, effective_at) WHERE from_location_id IS NOT NULL;
 
--- One row per subgroup. Variables: values[] plus computed statistics.
--- Attributes: inspected/defect counts. Limits in force are stamped on.
+-- Quality results (#65, D-085): one row per sample. Variables: values[] plus their statistics; attributes: inspected and defect
+-- counts. The specification item checked against and whether it conformed are stamped on. A wrong result is excluded, never changed.
 CREATE TABLE ts.quality_sample (
     id                      uuid NOT NULL DEFAULT uuidv7(),
-    occurred_at             timestamptz NOT NULL,
+    occurred_at             timestamptz NOT NULL,               -- when it was sampled
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
     characteristic_id       uuid NOT NULL REFERENCES core.quality_characteristic(id),
-    equipment_id            uuid NOT NULL REFERENCES core.equipment(id),
+    equipment_id            uuid REFERENCES core.equipment(id),
+    job_id                  uuid REFERENCES core.job(id),
     run_id                  uuid,
     lot_id                  uuid REFERENCES core.lot(id),
-    material_id             uuid REFERENCES core.material(id),
+    material_id             uuid NOT NULL REFERENCES core.material(id),
     subgroup_size           smallint NOT NULL,
-    measured_values         double precision[],
-    mean                    double precision,
-    range                   double precision,
-    std_dev                 double precision,
+    measured_values         numeric[],
+    mean                    numeric,
+    range                   numeric,
+    std_dev                 numeric,
     inspected_count         integer,
     defect_count            integer,
-    spec_limit_id           uuid REFERENCES core.spec_limit(id),
+    spec_item_id            uuid REFERENCES core.material_spec_item(id),
+    conforms                boolean,                            -- NULL: no limits in force for it
     control_limit_id        uuid REFERENCES core.control_limit(id),
-    source                  text NOT NULL CHECK (source IN ('auto','manual','lab')),
+    source                  text NOT NULL CHECK (source IN ('auto','manual','lab','lot_attribute')),
     entered_by_user_id      uuid,
+    recorded_by             text NOT NULL,
+    recorded_at             timestamptz NOT NULL,
+    comment                 text,
     is_excluded             boolean NOT NULL DEFAULT false,
     exclusion_reason_id     uuid REFERENCES core.reason_code(id),
+    excluded_note           text,
+    excluded_by             text,
+    excluded_at             timestamptz,
     PRIMARY KEY (id, occurred_at),
-    CONSTRAINT quality_sample_kind_ck CHECK (measured_values IS NOT NULL OR (inspected_count IS NOT NULL AND defect_count IS NOT NULL))
+    CONSTRAINT quality_sample_kind_ck CHECK (measured_values IS NOT NULL OR (inspected_count IS NOT NULL AND defect_count IS NOT NULL)),
+    CONSTRAINT quality_sample_target_ck CHECK (lot_id IS NOT NULL OR job_id IS NOT NULL),
+    CONSTRAINT quality_sample_excluded_ck CHECK (is_excluded = (excluded_at IS NOT NULL))
 ) PARTITION BY RANGE (occurred_at);
 CREATE INDEX ON ts.quality_sample (characteristic_id, occurred_at);
+CREATE INDEX quality_sample_site_ix ON ts.quality_sample (site_id, occurred_at);
+CREATE INDEX quality_sample_lot_ix ON ts.quality_sample (lot_id, occurred_at) WHERE lot_id IS NOT NULL;
+CREATE INDEX quality_sample_job_ix ON ts.quality_sample (job_id, occurred_at) WHERE job_id IS NOT NULL;
 
 CREATE TABLE ts.spc_violation (
     id                  uuid NOT NULL DEFAULT uuidv7(),
@@ -2335,7 +2381,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0049_nested_containers'),
     ('0050_mixing_containers'),
     ('0051_partial_receipts_lead_times'),
-    ('0052_allocation_refinements');
+    ('0052_allocation_refinements'),
+    ('0053_quality');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2395,7 +2442,11 @@ INSERT INTO sec.permission (code, description) VALUES
     ('lot_attributes.manage', 'Maintain lot attribute definitions'),
     ('security.manage', 'Maintain users, roles and what each role may do'),
     ('integrations.manage', 'Retry or skip failed deliveries to the ERP'),
-    ('edge.ingest', 'Send machine data as a Pulaski Edge node: read its configuration and forward what it collects')
+    ('edge.ingest', 'Send machine data as a Pulaski Edge node: read its configuration and forward what it collects'),
+    ('quality.view', 'See specifications, characteristics and quality results'),
+    ('quality.record', 'Record quality results against runs and lots'),
+    ('quality.decide', 'Exclude quality results and reject held lots on quality'),
+    ('specs.manage', 'Maintain quality characteristics and material specifications')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
 -- The roles a new database starts with (Roles.Defaults); after that they are the administrator's to change.
@@ -2403,12 +2454,12 @@ ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 INSERT INTO sec.role (code, name, description, is_system) VALUES
     ('administrator', 'Administrator', 'Everything, everywhere, including users and roles.', true),
     ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates, changeover times and materials. Sees the floor, inventory and processes.', true),
-    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops. Doesn''t correct inventory.', true),
-    ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops.', true),
-    ('quality', 'Quality', 'Holds and releases lots, corrects inventory, decides on partial batches, and keeps lot attributes and certificates.', true),
+    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops; records quality results. Doesn''t correct inventory.', true),
+    ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops, records quality results.', true),
+    ('quality', 'Quality', 'Holds and releases lots, corrects inventory, decides on partial batches, keeps lot attributes and certificates, maintains specifications, records quality results, excludes them and rejects lots on quality.', true),
     ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people, lot attributes and the site''s settings.', true),
     ('auditor', 'Auditor', 'Views everything, corrects inventory and reverses production reports; counts stock. Doesn''t plan or run jobs.', true),
-    ('process_engineer', 'Process engineer', 'Maintains processes, BOMs, capabilities and changeover times. Sees equipment, materials, units and the schedule.', true),
+    ('process_engineer', 'Process engineer', 'Maintains processes, BOMs, capabilities, changeover times and specifications. Sees equipment, materials, units and the schedule.', true),
     ('edge_node', 'Edge node', 'For the service user a Pulaski Edge node signs in as: reads its configuration and forwards machine data. Sees no screens.', true)
 ON CONFLICT (code) DO NOTHING;
 
@@ -2431,6 +2482,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('planner', 'materials.manage'),
     ('planner', 'lot.allocate'),
     ('planner', 'changeovers.manage'),
+    ('planner', 'quality.view'),
     ('supervisor', 'overview.view'),
     ('supervisor', 'floor.view'),
     ('supervisor', 'site_settings.view'),
@@ -2453,6 +2505,8 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('supervisor', 'machines.view'),
     ('supervisor', 'downtime.code'),
     ('supervisor', 'downtime.adjust'),
+    ('supervisor', 'quality.view'),
+    ('supervisor', 'quality.record'),
     ('operator', 'overview.view'),
     ('operator', 'floor.view'),
     ('operator', 'inventory.view'),
@@ -2464,6 +2518,8 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('operator', 'labor.record_own'),
     ('operator', 'machines.view'),
     ('operator', 'downtime.code'),
+    ('operator', 'quality.view'),
+    ('operator', 'quality.record'),
     ('quality', 'overview.view'),
     ('quality', 'floor.view'),
     ('quality', 'inventory.view'),
@@ -2476,6 +2532,10 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('quality', 'lot_records.manage'),
     ('quality', 'inventory.backdate'),
     ('quality', 'lot_attributes.manage'),
+    ('quality', 'quality.view'),
+    ('quality', 'quality.record'),
+    ('quality', 'quality.decide'),
+    ('quality', 'specs.manage'),
     ('manager', 'overview.view'),
     ('manager', 'work_orders.view'),
     ('manager', 'schedule.view'),
@@ -2491,6 +2551,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('manager', 'machines.view'),
     ('manager', 'site_settings.view'),
     ('manager', 'integrations.view'),
+    ('manager', 'quality.view'),
     ('manager', 'job.reopen'),
     ('manager', 'work_order.close'),
     ('manager', 'reasons.manage'),
@@ -2515,6 +2576,7 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('auditor', 'machines.view'),
     ('auditor', 'site_settings.view'),
     ('auditor', 'integrations.view'),
+    ('auditor', 'quality.view'),
     ('auditor', 'inventory.backdate'),
     ('auditor', 'inventory.correct'),
     ('auditor', 'production.correct'),
@@ -2525,6 +2587,8 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('process_engineer', 'units.view'),
     ('process_engineer', 'processes.manage'),
     ('process_engineer', 'changeovers.manage'),
+    ('process_engineer', 'quality.view'),
+    ('process_engineer', 'specs.manage'),
     ('edge_node', 'edge.ingest')
 ) AS v(role_code, permission_code)
 JOIN sec.role r ON r.code = v.role_code

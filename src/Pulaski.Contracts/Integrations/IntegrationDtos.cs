@@ -39,6 +39,13 @@ public sealed record DeliveryDto
 public sealed record DeliveryStatusDto
 {
     public required string Sink { get; init; }
+
+    /// <summary>The feed's key: <c>erp</c> or <c>documents</c> (#78), and what it is for.</summary>
+    public string Feed { get; init; } = "erp";
+    public string Label { get; init; } = "ERP";
+
+    /// <summary>A certificate's stored file goes with its event.</summary>
+    public bool IncludesFiles { get; init; }
     public bool Enabled { get; init; }
 
     /// <summary>The receiver's host only, never the full address or its secret.</summary>

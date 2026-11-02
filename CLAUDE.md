@@ -122,7 +122,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`sec.role`, `sec.role_permission.is_granted`), maintained on the Roles/Permissions tabs of Configure → Users; only `administrator` is in
   code (all permissions, everywhere, unchangeable); `Roles.Defaults` seeds a new database. Every other role is held at a
   site; every changing endpoint carries `.RequirePermission(permission, Site.…)`.
-- Viewing (D-039, proposed): 13 view permissions (`*.view`) decide screens and data; a change brings its views
+- Viewing (D-039, proposed): the view permissions (`*.view`) decide screens and data; a change brings its views
   (`Permissions.Implied`). Reads use `.RequireAny(site, views…)`, `.RequireAnyAtSite` (no site = every site) or
   `.RequireAnyView()` for lookups; lists filter with `.At(Visible.SitesAsync(...))`. Web pages carry
   `[RequiresView(...)]`, checked in `MainLayout` (not found, or the no-access panel); cross-screen links use `ScreenLink`.
@@ -219,7 +219,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Balance genealogy (D-060, proposed): `equipment.flow_model` (`mixed`/`fifo`) + `min_residence`; `BalanceAllocation.Allocate` replays a
   balance's movements by effective time and gives each withdrawal its arrivals with precision exact/estimated/possible; `TraceNarrowing`
   narrows traces through balances on read. Nothing stored. `level` tag role is bindable, not yet read.
-- ERP delivery (D-061, proposed): `ErpDeliveryService` (API hosted service, `Integrations:Erp` config; secret never in the DB) captures
+- ERP delivery (D-061, proposed): `WebhookDeliveryService` (API hosted service, one per feed since D-086; `Integrations:Erp` config; secret never in the DB) captures
   matching events into `evt.delivery` below the snapshot xmin and moves `evt.sink_checkpoint` in one statement (`DeliveryRelay`, advisory
   lock per sink), then POSTs CloudEvents JSON with `Idempotency-Key` = event id and an HMAC signature. `DeliveryPolicy.AfterAttempt`: 2xx
   delivered, 4xx (not 408/425/429) failed now, else backoff to `MaxAttempts`. A subject's later rows are held behind a pending/failed one.
@@ -270,6 +270,18 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `ratio` and cover `quantity ÷ ratio` (`LotAllocation.Covers`). Hard reservation: `AllocationUse.ConsumeAsync` refuses, naming the jobs;
   `FeedAutomation` (given `IAllocationRepository`) takes only free stock and uses up the job's own. Picking lists: `GetPickingListQuery`,
   `/api/inventory/picking-list[.pdf]` (`PickingListPdfRenderer`), lots at the job's line left out.
+- Quality (D-085, proposed): enterprise-wide `core.quality_characteristic` (variable / attribute, code and kind fixed); `core.material_spec` per
+  material, versions like BOMs (`SpecVersion`, draft `jsonb` → released `core.material_spec_item`: limits or most defects, `hold_on_fail`).
+  Results in `ts.quality_sample` against a lot and/or job (its run then), `QualityRecorder` stamps the item in force (`GetItemInForceAsync`, FOR SHARE)
+  and `conforms` (`QualityCheck`); a failing `hold_on_fail` item holds an available lot (reason `OUT-OF-SPEC`). Excluded with a reason, never edited
+  (column-level UPDATE). A number lot attribute may stand for a characteristic. `RejectLotCommand` writes off a held lot and, if made in a run,
+  moves it good → scrap there (defective count at its effective time), which is how quality reaches OEE. Permissions `quality.view`,
+  `quality.record`, `quality.decide`, `specs.manage`.
+- Attribute values in bulk, certificate feed (D-086, proposed): `LotAttributeCsv` (lot_number, optional material_code, a column per attribute code;
+  blank = unchanged, `(clear)` clears) → `ImportLotAttributeValuesCommand` (all or nothing, dry run ends uncommitted; locks lots in id order; writes
+  through `LotAttributeWriter`, shared with the lot page). Export `values.csv` is the import format. Webhook feeds `erp` and `documents`
+  (`WebhookFeedOptions`, one `WebhookDeliveryService` each, `/api/integrations/{feed}`); `IncludeFiles` puts a certificate's file base64 in
+  `data.file` of `lot_document.attached` at send time (`DeliveryRelay.GetDocumentFileAsync`).
 - Line batch sizes (D-065, proposed): `core.equipment_capability.batch_size` (null = the material's; only for a batch material; rule stays the
   material's, `Batching.OnLine`; a line tolerance too since D-075, `batch_tolerance_pct`, `ILineBatchSizes.GetTolerancesAsync`). `ILineBatchSizes` (in-transaction) feeds order creation (`Batching.ShareBySize`: whole
   batches of each line's size adding up exactly, else refused with the nearest quantities), job create/move/assign/start-on-line checks

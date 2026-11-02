@@ -40,7 +40,7 @@ Orders & scheduling                       Execution & inventory
                                                 stock_count ─ stock_count_line,
                                                 lot_attribute(_class, _value), lot_document(_content, _link)
       └─ job ── job_material               labor_session, labor_break, labor_approval
-          └─ job_run                       quality_characteristic ─ spec_limit, control_limit,
+          └─ job_run                       quality_characteristic ─ material_spec(_version, _item), control_limit,
  scheduling_policy, run_standard,             characteristic_rule, spc_alert,
  changeover_rule                              ts.quality_sample, ts.spc_violation
 
@@ -1190,6 +1190,7 @@ What a site records on its lots, such as melt index. Kept beside the lot, so rec
 | `applies_to_all` | boolean | no | True: offered for every material; false: only for the classes in `core.lot_attribute_class`. |
 | `sort_order` | integer | no | Order on the lot page. |
 | `is_active` | boolean | no | Switched off rather than deleted: values stay and can be cleared, not set. |
+| `characteristic_id` | uuid → quality_characteristic | yes | For a `number` only (`lot_attribute_characteristic_ck`): the quality characteristic it stands for (#65, D-085). Setting the value records a result for the lot, source `lot_attribute`, checked against the material's specification. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ### core.lot_attribute_class — the classes an attribute is for (D-056) · *In use*
@@ -1413,37 +1414,70 @@ A break's time comes out of the worked hours of every session of the person it o
 
 ## 11. Quality and SPC
 
-### core.quality_characteristic — what is measured · *Planned*
+### core.quality_characteristic — what is measured or inspected (#65, D-085) · *In use*
+
+Enterprise-wide for specifications (`site_id` NULL). Code and kind are fixed once created; switched off, never deleted. The SPC columns
+(`chart_type`, `subgroup_size`, `sample_interval`, `equipment_*`) serve charts later; the app sets `chart_type` to `i_mr` for a variable and
+`np` for an attribute.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `site_id` | uuid → equipment | no | The site. |
-| `code` | text | no | Unique per site. |
+| `site_id` | uuid → equipment | yes | NULL: every site; all characteristics the app makes are. |
+| `code` | text | no | Upper case, unique per site or enterprise-wide (`characteristic_code_uq`); fixed once created. |
 | `name` | text | no | Display name. |
-| `equipment_id` | uuid → equipment | no | Where it is measured. |
+| `description` | text | yes | Up to 500 characters. |
+| `equipment_id` | uuid → equipment | yes | Where it is measured, when that is one place. |
 | `equipment_tag_id` | uuid → equipment_tag | yes | Set when sampled automatically from process data; cleared if its tag is physically deleted. |
-| `data_kind` | text | no | `variable` (measured) or `attribute` (counted). |
+| `data_kind` | text | no | `variable` (measured values) or `attribute` (inspected and defective counts); fixed once created. |
 | `chart_type` | text | no | `xbar_r`, `xbar_s`, `i_mr` (variables) or `p`, `np`, `c`, `u` (attributes). |
 | `subgroup_size` | smallint | no | Measurements per subgroup; 1 for `i_mr`. |
 | `sample_interval` | interval | yes | Cadence for automatic sampling. |
-| `uom_id` | uuid → uom | yes | Unit of the measurement. |
-| `decimals` | smallint | no | Display precision. Default 3. |
-| `is_active` | boolean | no | False when retired. |
+| `uom_id` | uuid → uom | yes | Unit of a measured value. |
+| `decimals` | smallint | no | Display precision, 0 to 6. Default 3. |
+| `is_active` | boolean | no | False when switched off: it can't be added to specifications or recorded. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
-### core.spec_limit — engineering limits · *Planned*
+### core.material_spec — a material's specification (#65, D-085) · *In use*
 
-Versioned, for one product or all. Periods may not overlap.
+At most one per material (`material_spec_uq`); its content lives in versions.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `characteristic_id` | uuid → quality_characteristic | no | The characteristic. |
-| `material_id` | uuid → material | yes | The product; null for all products. |
-| `lsl`, `target`, `usl` | double precision | yes | Lower limit, target, upper limit. Lower below upper. |
-| `effective_from` | timestamptz | no | Start. |
-| `effective_to` | timestamptz | yes | End; null means open-ended. |
-| `approved_by_user_id` | uuid → app_user | yes | Who approved them. |
+| `material_id` | uuid → material | no | The material. |
+| `is_active` | boolean | no | An inactive specification isn't checked against. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.material_spec_version — specification versions (#65, D-085) · *In use*
+
+As BOM versions (D-025): a draft holds the items as one `jsonb` document; releasing writes them to `material_spec_item` and makes the released
+version before it obsolete. At most one draft and one released version per specification (`material_spec_version_draft_uq`, `_released_uq`).
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `spec_id` | uuid → material_spec | no | The specification. |
+| `version_number` | integer | no | 1, 2, …; unique per specification. |
+| `status` | text | no | `draft`, `released` or `obsolete`. |
+| `definition` | jsonb | no | `{"items":[…]}`: each item's id, characteristic, limits, most defects, hold-on-fail and order, camelCase. |
+| `released_at`, `released_by` | timestamptz, text | yes | When and by whom it was released; set exactly when not a draft (`material_spec_version_released_ck`). |
+| `note` | text | yes | Release note, up to 500 characters. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.material_spec_item — a released version's characteristics (#65, D-085) · *In use*
+
+Written once, when the version is released; results point at the item they were checked against.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key; the item's id in the definition. |
+| `spec_version_id` | uuid → material_spec_version | no | The released version. |
+| `characteristic_id` | uuid → quality_characteristic | no | The characteristic; once per version (`material_spec_item_uq`). |
+| `lsl`, `target`, `usl` | numeric | yes | A variable's lower limit, target and upper limit (inclusive); at least one limit, lower not above upper. |
+| `max_defects` | integer | yes | An attribute's most defective items allowed in a sample; required for an attribute, never for a variable. |
+| `hold_on_fail` | boolean | no | A failing result for a lot puts the lot on hold. Default false. |
+| `sort_order` | integer | no | Order on screens and the shop order sheet. |
 
 ### core.control_limit — statistical limits · *Planned*
 
@@ -1656,29 +1690,36 @@ One row for every job status change, written in the same transaction as the chan
 | `actor_user_id` | uuid | yes | Who, once `sec.app_user` exists. |
 | `actor_id` | text | yes | Who, as on `evt.event` (`issuer\|subject`, `anonymous` until sign-in). |
 
-### ts.quality_sample — one subgroup per row · *Planned*
+### ts.quality_sample — quality results, one sample per row (#65, D-085) · *In use*
 
-Variables store the values and their statistics; attributes store inspected and defect counts. The limits in force are stamped on each row.
+Variables store the values and their statistics; attributes store inspected and defective counts. The specification item in force and whether
+it conformed are stamped on each row. Appended only; a wrong result is excluded, the only columns the app role may update.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key with `occurred_at`. |
-| `occurred_at` | timestamptz | no | When sampled. Partition key. |
-| `characteristic_id` | uuid → quality_characteristic | no | What was measured. |
-| `equipment_id` | uuid → equipment | no | Where. |
-| `run_id` | uuid | yes | The run. |
-| `lot_id` | uuid → lot | yes | The lot sampled. |
-| `material_id` | uuid → material | yes | The product, for product-specific limits. |
-| `subgroup_size` | smallint | no | Number of measurements. |
-| `measured_values` | double precision[] | yes | The measurements, for variables. |
-| `mean`, `range`, `std_dev` | double precision | yes | Subgroup statistics. |
+| `occurred_at` | timestamptz | no | When sampled (up to 31 days back). Partition key. |
+| `site_id` | uuid → equipment | no | The site it was recorded at. Indexed with `occurred_at`. |
+| `characteristic_id` | uuid → quality_characteristic | no | What was measured or inspected. |
+| `equipment_id` | uuid → equipment | yes | Where: the job's run's equipment then, else the job's. |
+| `job_id` | uuid → job | yes | The job recorded against. |
+| `run_id` | uuid | yes | The job's run open at `occurred_at`. |
+| `lot_id` | uuid → lot | yes | The lot sampled. A lot, a job or both (`quality_sample_target_ck`). |
+| `material_id` | uuid → material | no | The lot's material, else the job's: whose specification applies. |
+| `subgroup_size` | smallint | no | Values, or items inspected. |
+| `measured_values` | numeric[] | yes | The measurements, for variables (up to 25). |
+| `mean`, `range`, `std_dev` | numeric | yes | Sample statistics; the standard deviation with at least two values. |
 | `inspected_count`, `defect_count` | integer | yes | For attributes. Either values or both counts are required. |
-| `spec_limit_id` | uuid → spec_limit | yes | Spec limits in force. |
-| `control_limit_id` | uuid → control_limit | yes | Control limits in force. |
-| `source` | text | no | `auto`, `manual` or `lab`. |
-| `entered_by_user_id` | uuid | yes | Who entered it. |
-| `is_excluded` | boolean | no | Left out of the charts and limit calculations. |
-| `exclusion_reason_id` | uuid → reason_code | yes | Why. |
+| `spec_item_id` | uuid → material_spec_item | yes | The item of the released specification it was checked against; null when none named the characteristic. |
+| `conforms` | boolean | yes | Every value within the limits, or defects at most the allowed; null when there were no limits. |
+| `control_limit_id` | uuid → control_limit | yes | Control limits in force (SPC, later). |
+| `source` | text | no | `manual`, `lab`, `auto` or `lot_attribute`. |
+| `entered_by_user_id` | uuid | yes | The signed-in user. |
+| `recorded_by`, `recorded_at` | text, timestamptz | no | Who and when, as on the event. |
+| `comment` | text | yes | Up to 1000 characters. |
+| `is_excluded` | boolean | no | Left out, with `excluded_at` set (`quality_sample_excluded_ck`). |
+| `exclusion_reason_id` | uuid → reason_code | yes | Why (kind `sample_exclusion`). |
+| `excluded_note`, `excluded_by`, `excluded_at` | text, text, timestamptz | yes | The comment, who and when. |
 
 ### ts.spc_violation — rule violations · *Planned*
 
@@ -1768,11 +1809,11 @@ Every command appends its CloudEvents event here in the same transaction as the 
 
 ### evt.sink_checkpoint — outbox progress per adapter (D-061) · *In use*
 
-How far an adapter has read `evt.event`. The ERP webhook (`webhook:erp`) moves it as it copies matching events into `evt.delivery`, in the same statement, so a crash never loses or repeats a capture. Its first row starts at the latest event when `StartFromNow` is on (the default), else at the beginning.
+How far an adapter has read `evt.event`. Each webhook feed (`webhook:erp`, and since D-086 `webhook:documents`) moves it as it copies matching events into `evt.delivery`, in the same statement, so a crash never loses or repeats a capture. Its first row starts at the latest event when `StartFromNow` is on (the default), else at the beginning.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `sink_name` | text | no | Primary key: `webhook:erp`; later `kafka-main`, `mqtt-uns`. |
+| `sink_name` | text | no | Primary key: `webhook:erp` or `webhook:documents`; later `kafka-main`, `mqtt-uns`. |
 | `last_tx_id` | xid8 | no | Last transaction read. |
 | `last_position` | bigint | no | Last position read within it. |
 | `updated_at` | timestamptz | no | Last progress. |
@@ -1784,7 +1825,7 @@ The queue and record of what was sent where. A row is added for each matching ev
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `sink` | text | no | The adapter: `webhook:erp`. |
+| `sink` | text | no | The adapter: `webhook:erp` or `webhook:documents` (D-086). |
 | `event_id` | uuid | no | The event (`evt.event.id`; no FK, it is partitioned). Also the message's `Idempotency-Key`. Unique with `sink`. |
 | `event_recorded_at` | timestamptz | no | The event's `recorded_at`, to find it in its partition. |
 | `tx_id`, `position` | xid8, bigint | no | The event's order, copied so the queue sorts and holds without the join. |

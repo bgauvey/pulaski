@@ -1,6 +1,6 @@
 -- =====================================================================
 -- Pulaski — starter reason codes                            2026-10-16
--- Enterprise-wide reasons for inventory adjustments and holds (D-027), scrap and run ends (D-035), and
+-- Enterprise-wide reasons for inventory adjustments and holds (D-027), scrap and run ends (D-035), excluding quality results (#65), and
 -- utilization reasons for machine time (D-050).
 -- Load after schema-draft.sql. Re-runnable: existing codes are left alone.
 --
@@ -24,6 +24,7 @@ INSERT INTO core.reason_code (site_id, reason_kind, code, name, requires_comment
     (NULL, 'hold', 'SUPPLIER',  'Supplier notice',          true,  30),
     (NULL, 'hold', 'CUSTOMER',  'Customer complaint',       true,  40),
     (NULL, 'hold', 'PARTIAL',   'Partial batch awaiting approval', false, 50),
+    (NULL, 'hold', 'OUT-OF-SPEC', 'Quality result out of specification', false, 60),
     (NULL, 'hold', 'OTHER',     'Other',                    true,  90),
     -- Scrap reported against a run (D-035).
     (NULL, 'scrap', 'STARTUP',   'Start-up scrap',           false, 10),
@@ -31,6 +32,7 @@ INSERT INTO core.reason_code (site_id, reason_kind, code, name, requires_comment
     (NULL, 'scrap', 'SURFACE',   'Surface defect',           false, 30),
     (NULL, 'scrap', 'COLOUR',    'Colour off',               false, 40),
     (NULL, 'scrap', 'CHANGEOVER','Changeover scrap',         false, 50),
+    (NULL, 'scrap', 'QUALITY',   'Rejected on quality',      false, 60),
     (NULL, 'scrap', 'OTHER',     'Other',                    true,  90),
     -- Why a run ended without completing its job (D-035).
     (NULL, 'run_end', 'SHIFT',     'End of shift',           false, 10),
@@ -38,7 +40,10 @@ INSERT INTO core.reason_code (site_id, reason_kind, code, name, requires_comment
     (NULL, 'run_end', 'BREAKDOWN', 'Breakdown',              false, 30),
     (NULL, 'run_end', 'PRIORITY',  'Higher-priority job',    false, 40),
     (NULL, 'run_end', 'QUALITY',   'Quality problem',        false, 50),
-    (NULL, 'run_end', 'OTHER',     'Other',                  true,  90)
+    (NULL, 'run_end', 'OTHER',     'Other',                  true,  90),
+    -- Why a quality result is left out (#65).
+    (NULL, 'sample_exclusion', 'ENTRY-ERROR',        'Entered in error',          true, 10),
+    (NULL, 'sample_exclusion', 'NOT-REPRESENTATIVE', 'Sample not representative', true, 20)
 ON CONFLICT (site_id, reason_kind, code) DO NOTHING;
 
 -- Utilization reasons (D-050): what a machine's time counts as. Runtime is run time; downtime is availability

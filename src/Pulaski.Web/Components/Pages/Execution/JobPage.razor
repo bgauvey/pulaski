@@ -36,6 +36,10 @@
             {
                 <ScreenLink Href="@($"inventory/jobs/{JobId}")" Permission="@PermissionCodes.InventoryView" Hide class="btn btn-outline-secondary">Materials and lots</ScreenLink>
             }
+            @if (j.JobType == "production" && User.Can(PermissionCodes.QualityView, j.SiteId))
+            {
+                <a class="btn btn-outline-secondary" href="@($"quality/results?jobId={JobId}&jobNumber={Uri.EscapeDataString(j.JobNumber)}&materialId={j.MaterialId}")">Quality results</a>
+            }
             @if (actions.CanStart && !j.IsOnGroup && May(PermissionCodes.JobExecute))
             {
                 <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="StartAsync">@(j.Status == "paused" ? "Resume" : "Start")</button>

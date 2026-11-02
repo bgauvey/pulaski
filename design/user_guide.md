@@ -2,7 +2,7 @@
 
 *Last updated: 2026-11-01 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
-This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#21-reference) tables give the exact rules.
+This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
 ## Contents
 
@@ -18,18 +18,19 @@ This guide explains how to use Pulaski to set up your plant, plan production and
 10. [The Schedule](#10-the-schedule)
 11. [The Floor: running jobs and reporting production](#11-the-floor-running-jobs-and-reporting-production)
 12. [Inventory](#12-inventory)
-13. [Materials](#13-materials)
-14. [Users, roles and signing in](#14-users-roles-and-signing-in)
-15. [Shift schedules](#15-shift-schedules)
-16. [Labor, people and crews](#16-labor-people-and-crews)
-17. [Site settings](#17-site-settings)
-18. [Machine profiles](#18-machine-profiles)
-19. [Edge nodes: collecting machine data](#19-edge-nodes-collecting-machine-data)
-20. [Machines: live status and stops](#20-machines-live-status-and-stops)
-21. [Reference](#21-reference)
-22. [What Pulaski doesn't do yet](#22-what-pulaski-doesnt-do-yet)
-23. [Troubleshooting and questions](#23-troubleshooting-and-questions)
-24. [Glossary](#24-glossary)
+13. [Quality: specifications and results](#13-quality-specifications-and-results)
+14. [Materials](#14-materials)
+15. [Users, roles and signing in](#15-users-roles-and-signing-in)
+16. [Shift schedules](#16-shift-schedules)
+17. [Labor, people and crews](#17-labor-people-and-crews)
+18. [Site settings](#18-site-settings)
+19. [Machine profiles](#19-machine-profiles)
+20. [Edge nodes: collecting machine data](#20-edge-nodes-collecting-machine-data)
+21. [Machines: live status and stops](#21-machines-live-status-and-stops)
+22. [Reference](#22-reference)
+23. [What Pulaski doesn't do yet](#23-what-pulaski-doesnt-do-yet)
+24. [Troubleshooting and questions](#24-troubleshooting-and-questions)
+25. [Glossary](#25-glossary)
 
 ---
 
@@ -48,13 +49,13 @@ Today you can use Pulaski to:
 - publish the plan to the floor and freeze it;
 - keep **inventory**: receive material lots into stores, write stock up or off, move and hold lots, record what each job used and made, and trace any lot back to what it was made from or forward to what was made from it.
 
-Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#22-what-pulaski-doesnt-do-yet).
+Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#23-what-pulaski-doesnt-do-yet).
 
 ### Opening Pulaski
 
 Open Pulaski in a web browser at the address your administrator gives you (on a developer's machine it is `http://localhost:5090`). Pulaski works best in a current version of Chrome, Edge, Firefox or Safari, on a desktop or a tablet in landscape.
 
-Pulaski asks you to **sign in** with the user name and password your administrator gave you; the first time, you choose your own password. Your **roles** decide which screens you see and what you can change on them. See [Users, roles and signing in](#14-users-roles-and-signing-in).
+Pulaski asks you to **sign in** with the user name and password your administrator gave you; the first time, you choose your own password. Your **roles** decide which screens you see and what you can change on them. See [Users, roles and signing in](#15-users-roles-and-signing-in).
 
 ### The screen
 
@@ -122,7 +123,7 @@ A line is both. A **department** (for example the Extrusion area) is schedulable
 
 ### What you make: materials
 
-A **material** is anything you make or use: a finished profile, a resin, a dry blend, a pallet, an end cap. Each material has a code (its item number), a base unit (metres, kilograms, each) and usually a **material class** that groups similar materials, such as *Extruded profiles*. Materials are kept on the [Materials](#13-materials) page; those your ERP sends keep their code, name, base unit and type in the ERP.
+A **material** is anything you make or use: a finished profile, a resin, a dry blend, a pallet, an end cap. Each material has a code (its item number), a base unit (metres, kilograms, each) and usually a **material class** that groups similar materials, such as *Extruded profiles*. Materials are kept on the [Materials](#14-materials) page; those your ERP sends keep their code, name, base unit and type in the ERP.
 
 **Capabilities** say which material can run on which line, and how fast (its ideal rate). Pulaski never puts a material's job on a line without a capability for it. You add them on the material's page ([Where it can run](#where-it-can-run-capabilities-and-rates)).
 
@@ -180,18 +181,18 @@ If you are starting from an empty Pulaski, work through this list in order. Each
 | --- | --- | --- | --- |
 | 1 | The enterprise and at least one site, with its time zone | [Equipment](#4-equipment) | Everything else belongs to a site. |
 | 2 | Areas (departments) and lines under the site | [Equipment](#4-equipment) | Jobs are planned on lines and departments. |
-| 3 | Material classes, then materials (one by one, from a [CSV or B2MML file](#import-materials-from-a-file), or from the ERP) | [Materials](#13-materials) | Orders and BOMs need materials. |
+| 3 | Material classes, then materials (one by one, from a [CSV or B2MML file](#import-materials-from-a-file), or from the ERP) | [Materials](#14-materials) | Orders and BOMs need materials. |
 | 3a | Units, and conversions for materials you order or use in other units | [Units](#6-units-and-conversions) | So orders, BOMs and rates can use any unit that converts. |
 | 4 | Capabilities: which material runs on which line, and how fast | [The material's page](#where-it-can-run-capabilities-and-rates) | Without one, a line can't take a material's job. |
-| 5 | Shift schedules, and which one each site, area or line follows (optional) | [Shifts](#15-shift-schedules), then [Equipment](#4-equipment) | Without one, Pulaski assumes lines run around the clock and marks them **24/7**. |
-| 5a | Crews and people, if you record labor (optional) | [People](#16-labor-people-and-crews) | So supervisors can check crews onto lines, and shifts can name their crew. |
+| 5 | Shift schedules, and which one each site, area or line follows (optional) | [Shifts](#16-shift-schedules), then [Equipment](#4-equipment) | Without one, Pulaski assumes lines run around the clock and marks them **24/7**. |
+| 5a | Crews and people, if you record labor (optional) | [People](#17-labor-people-and-crews) | So supervisors can check crews onto lines, and shifts can name their crew. |
 | 6 | Processes: the routes, what they make, released | [Processes](#5-processes) | Every work order is made from a process. |
 | 7 | BOMs for the materials you make (optional, recommended) | [BOMs](#7-bills-of-materials-boms) | Without a BOM, an order plans no components. |
 | 8 | Work orders | [Schedule → New work order](#8-creating-a-work-order) | Now you can plan. |
 | 9 | Inventory locations: stores, staging areas and feed points, with **Holds inventory** ticked | [Equipment](#4-equipment) | Lots have to be somewhere. |
 | 10 | Reason codes for write-ups, write-offs and holds, and utilization reasons for machine time | [Reasons](#reason-codes) (a starter set comes with `db/seed-reasons.sql`) | Every adjustment and hold needs a reason; machine profiles map stop codes to utilization reasons. |
-| 11 | Machine profiles, and which one each machine uses | [Machine profiles](#18-machine-profiles), then [Equipment](#4-equipment) | So the machine's state values and stop codes mean something in Pulaski. |
-| 12 | Edge nodes, their connections, and tags binding machine signals to equipment (optional) | [Edge nodes](#19-edge-nodes-collecting-machine-data) | So Pulaski hears machine state and counts. |
+| 11 | Machine profiles, and which one each machine uses | [Machine profiles](#19-machine-profiles), then [Equipment](#4-equipment) | So the machine's state values and stop codes mean something in Pulaski. |
+| 12 | Edge nodes, their connections, and tags binding machine signals to equipment (optional) | [Edge nodes](#20-edge-nodes-collecting-machine-data) | So Pulaski hears machine state and counts. |
 
 The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plant PLT1 with EXT-01, EXT-02 and PACK1, the stores RM-STORE and staging FG-STAGE, 200 materials, and the standard units with conversions for the demo materials), so you can start at step 6.
 
@@ -287,7 +288,7 @@ Select it and edit a property on the right. Text saves when you press **Enter** 
 
 Equipment with **Tracks state** set shows a **Machine data** group:
 
-1. **Machine profile**: how its controller reports state and stop codes. Choose one of its site's [machine profiles](#18-machine-profiles), or *None*.
+1. **Machine profile**: how its controller reports state and stop codes. Choose one of its site's [machine profiles](#19-machine-profiles), or *None*.
 2. **Micro-stop threshold**: stops shorter than this many minutes are micro-stops. They are logged but not queued for a reason, and they don't count against availability. Default 5 minutes; 0 to 60, in steps of half a minute. An extruder may use 2, a pack cell more.
 3. **State from**: where its state comes from.
    - *Its own state tag* (default).
@@ -295,7 +296,7 @@ Equipment with **Tracks state** set shows a **Machine data** group:
    - *Best of its machines (parallel)*: for machines running side by side, so the line runs while any of them does.
    - *Its constraint machine*: the line's state is one machine's. A **Constraint machine** row appears; Pulaski first picks the first machine below that tracks state, and you can choose another.
 
-Each saves as soon as you change it. The profile reads the machine's data as it arrives through an [edge node](#19-edge-nodes-collecting-machine-data); the threshold decides which stops are micro-stops, and *State from* how a line shows on [Machines](#20-machines-live-status-and-stops).
+Each saves as soon as you change it. The profile reads the machine's data as it arrives through an [edge node](#20-edge-nodes-collecting-machine-data); the threshold decides which stops are micro-stops, and *State from* how a line shows on [Machines](#21-machines-live-status-and-stops).
 
 ### Deactivate equipment
 
@@ -307,7 +308,7 @@ Set **Active** to *false*. Inactive equipment stays in the tree and in history, 
 - The levels, top to bottom: enterprise, site, area, work center, work unit, equipment module, control module. A child always sits below its parent's level.
 - Roles allowed at each level: work center: production line, process cell, production unit, storage zone; work unit: work cell, unit, machine, storage unit; equipment module: machine, feed point, module; control module: module.
 - Codes are unique within a site.
-- The **Working time** group: **Shifts** chooses when it works for planning (*Inherit from parent*, one of its site's shift schedules, or *Around the clock*), and **Shifts in effect** shows what it ends up with and where from, such as *2X8 · Two shifts, from PLT1*. See [Shift schedules](#15-shift-schedules). Changing **Shifts** needs permission to maintain shift schedules, not equipment.
+- The **Working time** group: **Shifts** chooses when it works for planning (*Inherit from parent*, one of its site's shift schedules, or *Around the clock*), and **Shifts in effect** shows what it ends up with and where from, such as *2X8 · Two shifts, from PLT1*. See [Shift schedules](#16-shift-schedules). Changing **Shifts** needs permission to maintain shift schedules, not equipment.
 - **Machine data** needs permission to maintain equipment. A machine profile must be active and of the equipment's own site, and only equipment that tracks state takes one. A constraint machine must be below the line and track state.
 - The **Hierarchy** group shows the parent, the owning site, the number of children and Pulaski's internal id (useful for support and the API).
 
@@ -647,9 +648,9 @@ Your ERP can send work orders to Pulaski (whoever runs the integration sets this
 
 1. Find the work order and open its row's **Actions** menu.
 2. Choose **Print shop order**. Pulaski downloads one PDF with a traveler sheet for each job.
-3. Print the PDF for the floor. Check the schedule and the approved product specification before running.
+3. Print the PDF for the floor. Check the schedule before running.
 
-**In detail.** Each sheet identifies the work order, job and process operation; shows the material, planned quantity, line or waiting department, scheduled time, run rate, work-order due date, status and priority, special instructions, operation description and that job's planned BOM components; and carries a Code 128 barcode containing `order-number|OP-number` (for example, `WO-1001|OP-10`). A currently projected schedule is labelled **Projected schedule**; jobs without a live projection show their published baseline. Orders without jobs get a summary page with the specification warning. Pulaski does not yet maintain released product specifications, so every sheet explicitly says to verify the approved specification elsewhere; it does not print or imply spec limits.
+**In detail.** Each sheet identifies the work order, job and process operation; shows the material, planned quantity, line or waiting department, scheduled time, run rate, work-order due date, status and priority, special instructions, operation description and that job's planned BOM components; and carries a Code 128 barcode containing `order-number|OP-number` (for example, `WO-1001|OP-10`). A currently projected schedule is labelled **Projected schedule**; jobs without a live projection show their published baseline. Orders without jobs get a summary page. Under **Specifications**, each sheet lists the material's released [specification](#13-quality-specifications-and-results): its version, each characteristic with its limits and unit, and which ones hold the lot on failure. When the material has none, the sheet says so and asks for the approved specification to be checked elsewhere.
 
 ---
 
@@ -762,14 +763,14 @@ Pulaski lays work end to end on each line, so two jobs on a line only overlap wh
 
 ## 11. The Floor: running jobs and reporting production
 
-**Operate → Floor.** Where operators start, pause and complete jobs and report what they make. The schedule says what should run; the floor records what does. Each line shows how many people are on it, and someone set up to clock themselves on sees **Clock on** and **Clock off** on each line (see [Labor](#16-labor-people-and-crews)).
+**Operate → Floor.** Where operators start, pause and complete jobs and report what they make. The schedule says what should run; the floor records what does. Each line shows how many people are on it, and someone set up to clock themselves on sees **Clock on** and **Clock off** on each line (see [Labor](#17-labor-people-and-crews)).
 
 ### Ideas to know first
 
 - **Runs.** A job runs in one or more **runs**: starting a job opens a run, pausing or completing it ends the run, and resuming opens the next. Good and scrap are reported into a run, and so are the lots the job uses and makes.
 - **Only one run at a time on a line.** Pause or complete what is running before starting the next job.
 - **When a job can start.** Its work order must be on the floor (dispatched or firmed). If its order was made from a process, the process links must be met: a Pack operation set to start *after Extrude ends* can't start until every Extrude job of the order is completed, plus any lag. Pulaski never starts a job by itself; it tells you when one can start.
-- **The rate check.** A run can't hold more than the line could have made in it: its length × the line's **ideal rate** for the material × the site's tolerance (110% unless a manager changed it on [Site settings](#17-site-settings)). Reporting 1000 m after one hour on a line rated 100 m/h is refused. The check uses the ideal rate from the line's capability, not the planning rate, which is usually lower.
+- **The rate check.** A run can't hold more than the line could have made in it: its length × the line's **ideal rate** for the material × the site's tolerance (110% unless a manager changed it on [Site settings](#18-site-settings)). Reporting 1000 m after one hour on a line rated 100 m/h is refused. The check uses the ideal rate from the line's capability, not the planning rate, which is usually lower.
 - **The order follows its jobs.** Starting an order's first job firms the order (if it was only dispatched) and puts it **in progress**; completing its last open job **completes** it; reopening a job takes it back to in progress.
 
 ### The board
@@ -844,7 +845,7 @@ What each shift made, for a supervisor's shift report or the morning meeting.
 
 **In detail**
 
-- **Which shift a report counts in:** the shift running on its line when the report was made, from the [shift schedule](#15-shift-schedules) the line follows with its one-off changes. A report into a run that had already ended counts when the run ended.
+- **Which shift a report counts in:** the shift running on its line when the report was made, from the [shift schedule](#16-shift-schedules) the line follows with its one-off changes. A report into a run that had already ended counts when the run ended.
 - **Which day:** a shift's production day is the day it starts, so a night shift's output after midnight counts towards the evening it began. A report between shifts, or on a line without shifts, counts towards the site's calendar day and shows as *outside shifts*.
 - **Good** is everything a report made less its scrap. A rejected partial batch moves its quantity from good to scrap in the shift the batch was made.
 - **Every report is counted once,** so a job's rows add up to its runs' totals when the days cover all its reports.
@@ -1094,7 +1095,7 @@ On **Inventory → Locations**, a location where lots mix shows how it flows; cl
 - **Mixed** (the default): everything blends, as in a tank or a mixed silo. A withdrawal takes a share of every arrival still there, by quantity.
 - **First in, first out:** plug flow, as in a mass-flow silo or bin. A withdrawal takes the oldest material first.
 - **Minimum residence** (optional, in minutes): the least time material stays before it can leave. Material taken before then is only *possible*.
-- **Empty at level** (optional): for a silo with a [level tag](#19-edge-nodes-collecting-machine-data), in the tag's unit. A reading at or below this means the silo was empty.
+- **Empty at level** (optional): for a silo with a [level tag](#20-edge-nodes-collecting-machine-data), in the tag's unit. A reading at or below this means the silo was empty.
 - **Level tolerance** (optional): in the tag's unit, how far the level may be from the declared stock and still agree. Leave it blank to not compare them.
 
 Everything is worked out from the movements as recorded, by when they count, so [back-dated](#back-date-a-movement) ones fit in. Changing these settings changes every trace through the silo at once, because nothing is stored.
@@ -1206,7 +1207,7 @@ When a movement is entered late, it can count from when it really happened: a re
 - **Stock on a date:** each material's on-hand quantity at the end of the day you choose, **where** it was then (by location) and how much of it was **on hold** or in quarantine then. Each lot is worked out as it was, from every movement that counts by then, including [back-dated](#back-date-a-movement) ones entered later, so a past date can change after a correction, gives the same answer whatever order movements were entered in, and agrees with the journal. Older dates take longer. The export has a row per material and location.
 - **Aging:** on-hand stock by how long ago each lot was received or made (from when its first movement counts, so a back-dated receipt ages from its real day): up to 30 days, 31–90, 91–180 and over 180 (in amber). Balances of materials that aren't lot-tracked aren't aged, and a split lot counts from the day it was split.
 
-**Export CSV** downloads a spreadsheet file from the **Stock** tab (what is on screen, with its filters), the **Lots** tab (every matching lot, up to 10,000), the **Journal** (every matching movement, up to 10,000) and both reports. Lot search shows 200 at a time: click **Show more** for the next.
+**Export CSV** downloads a spreadsheet file from the **Stock** tab (what is on screen, with its filters), the **Lots** tab (every matching lot, up to 10,000, with a column per active lot attribute), the **Journal** (every matching movement, up to 10,000) and both reports. Lot search shows 200 at a time: click **Show more** for the next.
 
 ### Reason codes
 
@@ -1328,11 +1329,11 @@ The **Scan** tab is for a barcode scanner that types like a keyboard (most USB a
 - When a second scan is asked for (where to move, or which container), only that kind counts; scanning something else says so.
 - Every movement made by scanning is the same as one made from the lot's or container's page, with the same rules, history and permissions.
 
-### Send movements to the ERP
+### Send movements to the ERP and certificates to a document system
 
-Pulaski can send every inventory movement (received, moved, consumed, produced, written up or off, shipped, held and so on) to your ERP as it happens, so the ERP's stock follows the floor's. It is switched on in the API's configuration by whoever runs Pulaski (see *In detail*); **Configure → Integrations** shows how it is doing and is where failures are put right.
+Pulaski can send every inventory movement (received, moved, consumed, produced, written up or off, shipped, held and so on) to your ERP as it happens, so the ERP's stock follows the floor's. A second feed sends certificates and other lot documents, as they are attached and withdrawn, to a document system, with their files. Each is switched on in the API's configuration by whoever runs Pulaski (see *In detail*); **Configure → Integrations** shows how each is doing and is where failures are put right.
 
-1. Open **Configure → Integrations**. The top panel says whether the ERP webhook is **On** and where it sends, how many movements are waiting, how many have **failed**, and how many were delivered in the last 24 hours.
+1. Open **Configure → Integrations** and choose the feed: **ERP** or **Document system**. The top panel says whether the ERP webhook is **On** and where it sends, how many movements are waiting, how many have **failed**, and how many were delivered in the last 24 hours.
 2. The list starts on **Failed**. Each row shows the movement, the lot, how many attempts were made and the ERP's last answer (its status code and message).
 3. Put the cause right (the ERP rejected an unknown material, say, or a lot it doesn't know), then choose **Retry** on the row, or **Retry all failed** in the panel. It goes again within a few seconds.
 4. If it shouldn't be sent at all (you have booked it in the ERP by hand, for example), choose **Skip…**, give the reason and choose **Skip it**. The ERP won't get that movement.
@@ -1346,7 +1347,8 @@ Pulaski can send every inventory movement (received, moved, consumed, produced, 
 - **Sent twice is safe.** Pulaski may send a movement again if it didn't hear the ERP's answer (at least once). Every message carries the movement's event id as its `Idempotency-Key`; the receiver should ignore an id it has already booked.
 - **The message** is a CloudEvents 1.0 JSON document (`application/cloudevents+json`) holding the event as Pulaski recorded it: its type (`pulaski.lot.received.v1` …), the lot as its subject, the time, who did it, the reason and the movement's details. It is signed: `X-Pulaski-Signature` is `sha256=` and the hex HMAC-SHA256, with the shared secret, of the `X-Pulaski-Timestamp` value, a full stop, and the body. A receiver should check the signature and refuse old timestamps.
 - **Switching it on.** In the API's settings (or environment), section `Integrations:Erp`: `Enabled` true, `Url` (the HTTPS address to post to) and `Secret` (shared with the receiver; keep it in a secret store or environment variable, not in a file in source control). Optional: `EventTypes` (type prefixes to send, default `pulaski.lot.`), `MaxAttempts` (12), `TimeoutSeconds` (15), `PollSeconds` (5) and `StartFromNow` (true: the first time it is switched on, only movements from then on are sent; false sends the whole history). Restart the API after a change.
-- **Several API servers** share the work safely: only one sends at a time.
+- **The document feed.** Section `Integrations:Documents`, with the same settings as the ERP's. It sends `pulaski.lot_document.attached.v1` and `…withdrawn.v1` (default `EventTypes` `pulaski.lot_document.`), each holding the document's kind, title, number, issuer, issue date, URL, file name, type, size and SHA-256 and the lot it was attached to; a withdrawal has the reason. With `IncludeFiles` (on for this feed, off for the ERP's unless set), the attached event also carries the stored file in `data.file`: `fileName`, `contentType`, `sizeBytes`, `sha256` and `contentBase64`. The ERP feed can take certificates too: add `pulaski.lot_document.` to its `EventTypes`. A certificate's later events wait behind an undelivered earlier one, as a lot's do. Documents carried to other lots by a split or merge send nothing of their own.
+- **Several API servers** share the work safely: only one sends each feed at a time.
 - **Who.** Anyone who can see Integrations (Administrator, Manager and Auditor to start with) sees the status and the deliveries; retrying and skipping need *integrations.manage* (Administrator to start with). Each retry and skip is recorded as an event with who did it, and a skip keeps its reason on the delivery.
 
 ### In detail
@@ -1360,7 +1362,108 @@ Pulaski can send every inventory movement (received, moved, consumed, produced, 
 
 ---
 
-## 13. Materials
+## 13. Quality: specifications and results
+
+**Configure → Specifications** keeps what each material must meet. **Operate → Quality** records what was measured or inspected, and checks it
+against the material's released specification. You can hold a lot whose result is out of limits, and reject it, which takes it off the good
+output of the run that made it.
+
+### Ideas to know first
+
+- **A characteristic** is something measured, such as a wall thickness in mm or a melt flow index, or something inspected, such as surface defects
+  counted on a sample. Characteristics are shared by every site and material.
+- **A specification** belongs to one material and gives some characteristics their limits:
+  - a measured one has a lower limit, an upper limit or both, and an optional target;
+  - an inspected one has the most defects a sample may have.
+- **Versions, as BOMs.** A specification is edited as a draft, then released. Results are checked against the released version. Releasing a newer
+  one makes the old one obsolete. To change a released specification, start a new draft.
+- **Holds the lot.** For each characteristic, the specification says whether a failing result for a lot puts the lot on hold. Otherwise the result
+  is only flagged.
+- **A result** belongs to a lot, a job or both, at a site, and keeps who recorded it, when the sample was taken, the values or counts, where it
+  came from (at the line or the laboratory), the limits it was checked against and whether it was in specification.
+
+### Add characteristics
+
+1. Open **Configure → Specifications** and click **Characteristics**.
+2. Under **Add a characteristic**, enter a **Code** (upper-case letters, digits, `-` and `_`) and a **Name**.
+3. Choose its **Kind**: **Measured** or **Inspected (defects)**.
+4. For a measured one, choose its **Unit** and how many **Decimals** to show. Add a **Description** if it helps.
+5. Click **Add**.
+
+To change one, click **Change**: the name, description, unit and decimals can change, and **On** switches it off or on. The code and kind
+never change, since results and specifications depend on them.
+
+### Write a specification
+
+1. On **Configure → Specifications**, click **New specification**, choose the **Material** and click **Create and edit**.
+2. Click **Add characteristic** for each line, and choose the characteristic.
+3. For a measured one, fill in **Lower limit**, **Upper limit** (one or both) and, if you like, **Target**. For an inspected one, fill in
+   **Most defects** (0 for none).
+4. Tick **Holds the lot** where a failure should put the lot on hold.
+5. Click **Save draft**. A yellow box lists anything that stops the release, and the lines concerned are highlighted.
+6. Type an optional **Release note** and click **Release version N**.
+
+To change it later, click **New draft**: it starts as a copy of the released version.
+
+### Record a result
+
+1. Open **Operate → Quality**, and choose the site if you have more than one.
+2. Under **Record a result**, find the **Lot**: scan or type its number and click **Find**. To record against a job, open the job's page and click
+   **Quality results** instead: the job is filled in.
+3. Choose the **Characteristic**. Those in the material's released specification come first, with their limits.
+4. For a measured one, type the **Values**: one, or several from one sample, separated by spaces. For an inspected one, type how many were
+   **Inspected** and how many were **Defective**.
+5. Choose the **Source** (**At the line** or **Laboratory**), check **Sampled at** and add a comment if needed.
+6. Click **Record**. Pulaski says whether the result is in specification. If it isn't and the characteristic holds the lot, it says the lot
+   was put on hold.
+
+From a lot's page, **Record a result** under **Quality** opens this form with the lot filled in.
+
+### Leave out a wrong result
+
+1. Find the result: on **Operate → Quality**, or under **Quality** on the lot's page.
+2. Click **Leave out…**, choose why (*Entered in error*, *Sample not representative*) and add a comment.
+3. Click **Leave it out**.
+
+The result stays, marked **Left out**, with who did it and why. It is no longer counted as out of specification. A result is never edited.
+
+### Reject a lot on quality
+
+1. Open the lot's page. It must be on hold (or in quarantine).
+2. Under **Quality**, click **Reject…**.
+3. Choose the **Scrap reason** (*Rejected on quality* is offered first) and type a comment.
+4. Click **Reject the lot**.
+
+Everything left of the lot is written off as scrap. If the lot was made in a run, its quantity moves from good to scrap on that run, at the time
+the lot was made. OEE quality, the job's totals and production by shift all show it.
+
+**In detail**
+
+- **What is checked.** Every value must be within the limits, which count as in specification. An inspected sample may have at most the defects
+  allowed. A characteristic that isn't in the material's released specification is recorded without limits, and Pulaski says so.
+- **Whose specification.** The lot's material, or for a job alone, the material the job makes. The released version at the time of recording is
+  stamped on the result, so a later version never changes what an earlier result was checked against.
+- **Holding.** Only a lot that is available and has stock is put on hold, with the reason *Quality result out of specification* (`OUT-OF-SPEC`)
+  when it exists, and the failure as the comment. A lot already held, used up or gone is left as it is. Release it as usual (see
+  [A lot's page](#a-lots-page)).
+- **Lot attributes.** A number lot attribute can stand for a measured characteristic (**Stands for characteristic** on
+  [Lot attributes](#lot-attributes)). Setting it on a lot records a result, source *lot attribute*, checked and held like any other.
+- **Time.** **Sampled at** can be up to 31 days back, never ahead. A job's result is tied to the run that was open on its line then.
+- **The run's good output** changes only when a lot is rejected. Results alone never change OEE.
+- **The shop order sheet** prints the material's released specification. See [Print a shop order](#print-a-shop-order).
+- **Who.**
+  - Seeing specifications and results needs permission to see quality (Planner, Supervisor, Operator, Quality, Manager, Auditor, Process
+    engineer to start with).
+  - Recording results: Supervisor, Operator and Quality.
+  - Leaving results out and rejecting lots: Quality.
+  - Maintaining characteristics and specifications: Quality and Process engineer.
+- **Where it is recorded:** results in `ts.quality_sample`, with the events `pulaski.quality_result.recorded.v1` and `…excluded.v1`.
+  Specification changes are `pulaski.material_spec.*` and characteristic changes `pulaski.quality_characteristic.*`. A rejection is the lot's
+  `pulaski.lot.written_off.v1`, marked as rejected on quality.
+
+---
+
+## 14. Materials
 
 **Configure → Materials.** Every item and part Pulaski knows about: what you make, what you make it from, and what you pack it in. The page has three tabs, **Materials**, **Classes** and **Lot attributes**.
 
@@ -1617,12 +1720,26 @@ The properties a site records on its lots, such as melt index, moisture or colou
 
 1. Open the **Lot attributes** tab and, with more than one site, choose the site.
 2. Type a **Code** (up to 30 characters, unique in the site; it can't change later) and a **Name**.
-3. Pick its **Type**: *Text*, *Number* (with an optional **Unit**, for display), *Date*, *Yes / no* or *Choice* (type the choices, one per line). The type can't change later.
+3. Pick its **Type**: *Text*, *Number* (with an optional **Unit**, for display), *Date*, *Yes / no* or *Choice* (type the choices, one per line). The type can't change later. A *Number* can also be linked to a measured quality characteristic under **Stands for characteristic**: setting it on a lot then records a [quality result](#13-quality-specifications-and-results), checked against the material's specification.
 4. Leave **For every material** ticked, or untick it and tick the material classes it is for.
 5. Set the **Order** it is listed in, and click **Add attribute**.
-6. To change one, click **Change**: its name, unit, choices, classes, order and whether it is **Active** can change. Click **Save attribute**.
+6. To change one, click **Change**: its name, unit, characteristic, choices, classes, order and whether it is **Active** can change. Click **Save attribute**.
 
 An attribute is never deleted: untick **Active** to stop it being recorded; values already recorded stay and can be searched. The list shows how many lots have a value of each. Removing a choice doesn't change values already recorded. Maintaining lot attributes needs permission to maintain lot attribute definitions (the Quality and Manager roles have it).
+
+**Values in bulk.** Under the list, **Values in bulk** moves many lots' values at once, for example from a supplier's certificate data:
+
+1. Click **Export values** for a file of every recorded value of the site's numbered lots: `lot_number`, `material_code`, then a column per attribute code.
+2. Edit it in a spreadsheet, or make your own file with those columns. Only `lot_number` and the attribute columns you want are needed; add
+   `material_code` when two materials share a lot number.
+3. Pick the file. Pulaski checks it and says what it would change, row by row, or which rows are wrong.
+4. If every row is valid, click **Import**.
+
+A blank cell leaves the value as it is; type `(clear)` to clear one. Values are read as on the lot page: numbers with a decimal point, dates as
+`yyyy-MM-dd`, yes/no, and choices in any case. A lot number is matched in any case. Nothing is saved unless every row is valid, so fix the rows
+it lists and pick the file again. Balances have no lot number, so they aren't in the file. Each value set is recorded as the lot's
+`pulaski.lot.attribute_set.v1`, with the reason *CSV import*, and an attribute standing for a quality characteristic records its result too.
+Importing needs permission to record lot attributes and certificates.
 
 ### In detail
 
@@ -1633,7 +1750,7 @@ An attribute is never deleted: untick **Active** to stop it being recorded; valu
 
 ---
 
-## 14. Users, roles and signing in
+## 15. Users, roles and signing in
 
 Everyone signs in to Pulaski. Your **roles** decide what you **see** and what you can **change**: you see only the screens, and only the sites, your roles allow, and the menu shows nothing else. A role is a set of **permissions**, such as *See inventory*, *Receive lots* or *Plan jobs*. An administrator decides what each role may do and gives each user their roles, each at a **site** (only Administrator is everywhere).
 
@@ -1662,12 +1779,12 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | --- | --- |
 | **Administrator** | Everything, at every site, including users and roles. |
 | **Planner** | The schedule (place, sequence, pin, assign and cancel jobs, and replace one with a partial batch); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; changeover rules; materials; allocating lots to jobs. |
-| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops, and enter, split and merge them; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches. |
-| **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off. |
-| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements. |
+| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops, and enter, split and merge them; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches; record quality results. |
+| **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off; record quality results. |
+| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements; maintain characteristics and specifications; record quality results, leave them out and reject lots on quality. |
 | **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; lot attribute definitions; the site's settings. |
 | **Auditor** | Correct inventory, including reversing consumption, splits, merges and transfers; reverse production reports; stock counts; back-date inventory movements. Can't plan or run jobs. |
-| **Process engineer** | Processes, BOMs, which lines can run each material, and changeover rules. |
+| **Process engineer** | Processes, BOMs, which lines can run each material, changeover rules, and characteristics and specifications. |
 | **Edge node** | Nothing on screen: it is for the user a Pulaski Edge node signs in as, to read its configuration and forward machine data. |
 
 Equipment (with machine profiles and edge nodes), units and retrying or skipping deliveries to the ERP (**Integrations**) belong to the Administrator. Someone with two roles can do what either allows.
@@ -1681,11 +1798,11 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 | Role | Sees |
 | --- | --- |
 | **Administrator**, **Auditor**, **Manager** | Every screen (Users only for Administrator). |
-| **Planner** | Overview, Work orders, Schedule, Floor, Machines, Inventory, Materials, Processes and BOMs, Changeovers, Site settings (to look at). |
-| **Supervisor** | Overview, Work orders (to look at), Floor, Machines, Inventory, Labor, Site settings (to look at). |
-| **Operator** | Overview, Work orders (to look at), Floor, Machines, Inventory. |
-| **Quality** | Overview, Floor, Machines, Inventory, Materials. |
-| **Process engineer** | Equipment, Materials, Processes and BOMs, Units, Schedule, Changeovers. |
+| **Planner** | Overview, Work orders, Schedule, Floor, Machines, Inventory, Quality, Materials, Processes and BOMs, Specifications, Changeovers, Site settings (to look at). |
+| **Supervisor** | Overview, Work orders (to look at), Floor, Machines, Inventory, Quality, Specifications (to look at), Labor, Site settings (to look at). |
+| **Operator** | Overview, Work orders (to look at), Floor, Machines, Inventory, Quality, Specifications (to look at). |
+| **Quality** | Overview, Floor, Machines, Inventory, Quality, Materials, Specifications. |
+| **Process engineer** | Equipment, Materials, Processes and BOMs, Specifications, Units, Schedule, Changeovers. |
 
 - **Start page.** After signing in you land on the Overview, or, if you can't see it, the first screen in the menu you can.
 - **A screen you can't see** isn't in the menu, links to it show as plain text and buttons for it are left out. Typing its address shows **Page not found**.
@@ -1739,7 +1856,7 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 
 ---
 
-## 15. Shift schedules
+## 16. Shift schedules
 
 **Configure → Shifts.** When each site works. Planning places jobs only inside shifts, so a job that would run into a weekend waits for Monday's first shift. A site can have several schedules: two shifts on weekdays for packing, around the clock for extrusion.
 
@@ -1795,14 +1912,14 @@ The schedule list says how many one-off changes are coming up, and the preview w
 
 ---
 
-## 16. Labor, people and crews
+## 17. Labor, people and crews
 
 Who worked on which line, for how long, and against the standard crew. Supervisors check their crew onto a line at the start of a shift, operators can clock themselves on, and at the end a supervisor approves the shift's labor. Pulaski doesn't do payroll or attendance: export the hours for that.
 
 ### Ideas to know first
 
 - **People and crews.** Everyone whose time is recorded is a **person**, with an employee number and usually a **crew**. A person needn't sign in to Pulaski; link one to a Pulaski user to let them clock themselves on.
-- **The crew on shift.** Each shift in a [shift schedule](#15-shift-schedules) can name its crew, so Pulaski knows who should be on. A rotation is several shifts at the same time on different days, each with its crew.
+- **The crew on shift.** Each shift in a [shift schedule](#16-shift-schedules) can name its crew, so Pulaski knows who should be on. A rotation is several shifts at the same time on different days, each with its crew.
 - **Kinds of time.** *Direct* is running the line, *setup* is getting a job ready (it names the job), *indirect* is time off production such as cleaning (it needs a reason), *training* is training.
 - **Jobs change, people don't re-clock.** Direct time on a line counts towards whatever ran on it while the person was there. Time on a line with nothing running is shown as *idle*.
 - **A share of their time.** Someone tending two lines is on each at 50%. A person's time adds up to at most 100%.
@@ -1926,7 +2043,7 @@ Import the same file, or next week's, as often as you like: people are matched o
 
 ---
 
-## 17. Site settings
+## 18. Site settings
 
 **Configure → Site settings.** What applies to a whole site: who places changeovers on the schedule, how far production reports may go, the OEE it aims for, its labels, how it allocates lots, and the holidays and shutdowns when the site doesn't work. Each part has its own **Save** button.
 
@@ -1935,7 +2052,7 @@ Import the same file, or next week's, as often as you like: people are matched o
 - **Changeovers** are the time a line needs between two materials. *Automatic* (the default) lets Pulaski add them to the schedule; *Placed by planners* leaves it to the planners, and Pulaski warns where one is missing. See [Changeovers](#changeovers).
 - **Reporting tolerances** keep production reports believable. The output tolerance is a **limit**: a report that would take a run past its length × the line's ideal rate × the tolerance is refused. The consumption tolerance is a **warning**: using more of a component than planned × the tolerance is recorded, with a warning to check it. Both are 110% to start with.
 - **OEE targets** say what availability, performance, quality and OEE should reach. The site's targets apply to all its equipment; a machine or line can have targets of its own, which replace the site's. Each set of targets applies from a day on, so earlier days keep the targets they had. The OEE report shows each figure against its target.
-- **Calendar exceptions** take time out of the calendar: a holiday, a planned shutdown, a week with no demand. One set on the site covers everything in it; one on an area or line covers that and everything below it, whichever [shift schedule](#15-shift-schedules) it follows. Planning places no work in it.
+- **Calendar exceptions** take time out of the calendar: a holiday, a planned shutdown, a week with no demand. One set on the site covers everything in it; one on an area or line covers that and everything below it, whichever [shift schedule](#16-shift-schedules) it follows. Planning places no work in it.
 
 ### Lot allocations
 
@@ -2043,11 +2160,11 @@ Formats are tried in their **Order**, after GS1; the whole scan must match.
 
 ---
 
-## 18. Machine profiles
+## 19. Machine profiles
 
 **Configure → Machine profiles.** A machine profile describes how one kind of machine reports itself: the values its state tag takes and the PackML state each one means, and its own stop, alarm and warning codes with the utilization reason each one counts as. Identical machines share a profile; machines from different vendors or of different models each get their own. You give each machine its profile on the [Equipment](#machine-data) screen.
 
-Machine data arrives through [edge nodes](#19-edge-nodes-collecting-machine-data): the profile turns what each machine sends into PackML states.
+Machine data arrives through [edge nodes](#20-edge-nodes-collecting-machine-data): the profile turns what each machine sends into PackML states.
 
 ### Ideas to know first
 
@@ -2104,7 +2221,7 @@ If one machine's code means something else than on the others with the same prof
 - **Two people at once:** every change to a profile's lists counts as a change to the profile, so someone saving after another's change is asked to reload.
 - **Errors in a file** name the line: a value that isn't a whole number, an unknown kind, a missing or unknown PackML state, a PackML state on a code row (usually a missing column), a value that appears twice, a name too long, or a reason that isn't an active utilization reason of the site.
 
-## 19. Edge nodes: collecting machine data
+## 20. Edge nodes: collecting machine data
 
 **Configure → Edge nodes.** A Pulaski Edge node is a small program on plant hardware, near the machines. It reads them through an MQTT broker they publish to in **Sparkplug B**, an **OPC UA** server, or straight from an **EtherNet/IP** PLC (Allen-Bradley Logix, Micro800, Omron NJ/NX), keeps what it reads in a buffer on its own disk, and forwards it to Pulaski. If the network or Pulaski goes down, it keeps reading and forwards everything once it can, so nothing is lost.
 
@@ -2112,9 +2229,9 @@ If one machine's code means something else than on the others with the same prof
 
 - **Connections** are where an edge node reads from: an MQTT broker (Pulaski listens as a Sparkplug B host application), an OPC UA server, or a PLC over EtherNet/IP.
 - **Tags** bind a signal to equipment: *this* metric is PACK1's state, *that* one its processed count. The address depends on the connection: Sparkplug B `group/node/device:metric` (such as `Plant1/Packing/PACK-01:Status/StateCurrent`), an OPC UA node id (such as `ns=2;s=Line1.State`), or an EtherNet/IP tag name with its type after `|` (such as `Program:Main.State|dint`; `dint` when left out; also `bool`, `sint`, `int`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`).
-- **What Pulaski does with them.** A state value goes through the equipment's [machine profile](#18-machine-profiles) to its PackML state, and every change of state is kept, with the value the machine sent. The machine's first-out stop code is kept until it runs again. Counter readings become counts, in the job running on the equipment. Losing the signal is recorded as *Undefined*.
+- **What Pulaski does with them.** A state value goes through the equipment's [machine profile](#19-machine-profiles) to its PackML state, and every change of state is kept, with the value the machine sent. The machine's first-out stop code is kept until it runs again. Counter readings become counts, in the job running on the equipment. Losing the signal is recorded as *Undefined*.
 - **Alarms and warnings.** An alarm or warning tag carries the number of the one active now, as PackML's `Admin.Alarm[].ID` does, and 0 for none. A new number clears the one before and raises it, with its message from the machine profile; 0 clears it. A machine may have several alarm and warning tags. They are kept apart from its state and stops.
-- **Process values** (a temperature, a pressure) and **levels** are kept as readings, multiplied by the tag's scale, for looking back over on [Machines](#20-machines-live-status-and-stops).
+- **Process values** (a temperature, a pressure) and **levels** are kept as readings, multiplied by the tag's scale, for looking back over on [Machines](#21-machines-live-status-and-stops).
 
 ### Add an edge node
 
@@ -2140,7 +2257,7 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 ### Watch it work
 
 - The node's heading shows **Forwarding** while it is heard from, **Quiet** after 2 minutes without anything (offline, or nothing changed), and when it was last heard from and its version.
-- **Live** shows each bound machine's PackML state (and the value it sent, where different), since when, its unit mode, latched stop code and speed. Click **Refresh** to update. Its stops are on [Machines](#20-machines-live-status-and-stops).
+- **Live** shows each bound machine's PackML state (and the value it sent, where different), since when, its unit mode, latched stop code and speed. Click **Refresh** to update. Its stops are on [Machines](#21-machines-live-status-and-stops).
 - **Tags** shows each tag's last value.
 
 ### In detail
@@ -2161,14 +2278,14 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 - **Connect the edge.** Add a Sparkplug B connection on the edge node with broker host `localhost`, port `1883` (or the value of `PULASKI_MQTT_PORT` if 1883 is occupied), and group id `Plant1`. If Pulaski Edge runs in the same Docker Compose network as the broker, use host `broker` and port `1883` instead. Bind the three simulator addresses from the Seen tab, for example `Plant1/Extruder/EXT-01-EXT:Status/StateCurrent`, `Plant1/Saw/EXT-01-SAW:Status/StateCurrent` and `Plant1/Packer/PACK1:Status/StateCurrent`. Useful companion metrics include `Status/UnitModeCurrent`, `Status/CurMachSpeed`, and the `Admin/Prod*Count/0/AccCount` counters.
 - **Start a simulated machine.** After a fresh start, wait for its initial `Clearing` transition to finish at `Stopped`. Then Reset takes 1–10 seconds to reach `Idle`; the simulator command tool's `--delay-seconds 12` allows for that before it sends Start. For example, run `dotnet run --project tools/Pulaski.SparkplugCommand -- --host localhost --port 1883 --delay-seconds 12 spBv1.0/Plant1/DCMD/Extruder/EXT-01-EXT Command/Reset=true Command/Start=true`. Change `Extruder/EXT-01-EXT` to `Saw/EXT-01-SAW` or `Packer/PACK1` for the other devices; use the configured broker port if it is not 1883. Start takes another 1–10 seconds to reach `Execute`.
 
-## 20. Machines: live status and stops
+## 21. Machines: live status and stops
 
-**Operate → Machines.** What every machine is doing now, as its [edge node](#19-edge-nodes-collecting-machine-data) reports it, its stops to code, its alarms and warnings, its process values, and its utilization and OEE over past days.
+**Operate → Machines.** What every machine is doing now, as its [edge node](#20-edge-nodes-collecting-machine-data) reports it, its stops to code, its alarms and warnings, its process values, and its utilization and OEE over past days.
 
 ### Ideas to know first
 
 - **A stop** is time a machine isn't executing: it starts when the machine leaves Execute (or loses its signal) and ends when it executes again. The states it passes through on the way (Stopping, Stopped, Resetting…) are one stop.
-- **Its reason.** A stop takes the reason its first-out stop code maps to in the machine's [profile](#18-machine-profiles); with no code, the reason of the first state on its way that has one (Suspended = *Starved*, say). An operator confirms that reason or gives another, and both are kept.
+- **Its reason.** A stop takes the reason its first-out stop code maps to in the machine's [profile](#19-machine-profiles); with no code, the reason of the first state on its way that has one (Suspended = *Starved*, say). An operator confirms that reason or gives another, and both are kept.
 - **Micro-stops** are stops shorter than the machine's micro-stop threshold (5 minutes unless set otherwise on the Equipment screen). They are listed but not coded, and don't count against availability.
 
 ### The status board
@@ -2263,7 +2380,7 @@ A dash means there is nothing to measure that figure against, such as performanc
 - **Counts on the board** are the machine's processed less defective counts in the run open on it.
 - **Each coding is recorded** as an event, with the reason before and after and whether it confirmed the mapped one.
 - **Adjusted stops** (D-069) say where they came from: **Entered by hand**, **Split** or **Merged**, with who did it and why. A replaced stop can't be coded; code the stops that replaced it. A stop entered by hand has no PackML state (it shows *Undefined*), takes the run on the machine at its start, and is coded with the reason given. None of them is a micro-stop, however short: someone said it was a stop. Time between merged stops counts as stop time, even where the machine ran. Each adjustment is recorded as an event with the stops before and after. Splits and merges can be repeated on the stops they made, within 31 days of the stop's start.
-- **Scheduled time** is what the equipment's [shift schedule](#15-shift-schedules) gives it: its shifts, counted towards the day they start on; equipment without shifts (around the clock) is scheduled the whole site-local day. Time outside its shifts isn't counted, and neither is time still to come.
+- **Scheduled time** is what the equipment's [shift schedule](#16-shift-schedules) gives it: its shifts, counted towards the day they start on; equipment without shifts (around the clock) is scheduled the whole site-local day. Time outside its shifts isn't counted, and neither is time still to come.
 - **How each moment counts:** in a unit mode that isn't production time (Maintenance, Manual) it is *non-production*; in a stop it counts by its reason's class: **planned** reasons (setup, changeover, cleaning) are planned stops, **runtime** reasons are run time, **downtime** reasons and uncoded stops are down. A micro-stop is run time. Otherwise executing is run time and anything else is down. Before a machine has sent anything, or while its signal is lost, it is down with *no signal*. Time in a job that counts as planned downtime (planned maintenance) is a planned stop.
 - **Planned time** is scheduled time less non-production modes and planned stops. **Availability** = run time ÷ planned time.
 - **Performance** = output at the ideal rate ÷ run time in jobs. The ideal rate is the line's capability for the material when the run started. Run time with no job running isn't in it (its output can't be reported). **Quality** = good ÷ good and scrap. **OEE** = availability × performance × quality. Output comes from production reports; machine counts aren't reports and aren't used.
@@ -2280,7 +2397,7 @@ A dash means there is nothing to measure that figure against, such as performanc
 
 ---
 
-## 21. Reference
+## 22. Reference
 
 ### Work order statuses
 
@@ -2346,11 +2463,11 @@ An order can count in several tiles (starting today *and* behind, for example).
 
 ### Changeovers
 
-Between two production jobs on different materials, a line needs a changeover. Pulaski sizes it from the plant's [changeover rules](#changeover-rules) (for example *white to grey: 30 minutes*, *grey to white: 2 hours*), or from the line's standard changeover for the incoming material. By default Pulaski inserts these automatically as placeholders and recalculates them as you resequence. A plant can instead choose to have planners place changeover jobs themselves; Pulaski then warns where one is missing. A manager chooses which on [Site settings](#17-site-settings).
+Between two production jobs on different materials, a line needs a changeover. Pulaski sizes it from the plant's [changeover rules](#changeover-rules) (for example *white to grey: 30 minutes*, *grey to white: 2 hours*), or from the line's standard changeover for the incoming material. By default Pulaski inserts these automatically as placeholders and recalculates them as you resequence. A plant can instead choose to have planners place changeover jobs themselves; Pulaski then warns where one is missing. A manager chooses which on [Site settings](#18-site-settings).
 
 ---
 
-## 22. What Pulaski doesn't do yet
+## 23. What Pulaski doesn't do yet
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
@@ -2358,25 +2475,25 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Materials import** from CSV or B2MML files, from an OData v4 connection on demand, or one item at a time through the API. Nothing fetches items on a timer, other kinds of service (plain REST, SOAP, a database) have no connection yet, and there are no adapters for label printing. Capabilities import from CSV only, and only for now: a future or past period is set on the material page. B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
-- **Production is reported by hand.** Machine counts are recorded but aren't production reports, and quality isn't recorded yet. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
+- **Production is reported by hand.** Machine counts are recorded but aren't production reports. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
-- **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Lot attributes aren't in the lots CSV export, can't be imported, and aren't checked against specification limits; certificates aren't sent to the ERP or a document system.
+- **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Only a number attribute standing for a quality characteristic is checked against specification limits. Balances' attribute values aren't in the values file.
 - **Reversing:** a chain undo follows a lot and the lots split off it, not merges into other lots, consumption into jobs or the output made from it; corrections made before this version can't be reversed.
 - **Genealogy through a silo is an estimate** from the declared movements. A level tag's readings confirm when it was empty and check the declared stock (see [How a silo flows](#how-a-silo-flows)), but they don't change how much each arrival gave. A reversed movement and its reversal are left out of the estimate, as if neither happened.
-- **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
+- **Sending to the ERP and a document system** is one HTTPS webhook each, configured in the API's settings (not on a screen). Pulaski doesn't read anything back, so the receivers' answers don't change anything in Pulaski; there is no adapter for a particular ERP's or document system's own API, and no message queue (MQTT, Kafka and the like). A certificate's file goes inline in the event, up to 10 MB; there is no download link for a receiver to fetch it later. The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
 - **Allocations:** the background refresh is all or nothing for a site, and any change anywhere makes it run. Preferences are per site, not per material. A picking list is printed, not confirmed: fetching the lot is still an ordinary move. Approved alternates show only in allocations and on consumption, not in an order's planned components, and only a BOM's approved alternates can be allocated.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** has no quality figures or SPC alerts yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
-- **Released product specifications** are not maintained in Pulaski yet. Shop-order sheets flag this gap and require operators to verify the approved specification elsewhere.
+- **Quality:** there are no SPC charts, control limits or alerts yet, and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
 - **Signing in through your company's identity provider** (Okta, Entra ID, AD FS, Keycloak) isn't built yet: users have Pulaski passwords, and an administrator resets forgotten ones (Pulaski sends no e-mail).
 - **A switched-off button's reason** shows when you point at it with the mouse, but not when you move to it with the keyboard (switched-off buttons are skipped); screen readers announce it as unavailable without the reason. Screens that are view-only for you say so in a note at the top instead.
 - **Only Administrator is held everywhere;** every role you create is held at a site.
 
 ---
 
-## 23. Troubleshooting and questions
+## 24. Troubleshooting and questions
 
 **A component wasn't consumed when I reported production.**
 Check its **Consumed by** in the BOM: only backflush and time window are automatic. Then check what is loaded on **Inventory → Feed points**: the lot must be at a feed point below the job's line, available and not expired. Anything it couldn't cover is listed there to resolve or dismiss.
@@ -2446,7 +2563,7 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 
 ---
 
-## 24. Glossary
+## 25. Glossary
 
 | Term | Meaning |
 | --- | --- |
@@ -2490,10 +2607,10 @@ Read the yellow box: a component that doesn't exist or is inactive, an operation
 | **Ready** | A job that can start: its order is on the floor and its process links are met. |
 | **Reverse** | Undo a movement or declaration with a new movement that puts it back; the original stays in the history. |
 | **Permission** | One kind of change Pulaski lets people make, such as *Receive lots*. Roles hold permissions. |
-| **Role** | A set of permissions, such as Planner or Quality, that an administrator maintains and gives to users at a site (Administrator everywhere). See [Users, roles and signing in](#14-users-roles-and-signing-in). |
+| **Role** | A set of permissions, such as Planner or Quality, that an administrator maintains and gives to users at a site (Administrator everywhere). See [Users, roles and signing in](#15-users-roles-and-signing-in). |
 | **Run** | One stretch of a job running on a line, from a start to a pause or completion. Production and consumption go into a run. |
-| **Labor session** | A stretch of time one person spent on a line: direct, setup, indirect or training. See [Labor](#16-labor-people-and-crews). |
-| **Shift schedule** | When a site works: shifts repeating over a cycle of days. Equipment follows one, inherits its parent's or runs around the clock. See [Shift schedules](#15-shift-schedules). |
+| **Labor session** | A stretch of time one person spent on a line: direct, setup, indirect or training. See [Labor](#17-labor-people-and-crews). |
+| **Shift schedule** | When a site works: shifts repeating over a cycle of days. Equipment follows one, inherits its parent's or runs around the clock. See [Shift schedules](#16-shift-schedules). |
 | **Run standard (planning rate)** | The rate Pulaski plans with for a material on a line: calculated from the ideal rate, or modified by a person. |
 | **Scrap factor** | Extra component quantity planned for losses. |
 | **Sequence** | The order of jobs on a line. |

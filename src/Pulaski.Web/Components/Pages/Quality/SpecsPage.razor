@@ -1,0 +1,131 @@
+@page "/quality/specs"
+@attribute [RequiresView(PermissionCodes.QualityView)]
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+@inject CurrentUser User
+
+<PageTitle>Specifications · Pulaski</PageTitle>
+
+@* Material specifications (#65): what each material must meet, versioned like BOMs. *@
+<div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="mb-1">Specifications</h1>
+        <p class="text-muted mb-0">What each material must meet: its characteristics and their limits. Quality results are checked against the released version.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="quality/characteristics">Characteristics</a>
+        @if (User.Can(PermissionCodes.Specs))
+        {
+            <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New specification</button>
+        }
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Specs" What="maintain specifications" />
+
+@if (_adding)
+{
+    <form class="process-new" @onsubmit="CreateAsync" @onsubmit:preventDefault>
+        <div class="flex-grow-1">
+            <label class="form-label" for="new-material">Material</label>
+            <select id="new-material" class="form-select" @bind="_materialId">
+                <option value="@Guid.Empty">Choose a material…</option>
+                @foreach (var m in _materials.Where(m => _specs?.All(s => s.MaterialId != m.Id) ?? true))
+                {
+                    <option value="@m.Id">@m.Code · @m.Name</option>
+                }
+            </select>
+        </div>
+        <div class="d-flex gap-2 align-self-end">
+            <button type="submit" class="btn btn-primary" disabled="@(_saving || _materialId == Guid.Empty)">Create and edit</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _adding = false">Cancel</button>
+        </div>
+    </form>
+}
+
+@if (_specs is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_specs.Count == 0)
+{
+    <div class="empty-panel">
+        <h2>No specifications yet</h2>
+        <p class="text-muted mb-0">
+            Add the <a href="quality/characteristics">characteristics</a> you measure or inspect first, then a specification for a material with their limits,
+            for example a profile's wall thickness of 3.2 – 3.4 mm.
+        </p>
+    </div>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table align-middle">
+            <thead><tr><th>Material</th><th>Released</th><th>Draft</th><th>Updated</th></tr></thead>
+            <tbody>
+                @foreach (var s in _specs)
+                {
+                    <tr @key="s.Id" class="@(s.IsActive ? "" : "text-muted")">
+                        <td>
+                            <a class="fw-semibold" href="quality/specs/@s.Id">@s.MaterialCode</a>
+                            <div class="small text-muted">@s.MaterialName</div>
+                        </td>
+                        <td>@(s.ReleasedVersion is { } r ? $"Version {r} · {s.ReleasedItems} characteristics" : "—")</td>
+                        <td>
+                            @if (s.DraftVersion is { } d)
+                            {
+                                <span class="chip">Version @d</span>
+                            }
+                        </td>
+                        <td class="small text-muted text-nowrap">@s.UpdatedAt.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) UTC</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<SpecSummaryDto>? _specs;
+    private IReadOnlyList<MaterialDto> _materials = [];
+    private ApiException? _error;
+    private bool _adding;
+    private bool _saving;
+    private Guid _materialId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _materials = await Api.ListMaterialsAsync();
+            _specs = await Api.ListSpecsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var created = await Api.CreateSpecAsync(_materialId);
+            Navigation.NavigateTo($"quality/specs/{created.Id}");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

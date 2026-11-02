@@ -12,6 +12,7 @@ using Pulaski.Contracts.MachineData;
 using Pulaski.Contracts.Materials;
 using Pulaski.Contracts.Overview;
 using Pulaski.Contracts.Processes;
+using Pulaski.Contracts.Quality;
 using Pulaski.Contracts.ReferenceData;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Contracts.Security;
@@ -348,22 +349,29 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ImportMaterialsResponse> RunMaterialConnectionAsync(Guid id, RunMaterialConnectionRequest request, CancellationToken ct = default) =>
         SendAsync<ImportMaterialsResponse>(HttpMethod.Post, $"api/material-connections/{id}/run", request, ct);
 
-    // Outbound deliveries to the ERP (D-061)
+    // Outbound deliveries (D-061): the ERP feed (erp) and the document system's (documents, #78)
 
-    public Task<DeliveryStatusDto> GetErpDeliveryStatusAsync(CancellationToken ct = default) =>
-        GetAsync<DeliveryStatusDto>("api/integrations/erp", ct);
+    public Task<DeliveryStatusDto> GetDeliveryStatusAsync(string feed, CancellationToken ct = default) =>
+        GetAsync<DeliveryStatusDto>($"api/integrations/{feed}", ct);
 
-    public Task<IReadOnlyList<DeliveryDto>> ListErpDeliveriesAsync(string? status, CancellationToken ct = default) =>
-        GetAsync<IReadOnlyList<DeliveryDto>>(status is null ? "api/integrations/erp/deliveries" : $"api/integrations/erp/deliveries?status={status}", ct);
+    public Task<IReadOnlyList<DeliveryDto>> ListDeliveriesAsync(string feed, string? status, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<DeliveryDto>>(Query($"api/integrations/{feed}/deliveries", ("status", status)), ct);
 
-    public Task<RetryDeliveriesResponse> RetryErpDeliveryAsync(Guid id, CancellationToken ct = default) =>
-        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/erp/deliveries/{id}/retry", new { }, ct);
+    public Task<RetryDeliveriesResponse> RetryDeliveryAsync(string feed, Guid id, CancellationToken ct = default) =>
+        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/{feed}/deliveries/{id}/retry", new { }, ct);
 
-    public Task<RetryDeliveriesResponse> SkipErpDeliveryAsync(Guid id, SkipDeliveryRequest request, CancellationToken ct = default) =>
-        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/erp/deliveries/{id}/skip", request, ct);
+    public Task<RetryDeliveriesResponse> SkipDeliveryAsync(string feed, Guid id, SkipDeliveryRequest request, CancellationToken ct = default) =>
+        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/{feed}/deliveries/{id}/skip", request, ct);
 
-    public Task<RetryDeliveriesResponse> RetryFailedErpDeliveriesAsync(CancellationToken ct = default) =>
-        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, "api/integrations/erp/deliveries/retry-failed", new { }, ct);
+    public Task<RetryDeliveriesResponse> RetryFailedDeliveriesAsync(string feed, CancellationToken ct = default) =>
+        SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/{feed}/deliveries/retry-failed", new { }, ct);
+
+    /// <summary>The site's attribute values as the import reads them (#78).</summary>
+    public Task<(byte[] Content, string ContentType, string FileName)> GetLotAttributeValuesCsvAsync(Guid siteId, CancellationToken ct = default) =>
+        GetFileAsync($"api/lot-attributes/values.csv?siteId={siteId}", ct);
+
+    public Task<IReadOnlyList<LotAttributeExportDto>> ListLotAttributeValuesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<LotAttributeExportDto>>($"api/lot-attributes/values?siteId={siteId}", ct);
 
     // Edge nodes, connections and tags (D-050)
 
@@ -1159,6 +1167,66 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ReverseProductionResponse> ReverseProductionReportAsync(Guid jobId, Guid reportId, ReverseProductionRequest request, CancellationToken ct = default) =>
         SendAsync<ReverseProductionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/production/{reportId}/reverse", request, ct);
 
+    // Quality (#65): characteristics, specifications, results, rejecting lots
+
+    public Task<IReadOnlyList<CharacteristicDto>> ListCharacteristicsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<CharacteristicDto>>("api/quality/characteristics", ct);
+
+    public Task<CreatedResponse> CreateCharacteristicAsync(CreateCharacteristicRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/quality/characteristics", request, ct);
+
+    public Task<VersionResponse> UpdateCharacteristicAsync(Guid id, UpdateCharacteristicRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/quality/characteristics/{id}", request, ct);
+
+    public Task<IReadOnlyList<SpecSummaryDto>> ListSpecsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<SpecSummaryDto>>("api/quality/specs", ct);
+
+    public Task<SpecDto> GetSpecAsync(Guid id, CancellationToken ct = default) => GetAsync<SpecDto>($"api/quality/specs/{id}", ct);
+
+    public Task<CreatedResponse> CreateSpecAsync(Guid materialId, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/quality/specs", new CreateSpecRequest { MaterialId = materialId }, ct);
+
+    public Task<SpecVersionDto> GetSpecVersionAsync(Guid specId, Guid versionId, CancellationToken ct = default) =>
+        GetAsync<SpecVersionDto>($"api/quality/specs/{specId}/versions/{versionId}", ct);
+
+    public Task<SaveSpecDraftResponse> SaveSpecDraftAsync(Guid specId, Guid versionId, SaveSpecDraftRequest request, CancellationToken ct = default) =>
+        SendAsync<SaveSpecDraftResponse>(HttpMethod.Put, $"api/quality/specs/{specId}/versions/{versionId}", request, ct);
+
+    public Task<VersionResponse> ReleaseSpecVersionAsync(Guid specId, Guid versionId, ReleaseSpecVersionRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/quality/specs/{specId}/versions/{versionId}/release", request, ct);
+
+    public Task<CreatedResponse> StartSpecDraftAsync(Guid specId, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/quality/specs/{specId}/drafts", new { }, ct);
+
+    /// <summary>The material's released specification, or null when it has none.</summary>
+    public async Task<ReleasedSpecDto?> GetReleasedSpecAsync(Guid materialId, CancellationToken ct = default)
+    {
+        try
+        {
+            return await GetAsync<ReleasedSpecDto>($"api/materials/{materialId}/specification", ct);
+        }
+        catch (ApiException ex) when (ex.Status == (int)HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
+    public Task<IReadOnlyList<QualityResultDto>> ListQualityResultsAsync(
+        Guid? siteId, Guid? materialId = null, Guid? lotId = null, Guid? jobId = null, Guid? characteristicId = null, bool failingOnly = false,
+        DateTimeOffset? from = null, DateTimeOffset? to = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<QualityResultDto>>(Query("api/quality/results",
+            ("siteId", siteId), ("materialId", materialId), ("lotId", lotId), ("jobId", jobId), ("characteristicId", characteristicId),
+            ("failingOnly", failingOnly ? "true" : null), ("from", from?.ToString("o")), ("to", to?.ToString("o"))), ct);
+
+    public Task<QualityResultResponse> RecordQualityResultAsync(Guid siteId, RecordQualityResultRequest request, CancellationToken ct = default) =>
+        SendAsync<QualityResultResponse>(HttpMethod.Post, $"api/quality/results?siteId={siteId}", request, ct);
+
+    public Task<QualityResultDto> ExcludeQualityResultAsync(Guid siteId, Guid id, ExcludeQualityResultRequest request, CancellationToken ct = default) =>
+        SendAsync<QualityResultDto>(HttpMethod.Post, $"api/quality/results/{id}/exclude?siteId={siteId}", request, ct);
+
+    public Task<LotTransactionResponse> RejectLotAsync(Guid lotId, RejectLotRequest request, CancellationToken ct = default) =>
+        SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{lotId}/reject", request, ct);
+
     // Planning rates from run history (D-045)
 
     public Task<RunHistoryRateDto> GetRunHistoryRateAsync(Guid runStandardId, int days, CancellationToken ct = default) =>
@@ -1213,6 +1281,17 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public async Task<ImportMaterialsResponse> ImportChangeoverRulesCsvAsync(Guid siteId, string csv, bool dryRun, CancellationToken ct = default)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"api/changeover-rules/import/csv?siteId={siteId}&dryRun={(dryRun ? "true" : "false")}")
+        {
+            Content = new StringContent(csv, System.Text.Encoding.UTF8, "text/csv"),
+        };
+        using var response = await SendCoreAsync(request, ct);
+        return await ReadAsync<ImportMaterialsResponse>(response, ct);
+    }
+
+    /// <summary>Imports lot attribute values (#78); <paramref name="dryRun"/> checks without saving.</summary>
+    public async Task<ImportMaterialsResponse> ImportLotAttributeValuesAsync(Guid siteId, string csv, bool dryRun, CancellationToken ct = default)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/lot-attributes/values/import?siteId={siteId}&dryRun={(dryRun ? "true" : "false")}")
         {
             Content = new StringContent(csv, System.Text.Encoding.UTF8, "text/csv"),
         };

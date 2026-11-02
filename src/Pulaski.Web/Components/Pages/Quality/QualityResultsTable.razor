@@ -1,0 +1,172 @@
+@using System.Globalization
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* Quality results (#65) as a table: what was found, against which limits, and whether it conformed. A wrong one can be left out, with a reason. *@
+<ProblemAlert Error="_error" />
+@if (Results.Count == 0)
+{
+    <p class="text-muted small mb-0">@Empty</p>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Characteristic</th>
+                    @if (ShowTarget)
+                    {
+                        <th>Lot or job</th>
+                    }
+                    <th>Result</th>
+                    <th>Limits</th>
+                    <th></th>
+                    <th>By</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Results)
+                {
+                    <tr @key="r.Id" class="@(r.IsExcluded ? "text-muted" : r.Conforms == false ? "table-warning" : "")">
+                        <td class="small text-nowrap">@Display.SiteTime(r.OccurredAt, TimeZone)</td>
+                        <td>
+                            <span class="fw-semibold">@r.CharacteristicCode</span>
+                            <div class="small text-muted">@r.CharacteristicName</div>
+                        </td>
+                        @if (ShowTarget)
+                        {
+                            <td class="small">
+                                @if (r.LotId is { } lotId)
+                                {
+                                    <a href="inventory/lots/@lotId">@r.LotLabel</a>
+                                }
+                                @if (r.JobId is { } jobId)
+                                {
+                                    <div><a href="jobs/@jobId">@r.JobNumber</a>@(r.EquipmentCode is { } e ? $" · {e}" : "")</div>
+                                }
+                                <div class="text-muted">@r.MaterialCode</div>
+                            </td>
+                        }
+                        <td class="small">@ResultText(r)</td>
+                        <td class="small">@(r.Limits is { } limits ? $"{limits}{(r.UomCode is { } u && r.DataKind != "attribute" ? " " + u : "")} · v{r.SpecVersionNumber}" : "No limits")</td>
+                        <td class="text-nowrap">
+                            @if (r.IsExcluded)
+                            {
+                                <span class="chip" title="@($"{r.ExclusionReason}{(r.ExcludedNote is { } n ? ": " + n : "")} · {r.ExcludedBy}")">Left out</span>
+                            }
+                            else if (r.Conforms == true)
+                            {
+                                <span class="chip chip-ok">In spec</span>
+                            }
+                            else if (r.Conforms == false)
+                            {
+                                <span class="chip chip-warn">Out of spec</span>
+                            }
+                        </td>
+                        <td class="small text-muted">
+                            @r.RecordedBy · @Display.Label(r.Source)
+                            @if (r.Comment is { } comment)
+                            {
+                                <div>@comment</div>
+                            }
+                            @if (!r.IsExcluded && User.Can(PermissionCodes.QualityDecide, r.SiteId))
+                            {
+                                <button type="button" class="btn btn-sm btn-link p-0" @onclick="() => StartExclude(r)">Leave out…</button>
+                            }
+                        </td>
+                    </tr>
+                    @if (_excluding?.Id == r.Id)
+                    {
+                        <tr @key="@($"{r.Id}-exclude")">
+                            <td colspan="7">
+                                <form class="d-flex flex-wrap gap-2 align-items-end" @onsubmit="ExcludeAsync" @onsubmit:preventDefault>
+                                    <div>
+                                        <label class="form-label small fw-semibold" for="exclude-reason">Why it is left out</label>
+                                        <select id="exclude-reason" class="form-select form-select-sm" @bind="_reasonId">
+                                            <option value="@Guid.Empty">Choose…</option>
+                                            @foreach (var reason in _reasons)
+                                            {
+                                                <option value="@reason.Id">@reason.Name</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <label class="form-label small fw-semibold" for="exclude-comment">Comment</label>
+                                        <input id="exclude-comment" class="form-control form-control-sm" maxlength="1000" @bind="_comment" />
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-primary" disabled="@(_busy || _reasonId == Guid.Empty)">Leave it out</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _excluding = null">Cancel</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<QualityResultDto> Results { get; set; } = [];
+
+    [Parameter] public string? TimeZone { get; set; }
+
+    /// <summary>Show the lot, job and material of each result (off on a lot's own page).</summary>
+    [Parameter] public bool ShowTarget { get; set; } = true;
+
+    [Parameter] public string Empty { get; set; } = "No results.";
+
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private QualityResultDto? _excluding;
+    private IReadOnlyList<ReasonCodeDto> _reasons = [];
+    private Guid _reasonId;
+    private string? _comment;
+    private bool _busy;
+    private ApiException? _error;
+
+    public static string ResultText(QualityResultDto r) =>
+        r.DataKind == "attribute"
+            ? $"{r.Defects} of {r.Inspected} defective"
+            : string.Join(", ", r.Values.Select(v => v.ToString("0.##########", CultureInfo.InvariantCulture)))
+              + (r.UomCode is { } u ? " " + u : "")
+              + (r.Values.Count > 1 && r.Mean is { } mean ? $" (mean {mean.ToString("0.####", CultureInfo.InvariantCulture)})" : "");
+
+    private async Task StartExclude(QualityResultDto result)
+    {
+        _excluding = result;
+        _reasonId = Guid.Empty;
+        _comment = null;
+        try
+        {
+            _reasons = await Api.ListReasonCodesAsync("sample_exclusion", result.SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task ExcludeAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.ExcludeQualityResultAsync(_excluding!.SiteId, _excluding.Id,
+                new ExcludeQualityResultRequest { OccurredAt = _excluding.OccurredAt, ReasonCodeId = _reasonId, Comment = _comment });
+            _excluding = null;
+            await Changed.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

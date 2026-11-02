@@ -10,23 +10,25 @@ using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
 
-/// <summary>Outbound deliveries to the ERP (D-061): how the feed is doing, what failed, and putting it right.</summary>
+/// <summary>Outbound deliveries to the ERP and a document system (D-061, #78): how each feed is doing, what failed, and putting it right.</summary>
 internal static class IntegrationEndpoints
 {
     public static IEndpointRouteBuilder MapIntegrationEndpoints(this IEndpointRouteBuilder routes)
     {
-        var integrations = routes.MapGroup("/integrations/erp").WithTags("Integrations");
+        // One group per feed (D-061, #78): /integrations/erp and /integrations/documents.
+        var integrations = routes.MapGroup("/integrations/{feed:regex(^(erp|documents)$)}").WithTags("Integrations");
 
-        integrations.MapGet("/", async Task<Ok<DeliveryStatusDto>> (IQueryHandler<GetDeliveryStatusQuery, DeliveryStatusDto> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetDeliveryStatusQuery(), ct)))
+        integrations.MapGet("/", async Task<Ok<DeliveryStatusDto>> (string feed, IQueryHandler<GetDeliveryStatusQuery, DeliveryStatusDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetDeliveryStatusQuery(feed), ct)))
         .RequireAny(null, Permissions.IntegrationsView);
 
         integrations.MapGet("/deliveries", async Task<Ok<IReadOnlyList<DeliveryDto>>> (
+            string feed,
             string? status,
             int? limit,
             IQueryHandler<ListDeliveriesQuery, IReadOnlyList<DeliveryDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListDeliveriesQuery(status, limit ?? 200), ct)))
+            TypedResults.Ok(await handler.HandleAsync(new ListDeliveriesQuery(status, limit ?? 200, feed), ct)))
         .RequireAny(null, Permissions.IntegrationsView);
 
         integrations.MapPost("/deliveries/{id:guid}/retry", async Task<Ok<RetryDeliveriesResponse>> (
@@ -40,8 +42,8 @@ internal static class IntegrationEndpoints
         .RequirePermission(Permissions.Integrations);
 
         integrations.MapPost("/deliveries/retry-failed", async Task<Ok<RetryDeliveriesResponse>> (
-            ICommandHandler<RetryFailedDeliveriesCommand, RetryDeliveriesResponse> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new RetryFailedDeliveriesCommand(), ct)))
+            string feed, ICommandHandler<RetryFailedDeliveriesCommand, RetryDeliveriesResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RetryFailedDeliveriesCommand(feed), ct)))
         .RequirePermission(Permissions.Integrations);
 
         // External sources of material master data (D-068): set up by whoever manages integrations, run by whoever manages materials.

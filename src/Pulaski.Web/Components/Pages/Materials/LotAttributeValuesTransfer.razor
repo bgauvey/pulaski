@@ -1,0 +1,116 @@
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+@inject Downloads Downloads
+
+@* Lot attribute values in bulk (#78): export every recorded value of the site's numbered lots, and import them back, all or nothing. *@
+<section class="inv-facts mt-3" aria-labelledby="values-transfer">
+    <h2 class="h6" id="values-transfer">Values in bulk</h2>
+    <p class="small text-muted mb-2">
+        One row per lot: <code>lot_number</code>, <code>material_code</code> (needed only when two materials share a lot number), then a column per
+        attribute code. Values are read as on the lot page. A blank cell leaves the value as it is; <code>(clear)</code> clears it. Balances have no
+        lot number, so they aren't in the file. Nothing is saved until every row is valid.
+    </p>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="ExportAsync">Export values</button>
+        @if (User.Can(PermissionCodes.LotRecords, SiteId))
+        {
+            <InputFile OnChange="PickAsync" accept=".csv,text/csv,text/plain" class="form-control form-control-sm" style="max-width: 24rem"
+                       aria-label="Lot attribute values file" disabled="@_busy" />
+            <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || _check is not { Errors: 0, Applied: false } || _check.Updated == 0)"
+                    @onclick="ImportAsync">Import</button>
+        }
+    </div>
+    <ProblemAlert Error="_error" />
+    @if (_check is { } c)
+    {
+        <p class="small mt-2 mb-1 @(c.Errors > 0 ? "text-danger" : "")">
+            @(c.FileProblems.Count > 0 ? string.Join(" ", c.FileProblems)
+                : c.Errors > 0 ? $"{c.Errors} rows have errors, so nothing can be imported yet. Fix them and pick the file again."
+                : $"{(c.Applied ? "Imported" : "Ready")}: {c.Updated} lots to change, {c.Unchanged} unchanged.")
+        </p>
+        @foreach (var row in c.Rows.Where(r => r.Action == "error"))
+        {
+            <div class="small text-danger">Line @row.Line, @row.Code: @row.Message</div>
+        }
+        @if (c.Errors == 0)
+        {
+            @foreach (var row in c.Rows.Where(r => r.Action == "update").Take(20))
+            {
+                <div class="small text-muted">@row.Code: @string.Join("; ", row.Changes)</div>
+            }
+        }
+    }
+</section>
+
+@code {
+    private const int MaxFileBytes = 5 * 1024 * 1024;
+
+    [Parameter, EditorRequired] public Guid SiteId { get; set; }
+
+    /// <summary>Values changed: the page reloads its counts.</summary>
+    [Parameter] public EventCallback Imported { get; set; }
+
+    private string? _csv;
+    private ImportMaterialsResponse? _check;
+    private bool _busy;
+    private ApiException? _error;
+
+    private async Task ExportAsync()
+    {
+        _error = null;
+        try
+        {
+            var (content, type, name) = await Api.GetLotAttributeValuesCsvAsync(SiteId);
+            await Downloads.FileAsync(name, content, type);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task PickAsync(InputFileChangeEventArgs e)
+    {
+        (_check, _csv, _error) = (null, null, null);
+        if (e.File.Size > MaxFileBytes)
+        {
+            _error = new ApiException(400, "Too large", $"{e.File.Name} is larger than 5 MB; split it.", null);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(MaxFileBytes));
+            _csv = await reader.ReadToEndAsync();
+            _check = await Api.ImportLotAttributeValuesAsync(SiteId, _csv, dryRun: true);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _check = await Api.ImportLotAttributeValuesAsync(SiteId, _csv!, dryRun: false);
+            await Imported.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -46,6 +46,18 @@ public sealed class InMemoryLotRecords(InMemoryInventory inventory) : ILotRecord
 
     public Task<bool> IsSiteAsync(Guid siteId, CancellationToken cancellationToken) => Locked(() => Sites.Contains(siteId));
 
+    public Task<IReadOnlyList<LotAttributeDefinition>> ListAttributeDefinitionsAsync(Guid siteId, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<LotAttributeDefinition>>(() => [.. _attributes.Values.Select(a => a.Value).Where(a => a.SiteId == siteId).OrderBy(a => a.SortOrder)]);
+
+    /// <summary>Lots a test makes findable by number for an attribute import.</summary>
+    public List<LotByNumber> NumberedLots { get; } = [];
+
+    public Task<IReadOnlyList<LotByNumber>> FindLotsByNumberAsync(Guid siteId, IReadOnlyCollection<string> lotNumbers, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<LotByNumber>>([.. NumberedLots.Where(l => lotNumbers.Contains(l.LotNumber, StringComparer.OrdinalIgnoreCase))]);
+
+    public Task<IReadOnlyList<LotAttributeValueRow>> ListValuesAtSiteAsync(Guid siteId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<LotAttributeValueRow>>([]);
+
     public Task<bool> AttributeCodeExistsAsync(Guid siteId, string code, CancellationToken cancellationToken) =>
         Locked(() => _attributes.Values.Any(a => a.Value.SiteId == siteId && a.Value.Code == code));
 

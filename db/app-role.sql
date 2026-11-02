@@ -48,6 +48,9 @@ GRANT SELECT, INSERT, UPDATE ON ts.downtime TO pulaski_app;
 -- through ts.drop_old_process_values.
 GRANT SELECT, INSERT, UPDATE ON ts.equipment_alarm TO pulaski_app;
 GRANT SELECT, INSERT ON ts.process_value TO pulaski_app;
+-- Quality results (#65) are appended; a wrong one is excluded with a reason, which is all that may change.
+GRANT SELECT, INSERT ON ts.quality_sample TO pulaski_app;
+GRANT UPDATE (is_excluded, exclusion_reason_id, excluded_note, excluded_by, excluded_at) ON ts.quality_sample TO pulaski_app;
 -- Daily OEE rollups (#66): rolled again in place, never deleted.
 GRANT SELECT, INSERT, UPDATE ON ts.oee_rollup_site, ts.oee_rollup_day, ts.oee_rollup TO pulaski_app;
 

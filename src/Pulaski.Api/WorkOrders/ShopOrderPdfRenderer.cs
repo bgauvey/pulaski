@@ -45,7 +45,9 @@ public sealed class ShopOrderPdfRenderer
             DrawSectionTitle(page.Graphics, "Jobs", Margin, 250, PageWidth - 2 * Margin);
             DrawText(page.Graphics, "No jobs are currently planned for this work order.", Margin, 268, PageWidth - 2 * Margin, BodyFont, InkColor);
             DrawSectionTitle(page.Graphics, "Specifications", Margin, 306, PageWidth - 2 * Margin);
-            DrawText(page.Graphics, "No released product specifications are configured in Pulaski. Verify the approved specification before production.",
+            DrawText(page.Graphics, shopOrder.Specification is { } spec
+                    ? $"Specification version {spec.VersionNumber}: {string.Join("; ", spec.Items.Select(i => $"{i.Code} {i.Limits}{(i.UomCode is { } u ? " " + u : "")}"))}"
+                    : "No released specification for this material in Pulaski. Verify the approved specification before production.",
                 Margin, 324, PageWidth - 2 * Margin, SmallFont, MutedColor);
             page.Graphics.Dispose();
         }
@@ -293,8 +295,25 @@ public sealed class ShopOrderPdfRenderer
             EnsureRoom(62);
             DrawSectionTitle(_page.Graphics, "SPECIFICATIONS", Margin, _y, PageWidth - 2 * Margin);
             _y += 22;
+            if (shopOrder.Specification is { } spec)
+            {
+                // The released specification (#65): each characteristic with its limits; what holds a lot on failure is marked.
+                DrawText(_page.Graphics, $"{spec.MaterialCode} · version {spec.VersionNumber}", Margin, _y, PageWidth - 2 * Margin, SmallFont, MutedColor);
+                _y += 14;
+                foreach (var item in spec.Items)
+                {
+                    EnsureRoom(15);
+                    DrawFittedText(_page.Graphics, $"{item.Code} · {item.Name}", Margin, _y, 300, SmallFont, InkColor);
+                    DrawFittedText(_page.Graphics, $"{item.Limits}{(item.UomCode is { } unit ? " " + unit : "")}{(item.HoldOnFail ? " · holds the lot" : "")}",
+                        352, _y, PageWidth - Margin - 352, SmallFont, InkColor);
+                    _y += 13;
+                }
+
+                return;
+            }
+
             foreach (var line in Wrap(
-                         "No released product specifications are configured in Pulaski. Verify the current approved specification before production.",
+                         "No released specification for this material in Pulaski. Verify the current approved specification before production.",
                          SmallFont, PageWidth - 2 * Margin))
             {
                 EnsureRoom(15);

@@ -33,6 +33,9 @@ public sealed record LotAttributeDefinition(
 {
     public const int MaxCode = 30;
     public const int MaxName = 100;
+
+    /// <summary>The quality characteristic a number attribute stands for (#65): setting it records a result checked against the specification.</summary>
+    public Guid? CharacteristicId { get; init; }
     public const int MaxChoices = 50;
     public const int MaxText = 500;
 

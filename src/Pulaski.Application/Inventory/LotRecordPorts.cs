@@ -16,12 +16,24 @@ public sealed record LotDocumentContent(Guid SiteId, string FileName, string Con
 /// <summary>A lot as its records need it: its site and its material's class.</summary>
 public sealed record LotRecordContext(Guid SiteId, Guid MaterialId, Guid? MaterialClassId);
 
+/// <summary>A numbered lot at a site, found by its number for an attribute import (#78).</summary>
+public sealed record LotByNumber(Guid LotId, string LotNumber, string MaterialCode, Guid MaterialId, Guid? MaterialClassId);
+
+/// <summary>One recorded attribute value of a numbered lot, for exports (#78).</summary>
+public sealed record LotAttributeValueRow(Guid LotId, string LotNumber, string MaterialCode, string AttributeCode, string Value);
+
 /// <summary>Write side for lot attributes and documents (D-056); runs inside the current <see cref="IUnitOfWork"/>.</summary>
 public interface ILotRecordsRepository
 {
     Task<bool> IsSiteAsync(Guid siteId, CancellationToken cancellationToken);
 
     Task<bool> AttributeCodeExistsAsync(Guid siteId, string code, CancellationToken cancellationToken);
+
+    /// <summary>The site's attribute definitions, switched-off ones too, in their order.</summary>
+    Task<IReadOnlyList<LotAttributeDefinition>> ListAttributeDefinitionsAsync(Guid siteId, CancellationToken cancellationToken);
+
+    /// <summary>The site's numbered lots with any of these numbers (in any case); a number may name lots of several materials.</summary>
+    Task<IReadOnlyList<LotByNumber>> FindLotsByNumberAsync(Guid siteId, IReadOnlyCollection<string> lotNumbers, CancellationToken cancellationToken);
 
     /// <summary>How many of these are active material classes.</summary>
     Task<int> CountActiveClassesAsync(IReadOnlyCollection<Guid> classIds, CancellationToken cancellationToken);
@@ -67,4 +79,7 @@ public interface ILotRecordsReadStore
     Task<IReadOnlyList<LinkedDocument>> ListDocumentsAsync(Guid lotId, CancellationToken cancellationToken);
 
     Task<LotDocumentContent?> GetContentAsync(Guid documentId, CancellationToken cancellationToken);
+
+    /// <summary>Every recorded value of the site's numbered lots, by lot number then attribute order (#78).</summary>
+    Task<IReadOnlyList<LotAttributeValueRow>> ListValuesAtSiteAsync(Guid siteId, CancellationToken cancellationToken);
 }
