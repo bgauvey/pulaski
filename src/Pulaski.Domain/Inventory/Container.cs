@@ -16,10 +16,23 @@ public static class ContainerKinds
 
 /// <summary>
 /// A pallet, tote, box or bin holding lots at a location in a site (D-059). Its lots keep their own identity; moving it moves them. It may sit
-/// inside another container at that one's location (#76): a box on a pallet. Retired, never deleted, and only when empty.
+/// inside another container at that one's location (#76): a box on a pallet. One that <see cref="MixesLots"/> (#93) keeps no lots apart: what
+/// goes in joins its balance of the material, genealogy estimated by its flow (D-060); it holds no containers. Retired, never deleted, and only
+/// when empty.
 /// </summary>
 public sealed record Container(
-    Guid Id, Guid SiteId, string Code, string Kind, Guid LocationId, bool IsActive, DateTimeOffset CreatedAt, string CreatedBy, Guid? ParentId = null)
+    Guid Id,
+    Guid SiteId,
+    string Code,
+    string Kind,
+    Guid LocationId,
+    bool IsActive,
+    DateTimeOffset CreatedAt,
+    string CreatedBy,
+    Guid? ParentId = null,
+    bool MixesLots = false,
+    string FlowModel = FlowModels.Mixed,
+    TimeSpan? MinResidence = null)
 {
     public const int MaxCode = 30;
 
@@ -61,6 +74,11 @@ public sealed record Container(
             throw new DomainRuleException($"{Code} can't go inside {outer.Code}: {outer.Code} is {(outer.Id == Id ? "the same container" : $"inside {Code}")}.");
         }
 
+        if (outer.MixesLots)
+        {
+            throw new DomainRuleException($"Lots mix in {outer.Code}, so it holds no containers; only lots go in.");
+        }
+
         if (outer.Id == ParentId)
         {
             throw new DomainRuleException($"{Code} is already inside {outer.Code}.");
@@ -78,6 +96,32 @@ public sealed record Container(
     {
         EnsureActive("taken out");
         return ParentId is null ? throw new DomainRuleException($"{Code} isn't inside another container.") : this with { ParentId = null };
+    }
+
+    /// <summary>
+    /// Whether lots mix in it, and how they flow for genealogy (#93). Mixing changes only while it holds nothing (<paramref name="stockInside"/> and
+    /// <paramref name="containersInside"/> are zero): mixed stock never turns back into whole lots.
+    /// </summary>
+    /// <exception cref="DomainRuleException">It is retired, mixing would change while it holds something, or it would mix while holding containers.</exception>
+    public Container SetMixing(bool mixesLots, string flowModel, TimeSpan? minResidence, int stockInside, int containersInside)
+    {
+        EnsureActive("changed");
+        if (!FlowModels.All.Contains(flowModel))
+        {
+            throw new DomainRuleException("Mixed or first in, first out (fifo).");
+        }
+
+        if (mixesLots != MixesLots && stockInside > 0)
+        {
+            throw new DomainRuleException($"{Code} holds stock; empty it before {(mixesLots ? "letting lots mix in it" : "keeping lots apart in it")}.");
+        }
+
+        if (mixesLots && containersInside > 0)
+        {
+            throw new DomainRuleException($"{Code} holds containers; take them out before letting lots mix in it.");
+        }
+
+        return this with { MixesLots = mixesLots, FlowModel = flowModel, MinResidence = minResidence is { } r && r > TimeSpan.Zero ? r : null };
     }
 
     /// <summary>Carried along when a container it is inside moves.</summary>

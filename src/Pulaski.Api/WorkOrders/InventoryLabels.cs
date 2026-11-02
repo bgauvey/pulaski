@@ -55,6 +55,7 @@ internal static class InventoryLabels
             ScanCode.ForContainer(container.LabelNo),
             [
                 $"At {container.LocationCode}{(container.ParentContainerCode is { } parent ? $", in {parent}" : "")}",
+                .. container.MixesLots ? ["Lots mix in it"] : Array.Empty<string>(),
                 $"{container.LotCount} {(container.LotCount == 1 ? "lot" : "lots")}{(container.ContainerCount > 0 ? $" and {container.ContainerCount} {(container.ContainerCount == 1 ? "container" : "containers")}" : "")} when printed",
             ],
             gs1 is null ? LabelFormats.Pulaski : format,

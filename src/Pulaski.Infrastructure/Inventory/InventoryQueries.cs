@@ -229,12 +229,15 @@ internal sealed class InventoryQueries(NpgsqlDataSource dataSource) : IInventory
 
     // A balance's quantity movements in the order they count (D-057), with its location's flow settings (D-060).
     private const string BalanceSettingsSql = """
-        SELECT l.id AS lot_id, coalesce(loc.flow_model, 'mixed') AS flow_model, loc.min_residence,
+        SELECT l.id AS lot_id, CASE WHEN ct.mixes_lots THEN ct.flow_model ELSE coalesce(loc.flow_model, 'mixed') END AS flow_model,
+               CASE WHEN ct.mixes_lots THEN ct.min_residence ELSE loc.min_residence END AS min_residence,
                l.material_id, m.base_uom_id, loc.empty_level, loc.level_tolerance, t.id AS level_tag_id, t.uom_id AS level_uom_id
         FROM core.lot l
         JOIN core.material m ON m.id = l.material_id
         LEFT JOIN core.equipment loc ON loc.id = l.location_equipment_id
-        LEFT JOIN core.equipment_tag t ON t.equipment_id = loc.id AND t.tag_role = 'level' AND t.is_active
+        LEFT JOIN core.container ct ON ct.id = l.container_id
+        -- A mixing container's balance (#93) flows by its own settings; the location's level tag is the location's, not the container's.
+        LEFT JOIN core.equipment_tag t ON t.equipment_id = loc.id AND t.tag_role = 'level' AND t.is_active AND l.container_id IS NULL
         WHERE l.id = @Id AND l.is_bulk
         """;
 

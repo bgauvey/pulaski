@@ -1180,6 +1180,9 @@ CREATE TABLE core.container (
     label_no                bigint NOT NULL DEFAULT nextval('core.label_seq') UNIQUE,
     sscc                    text CONSTRAINT container_sscc_ck CHECK (sscc ~ '^[0-9]{18}$'),  -- GS1 SSCC from the site's company prefix (#75)
     parent_container_id     uuid REFERENCES core.container(id),     -- the container it is inside, at its location (#76); no cycles, at most 5 deep
+    mixes_lots              boolean NOT NULL DEFAULT false,         -- lots put in join its balance of their material (#93); changed only while empty
+    flow_model              text NOT NULL DEFAULT 'mixed' CONSTRAINT container_flow_model_ck CHECK (flow_model IN ('mixed','fifo')), -- for genealogy (D-060)
+    min_residence           interval CONSTRAINT container_min_residence_ck CHECK (min_residence IS NULL OR min_residence >= interval '0'),
     is_active               boolean NOT NULL DEFAULT true,
     created_at              timestamptz NOT NULL DEFAULT now(),
     created_by              text NOT NULL,
@@ -1269,8 +1272,10 @@ CREATE INDEX lot_container_ix ON core.lot (container_id) WHERE container_id IS N
 CREATE INDEX lot_material_ix ON core.lot (material_id, site_id) WHERE status IN ('available','on_hold','quarantine');
 CREATE INDEX lot_run_ix ON core.lot (produced_by_run_id);
 CREATE INDEX lot_job_ix ON core.lot (produced_by_job_id) WHERE produced_by_job_id IS NOT NULL;
--- One bulk balance per material and location.
-CREATE UNIQUE INDEX lot_bulk_uq ON core.lot (material_id, location_equipment_id) WHERE is_bulk;
+-- Balances (D-031): one per material and location, outside containers.
+-- A location's balance outside containers, and a mixing container's (#93), each one per material.
+CREATE UNIQUE INDEX lot_bulk_uq ON core.lot (material_id, location_equipment_id) WHERE is_bulk AND container_id IS NULL;
+CREATE UNIQUE INDEX lot_bulk_container_uq ON core.lot (material_id, container_id) WHERE is_bulk AND container_id IS NOT NULL;
 
 -- Supply known to be on its way (D-058): a purchase or transfer the ERP or a person says will arrive, so the shortage check can
 -- show it beside stock. Not a purchase order: Pulaski doesn't place, price or plan them. Receiving a lot against one closes it.
@@ -2285,7 +2290,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0046_lot_pairing'),
     ('0047_feed_automation'),
     ('0048_gs1_labels'),
-    ('0049_nested_containers');
+    ('0049_nested_containers'),
+    ('0050_mixing_containers');
 
 -- =====================================================================
 -- 17. SEED DATA

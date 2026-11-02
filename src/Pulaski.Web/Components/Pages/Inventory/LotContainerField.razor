@@ -26,7 +26,7 @@ else
                     <option value="@Guid.Empty">Choose a container</option>
                     @foreach (var c in _containers)
                     {
-                        <option value="@c.Id">@c.Code · @c.LocationCode@(c.LocationId == Lot.LocationId ? "" : " (moves it there)")</option>
+                        <option value="@c.Id">@c.Code · @c.LocationCode@(c.LocationId == Lot.LocationId ? "" : " (moves it there)")@(c.MixesLots ? " · lots mix: it joins the balance" : "")</option>
                     }
                 </select>
                 <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || _containerId == Guid.Empty)" @onclick="PackAsync">Pack</button>

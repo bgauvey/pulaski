@@ -48,4 +48,25 @@ public class NestedContainerTests
 
         Assert.Throws<DomainRuleException>(() => pallet.Retire(lotsInside: 0, containersInside: 1));
     }
+
+    [Fact]
+    public void A_container_mixes_lots_only_when_set_while_empty_and_then_holds_no_containers()
+    {
+        var gaylord = Make("GAY-1");
+
+        var mixing = gaylord.SetMixing(true, FlowModels.Fifo, TimeSpan.FromMinutes(30), stockInside: 0, containersInside: 0);
+        Assert.Equal((true, FlowModels.Fifo, TimeSpan.FromMinutes(30)), (mixing.MixesLots, mixing.FlowModel, mixing.MinResidence!.Value));
+        Assert.Throws<DomainRuleException>(() => mixing.SetMixing(false, FlowModels.Mixed, null, stockInside: 2, containersInside: 0));
+        Assert.Throws<DomainRuleException>(() => gaylord.SetMixing(true, FlowModels.Mixed, null, stockInside: 0, containersInside: 1));
+
+        // Its flow may change with stock in it; whether it mixes may not.
+        Assert.Equal(FlowModels.Mixed, mixing.SetMixing(true, FlowModels.Mixed, null, stockInside: 2, containersInside: 0).FlowModel);
+
+        var refused = Assert.Throws<DomainRuleException>(() => Make("BOX-1").PackInto(mixing, [], 0));
+        Assert.Contains("holds no containers", refused.Message, StringComparison.Ordinal);
+
+        // It may go on a pallet itself.
+        var pallet = Make("PAL-1");
+        Assert.Equal(pallet.Id, mixing.PackInto(pallet, [], 0).ParentId);
+    }
 }

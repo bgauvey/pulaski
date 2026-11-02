@@ -194,6 +194,9 @@ public interface IInventoryRepository
     Task<Versioned<Lot>?> FindLotForUpdateAsync(Guid siteId, Guid materialId, string lotNumber, CancellationToken cancellationToken);
 
     /// <summary>The bulk balance of a material that isn't lot-tracked at a location, locked.</summary>
+    /// <summary>A mixing container's balance of the material (#93), locked; null when it has none.</summary>
+    Task<Versioned<Lot>?> FindContainerBulkLotForUpdateAsync(Guid materialId, Guid containerId, CancellationToken cancellationToken);
+
     Task<Versioned<Lot>?> FindBulkLotForUpdateAsync(Guid materialId, Guid locationId, CancellationToken cancellationToken);
 
     /// <returns>The new row version.</returns>

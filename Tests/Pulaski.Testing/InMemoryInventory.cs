@@ -188,7 +188,15 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
         lock (_lock)
         {
             return Task.FromResult(_lots.Values.FirstOrDefault(l =>
-                l.Value.IsBulk && l.Value.MaterialId == materialId && l.Value.LocationId == locationId));
+                l.Value.IsBulk && l.Value.ContainerId is null && l.Value.MaterialId == materialId && l.Value.LocationId == locationId));
+        }
+    }
+
+    public Task<Versioned<Lot>?> FindContainerBulkLotForUpdateAsync(Guid materialId, Guid containerId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_lots.Values.FirstOrDefault(l => l.Value.IsBulk && l.Value.MaterialId == materialId && l.Value.ContainerId == containerId));
         }
     }
 

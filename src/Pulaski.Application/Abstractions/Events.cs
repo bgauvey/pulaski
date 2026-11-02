@@ -177,6 +177,7 @@ public static class EventTypes
     public const string EquipmentFlowSet = "pulaski.equipment.flow_set.v1";
     public const string ContainerMoved = "pulaski.container.moved.v1";
     public const string ContainerPacked = "pulaski.container.packed.v1";
+    public const string ContainerMixingSet = "pulaski.container.mixing_set.v1";
     public const string ContainerUnpacked = "pulaski.container.unpacked.v1";
     public const string ContainerRetired = "pulaski.container.retired.v1";
     public const string DeliveryRetried = "pulaski.delivery.retried.v1";

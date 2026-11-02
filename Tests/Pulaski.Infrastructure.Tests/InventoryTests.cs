@@ -977,6 +977,53 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Partial_lots_tipped_into_a_mixing_container_join_its_balance_and_whole_lots_stay_whole_elsewhere()
+    {
+        var plant = await CreatePlantAsync();
+        var hold = await ReasonAsync("hold", "QA-HOLD");
+        async Task<ContainerDto> GetAsync(Guid id) => await QueryAsync<GetContainerQuery, ContainerDto>(new GetContainerQuery(id));
+        async Task<LotSummaryDto> LotAsync(Guid id) => (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(id))).Lot;
+
+        CreatedResponse gaylord = await db.SendAsync(new CreateContainerCommand(plant.Site, null, "bin", plant.Stores, MixesLots: true));
+        CreatedResponse tote = await db.SendAsync(new CreateContainerCommand(plant.Site, null, "tote", plant.Stores));
+        var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "MX-A-" + _suffix, 12m, plant.Kg));
+        var b = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Staging, "MX-B-" + _suffix, 8m, plant.Kg));
+        var c = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "MX-C-" + _suffix, 5m, plant.Kg));
+
+        // A whole lot in an ordinary tote stays itself.
+        await db.SendAsync(new PackLotCommand(c.LotId, await VersionAsync(c.LotId), tote.Id));
+        Assert.Equal((5m, (await GetAsync(tote.Id)).Code), ((await LotAsync(c.LotId)).Quantity, (await LotAsync(c.LotId)).ContainerCode));
+
+        // Two partial lots tipped into the gaylord become one balance there; B comes over from the staging area first.
+        var first = await db.SendAsync(new PackLotCommand(a.LotId, await VersionAsync(a.LotId), gaylord.Id));
+        var second = await db.SendAsync(new PackLotCommand(b.LotId, await VersionAsync(b.LotId), gaylord.Id));
+        Assert.Equal((first.LotId, 20m, (string?)null), (second.LotId, second.Quantity, second.LotNumber));
+        Assert.Contains(second.Warnings, w => w.Code == "commingled");
+        var balance = await LotAsync(second.LotId);
+        Assert.Equal((true, (await GetAsync(gaylord.Id)).Code, plant.StoresCode), (balance.IsBulk, balance.ContainerCode, balance.LocationCode));
+        Assert.Equal((0m, LotStatus.Consumed, (string?)null), ((await LotAsync(b.LotId)).Quantity, (await LotAsync(b.LotId)).Status, (await LotAsync(b.LotId)).ContainerCode));
+        var back = await QueryAsync<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>(new TraceLotQuery(balance.Id, Forward: false));
+        Assert.Equal(new HashSet<Guid> { a.LotId, b.LotId }, back.Where(n => n.Depth == 1).Select(n => n.LotId).ToHashSet());
+
+        // Only available stock goes in; no containers go in; its stock leaves by quantity, not by unpacking; mixing can't be switched off with stock in it.
+        var held = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "MX-H-" + _suffix, 3m, plant.Kg));
+        await db.SendAsync(new ChangeLotStatusCommand(held.LotId, held.Version, LotStatus.OnHold, hold, "Check"));
+        await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new PackLotCommand(held.LotId, await VersionAsync(held.LotId), gaylord.Id)));
+        await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new PackContainerCommand(tote.Id, (await GetAsync(tote.Id)).Version, gaylord.Id)));
+        await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new UnpackLotCommand(balance.Id, await VersionAsync(balance.Id))));
+        await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new SetContainerMixingCommand(gaylord.Id, (await GetAsync(gaylord.Id)).Version, false, FlowModels.Mixed, null)));
+
+        // The gaylord goes on a pallet and travels with it, its balance too; then stock is taken out of it.
+        CreatedResponse pallet = await db.SendAsync(new CreateContainerCommand(plant.Site, null, "pallet", plant.Stores));
+        await db.SendAsync(new PackContainerCommand(gaylord.Id, (await GetAsync(gaylord.Id)).Version, pallet.Id));
+        await db.SendAsync(new MoveContainerCommand(pallet.Id, (await GetAsync(pallet.Id)).Version, plant.Staging));
+        Assert.Equal(plant.StagingCode, (await LotAsync(balance.Id)).LocationCode);
+        await db.SendAsync(new ConsumeLotCommand(balance.Id, plant.Job, 6m, plant.Kg));
+        Assert.Equal(14m, (await LotAsync(balance.Id)).Quantity);
+        Assert.Contains(await QueryAsync<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>(new TraceLotQuery(balance.Id, Forward: false)), n => n.LotId == a.LotId);
+    }
+
+    [Fact]
     public async Task Allocations_set_stock_aside_first_expiry_first_are_used_up_by_consumption_and_refresh_as_stock_changes()
     {
         var plant = await CreatePlantAsync();

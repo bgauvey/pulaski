@@ -37,6 +37,10 @@
                 <option value="@l.Id">@l.Code · @l.Name</option>
             }
         </select>
+        <div class="form-check align-self-center">
+            <input class="form-check-input" type="checkbox" id="ct-mixes" @bind="_mixes" />
+            <label class="form-check-label" for="ct-mixes" title="Lots put in it lose their identity and join one balance per material, like a gaylord of partial bags">Lots mix in it</label>
+        </div>
         <button type="submit" class="btn btn-primary" disabled="@(_busy || _locationId == Guid.Empty)">Add container</button>
     </form>
 }
@@ -74,6 +78,10 @@ else
                                 <Icon Name="chevron-right" Size="16" /><span class="fw-semibold">@c.Code</span>
                             </button>
                             @(c.IsActive ? "" : " · retired")
+                            @if (c.MixesLots)
+                            {
+                                <span class="chip ms-1" title="Lots put in it join one balance per material (@(c.FlowModel == "fifo" ? "first in, first out" : "mixed"))">Mixes lots</span>
+                            }
                         </td>
                         <td>@Display.Label(c.Kind)</td>
                         <td>@c.LocationCode@(c.ParentContainerCode is { } parent ? $" · in {parent}" : "")</td>
@@ -85,6 +93,7 @@ else
                             {
                                 <button type="button" class="btn btn-sm btn-link" @onclick="() => { _moving = c; _toId = Guid.Empty; _packing = null; }">Move…</button>
                                 <button type="button" class="btn btn-sm btn-link" @onclick="() => { _packing = c; _intoId = Guid.Empty; _moving = null; }">Pack into…</button>
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => EditMixing(c)">Mixing…</button>
                                 @if (c.ParentContainerId is not null)
                                 {
                                     <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => TakeOutAsync(c)">Take out of @c.ParentContainerCode</button>
@@ -111,6 +120,26 @@ else
                             </td>
                         </tr>
                     }
+                    @if (_mixing?.Id == c.Id)
+                    {
+                        <tr>
+                            <td colspan="5">
+                                <form class="d-flex flex-wrap gap-2 align-items-center" @onsubmit="SaveMixingAsync" @onsubmit:preventDefault>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="mix-@c.Id" @bind="_mixOn" disabled="@(c.LotCount + c.ContainerCount > 0)" />
+                                        <label class="form-check-label small" for="mix-@c.Id">Lots mix in it@(c.LotCount + c.ContainerCount > 0 ? " (empty it to change)" : "")</label>
+                                    </div>
+                                    <select class="form-select form-select-sm w-auto" aria-label="How it flows" @bind="_mixFlow">
+                                        <option value="mixed">Mixed: everything blends</option>
+                                        <option value="fifo">First in, first out</option>
+                                    </select>
+                                    <input type="number" min="0" class="form-control form-control-sm" style="width: 9rem" placeholder="Min. minutes" aria-label="Minimum residence in minutes" @bind="_mixResidence" />
+                                    <button type="submit" class="btn btn-sm btn-primary" disabled="@_busy">Save</button>
+                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _mixing = null">Cancel</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
                     @if (_packing?.Id == c.Id)
                     {
                         <tr>
@@ -118,7 +147,7 @@ else
                                 <form class="d-flex gap-2" @onsubmit="PackAsync" @onsubmit:preventDefault>
                                     <select class="form-select form-select-sm w-auto" aria-label="Into" @bind="_intoId">
                                         <option value="@Guid.Empty">Put @c.Code and all it holds inside…</option>
-                                        @foreach (var o in _containers.Where(o => o.IsActive && o.Id != c.Id && o.Id != c.ParentContainerId))
+                                        @foreach (var o in _containers.Where(o => o.IsActive && !o.MixesLots && o.Id != c.Id && o.Id != c.ParentContainerId))
                                         {
                                             <option value="@o.Id">@o.Code · @o.LocationCode@(o.LocationId == c.LocationId ? "" : " (moves it there)")</option>
                                         }
@@ -169,6 +198,11 @@ else
     private IReadOnlyList<InventoryLocationDto> _locations = [];
     private ContainerDto? _open;
     private ContainerDto? _packing;
+    private ContainerDto? _mixing;
+    private bool _mixes;
+    private bool _mixOn;
+    private string _mixFlow = "mixed";
+    private int? _mixResidence;
     private Guid _intoId;
     private ContainerDto? _moving;
     private Guid _toId;
@@ -239,8 +273,9 @@ else
 
     private Task CreateAsync() => RunAsync(async () =>
     {
-        await Api.CreateContainerAsync(new CreateContainerRequest { SiteId = Sites.SiteId!.Value, Code = _code, Kind = _kind, LocationId = _locationId });
+        await Api.CreateContainerAsync(new CreateContainerRequest { SiteId = Sites.SiteId!.Value, Code = _code, Kind = _kind, LocationId = _locationId, MixesLots = _mixes });
         _code = null;
+        _mixes = false;
     });
 
     private Task MoveAsync() => RunAsync(async () =>
@@ -251,6 +286,18 @@ else
     });
 
     private Task RetireAsync(ContainerDto c) => RunAsync(() => Api.RetireContainerAsync(c.Id, c.Version));
+
+    private void EditMixing(ContainerDto c) =>
+        (_mixing, _mixOn, _mixFlow, _mixResidence, _moving, _packing) = (c, c.MixesLots, c.FlowModel, c.MinResidenceMinutes, null, null);
+
+    private Task SaveMixingAsync() => RunAsync(async () =>
+    {
+        await Api.SetContainerMixingAsync(_mixing!.Id, new SetContainerMixingRequest
+        {
+            Version = _mixing.Version, MixesLots = _mixOn, FlowModel = _mixFlow, MinResidenceMinutes = _mixResidence,
+        });
+        _mixing = null;
+    });
 
     private Task PackAsync() => RunAsync(async () =>
     {

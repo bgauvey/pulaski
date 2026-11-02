@@ -252,6 +252,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   from `Labels:TemplateDirectory/{set}/{kind}[.{format}].{ext}` (`LabelTemplates`, `LabelPrinting`); scans read GS1, then supplier formats (`receivable`).
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
+- Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the
+  container's balance (`is_bulk`, `container_id` set, unique per material + container; location balances are `container_id IS NULL`), which moves with
+  it, never unpacks, and flows by the container's `flow_model` for genealogy.
 - Lot allocations (D-064, proposed): `core.lot_allocation` (active / consumed / released; one active per job + lot) sets a lot's stock aside for a
   job's planned component; other jobs (recommendations, shortages) see it as taken; consumption into its job uses it up
   (`AllocationUse`), into another warns. `LotRecommendation` (FEFO, then FIFO; only available, unexpired at need time, free stock; every

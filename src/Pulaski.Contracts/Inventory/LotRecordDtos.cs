@@ -162,6 +162,11 @@ public sealed record ContainerDto
 
     /// <summary>How many containers are directly inside it (#76).</summary>
     public int ContainerCount { get; init; }
+
+    /// <summary>Lots put in it mix into one balance per material (#93); with how that stock flows, for genealogy.</summary>
+    public bool MixesLots { get; init; }
+    public string FlowModel { get; init; } = "mixed";
+    public int? MinResidenceMinutes { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public string CreatedBy { get; init; } = "";
     public long Version { get; init; }
@@ -181,6 +186,18 @@ public sealed record CreateContainerRequest
     public string? Code { get; init; }
     public string Kind { get; init; } = "pallet";
     public Guid LocationId { get; init; }
+
+    /// <summary>Lots put in it mix into one balance per material (#93).</summary>
+    public bool MixesLots { get; init; }
+}
+
+/// <summary>Whether lots mix in a container, and how they flow for genealogy (#93).</summary>
+public sealed record SetContainerMixingRequest
+{
+    public long Version { get; init; }
+    public bool MixesLots { get; init; }
+    public string FlowModel { get; init; } = "mixed";
+    public int? MinResidenceMinutes { get; init; }
 }
 
 public sealed record MoveContainerRequest

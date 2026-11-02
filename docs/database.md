@@ -1032,6 +1032,9 @@ Holds lots that keep their own identity (`core.lot.container_id`); moving it mov
 | `label_no` | bigint | no | Its label number, unique; the barcode carries `PUL1C` + this. |
 | `sscc` | text | yes | Its GS1 SSCC, 18 digits (`container_sscc_ck`), unique (`container_sscc_uq`): given when it is made, from its site's company prefix and next serial, if the site has a prefix then (#75). |
 | `parent_container_id` | uuid → container | yes | The container it is inside, at that one's location (#76, D-081); never itself (`container_parent_ck`) or anything inside it, at most five deep. Indexed. |
+| `mixes_lots` | boolean | no | Lots packed into it join its balance of their material (#93, D-082); changed only while it is empty. Such a container holds no containers. |
+| `flow_model` | text | no | How its balances flow, for genealogy (D-060): `mixed` (default) or `fifo` (`container_flow_model_ck`). |
+| `min_residence` | interval | yes | The least time material stays in it before it can leave (D-060). |
 | `is_active` | boolean | no | False once retired, which needs it empty; never deleted. |
 | `created_at`, `created_by` | timestamptz, text | no | When and by whom. |
 | `updated_at` | timestamptz | no | Last change. |
@@ -1081,7 +1084,7 @@ One row per site, made with the defaults the first time it is changed or a conta
 
 ### core.lot — current state of each lot · *In use*
 
-A balance (`is_bulk`) is the one quantity of a material at a location: for a material that isn't lot-tracked (D-027), or for any material at a location whose lots are indistinguishable (`commingles_lots`, D-031). It has no lot number, is unique per material and location, and stays `available` at zero.
+A balance (`is_bulk`) is the one quantity of a material at a location: for a material that isn't lot-tracked (D-027), or for any material at a location whose lots are indistinguishable (`commingles_lots`, D-031). It has no lot number, is unique per material and location, and stays `available` at zero. A container whose lots mix (#93, D-082) keeps its own balance per material, unique per material and container, which moves with it.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1093,7 +1096,7 @@ A balance (`is_bulk`) is the one quantity of a material at a location: for a mat
 | `quantity` | qty | no | Current quantity; the running result of its lot events. Zero or more, never negative. |
 | `uom_id` | uuid → uom | no | Its unit: the material's base unit. |
 | `location_equipment_id` | uuid → equipment | yes | Where it is now. Required for a bulk lot. |
-| `is_bulk` | boolean | no | The one balance of a material that isn't lot-tracked at its location. |
+| `is_bulk` | boolean | no | A balance: the one of a material at a location outside containers (`lot_bulk_uq`), or in a mixing container (`container_id` set, `lot_bulk_container_uq`, #93). |
 | `produced_by_job_id` | uuid → job | yes | The job that declared it produced (D-027). |
 | `produced_by_run_id` | uuid → job_run | yes | The run that made it; filled once execution exists. |
 | `origin` | text | no | `produced`, `received`, `erp`, `split` or `merge`. A lot split off another is `split` (D-030). |

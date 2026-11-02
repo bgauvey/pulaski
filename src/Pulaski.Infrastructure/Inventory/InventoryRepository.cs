@@ -41,7 +41,14 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     private const string FindBulkForUpdate = $"""
         SELECT {LotColumns} FROM core.lot
-        WHERE material_id = @MaterialId AND location_equipment_id = @LocationId AND is_bulk
+        WHERE material_id = @MaterialId AND location_equipment_id = @LocationId AND is_bulk AND container_id IS NULL
+        FOR UPDATE
+        """;
+
+    // A mixing container's balance of a material (#93).
+    private const string FindContainerBulkForUpdate = $"""
+        SELECT {LotColumns} FROM core.lot
+        WHERE material_id = @MaterialId AND container_id = @ContainerId AND is_bulk
         FOR UPDATE
         """;
 
@@ -332,6 +339,10 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
     public async Task<Versioned<Lot>?> FindBulkLotForUpdateAsync(Guid materialId, Guid locationId, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<LotRow>(
             FindBulkForUpdate, new { MaterialId = materialId, LocationId = locationId }, cancellationToken))?.ToVersioned();
+
+    public async Task<Versioned<Lot>?> FindContainerBulkLotForUpdateAsync(Guid materialId, Guid containerId, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<LotRow>(
+            FindContainerBulkForUpdate, new { MaterialId = materialId, ContainerId = containerId }, cancellationToken))?.ToVersioned();
 
     public Task<long> InsertLotAsync(Lot lot, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(

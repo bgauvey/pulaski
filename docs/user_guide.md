@@ -1230,7 +1230,7 @@ The **Locations** tab lists every piece of equipment that holds inventory, with 
 
 Pallets, totes, boxes and bins that hold lots, and other containers (boxes on a pallet). Each lot inside keeps its own number, history and genealogy; moving the container moves everything in it.
 
-1. Open **Inventory → Containers** and choose the **kind**, an optional **code** (blank makes one such as *PAL-1042*) and **where it is**. Click **Add container**.
+1. Open **Inventory → Containers** and choose the **kind**, an optional **code** (blank makes one such as *PAL-1042*) and **where it is**. Tick **Lots mix in it** for a container whose contents physically blend, such as a gaylord partial bags are tipped into (see below). Click **Add container**.
 2. **Pack a lot** into it from the lot's page (**Container → Pack…**, then choose the container) or by [scanning](#scan-labels). A lot elsewhere is moved to the container's location as it is packed. To pack part of a lot, split it first.
 3. **Move…** a container to move it and everything in it: its lots, the containers inside it and their lots.
 4. **Pack into…** puts a container inside another (a box on a pallet). If the other one is somewhere else, the container and everything in it move there. **Take out of …** takes it off again; it stays where it is.
@@ -1242,6 +1242,13 @@ Pallets, totes, boxes and bins that hold lots, and other containers (boxes on a 
 - **Leaving a container.** A lot moved on its own, split off, or used up (consumed, shipped or written off to zero) leaves its container. A part split off is loose.
 - **Where containers can be:** any location that holds inventory at the site, except one where lots mix into balances (a silo), since a container keeps its lots apart. A location that takes one material at a time only takes a container whose lots are that material.
 - **Mixed contents** are allowed: a container can hold lots of several materials, and containers beside lots. Balances of materials that aren't lot-tracked can't be packed.
+- **Containers where lots mix.** Whole lots keep their identity in containers until they are put into a container where lots mix (**Mixes lots** on the list). There they lose it: each lot packed in joins the container's one balance of its material, and the lot goes to zero, linked to the balance in genealogy, as at a silo.
+  - **What goes in:** only available, unexpired lots. A lot elsewhere is moved to the container first.
+  - **Genealogy:** traces through the balance are narrowed by the container's flow (**Mixing…**: mixed or first in, first out, and a minimum residence), as for a silo; see [How a silo flows](#how-a-silo-flows).
+  - **What comes out:** the balance's stock leaves by consumption, a move of a quantity, or a write-off, never by unpacking. The balance moves with the container.
+  - **Containers:** such a container holds no containers, but it can sit on a pallet and travel with it.
+  - **Changing it:** **Mixing…** switches mixing on or off only while the container is empty, so mixed stock never turns back into whole lots. Its flow can change at any time.
+  - **Recall scope:** a trace forward from a lot tipped in reaches everything taken from the container's balance afterwards.
 - **Containers inside containers.** A container sits inside at most one other, at that one's location, and never inside itself or anything inside it. Nesting goes at most five deep (a pallet of cases of boxes is three). A container moved on its own leaves the one it was in, as a lot moved alone leaves its container. Each lot that moves along records its own movement, naming the container it is in.
 - **History.** Packing, unpacking and moving with a container are ordinary movements in each lot's history (*Packed into …*, *Unpacked out of …*, *Moved with …*), and `pulaski.lot.packed.v1`, `…unpacked.v1` and `pulaski.container.created.v1` / `…moved.v1` / `…packed.v1` / `…unpacked.v1` / `…retired.v1` in the event log. Genealogy isn't touched: a container isn't a lot.
 - **Who:** containers, packing and unpacking need permission to move lots.

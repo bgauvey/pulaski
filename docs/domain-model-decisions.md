@@ -1953,6 +1953,31 @@ deadlock; the cycle check then refuses one.
 
 **Not done:** splitting a container's contents onto several in one step.
 
+## Containers that mix lots (D-082, proposed)
+
+Issue #93. Whole lots kept their identity in every container (D-059, D-081); only fixed locations could mix lots (D-031). But some containers
+physically blend what goes in: partial bags tipped into a gaylord, offcuts into a regrind tote.
+
+**Rule.** Whole lots stay distinct until they are put into a container that mixes lots; from then on they are indistinguishable there.
+
+- **The setting.** `core.container.mixes_lots`, chosen when the container is made. `SetContainerMixingCommand` (`PUT
+  /api/inventory/containers/{id}/mixing`, `lot.move`) changes it only while the container holds no stock and no containers
+  (`Container.SetMixing`); the flow model and minimum residence (as D-060) change at any time.
+- **Arrival.** `PackLotCommand` into a mixing container takes only available stock. It writes the ordinary `packed` row (moving the lot to the
+  container's location), then `Commingling.MergeArrivalAsync` merges it into the container's balance of the material, with merge genealogy,
+  the earliest expiry and lot records carried, exactly as at a mixing location.
+- **Balances per container.** A container's balance has `container_id` set and is unique per material and container
+  (`lot_bulk_container_uq`). A location's balance is now one per material and location outside containers (`lot_bulk_uq … AND container_id IS
+  NULL`; `FindBulkLotForUpdateAsync` ignores container balances). It moves with the container (D-081 carrying), never unpacks (`Lot.Unpack`),
+  and leaves by consumption, a transfer by quantity or a write-off. A lot merged out goes to zero and leaves its container (D-059).
+- **Genealogy.** The balance history reads the container's flow when its balance is in a mixing container (no level tag: that is the
+  location's), so traces are narrowed as through a silo.
+- **Containers.** A mixing container holds no containers (`Container.PackInto` refuses it as the outer one) but may sit inside others.
+- Lock order is unchanged: container, then lot, then balance; moving locks the container, those inside, then their lots and balances in id
+  order. Event `pulaski.container.mixing_set.v1`.
+
+**Not done:** transferring a balance's quantity into a mixing container (only whole lots are packed in).
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

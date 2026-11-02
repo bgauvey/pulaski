@@ -393,7 +393,7 @@ internal static class InventoryEndpoints
             ICommandHandler<CreateContainerCommand, CreatedResponse> handler,
             CancellationToken ct) =>
         {
-            var created = await handler.HandleAsync(new CreateContainerCommand(request.SiteId, request.Code, request.Kind, request.LocationId), ct);
+            var created = await handler.HandleAsync(new CreateContainerCommand(request.SiteId, request.Code, request.Kind, request.LocationId, request.MixesLots), ct);
             return TypedResults.Created($"/api/inventory/containers/{created.Id}", created);
         })
         .RequirePermission(Permissions.LotMove, Site.FromBody<CreateContainerRequest>(SiteOf.Equipment, r => r.SiteId));
@@ -412,6 +412,15 @@ internal static class InventoryEndpoints
             ICommandHandler<RetireContainerCommand, VersionResponse> handler,
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new RetireContainerCommand(id, request.Version), ct)))
+        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Container));
+
+        // Whether lots mix in it (#93), and how they flow for genealogy.
+        containers.MapPut("/{id:guid}/mixing", async Task<Ok<VersionResponse>> (
+            Guid id,
+            SetContainerMixingRequest request,
+            ICommandHandler<SetContainerMixingCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetContainerMixingCommand(id, request.Version, request.MixesLots, request.FlowModel, request.MinResidenceMinutes), ct)))
         .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Container));
 
         // Into another container, or (with none) out of the one it is in (#76).
