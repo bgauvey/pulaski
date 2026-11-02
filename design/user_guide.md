@@ -2078,7 +2078,7 @@ The file's first line names the columns, in any order and case:
 | `category` | The vendor's grouping, such as *Mechanical*. Optional. |
 | `reason` | The code of the utilization reason it counts as, such as `JAM`. Optional. |
 
-**Each kind in the file replaces that list:** its rows are added or changed, and entries of that kind the file leaves out are switched off. A kind the file doesn't mention stays as it is, so a file of stop reasons only keeps the states. An example file is `docs/samples/machine-profile-example.csv`. **Export CSV** saves the profile's active entries in the same format, to edit and import again.
+**Each kind in the file replaces that list:** its rows are added or changed, and entries of that kind the file leaves out are switched off. A kind the file doesn't mention stays as it is, so a file of stop reasons only keeps the states. An example file is `design/samples/machine-profile-example.csv`. **Export CSV** saves the profile's active entries in the same format, to edit and import again.
 
 ### Change a profile
 
