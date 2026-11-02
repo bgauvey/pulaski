@@ -307,6 +307,7 @@ Groups materials (e.g. all resins), so processes and changeover rules can match 
 | `base_uom_id` | uuid → uom | no | The unit it is counted in by default. Fixed once the material is in use, whatever its origin (D-033). |
 | `shelf_life_days` | integer | yes | A new lot received or produced without an expiry expires this many days after it arrives (D-032). |
 | `gtin` | text | yes | Its GS1 trade item number as 14 digits (`material_gtin_ck`), unique (`material_gtin_uq`); on GS1 lot labels and for reading scanned GS1 or supplier codes (#75, D-080). |
+| `lead_time_days` | integer | yes | How many days supply of it takes to come, 1 to 3650 (`material_lead_time_ck`); shortages needed sooner are flagged (#83, D-083). |
 | `batch_size` | numeric(18,6) | yes | Made in batches of this many base units (D-036): orders and jobs are whole batches, and production is reported batch by batch. Null for a material made continuously. Pulaski-owned. |
 | `batch_tolerance_pct` | numeric(5,2) | no | Under the `near` rule, how far a batch may be from `batch_size`, 0 to 50. Default 2. |
 | `batch_rule` | text | yes | `exact` (every batch is the batch size; a partial batch waits for approval) or `near` (within the tolerance; a partial batch is accepted). Set exactly when `batch_size` is (`material_batch_ck`); defaults from the type, `exact` for finished goods. |
@@ -1122,11 +1123,22 @@ A purchase or transfer someone (or the ERP) says will arrive, for the shortage c
 | `expected_at` | timestamptz | no | When it is due. Indexed with site and material for open ones (`expected_receipt_open_ix`). |
 | `reference`, `supplier`, `note` | text | yes | A PO, transfer or ASN number; the supplier; a note. |
 | `status` | text | no | `open`, `received` or `cancelled`. Only open ones count. |
-| `received_lot_id` | uuid → lot | yes | The lot received against it; set only when `received` (`expected_receipt_received_ck`). |
+| `received_lot_id` | uuid → lot | yes | The latest lot received against it; every one is in `expected_receipt_lot` (#83). |
+| `received_qty` | qty | no | What has arrived against it so far, in its unit (`expected_receipt_received_qty_ck`, ≥ 0). It stays `open` until this reaches `quantity`, or is closed as complete (#83, D-083). |
 | `external_system`, `external_key` | text | yes | The ERP that sent it and its key there; both or neither (`expected_receipt_external_ck`), unique together (`expected_receipt_external_uq`). |
 | `created_at`, `created_by` | timestamptz, text | no | When and by whom. |
 | `updated_at` | timestamptz | no | Last change. |
 
+
+### core.expected_receipt_lot — lots received against an expected receipt (#83, D-083) · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `expected_receipt_id` | uuid → expected_receipt | no | Indexed. |
+| `lot_id` | uuid → lot | no | The lot received. |
+| `quantity` | qty | no | How much of the receipt counted toward it, in the expected receipt's unit. |
+| `received_at`, `received_by` | timestamptz, text | no | When and by whom. Receipts closed before migration 0051 were filled in with the expected quantity. |
 ### core.lot_attribute — lot attribute definitions (D-056) · *In use*
 
 What a site records on its lots, such as melt index. Kept beside the lot, so recording values never changes `core.lot` or `ts.lot_event`.

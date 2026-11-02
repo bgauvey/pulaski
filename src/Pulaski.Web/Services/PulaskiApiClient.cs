@@ -741,6 +741,12 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<PrintLabelsResponse> PrintLabelsAsync(PrintLabelsRequest request, CancellationToken ct = default) =>
         SendAsync<PrintLabelsResponse>(HttpMethod.Post, "api/labels/print", request, ct);
 
+    public Task<VersionResponse> SetMaterialLeadTimeAsync(Guid materialId, SetMaterialLeadTimeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/materials/{materialId}/lead-time", request, ct);
+
+    public Task<VersionResponse> CompleteExpectedReceiptAsync(Guid id, long version, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/expected-receipts/{id}/complete", new CancelExpectedReceiptRequest { Version = version }, ct);
+
     public Task<VersionResponse> SetMaterialGtinAsync(Guid materialId, SetMaterialGtinRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/materials/{materialId}/gtin", request, ct);
 

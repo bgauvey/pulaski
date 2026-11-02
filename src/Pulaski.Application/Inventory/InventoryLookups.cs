@@ -98,7 +98,8 @@ internal sealed class GetShortagesHandler(
             var converter = UnitConversions.For(receipt.MaterialId, allUnits, conversions);
             if (converter.Factor(receipt.UomId, baseUom.BaseUomId) is { } factor)
             {
-                incoming.Add(new IncomingSupply(receipt.MaterialId, receipt.ExpectedAt, Math.Round(receipt.Quantity * factor, 6, MidpointRounding.AwayFromZero)));
+                // Only what is still expected (#83): a partly received one counts for the rest.
+                incoming.Add(new IncomingSupply(receipt.MaterialId, receipt.ExpectedAt, Math.Round(receipt.RemainingQty * factor, 6, MidpointRounding.AwayFromZero)));
             }
             else
             {
@@ -121,7 +122,7 @@ internal sealed class GetShortagesHandler(
             LiveTiming = live,
             Problems = problems,
             Materials = [.. results
-                .Select(r => ToDto(r, materials[r.MaterialId], stock.GetValueOrDefault(r.MaterialId), jobs, times, nextIncoming.TryGetValue(r.MaterialId, out var n) ? n : null))
+                .Select(r => ToDto(r, materials[r.MaterialId], stock.GetValueOrDefault(r.MaterialId), jobs, times, nextIncoming.TryGetValue(r.MaterialId, out var n) ? n : null, now))
                 .OrderByDescending(m => m.Shortfall > 0)
                 .ThenBy(m => m.FirstShortAt is null)
                 .ThenBy(m => m.FirstShortAt)
@@ -155,8 +156,10 @@ internal sealed class GetShortagesHandler(
 
     private static MaterialShortageDto ToDto(
         MaterialShortage shortage, ComponentDemandRow material, MaterialAvailabilityRow? stock, Dictionary<Guid, ComponentDemandRow> jobs,
-        Dictionary<Guid, DateTimeOffset> times, DateTimeOffset? nextIncoming) => new()
+        Dictionary<Guid, DateTimeOffset> times, DateTimeOffset? nextIncoming, DateTimeOffset now) => new()
         {
+            LeadTimeDays = material.LeadTimeDays,
+            CantArriveInTime = shortage.Lines.Any(l => ShortageCalculator.CantArriveInTime(l, material.LeadTimeDays, now)),
             MaterialId = shortage.MaterialId,
             MaterialCode = material.MaterialCode,
             MaterialName = material.MaterialName,
@@ -190,6 +193,7 @@ internal sealed class GetShortagesHandler(
                     FromStock = l.FromStock,
                     FromIncoming = l.FromIncoming,
                     Uncovered = l.Uncovered,
+                    CantArriveInTime = ShortageCalculator.CantArriveInTime(l, material.LeadTimeDays, now),
                 };
             })],
         };

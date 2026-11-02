@@ -34,6 +34,9 @@ public sealed record ImportMaterialCommand(
 /// <summary>Sets or clears a material's GTIN (#75): 8, 12, 13 or 14 digits with a right check digit, kept as 14; one material per GTIN.</summary>
 public sealed record SetMaterialGtinCommand(Guid Id, long ExpectedVersion, string? Gtin) : ICommand<VersionResponse>;
 
+/// <summary>Sets or clears a material's lead time (#83): 1 to 3650 days. Shortages needed sooner than that are flagged; nothing is ordered.</summary>
+public sealed record SetMaterialLeadTimeCommand(Guid Id, long ExpectedVersion, int? LeadTimeDays) : ICommand<VersionResponse>;
+
 public sealed record CreateMaterialClassCommand(string Code, string Name) : ICommand<CreatedResponse>;
 
 public sealed record UpdateMaterialClassCommand(Guid Id, long ExpectedVersion, string Name, bool IsActive) : ICommand<VersionResponse>;
@@ -180,6 +183,30 @@ internal sealed class SetMaterialGtinHandler(IUnitOfWork unitOfWork, IMaterialAd
 
         var envelope = events.Create(EventTypes.MaterialUpdated, "material", current.Value.Id, new { current.Value.Code, Gtin = gtin });
         var version = await materials.SetGtinAsync(current.Value.Id, gtin, envelope.OccurredAt, cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new VersionResponse(version);
+    }
+}
+
+internal sealed class SetMaterialLeadTimeHandler(IUnitOfWork unitOfWork, IMaterialAdminRepository materials, IEventLog eventLog, IEventFactory events)
+    : ICommandHandler<SetMaterialLeadTimeCommand, VersionResponse>
+{
+    public async Task<VersionResponse> HandleAsync(SetMaterialLeadTimeCommand command, CancellationToken cancellationToken)
+    {
+        new Validator()
+            .Require(command.LeadTimeDays is null or (>= 1 and <= 3650), nameof(command.LeadTimeDays), "1 to 3650 days, or blank for none.")
+            .ThrowIfInvalid();
+
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var current = await materials.GetForUpdateAsync(command.Id, cancellationToken) ?? throw new NotFoundException($"Material {command.Id} not found.");
+        if (current.Version != command.ExpectedVersion)
+        {
+            throw new ConflictException($"{current.Value.Code} was changed by someone else. Reload and try again.");
+        }
+
+        var envelope = events.Create(EventTypes.MaterialUpdated, "material", current.Value.Id, new { current.Value.Code, command.LeadTimeDays });
+        var version = await materials.SetLeadTimeAsync(current.Value.Id, command.LeadTimeDays, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new VersionResponse(version);

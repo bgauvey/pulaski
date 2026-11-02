@@ -1024,6 +1024,45 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task An_expected_receipt_takes_partial_receipts_until_complete_and_a_lead_time_flags_shortages_too_soon_to_cover()
+    {
+        var plant = await CreatePlantAsync();
+        async Task<ExpectedReceiptDto> ExpectedAsync(Guid id) =>
+            (await QueryAsync<ListExpectedReceiptsQuery, IReadOnlyList<ExpectedReceiptDto>>(new ListExpectedReceiptsQuery(plant.Site, IncludeClosed: true))).Single(r => r.Id == id);
+        async Task<MaterialShortageDto> ResinAsync() =>
+            Assert.Single((await QueryAsync<GetShortagesQuery, ShortageReportDto>(new GetShortagesQuery(plant.Site))).Materials);
+
+        // 1000 kg expected now, in grams, against a job needing 1450 kg.
+        CreatedResponse po = await db.SendAsync(new CreateExpectedReceiptCommand(plant.Site, plant.Resin, 1_000_000m, plant.Gram, DateTimeOffset.UtcNow.AddMinutes(-5), "PO-P-" + _suffix, null, null));
+
+        // 400 kg arrives against it: counted in its own unit, it stays open for the other 600 kg, which is all the shortage check counts as coming.
+        var first = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-P1-" + _suffix, 400m, plant.Kg, ExpectedReceiptId: po.Id));
+        var part = await ExpectedAsync(po.Id);
+        Assert.Equal(("open", 400_000m, 600_000m, first.LotId, 1), (part.Status, part.ReceivedQty, part.RemainingQty, part.ReceivedLotId!.Value, part.ReceivedLotCount));
+        var resin = await ResinAsync();
+        Assert.Equal((400m, 600m, 450m), (resin.Available, resin.Incoming, resin.Shortfall));
+
+        // Cancelling it now is refused; closing it as complete keeps what arrived and expects no more.
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CancelExpectedReceiptCommand(po.Id, part.Version)));
+        await db.SendAsync(new CompleteExpectedReceiptCommand(po.Id, part.Version));
+        Assert.Equal(("received", 0m), ((await ExpectedAsync(po.Id)).Status, (await ExpectedAsync(po.Id)).RemainingQty));
+        Assert.Equal((0m, 1050m), ((await ResinAsync()).Incoming, (await ResinAsync()).Shortfall));
+
+        // Receipts that add up to the whole close it on their own.
+        CreatedResponse po2 = await db.SendAsync(new CreateExpectedReceiptCommand(plant.Site, plant.Resin, 300m, plant.Kg, DateTimeOffset.UtcNow.AddDays(1), "PO-Q-" + _suffix, null, null));
+        await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-Q1-" + _suffix, 100m, plant.Kg, ExpectedReceiptId: po2.Id));
+        await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-Q2-" + _suffix, 200m, plant.Kg, ExpectedReceiptId: po2.Id));
+        Assert.Equal(("received", 2), ((await ExpectedAsync(po2.Id)).Status, (await ExpectedAsync(po2.Id)).ReceivedLotCount));
+
+        // A 10-day lead time: the job needs resin now, so what is short can't arrive in time.
+        Assert.False((await ResinAsync()).CantArriveInTime);
+        var material = await QueryAsync<Application.Materials.GetMaterialQuery, Contracts.Materials.MaterialDetailDto>(new Application.Materials.GetMaterialQuery(plant.Resin));
+        await db.SendAsync(new Application.Materials.SetMaterialLeadTimeCommand(plant.Resin, material.Material.Version, 10));
+        resin = await ResinAsync();
+        Assert.Equal((10, true, true), (resin.LeadTimeDays!.Value, resin.CantArriveInTime, Assert.Single(resin.Lines).CantArriveInTime));
+    }
+
+    [Fact]
     public async Task Allocations_set_stock_aside_first_expiry_first_are_used_up_by_consumption_and_refresh_as_stock_changes()
     {
         var plant = await CreatePlantAsync();

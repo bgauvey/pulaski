@@ -324,6 +324,7 @@ CREATE TABLE core.material (
     is_lot_tracked      boolean NOT NULL DEFAULT true,
     shelf_life_days     integer CHECK (shelf_life_days > 0),    -- a new lot expires this long after it arrives (D-032)
     gtin                text CONSTRAINT material_gtin_ck CHECK (gtin ~ '^[0-9]{14}$'),  -- GS1 trade item number, as 14 digits (#75)
+    lead_time_days      integer CONSTRAINT material_lead_time_ck CHECK (lead_time_days BETWEEN 1 AND 3650), -- how long supply takes to come (#83)
     batch_size          numeric(18,6) CHECK (batch_size > 0),  -- made in batches of this many base units (D-036); null: continuous
     batch_tolerance_pct numeric(5,2) NOT NULL DEFAULT 2 CHECK (batch_tolerance_pct >= 0 AND batch_tolerance_pct <= 50),  -- 'near' batches may differ by this much
     batch_rule          text CHECK (batch_rule IN ('exact','near')),  -- exact: every batch the batch size, partials approved; near: within the tolerance
@@ -1290,17 +1291,28 @@ CREATE TABLE core.expected_receipt (
     supplier            text,
     note                text,
     status              text NOT NULL DEFAULT 'open' CHECK (status IN ('open','received','cancelled')),
-    received_lot_id     uuid REFERENCES core.lot(id),               -- the lot received against it
+    received_lot_id     uuid REFERENCES core.lot(id),               -- the latest lot received against it; all of them: expected_receipt_lot
+    received_qty        core.qty NOT NULL DEFAULT 0 CONSTRAINT expected_receipt_received_qty_ck CHECK (received_qty >= 0), -- arrived so far, in its unit (#83)
     external_system     text,                                       -- the ERP that sent it; with the key, matched by every import
     external_key        text,
     created_at          timestamptz NOT NULL DEFAULT now(),
     created_by          text NOT NULL,
     updated_at          timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT expected_receipt_external_ck CHECK ((external_system IS NULL) = (external_key IS NULL)),
-    CONSTRAINT expected_receipt_received_ck CHECK (received_lot_id IS NULL OR status = 'received')
+    CONSTRAINT expected_receipt_external_ck CHECK ((external_system IS NULL) = (external_key IS NULL))
 );
 CREATE UNIQUE INDEX expected_receipt_external_uq ON core.expected_receipt (external_system, external_key) WHERE external_key IS NOT NULL;
 CREATE INDEX expected_receipt_open_ix ON core.expected_receipt (site_id, material_id, expected_at) WHERE status = 'open';
+
+-- Each lot received against an expected receipt (#83), with how much of it counted, in the receipt's unit.
+CREATE TABLE core.expected_receipt_lot (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    expected_receipt_id uuid NOT NULL REFERENCES core.expected_receipt(id),
+    lot_id              uuid NOT NULL REFERENCES core.lot(id),
+    quantity            core.qty NOT NULL CHECK (quantity > 0),
+    received_at         timestamptz NOT NULL,
+    received_by         text NOT NULL
+);
+CREATE INDEX expected_receipt_lot_receipt_ix ON core.expected_receipt_lot (expected_receipt_id);
 
 -- Lot attributes (D-056): typed properties a site records on its lots, such as melt index or moisture, kept beside the lot so
 -- its identity and movement history never change. A definition is offered for every material, or only for materials in the
@@ -2291,7 +2303,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0047_feed_automation'),
     ('0048_gs1_labels'),
     ('0049_nested_containers'),
-    ('0050_mixing_containers');
+    ('0050_mixing_containers'),
+    ('0051_partial_receipts_lead_times');
 
 -- =====================================================================
 -- 17. SEED DATA

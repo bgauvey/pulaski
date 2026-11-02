@@ -7,7 +7,7 @@ internal static class MaterialSql
         SELECT m.id, m.code, m.name, m.description, m.material_type, m.base_uom_id, u.code AS base_uom_code,
                m.material_class_id, c.code AS material_class_code, c.name AS material_class_name,
                m.is_lot_tracked, m.shelf_life_days, m.is_active, m.batch_size, m.batch_tolerance_pct, m.batch_rule, m.erp_batch_rule,
-               m.origin, m.external_system, m.external_key, m.external_version, m.gtin, m.updated_at, m.xmin::text::bigint AS version
+               m.origin, m.external_system, m.external_key, m.external_version, m.gtin, m.lead_time_days, m.updated_at, m.xmin::text::bigint AS version
         FROM core.material m
         JOIN core.uom u ON u.id = m.base_uom_id
         LEFT JOIN core.material_class c ON c.id = m.material_class_id

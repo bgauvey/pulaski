@@ -69,6 +69,20 @@ public sealed class InMemoryMaterialAdmin : IMaterialAdminRepository, IMaterialR
         }
     }
 
+    /// <summary>Lead times by material (#83), as the set command leaves them.</summary>
+    public Dictionary<Guid, int?> LeadTimes { get; } = [];
+
+    public Task<long> SetLeadTimeAsync(Guid id, int? days, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            LeadTimes[id] = days;
+            var current = _materials[id];
+            _materials[id] = current with { Version = current.Version + 1 };
+            return Task.FromResult(current.Version + 1);
+        }
+    }
+
     public Task<long> SetGtinAsync(Guid id, string? gtin, DateTimeOffset at, CancellationToken cancellationToken)
     {
         lock (_lock)

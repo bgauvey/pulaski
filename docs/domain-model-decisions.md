@@ -1215,7 +1215,7 @@ People with `lot.receive` enter and change open ones on Inventory → Incoming. 
 - A change updates the open one, and `Cancelled` cancels it.
 - Once closed in Pulaski it stays closed: a late update from the ERP is ignored.
 
-`ReceiveLotCommand.ExpectedReceiptId` closes one in the receipt's transaction (lot first, then the receipt) and links the lot. Whatever quantity arrived, nothing more is expected; there are no partial receipts. Events are `expected_receipt.created/updated/cancelled/received`.
+`ReceiveLotCommand.ExpectedReceiptId` closes one in the receipt's transaction (lot first, then the receipt) and links the lot. Whatever quantity arrived, nothing more is expected; there are no partial receipts. (Since D-083, receipts count toward it and it stays open for the rest.) Events are `expected_receipt.created/updated/cancelled/received`.
 
 **The calculation.** `ShortageCalculator.Calculate(demand, available, incoming, now)` is still a pure function:
 
@@ -1224,7 +1224,7 @@ People with `lot.receive` enter and change open ones on Inventory → Incoming. 
 - Each line reports `FromStock`, `FromIncoming` and `Uncovered`. The material reports `Incoming` (all open, in the base unit) and the next due time.
 - A receipt whose unit doesn't convert is left out with a problem note.
 
-**Not MRP.** Nothing is suggested, ordered, netted across sites or rescheduled, and there are no lead times. Expected receipts are only what someone said is coming.
+**Not MRP.** Nothing is suggested, ordered, netted across sites or rescheduled, and there are no lead times (they flag shortages since D-083). Expected receipts are only what someone said is coming.
 
 ## Containers, labels and scanning (D-059, proposed)
 
@@ -1977,6 +1977,34 @@ physically blend what goes in: partial bags tipped into a gaylord, offcuts into 
   order. Event `pulaski.container.mixing_set.v1`.
 
 **Not done:** transferring a balance's quantity into a mixing container (only whole lots are packed in).
+
+## Partial receipts and lead times (D-083, proposed)
+
+Issue #83. Receiving against an expected receipt closed it whatever arrived (D-058), and nothing said when a shortage was too close to
+cover.
+
+**Partial receipts.** `core.expected_receipt.received_qty`, in the receipt's own unit, and `core.expected_receipt_lot` (each lot and how
+much of it counted).
+- `ReceiveLotCommand.ExpectedReceiptId` converts the received base quantity into the receipt's unit (`ExpectedReceiving.ReceiveAsync`). It
+  adds that (`ExpectedReceipt.Receive`), records the lot and points `received_lot_id` at it.
+- The receipt is `received` once what arrived reaches the quantity (more closes it too); otherwise it stays `open`, partly received.
+- `CompleteExpectedReceiptCommand` (`POST /api/inventory/expected-receipts/{id}/complete`, `lot.receive`) closes a partly received one: nothing
+  more is coming.
+- `Cancel` is refused once something has arrived. `Change` keeps the unit and needs more than has arrived.
+- From the ERP, a cancellation or a quantity no more than what arrived closes it as complete (event `…received.v1`).
+- The shortage check counts only what is still expected (`RemainingQty`), and receiving pre-fills that quantity.
+- Migration 0051 fills earlier received ones as whole: `received_qty` = quantity, and one `expected_receipt_lot` row.
+
+**Lead times.** `core.material.lead_time_days` (1–3650, optional), set with `SetMaterialLeadTimeCommand` (`PUT /api/materials/{id}/lead-time`,
+`materials.manage`) apart from ERP-owned fields.
+- `ShortageCalculator.CantArriveInTime`: a line still uncovered whose job needs the material before now plus the lead time. A job with no
+  time isn't flagged.
+- Shortage lines and materials carry `CantArriveInTime`, and the material carries `LeadTimeDays`.
+- Nothing is suggested or ordered (not MRP).
+
+**Not done:**
+- lead times per supplier or site;
+- receipt tolerances (closing near enough on its own).
 
 ## Application architecture
 

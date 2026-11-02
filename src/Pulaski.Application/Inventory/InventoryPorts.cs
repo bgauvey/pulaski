@@ -168,6 +168,9 @@ public sealed record ComponentDemandRow
     public required string MaterialName { get; init; }
     public required Guid BaseUomId { get; init; }
     public required string BaseUomCode { get; init; }
+
+    /// <summary>How many days supply of the material takes to come (#83); null when not set.</summary>
+    public int? LeadTimeDays { get; init; }
     public decimal PlannedQty { get; init; }
     public required Guid UomId { get; init; }
     public required string UomCode { get; init; }

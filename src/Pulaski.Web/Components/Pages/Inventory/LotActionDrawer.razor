@@ -41,7 +41,7 @@
                                     <option value="@Guid.Empty">None</option>
                                     @foreach (var e in _expected)
                                     {
-                                        <option value="@e.Id">@(e.Reference ?? "No reference") · @InventoryView.Qty(e.Quantity) @e.UomCode · due @Display.SiteTime(e.ExpectedAt, Sites.Site?.TimeZone)</option>
+                                        <option value="@e.Id">@(e.Reference ?? "No reference") · @InventoryView.Qty(e.RemainingQty) @e.UomCode@(e.ReceivedQty > 0 ? " still to come" : "") · due @Display.SiteTime(e.ExpectedAt, Sites.Site?.TimeZone)</option>
                                     }
                                 </select>
                                 <div class="form-text">Receiving against it closes it: nothing more is expected, whatever quantity arrives.</div>
@@ -645,7 +645,7 @@
     {
         if (_expected.FirstOrDefault(e => e.Id == _expectedId) is { } chosen)
         {
-            _quantity ??= chosen.Quantity;
+            _quantity ??= chosen.RemainingQty;
             _uomId = chosen.UomId;
         }
     }

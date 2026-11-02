@@ -43,6 +43,19 @@ public sealed class InMemoryExpectedReceipts : IExpectedReceiptRepository, IExpe
 
     public Task<long> UpdateAsync(ExpectedReceipt receipt, DateTimeOffset at, CancellationToken cancellationToken) => Task.FromResult(Save(receipt));
 
+    /// <summary>Lots received against receipts (#83): receipt, lot and quantity in the receipt's unit.</summary>
+    public List<(Guid ReceiptId, Guid LotId, decimal Quantity)> ReceivedLots { get; } = [];
+
+    public Task InsertLotAsync(Guid id, Guid expectedReceiptId, Guid lotId, decimal quantity, string actorId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            ReceivedLots.Add((expectedReceiptId, lotId, quantity));
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task<IReadOnlyList<ExpectedReceiptDto>> ListAsync(Guid siteId, bool includeClosed, Guid? materialId, CancellationToken cancellationToken)
     {
         lock (_lock)
@@ -66,6 +79,8 @@ public sealed class InMemoryExpectedReceipts : IExpectedReceiptRepository, IExpe
                     Note = r.Value.Note,
                     Status = r.Value.Status,
                     ReceivedLotId = r.Value.ReceivedLotId,
+                    ReceivedQty = r.Value.ReceivedQty,
+                    RemainingQty = r.Value.Remaining,
                     ExternalSystem = r.Value.ExternalSystem,
                     ExternalKey = r.Value.ExternalKey,
                     CreatedAt = r.Value.CreatedAt,

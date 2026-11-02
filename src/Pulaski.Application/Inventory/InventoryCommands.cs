@@ -173,10 +173,10 @@ internal sealed class ReceiveLotHandler(
             envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
 
-        // What was on its way is here: the expected receipt closes (D-058).
+        // What was on its way is here: it counts toward the expected receipt, which closes once all of it has arrived (D-058, #83).
         if (command.ExpectedReceiptId is { } expected)
         {
-            await ExpectedReceiving.CloseAsync(expectedReceipts, eventLog, events, expected, received, cancellationToken);
+            await ExpectedReceiving.ReceiveAsync(expectedReceipts, units, eventLog, events, ids, expected, received, material, quantity, cancellationToken);
         }
 
         // A numbered receipt where lots mix is kept, for its genealogy, then joins the balance (D-031).

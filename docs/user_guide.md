@@ -1111,7 +1111,7 @@ The **Shortages** tab answers *"will we have the material for the jobs coming up
 5. Click a component to see each job that needs it, in the order they are needed: what it still needs, how much comes **from stock** and how much **incoming**, whether it is **covered** or how much is short, and when it is needed (*as scheduled now*, *published start*, or *hold-until or window*).
 6. Click a job to open it, or **stock** to open the component.
 
-Each row shows **Needed** (what the jobs still need: planned less consumed), **Available**, **Held** (on hold or quarantine, in amber: releasing it might cover the gap), **Incoming** (open [expected deliveries](#incoming-deliveries), with the next one's time, in red when late), **Short** (in red), and the **first short** job with when it is needed.
+Each row shows **Needed** (what the jobs still need: planned less consumed), **Available**, **Held** (on hold or quarantine, in amber: releasing it might cover the gap), **Incoming** (what open [expected deliveries](#incoming-deliveries) still have to bring, with the next one's time, in red when late), **Short** (in red), and the **first short** job with when it is needed. **Can't arrive in time** (amber) marks a component whose shortage is needed sooner than its lead time from now; the job's line says *within lead time*.
 
 **In detail**
 
@@ -1119,6 +1119,7 @@ Each row shows **Needed** (what the jobs still need: planned less consumed), **A
 - With a horizon, jobs needed after it, and jobs with no time at all, are left out; the horizon uses the same timing.
 - **Allocations.** Stock [allocated](#allocate-lots-to-a-job) to a job covers that job first and isn't free for the others.
 - **Supply.** Each job takes **available** stock first, then incoming deliveries due by the time it needs them. A delivery due after a job needs the material doesn't cover that job, however much arrives. A job already under way needs what it has left from now, and a late delivery counts as arriving now. Held stock isn't counted.
+- **Lead times.** A material can carry a **Lead time** in days (on its page). A job short of it and needed before now plus that time is flagged: supply asked for today wouldn't arrive in time, so it needs something else (another source, a different plan). A job with no time isn't flagged.
 - **Not purchasing.** Nothing is suggested, ordered or rescheduled: deliveries are only what the ERP or a person said is coming, and ordering stays in the ERP.
 - A component planned in a unit that doesn't convert to its base unit is left out, with an amber note naming the job.
 
@@ -1129,14 +1130,16 @@ The **Incoming** tab lists purchases and transfers expected to arrive, for the s
 1. Open **Inventory → Incoming**. Open deliveries are listed by when they are expected; late ones in red.
 2. **Expect a delivery:** choose the **Material**, enter the **Quantity** and **Unit**, when it is **Expected**, and optionally the **Reference** (PO, transfer or ASN number), **Supplier** and a **Note**. Click **Add delivery**.
 3. **Change** an open one when the date or quantity changes, or **Cancel** it if it won't come.
-4. When it arrives, **Receive** the lot as usual and choose it under **Against expected receipt**: it closes, and its row links to the lot. Nothing more is expected of it, whatever quantity arrived; if more is still coming, add another.
-5. Tick **Show received and cancelled** to see closed ones.
+4. When it arrives, **Receive** the lot as usual and choose it under **Against expected receipt** (the quantity still to come is filled in). What arrived counts toward it: once all of it has arrived it closes. Until then it stays open, *partly received*, showing what arrived and what is still to come, and the shortage check counts only the rest.
+5. When nothing more of a partly received delivery is coming, click **Close as complete**. (**Cancel** is only for one where nothing arrived.)
+6. Tick **Show received and cancelled** to see closed ones.
 
 **In detail**
 
 - **Who:** anyone who can see inventory sees them; adding, changing and cancelling needs permission to receive lots.
 - **From the ERP:** `POST /api/inventory/expected-receipts/import` takes one delivery with the ERP's name and its key there, the site, the material and unit codes, the quantity and expected time, the reference and supplier, and whether it is cancelled. Sending the same one again changes nothing; a change updates it while it is open; once received or cancelled in Pulaski it stays so. It is listed with the ERP's name beside the reference.
-- The unit must convert to the material's base unit, so the shortage check can count it.
+- The unit must convert to the material's base unit, so the shortage check can count it. What arrives is counted in the delivery's own unit, so 400 kg against a delivery expected in grams counts 400 000 g.
+- **Partly received.** Its unit can't change, and its quantity can only be changed to more than has arrived. From the ERP, a quantity no more than what arrived, or a cancellation, closes it as complete. More than expected closes it too. Each lot received against it is recorded; the row shows the latest and how many more.
 - **Events:** `pulaski.expected_receipt.created.v1`, `…updated.v1`, `…cancelled.v1` and `…received.v1`.
 
 ### The movement journal
@@ -1583,12 +1586,13 @@ From then on orders and jobs must be whole batches and production is reported ba
 | Lot-tracked | While none of it is on hand | Same |
 | Description, class, shelf life, active | Always | Same |
 | Batch size, rule, tolerance | Always; open orders keep their quantity | Same |
-| GTIN | Always | Same |
+| GTIN, lead time | Always | Same |
 
 - **Base unit.** Quantities are stored in the base unit, so it can't change once the material is in use, not even from the ERP: an import that tries is refused.
 - **Lot-tracked.** Switching between lots and balances needs no stock on hand: use, move out or write off what is there first.
 - **Shelf life** applies to lots that arrive from now on; lots already on hand keep their expiry.
 - **GTIN** (GS1 trade item number): 8, 12, 13 or 14 digits with a right check digit, kept as 14; one material per GTIN. It goes on GS1 lot labels and lets a scanned GS1 or supplier barcode find the material (see [Scan labels](#scan-labels)). Leave it blank to clear it.
+- **Lead time:** how many days supply of it takes to come, 1 to 3650, or blank. The [shortage check](#check-for-shortages) flags shortages needed sooner than that; nothing is ordered.
 - **Switching a material off** (setting **Active** to *false*) is always allowed. Afterwards it can't be received, put on new orders or added to BOMs, but what already uses it carries on. A yellow notice lists what still uses it, for example *a capability on 3 lines*. Pulaski never deletes a material.
 
 ### Classes
@@ -2335,7 +2339,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Genealogy through a silo is an estimate** from the declared movements. A level tag's readings confirm when it was empty and check the declared stock (see [How a silo flows](#how-a-silo-flows)), but they don't change how much each arrival gave. A reversed movement and its reversal are left out of the estimate, as if neither happened.
 - **Sending to the ERP** is one HTTPS webhook, for inventory movements only, configured in the API's settings (not on a screen). Pulaski doesn't read anything back from it, so the ERP's answers don't change anything in Pulaski; there is no adapter for a particular ERP's own API, no second receiver, and no message queue (MQTT, Kafka and the like). The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
 - **Allocations are kept up to date by hand:** nothing refreshes them when stock moves or the schedule changes; click **Refresh**. Suggestions don't prefer lots near the line, lots already in a container, or whole lots, and there are no picking lists; a substitution (a material the job doesn't plan) isn't allocated. Allocating doesn't stop another job consuming the stock: it only warns.
-- **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP; there are no lead times, purchase suggestions or partial receipts against one delivery (receiving closes it). The live timing is the schedule as projected now, not a forecast of slips.
+- **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** has no quality figures or SPC alerts yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
 - **Released product specifications** are not maintained in Pulaski yet. Shop-order sheets flag this gap and require operators to verify the approved specification elsewhere.

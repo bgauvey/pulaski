@@ -135,6 +135,15 @@ internal static class InventoryEndpoints
             TypedResults.Ok(await handler.HandleAsync(new CancelExpectedReceiptCommand(id, request.Version), ct)))
         .RequirePermission(Permissions.LotReceive, Site.Of(SiteOf.ExpectedReceipt));
 
+        // A partly received one closed as complete: nothing more is coming (#83).
+        expected.MapPost("/{id:guid}/complete", async Task<Ok<VersionResponse>> (
+            Guid id,
+            CancelExpectedReceiptRequest request,
+            ICommandHandler<CompleteExpectedReceiptCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CompleteExpectedReceiptCommand(id, request.Version), ct)))
+        .RequirePermission(Permissions.LotReceive, Site.Of(SiteOf.ExpectedReceipt));
+
         inventory.MapGet("/movements", async Task<Ok<JournalPageDto>> (
             Guid siteId,
             DateTimeOffset? from,

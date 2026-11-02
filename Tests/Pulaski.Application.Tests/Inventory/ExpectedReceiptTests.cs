@@ -64,7 +64,7 @@ public class ExpectedReceiptTests
     }
 
     [Fact]
-    public async Task An_expected_receipt_is_changed_or_cancelled_while_open_and_closed_by_receiving_against_it()
+    public async Task An_expected_receipt_is_changed_or_cancelled_while_open_and_closed_once_all_of_it_is_received()
     {
         var created = await CreateAsync(1000m, Now.AddDays(3), _lb.Id);
         Assert.Equal(("buyer", ExpectedReceipt.Open), (Receipts.Get(created.Id).CreatedBy, Receipts.Get(created.Id).Status));
@@ -72,13 +72,17 @@ public class ExpectedReceiptTests
         var changed = await new UpdateExpectedReceiptHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, Receipts, _f.Stores.Events, _f.Events)
             .HandleAsync(new UpdateExpectedReceiptCommand(created.Id, created.Version, 500m, _kg.Id, Now.AddDays(4), "PO-4711", "Acme", "Split delivery"), CancellationToken.None);
 
-        var lot = await new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time, Receipts)
-            .HandleAsync(new ReceiveLotCommand(_resin.Id, _stores.Id, "R-1", 480m, _kg.Id, ExpectedReceiptId: created.Id), CancellationToken.None);
-        Assert.Equal((ExpectedReceipt.Received, lot.LotId), (Receipts.Get(created.Id).Status, Receipts.Get(created.Id).ReceivedLotId!.Value));
+        // 480 of the 500 kg arrives: it counts, and the receipt stays open for the rest (#83); the last 20 closes it.
+        var receive = new ReceiveLotHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, _f.Stores.Events, _f.Events, _f.Ids, _f.Time, Receipts);
+        var lot = await receive.HandleAsync(new ReceiveLotCommand(_resin.Id, _stores.Id, "R-1", 480m, _kg.Id, ExpectedReceiptId: created.Id), CancellationToken.None);
+        Assert.Equal((ExpectedReceipt.Open, 480m, lot.LotId), (Receipts.Get(created.Id).Status, Receipts.Get(created.Id).ReceivedQty, Receipts.Get(created.Id).ReceivedLotId!.Value));
         Assert.Equal(EventTypes.ExpectedReceiptReceived, _f.Stores.Events.Appended[^1].Type);
+        var last = await receive.HandleAsync(new ReceiveLotCommand(_resin.Id, _stores.Id, "R-2", 20m, _kg.Id, ExpectedReceiptId: created.Id), CancellationToken.None);
+        Assert.Equal((ExpectedReceipt.Received, last.LotId), (Receipts.Get(created.Id).Status, Receipts.Get(created.Id).ReceivedLotId!.Value));
+        Assert.Equal(2, Receipts.ReceivedLots.Count(r => r.ReceiptId == created.Id));
 
         await Assert.ThrowsAsync<DomainRuleException>(() => new CancelExpectedReceiptHandler(_f.Stores.UnitOfWork, Receipts, _f.Stores.Events, _f.Events)
-            .HandleAsync(new CancelExpectedReceiptCommand(created.Id, changed.Version + 1), CancellationToken.None));
+            .HandleAsync(new CancelExpectedReceiptCommand(created.Id, changed.Version + 2), CancellationToken.None));
         await Assert.ThrowsAsync<Errors.ValidationException>(() => CreateAsync(0m, Now));
     }
 

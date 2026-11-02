@@ -209,7 +209,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `counted_at`; `LotPastState` works a lot's state at T back from now (`GET /lots/{id}/at`, Stock on a date by location and on hold).
 - Shortages (D-058, proposed): live timing by default (each line projected via `TimelineMapping.Project`, `TimeSource` per line);
   `core.expected_receipt` (screen + idempotent ERP import by system/key; receiving with `ExpectedReceiptId` closes it) counted by
-  `ShortageCalculator` after stock, only when due by a job's time (past times count as now). Not MRP.
+  `ShortageCalculator` after stock, only when due by a job's time (past times count as now). Not MRP. D-083: receipts count toward it in its unit
+  (`received_qty`, `expected_receipt_lot`), open until fully received or `CompleteExpectedReceiptCommand`; shortages count `RemainingQty`;
+  `material.lead_time_days` flags lines needed before now + lead time (`ShortageCalculator.CantArriveInTime`).
 - Containers and labels (D-059, proposed): `core.container` holds whole lots (`lot.container_id`, kept at the container's location by
   `Lot.PackInto`/`MoveWithContainer`; moving alone, splitting or reaching zero clears it). Moving a container locks it, then its lots in
   id order. `core.label_seq` numbers lots and containers; barcodes `PUL1L<n>`/`PUL1C<n>`/`PUL1E:<code>` (Code 128, `LabelPdfRenderer`,

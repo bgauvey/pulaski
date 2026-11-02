@@ -162,6 +162,13 @@ public sealed record SetMaterialGtinRequest
     public string? Gtin { get; init; }
 }
 
+/// <summary>Sets a material's lead time in days (#83); blank clears it.</summary>
+public sealed record SetMaterialLeadTimeRequest
+{
+    public long Version { get; init; }
+    public int? LeadTimeDays { get; init; }
+}
+
 /// <summary>The material as it is now, and, when it was switched off, what still uses it.</summary>
 public sealed record UpdateMaterialResponse(long Version, IReadOnlyList<string> StillUsedBy);
 

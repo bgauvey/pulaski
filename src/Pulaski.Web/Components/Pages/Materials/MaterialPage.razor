@@ -260,6 +260,29 @@ else if (_error is null)
 
     private async Task OnChangeAsync(PropertyChange change)
     {
+        if (_detail is not null && change.Key == MaterialProperties.LeadTimeKey)
+        {
+            _saving = true;
+            _error = null;
+            try
+            {
+                var days = int.TryParse(change.Value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : (int?)null;
+                await Api.SetMaterialLeadTimeAsync(MaterialId, new SetMaterialLeadTimeRequest { Version = _detail.Material.Version, LeadTimeDays = days });
+                await LoadAsync();
+            }
+            catch (ApiException ex)
+            {
+                _error = ex;
+                _revision++;
+            }
+            finally
+            {
+                _saving = false;
+            }
+
+            return;
+        }
+
         if (_detail is not null && change.Key == MaterialProperties.GtinKey)
         {
             _saving = true;

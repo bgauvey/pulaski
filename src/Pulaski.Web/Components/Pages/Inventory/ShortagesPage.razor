@@ -132,6 +132,10 @@ else
                                 @if (m.Shortfall > 0)
                                 {
                                     <span class="chip chip-danger">@InventoryView.Qty(m.Shortfall) @m.BaseUomCode</span>
+                                    @if (m.CantArriveInTime)
+                                    {
+                                        <div><span class="chip chip-warning" title="Needed sooner than its @m.LeadTimeDays-day lead time from now">Can't arrive in time</span></div>
+                                    }
                                 }
                                 else
                                 {
@@ -159,7 +163,13 @@ else
                                     <td class="inv-num text-muted">@(l.FromStock > 0 ? $"{InventoryView.Qty(l.FromStock)} from stock" : "")</td>
                                     <td></td>
                                     <td class="inv-num text-muted">@(l.FromIncoming > 0 ? $"{InventoryView.Qty(l.FromIncoming)} incoming" : "")</td>
-                                    <td class="inv-num @(l.Uncovered > 0 ? "text-danger fw-semibold" : "text-muted")">@(l.Uncovered > 0 ? InventoryView.Qty(l.Uncovered) : "covered")</td>
+                                    <td class="inv-num @(l.Uncovered > 0 ? "text-danger fw-semibold" : "text-muted")">
+                                        @(l.Uncovered > 0 ? InventoryView.Qty(l.Uncovered) : "covered")
+                                        @if (l.CantArriveInTime)
+                                        {
+                                            <div class="small fw-normal" title="Needed sooner than the material's @m.LeadTimeDays-day lead time from now">within lead time</div>
+                                        }
+                                    </td>
                                     <td class="text-muted">
                                         @(l.NeededFrom is null ? "no time yet" : Display.SiteTime(l.NeededFrom, Sites.Site?.TimeZone))
                                         <div title="@TimeHint(l)">@TimeLabel(l.TimeSource)</div>

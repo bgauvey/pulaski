@@ -119,6 +119,14 @@ public static class MaterialProperties
             },
             new()
             {
+                Key = LeadTimeKey, Name = "Lead time", Category = Stock,
+                Value = m.LeadTimeDays?.ToString(CultureInfo.InvariantCulture), Editor = PropertyEditor.Number,
+                Min = 1, Max = 3650, Step = 1, Suffix = "days", Placeholder = "None",
+                Description = "How long supply of it takes to come. The shortage check flags shortages needed sooner than this from now: " +
+                    "asked for today, supply wouldn't arrive in time. Nothing is ordered.",
+            },
+            new()
+            {
                 Key = "batchSize", Name = "Batch size", Category = Batches,
                 Value = m.BatchSize?.ToString("0.######", CultureInfo.InvariantCulture), Editor = PropertyEditor.Number,
                 Min = 0, Step = 0.001, Suffix = m.BaseUomCode, Placeholder = "Made continuously",
@@ -165,6 +173,9 @@ public static class MaterialProperties
             },
         ];
     }
+
+    /// <summary>The material's lead time (#83), saved on its own.</summary>
+    public const string LeadTimeKey = "leadTime";
 
     /// <summary>The material's GTIN (#75), saved on its own.</summary>
     public const string GtinKey = "gtin";

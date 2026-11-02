@@ -31,6 +31,13 @@ public sealed record MaterialShortage(Guid MaterialId, decimal Available, decima
 /// </summary>
 public static class ShortageCalculator
 {
+    /// <summary>
+    /// Whether a line's uncovered need comes sooner than supply could arrive if asked for now (#83): it is short, the material has a lead time,
+    /// and the job needs it before now plus that time. A job without a time isn't flagged. Nothing is suggested or ordered.
+    /// </summary>
+    public static bool CantArriveInTime(ShortageLine line, int? leadTimeDays, DateTimeOffset now) =>
+        line.Uncovered > 0 && leadTimeDays is { } days && line.Demand.NeededFrom is { } at && at < now.AddDays(days);
+
     /// <param name="demand">Remaining needs; lines with nothing left are ignored.</param>
     /// <param name="available">Available stock per material in its base unit; a missing material has none.</param>
     /// <param name="incoming">Supply on its way; a job without a time can use all of it.</param>
