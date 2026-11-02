@@ -21,14 +21,16 @@ internal sealed class LotRecordsRepository(DbSession session) : ILotRecordsRepos
         """;
 
     private const string InsertAttribute = """
-        INSERT INTO core.lot_attribute (id, site_id, code, name, data_type, uom_id, choices, applies_to_all, sort_order, is_active, created_at, updated_at)
-        VALUES (@Id, @SiteId, @Code, @Name, @DataType, @UomId, @Choices, @AppliesToAll, @SortOrder, @IsActive, @At, @At)
+        INSERT INTO core.lot_attribute (id, site_id, code, name, data_type, uom_id, choices, applies_to_all, sort_order, is_active, characteristic_id,
+                                        created_at, updated_at)
+        VALUES (@Id, @SiteId, @Code, @Name, @DataType, @UomId, @Choices, @AppliesToAll, @SortOrder, @IsActive, @CharacteristicId, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     private const string UpdateAttribute = """
         UPDATE core.lot_attribute
-        SET name = @Name, uom_id = @UomId, choices = @Choices, applies_to_all = @AppliesToAll, sort_order = @SortOrder, is_active = @IsActive, updated_at = @At
+        SET name = @Name, uom_id = @UomId, choices = @Choices, applies_to_all = @AppliesToAll, sort_order = @SortOrder, is_active = @IsActive,
+            characteristic_id = @CharacteristicId, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -156,6 +158,7 @@ internal sealed class LotRecordsRepository(DbSession session) : ILotRecordsRepos
         a.AppliesToAll,
         a.SortOrder,
         a.IsActive,
+        a.CharacteristicId,
         At = at,
     };
 

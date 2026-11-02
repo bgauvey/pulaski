@@ -10,7 +10,7 @@ namespace Pulaski.Infrastructure.Inventory;
 internal static class LotRecordSql
 {
     public const string AttributeColumns = """
-        a.id, a.site_id, a.code, a.name, a.data_type, a.uom_id, a.choices, a.applies_to_all, a.sort_order, a.is_active,
+        a.id, a.site_id, a.code, a.name, a.data_type, a.uom_id, a.choices, a.applies_to_all, a.sort_order, a.is_active, a.characteristic_id,
         ARRAY(SELECT c.material_class_id FROM core.lot_attribute_class c WHERE c.attribute_id = a.id AND c.is_applied ORDER BY c.material_class_id) AS class_ids,
         a.xmin::text::bigint AS version
         """;
@@ -43,10 +43,11 @@ internal static class LotRecordSql
         public int SortOrder { get; init; }
         public bool IsActive { get; init; }
         public Guid[] ClassIds { get; init; } = [];
+        public Guid? CharacteristicId { get; init; }
         public long Version { get; init; }
 
         public LotAttributeDefinition ToDomain() =>
-            new(Id, SiteId, Code, Name, DataType, UomId, Choices, AppliesToAll, ClassIds, SortOrder, IsActive);
+            new(Id, SiteId, Code, Name, DataType, UomId, Choices, AppliesToAll, ClassIds, SortOrder, IsActive) { CharacteristicId = CharacteristicId };
     }
 
     internal sealed class ValueRow
@@ -148,6 +149,7 @@ internal sealed class LotRecordsQueries(NpgsqlDataSource dataSource) : ILotRecor
             ClassCodes = r.ClassCodes,
             SortOrder = r.SortOrder,
             IsActive = r.IsActive,
+            CharacteristicId = r.CharacteristicId,
             LotsWithValue = r.LotsWithValue,
             Version = r.Version,
         })];
@@ -199,6 +201,7 @@ internal sealed class LotRecordsQueries(NpgsqlDataSource dataSource) : ILotRecor
         public string[] ClassCodes { get; init; } = [];
         public int SortOrder { get; init; }
         public bool IsActive { get; init; }
+        public Guid? CharacteristicId { get; init; }
         public int LotsWithValue { get; init; }
         public long Version { get; init; }
     }

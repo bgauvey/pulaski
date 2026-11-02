@@ -625,7 +625,7 @@ internal static class InventoryEndpoints
         {
             var created = await handler.HandleAsync(
                 new CreateLotAttributeCommand(request.SiteId, request.Code, request.Name, request.DataType, request.UomId, request.Choices,
-                    request.AppliesToAll, request.ClassIds, request.SortOrder),
+                    request.AppliesToAll, request.ClassIds, request.SortOrder, request.CharacteristicId),
                 ct);
             return TypedResults.Created($"/api/lot-attributes/{created.Id}", created);
         })
@@ -638,7 +638,7 @@ internal static class InventoryEndpoints
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
                 new UpdateLotAttributeCommand(id, request.Version, request.Name, request.UomId, request.Choices, request.AppliesToAll, request.ClassIds,
-                    request.SortOrder, request.IsActive),
+                    request.SortOrder, request.IsActive, request.CharacteristicId),
                 ct)))
         .RequirePermission(Permissions.LotAttributes, Site.Of(SiteOf.LotAttribute));
 

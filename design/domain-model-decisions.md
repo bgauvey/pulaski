@@ -1167,7 +1167,7 @@ The handler parses the bounds in the attribute's type, so `1,5` is a validation 
 
 Screens: the lot page's **Attributes and certificates** section (`LotRecordsPanel`), the attribute filter on Find a lot, and Configure → Materials → **Lot attributes**. Migration `0024_lot_records`.
 
-**Not yet.** Attributes in the lots CSV export or in imports; checking values against specification limits (with quality); certificates to or from the ERP or a document system; a retention job.
+**Not yet.** Attributes in the lots CSV export or in imports; certificates to or from the ERP or a document system; a retention job. Checking values against specification limits came with D-085: a number attribute may stand for a quality characteristic.
 
 ## Back-dated inventory movements (D-057, proposed)
 
@@ -2075,6 +2075,68 @@ lock the settings row.
 - a site-filtered change feed for the refresh;
 - alternates on the Order form's component plan (they show only in allocations);
 - picking confirmation (a pick is still a move).
+
+## Quality results and material specifications (D-085, proposed)
+
+Issue #65. Quality wasn't recorded, released product specifications weren't kept in Pulaski (the shop order sheet asked operators to check
+them elsewhere), and lot attributes weren't checked against limits. The drafted SPC tables (`quality_characteristic`, `spec_limit`,
+`ts.quality_sample`) had never been used.
+
+**Characteristics.** `core.quality_characteristic` is reused, enterprise-wide (`site_id` NULL), so any material's specification can name one.
+- `variable` takes measured values with a unit and decimals; `attribute` takes inspected and defective counts.
+- Code and kind are fixed once created; it is switched off, never deleted.
+- The SPC columns stay for charts later; the app sets `chart_type` to `i_mr` or `np`.
+
+**Specifications, versioned like BOMs** (the user's choice over the drafted effective-dated `spec_limit`, which is dropped).
+- `core.material_spec`: one per material.
+- `core.material_spec_version`: a draft edited as one `jsonb` document, released into fixed `core.material_spec_item` rows. Releasing makes the
+  previous version obsolete; a new draft copies the released one with new item ids.
+- Each item: a variable's lower and/or upper limit (inclusive) and optional target, or an attribute's most defects per sample, never both
+  (`SpecDefinition.KindProblems`), plus `hold_on_fail` and an order.
+- Permission `specs.manage` (Configuration; Quality, Process engineer). Specifications aren't per site, like BOMs.
+
+**Results.** `ts.quality_sample`, rebuilt by migration 0053 (it was never written to), one sample per row.
+- Recorded at a site against a lot, a job (its run open at the time) or both. The sample time can be up to 31 days back. Source is `manual` or
+  `lab` (`lot_attribute` and `auto` are set by the app).
+- The material is the lot's, else the job's. The item in force is that material's released specification's item for the characteristic, read
+  `FOR SHARE` (`IQualityRepository.GetItemInForceAsync`).
+- `QualityCheck.Conforms`: every value within the limits, or defects at most allowed; null when no item names the characteristic, which is noted.
+  Statistics (mean, range, sample standard deviation) are stored (`SampleStatistics`).
+- Each row keeps who, when, the sample, the source, the item and whether it conformed. Results are appended only. A wrong one is excluded with a
+  reason of kind `sample_exclusion` and a comment (`ExcludeQualityResultCommand`). The app role may update only the exclusion columns.
+- Events `pulaski.quality_result.recorded.v1` and `…excluded.v1`.
+
+**Out of limits holds per characteristic** (the user's choice). A failing result of an item with `hold_on_fail`, for a lot that is available
+with stock, puts the lot on hold under the existing hold rules. The reason is `OUT-OF-SPEC` (kind `hold`) when it exists, with the failure as
+the comment. Otherwise the result is flagged (warning notes, out-of-spec list), and holding stays a person's decision.
+
+**Lot attributes.** A `number` attribute may name a measured characteristic (`lot_attribute.characteristic_id`). Setting it records a result
+with source `lot_attribute`, checked and held like any other (`SetLotAttributeHandler` → `QualityRecorder`).
+
+**Quality feeds OEE through rejected lots** (the user's choice). `RejectLotCommand` (`POST /api/lots/{id}/reject`, `quality.decide`) takes a held
+lot and writes off what is left as scrap.
+- A lot made in a run: the quantity moves from good to scrap there (`JobRun.Reclassify`), and a `defective` count is added at the
+  declaration's effective time, as a rejected partial batch does (D-036).
+- OEE quality, which reads reports and corrections, and its daily rollups (through `InsertCountAsync`) show it.
+- Locks: job, run, then lot. Results alone never change OEE.
+
+**Permissions.** `quality.view` (Viewing), `quality.record` (Supervisor, Operator, Quality), `quality.decide` (exclude results, reject lots;
+Quality) and `specs.manage`. Migration 0053 grants them to the starting roles and updates their descriptions where unchanged.
+
+**Screens and routes.**
+- Operate → Quality: results, with a record form and filters. Configure → Specifications: specification list, editor, Characteristics.
+- The lot page's Quality panel shows the specification and the lot's results, and offers Record and Reject. The job page links to its results.
+  The shop order sheet prints the released specification. The lot attribute form picks a characteristic.
+- `/api/quality/characteristics`, `/api/quality/specs` (versions, release, drafts), `/api/materials/{id}/specification`,
+  `/api/quality/results` (GET and POST `?siteId=`, `/{id}/exclude`) and `/api/lots/{id}/reject`.
+
+**Not done:**
+- SPC charts, control limits and rule alerts (the drafted tables stay);
+- sampling plans and due samples;
+- automatic results from process values;
+- specifications per site or customer;
+- certificates of analysis generated from results;
+- recording against a job only from its page (the results page has no job picker).
 
 ## Application architecture
 

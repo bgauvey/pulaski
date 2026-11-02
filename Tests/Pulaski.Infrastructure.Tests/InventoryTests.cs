@@ -1232,6 +1232,96 @@ public sealed class InventoryTests(DatabaseFixture db)
         }
     }
 
+    [Fact]
+    public async Task Results_are_checked_against_the_released_specification_hold_lots_and_rejected_lots_move_good_to_scrap()
+    {
+        var plant = await CreatePlantAsync();
+        var s = _suffix.ToUpperInvariant();
+        CreatedResponse wall = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("WALL-" + s, "Wall thickness", null, "variable", plant.Kg, 2));
+        CreatedResponse surface = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("SURF-" + s, "Surface defects", null, "attribute", null, 0));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new Application.Quality.CreateCharacteristicCommand("wall-" + s, "Again", null, "variable", null, 2)));
+
+        // A specification for the profile: a draft is checked as it is saved, and released into fixed items.
+        CreatedResponse spec = await db.SendAsync(new Application.Quality.CreateSpecCommand(plant.Profile));
+        var header = await QueryAsync<Application.Quality.GetSpecQuery, Contracts.Quality.SpecDto>(new Application.Quality.GetSpecQuery(spec.Id));
+        var draft = await QueryAsync<Application.Quality.GetSpecVersionQuery, Contracts.Quality.SpecVersionDto>(
+            new Application.Quality.GetSpecVersionQuery(spec.Id, header.Versions[0].Id));
+        Assert.Contains(draft.Problems, p => p.Code == "no_items");
+        Contracts.Quality.SpecItemDto Item(Guid characteristic, decimal? lsl = null, decimal? usl = null, int? maxDefects = null, bool hold = false, int order = 0) =>
+            new() { Id = Guid.CreateVersion7(), CharacteristicId = characteristic, Lsl = lsl, Usl = usl, MaxDefects = maxDefects, HoldOnFail = hold, SortOrder = order };
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Application.Quality.SaveSpecDraftCommand(
+            spec.Id, draft.Id, draft.Version, new Contracts.Quality.SpecDefinitionDto { Items = [Item(wall.Id, maxDefects: 1)] })));
+        var saved = await db.SendAsync(new Application.Quality.SaveSpecDraftCommand(spec.Id, draft.Id, draft.Version, new Contracts.Quality.SpecDefinitionDto
+        {
+            Items = [Item(wall.Id, 3.2m, 3.4m, hold: true, order: 10), Item(surface.Id, maxDefects: 1, order: 20)],
+        }));
+        Assert.Empty(saved.Problems);
+        await db.SendAsync(new Application.Quality.ReleaseSpecVersionCommand(spec.Id, draft.Id, saved.Version, "First issue"));
+        var released = await QueryAsync<Application.Quality.GetReleasedSpecQuery, Contracts.Quality.ReleasedSpecDto>(
+            new Application.Quality.GetReleasedSpecQuery(plant.Profile));
+        Assert.Equal((1, "3.2 – 3.4", "at most 1 defect"), (released.VersionNumber, released.Items[0].Limits, released.Items[1].Limits));
+
+        // A lot made in the running job: a wall thickness out of limits holds it; a surface inspection within them doesn't.
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Metre, null, plant.Staging));
+        var lotId = report.Lots.Single().LotId;
+        var failed = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(
+            plant.Site, wall.Id, lotId, plant.Job, null, [3.31m, 3.45m], null, null, "manual", "Caliper"));
+        Assert.Equal((false, true), (failed.Conforms, failed.LotHeld));
+        Assert.Contains(failed.Notes, n => n.Contains("the value is", StringComparison.Ordinal) || n.Contains("above 3.4", StringComparison.Ordinal));
+        Assert.Equal(LotStatus.OnHold, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lotId))).Lot.Status);
+        var passed = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, surface.Id, lotId, null, null, null, 50, 1, "lab", null));
+        Assert.True(passed.Conforms);
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(
+            new Application.Quality.RecordQualityResultCommand(plant.Site, surface.Id, lotId, null, null, [1m], null, null, "manual", null)));
+
+        var results = await QueryAsync<Application.Quality.ListQualityResultsQuery, IReadOnlyList<Contracts.Quality.QualityResultDto>>(
+            new Application.Quality.ListQualityResultsQuery(new Application.Quality.QualityResultFilter(null, LotId: lotId)));
+        Assert.Equal(2, results.Count);
+        var wallResult = results.Single(r => r.CharacteristicId == wall.Id);
+        Assert.Equal((plant.JobNumber, 1, "manual"), (wallResult.JobNumber, wallResult.SpecVersionNumber, wallResult.Source));
+        Assert.Equal([3.31m, 3.45m], wallResult.Values);
+
+        // Left out with a reason, it is no longer listed as out of specification.
+        await db.SendAsync(new Application.Quality.ExcludeQualityResultCommand(
+            plant.Site, wallResult.Id, wallResult.OccurredAt, await ReasonAsync("sample_exclusion", "ENTRY-ERROR"), "Wrong gauge"));
+        Assert.Empty(await QueryAsync<Application.Quality.ListQualityResultsQuery, IReadOnlyList<Contracts.Quality.QualityResultDto>>(
+            new Application.Quality.ListQualityResultsQuery(new Application.Quality.QualityResultFilter(null, LotId: lotId, FailingOnly: true))));
+
+        // Rejected on quality: the lot is written off and its 100 m become a defective count of the run, at the time it was made.
+        var held = await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lotId));
+        var rejected = await db.SendAsync(new Application.Quality.RejectLotCommand(lotId, held.Lot.Version, await ReasonAsync("scrap", "QUALITY"), "Wall too thick"));
+        Assert.Equal(0m, rejected.Quantity);
+        Assert.Contains(rejected.Warnings, w => w.Code == "counted_as_scrap");
+        await using (var admin = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            var defective = await admin.ExecuteScalarAsync<decimal>(
+                "SELECT sum(delta_qty) FROM ts.production_count WHERE job_id = @Job AND count_kind = 'defective'", new { Job = plant.Job });
+            Assert.Equal(100m, defective);
+        }
+
+        // A number lot attribute standing for the characteristic records a result when it is set, and holds the lot when it fails.
+        CreatedResponse attribute = await db.SendAsync(new CreateLotAttributeCommand(plant.Site, "WALL", "Wall", "number", null, [], true, [], 1, wall.Id));
+        var second = (await db.SendAsync(new ReportProductionCommand(plant.Job, null, 50m, 0m, plant.Metre, null, plant.Staging))).Lots.Single().LotId;
+        await db.SendAsync(new SetLotAttributeCommand(second, attribute.Id, 0, "3.5"));
+        var fromAttribute = Assert.Single(await QueryAsync<Application.Quality.ListQualityResultsQuery, IReadOnlyList<Contracts.Quality.QualityResultDto>>(
+            new Application.Quality.ListQualityResultsQuery(new Application.Quality.QualityResultFilter(null, LotId: second))));
+        Assert.Equal(("lot_attribute", false), (fromAttribute.Source, fromAttribute.Conforms));
+        Assert.Equal(LotStatus.OnHold, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(second))).Lot.Status);
+
+        // The shop order sheet carries the released specification; a new draft starts from it.
+        await using (var admin = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            var order = await admin.ExecuteScalarAsync<Guid>("SELECT work_order_id FROM core.job WHERE id = @Id", new { Id = plant.Job });
+            var sheet = await QueryAsync<Application.WorkOrders.GetShopOrderQuery, Contracts.WorkOrders.ShopOrderDto>(new Application.WorkOrders.GetShopOrderQuery(order));
+            Assert.Equal(2, sheet.Specification!.Items.Count);
+        }
+
+        CreatedResponse next = await db.SendAsync(new Application.Quality.StartSpecDraftCommand(spec.Id));
+        var copy = await QueryAsync<Application.Quality.GetSpecVersionQuery, Contracts.Quality.SpecVersionDto>(new Application.Quality.GetSpecVersionQuery(spec.Id, next.Id));
+        Assert.Equal((2, 2), (copy.Number, copy.Definition.Items.Count));
+        Assert.DoesNotContain(copy.Definition.Items, i => released.Items.Any(r => r.ItemId == i.Id));
+    }
+
     private async Task<Plant> CreatePlantAsync()
     {
         CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(

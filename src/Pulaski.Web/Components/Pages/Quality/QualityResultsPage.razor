@@ -1,0 +1,344 @@
+@page "/quality/results"
+@attribute [RequiresView(PermissionCodes.QualityView)]
+@using System.Globalization
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+@inject TimeProvider Clock
+
+<PageTitle>Quality results · Pulaski</PageTitle>
+
+@* Quality results (#65): record what was measured or inspected against a lot or a job, checked against the material's released specification. *@
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Quality results</h1>
+        <p class="text-muted mb-0">
+            What was measured or inspected, against a lot or a job's run, checked against the material's released
+            <a href="quality/specs">specification</a>. A failure of a characteristic that holds the lot puts the lot on hold.
+        </p>
+    </div>
+    <div class="inv-head-tools">
+        @if (Sites.Sites.Count > 1)
+        {
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+@if (_response is { } response)
+{
+    <div class="alert @(response.Conforms == false ? "alert-warning" : "alert-success") small" role="status">
+        <strong>@(response.Conforms switch { true => "In specification.", false => "Out of specification.", _ => "Recorded." })</strong>
+        @foreach (var note in response.Notes)
+        {
+            <div>@note</div>
+        }
+    </div>
+}
+
+@if (Sites.SiteId is { } siteId && User.Can(PermissionCodes.QualityRecord, siteId))
+{
+    <section class="inv-facts mb-3" aria-labelledby="record-heading">
+        <h2 class="h6" id="record-heading">Record a result</h2>
+        <form class="row g-2 align-items-end" @onsubmit="RecordAsync" @onsubmit:preventDefault>
+            <div class="col-12 col-md-4">
+                <label class="form-label small fw-semibold" for="q-lot">Lot</label>
+                @if (_lot is { } lot)
+                {
+                    <div class="input-group input-group-sm">
+                        <span class="form-control">@lot.Label</span>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="ClearLot">Change</button>
+                    </div>
+                    <div class="small text-muted">@lot.Detail</div>
+                }
+                else
+                {
+                    <div class="input-group input-group-sm">
+                        <input id="q-lot" class="form-control" placeholder="Scan or type a lot number" @bind="_lotCode" />
+                        <button type="button" class="btn btn-outline-secondary" disabled="@string.IsNullOrWhiteSpace(_lotCode)" @onclick="FindLotAsync">Find</button>
+                    </div>
+                    @foreach (var match in _lotMatches)
+                    {
+                        <button type="button" class="btn btn-sm btn-link p-0 d-block" @onclick="() => PickLotAsync(match)">@match.Label · @match.Detail</button>
+                    }
+                }
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label small fw-semibold">Job</label>
+                <div class="form-control form-control-sm">@(JobNumber ?? "None (open from a job's page to record against it)")</div>
+            </div>
+            <div class="col-12 col-md-5">
+                <label class="form-label small fw-semibold" for="q-characteristic">Characteristic</label>
+                <select id="q-characteristic" class="form-select form-select-sm" @bind="_characteristicId">
+                    <option value="@Guid.Empty">Choose…</option>
+                    @if (_spec is { } spec)
+                    {
+                        <optgroup label="@($"In {spec.MaterialCode}'s specification (version {spec.VersionNumber})")">
+                            @foreach (var item in spec.Items)
+                            {
+                                <option value="@item.CharacteristicId">@item.Code · @item.Name · @item.Limits@(item.UomCode is { } u && item.DataKind != "attribute" ? " " + u : "")</option>
+                            }
+                        </optgroup>
+                    }
+                    <optgroup label="@(_spec is null ? "Characteristics" : "Others (no limits for this material)")">
+                        @foreach (var c in _characteristics.Where(c => c.IsActive && (_spec?.Items.All(i => i.CharacteristicId != c.Id) ?? true)))
+                        {
+                            <option value="@c.Id">@c.Code · @c.Name</option>
+                        }
+                    </optgroup>
+                </select>
+            </div>
+            @if (Chosen is { } chosen)
+            {
+                @if (chosen.DataKind == "attribute")
+                {
+                    <div class="col-6 col-md-2">
+                        <label class="form-label small fw-semibold" for="q-inspected">Inspected</label>
+                        <input id="q-inspected" type="number" min="1" class="form-control form-control-sm" @bind="_inspected" />
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label small fw-semibold" for="q-defects">Defective</label>
+                        <input id="q-defects" type="number" min="0" class="form-control form-control-sm" @bind="_defects" />
+                    </div>
+                }
+                else
+                {
+                    <div class="col-12 col-md-4">
+                        <label class="form-label small fw-semibold" for="q-values">Values@(chosen.UomCode is { } u ? $" ({u})" : "")</label>
+                        <input id="q-values" class="form-control form-control-sm" placeholder="3.31 3.29 3.34" @bind="_values" />
+                        <div class="small text-muted">One value, or several from one sample, separated by spaces.</div>
+                    </div>
+                }
+            }
+            <div class="col-6 col-md-2">
+                <label class="form-label small fw-semibold" for="q-source">Source</label>
+                <select id="q-source" class="form-select form-select-sm" @bind="_source">
+                    <option value="manual">At the line</option>
+                    <option value="lab">Laboratory</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold" for="q-when">Sampled at</label>
+                <input id="q-when" type="datetime-local" class="form-control form-control-sm" @bind="_when" />
+            </div>
+            <div class="col-12 col-md-5">
+                <label class="form-label small fw-semibold" for="q-comment">Comment</label>
+                <input id="q-comment" class="form-control form-control-sm" maxlength="1000" @bind="_comment" />
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-sm btn-primary" disabled="@(_busy || Chosen is null || (_lot is null && JobId is null))">Record</button>
+            </div>
+        </form>
+    </section>
+}
+
+<div class="inv-toolbar">
+    <select class="form-select" aria-label="Characteristic" value="@(_filterCharacteristic?.ToString() ?? "")" @onchange="OnFilterChangedAsync">
+        <option value="">Every characteristic</option>
+        @foreach (var c in _characteristics)
+        {
+            <option value="@c.Id">@c.Code · @c.Name</option>
+        }
+    </select>
+    <div class="form-check">
+        <input id="q-failing" type="checkbox" class="form-check-input" checked="@_failingOnly" @onchange="OnFailingChangedAsync" />
+        <label class="form-check-label" for="q-failing">Out of specification only</label>
+    </div>
+</div>
+
+@if (_results is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    <QualityResultsTable Results="_results" TimeZone="@Sites.Site?.TimeZone" Changed="LoadResultsAsync"
+                         Empty="@(_failingOnly ? "Nothing out of specification." : "No results yet.")" />
+}
+
+@code {
+    [SupplyParameterFromQuery] public Guid? LotId { get; set; }
+
+    [SupplyParameterFromQuery] public Guid? JobId { get; set; }
+
+    [SupplyParameterFromQuery] public string? JobNumber { get; set; }
+
+    [SupplyParameterFromQuery] public Guid? MaterialId { get; set; }
+
+    private IReadOnlyList<CharacteristicDto> _characteristics = [];
+    private IReadOnlyList<QualityResultDto>? _results;
+    private ReleasedSpecDto? _spec;
+    private ScanMatchDto? _lot;
+    private Guid? _lotMaterialId;
+    private IReadOnlyList<ScanMatchDto> _lotMatches = [];
+    private string? _lotCode;
+    private Guid _characteristicId;
+    private string? _values;
+    private int? _inspected;
+    private int? _defects;
+    private string _source = "manual";
+    private DateTime _when;
+    private string? _comment;
+    private Guid? _filterCharacteristic;
+    private bool _failingOnly;
+    private bool _busy;
+    private QualityResultResponse? _response;
+    private ApiException? _error;
+
+    private CharacteristicDto? Chosen => _characteristics.FirstOrDefault(c => c.Id == _characteristicId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _characteristics = await Api.ListCharacteristicsAsync();
+            ResetWhen();
+            if (LotId is { } lotId)
+            {
+                var lot = (await Api.GetLotAsync(lotId)).Lot;
+                Sites.SiteId = lot.SiteId;
+                await PickLotAsync(new ScanMatchDto
+                {
+                    Kind = "lot",
+                    Id = lot.Id,
+                    Label = InventoryView.LotLabel(lot.LotNumber, lot.IsBulk, lot.LocationCode),
+                    Detail = $"{lot.MaterialCode} · {InventoryView.Qty(lot.Quantity)} {lot.UomCode}",
+                    MatchedBy = "label",
+                }, lot.MaterialId);
+            }
+            else if (MaterialId is { } materialId)
+            {
+                _spec = await Api.GetReleasedSpecAsync(materialId);
+            }
+
+            await LoadResultsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private void ResetWhen() => _when = Display.ToSite(Clock.GetUtcNow(), Sites.Site?.TimeZone).DateTime;
+
+    private async Task LoadResultsAsync()
+    {
+        try
+        {
+            _results = await Api.ListQualityResultsAsync(Sites.SiteId, lotId: LotId, jobId: JobId, characteristicId: _filterCharacteristic, failingOnly: _failingOnly);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        ClearLot();
+        await LoadResultsAsync();
+    }
+
+    private async Task OnFilterChangedAsync(ChangeEventArgs e)
+    {
+        _filterCharacteristic = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await LoadResultsAsync();
+    }
+
+    private async Task OnFailingChangedAsync(ChangeEventArgs e)
+    {
+        _failingOnly = e.Value is true;
+        await LoadResultsAsync();
+    }
+
+    private async Task FindLotAsync()
+    {
+        _error = null;
+        try
+        {
+            var scan = await Api.ResolveScanAsync(Sites.SiteId!.Value, _lotCode!);
+            _lotMatches = [.. scan.Matches.Where(m => m.Kind == "lot")];
+            if (_lotMatches.Count == 1)
+            {
+                await PickLotAsync(_lotMatches[0]);
+            }
+            else if (_lotMatches.Count == 0)
+            {
+                _error = new ApiException(404, "No lot found", $"No lot at this site matches {_lotCode}.", null);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task PickLotAsync(ScanMatchDto match, Guid? materialId = null)
+    {
+        _lot = match;
+        _lotMatches = [];
+        _lotMaterialId = materialId ?? (await Api.GetLotAsync(match.Id)).Lot.MaterialId;
+        _spec = await Api.GetReleasedSpecAsync(_lotMaterialId.Value);
+    }
+
+    private void ClearLot()
+    {
+        _lot = null;
+        _lotMaterialId = null;
+        _lotCode = null;
+        _spec = null;
+    }
+
+    private async Task RecordAsync()
+    {
+        _busy = true;
+        _error = null;
+        _response = null;
+        try
+        {
+            var values = Chosen?.DataKind == "attribute"
+                ? null
+                : (_values ?? "").Split([' ', ',', ';'], StringSplitOptions.RemoveEmptyEntries)
+                    .Select(v => decimal.TryParse(v, NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : throw new FormatException(v))
+                    .ToList();
+            _response = await Api.RecordQualityResultAsync(Sites.SiteId!.Value, new RecordQualityResultRequest
+            {
+                CharacteristicId = _characteristicId,
+                LotId = _lot?.Id,
+                JobId = JobId,
+                OccurredAt = Display.FromSiteLocal(_when, Sites.Site?.TimeZone),
+                Values = values,
+                Inspected = Chosen?.DataKind == "attribute" ? _inspected : null,
+                Defects = Chosen?.DataKind == "attribute" ? _defects : null,
+                Source = _source,
+                Comment = _comment,
+            });
+            (_values, _inspected, _defects, _comment) = (null, null, null, null);
+            ResetWhen();
+            await LoadResultsAsync();
+        }
+        catch (FormatException ex)
+        {
+            _error = new ApiException(400, "Not a number", $"{ex.Message} isn't a number; use a decimal point.", null);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

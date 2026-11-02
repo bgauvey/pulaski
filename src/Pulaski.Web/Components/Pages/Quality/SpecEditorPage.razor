@@ -1,0 +1,288 @@
+@page "/quality/specs/{Id:guid}"
+@attribute [RequiresView(PermissionCodes.QualityView)]
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+<PageTitle>@(_spec?.MaterialCode ?? "Specification") · Specifications · Pulaski</PageTitle>
+
+<p class="small mb-2"><a href="quality/specs">Specifications</a></p>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Specs" What="maintain specifications" />
+
+@if (_spec is null || _version is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-3">
+        <div>
+            <h1 class="mb-1">@_spec.MaterialCode</h1>
+            <p class="text-muted mb-0">@_spec.MaterialName</p>
+        </div>
+        <div class="d-flex flex-wrap gap-1 align-items-center">
+            @foreach (var v in _spec.Versions)
+            {
+                <button type="button" class="btn btn-sm @(v.Id == _version.Id ? "btn-secondary" : "btn-outline-secondary")" @onclick="() => OpenVersionAsync(v.Id)">
+                    Version @v.Number · @Display.Label(v.Status)
+                </button>
+            }
+            @if (CanStartDraft && CanEdit)
+            {
+                <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_saving" @onclick="StartDraftAsync">New draft</button>
+            }
+        </div>
+    </div>
+
+    <div class="table-panel mb-3">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Characteristic</th>
+                    <th style="width: 8rem" class="text-end">Lower limit</th>
+                    <th style="width: 8rem" class="text-end">Target</th>
+                    <th style="width: 8rem" class="text-end">Upper limit</th>
+                    <th style="width: 8rem" class="text-end">Most defects</th>
+                    <th style="width: 8rem" class="text-center" title="A failing result for a lot puts the lot on hold">Holds the lot</th>
+                    <th style="width: 2.5rem"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in _items)
+                {
+                    var characteristic = _characteristics.FirstOrDefault(c => c.Id == item.CharacteristicId);
+                    var measured = characteristic?.DataKind != "attribute";
+                    <tr @key="item.Id" class="@(Flagged(item.Id) ? "table-warning" : "")">
+                        <td>
+                            <select class="form-select form-select-sm" value="@item.CharacteristicId" disabled="@ReadOnly"
+                                    @onchange="e => Edit(() => SetCharacteristic(item, e))">
+                                <option value="@Guid.Empty">Choose a characteristic…</option>
+                                @foreach (var c in _characteristics.Where(c => c.IsActive || c.Id == item.CharacteristicId))
+                                {
+                                    <option value="@c.Id">@c.Code · @c.Name@(c.UomCode is { } u ? $" ({u})" : "")@(c.DataKind == "attribute" ? " · inspected" : "")</option>
+                                }
+                            </select>
+                        </td>
+                        <td>@Number(item.Lsl, v => item.Lsl = v, !measured)</td>
+                        <td>@Number(item.Target, v => item.Target = v, !measured)</td>
+                        <td>@Number(item.Usl, v => item.Usl = v, !measured)</td>
+                        <td>
+                            <input type="number" class="form-control form-control-sm text-end" min="0" step="1" aria-label="Most defects allowed"
+                                   value="@item.MaxDefects" disabled="@(ReadOnly || measured)"
+                                   @onchange="e => Edit(() => item.MaxDefects = int.TryParse(e.Value?.ToString(), out var n) ? n : null)" />
+                        </td>
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input" aria-label="Holds the lot on failure" checked="@item.HoldOnFail" disabled="@ReadOnly"
+                                   @onchange="e => Edit(() => item.HoldOnFail = e.Value is true)" />
+                        </td>
+                        <td>
+                            @if (!ReadOnly)
+                            {
+                                <button type="button" class="btn btn-sm btn-link text-danger p-0" title="Remove" @onclick="() => Edit(() => _items.Remove(item))">×</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (_items.Count == 0)
+                {
+                    <tr><td colspan="7" class="text-muted small">No characteristics yet.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (!ReadOnly)
+    {
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <button type="button" class="btn btn-outline-secondary" @onclick="AddItem"><Icon Name="plus" /> Add characteristic</button>
+            <button type="button" class="btn btn-primary" disabled="@(_saving || !_dirty)" @onclick="SaveAsync">@(_dirty ? "Save draft" : "Saved")</button>
+        </div>
+
+        @if (_problems.Count > 0)
+        {
+            <div class="alert alert-warning small">
+                <strong>Before this version can be released:</strong>
+                <ul class="mb-0">
+                    @foreach (var p in _problems)
+                    {
+                        <li>@p.Message</li>
+                    }
+                </ul>
+            </div>
+        }
+        else
+        {
+            <div class="d-flex flex-wrap gap-2 align-items-end">
+                <div class="flex-grow-1" style="max-width: 28rem">
+                    <label class="form-label" for="note">Release note</label>
+                    <input id="note" class="form-control" maxlength="500" @bind="_note" />
+                </div>
+                <button type="button" class="btn btn-success" disabled="@(_saving || _dirty)" @onclick="ReleaseAsync">Release version @_version.Number</button>
+            </div>
+        }
+    }
+    else if (_version.Status != "draft")
+    {
+        <p class="small text-muted">
+            Version @_version.Number is @Display.Label(_version.Status)@(_version.ReleasedAt is { } at ? $", released {at:yyyy-MM-dd}" : "")@(_version.ReleasedBy is { } by ? $" by {by}" : "")@(_version.Note is null ? "" : $": {_version.Note}").
+            A released version never changes; start a new draft to change the specification.
+        </p>
+    }
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private SpecDto? _spec;
+    private SpecVersionDto? _version;
+    private IReadOnlyList<CharacteristicDto> _characteristics = [];
+    private List<ItemModel> _items = [];
+    private IReadOnlyList<SpecProblemDto> _problems = [];
+    private string? _note;
+    private bool _dirty;
+    private bool _saving;
+    private ApiException? _error;
+
+    private bool CanEdit => User.Can(PermissionCodes.Specs);
+
+    private bool ReadOnly => _version?.Status != "draft" || !CanEdit;
+
+    private bool CanStartDraft => _spec is not null && _spec.Versions.All(v => v.Status != "draft") && _spec.Versions.Any(v => v.Status == "released");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _characteristics = await Api.ListCharacteristicsAsync();
+            await LoadAsync(null);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    // Opens the draft if there is one, else the newest version.
+    private async Task LoadAsync(Guid? versionId)
+    {
+        _spec = await Api.GetSpecAsync(Id);
+        var pick = versionId ?? _spec.Versions.FirstOrDefault(v => v.Status == "draft")?.Id ?? _spec.Versions.First().Id;
+        _version = await Api.GetSpecVersionAsync(Id, pick);
+        _items = [.. _version.Definition.Items.OrderBy(i => i.SortOrder).Select(ItemModel.From)];
+        _problems = _version.Problems;
+        _dirty = false;
+        _note = null;
+    }
+
+    private async Task OpenVersionAsync(Guid versionId) => await RunAsync(() => LoadAsync(versionId));
+
+    private void Edit(Action change)
+    {
+        change();
+        _dirty = true;
+    }
+
+    private void AddItem() => Edit(() => _items.Add(new ItemModel { Id = Guid.CreateVersion7() }));
+
+    // A new characteristic clears what doesn't fit its kind.
+    private void SetCharacteristic(ItemModel item, ChangeEventArgs e)
+    {
+        item.CharacteristicId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty;
+        if (_characteristics.FirstOrDefault(c => c.Id == item.CharacteristicId)?.DataKind == "attribute")
+        {
+            (item.Lsl, item.Target, item.Usl) = (null, null, null);
+            item.MaxDefects ??= 0;
+        }
+        else
+        {
+            item.MaxDefects = null;
+        }
+    }
+
+    private RenderFragment Number(decimal? value, Action<decimal?> set, bool disabled) =>
+        @<input type="number" class="form-control form-control-sm text-end" step="any" value="@value?.ToString("0.##########", System.Globalization.CultureInfo.InvariantCulture)"
+                disabled="@(ReadOnly || disabled)"
+                @onchange="@(e => Edit(() => set(decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null)))" />;
+
+    private bool Flagged(Guid itemId) => _problems.Any(p => p.ItemId == itemId);
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        var saved = await Api.SaveSpecDraftAsync(Id, _version!.Id, new SaveSpecDraftRequest
+        {
+            Version = _version.Version,
+            Definition = new SpecDefinitionDto { Items = [.. _items.Select((i, n) => i.ToDto(n * 10))] },
+        });
+        _version = _version with { Version = saved.Version };
+        _problems = saved.Problems;
+        _dirty = false;
+    });
+
+    private Task ReleaseAsync() => RunAsync(async () =>
+    {
+        await Api.ReleaseSpecVersionAsync(Id, _version!.Id, new ReleaseSpecVersionRequest { Version = _version.Version, Note = _note });
+        await LoadAsync(_version.Id);
+    });
+
+    private Task StartDraftAsync() => RunAsync(async () =>
+    {
+        var draft = await Api.StartSpecDraftAsync(Id);
+        await LoadAsync(draft.Id);
+    });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private sealed class ItemModel
+    {
+        public Guid Id { get; init; }
+        public Guid CharacteristicId { get; set; }
+        public decimal? Lsl { get; set; }
+        public decimal? Target { get; set; }
+        public decimal? Usl { get; set; }
+        public int? MaxDefects { get; set; }
+        public bool HoldOnFail { get; set; }
+
+        public static ItemModel From(SpecItemDto dto) => new()
+        {
+            Id = dto.Id,
+            CharacteristicId = dto.CharacteristicId,
+            Lsl = dto.Lsl,
+            Target = dto.Target,
+            Usl = dto.Usl,
+            MaxDefects = dto.MaxDefects,
+            HoldOnFail = dto.HoldOnFail,
+        };
+
+        public SpecItemDto ToDto(int sortOrder) => new()
+        {
+            Id = Id,
+            CharacteristicId = CharacteristicId,
+            Lsl = Lsl,
+            Target = Target,
+            Usl = Usl,
+            MaxDefects = MaxDefects,
+            HoldOnFail = HoldOnFail,
+            SortOrder = sortOrder,
+        };
+    }
+}

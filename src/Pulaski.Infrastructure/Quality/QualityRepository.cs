@@ -1,0 +1,396 @@
+using Pulaski.Application.Abstractions;
+using Pulaski.Application.Quality;
+using Pulaski.Domain.Quality;
+using Pulaski.Infrastructure.Inventory;
+using Pulaski.Infrastructure.Persistence;
+using Pulaski.Infrastructure.Processes;
+
+namespace Pulaski.Infrastructure.Quality;
+
+/// <summary>SQL shared by the write and read sides of quality (#65, D-085).</summary>
+internal static class QualitySql
+{
+    public const string CharacteristicColumns = """
+        c.id, c.code, c.name, c.description, c.data_kind, c.uom_id, c.decimals, c.is_active, c.xmin::text::bigint AS version
+        """;
+
+    public const string Characteristics = $"SELECT {CharacteristicColumns} FROM core.quality_characteristic c WHERE c.id = ANY(@Ids)";
+
+    public const string VersionColumns = """
+        v.id, v.spec_id, v.version_number AS number, v.status, v.definition::text AS definition_json, v.released_at, v.released_by, v.note,
+        v.xmin::text::bigint AS version
+        """;
+
+    internal sealed class CharacteristicRow
+    {
+        public Guid Id { get; init; }
+        public string Code { get; init; } = "";
+        public string Name { get; init; } = "";
+        public string? Description { get; init; }
+        public string DataKind { get; init; } = "";
+        public Guid? UomId { get; init; }
+        public int Decimals { get; init; }
+        public bool IsActive { get; init; }
+        public long Version { get; init; }
+
+        public Characteristic ToDomain() => new(Id, Code, Name, Description, DataKind, UomId, Decimals, IsActive);
+    }
+
+    internal sealed class VersionRow
+    {
+        public Guid Id { get; init; }
+        public Guid SpecId { get; init; }
+        public int Number { get; init; }
+        public string Status { get; init; } = "";
+        public string DefinitionJson { get; init; } = "";
+        public DateTimeOffset? ReleasedAt { get; init; }
+        public string? ReleasedBy { get; init; }
+        public string? Note { get; init; }
+        public long Version { get; init; }
+
+        public Versioned<SpecVersion> ToVersioned() => new(
+            new SpecVersion(Id, SpecId, Number, Status, new SpecDefinition(ProcessJson.Read<SpecItemsDocument>(DefinitionJson).Items), ReleasedAt, ReleasedBy, Note),
+            Version);
+    }
+}
+
+/// <summary>The stored shape of <c>core.material_spec_version.definition</c>: the items, camelCase, the same as the API's item DTOs.</summary>
+internal sealed record SpecItemsDocument(IReadOnlyList<SpecItem> Items);
+
+/// <summary>Write side of quality (#65, D-085). Every statement runs in the command's transaction.</summary>
+internal sealed class QualityRepository(DbSession session) : IQualityRepository
+{
+    private const string CharacteristicForUpdate = $"SELECT {QualitySql.CharacteristicColumns} FROM core.quality_characteristic c WHERE c.id = @Id FOR UPDATE";
+
+    private const string CodeExists = "SELECT EXISTS (SELECT 1 FROM core.quality_characteristic WHERE site_id IS NULL AND code = @Code)";
+
+    private const string InsertCharacteristic = """
+        INSERT INTO core.quality_characteristic (id, site_id, code, name, description, data_kind, chart_type, subgroup_size, uom_id, decimals, is_active,
+                                                 created_at, updated_at)
+        VALUES (@Id, NULL, @Code, @Name, @Description, @DataKind, @ChartType, 1, @UomId, @Decimals, @IsActive, @At, @At)
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string UpdateCharacteristic = """
+        UPDATE core.quality_characteristic
+        SET name = @Name, description = @Description, uom_id = @UomId, decimals = @Decimals, is_active = @IsActive, updated_at = @At
+        WHERE id = @Id
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string Material = "SELECT code, is_active FROM core.material WHERE id = @Id";
+
+    private const string SpecExists = "SELECT EXISTS (SELECT 1 FROM core.material_spec WHERE material_id = @MaterialId)";
+
+    private const string SpecForUpdate = "SELECT id, material_id, is_active, xmin::text::bigint AS version FROM core.material_spec WHERE id = @Id FOR UPDATE";
+
+    private const string InsertSpec = """
+        INSERT INTO core.material_spec (id, material_id, is_active, created_at, updated_at) VALUES (@Id, @MaterialId, @IsActive, @At, @At)
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string VersionForUpdate = $"""
+        SELECT {QualitySql.VersionColumns} FROM core.material_spec_version v WHERE v.spec_id = @SpecId AND v.id = @VersionId FOR UPDATE
+        """;
+
+    private const string ReleasedForUpdate = $"""
+        SELECT {QualitySql.VersionColumns} FROM core.material_spec_version v WHERE v.spec_id = @SpecId AND v.status = 'released' FOR UPDATE
+        """;
+
+    private const string HasDraft = "SELECT EXISTS (SELECT 1 FROM core.material_spec_version WHERE spec_id = @SpecId AND status = 'draft')";
+
+    private const string InsertVersion = """
+        INSERT INTO core.material_spec_version (id, spec_id, version_number, status, definition, released_at, released_by, note, created_at, updated_at)
+        VALUES (@Id, @SpecId, @Number, @Status, @Definition::jsonb, @ReleasedAt, @ReleasedBy, @Note, @At, @At)
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string UpdateVersion = """
+        UPDATE core.material_spec_version
+        SET status = @Status, definition = @Definition::jsonb, released_at = @ReleasedAt, released_by = @ReleasedBy, note = @Note, updated_at = @At
+        WHERE id = @Id
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string InsertItem = """
+        INSERT INTO core.material_spec_item (id, spec_version_id, characteristic_id, lsl, target, usl, max_defects, hold_on_fail, sort_order)
+        VALUES (@Id, @VersionId, @CharacteristicId, @Lsl, @Target, @Usl, @MaxDefects, @HoldOnFail, @SortOrder)
+        """;
+
+    private const string ItemInForce = """
+        SELECT i.id, i.characteristic_id, i.lsl, i.target, i.usl, i.max_defects, i.hold_on_fail, i.sort_order, v.version_number
+        FROM core.material_spec s
+        JOIN core.material_spec_version v ON v.spec_id = s.id AND v.status = 'released'
+        JOIN core.material_spec_item i ON i.spec_version_id = v.id
+        WHERE s.material_id = @MaterialId AND s.is_active AND i.characteristic_id = @CharacteristicId
+        FOR SHARE OF v
+        """;
+
+    // The run the job had at the time: the one open then, the latest such.
+    private const string JobContext = """
+        SELECT j.id AS job_id, j.job_number, j.site_id, j.material_id, j.equipment_id, r.id AS run_id, r.equipment_id AS run_equipment_id
+        FROM core.job j
+        LEFT JOIN LATERAL (
+            SELECT r.id, r.equipment_id FROM core.job_run r
+            WHERE r.job_id = j.id AND r.started_at <= @At AND (r.ended_at IS NULL OR r.ended_at >= @At)
+            ORDER BY r.started_at DESC LIMIT 1) r ON true
+        WHERE j.id = @JobId
+        """;
+
+    private const string LotProduction = $"""
+        SELECT e.job_id, e.run_id, e.effective_at
+        FROM ts.lot_event e
+        WHERE e.lot_id = @LotId AND e.event_kind = 'produced' AND e.job_id IS NOT NULL AND {LotEventSql.NotReversed}
+        ORDER BY e.occurred_at
+        LIMIT 1
+        """;
+
+    private const string FindReason = """
+        SELECT id FROM core.reason_code
+        WHERE reason_kind = @Kind AND code = @Code AND is_active AND (site_id = @SiteId OR site_id IS NULL)
+        ORDER BY site_id NULLS LAST
+        LIMIT 1
+        """;
+
+    private const string InsertResult = """
+        INSERT INTO ts.quality_sample (id, occurred_at, site_id, characteristic_id, equipment_id, job_id, run_id, lot_id, material_id, subgroup_size,
+                                       measured_values, mean, range, std_dev, inspected_count, defect_count, spec_item_id, conforms, source,
+                                       entered_by_user_id, recorded_by, recorded_at, comment)
+        VALUES (@Id, @OccurredAt, @SiteId, @CharacteristicId, @EquipmentId, @JobId, @RunId, @LotId, @MaterialId, @SubgroupSize,
+                @Values, @Mean, @Range, @StdDev, @Inspected, @Defects, @SpecItemId, @Conforms, @Source,
+                @EnteredByUserId, @RecordedBy, @RecordedAt, @Comment)
+        """;
+
+    private const string ResultForUpdate = """
+        SELECT id, occurred_at, site_id, characteristic_id, equipment_id, job_id, run_id, lot_id, material_id, measured_values, inspected_count,
+               defect_count, mean, range, std_dev, spec_item_id, conforms, source, entered_by_user_id, recorded_by, recorded_at, comment, is_excluded
+        FROM ts.quality_sample
+        WHERE id = @Id AND occurred_at = @OccurredAt
+        FOR UPDATE
+        """;
+
+    private const string Exclude = """
+        UPDATE ts.quality_sample
+        SET is_excluded = true, exclusion_reason_id = @ReasonId, excluded_note = @Note, excluded_by = @By, excluded_at = @At
+        WHERE id = @Id AND occurred_at = @OccurredAt
+        """;
+
+    public async Task<Versioned<Characteristic>?> GetCharacteristicForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<QualitySql.CharacteristicRow>(CharacteristicForUpdate, new { Id = id }, cancellationToken) is { } row
+            ? new Versioned<Characteristic>(row.ToDomain(), row.Version)
+            : null;
+
+    public async Task<IReadOnlyList<Characteristic>> GetCharacteristicsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<QualitySql.CharacteristicRow>(QualitySql.Characteristics, new { Ids = ids.ToArray() }, cancellationToken)).Select(r => r.ToDomain())];
+
+    public Task<bool> CharacteristicCodeExistsAsync(string code, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<bool>(CodeExists, new { Code = code }, cancellationToken);
+
+    public Task<long> InsertCharacteristicAsync(Characteristic characteristic, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(InsertCharacteristic, CharacteristicArgs(characteristic, at), cancellationToken);
+
+    public Task<long> UpdateCharacteristicAsync(Characteristic characteristic, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(UpdateCharacteristic, CharacteristicArgs(characteristic, at), cancellationToken);
+
+    public async Task<(string Code, bool IsActive)?> GetMaterialAsync(Guid id, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<MaterialRow>(Material, new { Id = id }, cancellationToken) is { } row ? (row.Code, row.IsActive) : null;
+
+    public Task<bool> SpecExistsForMaterialAsync(Guid materialId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<bool>(SpecExists, new { MaterialId = materialId }, cancellationToken);
+
+    public async Task<Versioned<MaterialSpec>?> GetSpecForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<SpecRow>(SpecForUpdate, new { Id = id }, cancellationToken) is { } row
+            ? new Versioned<MaterialSpec>(new MaterialSpec(row.Id, row.MaterialId, row.IsActive), row.Version)
+            : null;
+
+    public Task<long> InsertSpecAsync(MaterialSpec spec, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(InsertSpec, new { spec.Id, spec.MaterialId, spec.IsActive, At = at }, cancellationToken);
+
+    public async Task<Versioned<SpecVersion>?> GetVersionForUpdateAsync(Guid specId, Guid versionId, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<QualitySql.VersionRow>(VersionForUpdate, new { SpecId = specId, VersionId = versionId }, cancellationToken))?.ToVersioned();
+
+    public async Task<Versioned<SpecVersion>?> GetReleasedForUpdateAsync(Guid specId, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<QualitySql.VersionRow>(ReleasedForUpdate, new { SpecId = specId }, cancellationToken))?.ToVersioned();
+
+    public Task<bool> HasDraftAsync(Guid specId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<bool>(HasDraft, new { SpecId = specId }, cancellationToken);
+
+    public Task<long> InsertVersionAsync(SpecVersion version, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(InsertVersion, VersionArgs(version, at), cancellationToken);
+
+    public Task<long> UpdateVersionAsync(SpecVersion version, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(UpdateVersion, VersionArgs(version, at), cancellationToken);
+
+    public async Task InsertReleasedItemsAsync(SpecVersion version, CancellationToken cancellationToken)
+    {
+        foreach (var item in version.Definition.Items)
+        {
+            await session.ExecuteAsync(
+                InsertItem,
+                new { item.Id, VersionId = version.Id, item.CharacteristicId, item.Lsl, item.Target, item.Usl, item.MaxDefects, item.HoldOnFail, item.SortOrder },
+                cancellationToken);
+        }
+    }
+
+    public async Task<(SpecItem Item, int VersionNumber)?> GetItemInForceAsync(Guid materialId, Guid characteristicId, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<ItemRow>(ItemInForce, new { MaterialId = materialId, CharacteristicId = characteristicId }, cancellationToken) is { } row
+            ? (new SpecItem(row.Id, row.CharacteristicId, row.Lsl, row.Target, row.Usl, row.MaxDefects, row.HoldOnFail, row.SortOrder), row.VersionNumber)
+            : null;
+
+    public async Task<QualityJobContext?> GetJobContextAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<JobRow>(JobContext, new { JobId = jobId, At = at }, cancellationToken) is { } row
+            ? new QualityJobContext(row.JobId, row.JobNumber, row.SiteId, row.MaterialId, row.EquipmentId, row.RunId, row.RunEquipmentId)
+            : null;
+
+    public async Task<LotProduction?> GetLotProductionAsync(Guid lotId, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<ProductionRow>(LotProduction, new { LotId = lotId }, cancellationToken) is { } row
+            ? new LotProduction(row.JobId, row.RunId, row.EffectiveAt)
+            : null;
+
+    public Task<Guid?> FindReasonAsync(string kind, string code, Guid siteId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<Guid?>(FindReason, new { Kind = kind, Code = code, SiteId = siteId }, cancellationToken);
+
+    public Task InsertResultAsync(QualityResultRow result, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(
+            InsertResult,
+            new
+            {
+                result.Id,
+                result.OccurredAt,
+                result.SiteId,
+                result.CharacteristicId,
+                result.EquipmentId,
+                result.JobId,
+                result.RunId,
+                result.LotId,
+                result.MaterialId,
+                SubgroupSize = (short)result.Measurement.SubgroupSize,
+                Values = result.Measurement.Values?.ToArray(),
+                result.Statistics.Mean,
+                result.Statistics.Range,
+                result.Statistics.StdDev,
+                result.Measurement.Inspected,
+                result.Measurement.Defects,
+                result.SpecItemId,
+                result.Conforms,
+                result.Source,
+                result.EnteredByUserId,
+                result.RecordedBy,
+                result.RecordedAt,
+                result.Comment,
+            },
+            cancellationToken);
+
+    public async Task<QualityResultRow?> GetResultForUpdateAsync(Guid id, DateTimeOffset occurredAt, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<ResultRow>(ResultForUpdate, new { Id = id, OccurredAt = occurredAt }, cancellationToken))?.ToRow();
+
+    public Task ExcludeResultAsync(Guid id, DateTimeOffset occurredAt, Guid reasonId, string? note, string by, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(Exclude, new { Id = id, OccurredAt = occurredAt, ReasonId = reasonId, Note = note, By = by, At = at }, cancellationToken);
+
+    private static object CharacteristicArgs(Characteristic c, DateTimeOffset at) => new
+    {
+        c.Id,
+        c.Code,
+        c.Name,
+        c.Description,
+        c.DataKind,
+        c.ChartType,
+        c.UomId,
+        Decimals = (short)c.Decimals,
+        c.IsActive,
+        At = at,
+    };
+
+    private static object VersionArgs(SpecVersion version, DateTimeOffset at) => new
+    {
+        version.Id,
+        version.SpecId,
+        version.Number,
+        version.Status,
+        Definition = ProcessJson.Write(new SpecItemsDocument(version.Definition.Items)),
+        version.ReleasedAt,
+        version.ReleasedBy,
+        version.Note,
+        At = at,
+    };
+
+    private sealed class MaterialRow
+    {
+        public string Code { get; init; } = "";
+        public bool IsActive { get; init; }
+    }
+
+    private sealed class SpecRow
+    {
+        public Guid Id { get; init; }
+        public Guid MaterialId { get; init; }
+        public bool IsActive { get; init; }
+        public long Version { get; init; }
+    }
+
+    private sealed class ItemRow
+    {
+        public Guid Id { get; init; }
+        public Guid CharacteristicId { get; init; }
+        public decimal? Lsl { get; init; }
+        public decimal? Target { get; init; }
+        public decimal? Usl { get; init; }
+        public int? MaxDefects { get; init; }
+        public bool HoldOnFail { get; init; }
+        public int SortOrder { get; init; }
+        public int VersionNumber { get; init; }
+    }
+
+    private sealed class JobRow
+    {
+        public Guid JobId { get; init; }
+        public string JobNumber { get; init; } = "";
+        public Guid SiteId { get; init; }
+        public Guid? MaterialId { get; init; }
+        public Guid EquipmentId { get; init; }
+        public Guid? RunId { get; init; }
+        public Guid? RunEquipmentId { get; init; }
+    }
+
+    private sealed class ProductionRow
+    {
+        public Guid JobId { get; init; }
+        public Guid? RunId { get; init; }
+        public DateTimeOffset EffectiveAt { get; init; }
+    }
+
+    private sealed class ResultRow
+    {
+        public Guid Id { get; init; }
+        public DateTimeOffset OccurredAt { get; init; }
+        public Guid SiteId { get; init; }
+        public Guid CharacteristicId { get; init; }
+        public Guid? EquipmentId { get; init; }
+        public Guid? JobId { get; init; }
+        public Guid? RunId { get; init; }
+        public Guid? LotId { get; init; }
+        public Guid MaterialId { get; init; }
+        public decimal[]? MeasuredValues { get; init; }
+        public int? InspectedCount { get; init; }
+        public int? DefectCount { get; init; }
+        public decimal? Mean { get; init; }
+        public decimal? Range { get; init; }
+        public decimal? StdDev { get; init; }
+        public Guid? SpecItemId { get; init; }
+        public bool? Conforms { get; init; }
+        public string Source { get; init; } = "";
+        public Guid? EnteredByUserId { get; init; }
+        public string RecordedBy { get; init; } = "";
+        public DateTimeOffset RecordedAt { get; init; }
+        public string? Comment { get; init; }
+        public bool IsExcluded { get; init; }
+
+        public QualityResultRow ToRow() => new(
+            Id, OccurredAt, SiteId, CharacteristicId, EquipmentId, JobId, RunId, LotId, MaterialId,
+            new QualityMeasurement(MeasuredValues, InspectedCount, DefectCount), new SampleStatistics(Mean, Range, StdDev),
+            SpecItemId, Conforms, Source, EnteredByUserId, RecordedBy, RecordedAt, Comment)
+        {
+            IsExcluded = IsExcluded,
+        };
+    }
+}

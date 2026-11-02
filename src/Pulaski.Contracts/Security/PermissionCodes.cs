@@ -21,11 +21,12 @@ public static class PermissionCodes
     public const string MachinesView = "machines.view";
     public const string SiteSettingsView = "site_settings.view";
     public const string IntegrationsView = "integrations.view";
+    public const string QualityView = "quality.view";
 
     /// <summary>Every view permission (D-039).</summary>
     public static IReadOnlyList<string> Views { get; } =
         [OverviewView, WorkOrdersView, ScheduleView, FloorView, InventoryView, EquipmentView, MaterialsView, ProcessesView, UnitsView, ReasonsView, ShiftsView, LaborView,
-         MachinesView, SiteSettingsView, IntegrationsView];
+         MachinesView, SiteSettingsView, IntegrationsView, QualityView];
     public const string SchedulePlan = "schedule.plan";
     public const string SchedulePlanPartial = "schedule.plan_partial";
     public const string WorkOrderManage = "work_order.manage";
@@ -64,4 +65,7 @@ public static class PermissionCodes
     public const string EdgeIngest = "edge.ingest";
     public const string DowntimeCode = "downtime.code";
     public const string DowntimeAdjust = "downtime.adjust";
+    public const string QualityRecord = "quality.record";
+    public const string QualityDecide = "quality.decide";
+    public const string Specs = "specs.manage";
 }

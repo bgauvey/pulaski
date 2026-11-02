@@ -1,0 +1,209 @@
+@page "/quality/characteristics"
+@attribute [RequiresView(PermissionCodes.QualityView)]
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+<PageTitle>Characteristics · Pulaski</PageTitle>
+
+@* What is measured or inspected (#65): enterprise-wide, so any material's specification can name it. *@
+<p class="small mb-2"><a href="quality/specs">Specifications</a></p>
+<div class="mb-3">
+    <h1 class="mb-1">Characteristics</h1>
+    <p class="text-muted mb-0">
+        What is measured (a wall thickness, a melt flow index) or inspected (surface defects). Specifications give each one its limits per material.
+        Code and kind can't change once created; switch one off instead.
+    </p>
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Specs" What="maintain characteristics" />
+@if (_message is { } message)
+{
+    <div class="alert alert-success small" role="status">@message</div>
+}
+
+@if (_characteristics is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    <div class="table-panel mb-3">
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Code</th><th>Name</th><th>Kind</th><th>Unit</th><th class="text-end">Decimals</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _characteristics)
+                {
+                    <tr @key="c.Id" class="@(c.IsActive ? "" : "text-muted")">
+                        <td class="fw-semibold">@c.Code</td>
+                        <td>@c.Name<div class="small text-muted">@c.Description</div></td>
+                        <td>@(c.DataKind == "attribute" ? "Inspected (defects)" : "Measured")</td>
+                        <td>@(c.UomCode ?? "—")</td>
+                        <td class="text-end">@c.Decimals</td>
+                        <td class="text-end text-nowrap">
+                            @if (!c.IsActive)
+                            {
+                                <span class="chip me-2">Off</span>
+                            }
+                            @if (CanManage)
+                            {
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => Edit(c)">Change</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (_characteristics.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-muted small">No characteristics yet.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (CanManage)
+    {
+        <form class="row g-2 align-items-end" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+            <div class="col-12"><h2 class="h6 mb-0">@(_editing is null ? "Add a characteristic" : $"Change {_editing.Code}")</h2></div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small fw-semibold" for="ch-code">Code</label>
+                <input id="ch-code" class="form-control form-control-sm" maxlength="30" @bind="_code" disabled="@(_editing is not null)" />
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold" for="ch-name">Name</label>
+                <input id="ch-name" class="form-control form-control-sm" maxlength="100" @bind="_name" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small fw-semibold" for="ch-kind">Kind</label>
+                <select id="ch-kind" class="form-select form-select-sm" @bind="_kind" disabled="@(_editing is not null)">
+                    <option value="variable">Measured</option>
+                    <option value="attribute">Inspected (defects)</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small fw-semibold" for="ch-unit">Unit</label>
+                <select id="ch-unit" class="form-select form-select-sm" value="@(_uomId?.ToString() ?? "")" disabled="@(_kind == "attribute")"
+                        @onchange="@(e => _uomId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
+                    <option value="">None</option>
+                    @foreach (var u in _uoms.Where(u => u.IsActive || u.Id == _uomId))
+                    {
+                        <option value="@u.Id">@u.Code</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6 col-md-1">
+                <label class="form-label small fw-semibold" for="ch-decimals">Decimals</label>
+                <input id="ch-decimals" type="number" min="0" max="6" class="form-control form-control-sm" @bind="_decimals" />
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small fw-semibold" for="ch-description">Description</label>
+                <input id="ch-description" class="form-control form-control-sm" maxlength="500" @bind="_description" />
+            </div>
+            @if (_editing is not null)
+            {
+                <div class="col-6 col-md-2 form-check ms-2">
+                    <input id="ch-active" type="checkbox" class="form-check-input" @bind="_active" />
+                    <label class="form-check-label small" for="ch-active">On</label>
+                </div>
+            }
+            <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">@(_editing is null ? "Add" : "Save")</button>
+                @if (_editing is not null)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="Clear">Cancel</button>
+                }
+            </div>
+        </form>
+    }
+}
+
+@code {
+    private IReadOnlyList<CharacteristicDto>? _characteristics;
+    private IReadOnlyList<UomDto> _uoms = [];
+    private CharacteristicDto? _editing;
+    private string _code = "";
+    private string _name = "";
+    private string _kind = "variable";
+    private Guid? _uomId;
+    private int _decimals = 3;
+    private string? _description;
+    private bool _active = true;
+    private bool _saving;
+    private string? _message;
+    private ApiException? _error;
+
+    private bool CanManage => User.Can(PermissionCodes.Specs);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _uoms = await Api.ListUomsAsync();
+            _characteristics = await Api.ListCharacteristicsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private void Edit(CharacteristicDto c)
+    {
+        _editing = c;
+        (_code, _name, _kind, _uomId, _decimals, _description, _active) = (c.Code, c.Name, c.DataKind, c.UomId, c.Decimals, c.Description, c.IsActive);
+    }
+
+    private void Clear()
+    {
+        _editing = null;
+        (_code, _name, _kind, _uomId, _decimals, _description, _active) = ("", "", "variable", null, 3, null, true);
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            if (_editing is null)
+            {
+                await Api.CreateCharacteristicAsync(new CreateCharacteristicRequest
+                {
+                    Code = _code,
+                    Name = _name,
+                    Description = _description,
+                    DataKind = _kind,
+                    UomId = _kind == "attribute" ? null : _uomId,
+                    Decimals = _decimals,
+                });
+                _message = $"Added {_code.Trim().ToUpperInvariant()}.";
+            }
+            else
+            {
+                await Api.UpdateCharacteristicAsync(_editing.Id, new UpdateCharacteristicRequest
+                {
+                    Version = _editing.Version,
+                    Name = _name,
+                    Description = _description,
+                    UomId = _kind == "attribute" ? null : _uomId,
+                    Decimals = _decimals,
+                    IsActive = _active,
+                });
+                _message = $"Saved {_editing.Code}.";
+            }
+
+            Clear();
+            _characteristics = await Api.ListCharacteristicsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

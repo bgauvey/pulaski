@@ -10,11 +10,11 @@ namespace Pulaski.Application.Inventory;
 /// <summary>A new lot attribute at a site (D-056). Its code and type are fixed once created.</summary>
 public sealed record CreateLotAttributeCommand(
     Guid SiteId, string Code, string Name, string DataType, Guid? UomId, IReadOnlyList<string> Choices, bool AppliesToAll,
-    IReadOnlyList<Guid> ClassIds, int SortOrder) : ICommand<CreatedResponse>;
+    IReadOnlyList<Guid> ClassIds, int SortOrder, Guid? CharacteristicId = null) : ICommand<CreatedResponse>;
 
 public sealed record UpdateLotAttributeCommand(
     Guid Id, long ExpectedVersion, string Name, Guid? UomId, IReadOnlyList<string> Choices, bool AppliesToAll, IReadOnlyList<Guid> ClassIds,
-    int SortOrder, bool IsActive) : ICommand<VersionResponse>;
+    int SortOrder, bool IsActive, Guid? CharacteristicId = null) : ICommand<VersionResponse>;
 
 /// <summary>Sets one attribute of a lot, or with a blank value clears it (D-056). The lot itself doesn't change.</summary>
 /// <param name="LotId">The lot.</param>
@@ -45,6 +45,27 @@ internal static class LotRecordRules
         }
     }
 
+    /// <summary>A number attribute may stand for an active, measured quality characteristic (#65).</summary>
+    public static async Task EnsureCharacteristicAsync(
+        Quality.IQualityRepository? quality, Guid? characteristicId, string dataType, CancellationToken cancellationToken)
+    {
+        if (characteristicId is not { } id)
+        {
+            return;
+        }
+
+        if (dataType != LotAttributeTypes.Number)
+        {
+            throw new DomainRuleException("Only a number attribute can stand for a quality characteristic.");
+        }
+
+        var characteristic = quality is null ? null : (await quality.GetCharacteristicsAsync([id], cancellationToken)).SingleOrDefault();
+        if (characteristic is not { IsActive: true, DataKind: Domain.Quality.CharacteristicKinds.Variable })
+        {
+            throw new DomainRuleException("Choose an active, measured quality characteristic.");
+        }
+    }
+
     public static async Task EnsureUnitAsync(ILotRecordsRepository records, Guid? uomId, CancellationToken cancellationToken)
     {
         if (uomId is { } id && !await records.IsActiveUnitAsync(id, cancellationToken))
@@ -54,7 +75,8 @@ internal static class LotRecordRules
     }
 }
 
-internal sealed class CreateLotAttributeHandler(IUnitOfWork unitOfWork, ILotRecordsRepository records, IEventLog eventLog, IEventFactory events, IIdGenerator ids)
+internal sealed class CreateLotAttributeHandler(
+    IUnitOfWork unitOfWork, ILotRecordsRepository records, IEventLog eventLog, IEventFactory events, IIdGenerator ids, Quality.IQualityRepository? quality = null)
     : ICommandHandler<CreateLotAttributeCommand, CreatedResponse>
 {
     public async Task<CreatedResponse> HandleAsync(CreateLotAttributeCommand command, CancellationToken cancellationToken)
@@ -78,7 +100,11 @@ internal sealed class CreateLotAttributeHandler(IUnitOfWork unitOfWork, ILotReco
         await LotRecordRules.EnsureClassesAsync(records, command.ClassIds, cancellationToken);
         var attribute = LotAttributeDefinition.Create(
             ids.NewId(), command.SiteId, code, name, command.DataType.Trim().ToLowerInvariant(), command.UomId, command.Choices, command.AppliesToAll,
-            command.ClassIds, command.SortOrder);
+            command.ClassIds, command.SortOrder) with
+        {
+            CharacteristicId = command.CharacteristicId,
+        };
+        await LotRecordRules.EnsureCharacteristicAsync(quality, attribute.CharacteristicId, attribute.DataType, cancellationToken);
         var envelope = events.Create(EventTypes.LotAttributeCreated, "lot_attribute", attribute.Id, new { After = attribute });
         var version = await records.InsertAttributeAsync(attribute, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
@@ -87,7 +113,8 @@ internal sealed class CreateLotAttributeHandler(IUnitOfWork unitOfWork, ILotReco
     }
 }
 
-internal sealed class UpdateLotAttributeHandler(IUnitOfWork unitOfWork, ILotRecordsRepository records, IEventLog eventLog, IEventFactory events)
+internal sealed class UpdateLotAttributeHandler(
+    IUnitOfWork unitOfWork, ILotRecordsRepository records, IEventLog eventLog, IEventFactory events, Quality.IQualityRepository? quality = null)
     : ICommandHandler<UpdateLotAttributeCommand, VersionResponse>
 {
     public async Task<VersionResponse> HandleAsync(UpdateLotAttributeCommand command, CancellationToken cancellationToken)
@@ -109,7 +136,13 @@ internal sealed class UpdateLotAttributeHandler(IUnitOfWork unitOfWork, ILotReco
         }
 
         await LotRecordRules.EnsureClassesAsync(records, [.. command.ClassIds.Except(current.Value.ClassIds)], cancellationToken);
-        var updated = current.Value.Edit(name, command.UomId, command.Choices, command.AppliesToAll, command.ClassIds, command.SortOrder, command.IsActive);
+        var edited = current.Value.Edit(name, command.UomId, command.Choices, command.AppliesToAll, command.ClassIds, command.SortOrder, command.IsActive);
+        var updated = edited with { CharacteristicId = command.CharacteristicId };
+        if (updated.CharacteristicId != current.Value.CharacteristicId)
+        {
+            await LotRecordRules.EnsureCharacteristicAsync(quality, updated.CharacteristicId, updated.DataType, cancellationToken);
+        }
+
         if (Same(updated, current.Value))
         {
             return new VersionResponse(current.Version);
@@ -133,7 +166,10 @@ internal sealed class SetLotAttributeHandler(
     IInventoryRepository inventory,
     ILotRecordsRepository records,
     IEventLog eventLog,
-    IEventFactory events) : ICommandHandler<SetLotAttributeCommand, VersionResponse>
+    IEventFactory events,
+    Quality.IQualityRepository? quality = null,
+    IIdGenerator? ids = null,
+    IRequestContext? request = null) : ICommandHandler<SetLotAttributeCommand, VersionResponse>
 {
     public async Task<VersionResponse> HandleAsync(SetLotAttributeCommand command, CancellationToken cancellationToken)
     {
@@ -174,6 +210,16 @@ internal sealed class SetLotAttributeHandler(
             new { lot.LotNumber, AttributeId = attribute.Id, attribute.Code, Before = before.Display, After = value.Display });
         var version = await records.SaveValueAsync(lot.Id, attribute.Id, value, envelope.ActorId, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
+
+        // An attribute standing for a characteristic (#65) records a result, checked against the specification like any other.
+        if (attribute.CharacteristicId is { } characteristicId && value.Number is { } number && quality is not null && ids is not null && request is not null
+            && (await quality.GetCharacteristicsAsync([characteristicId], cancellationToken)).SingleOrDefault() is { IsActive: true } characteristic)
+        {
+            await new Quality.QualityRecorder(quality, inventory, eventLog, events, ids, request).RecordAsync(
+                lot.SiteId, characteristic, lot, null, Domain.Quality.QualityMeasurement.Measured(number), envelope.OccurredAt,
+                Domain.Quality.QualitySources.LotAttribute, $"Lot attribute {attribute.Code}", cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
         return new VersionResponse(version);
     }

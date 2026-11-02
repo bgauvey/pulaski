@@ -18,6 +18,9 @@ public sealed record LotAttributeDto
     public bool AppliesToAll { get; init; } = true;
     public IReadOnlyList<Guid> ClassIds { get; init; } = [];
     public IReadOnlyList<string> ClassCodes { get; init; } = [];
+
+    /// <summary>The quality characteristic a number attribute stands for (#65): setting it records a result checked against the specification.</summary>
+    public Guid? CharacteristicId { get; init; }
     public int SortOrder { get; init; }
     public bool IsActive { get; init; }
 
@@ -37,6 +40,7 @@ public sealed record CreateLotAttributeRequest
     public bool AppliesToAll { get; init; } = true;
     public IReadOnlyList<Guid> ClassIds { get; init; } = [];
     public int SortOrder { get; init; }
+    public Guid? CharacteristicId { get; init; }
 }
 
 public sealed record UpdateLotAttributeRequest
@@ -49,6 +53,7 @@ public sealed record UpdateLotAttributeRequest
     public IReadOnlyList<Guid> ClassIds { get; init; } = [];
     public int SortOrder { get; init; }
     public bool IsActive { get; init; } = true;
+    public Guid? CharacteristicId { get; init; }
 }
 
 /// <summary>A lot's attributes and documents (D-056).</summary>

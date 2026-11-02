@@ -1,0 +1,134 @@
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* A lot's quality (#65): the material's released specification, the results recorded for the lot, and, while it is held, rejecting it. *@
+<section class="inv-section" aria-labelledby="quality-title">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h2 id="quality-title" class="mb-0 me-auto">Quality</h2>
+        @if (User.Can(PermissionCodes.QualityRecord, Lot.SiteId))
+        {
+            <a class="btn btn-sm btn-outline-secondary" href="@($"quality/results?lotId={Lot.Id}")">Record a result</a>
+        }
+        @if (Held && Lot.Quantity > 0 && User.Can(PermissionCodes.QualityDecide, Lot.SiteId))
+        {
+            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="StartRejectAsync">Reject…</button>
+        }
+    </div>
+    <ProblemAlert Error="_error" />
+
+    @if (_spec is { } spec)
+    {
+        <p class="small text-muted">
+            Specification version @spec.VersionNumber:
+            @string.Join("; ", spec.Items.Select(i => $"{i.Code} {i.Limits}{(i.UomCode is { } u && i.DataKind != "attribute" ? " " + u : "")}"))
+        </p>
+    }
+    else if (_loaded)
+    {
+        <p class="small text-muted">@Lot.MaterialCode has no released specification, so results aren't checked.</p>
+    }
+
+    @if (_rejecting)
+    {
+        <form class="inv-facts mb-2" @onsubmit="RejectAsync" @onsubmit:preventDefault>
+            <p class="small mb-2">
+                Rejecting writes off all @InventoryView.Qty(Lot.Quantity) @Lot.UomCode as scrap. If the lot was made in a run, that quantity moves from good to
+                scrap there, at the time it was made, so it shows in OEE quality.
+            </p>
+            <div class="d-flex flex-wrap gap-2 align-items-end">
+                <div>
+                    <label class="form-label small fw-semibold" for="reject-reason">Scrap reason</label>
+                    <select id="reject-reason" class="form-select form-select-sm" @bind="_reasonId">
+                        <option value="@Guid.Empty">Choose…</option>
+                        @foreach (var reason in _reasons)
+                        {
+                            <option value="@reason.Id">@reason.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="flex-grow-1">
+                    <label class="form-label small fw-semibold" for="reject-comment">Comment</label>
+                    <input id="reject-comment" class="form-control form-control-sm" maxlength="500" @bind="_comment" />
+                </div>
+                <button type="submit" class="btn btn-sm btn-danger" disabled="@(_busy || _reasonId == Guid.Empty)">Reject the lot</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _rejecting = false">Cancel</button>
+            </div>
+        </form>
+    }
+
+    @if (_results is not null)
+    {
+        <QualityResultsTable Results="_results" TimeZone="@TimeZone" ShowTarget="false" Changed="LoadAsync" Empty="No results recorded for this lot." />
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public LotSummaryDto Lot { get; set; } = null!;
+
+    [Parameter] public string? TimeZone { get; set; }
+
+    /// <summary>The lot changed (rejected): the page reloads it.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private IReadOnlyList<QualityResultDto>? _results;
+    private ReleasedSpecDto? _spec;
+    private IReadOnlyList<ReasonCodeDto> _reasons = [];
+    private bool _loaded;
+    private bool _rejecting;
+    private Guid _reasonId;
+    private string? _comment;
+    private bool _busy;
+    private ApiException? _error;
+
+    private bool Held => Lot.Status is "on_hold" or "quarantine";
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _spec = await Api.GetReleasedSpecAsync(Lot.MaterialId);
+            _results = User.CanAny([PermissionCodes.QualityView], Lot.SiteId) ? await Api.ListQualityResultsAsync(Lot.SiteId, lotId: Lot.Id) : [];
+            _loaded = true;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task StartRejectAsync()
+    {
+        _rejecting = true;
+        try
+        {
+            _reasons = await Api.ListReasonCodesAsync("scrap", Lot.SiteId);
+            _reasonId = _reasons.FirstOrDefault(r => r.Code == "QUALITY")?.Id ?? Guid.Empty;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task RejectAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.RejectLotAsync(Lot.Id, new RejectLotRequest { Version = Lot.Version, ScrapReasonCodeId = _reasonId, Comment = _comment });
+            _rejecting = false;
+            await Changed.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

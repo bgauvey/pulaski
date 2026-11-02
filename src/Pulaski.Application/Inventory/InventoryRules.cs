@@ -91,6 +91,7 @@ internal static class InventoryRules
                 ReasonKinds.Hold => "Choose a hold reason.",
                 ReasonKinds.Scrap => "Choose a scrap reason.",
                 ReasonKinds.RunEnd => "Choose a reason for ending the run.",
+                ReasonKinds.SampleExclusion => "Choose why the result is left out.",
                 _ => "Choose an adjustment reason.",
             });
         }

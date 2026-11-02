@@ -12,7 +12,8 @@ public sealed record GetShopOrderQuery(Guid Id) : IQuery<ShopOrderDto>;
 internal sealed class GetShopOrderHandler(
     IWorkOrderReadStore workOrders,
     IBomReadStore boms,
-    IQueryHandler<GetLineTimelineQuery, LineTimelineDto> timelines)
+    IQueryHandler<GetLineTimelineQuery, LineTimelineDto> timelines,
+    Quality.IQualityReadStore? quality = null)
     : IQueryHandler<GetShopOrderQuery, ShopOrderDto>
 {
     public async Task<ShopOrderDto> HandleAsync(GetShopOrderQuery query, CancellationToken cancellationToken)
@@ -80,6 +81,7 @@ internal sealed class GetShopOrderHandler(
             Order = WorkOrderMapping.WithNextStatuses(order),
             SiteTimeZone = source.SiteTimeZone,
             Jobs = jobs,
+            Specification = quality is null ? null : await quality.GetReleasedSpecAsync(order.MaterialId, cancellationToken),
         };
     }
 

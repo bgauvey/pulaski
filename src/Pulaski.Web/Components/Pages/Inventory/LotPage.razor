@@ -202,6 +202,11 @@
 
     <LotRecordsPanel @key="l.Id" LotId="l.Id" SiteId="l.SiteId" TimeZone="@tz" />
 
+    @if (User.Can(PermissionCodes.QualityView, l.SiteId))
+    {
+        <Pulaski.Web.Components.Pages.Quality.LotQualityPanel @key="@($"{l.Id}-{l.Version}")" Lot="l" TimeZone="@tz" Changed="LoadAsync" />
+    }
+
     @if (l.IsBulk)
     {
         <BalanceAllocationPanel @key="l.Id" LotId="l.Id" TimeZone="@tz" />

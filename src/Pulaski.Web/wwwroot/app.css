@@ -364,6 +364,24 @@ a.card {
     background: var(--success);
 }
 
+/* A quality result (#65): in or out of specification, a dot in the status colour beside its label. */
+.chip-ok::before,
+.chip-warn::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--success);
+}
+
+.chip-warn {
+    border-color: var(--warning);
+}
+
+.chip-warn::before {
+    background: var(--warning);
+}
+
 /* ---- Alerts ---- */
 
 .alert {

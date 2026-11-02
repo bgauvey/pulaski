@@ -8,6 +8,9 @@ public sealed record ShopOrderDto
     public required WorkOrderDto Order { get; init; }
     public required string SiteTimeZone { get; init; }
     public IReadOnlyList<ShopOrderJobDto> Jobs { get; init; } = [];
+
+    /// <summary>The order material's released specification (#65); null when it has none.</summary>
+    public Quality.ReleasedSpecDto? Specification { get; init; }
 }
 
 /// <summary>The order, process operation, schedule, rate and planned components for one job.</summary>
