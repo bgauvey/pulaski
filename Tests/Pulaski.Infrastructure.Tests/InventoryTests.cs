@@ -937,6 +937,46 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Boxes_go_on_pallets_and_move_with_them_and_a_container_never_ends_up_inside_itself()
+    {
+        var plant = await CreatePlantAsync();
+        async Task<ContainerDto> GetAsync(Guid id) => await QueryAsync<GetContainerQuery, ContainerDto>(new GetContainerQuery(id));
+
+        CreatedResponse pallet = await db.SendAsync(new CreateContainerCommand(plant.Site, null, "pallet", plant.Stores));
+        CreatedResponse box = await db.SendAsync(new CreateContainerCommand(plant.Site, null, "box", plant.Staging));
+        var lot = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Staging, "R-NB-" + _suffix, 20m, plant.Kg));
+        await db.SendAsync(new PackLotCommand(lot.LotId, await VersionAsync(lot.LotId), box.Id));
+
+        // The box goes on the pallet: it and its lot move to the pallet's place.
+        await db.SendAsync(new PackContainerCommand(box.Id, (await GetAsync(box.Id)).Version, pallet.Id));
+        var onPallet = await GetAsync(box.Id);
+        Assert.Equal((pallet.Id, plant.Stores), (onPallet.ParentContainerId!.Value, onPallet.LocationId));
+        var lotNow = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId))).Lot;
+        Assert.Equal((plant.StoresCode, onPallet.Code), (lotNow.LocationCode, lotNow.ContainerCode));
+        var holder = await GetAsync(pallet.Id);
+        Assert.Equal((1, box.Id), (holder.ContainerCount, Assert.Single(holder.Containers).Id));
+
+        // Moving the pallet carries the box and its lot.
+        await db.SendAsync(new MoveContainerCommand(pallet.Id, holder.Version, plant.Staging));
+        Assert.Equal(plant.Staging, (await GetAsync(box.Id)).LocationId);
+        Assert.Equal(plant.StagingCode, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId))).Lot.LocationCode);
+
+        // No cycles; the pallet can't be retired with the box on it; a scan of the box says where it is.
+        await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new PackContainerCommand(pallet.Id, (await GetAsync(pallet.Id)).Version, box.Id)));
+        await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new RetireContainerCommand(pallet.Id, (await GetAsync(pallet.Id)).Version)));
+        var scan = await QueryAsync<ResolveScanQuery, ScanResultDto>(new ResolveScanQuery(plant.Site, onPallet.Barcode));
+        Assert.Contains("in " + holder.Code, Assert.Single(scan.Matches).Detail, StringComparison.Ordinal);
+
+        // Taken off, it stays where it is; moved alone, a box on a pallet leaves it.
+        await db.SendAsync(new PackContainerCommand(box.Id, (await GetAsync(box.Id)).Version, null));
+        Assert.Equal(((Guid?)null, plant.Staging), ((await GetAsync(box.Id)).ParentContainerId, (await GetAsync(box.Id)).LocationId));
+        await db.SendAsync(new PackContainerCommand(box.Id, (await GetAsync(box.Id)).Version, pallet.Id));
+        await db.SendAsync(new MoveContainerCommand(box.Id, (await GetAsync(box.Id)).Version, plant.Stores));
+        Assert.Null((await GetAsync(box.Id)).ParentContainerId);
+        Assert.Equal(0, (await GetAsync(pallet.Id)).ContainerCount);
+    }
+
+    [Fact]
     public async Task Allocations_set_stock_aside_first_expiry_first_are_used_up_by_consumption_and_refresh_as_stock_changes()
     {
         var plant = await CreatePlantAsync();

@@ -12,7 +12,37 @@ namespace Pulaski.Infrastructure.Inventory;
 internal sealed class ContainerRepository(DbSession session) : IContainerRepository
 {
     private const string Columns = """
-        id, site_id, code, kind, location_equipment_id AS location_id, is_active, created_at, created_by, xmin::text::bigint AS version
+        id, site_id, code, kind, location_equipment_id AS location_id, is_active, created_at, created_by, parent_container_id AS parent_id,
+        xmin::text::bigint AS version
+        """;
+
+    private const string LockMany = $"SELECT {Columns} FROM core.container WHERE id = ANY(@Ids) ORDER BY id FOR UPDATE";
+
+    // Everything inside, at any depth; the depth limit (5) keeps a damaged chain from running on.
+    private const string LockInside = """
+        WITH RECURSIVE below AS (
+            SELECT id, 1 AS depth FROM core.container WHERE parent_container_id = @Id AND is_active
+            UNION ALL
+            SELECT c.id, b.depth + 1 FROM core.container c JOIN below b ON c.parent_container_id = b.id WHERE c.is_active AND b.depth < 10)
+        SELECT c.id, c.site_id, c.code, c.kind, c.location_equipment_id AS location_id, c.is_active, c.created_at, c.created_by,
+               c.parent_container_id AS parent_id, c.xmin::text::bigint AS version, b.depth
+        FROM core.container c JOIN below b ON b.id = c.id
+        ORDER BY c.id
+        FOR UPDATE OF c
+        """;
+
+    private const string Ancestors = """
+        WITH RECURSIVE up AS (
+            SELECT parent_container_id AS id, 1 AS n FROM core.container WHERE id = @Id AND parent_container_id IS NOT NULL
+            UNION ALL
+            SELECT c.parent_container_id, up.n + 1 FROM core.container c JOIN up ON c.id = up.id WHERE c.parent_container_id IS NOT NULL AND up.n < 10)
+        SELECT id FROM up ORDER BY n
+        """;
+
+    private const string LotIdsIn = """
+        SELECT id FROM core.lot
+        WHERE container_id = ANY(@Ids) AND quantity > 0 AND status IN ('available','on_hold','quarantine')
+        ORDER BY id
         """;
 
     private const string GetById = $"SELECT {Columns} FROM core.container WHERE id = @Id FOR UPDATE";
@@ -28,7 +58,7 @@ internal sealed class ContainerRepository(DbSession session) : IContainerReposit
         """;
 
     private const string Update = """
-        UPDATE core.container SET location_equipment_id = @LocationId, is_active = @IsActive, updated_at = @At
+        UPDATE core.container SET location_equipment_id = @LocationId, is_active = @IsActive, parent_container_id = @ParentId, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -41,7 +71,7 @@ internal sealed class ContainerRepository(DbSession session) : IContainerReposit
 
     public async Task<Versioned<Container>?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<Row>(GetById, new { Id = id }, cancellationToken) is { } r
-            ? new Versioned<Container>(new Container(r.Id, r.SiteId, r.Code, r.Kind, r.LocationId, r.IsActive, r.CreatedAt, r.CreatedBy), r.Version)
+            ? Map(r)
             : null;
 
     public Task<bool> CodeExistsAsync(Guid siteId, string code, CancellationToken cancellationToken) =>
@@ -69,10 +99,25 @@ internal sealed class ContainerRepository(DbSession session) : IContainerReposit
             cancellationToken);
 
     public Task<long> UpdateAsync(Container container, DateTimeOffset at, CancellationToken cancellationToken) =>
-        session.ExecuteScalarAsync<long>(Update, new { container.Id, container.LocationId, container.IsActive, At = at }, cancellationToken);
+        session.ExecuteScalarAsync<long>(Update, new { container.Id, container.LocationId, container.IsActive, container.ParentId, At = at }, cancellationToken);
 
     public Task<IReadOnlyList<Guid>> ListLotIdsAsync(Guid containerId, CancellationToken cancellationToken) =>
         session.QueryAsync<Guid>(LotIds, new { Id = containerId }, cancellationToken);
+
+    public Task<IReadOnlyList<Guid>> ListLotIdsInAsync(IReadOnlyCollection<Guid> containerIds, CancellationToken cancellationToken) =>
+        session.QueryAsync<Guid>(LotIdsIn, new { Ids = containerIds.ToArray() }, cancellationToken);
+
+    public async Task<IReadOnlyList<Versioned<Container>>> LockContainersAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<Row>(LockMany, new { Ids = ids.ToArray() }, cancellationToken)).Select(Map)];
+
+    public async Task<IReadOnlyList<(Versioned<Container> Container, int Depth)>> LockInsideAsync(Guid id, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<Row>(LockInside, new { Id = id }, cancellationToken)).Select(r => (Map(r), r.Depth))];
+
+    public Task<IReadOnlyList<Guid>> ListAncestorIdsAsync(Guid id, CancellationToken cancellationToken) =>
+        session.QueryAsync<Guid>(Ancestors, new { Id = id }, cancellationToken);
+
+    private static Versioned<Container> Map(Row r) =>
+        new(new Container(r.Id, r.SiteId, r.Code, r.Kind, r.LocationId, r.IsActive, r.CreatedAt, r.CreatedBy, r.ParentId), r.Version);
 
     private sealed class Row
     {
@@ -84,7 +129,9 @@ internal sealed class ContainerRepository(DbSession session) : IContainerReposit
         public bool IsActive { get; init; }
         public DateTimeOffset CreatedAt { get; init; }
         public string CreatedBy { get; init; } = "";
+        public Guid? ParentId { get; init; }
         public long Version { get; init; }
+        public int Depth { get; init; }
     }
 }
 
@@ -95,12 +142,16 @@ internal sealed class ContainerQueries(NpgsqlDataSource dataSource, IInventoryRe
 
     private const string ContainerSelect = $"""
         SELECT c.id, c.site_id, c.code, c.kind, c.location_equipment_id AS location_id, loc.code AS location_code, c.is_active, c.label_no,
-               'PUL1C' || c.label_no AS barcode, c.sscc,
+               'PUL1C' || c.label_no AS barcode, c.sscc, c.parent_container_id, pc.code AS parent_container_code,
                (SELECT count(*)::int FROM core.lot l WHERE l.container_id = c.id AND l.quantity > 0 AND l.status IN {OnHand}) AS lot_count,
+               (SELECT count(*)::int FROM core.container k WHERE k.parent_container_id = c.id AND k.is_active) AS container_count,
                c.created_at, c.created_by, c.xmin::text::bigint AS version
         FROM core.container c
         JOIN core.equipment loc ON loc.id = c.location_equipment_id
+        LEFT JOIN core.container pc ON pc.id = c.parent_container_id
         """;
+
+    private const string Inside = $"{ContainerSelect} WHERE c.parent_container_id = @Id AND c.is_active ORDER BY c.code";
 
     private const string List = $"""
         {ContainerSelect}
@@ -126,11 +177,12 @@ internal sealed class ContainerQueries(NpgsqlDataSource dataSource, IInventoryRe
           AND ((@Kind = 'lot' AND l.label_no = @LabelNo)
             OR (@Kind = 'text' AND l.status IN {OnHand} AND (lower(l.lot_number) = lower(@Text) OR lower(l.supplier_lot) = lower(@Text))))
         UNION ALL
-        SELECT 'container', c.id, c.code, loc.code || ' · ' ||
+        SELECT 'container', c.id, c.code, loc.code || coalesce(' · in ' || pc.code, '') || ' · ' ||
                (SELECT count(*) FROM core.lot l WHERE l.container_id = c.id AND l.quantity > 0 AND l.status IN {OnHand}) || ' lots',
                CASE WHEN @Kind = 'container' THEN 'label' ELSE 'container code' END
         FROM core.container c
         JOIN core.equipment loc ON loc.id = c.location_equipment_id
+        LEFT JOIN core.container pc ON pc.id = c.parent_container_id
         WHERE c.site_id = @SiteId AND c.is_active
           AND ((@Kind = 'container' AND c.label_no = @LabelNo) OR (@Kind = 'text' AND upper(c.code) = upper(@Text)))
         UNION ALL
@@ -158,7 +210,8 @@ internal sealed class ContainerQueries(NpgsqlDataSource dataSource, IInventoryRe
         }
 
         var lots = await inventory.SearchLotsAsync(new LotFilter(SiteId: container.SiteId, ContainerId: id), cancellationToken);
-        return container with { Lots = lots };
+        var inside = await connection.QueryAsync<ContainerDto>(new CommandDefinition(Inside, new { Id = id }, cancellationToken: cancellationToken));
+        return container with { Lots = lots, Containers = inside.AsList() };
     }
 
     public async Task<IReadOnlyList<ScanMatchDto>> FindAsync(Guid siteId, ScanCode code, CancellationToken cancellationToken)

@@ -103,7 +103,12 @@
                         <a class="btn btn-outline-secondary" href="inventory/containers?open=@item.Id">Open container</a>
                         @if (CanMove)
                         {
-                            <button type="button" class="btn btn-primary" @onclick='() => Await("location", "Scan where it goes")'>Move with its lots</button>
+                            <button type="button" class="btn btn-primary" @onclick='() => Await("location", "Scan where it goes")'>Move with what it holds</button>
+                            <button type="button" class="btn btn-outline-secondary" @onclick='() => Await("container", "Scan the container to put it in")'>Pack into another</button>
+                            @if (_container?.ParentContainerId is not null)
+                            {
+                                <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="TakeOutAsync">Take out of @_container.ParentContainerCode</button>
+                            }
                         }
                         break;
                     case "location":
@@ -239,7 +244,12 @@
         _busy = true;
         try
         {
-            if (kind == "container" && _lot is { } lot)
+            if (kind == "container" && _container is { } packing)
+            {
+                await Api.PackContainerAsync(packing.Id, new PackContainerRequest { Version = packing.Version, IntoContainerId = target.Id });
+                Say($"{packing.Code} and all it holds put inside {target.Label}.");
+            }
+            else if (kind == "container" && _lot is { } lot)
             {
                 await Api.PackLotAsync(lot.Id, new PackLotRequest { Version = lot.Version, ContainerId = target.Id });
                 Say($"{_item!.Label} packed into {target.Label}.");
@@ -267,6 +277,25 @@
         {
             _error = ex;
             _next = null;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task TakeOutAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Api.PackContainerAsync(_container!.Id, new PackContainerRequest { Version = _container.Version });
+            Say($"{_container.Code} taken out of {_container.ParentContainerCode}.");
+            await ChooseAsync(_item!);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
         }
         finally
         {

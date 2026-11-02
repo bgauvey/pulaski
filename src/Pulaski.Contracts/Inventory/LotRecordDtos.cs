@@ -154,13 +154,23 @@ public sealed record ContainerDto
 
     /// <summary>Its GS1 SSCC (#75): given when it was made, if its site had a GS1 company prefix then.</summary>
     public string? Sscc { get; init; }
+
+    /// <summary>The container it is inside (#76); null when it stands on its own.</summary>
+    public Guid? ParentContainerId { get; init; }
+    public string? ParentContainerCode { get; init; }
     public int LotCount { get; init; }
+
+    /// <summary>How many containers are directly inside it (#76).</summary>
+    public int ContainerCount { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public string CreatedBy { get; init; } = "";
     public long Version { get; init; }
 
     /// <summary>Its lots with stock, in a detail read; empty in a list.</summary>
     public IReadOnlyList<LotSummaryDto> Lots { get; init; } = [];
+
+    /// <summary>The containers directly inside it, in a detail read (#76); empty in a list.</summary>
+    public IReadOnlyList<ContainerDto> Containers { get; init; } = [];
 }
 
 public sealed record CreateContainerRequest
@@ -190,6 +200,14 @@ public sealed record PackLotRequest
 {
     public long Version { get; init; }
     public Guid? ContainerId { get; init; }
+    public string? Comment { get; init; }
+}
+
+/// <summary>Puts a container inside another (#76); with no container, takes it out of the one it is in.</summary>
+public sealed record PackContainerRequest
+{
+    public long Version { get; init; }
+    public Guid? IntoContainerId { get; init; }
     public string? Comment { get; init; }
 }
 

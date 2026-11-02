@@ -1179,12 +1179,15 @@ CREATE TABLE core.container (
     location_equipment_id   uuid NOT NULL REFERENCES core.equipment(id),
     label_no                bigint NOT NULL DEFAULT nextval('core.label_seq') UNIQUE,
     sscc                    text CONSTRAINT container_sscc_ck CHECK (sscc ~ '^[0-9]{18}$'),  -- GS1 SSCC from the site's company prefix (#75)
+    parent_container_id     uuid REFERENCES core.container(id),     -- the container it is inside, at its location (#76); no cycles, at most 5 deep
     is_active               boolean NOT NULL DEFAULT true,
     created_at              timestamptz NOT NULL DEFAULT now(),
     created_by              text NOT NULL,
     updated_at              timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT container_uq UNIQUE (site_id, code)
+    CONSTRAINT container_uq UNIQUE (site_id, code),
+    CONSTRAINT container_parent_ck CHECK (parent_container_id <> id)
 );
+CREATE INDEX container_parent_ix ON core.container (parent_container_id) WHERE parent_container_id IS NOT NULL;
 CREATE UNIQUE INDEX container_sscc_uq ON core.container (sscc) WHERE sscc IS NOT NULL;
 
 -- A label printer (#75, D-080): sent ZPL (or any printer language) over raw TCP, or a file written to a drop folder named in the API's
@@ -2281,7 +2284,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0045_reversal_details'),
     ('0046_lot_pairing'),
     ('0047_feed_automation'),
-    ('0048_gs1_labels');
+    ('0048_gs1_labels'),
+    ('0049_nested_containers');
 
 -- =====================================================================
 -- 17. SEED DATA

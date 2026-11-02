@@ -1255,7 +1255,7 @@ Issue #37.
 - Free text matches on-hand lots by lot or supplier lot number, active containers by code, and locations by code, ignoring case.
 - The Scan screen is for keyboard-wedge scanners. A second scan for a move or pack is filtered to the kind it needs. Every action is an existing command, so rules, history and permissions are unchanged.
 
-**Not yet.** Nested containers; a mobile/offline scanning app. GS1 labels, direct label-printer output and structured supplier barcodes came with D-080.
+**Not yet.** A mobile/offline scanning app. Nested containers came with D-081. GS1 labels, direct label-printer output and structured supplier barcodes came with D-080.
 
 ## Genealogy through commingled balances (D-060, proposed)
 
@@ -1927,6 +1927,31 @@ with a try-it test (`POST /api/labels/supplier-formats/test`).
 - GTINs from the material import;
 - SSCCs for containers made before a prefix;
 - GS1 Digital Link.
+
+## Containers inside containers (D-081, proposed)
+
+Issue #76. A container held lots only.
+
+**Nesting.** `core.container.parent_container_id`: a container sits inside at most one other, at that one's location.
+- `Container.PackInto` refuses itself, anything it holds (the target's ancestors include it), another site, and nesting deeper than 5 (the
+  target's ancestors + 2 + the height of what it holds).
+- `TakeOut` leaves it where it is.
+- `MoveTo` on its own clears the parent, as a lot moved alone leaves its container (D-059).
+- `Retire` needs no lots and no containers inside.
+
+**Carrying** (`ContainerCarry`): moving a container, or packing it into one elsewhere, moves every container inside it and all their lots to
+the destination. Each lot records its own move with `container_id` naming the container it is in. The destination's location rules (D-032)
+apply to every material carried.
+
+**Locks.** Moving locks the container, then everything inside it (a recursive query, id order, `FOR UPDATE OF c`), then all their lots in id
+order. Packing locks the two containers together in id order (`LockContainersAsync`) before the inside, so two opposite packs can't
+deadlock; the cycle check then refuses one.
+
+**Commands.** `PackContainerCommand` (`POST /api/inventory/containers/{id}/pack`, `lot.move`; no container takes it out); events
+`pulaski.container.packed.v1` / `unpacked.v1`. `ContainerDto` carries `ParentContainerId`/`Code`, `ContainerCount` and, in detail,
+`Containers`. Scans and labels say what a container is in. The Containers and Scan pages pack and take out.
+
+**Not done:** splitting a container's contents onto several in one step.
 
 ## Application architecture
 

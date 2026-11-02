@@ -1031,6 +1031,7 @@ Holds lots that keep their own identity (`core.lot.container_id`); moving it mov
 | `location_equipment_id` | uuid → equipment | no | Where it is: a location that holds inventory and doesn't mix lots. |
 | `label_no` | bigint | no | Its label number, unique; the barcode carries `PUL1C` + this. |
 | `sscc` | text | yes | Its GS1 SSCC, 18 digits (`container_sscc_ck`), unique (`container_sscc_uq`): given when it is made, from its site's company prefix and next serial, if the site has a prefix then (#75). |
+| `parent_container_id` | uuid → container | yes | The container it is inside, at that one's location (#76, D-081); never itself (`container_parent_ck`) or anything inside it, at most five deep. Indexed. |
 | `is_active` | boolean | no | False once retired, which needs it empty; never deleted. |
 | `created_at`, `created_by` | timestamptz, text | no | When and by whom. |
 | `updated_at` | timestamptz | no | Last change. |

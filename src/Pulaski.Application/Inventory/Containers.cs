@@ -24,6 +24,18 @@ public interface IContainerRepository
 
     /// <summary>The ids of the lots with stock in it, in id order, for locking them in that order (D-017).</summary>
     Task<IReadOnlyList<Guid>> ListLotIdsAsync(Guid containerId, CancellationToken cancellationToken);
+
+    /// <summary>The ids of the lots with stock in any of the containers, in id order (#76).</summary>
+    Task<IReadOnlyList<Guid>> ListLotIdsInAsync(IReadOnlyCollection<Guid> containerIds, CancellationToken cancellationToken);
+
+    /// <summary>The containers, locked in id order in SQL (#76), so two that lock the same pair can't deadlock.</summary>
+    Task<IReadOnlyList<Versioned<Container>>> LockContainersAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
+    /// <summary>Every active container inside it, at any depth (1 = directly inside), locked in id order (#76).</summary>
+    Task<IReadOnlyList<(Versioned<Container> Container, int Depth)>> LockInsideAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>The containers it is inside, nearest first (#76).</summary>
+    Task<IReadOnlyList<Guid>> ListAncestorIdsAsync(Guid id, CancellationToken cancellationToken);
 }
 
 /// <summary>Read side for containers and scans (D-059).</summary>
@@ -58,6 +70,9 @@ public sealed record CreateContainerCommand(Guid SiteId, string? Code, string Ki
 public sealed record MoveContainerCommand(Guid Id, long ExpectedVersion, Guid ToLocationId, string? Comment = null) : ICommand<VersionResponse>;
 
 public sealed record RetireContainerCommand(Guid Id, long ExpectedVersion) : ICommand<VersionResponse>;
+
+/// <summary>Puts a container inside another (#76), moving it and everything in it to that one's location; with no container, takes it out.</summary>
+public sealed record PackContainerCommand(Guid Id, long ExpectedVersion, Guid? IntoContainerId, string? Comment = null) : ICommand<VersionResponse>;
 
 /// <summary>Puts a whole lot into a container, moving it there if needed (D-059); to pack part of a lot, split it first.</summary>
 public sealed record PackLotCommand(Guid LotId, long ExpectedVersion, Guid ContainerId, string? Comment = null) : ICommand<LotTransactionResponse>;
@@ -229,6 +244,43 @@ internal sealed class CreateContainerHandler(
     }
 }
 
+/// <summary>
+/// Carries a container, every container inside it and all their lots to a location (#76): each container takes the location, and each lot
+/// records its own move with the container it is in. The caller has locked the container; this locks those inside, then the lots, in id order.
+/// </summary>
+internal static class ContainerCarry
+{
+    public static async Task<(IReadOnlyList<Container> Inside, IReadOnlyList<Guid> LotIds)> CarryAsync(
+        IInventoryRepository inventory, IContainerRepository containers, IIdGenerator ids, Container outer, InventoryLocation destination, bool moves,
+        string actorId, string? comment, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var inside = await containers.LockInsideAsync(outer.Id, cancellationToken);
+        var lots = await inventory.LockLotsAsync(await containers.ListLotIdsInAsync([outer.Id, .. inside.Select(c => c.Container.Value.Id)], cancellationToken), cancellationToken);
+        if (moves)
+        {
+            foreach (var materialId in lots.Select(l => l.Lot.MaterialId).Distinct())
+            {
+                await InventoryRules.EnsureAcceptsAsync(inventory, destination, materialId, cancellationToken);
+            }
+
+            foreach (var (container, _) in inside)
+            {
+                await containers.UpdateAsync(container.Value.CarriedTo(destination.Id), at, cancellationToken);
+            }
+
+            foreach (var locked in lots)
+            {
+                var (after, movement) = locked.Lot.MoveWithContainer(destination.Id);
+                await inventory.UpdateLotAsync(after, at, cancellationToken);
+                await inventory.InsertEventAsync(
+                    new LotEventRow(ids.NewId(), after.Id, movement, after.UomId, actorId, Comment: comment, ContainerId: after.ContainerId), at, cancellationToken);
+            }
+        }
+
+        return ([.. inside.Select(c => c.Container.Value)], [.. lots.Select(l => l.Lot.Id)]);
+    }
+}
+
 internal sealed class MoveContainerHandler(
     IUnitOfWork unitOfWork,
     IInventoryRepository inventory,
@@ -244,29 +296,72 @@ internal sealed class MoveContainerHandler(
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
 
-        // The container, then its lots in id order: packing locks the same way, so the two can't deadlock.
+        // The container, then the containers inside it, then all their lots, each in id order: packing locks the same way, so they can't deadlock.
         var current = await ContainerRules.GetAsync(containers, command.Id, command.ExpectedVersion, cancellationToken);
         var destination = await ContainerRules.LocationAsync(inventory, command.ToLocationId, current.Value.SiteId, cancellationToken);
         var moved = current.Value.MoveTo(destination.Id);
-        var lots = await inventory.LockLotsAsync(await containers.ListLotIdsAsync(moved.Id, cancellationToken), cancellationToken);
-        foreach (var materialId in lots.Select(l => l.Lot.MaterialId).Distinct())
-        {
-            await InventoryRules.EnsureAcceptsAsync(inventory, destination, materialId, cancellationToken);
-        }
-
-        var envelope = events.Create(
-            EventTypes.ContainerMoved, "container", moved.Id,
-            new { moved.Code, FromLocationId = current.Value.LocationId, ToLocationId = destination.Id, LotIds = lots.Select(l => l.Lot.Id), Comment = comment });
+        // The event's time and actor stamp every lot's movement; what it carried is known once carried.
+        var envelope = events.Create(EventTypes.ContainerMoved, "container", moved.Id, new { });
+        var (inside, lotIds) = await ContainerCarry.CarryAsync(
+            inventory, containers, ids, moved, destination, moves: true, envelope.ActorId, comment, envelope.OccurredAt, cancellationToken);
         var version = await containers.UpdateAsync(moved, envelope.OccurredAt, cancellationToken);
-        foreach (var locked in lots)
+        var data = new
         {
-            var (after, movement) = locked.Lot.MoveWithContainer(destination.Id);
-            await inventory.UpdateLotAsync(after, envelope.OccurredAt, cancellationToken);
-            await inventory.InsertEventAsync(
-                new LotEventRow(ids.NewId(), after.Id, movement, after.UomId, envelope.ActorId, Comment: comment, ContainerId: moved.Id),
-                envelope.OccurredAt, cancellationToken);
+            moved.Code,
+            FromLocationId = current.Value.LocationId,
+            ToLocationId = destination.Id,
+            FromContainerId = current.Value.ParentId,
+            ContainerIds = inside.Select(c => c.Id),
+            LotIds = lotIds,
+            Comment = comment,
+        };
+        await eventLog.AppendAsync(envelope with { Data = data }, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new VersionResponse(version);
+    }
+}
+
+internal sealed class PackContainerHandler(
+    IUnitOfWork unitOfWork,
+    IInventoryRepository inventory,
+    IContainerRepository containers,
+    IEventLog eventLog,
+    IEventFactory events,
+    IIdGenerator ids) : ICommandHandler<PackContainerCommand, VersionResponse>
+{
+    public async Task<VersionResponse> HandleAsync(PackContainerCommand command, CancellationToken cancellationToken)
+    {
+        var comment = InventoryRules.Text(command.Comment);
+        new Validator().RequireComment(command.Comment).ThrowIfInvalid();
+
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        if (command.IntoContainerId is not { } outerId)
+        {
+            var current = await ContainerRules.GetAsync(containers, command.Id, command.ExpectedVersion, cancellationToken);
+            var outside = current.Value.TakeOut();
+            var unpacked = events.Create(EventTypes.ContainerUnpacked, "container", outside.Id, new { outside.Code, FromContainerId = current.Value.ParentId, Comment = comment });
+            var unpackedVersion = await containers.UpdateAsync(outside, unpacked.OccurredAt, cancellationToken);
+            await eventLog.AppendAsync(unpacked, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return new VersionResponse(unpackedVersion);
         }
 
+        // Both containers in id order, then what is inside the one going in, then the lots (#76).
+        var locked = await containers.LockContainersAsync([command.Id, outerId], cancellationToken);
+        var inner = locked.FirstOrDefault(c => c.Value.Id == command.Id) ?? throw new NotFoundException($"Container {command.Id} not found.");
+        var outer = locked.FirstOrDefault(c => c.Value.Id == outerId)?.Value ?? throw new NotFoundException($"Container {outerId} not found.");
+        if (inner.Version != command.ExpectedVersion)
+        {
+            throw new ConflictException($"{inner.Value.Code} was changed by someone else. Reload and try again.");
+        }
+
+        var height = (await containers.LockInsideAsync(inner.Value.Id, cancellationToken)).Select(c => c.Depth).DefaultIfEmpty(0).Max();
+        var packed = inner.Value.PackInto(outer, await containers.ListAncestorIdsAsync(outer.Id, cancellationToken), height);
+        var moves = packed.LocationId != inner.Value.LocationId;
+        var destination = await ContainerRules.LocationAsync(inventory, packed.LocationId, packed.SiteId, cancellationToken);
+        var envelope = events.Create(EventTypes.ContainerPacked, "container", packed.Id, new { packed.Code, IntoContainerId = outer.Id, IntoContainerCode = outer.Code, Comment = comment });
+        await ContainerCarry.CarryAsync(inventory, containers, ids, packed, destination, moves, envelope.ActorId, comment, envelope.OccurredAt, cancellationToken);
+        var version = await containers.UpdateAsync(packed, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new VersionResponse(version);
@@ -283,7 +378,8 @@ internal sealed class RetireContainerHandler(
     {
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var current = await ContainerRules.GetAsync(containers, command.Id, command.ExpectedVersion, cancellationToken);
-        var retired = current.Value.Retire((await containers.ListLotIdsAsync(current.Value.Id, cancellationToken)).Count);
+        var inside = (await containers.LockInsideAsync(current.Value.Id, cancellationToken)).Count(c => c.Depth == 1);
+        var retired = current.Value.Retire((await containers.ListLotIdsAsync(current.Value.Id, cancellationToken)).Count, inside);
         var envelope = events.Create(EventTypes.ContainerRetired, "container", retired.Id, new { Before = current.Value, After = retired });
         var version = await containers.UpdateAsync(retired, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);

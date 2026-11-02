@@ -414,6 +414,15 @@ internal static class InventoryEndpoints
             TypedResults.Ok(await handler.HandleAsync(new RetireContainerCommand(id, request.Version), ct)))
         .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Container));
 
+        // Into another container, or (with none) out of the one it is in (#76).
+        containers.MapPost("/{id:guid}/pack", async Task<Ok<VersionResponse>> (
+            Guid id,
+            PackContainerRequest request,
+            ICommandHandler<PackContainerCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new PackContainerCommand(id, request.Version, request.IntoContainerId, request.Comment), ct)))
+        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Container));
+
         containers.MapGet("/{id:guid}/label.pdf", async Task<FileContentHttpResult> (
             Guid id,
             IQueryHandler<GetContainerQuery, ContainerDto> handler,

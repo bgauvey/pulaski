@@ -771,6 +771,9 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<LotTransactionResponse> PackLotAsync(Guid lotId, PackLotRequest request, CancellationToken ct = default) =>
         SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{lotId}/pack", request, ct);
 
+    public Task<VersionResponse> PackContainerAsync(Guid containerId, PackContainerRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/containers/{containerId}/pack", request, ct);
+
     public Task<ScanResultDto> ResolveScanAsync(Guid siteId, string code, CancellationToken ct = default) =>
         GetAsync<ScanResultDto>(Query("api/inventory/scan", ("siteId", siteId), ("code", code)), ct);
 

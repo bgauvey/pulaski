@@ -53,7 +53,10 @@ internal static class InventoryLabels
             container.Kind,
             container.Code,
             ScanCode.ForContainer(container.LabelNo),
-            [$"At {container.LocationCode}", $"{container.LotCount} {(container.LotCount == 1 ? "lot" : "lots")} when printed"],
+            [
+                $"At {container.LocationCode}{(container.ParentContainerCode is { } parent ? $", in {parent}" : "")}",
+                $"{container.LotCount} {(container.LotCount == 1 ? "lot" : "lots")}{(container.ContainerCount > 0 ? $" and {container.ContainerCount} {(container.ContainerCount == 1 ? "container" : "containers")}" : "")} when printed",
+            ],
             gs1 is null ? LabelFormats.Pulaski : format,
             gs1)
         {
@@ -63,6 +66,8 @@ internal static class InventoryLabels
                 ["Location"] = container.LocationCode,
                 ["Lots"] = container.LotCount.ToString(CultureInfo.InvariantCulture),
                 ["Sscc"] = container.Sscc,
+                ["ParentContainer"] = container.ParentContainerCode,
+                ["Containers"] = container.ContainerCount.ToString(CultureInfo.InvariantCulture),
             },
         };
     }
