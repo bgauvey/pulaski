@@ -52,7 +52,7 @@ public sealed class InMemoryContainers(InMemoryInventory inventory) : IContainer
         }
     }
 
-    public Task<long> InsertAsync(Container container, long labelNo, DateTimeOffset at, CancellationToken cancellationToken)
+    public Task<long> InsertAsync(Container container, long labelNo, string? sscc, DateTimeOffset at, CancellationToken cancellationToken)
     {
         lock (_lock)
         {
@@ -78,12 +78,63 @@ public sealed class InMemoryContainers(InMemoryInventory inventory) : IContainer
             .Select(l => l.Id)
             .Order()]);
 
+    public Task<IReadOnlyList<Guid>> ListLotIdsInAsync(IReadOnlyCollection<Guid> containerIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Guid>>([.. inventory.Lots
+            .Where(l => l.ContainerId is { } c && containerIds.Contains(c) && l.Quantity > 0 && LotStatus.IsOnHand(l.Status))
+            .Select(l => l.Id)
+            .Order()]);
+
+    public Task<IReadOnlyList<Versioned<Container>>> LockContainersAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<Versioned<Container>>>([.. ids.Where(_containers.ContainsKey).Select(id => _containers[id].Container)]);
+        }
+    }
+
+    public Task<IReadOnlyList<(Versioned<Container> Container, int Depth)>> LockInsideAsync(Guid id, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var found = new List<(Versioned<Container>, int)>();
+            var level = new List<Guid> { id };
+            for (var depth = 1; level.Count > 0 && depth <= 10; depth++)
+            {
+                var below = _containers.Values.Select(c => c.Container).Where(c => c.Value.IsActive && c.Value.ParentId is { } p && level.Contains(p)).ToList();
+                found.AddRange(below.Select(c => (c, depth)));
+                level = [.. below.Select(c => c.Value.Id)];
+            }
+
+            return Task.FromResult<IReadOnlyList<(Versioned<Container>, int)>>(found);
+        }
+    }
+
+    public Task<IReadOnlyList<Guid>> ListAncestorIdsAsync(Guid id, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var up = new List<Guid>();
+            var at = _containers.GetValueOrDefault(id).Container?.Value.ParentId;
+            while (at is { } parent && up.Count < 10)
+            {
+                up.Add(parent);
+                at = _containers.GetValueOrDefault(parent).Container?.Value.ParentId;
+            }
+
+            return Task.FromResult<IReadOnlyList<Guid>>(up);
+        }
+    }
+
     public Task<IReadOnlyList<ContainerDto>> ListAsync(Guid siteId, string? search, bool includeRetired, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<ContainerDto>>([]);
 
     public Task<ContainerDto?> GetAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult<ContainerDto?>(null);
 
     /// <summary>Lots and containers by label number only; enough for the scan handler's tests.</summary>
+    public Task<(IReadOnlyList<ScanMatchDto> Matches, Guid? MaterialId, string? MaterialCode)> FindScannedAsync(
+        Guid siteId, ScannedLot read, CancellationToken cancellationToken) =>
+        Task.FromResult<(IReadOnlyList<ScanMatchDto>, Guid?, string?)>(([], null, null));
+
     public Task<IReadOnlyList<ScanMatchDto>> FindAsync(Guid siteId, ScanCode code, CancellationToken cancellationToken)
     {
         lock (_lock)

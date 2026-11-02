@@ -155,6 +155,13 @@ public sealed record UpdateMaterialRequest
     public bool IsActive { get; init; } = true;
 }
 
+/// <summary>Sets a material's GTIN (#75); blank clears it.</summary>
+public sealed record SetMaterialGtinRequest
+{
+    public long Version { get; init; }
+    public string? Gtin { get; init; }
+}
+
 /// <summary>The material as it is now, and, when it was switched off, what still uses it.</summary>
 public sealed record UpdateMaterialResponse(long Version, IReadOnlyList<string> StillUsedBy);
 

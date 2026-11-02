@@ -715,6 +715,35 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> DismissFeedShortfallAsync(Guid id, DismissShortfallRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/feed-shortfalls/{id}/dismiss", request, ct);
 
+    public Task<LabelSetupDto> GetLabelSetupAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<LabelSetupDto>($"api/labels/sites/{siteId}", ct);
+
+    public Task<VersionResponse> SetLabelSettingsAsync(Guid siteId, SetLabelSettingsRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/labels/sites/{siteId}", request, ct);
+
+    public Task<CreatedResponse> AddLabelPrinterAsync(Guid siteId, SaveLabelPrinterRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/labels/sites/{siteId}/printers", request, ct);
+
+    public Task<CreatedResponse> UpdateLabelPrinterAsync(Guid id, SaveLabelPrinterRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Put, $"api/labels/printers/{id}", request, ct);
+
+    public Task<CreatedResponse> AddSupplierFormatAsync(Guid siteId, SaveSupplierFormatRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/labels/sites/{siteId}/supplier-formats", request, ct);
+
+    public Task<CreatedResponse> UpdateSupplierFormatAsync(Guid id, Guid siteId, SaveSupplierFormatRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Put, Query($"api/labels/supplier-formats/{id}", ("siteId", siteId)), request, ct);
+
+    public Task<SupplierFormatTestDto> TestSupplierFormatAsync(TestSupplierFormatRequest request, CancellationToken ct = default) =>
+        SendAsync<SupplierFormatTestDto>(HttpMethod.Post, "api/labels/supplier-formats/test", request, ct);
+
+    public Task<LabelOptionsDto> GetLabelOptionsAsync(CancellationToken ct = default) => GetAsync<LabelOptionsDto>("api/labels/options", ct);
+
+    public Task<PrintLabelsResponse> PrintLabelsAsync(PrintLabelsRequest request, CancellationToken ct = default) =>
+        SendAsync<PrintLabelsResponse>(HttpMethod.Post, "api/labels/print", request, ct);
+
+    public Task<VersionResponse> SetMaterialGtinAsync(Guid materialId, SetMaterialGtinRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/materials/{materialId}/gtin", request, ct);
+
     public Task<VersionResponse> SetMadeFromAsync(Guid lotId, SetMadeFromRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/lots/{lotId}/made-from", request, ct);
 
@@ -741,6 +770,9 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     /// <summary>Packs the lot into <c>ContainerId</c>, or with none unpacks it.</summary>
     public Task<LotTransactionResponse> PackLotAsync(Guid lotId, PackLotRequest request, CancellationToken ct = default) =>
         SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{lotId}/pack", request, ct);
+
+    public Task<VersionResponse> PackContainerAsync(Guid containerId, PackContainerRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/inventory/containers/{containerId}/pack", request, ct);
 
     public Task<ScanResultDto> ResolveScanAsync(Guid siteId, string code, CancellationToken ct = default) =>
         GetAsync<ScanResultDto>(Query("api/inventory/scan", ("siteId", siteId), ("code", code)), ct);

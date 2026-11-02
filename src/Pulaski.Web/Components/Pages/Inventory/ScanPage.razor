@@ -49,6 +49,19 @@
     </div>
 }
 
+@if (_scanned is { MaterialId: not null } scanned && _item is null)
+{
+    <div class="inv-facts mb-3" style="max-width: 36rem">
+        <div class="small text-muted">From the @(scanned.Source == "gs1" ? "GS1" : scanned.Source) barcode</div>
+        <div class="fw-semibold">@scanned.MaterialCode@((scanned.LotNumber ?? scanned.SupplierLot) is { } lot ? $" · lot {lot}" : "")</div>
+        <div class="small">@(scanned.Quantity is { } q ? $"{InventoryView.Qty(q)} {scanned.QuantityUnit}" : "")@(scanned.Expiry is { } e ? $" · expires {e:yyyy-MM-dd}" : "")</div>
+        @if (User.Can(PermissionCodes.LotReceive, Sites.SiteId))
+        {
+            <button type="button" class="btn btn-primary mt-2" @onclick="() => _action = LotAction.Receive">Receive it…</button>
+        }
+    </div>
+}
+
 @if (_item is { } item)
 {
     <div class="inv-facts mb-3" style="max-width: 36rem">
@@ -81,12 +94,21 @@
                         {
                             <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Consume">Consume…</button>
                         }
+                        @if (CanMove && _lot is { IsBulk: false })
+                        {
+                            <button type="button" class="btn btn-outline-secondary" @onclick='() => Await("feed", "Scan the feed point to load it at")'>Load</button>
+                        }
                         break;
                     case "container":
                         <a class="btn btn-outline-secondary" href="inventory/containers?open=@item.Id">Open container</a>
                         @if (CanMove)
                         {
-                            <button type="button" class="btn btn-primary" @onclick='() => Await("location", "Scan where it goes")'>Move with its lots</button>
+                            <button type="button" class="btn btn-primary" @onclick='() => Await("location", "Scan where it goes")'>Move with what it holds</button>
+                            <button type="button" class="btn btn-outline-secondary" @onclick='() => Await("container", "Scan the container to put it in")'>Pack into another</button>
+                            @if (_container?.ParentContainerId is not null)
+                            {
+                                <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="TakeOutAsync">Take out of @_container.ParentContainerCode</button>
+                            }
                         }
                         break;
                     case "location":
@@ -102,7 +124,8 @@
     </div>
 }
 
-<LotActionDrawer Action="_action" Lot="_lot" LocationId="@(_item?.Kind == "location" ? _item.Id : null)" OnDone="OnDoneAsync" OnClose="() => _action = null" />
+<LotActionDrawer Action="_action" Lot="_lot" LocationId="@(_item?.Kind == "location" ? _item.Id : null)" Scanned="@(_item is null ? _scanned : null)"
+                 OnDone="OnDoneAsync" OnClose="() => _action = null" />
 
 @code {
     private ElementReference _box;
@@ -111,6 +134,9 @@
     private LotSummaryDto? _lot;
     private ContainerDto? _container;
     private IReadOnlyList<ScanMatchDto> _choices = [];
+
+    // A GS1 or supplier code for a material with nothing at the site yet (#75): offered to receive.
+    private ScannedLotDto? _scanned;
 
     // What the next scan is for: a location to move to, or a container to pack into; null when scanning the item.
     private (string Kind, string Prompt)? _next;
@@ -143,7 +169,7 @@
 
     private void Reset()
     {
-        (_item, _lot, _container, _next, _choices, _message, _code) = (null, null, null, null, [], null, null);
+        (_item, _lot, _container, _next, _choices, _message, _code, _scanned) = (null, null, null, null, [], null, null, null);
     }
 
     private void Await(string kind, string prompt)
@@ -166,14 +192,23 @@
         try
         {
             var result = await Api.ResolveScanAsync(site, code);
-            var matches = _next is { } next ? [.. result.Matches.Where(m => m.Kind == next.Kind)] : result.Matches;
+            if (_next is null && result.Status == "receivable")
+            {
+                (_item, _lot, _container, _scanned) = (null, null, null, result.Parsed);
+                Say(result.Message ?? "Not at this site yet: receive it?");
+                return;
+            }
+
+            // A feed point is a location; whether it is one, the load says.
+            var wantedKind = _next?.Kind == "feed" ? "location" : _next?.Kind;
+            var matches = wantedKind is { } next ? [.. result.Matches.Where(m => m.Kind == next)] : result.Matches;
             switch (matches.Count)
             {
                 case 1:
                     await ChooseAsync(matches[0]);
                     break;
                 case 0:
-                    Say(_next is { } wanted && result.Matches.Count > 0 ? $"{code} isn't a {wanted.Kind}." : result.Message ?? $"Nothing matches {code}.", warning: true);
+                    Say(wantedKind is { } wanted && result.Matches.Count > 0 ? $"{code} isn't a {wanted}." : result.Message ?? $"Nothing matches {code}.", warning: true);
                     break;
                 default:
                     _choices = matches;
@@ -197,6 +232,7 @@
         }
 
         _item = match;
+        _scanned = null;
         _message = null;
         _lot = match.Kind == "lot" ? (await Api.GetLotAsync(match.Id)).Lot : null;
         _container = match.Kind == "container" ? await Api.GetContainerAsync(match.Id) : null;
@@ -208,7 +244,12 @@
         _busy = true;
         try
         {
-            if (kind == "container" && _lot is { } lot)
+            if (kind == "container" && _container is { } packing)
+            {
+                await Api.PackContainerAsync(packing.Id, new PackContainerRequest { Version = packing.Version, IntoContainerId = target.Id });
+                Say($"{packing.Code} and all it holds put inside {target.Label}.");
+            }
+            else if (kind == "container" && _lot is { } lot)
             {
                 await Api.PackLotAsync(lot.Id, new PackLotRequest { Version = lot.Version, ContainerId = target.Id });
                 Say($"{_item!.Label} packed into {target.Label}.");
@@ -217,6 +258,11 @@
             {
                 await Api.MoveContainerAsync(container.Id, new MoveContainerRequest { Version = container.Version, ToLocationId = target.Id });
                 Say($"{container.Code} and its {container.LotCount} {(container.LotCount == 1 ? "lot" : "lots")} moved to {target.Label}.");
+            }
+            else if (kind == "feed" && _lot is { } loading)
+            {
+                await Api.LoadLotAsync(loading.Id, new LoadLotRequest { Version = loading.Version, FeedPointId = target.Id });
+                Say($"{_item!.Label} loaded at {target.Label}.");
             }
             else if (kind == "location" && _lot is { } moving)
             {
@@ -231,6 +277,25 @@
         {
             _error = ex;
             _next = null;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task TakeOutAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Api.PackContainerAsync(_container!.Id, new PackContainerRequest { Version = _container.Version });
+            Say($"{_container.Code} taken out of {_container.ParentContainerCode}.");
+            await ChooseAsync(_item!);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
         }
         finally
         {

@@ -359,12 +359,14 @@ internal static class InventoryEndpoints
             Guid id,
             IQueryHandler<GetLotQuery, LotDto> handler,
             LabelPdfRenderer renderer,
+            LabelBuilder labels,
             CancellationToken ct) =>
         {
             var detail = await handler.HandleAsync(new GetLotQuery(id), ct);
             var lot = detail.Lot;
             var title = InventoryLabels.LotTitle(lot);
-            return TypedResults.File(renderer.Render([InventoryLabels.ForLot(lot, detail.SiteTimeZone)]), "application/pdf", $"label-{InventoryLabels.FileName(title)}.pdf");
+            var label = InventoryLabels.ForLot(lot, detail.SiteTimeZone, await labels.FormatAsync(lot.SiteId, ct));
+            return TypedResults.File(renderer.Render([label]), "application/pdf", $"label-{InventoryLabels.FileName(title)}.pdf");
         })
         .RequireAny(Site.Of(SiteOf.Lot), Permissions.InventoryView);
 
@@ -412,14 +414,25 @@ internal static class InventoryEndpoints
             TypedResults.Ok(await handler.HandleAsync(new RetireContainerCommand(id, request.Version), ct)))
         .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Container));
 
+        // Into another container, or (with none) out of the one it is in (#76).
+        containers.MapPost("/{id:guid}/pack", async Task<Ok<VersionResponse>> (
+            Guid id,
+            PackContainerRequest request,
+            ICommandHandler<PackContainerCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new PackContainerCommand(id, request.Version, request.IntoContainerId, request.Comment), ct)))
+        .RequirePermission(Permissions.LotMove, Site.Of(SiteOf.Container));
+
         containers.MapGet("/{id:guid}/label.pdf", async Task<FileContentHttpResult> (
             Guid id,
             IQueryHandler<GetContainerQuery, ContainerDto> handler,
             LabelPdfRenderer renderer,
+            LabelBuilder labels,
             CancellationToken ct) =>
         {
             var container = await handler.HandleAsync(new GetContainerQuery(id), ct);
-            return TypedResults.File(renderer.Render([InventoryLabels.ForContainer(container)]), "application/pdf", $"label-{InventoryLabels.FileName(container.Code)}.pdf");
+            var label = InventoryLabels.ForContainer(container, await labels.FormatAsync(container.SiteId, ct));
+            return TypedResults.File(renderer.Render([label]), "application/pdf", $"label-{InventoryLabels.FileName(container.Code)}.pdf");
         })
         .RequireAny(Site.Of(SiteOf.Container), Permissions.InventoryView);
 

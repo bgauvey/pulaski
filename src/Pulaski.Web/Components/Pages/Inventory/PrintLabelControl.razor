@@ -1,0 +1,79 @@
+@inject PulaskiApiClient Api
+@inject LabelPrinters Printers
+
+@* Prints a lot's, container's or location's label on one of the site's label printers (#75); only shown when the site has one. *@
+@if (_printers.Count > 0)
+{
+    @if (!_open)
+    {
+        <button type="button" class="@ButtonClass" @onclick="() => { _open = true; _message = null; }">Print to…</button>
+    }
+    else
+    {
+        <span class="d-inline-flex flex-wrap gap-1 align-items-center">
+            <select class="form-select form-select-sm w-auto" aria-label="Printer" @bind="_printerId">
+                @foreach (var p in _printers)
+                {
+                    <option value="@p.Id">@p.Code · @p.Name</option>
+                }
+            </select>
+            <input type="number" min="1" max="20" class="form-control form-control-sm" style="width: 4.5rem" aria-label="Copies" title="Copies" @bind="_copies" />
+            <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="PrintAsync">Print</button>
+            <button type="button" class="btn btn-sm btn-link" @onclick="() => _open = false">Cancel</button>
+        </span>
+    }
+}
+@if (_message is not null)
+{
+    <span class="small text-muted ms-1">@_message</span>
+}
+<ProblemAlert Error="_error" />
+
+@code {
+    /// <summary><c>lot</c>, <c>container</c> or <c>location</c>.</summary>
+    [Parameter, EditorRequired] public string Kind { get; set; } = "lot";
+
+    [Parameter, EditorRequired] public Guid Id { get; set; }
+
+    [Parameter, EditorRequired] public Guid SiteId { get; set; }
+
+    [Parameter] public string ButtonClass { get; set; } = "btn btn-outline-secondary";
+
+    private IReadOnlyList<LabelPrinterDto> _printers = [];
+    private Guid _printerId;
+    private int _copies = 1;
+    private bool _open;
+    private bool _busy;
+    private string? _message;
+    private ApiException? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var (printers, defaultPrinter) = await Printers.GetAsync(SiteId);
+        _printers = printers;
+        if (_printerId == Guid.Empty || printers.All(p => p.Id != _printerId))
+        {
+            _printerId = defaultPrinter is { } d && printers.Any(p => p.Id == d) ? d : printers.FirstOrDefault()?.Id ?? Guid.Empty;
+        }
+    }
+
+    private async Task PrintAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await Api.PrintLabelsAsync(new PrintLabelsRequest { SiteId = SiteId, PrinterId = _printerId, Kind = Kind, Ids = [Id], Copies = _copies });
+            _message = $"Sent {result.Labels} {(result.Labels == 1 ? "label" : "labels")} to {result.PrinterCode}.";
+            _open = false;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -58,6 +58,36 @@ public sealed class InMemoryMaterialAdmin : IMaterialAdminRepository, IMaterialR
 
     public Task<Versioned<Material>?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(Find(id));
 
+    /// <summary>GTINs by material (#75), as the set command leaves them.</summary>
+    public Dictionary<Guid, string> Gtins { get; } = [];
+
+    public Task<string?> FindCodeByGtinAsync(string gtin, Guid exceptId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(Gtins.Where(g => g.Value == gtin && g.Key != exceptId).Select(g => _materials.TryGetValue(g.Key, out var m) ? m.Value.Code : null).FirstOrDefault());
+        }
+    }
+
+    public Task<long> SetGtinAsync(Guid id, string? gtin, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            if (gtin is null)
+            {
+                Gtins.Remove(id);
+            }
+            else
+            {
+                Gtins[id] = gtin;
+            }
+
+            var current = _materials[id];
+            _materials[id] = current with { Version = current.Version + 1 };
+            return Task.FromResult(current.Version + 1);
+        }
+    }
+
     public Task<Versioned<Material>?> FindByExternalKeyForUpdateAsync(string externalSystem, string externalKey, CancellationToken cancellationToken)
     {
         lock (_lock)

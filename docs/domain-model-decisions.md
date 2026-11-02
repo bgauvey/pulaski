@@ -1255,7 +1255,7 @@ Issue #37.
 - Free text matches on-hand lots by lot or supplier lot number, active containers by code, and locations by code, ignoring case.
 - The Scan screen is for keyboard-wedge scanners. A second scan for a move or pack is filtered to the kind it needs. Every action is an existing command, so rules, history and permissions are unchanged.
 
-**Not yet.** GS1 (SSCC, GTIN AIs) labels; direct label-printer output (ZPL); nested containers; reading structured supplier barcodes beyond their text; a mobile/offline scanning app.
+**Not yet.** A mobile/offline scanning app. Nested containers came with D-081. GS1 labels, direct label-printer output and structured supplier barcodes came with D-080.
 
 ## Genealogy through commingled balances (D-060, proposed)
 
@@ -1876,6 +1876,82 @@ into the job running on its line then, in the counter tag's unit (else the base 
 - automated consumption using up allocations (D-064);
 - residence time between a feed point and the line;
 - scan-to-consume beyond the Scan page's existing Consume.
+
+## GS1 labels, label printers and supplier barcodes (D-080, proposed)
+
+Issue #75. Labels were PDFs with Pulaski's Code 128 only, and a scanned GS1 or supplier barcode was matched only as text.
+
+**Identifiers.** Everything is from the public GS1 General Specifications (`Gs1`, pure, in the domain): the mod-10 check digit, GTINs, SSCCs, and
+element strings read bracketed or as scanners send them.
+- **GTIN:** `core.material.gtin`, kept as 14 digits and unique. It is set with `SetMaterialGtinCommand` (`PUT /api/materials/{id}/gtin`,
+  `materials.manage`), apart from the material's other fields, so ERP ownership (D-033) is untouched.
+- **SSCC:** each site's `core.label_settings` holds a company prefix and an extension digit. A new container takes the next serial under the
+  settings row's lock (`LabelRules.NextSsccAsync`) into `core.container.sscc`; with no prefix it gets none.
+
+**Labels.**
+- The site's `label_format` is `pulaski`, `gs1_128` or `gs1_datamatrix`.
+- **Lot elements** (`InventoryLabels.LotElements`), fixed-length first so only the last is variable: (01) GTIN, (17) expiry, (310n)/(320n) net
+  weight for a lot in kg or lb, then (10) lot. A container carries (00) SSCC.
+- No GTIN (or a lot number outside character set 82, or over 20 characters), or no SSCC, means the label falls back to Pulaski's. A GS1
+  label keeps the Pulaski code, smaller.
+- Barcodes are drawn with ZXing: GS1-128 with FNC1, GS1 DataMatrix with the GS1 flag and group separators.
+
+**Printing** (configurable, ZPL by default). `core.label_printer` per site sends one of two ways:
+- `raw_tcp`: host and port; all the labels go in one connection.
+- `drop_folder`: a name in the API's `Labels:DropFolders`. Each label is a file, written then renamed, for BarTender-like software.
+
+What is sent is a template from the printer's `template_set`, a folder under `Labels:TemplateDirectory` (`LabelTemplates`):
+- the file is `{kind}.{format}.{ext}`, else `{kind}.{ext}`;
+- `{{Name}}` takes the label's values, escaped by extension (`zpl`, `xml`/`btxml`, `csv`, `json`);
+- for ZPL, `Gs1Zpl128` (`>;>8` and `>8`) and `Gs1ZplDataMatrix` (`_1`) carry FNC1.
+
+Pulaski ships `zpl` (4 × 6 in, 203 dpi) and `csv`. Paths live only in configuration, never in the database. `POST /api/labels/print` (inventory
+or floor view at the site) prints lots, containers or locations, up to 200 and 1 to 20 copies, on a printer or the site's default. PDFs stay
+everywhere.
+
+**Scanning** (`ResolveScanHandler`).
+- A code that `Gs1.LooksLikeGs1` (symbology identifier, brackets, group separator, or digits from (00)/(01)/(02) that read through) is read
+  for its elements.
+- Otherwise the site's active `core.supplier_barcode_format`s are tried in order (`SupplierBarcodes`: a regex with named parts `lot`,
+  `supplier_lot`, `material`, `gtin`, `qty`, `expiry`; the whole scan must match within 100 ms; checked when saved).
+- What was read finds the container by SSCC, or lots on hand by lot or supplier lot number of the material named by GTIN or code
+  (`FindScannedAsync`).
+- With nothing found but a known material, the answer is `receivable` with the parsed data, and the Scan page offers Receive, filled in. The
+  Scan page also loads a lot at a feed point (D-079).
+
+**Set up** on Site settings → Labels (`site_settings.manage`): format, prefix, extension, default printer, printers, and supplier formats
+with a try-it test (`POST /api/labels/supplier-formats/test`).
+
+**Not done:**
+- printer status back from the printer;
+- GTINs from the material import;
+- SSCCs for containers made before a prefix;
+- GS1 Digital Link.
+
+## Containers inside containers (D-081, proposed)
+
+Issue #76. A container held lots only.
+
+**Nesting.** `core.container.parent_container_id`: a container sits inside at most one other, at that one's location.
+- `Container.PackInto` refuses itself, anything it holds (the target's ancestors include it), another site, and nesting deeper than 5 (the
+  target's ancestors + 2 + the height of what it holds).
+- `TakeOut` leaves it where it is.
+- `MoveTo` on its own clears the parent, as a lot moved alone leaves its container (D-059).
+- `Retire` needs no lots and no containers inside.
+
+**Carrying** (`ContainerCarry`): moving a container, or packing it into one elsewhere, moves every container inside it and all their lots to
+the destination. Each lot records its own move with `container_id` naming the container it is in. The destination's location rules (D-032)
+apply to every material carried.
+
+**Locks.** Moving locks the container, then everything inside it (a recursive query, id order, `FOR UPDATE OF c`), then all their lots in id
+order. Packing locks the two containers together in id order (`LockContainersAsync`) before the inside, so two opposite packs can't
+deadlock; the cycle check then refuses one.
+
+**Commands.** `PackContainerCommand` (`POST /api/inventory/containers/{id}/pack`, `lot.move`; no container takes it out); events
+`pulaski.container.packed.v1` / `unpacked.v1`. `ContainerDto` carries `ParentContainerId`/`Code`, `ContainerCount` and, in detail,
+`Containers`. Scans and labels say what a container is in. The Containers and Scan pages pack and take out.
+
+**Not done:** splitting a container's contents onto several in one step.
 
 ## Application architecture
 

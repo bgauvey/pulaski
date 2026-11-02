@@ -887,6 +887,96 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Gs1_numbers_containers_and_scans_of_gs1_and_supplier_barcodes_find_lots_or_offer_to_receive_them()
+    {
+        var plant = await CreatePlantAsync();
+
+        // A company prefix gives new containers SSCCs from the site's serial.
+        await db.SendAsync(new SetLabelSettingsCommand(plant.Site, 0, LabelFormats.Gs1128, "0614141", 1, null));
+        CreatedResponse pallet = await db.SendAsync(new CreateContainerCommand(plant.Site, null, "pallet", plant.Stores));
+        var sscc = (await QueryAsync<GetContainerQuery, ContainerDto>(new GetContainerQuery(pallet.Id))).Sscc;
+        Assert.Equal(Gs1.Sscc("0614141", 1, 1), sscc);
+        var setup = await QueryAsync<GetLabelSetupQuery, LabelSetupDto>(new GetLabelSetupQuery(plant.Site));
+        Assert.Equal((LabelFormats.Gs1128, 2L), (setup.LabelFormat, setup.SsccNextSerial));
+
+        // A GTIN on the resin, kept as 14 digits and given to one material only.
+        var gtin = "9501101530003";
+        var resin = await QueryAsync<Application.Materials.GetMaterialQuery, Contracts.Materials.MaterialDetailDto>(new Application.Materials.GetMaterialQuery(plant.Resin));
+        await db.SendAsync(new Application.Materials.SetMaterialGtinCommand(plant.Resin, resin.Material.Version, gtin));
+        var caps = await QueryAsync<Application.Materials.GetMaterialQuery, Contracts.Materials.MaterialDetailDto>(new Application.Materials.GetMaterialQuery(plant.Caps));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new Application.Materials.SetMaterialGtinCommand(plant.Caps, caps.Material.Version, "09501101530003")));
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new Application.Materials.SetMaterialGtinCommand(plant.Caps, caps.Material.Version, "9501101530004")));
+
+        async Task<ScanResultDto> ScanAsync(string code) => await QueryAsync<ResolveScanQuery, ScanResultDto>(new ResolveScanQuery(plant.Site, code));
+
+        // A supplier's GS1-128 label for a lot not here yet offers to receive it, filled in; once received, the same scan finds it.
+        var label = "]C1" + Gs1.Data([new("01", "09501101530003"), new("17", "271231"), new("3101", "002500"), new("10", "S-" + _suffix)], "\u001D");
+        var offer = await ScanAsync(label);
+        Assert.Equal(("receivable", plant.Resin, 250m, new DateOnly(2027, 12, 31)), (offer.Status, offer.Parsed!.MaterialId!.Value, offer.Parsed.Quantity!.Value, offer.Parsed.Expiry!.Value));
+        var lot = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-G-" + _suffix, 250m, plant.Kg, "S-" + _suffix));
+        var found = await ScanAsync(label);
+        Assert.Equal(("found", lot.LotId, "supplier lot"), (found.Status, Assert.Single(found.Matches).Id, found.Matches[0].MatchedBy));
+        Assert.Equal(pallet.Id, Assert.Single((await ScanAsync("(00)" + sscc)).Matches).Id);
+
+        // A lot label carries the resin's GTIN.
+        Assert.Equal("09501101530003", (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId))).Lot.MaterialGtin);
+
+        // A supplier's own format, tried after GS1.
+        await db.SendAsync(new SaveSupplierFormatCommand(plant.Site, null, 0, "ACME", "Acme resin", @"(?<material>[A-Za-z0-9-]+)\|(?<supplier_lot>[A-Za-z0-9-]+)\|(?<qty>\d+)", null, 0, true));
+        var acme = await ScanAsync($"RESIN-{_suffix}|S-{_suffix}|25");
+        Assert.Equal(("found", "ACME", lot.LotId), (acme.Status, acme.Parsed!.Source, Assert.Single(acme.Matches).Id));
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new SaveSupplierFormatCommand(plant.Site, null, 0, "BAD", "Bad", "(unclosed", null, 0, true)));
+
+        // A printer, and the settings naming it as the default.
+        CreatedResponse printer = await db.SendAsync(new SaveLabelPrinterCommand(plant.Site, null, 0, "zeb-1", "Zebra", PrintMethods.RawTcp, "10.0.0.5", 9100, null, "zpl", true));
+        setup = await QueryAsync<GetLabelSetupQuery, LabelSetupDto>(new GetLabelSetupQuery(plant.Site));
+        await db.SendAsync(new SetLabelSettingsCommand(plant.Site, setup.Version, LabelFormats.Gs1DataMatrix, "0614141", 1, printer.Id));
+        setup = await QueryAsync<GetLabelSetupQuery, LabelSetupDto>(new GetLabelSetupQuery(plant.Site));
+        Assert.Equal(("ZEB-1", printer.Id), (Assert.Single(setup.Printers).Code, setup.DefaultPrinterId!.Value));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new SetLabelSettingsCommand(plant.Site, setup.Version - 1, LabelFormats.Pulaski, null, 0, null)));
+    }
+
+    [Fact]
+    public async Task Boxes_go_on_pallets_and_move_with_them_and_a_container_never_ends_up_inside_itself()
+    {
+        var plant = await CreatePlantAsync();
+        async Task<ContainerDto> GetAsync(Guid id) => await QueryAsync<GetContainerQuery, ContainerDto>(new GetContainerQuery(id));
+
+        CreatedResponse pallet = await db.SendAsync(new CreateContainerCommand(plant.Site, null, "pallet", plant.Stores));
+        CreatedResponse box = await db.SendAsync(new CreateContainerCommand(plant.Site, null, "box", plant.Staging));
+        var lot = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Staging, "R-NB-" + _suffix, 20m, plant.Kg));
+        await db.SendAsync(new PackLotCommand(lot.LotId, await VersionAsync(lot.LotId), box.Id));
+
+        // The box goes on the pallet: it and its lot move to the pallet's place.
+        await db.SendAsync(new PackContainerCommand(box.Id, (await GetAsync(box.Id)).Version, pallet.Id));
+        var onPallet = await GetAsync(box.Id);
+        Assert.Equal((pallet.Id, plant.Stores), (onPallet.ParentContainerId!.Value, onPallet.LocationId));
+        var lotNow = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId))).Lot;
+        Assert.Equal((plant.StoresCode, onPallet.Code), (lotNow.LocationCode, lotNow.ContainerCode));
+        var holder = await GetAsync(pallet.Id);
+        Assert.Equal((1, box.Id), (holder.ContainerCount, Assert.Single(holder.Containers).Id));
+
+        // Moving the pallet carries the box and its lot.
+        await db.SendAsync(new MoveContainerCommand(pallet.Id, holder.Version, plant.Staging));
+        Assert.Equal(plant.Staging, (await GetAsync(box.Id)).LocationId);
+        Assert.Equal(plant.StagingCode, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId))).Lot.LocationCode);
+
+        // No cycles; the pallet can't be retired with the box on it; a scan of the box says where it is.
+        await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new PackContainerCommand(pallet.Id, (await GetAsync(pallet.Id)).Version, box.Id)));
+        await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new RetireContainerCommand(pallet.Id, (await GetAsync(pallet.Id)).Version)));
+        var scan = await QueryAsync<ResolveScanQuery, ScanResultDto>(new ResolveScanQuery(plant.Site, onPallet.Barcode));
+        Assert.Contains("in " + holder.Code, Assert.Single(scan.Matches).Detail, StringComparison.Ordinal);
+
+        // Taken off, it stays where it is; moved alone, a box on a pallet leaves it.
+        await db.SendAsync(new PackContainerCommand(box.Id, (await GetAsync(box.Id)).Version, null));
+        Assert.Equal(((Guid?)null, plant.Staging), ((await GetAsync(box.Id)).ParentContainerId, (await GetAsync(box.Id)).LocationId));
+        await db.SendAsync(new PackContainerCommand(box.Id, (await GetAsync(box.Id)).Version, pallet.Id));
+        await db.SendAsync(new MoveContainerCommand(box.Id, (await GetAsync(box.Id)).Version, plant.Stores));
+        Assert.Null((await GetAsync(box.Id)).ParentContainerId);
+        Assert.Equal(0, (await GetAsync(pallet.Id)).ContainerCount);
+    }
+
+    [Fact]
     public async Task Allocations_set_stock_aside_first_expiry_first_are_used_up_by_consumption_and_refresh_as_stock_changes()
     {
         var plant = await CreatePlantAsync();

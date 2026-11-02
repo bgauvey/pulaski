@@ -129,6 +129,8 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
             SiteOf.CalendarException => "SELECT e.site_id FROM core.calendar_exception x JOIN core.equipment e ON e.id = x.scope_equipment_id WHERE x.id = @Id",
             SiteOf.ChangeoverRule => "SELECT site_id FROM core.changeover_rule WHERE id = @Id",
             SiteOf.FeedShortfall => "SELECT site_id FROM core.feed_shortfall WHERE id = @Id",
+            SiteOf.LabelPrinter => "SELECT site_id FROM core.label_printer WHERE id = @Id",
+            SiteOf.SupplierBarcodeFormat => "SELECT site_id FROM core.supplier_barcode_format WHERE id = @Id",
             _ => throw new ArgumentOutOfRangeException(nameof(kind)),
         };
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);

@@ -50,6 +50,9 @@ public sealed record LotSummaryDto
     public required string MaterialCode { get; init; }
     public required string MaterialName { get; init; }
 
+    /// <summary>The material's GTIN (#75), for GS1 labels; null when it has none.</summary>
+    public string? MaterialGtin { get; init; }
+
     /// <summary><c>available</c>, <c>on_hold</c>, <c>quarantine</c>, <c>consumed</c> or <c>scrapped</c>.</summary>
     public required string Status { get; init; }
 

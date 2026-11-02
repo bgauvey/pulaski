@@ -306,6 +306,7 @@ Groups materials (e.g. all resins), so processes and changeover rules can match 
 | `material_class_id` | uuid → material_class | yes | Its class, if any. |
 | `base_uom_id` | uuid → uom | no | The unit it is counted in by default. Fixed once the material is in use, whatever its origin (D-033). |
 | `shelf_life_days` | integer | yes | A new lot received or produced without an expiry expires this many days after it arrives (D-032). |
+| `gtin` | text | yes | Its GS1 trade item number as 14 digits (`material_gtin_ck`), unique (`material_gtin_uq`); on GS1 lot labels and for reading scanned GS1 or supplier codes (#75, D-080). |
 | `batch_size` | numeric(18,6) | yes | Made in batches of this many base units (D-036): orders and jobs are whole batches, and production is reported batch by batch. Null for a material made continuously. Pulaski-owned. |
 | `batch_tolerance_pct` | numeric(5,2) | no | Under the `near` rule, how far a batch may be from `batch_size`, 0 to 50. Default 2. |
 | `batch_rule` | text | yes | `exact` (every batch is the batch size; a partial batch waits for approval) or `near` (within the tolerance; a partial batch is accepted). Set exactly when `batch_size` is (`material_batch_ck`); defaults from the type, `exact` for finished goods. |
@@ -1029,9 +1030,54 @@ Holds lots that keep their own identity (`core.lot.container_id`); moving it mov
 | `kind` | text | no | `pallet`, `tote`, `box`, `bin` or `other`. |
 | `location_equipment_id` | uuid → equipment | no | Where it is: a location that holds inventory and doesn't mix lots. |
 | `label_no` | bigint | no | Its label number, unique; the barcode carries `PUL1C` + this. |
+| `sscc` | text | yes | Its GS1 SSCC, 18 digits (`container_sscc_ck`), unique (`container_sscc_uq`): given when it is made, from its site's company prefix and next serial, if the site has a prefix then (#75). |
+| `parent_container_id` | uuid → container | yes | The container it is inside, at that one's location (#76, D-081); never itself (`container_parent_ck`) or anything inside it, at most five deep. Indexed. |
 | `is_active` | boolean | no | False once retired, which needs it empty; never deleted. |
 | `created_at`, `created_by` | timestamptz, text | no | When and by whom. |
 | `updated_at` | timestamptz | no | Last change. |
+
+### core.label_settings — a site's labels (#75, D-080) · *In use*
+
+One row per site, made with the defaults the first time it is changed or a container takes an SSCC.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key: the site. |
+| `label_format` | text | no | `pulaski` (Code 128 only, the default), `gs1_128` or `gs1_datamatrix`. |
+| `gs1_company_prefix` | text | yes | The site's GS1 company prefix, 6 to 12 digits; containers get SSCCs only while it is set. |
+| `sscc_extension` | smallint | no | The SSCC's extension digit, 0 to 9. |
+| `sscc_next_serial` | bigint | no | The serial the next SSCC takes; the row is locked to give one out. |
+| `default_printer_id` | uuid → label_printer | yes | Chosen first when printing. |
+| `updated_at` | timestamptz | no | Last change. |
+
+### core.label_printer — a site's label printers (#75) · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | Its site. |
+| `code` | text | no | Upper case, unique per site (`label_printer_uq`); fixed once made. |
+| `name` | text | no | |
+| `method` | text | no | `raw_tcp` (sent to host and port) or `drop_folder` (a file per label in a folder of the API's configuration); `label_printer_target_ck` keeps exactly that method's target set. |
+| `host`, `port` | text, integer | yes | For `raw_tcp`: the printer's address and port (usually 9100). |
+| `drop_folder` | text | yes | For `drop_folder`: the name of a folder in `Labels:DropFolders`, never a path. |
+| `template_set` | text | no | The folder of templates under `Labels:TemplateDirectory`, such as `zpl` or `csv`. |
+| `is_active` | boolean | no | Switched off rather than deleted. |
+| `created_at`, `updated_at` | timestamptz | no | |
+
+### core.supplier_barcode_format — how a supplier's barcodes read (#75) · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | Its site. |
+| `code` | text | no | Upper case, unique per site; fixed once made. Scans it reads name it as their source. |
+| `name` | text | no | |
+| `pattern` | text | no | A regular expression (at most 500 characters) with named parts `lot`, `supplier_lot`, `material`, `gtin`, `qty`, `expiry`; the whole scan must match, within 100 ms. |
+| `expiry_format` | text | yes | How the expiry part is written, as a .NET date format; null means `yyyy-MM-dd`. |
+| `sort_order` | integer | no | Formats are tried in this order, after GS1. |
+| `is_active` | boolean | no | Switched off rather than deleted. |
+| `created_at`, `updated_at` | timestamptz | no | |
 
 ### core.lot — current state of each lot · *In use*
 

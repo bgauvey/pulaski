@@ -20,6 +20,10 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddSingleton<ShopOrderPdfRenderer>();
 builder.Services.AddSingleton<LabelPdfRenderer>();
+builder.Services.Configure<LabelPrintingOptions>(builder.Configuration.GetSection("Labels"));
+builder.Services.AddSingleton<LabelTemplates>();
+builder.Services.AddSingleton<LabelPrinting>();
+builder.Services.AddScoped<LabelBuilder>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IRequestContext, HttpRequestContext>();
@@ -92,6 +96,7 @@ api.MapProcessEndpoints();
 api.MapBomEndpoints();
 api.MapUnitEndpoints();
 api.MapInventoryEndpoints();
+api.MapLabelEndpoints();
 api.MapIntegrationEndpoints();
 api.MapMaterialEndpoints();
 api.MapExecutionEndpoints();

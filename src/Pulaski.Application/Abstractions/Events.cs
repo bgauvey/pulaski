@@ -176,6 +176,8 @@ public static class EventTypes
     public const string ContainerCreated = "pulaski.container.created.v1";
     public const string EquipmentFlowSet = "pulaski.equipment.flow_set.v1";
     public const string ContainerMoved = "pulaski.container.moved.v1";
+    public const string ContainerPacked = "pulaski.container.packed.v1";
+    public const string ContainerUnpacked = "pulaski.container.unpacked.v1";
     public const string ContainerRetired = "pulaski.container.retired.v1";
     public const string DeliveryRetried = "pulaski.delivery.retried.v1";
     public const string DeliverySkipped = "pulaski.delivery.skipped.v1";
@@ -184,6 +186,9 @@ public static class EventTypes
     public const string LotProduced = "pulaski.lot.produced.v1";
     public const string LotMadeFromSet = "pulaski.lot.made_from_set.v1";
     public const string LotLoaded = "pulaski.lot.loaded.v1";
+    public const string LabelSettingsSet = "pulaski.site.label_settings_set.v1";
+    public const string LabelPrinterSaved = "pulaski.label_printer.saved.v1";
+    public const string SupplierFormatSaved = "pulaski.supplier_barcode_format.saved.v1";
     public const string FeedShortfallRecorded = "pulaski.feed_shortfall.recorded.v1";
     public const string FeedShortfallResolved = "pulaski.feed_shortfall.resolved.v1";
     public const string FeedShortfallDismissed = "pulaski.feed_shortfall.dismissed.v1";

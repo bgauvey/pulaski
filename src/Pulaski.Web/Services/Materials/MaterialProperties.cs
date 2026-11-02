@@ -113,6 +113,12 @@ public static class MaterialProperties
             },
             new()
             {
+                Key = GtinKey, Name = "GTIN", Category = Stock, Value = m.Gtin, Editor = PropertyEditor.Text, Placeholder = "None",
+                Description = "Its GS1 trade item number (8, 12, 13 or 14 digits). Lots of it get GS1 labels when the site prints them, " +
+                    "and a scanned GS1 or supplier barcode with it finds this material.",
+            },
+            new()
+            {
                 Key = "batchSize", Name = "Batch size", Category = Batches,
                 Value = m.BatchSize?.ToString("0.######", CultureInfo.InvariantCulture), Editor = PropertyEditor.Number,
                 Min = 0, Step = 0.001, Suffix = m.BaseUomCode, Placeholder = "Made continuously",
@@ -159,6 +165,9 @@ public static class MaterialProperties
             },
         ];
     }
+
+    /// <summary>The material's GTIN (#75), saved on its own.</summary>
+    public const string GtinKey = "gtin";
 
     /// <summary>The material's own rule for ERP orders that aren't whole batches (D-066), saved on its own.</summary>
     public const string ErpBatchRuleKey = "erpBatchRule";

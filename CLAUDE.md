@@ -246,6 +246,12 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   the next lot of its material); `core.material_load` is unused. Reports backflush / share time-window components (`FeedAutomation.OnReportAsync`); a feed
   point's consumed counter posts after ingest commits (`FeedCounterPoster`, job first). Rows carry `auto_source` + `source_ref`; never below zero; what isn't
   covered is a `core.feed_shortfall` (resolve with a lot / dismiss). Report reversal puts automated consumption back.
+- GS1 labels and printing (D-080, proposed): `Gs1` (pure: check digit, GTIN, SSCC, element strings) + `SupplierBarcodes` (regex with named parts).
+  `material.gtin` (own command), `container.sscc` from `core.label_settings` (prefix, extension, next serial, locked). Site `label_format`
+  pulaski/gs1_128/gs1_datamatrix; no GTIN/SSCC → Pulaski label. `core.label_printer` raw_tcp or drop_folder (name in `Labels:DropFolders`), rendered
+  from `Labels:TemplateDirectory/{set}/{kind}[.{format}].{ext}` (`LabelTemplates`, `LabelPrinting`); scans read GS1, then supplier formats (`receivable`).
+- Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
+  packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Lot allocations (D-064, proposed): `core.lot_allocation` (active / consumed / released; one active per job + lot) sets a lot's stock aside for a
   job's planned component; other jobs (recommendations, shortages) see it as taken; consumption into its job uses it up
   (`AllocationUse`), into another warns. `LotRecommendation` (FEFO, then FIFO; only available, unexpired at need time, free stock; every

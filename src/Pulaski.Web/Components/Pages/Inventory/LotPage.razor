@@ -79,6 +79,7 @@
                     <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Correct">Correct…</button>
                 }
                 <button type="button" class="btn btn-outline-secondary" @onclick="PrintLabelAsync">Print label</button>
+                <PrintLabelControl Kind="lot" Id="LotId" SiteId="lot.SiteId" />
             </div>
         }
     </Actions>

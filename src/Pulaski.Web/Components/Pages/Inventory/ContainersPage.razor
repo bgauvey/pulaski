@@ -5,7 +5,8 @@
 @inject CurrentUser User
 @inject Downloads Downloads
 
-@* Pallets, totes, boxes and bins holding lots (D-059). Lots keep their own identity inside; moving a container moves them all. *@
+@* Pallets, totes, boxes and bins holding lots (D-059), and other containers (#76). Lots keep their own identity inside; moving a container moves
+   everything in it. *@
 <PageTitle>Containers · Inventory · Pulaski</PageTitle>
 
 <InventoryHeader Title="Containers" SiteChanged="OnSiteChangedAsync">
@@ -75,14 +76,20 @@ else
                             @(c.IsActive ? "" : " · retired")
                         </td>
                         <td>@Display.Label(c.Kind)</td>
-                        <td>@c.LocationCode</td>
-                        <td class="inv-num">@c.LotCount</td>
+                        <td>@c.LocationCode@(c.ParentContainerCode is { } parent ? $" · in {parent}" : "")</td>
+                        <td class="inv-num">@c.LotCount@(c.ContainerCount > 0 ? $" + {c.ContainerCount} inside" : "")</td>
                         <td class="text-end text-nowrap">
                             <button type="button" class="btn btn-sm btn-link" @onclick="() => LabelAsync(c)">Label</button>
+                            <PrintLabelControl Kind="container" Id="c.Id" SiteId="c.SiteId" ButtonClass="btn btn-sm btn-link" />
                             @if (CanManage && c.IsActive)
                             {
-                                <button type="button" class="btn btn-sm btn-link" @onclick="() => { _moving = c; _toId = Guid.Empty; }">Move…</button>
-                                <button type="button" class="btn btn-sm btn-link" disabled="@(_busy || c.LotCount > 0)" title="@(c.LotCount > 0 ? "Empty it first" : null)" @onclick="() => RetireAsync(c)">Retire</button>
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => { _moving = c; _toId = Guid.Empty; _packing = null; }">Move…</button>
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => { _packing = c; _intoId = Guid.Empty; _moving = null; }">Pack into…</button>
+                                @if (c.ParentContainerId is not null)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => TakeOutAsync(c)">Take out of @c.ParentContainerCode</button>
+                                }
+                                <button type="button" class="btn btn-sm btn-link" disabled="@(_busy || c.LotCount + c.ContainerCount > 0)" title="@(c.LotCount + c.ContainerCount > 0 ? "Empty it first" : null)" @onclick="() => RetireAsync(c)">Retire</button>
                             }
                         </td>
                     </tr>
@@ -104,9 +111,36 @@ else
                             </td>
                         </tr>
                     }
+                    @if (_packing?.Id == c.Id)
+                    {
+                        <tr>
+                            <td colspan="5">
+                                <form class="d-flex gap-2" @onsubmit="PackAsync" @onsubmit:preventDefault>
+                                    <select class="form-select form-select-sm w-auto" aria-label="Into" @bind="_intoId">
+                                        <option value="@Guid.Empty">Put @c.Code and all it holds inside…</option>
+                                        @foreach (var o in _containers.Where(o => o.IsActive && o.Id != c.Id && o.Id != c.ParentContainerId))
+                                        {
+                                            <option value="@o.Id">@o.Code · @o.LocationCode@(o.LocationId == c.LocationId ? "" : " (moves it there)")</option>
+                                        }
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-primary" disabled="@(_busy || _intoId == Guid.Empty)">Pack</button>
+                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _packing = null">Cancel</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
                     @if (_open?.Id == c.Id)
                     {
-                        @if (_open.Lots.Count == 0)
+                        @foreach (var inner in _open.Containers)
+                        {
+                            <tr @key="inner.Id" class="small">
+                                <td class="ps-5"><span class="chip">@Display.Label(inner.Kind)</span> @inner.Code</td>
+                                <td colspan="2">container</td>
+                                <td class="inv-num">@inner.LotCount@(inner.ContainerCount > 0 ? $" + {inner.ContainerCount} inside" : "")</td>
+                                <td></td>
+                            </tr>
+                        }
+                        @if (_open.Lots.Count == 0 && _open.Containers.Count == 0)
                         {
                             <tr><td colspan="5" class="ps-5 small text-muted">Empty.</td></tr>
                         }
@@ -134,6 +168,8 @@ else
     private IReadOnlyList<ContainerDto>? _containers;
     private IReadOnlyList<InventoryLocationDto> _locations = [];
     private ContainerDto? _open;
+    private ContainerDto? _packing;
+    private Guid _intoId;
     private ContainerDto? _moving;
     private Guid _toId;
     private string _kind = "pallet";
@@ -215,6 +251,19 @@ else
     });
 
     private Task RetireAsync(ContainerDto c) => RunAsync(() => Api.RetireContainerAsync(c.Id, c.Version));
+
+    private Task PackAsync() => RunAsync(async () =>
+    {
+        await Api.PackContainerAsync(_packing!.Id, new PackContainerRequest { Version = _packing.Version, IntoContainerId = _intoId });
+        _packing = null;
+        _open = null;
+    });
+
+    private Task TakeOutAsync(ContainerDto c) => RunAsync(async () =>
+    {
+        await Api.PackContainerAsync(c.Id, new PackContainerRequest { Version = c.Version });
+        _open = null;
+    });
 
     private async Task LabelAsync(ContainerDto c)
     {
