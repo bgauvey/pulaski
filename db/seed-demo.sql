@@ -2,7 +2,7 @@
 -- Pulaski — demo seed data                                  2026-10-12
 -- Load after schema-draft.sql, into an empty database. One enterprise,
 -- one site, an extrusion department with two lines and a packer, matching the first
--- vertical slice in docs/charter.md.
+-- vertical slice in design/charter.md.
 --
 -- Seed rows are master data loaded before go-live, so they carry no
 -- creation events; everything the application changes afterwards does.

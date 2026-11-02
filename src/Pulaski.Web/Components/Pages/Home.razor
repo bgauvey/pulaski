@@ -1,6 +1,6 @@
 @page "/"
 @attribute [RequiresView(PermissionCodes.OverviewView)]
-@* The plant overview (docs/admin-dashboard-brief.md). In five seconds it answers: which lines
+@* The plant overview (design/admin-dashboard-brief.md). In five seconds it answers: which lines
    are running, which are not and why, and what needs a person. Live state, each line's shift so far
    and held lots come from GET /overview (D-070); OEE from the machine report; labor to approve from
    the shift review. SPC alerts remain a placeholder until quality checks exist. *@
@@ -458,7 +458,7 @@
     // Labor is counted only where the user may see it (D-039); the count and its link follow approvals on every refresh.
     private bool CanSeeLabor => _siteId != Guid.Empty && User.Can(PermissionCodes.LaborView, _siteId);
 
-    // Ordered by urgency (docs/admin-dashboard-brief.md). Placeholders keep their place until their data exists.
+    // Ordered by urgency (design/admin-dashboard-brief.md). Placeholders keep their place until their data exists.
     private IEnumerable<AttentionCell> Attention
     {
         get

@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pulaski · Open-source MES for process lines</title>
+<meta name="description" content="Pulaski is an open-source manufacturing execution system for extrusion, molding, compounding and high-rate packaging lines. It runs beneath your ERP. Pre-alpha, Apache 2.0.">
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f7f5;
+    --surface: #ffffff;
+    --ink: #1d2a33;
+    --muted: #5a6872;
+    --rule: #d6dcd8;
+    --accent: #145369;
+    --accent-ink: #ffffff;
+    --signal: #c26a12;
+    --run: #2f7d4f;
+    --code-bg: #eef1ee;
+    --max: 1120px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10171c;
+      --surface: #172128;
+      --ink: #e4eaee;
+      --muted: #9aa8b1;
+      --rule: #2a3741;
+      --accent: #5fb3cf;
+      --accent-ink: #0d1418;
+      --signal: #e39a4c;
+      --run: #6cc08d;
+      --code-bg: #0c1216;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.6 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  a:hover { text-decoration-thickness: 2px; }
+  code, pre { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.875em; }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 16px; }
+
+  /* Header */
+  header.top { border-bottom: 1px solid var(--rule); background: var(--surface); position: sticky; top: 0; z-index: 10; }
+  header.top .wrap { display: flex; align-items: center; gap: 24px; height: 56px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--ink); text-decoration: none; letter-spacing: 0.02em; }
+  .brand svg { flex: none; }
+  nav.links { display: flex; gap: 20px; margin-left: auto; font-size: 0.9rem; }
+  nav.links a { color: var(--muted); text-decoration: none; }
+  nav.links a:hover { color: var(--ink); }
+  @media (max-width: 720px) { nav.links a:not(.gh) { display: none; } }
+
+  /* Hero */
+  .hero { padding: 72px 0 56px; border-bottom: 1px solid var(--rule); }
+  .hero .wrap { display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px; align-items: center; }
+  @media (max-width: 880px) { .hero .wrap { grid-template-columns: 1fr; } }
+  .eyebrow { font: 500 0.78rem/1 "IBM Plex Mono", monospace; text-transform: uppercase; letter-spacing: 0.12em; color: var(--signal); margin: 0 0 18px; }
+  h1 { font-size: clamp(2rem, 4.6vw, 3.1rem); line-height: 1.12; margin: 0 0 20px; letter-spacing: -0.015em; }
+  .lede { font-size: 1.15rem; color: var(--muted); margin: 0 0 28px; max-width: 34em; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 6px; font-weight: 600; text-decoration: none; border: 1px solid var(--accent); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.ghost { color: var(--accent); background: transparent; }
+  .status { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 0.85rem; color: var(--muted); }
+  .status span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; background: var(--signal); vertical-align: 1px; }
+  .status span.ok::before { background: var(--run); }
+
+  /* Line diagram */
+  .line { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 20px; }
+  .line svg { width: 100%; height: auto; display: block; }
+  .line figcaption { font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
+  .lane-run { fill: var(--run); }
+  .lane-stop { fill: var(--signal); }
+  .lane-idle { fill: var(--rule); }
+  .stroke { stroke: var(--ink); }
+  .muted-fill { fill: var(--muted); }
+  .ink-fill { fill: var(--ink); }
+
+  /* Sections */
+  section { padding: 64px 0; border-bottom: 1px solid var(--rule); }
+  h2 { font-size: 1.6rem; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .section-lede { color: var(--muted); margin: 0 0 32px; max-width: 46em; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 20px; }
+  .card h3 { font-size: 1rem; margin: 0 0 6px; display: flex; align-items: center; gap: 10px; }
+  .card h3 .tag { font: 500 0.7rem/1 "IBM Plex Mono", monospace; color: var(--muted); border: 1px solid var(--rule); border-radius: 4px; padding: 3px 6px; margin-left: auto; }
+  .card p { margin: 0; color: var(--muted); font-size: 0.93rem; }
+  a.card { color: inherit; text-decoration: none; }
+  a.card:hover { border-color: var(--accent); }
+  a.card h3 { color: var(--accent); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  @media (max-width: 880px) { .two { grid-template-columns: 1fr; } }
+  ul.ticks { list-style: none; padding: 0; margin: 0; }
+  ul.ticks li { padding: 9px 0 9px 26px; border-top: 1px solid var(--rule); position: relative; font-size: 0.95rem; }
+  ul.ticks li:first-child { border-top: 0; }
+  ul.ticks li::before { content: "—"; position: absolute; left: 0; color: var(--muted); }
+  ul.ticks.yes li::before { content: "✓"; color: var(--run); font-weight: 700; }
+  ul.ticks.no li::before { content: "×"; color: var(--signal); font-weight: 700; }
+  h3.small { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 0 0 10px; font-family: "IBM Plex Mono", monospace; font-weight: 500; }
+
+  /* Architecture */
+  .arch { display: grid; gap: 10px; max-width: 760px; }
+  .tier { background: var(--surface); border: 1px solid var(--rule); border-left: 4px solid var(--accent); border-radius: 6px; padding: 14px 18px; }
+  .tier strong { display: block; }
+  .tier span { color: var(--muted); font-size: 0.9rem; }
+  .tier.floor { border-left-color: var(--signal); }
+  .tier.out { border-left-color: var(--run); }
+  .arrow { text-align: center; color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 0.8rem; line-height: 1; }
+  .principles { margin-top: 32px; }
+
+  /* Code */
+  pre { background: var(--code-bg); border: 1px solid var(--rule); border-radius: 8px; padding: 18px; overflow-x: auto; line-height: 1.55; margin: 0 0 16px; }
+  pre .c { color: var(--muted); }
+  .steps { counter-reset: step; list-style: none; padding: 0; margin: 0; }
+  .steps > li { counter-increment: step; position: relative; padding-left: 44px; margin-bottom: 24px; }
+  .steps > li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 0.85rem; display: grid; place-items: center; }
+  .steps p { margin: 2px 0 10px; }
+
+  /* Stack table */
+  table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
+  th, td { text-align: left; padding: 10px 12px; border-top: 1px solid var(--rule); vertical-align: top; }
+  th { width: 30%; color: var(--muted); font-weight: 500; }
+  .table-wrap { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; overflow-x: auto; }
+  .table-wrap tr:first-child th, .table-wrap tr:first-child td { border-top: 0; }
+
+  footer { padding: 40px 0 56px; color: var(--muted); font-size: 0.85rem; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 16px 32px; justify-content: space-between; }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+        <rect x="1" y="1" width="24" height="24" rx="5" fill="none" stroke="currentColor" stroke-width="2"/>
+        <rect x="6" y="15" width="4" height="5" fill="currentColor"/>
+        <rect x="11" y="11" width="4" height="9" fill="currentColor"/>
+        <rect x="16" y="7" width="4" height="13" fill="currentColor"/>
+      </svg>
+      Pulaski
+    </a>
+    <nav class="links" aria-label="Sections">
+      <a href="#capabilities">Capabilities</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#try">Try it</a>
+      <a href="#docs">Docs</a>
+      <a class="gh" href="https://github.com/bgauvey/pulaski">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="wrap">
+      <div>
+        <p class="eyebrow">Open-source MES · Pre-alpha</p>
+        <h1>Execution for lines that never stop.</h1>
+        <p class="lede">
+          Pulaski is a manufacturing execution system for extrusion, molding, compounding and high-rate packaging lines.
+          It takes states, counts and stops from the machines, traces lots through continuous flow, and sits beneath your ERP
+          instead of replacing it.
+        </p>
+        <div class="actions">
+          <a class="btn primary" href="https://github.com/bgauvey/pulaski">View on GitHub</a>
+          <a class="btn ghost" href="#try">Run it locally</a>
+        </div>
+        <div class="status" aria-label="Project status">
+          <span>Pre-alpha: APIs and screens will change</span>
+          <span class="ok">Apache 2.0</span>
+          <span class="ok">Self-hosted</span>
+        </div>
+      </div>
+
+      <figure class="line" aria-labelledby="line-caption">
+        <svg viewBox="0 0 460 250" role="img" aria-labelledby="line-title">
+          <title id="line-title">A line's state over a shift: running, a short stop, running, a coded stop, running.</title>
+          <text x="0" y="14" class="muted-fill" font-family="IBM Plex Mono, monospace" font-size="11">EXT-01 · shift A</text>
+          <g font-family="IBM Plex Mono, monospace" font-size="10" class="muted-fill">
+            <text x="0" y="56">State</text>
+            <text x="0" y="118">Output</text>
+            <text x="0" y="196">Lots</text>
+          </g>
+          <!-- state lane -->
+          <rect x="70" y="42" width="120" height="20" rx="3" class="lane-run"/>
+          <rect x="192" y="42" width="10" height="20" rx="2" class="lane-idle"/>
+          <rect x="204" y="42" width="96" height="20" rx="3" class="lane-run"/>
+          <rect x="302" y="42" width="44" height="20" rx="3" class="lane-stop"/>
+          <rect x="348" y="42" width="110" height="20" rx="3" class="lane-run"/>
+          <text x="306" y="80" font-family="IBM Plex Sans, sans-serif" font-size="10" class="ink-fill">Die change · coded</text>
+          <!-- output bars -->
+          <g class="muted-fill">
+            <rect x="74" y="112" width="10" height="16" rx="2"/><rect x="88" y="104" width="10" height="24" rx="2"/>
+            <rect x="102" y="100" width="10" height="28" rx="2"/><rect x="116" y="102" width="10" height="26" rx="2"/>
+            <rect x="130" y="99" width="10" height="29" rx="2"/><rect x="144" y="100" width="10" height="28" rx="2"/>
+            <rect x="158" y="101" width="10" height="27" rx="2"/><rect x="172" y="99" width="10" height="29" rx="2"/>
+            <rect x="208" y="106" width="10" height="22" rx="2"/><rect x="222" y="100" width="10" height="28" rx="2"/>
+            <rect x="236" y="99" width="10" height="29" rx="2"/><rect x="250" y="101" width="10" height="27" rx="2"/>
+            <rect x="264" y="100" width="10" height="28" rx="2"/><rect x="278" y="102" width="10" height="26" rx="2"/>
+            <rect x="352" y="110" width="10" height="18" rx="2"/><rect x="366" y="102" width="10" height="26" rx="2"/>
+            <rect x="380" y="100" width="10" height="28" rx="2"/><rect x="394" y="99" width="10" height="29" rx="2"/>
+            <rect x="408" y="100" width="10" height="28" rx="2"/><rect x="422" y="101" width="10" height="27" rx="2"/>
+            <rect x="436" y="99" width="10" height="29" rx="2"/>
+          </g>
+          <line x1="70" y1="129" x2="458" y2="129" class="stroke" stroke-width="1" opacity="0.25"/>
+          <!-- lots -->
+          <g font-family="IBM Plex Mono, monospace" font-size="10">
+            <rect x="70" y="180" width="160" height="24" rx="4" fill="none" class="stroke" stroke-width="1.2"/>
+            <text x="78" y="196" class="ink-fill">Resin R-0917 → silo</text>
+            <rect x="234" y="180" width="224" height="24" rx="4" fill="none" class="stroke" stroke-width="1.2"/>
+            <text x="242" y="196" class="ink-fill">Resin R-0921 · estimated</text>
+            <text x="70" y="230" class="muted-fill">Output lots trace back through the silo by time.</text>
+          </g>
+        </svg>
+        <figcaption id="line-caption">One line, one shift: state from the machine, output from production reports, lots through a silo.</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <section id="capabilities">
+    <div class="wrap">
+      <h2>What it does today</h2>
+      <p class="section-lede">
+        Pulaski is pre-alpha, but a lot already works end to end. Everything below is built and tested against PostgreSQL through the real handlers.
+      </p>
+      <div class="grid">
+        <div class="card"><h3>Equipment model <span class="tag">ISA-95</span></h3><p>Enterprise, site, area, line, unit and storage in one hierarchy, with capability flags, machine tags and shift calendars.</p></div>
+        <div class="card"><h3>Orders and scheduling</h3><p>Manufacturing order → work order → job → run. Planners set line and sequence; times are projected, with changeover rules, process links and batch sizes.</p></div>
+        <div class="card"><h3>Processes and BOMs <span class="tag">ISA-88</span></h3><p>Versioned routes of operations shared across lines, single-level BOMs with approved alternates, released into fixed rows that jobs reference.</p></div>
+        <div class="card"><h3>Production on the floor</h3><p>Start, pause and complete runs; report good and scrap, whole batches and partial ones, capped by a believable rate. Reversals, never edits.</p></div>
+        <div class="card"><h3>Machine data <span class="tag">Sparkplug B · OPC UA · EtherNet/IP</span></h3><p>An edge worker binds tags, buffers in SQLite through network loss and forwards. States are PackML; stops open and close on their own; alarms and process values are kept.</p></div>
+        <div class="card"><h3>Downtime and OEE</h3><p>Operators code stops from reason trees; supervisors split, merge and retime them. OEE by line, shift and day, with daily rollups, targets and a trend.</p></div>
+        <div class="card"><h3>Inventory and lots</h3><p>Lot balances by location, receipts, moves, holds, splits, merges, counts, back-dated movements and expiry. Containers, nested and mixing. GS1 labels and scanning.</p></div>
+        <div class="card"><h3>Genealogy through flow</h3><p>Feed points consume by time window, backflush or counter; silos and tanks are replayed FIFO or mixed, with exact, estimated or possible links in every trace.</p></div>
+        <div class="card"><h3>Supply</h3><p>Shortages against stock and expected deliveries, lead times, lot allocation by expiry and site preferences, hard reservation, and picking lists.</p></div>
+        <div class="card"><h3>Labor</h3><p>People, crews, shifts and overrides, sessions shared out to runs, breaks, approvals, qualifications, and badge-and-PIN shop-floor terminals.</p></div>
+        <div class="card"><h3>Integration</h3><p>A REST API, CloudEvents webhooks to the ERP with retries, and imports for materials (CSV, B2MML, OData), people (CSV, SCIM), orders and receipts.</p></div>
+        <div class="card"><h3>Security and audit</h3><p>Roles held per site with fine-grained permissions. Every change appends a CloudEvents record to an append-only log in the same transaction.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="scope">
+    <div class="wrap two">
+      <div>
+        <h2>Built for</h2>
+        <p class="section-lede">Mid-market process and semi-continuous plants, roughly 50 to 500 people across one to several sites, that already run an ERP.</p>
+        <h3 class="small">Lines</h3>
+        <ul class="ticks yes">
+          <li>Profile, pipe and sheet extrusion</li>
+          <li>Injection and blow molding</li>
+          <li>Compounding and blending</li>
+          <li>High-rate packaging</li>
+        </ul>
+      </div>
+      <div>
+        <h2>Deliberately not</h2>
+        <p class="section-lede">Leaving these out keeps the core sharp and lets Pulaski fit beside what plants already own.</p>
+        <h3 class="small">Non-goals for v1</h3>
+        <ul class="ticks no">
+          <li>An ERP: no accounting, purchasing, sales or MRP. The ERP stays the book of record.</li>
+          <li>SCADA, HMI or a historian: Pulaski reads from them and keeps only what it needs.</li>
+          <li>Finite-capacity scheduling: planners decide the order; Pulaski works out the times.</li>
+          <li>Regulated-industry features such as electronic signatures.</li>
+          <li>Hosted multi-tenant SaaS: self-hosted only.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="not-yet">
+    <div class="wrap">
+      <h2>Not built yet</h2>
+      <p class="section-lede">Known gaps on the way to v1, so you don't go looking for them.</p>
+      <ul class="ticks">
+        <li>Quality: inspections and real-time SPC charts with rule alerts.</li>
+        <li>Sign-in through your identity provider (OpenID Connect). Today users have Pulaski passwords.</li>
+        <li>Machine counts turning into production reports; output is reported by hand.</li>
+        <li>A single-command demo. Today you run the API, the web app and the simulators yourself.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="architecture">
+    <div class="wrap">
+      <h2>Architecture</h2>
+      <p class="section-lede">Event-first: every command changes relational state and appends an event in one transaction. Only the API writes the database.</p>
+      <div class="arch">
+        <div class="tier floor"><strong>Plant floor</strong><span>PLCs, OPC UA servers, MQTT / Sparkplug B brokers</span></div>
+        <div class="arrow" aria-hidden="true">↓ samples</div>
+        <div class="tier"><strong>Pulaski Edge</strong><span>Protocol connectors on one SDK, tag binding with deadband and heartbeat, SQLite store-and-forward. Runs on plant hardware: container, systemd or Windows service.</span></div>
+        <div class="arrow" aria-hidden="true">↓ signals over HTTPS</div>
+        <div class="tier"><strong>Pulaski API</strong><span>ASP.NET Core, CQRS handlers, domain rules in C#. PostgreSQL with time-partitioned history, BRIN indexes and worker-maintained rollups; an append-only CloudEvents log.</span></div>
+        <div class="arrow" aria-hidden="true">↓</div>
+        <div class="tier out"><strong>People and systems</strong><span>Blazor web app for planners, supervisors and operators · shop-floor terminals · ERP webhooks · your BI tools through the API</span></div>
+      </div>
+
+      <div class="principles two">
+        <div>
+          <h3 class="small">Principles</h3>
+          <ul class="ticks">
+            <li>Standard vocabulary: ISA-95, ISA-88, PackML, B2MML, OPC UA and Sparkplug B terms, unrenamed.</li>
+            <li>Raw machine state is always stored; OEE categories are a per-site mapping.</li>
+            <li>Corrections are new events. History is never edited.</li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="small">Stack</h3>
+          <div class="table-wrap">
+            <table>
+              <tr><th>Platform</th><td>C# on the current .NET LTS</td></tr>
+              <tr><th>Database</th><td>PostgreSQL 18 only</td></tr>
+              <tr><th>Data access</th><td>Dapper over Npgsql</td></tr>
+              <tr><th>UI</th><td>Blazor Web App, interactive server</td></tr>
+              <tr><th>Deployment</th><td>Containers or a Windows service</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="try">
+    <div class="wrap">
+      <h2>Run it locally</h2>
+      <p class="section-lede">You need the .NET SDK (current LTS), PostgreSQL 18 and, for machine data, Docker.</p>
+      <ol class="steps">
+        <li>
+          <p><strong>Get the code and load the database.</strong></p>
+<pre>git clone https://github.com/bgauvey/pulaski.git && cd pulaski
+createdb pulaski
+psql -d pulaski -v ON_ERROR_STOP=1 -f db/schema-draft.sql
+psql -d pulaski -f db/app-role.sql
+psql -d pulaski -f db/seed-demo.sql      <span class="c"># empty database only</span>
+psql -d pulaski -f db/seed-materials.sql <span class="c"># optional demo materials</span>
+psql -d pulaski -f db/seed-units.sql
+psql -d pulaski -f db/seed-reasons.sql</pre>
+        </li>
+        <li>
+          <p><strong>Start the API and the web app</strong> in two terminals.</p>
+<pre>dotnet run --project src/Pulaski.Api   <span class="c"># http://localhost:5080</span>
+dotnet run --project src/Pulaski.Web   <span class="c"># http://localhost:5090</span></pre>
+          <p>Sign in as <code>admin</code> with the temporary password in <code>src/Pulaski.Api/appsettings.Development.json</code>; you'll be asked to change it.</p>
+        </li>
+        <li>
+          <p><strong>Optionally, feed it machine data</strong> from the simulated line.</p>
+<pre>docker compose -f deploy/simulator/compose.yaml up -d
+dotnet run --project src/Pulaski.Edge  <span class="c"># credentials from Configure → Edge nodes → Setup</span></pre>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="docs">
+    <div class="wrap">
+      <h2>Documentation</h2>
+      <p class="section-lede">The working documents live in the repository's <code>design</code> folder and change with the code.</p>
+      <div class="grid">
+        <a class="card" href="https://github.com/bgauvey/pulaski/blob/main/design/user_guide.md"><h3>User guide</h3><p>Every screen, step by step for beginners, in detail for experienced users.</p></a>
+        <a class="card" href="https://github.com/bgauvey/pulaski/blob/main/design/charter.md"><h3>Charter</h3><p>Purpose, target plants, v1 scope, non-goals and the decisions that are expensive to reverse.</p></a>
+        <a class="card" href="https://github.com/bgauvey/pulaski/blob/main/design/domain-model-decisions.md"><h3>Decision log</h3><p>Each settled design decision, numbered, with why it was made.</p></a>
+        <a class="card" href="https://github.com/bgauvey/pulaski/blob/main/design/database.md"><h3>Database reference</h3><p>Every table and column of the PostgreSQL schema.</p></a>
+      </div>
+    </div>
+  </section>
+
+  <section id="contribute">
+    <div class="wrap two">
+      <div>
+        <h2>Contribute</h2>
+        <p class="section-lede" style="margin-bottom:16px">
+          Ideas and feedback from manufacturing and controls engineers are especially welcome, above all on the domain model and on genealogy for continuous processes.
+        </p>
+        <ul class="ticks">
+          <li>Open an issue to discuss a significant change before starting work.</li>
+          <li>Every commit is signed off under the <a href="https://developercertificate.org/">Developer Certificate of Origin</a> (<code>git commit -s</code>).</li>
+          <li>See <a href="https://github.com/bgauvey/pulaski/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</li>
+        </ul>
+      </div>
+      <div>
+        <h2>License</h2>
+        <p class="section-lede">
+          Apache License 2.0. Pulaski is an independent personal project, built clean-room from public standards, and is not affiliated with,
+          sponsored by or endorsed by any employer or company. <em>Pulaski</em> is a working codename.
+        </p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Pulaski · open-source MES for process and semi-continuous lines</span>
+    <span><a href="https://github.com/bgauvey/pulaski">GitHub</a> · <a href="https://github.com/bgauvey/pulaski/blob/main/LICENSE.md">Apache 2.0</a> · <a href="https://github.com/bgauvey/pulaski/issues">Issues</a></span>
+  </div>
+</footer>
+
+</body>
+</html>

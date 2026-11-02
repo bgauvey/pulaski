@@ -8,15 +8,15 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - **Clean-room.** Pulaski is an independent personal project. Never use, reproduce or reference
   code, schemas, naming or documents from any employer, client or commercial MES/ERP product.
   Public standards and general knowledge only.
-- **Source of truth:** `docs/charter.md` (scope, non-goals, architecture) and
-  `docs/domain-model-decisions.md` (decision log D-001…). Read the relevant one before designing
+- **Source of truth:** `design/charter.md` (scope, non-goals, architecture) and
+  `design/domain-model-decisions.md` (decision log D-001…). Read the relevant one before designing
   anything. Items marked **Decided** are settled; don't reopen them unless asked.
 - When we settle something new, add it to the decision log with the next D-number, and move any
   answered open question into it.
 - Respect the v1 non-goals in the charter: not an ERP, not SCADA/HMI/historian, no finite-capacity
   scheduling, no Part 11 features, no multi-tenant SaaS.
 - Every commit is signed off (DCO): `git commit -s`. License is Apache 2.0.
-- **User guide.** `docs/user_guide.md` is the end-user guide, for readers from novice to expert. Update it in
+- **User guide.** `design/user_guide.md` is the end-user guide, for readers from novice to expert. Update it in
   the same change as anything a user can see: a new or changed screen, step, button label, message, rule or
   warning. Each topic keeps numbered steps for beginners and an "In detail" part for experienced users.
   Keep the "What Pulaski doesn't do yet" section current: add known gaps and bugs, remove them when fixed.
@@ -176,7 +176,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 
 ## Database (`db/schema-draft.sql`)
 
-- `docs/database.md` documents every table and column. Update it in the same change as the schema.
+- `design/database.md` documents every table and column. Update it in the same change as the schema.
 - Every schema change goes in `db/schema-draft.sql` **and** a new `db/migrations/NNNN_description.sql` (D-028):
   re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`, `DO` blocks), no `BEGIN`/`COMMIT`. Add its name to the
   `public.schema_migration` insert at the end of `schema-draft.sql` and set `DatabaseMaintenance.RequiredMigration`.
