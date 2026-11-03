@@ -1807,23 +1807,29 @@ Every command appends its CloudEvents event here in the same transaction as the 
 | `data` | jsonb | no | Payload; changes carry `before` and `after`. |
 | `prev_hash`, `hash` | bytea | yes | Optional per-site hash chain for tamper evidence. |
 
-### core.delivery_feed — a webhook feed's settings (#73, D-087) · *In use*
+### core.delivery_feed — a delivery feed and its settings (#73, #74, D-087, D-088) · *In use*
 
-Kept from Configure → Integrations: everything but the secret, which stays in the API's configuration. No row: the feed runs on its configuration.
+Kept from Configure → Integrations: everything but the secrets (signing, a broker's sign-in), which stay in the API's configuration. The built-in
+`erp` and `documents` feeds may have no row and then run on their configuration; a feed added on the screen always has one. Code and kind are
+fixed: the feed's sink, and so its queue and checkpoint, is `kind:code`.
 The relay reads the row each round, so a change takes effect without a restart. Saved with an event (`pulaski.delivery_feed.settings_saved.v1`,
 before and after). Version by `xmin`, 0 while there is no row.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `feed` | text | no | Primary key: `erp` or `documents`. |
+| `feed` | text | no | Primary key: the feed's code, 2 to 30 lower-case letters, digits, `-` and `_` (`delivery_feed_code_ck`); `erp` and `documents` are built in. |
+| `name` | text | no | What the screen calls it; blank for a built-in feed's default name. |
+| `kind` | text | no | `webhook` (an HTTPS receiver) or `mqtt` (a broker, D-088). Fixed. |
 | `enabled` | boolean | no | Send to the receiver. Needs an address and at least one kind. |
-| `url` | text | yes | The receiver's address: https, or plain http only to this machine. |
+| `url` | text | yes | A webhook's address (https, or plain http only to this machine), or a broker's (`mqtt://` or `mqtts://` host and port). |
+| `topic` | text | yes | An MQTT feed's topic template, such as `pulaski/{type}`; `{type}` (dots as slashes), `{subjectType}` and `{subject}` are filled in. |
 | `event_kinds` | text[] | no | What it sends: `inventory`, `certificates`, `orders`, `production`, `labor`, `stops`, `quality` (`DeliveryKinds`, each a set of event type prefixes). |
 | `include_files` | boolean | no | Send a certificate's file with its event (D-086). |
 | `max_attempts` | integer | no | Attempts before a delivery fails, 1 to 50. Default 12. |
 | `timeout_seconds` | integer | no | How long one attempt waits, 1 to 120. Default 15. |
 | `poll_seconds` | integer | no | How often the relay looks for new events, 1 to 300. Default 5. |
 | `start_from_now` | boolean | no | The first time the feed starts: after the events already logged (true) or from the beginning. |
+| `created_at` | timestamptz | no | Added. |
 | `updated_at`, `updated_by` | timestamptz, text | no, yes | Last saved, and by whom. |
 
 ### evt.sink_checkpoint — outbox progress per adapter (D-061) · *In use*
@@ -1844,7 +1850,7 @@ The queue and record of what was sent where. A row is added for each matching ev
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `sink` | text | no | The adapter: `webhook:erp` or `webhook:documents` (D-086). |
+| `sink` | text | no | The feed's sink: `webhook:erp`, `webhook:documents` (D-086), or `kind:code` for a feed added on the screen, such as `mqtt:wms` (D-088). Delivered rows older than `Retention:DeliveredDays` (90) are deleted by `evt.purge_delivered` (`delivery_delivered_ix`); other rows stay. |
 | `event_id` | uuid | no | The event (`evt.event.id`; no FK, it is partitioned). Also the message's `Idempotency-Key`. Unique with `sink`. |
 | `event_recorded_at` | timestamptz | no | The event's `recorded_at`, to find it in its partition. |
 | `tx_id`, `position` | xid8, bigint | no | The event's order, copied so the queue sorts and holds without the join. |
@@ -1854,7 +1860,7 @@ The queue and record of what was sent where. A row is added for each matching ev
 | `attempts` | integer | no | Attempts so far. A retry carries on counting. |
 | `next_attempt_at` | timestamptz | no | When a pending row is next due; growing waits after each failure, now after a retry. |
 | `last_attempt_at` | timestamptz | yes | When it was last tried. |
-| `last_status_code` | integer | yes | The receiver's last HTTP status; null when there was no answer. |
+| `last_status_code` | integer | yes | The receiver's last HTTP status; null when there was no answer. For an MQTT feed, the broker's answer as one: 200 published, 403 not allowed, 400 refused, 429 over quota, 503 anything else. |
 | `last_error` | text | yes | What went wrong, up to 300 characters of the receiver's answer. |
 | `delivered_at` | timestamptz | yes | When the receiver accepted it. |
 | `resolved_by` | text | yes | Who last retried or skipped it. |

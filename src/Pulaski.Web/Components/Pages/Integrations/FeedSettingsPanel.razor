@@ -17,17 +17,31 @@
             @(_settings.IsSaved
                 ? $"Saved{(_settings.UpdatedBy is { } by ? $" by {by}" : "")}{(_settings.UpdatedAt is { } at ? $" on {at:yyyy-MM-dd HH:mm} UTC" : "")}. The API's configuration now holds only the secret."
                 : "Not saved yet: these are the API's configuration. Once you save, the screen's settings are used and the configuration keeps only the secret.")
-            @(_settings.SecretConfigured ? "" : " The secret isn't set in the API's configuration, so nothing is sent until it is.")
+            @(_settings.SecretConfigured ? "" : Mqtt
+                ? " No secret is set in the API's configuration, so messages aren't signed and acknowledgements can't be posted back."
+                : " The secret isn't set in the API's configuration, so nothing is sent until it is.")
         </p>
         <form class="row g-2 align-items-end" @onsubmit="SaveAsync" @onsubmit:preventDefault>
             <div class="col-12 form-check ms-2">
                 <input id="feed-on" type="checkbox" class="form-check-input" @bind="_enabled" />
                 <label class="form-check-label" for="feed-on">Send to this receiver</label>
             </div>
-            <div class="col-12 col-md-8">
-                <label class="form-label small fw-semibold" for="feed-url">Receiver's address</label>
-                <input id="feed-url" class="form-control form-control-sm" placeholder="https://erp.example.com/pulaski/events" @bind="_url" />
+            <div class="col-12 col-md-4">
+                <label class="form-label small fw-semibold" for="feed-name">Name</label>
+                <input id="feed-name" class="form-control form-control-sm" maxlength="100" @bind="_name" />
             </div>
+            <div class="col-12 col-md-8">
+                <label class="form-label small fw-semibold" for="feed-url">@(Mqtt ? "Broker's address" : "Receiver's address")</label>
+                <input id="feed-url" class="form-control form-control-sm" placeholder="@(Mqtt ? "mqtts://broker.example.com:8883" : "https://erp.example.com/pulaski/events")" @bind="_url" />
+            </div>
+            @if (Mqtt)
+            {
+                <div class="col-12 col-md-6">
+                    <label class="form-label small fw-semibold" for="feed-topic">Topic</label>
+                    <input id="feed-topic" class="form-control form-control-sm" placeholder="pulaski/{type}" @bind="_topic" />
+                    <div class="small text-muted">{type} (its dots as slashes), {subjectType} and {subject} are filled in for each event.</div>
+                </div>
+            }
             <div class="col-12">
                 <div class="small fw-semibold mb-1">What it sends</div>
                 @foreach (var kind in _settings.Kinds)
@@ -89,6 +103,10 @@
     private string? _loadedFor;
     private bool _enabled;
     private string? _url;
+    private string? _name;
+    private string? _topic;
+
+    private bool Mqtt => _settings?.Kind == "mqtt";
     private HashSet<string> _kinds = [];
     private bool _includeFiles;
     private int _attempts;
@@ -114,6 +132,7 @@
         {
             _settings = await Api.GetDeliveryFeedSettingsAsync(Feed);
             (_enabled, _url, _kinds, _includeFiles) = (_settings.Enabled, _settings.Url, [.. _settings.EventKinds], _settings.IncludeFiles);
+            (_name, _topic) = (_settings.Label, _settings.Topic);
             (_attempts, _timeout, _poll, _fromNow) = (_settings.MaxAttempts, _settings.TimeoutSeconds, _settings.PollSeconds, _settings.StartFromNow);
         }
         catch (ApiException ex)
@@ -152,6 +171,8 @@
                 TimeoutSeconds = _timeout,
                 PollSeconds = _poll,
                 StartFromNow = _fromNow,
+                Name = _name,
+                Topic = _topic,
             });
             await LoadAsync();
             _saved = true;

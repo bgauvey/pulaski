@@ -43,11 +43,16 @@ public sealed class InMemoryDeliveries : IDeliveryStore, IDeliveryFeedStore
         }
     }
 
-    public Task<IReadOnlyList<DeliveryDto>> ListAsync(string sink, string? status, int limit, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<DeliveryDto>> ListAsync(string sink, DeliveryFilter filter, CancellationToken cancellationToken)
     {
         lock (_lock)
         {
-            return Task.FromResult<IReadOnlyList<DeliveryDto>>([.. _rows.Where(r => r.Sink == sink && (status is null || r.Status == status)).Take(limit)]);
+            return Task.FromResult<IReadOnlyList<DeliveryDto>>([.. _rows
+                .Where(r => r.Sink == sink && (filter.Status is null || r.Status == filter.Status))
+                .Where(r => filter.Search is null || r.Subject.ToString() == filter.Search || string.Equals(r.LotNumber, filter.Search, StringComparison.OrdinalIgnoreCase))
+                .Where(r => filter.Type is null || r.EventType.Contains(filter.Type, StringComparison.OrdinalIgnoreCase))
+                .Where(r => (filter.From is null || r.OccurredAt >= filter.From) && (filter.To is null || r.OccurredAt < filter.To))
+                .Take(filter.Limit)]);
         }
     }
 
@@ -153,6 +158,22 @@ public sealed class InMemoryDeliveries : IDeliveryStore, IDeliveryFeedStore
             var version = (_feeds.TryGetValue(settings.Feed, out var saved) ? saved.Version : 0) + 1;
             _feeds[settings.Feed] = new StoredFeedSettings(settings, version, at, actor);
             return Task.FromResult(version);
+        }
+    }
+
+    public Task<IReadOnlyList<StoredFeedSettings>> ListAsync(CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<StoredFeedSettings>>([.. _feeds.Values.OrderBy(f => f.Settings.Feed, StringComparer.Ordinal)]);
+        }
+    }
+
+    public Task<bool> InsertAsync(DeliveryFeedSettings settings, string actor, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_feeds.TryAdd(settings.Feed, new StoredFeedSettings(settings, 1, at, actor)));
         }
     }
 }

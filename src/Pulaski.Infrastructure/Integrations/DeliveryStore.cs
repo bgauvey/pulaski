@@ -31,6 +31,10 @@ internal sealed class DeliveryStore(DbSession session, NpgsqlDataSource dataSour
         LEFT JOIN core.lot l ON l.id = d.subject
         LEFT JOIN core.equipment loc ON loc.id = l.location_equipment_id
         WHERE d.sink = @Sink AND (@Status::text IS NULL OR d.status = @Status)
+          AND (@Search::text IS NULL OR d.subject::text = lower(@Search) OR lower(l.lot_number) = lower(@Search))
+          AND (@Type::text IS NULL OR d.event_type ILIKE '%' || @Type || '%')
+          AND (@From::timestamptz IS NULL OR d.event_recorded_at >= @From)
+          AND (@To::timestamptz IS NULL OR d.event_recorded_at < @To)
         ORDER BY d.tx_id DESC, d.position DESC
         LIMIT @Limit
         """;
@@ -76,10 +80,13 @@ internal sealed class DeliveryStore(DbSession session, NpgsqlDataSource dataSour
         WHERE sink = @Sink AND status = 'failed'
         """;
 
-    public async Task<IReadOnlyList<DeliveryDto>> ListAsync(string sink, string? status, int limit, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<DeliveryDto>> ListAsync(string sink, DeliveryFilter filter, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        return [.. await connection.QueryAsync<DeliveryDto>(new CommandDefinition(List, new { Sink = sink, Status = status, Limit = limit }, cancellationToken: cancellationToken))];
+        return [.. await connection.QueryAsync<DeliveryDto>(new CommandDefinition(
+            List,
+            new { Sink = sink, filter.Status, filter.Search, filter.Type, filter.From, filter.To, filter.Limit },
+            cancellationToken: cancellationToken))];
     }
 
     public async Task<DeliveryCounts> CountAsync(string sink, DateTimeOffset now, CancellationToken cancellationToken)
@@ -293,6 +300,21 @@ public sealed class DeliveryRelay(NpgsqlDataSource dataSource)
                 AckMessage = acknowledgement?.Message,
             },
             cancellationToken: cancellationToken));
+    }
+
+    /// <summary>Every saved feed (#74), read each round: feeds added on the screen start without a restart.</summary>
+    public async Task<IReadOnlyList<DeliveryFeedSettings>> ListFeedSettingsAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. (await connection.QueryAsync<DeliveryFeedStore.Row>(new CommandDefinition(DeliveryFeedStore.All, cancellationToken: cancellationToken))).Select(r => r.ToSettings())];
+    }
+
+    /// <summary>Deletes delivered rows older than <paramref name="keepDays"/> (at least 7) through <c>evt.purge_delivered</c> (#74); returns how many.</summary>
+    public async Task<int> PurgeDeliveredAsync(int keepDays, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return await connection.ExecuteScalarAsync<int>(
+            new CommandDefinition("SELECT evt.purge_delivered(@Days)", new { Days = keepDays }, cancellationToken: cancellationToken));
     }
 
     /// <summary>A feed's saved settings (#73), read each round so a change on the screen takes effect without a restart.</summary>

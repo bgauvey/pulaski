@@ -17,8 +17,21 @@ internal static class IntegrationEndpoints
 
     public static IEndpointRouteBuilder MapIntegrationEndpoints(this IEndpointRouteBuilder routes)
     {
-        // One group per feed (D-061, #78): /integrations/erp and /integrations/documents.
-        var integrations = routes.MapGroup("/integrations/{feed:regex(^(erp|documents)$)}").WithTags("Integrations");
+        // The feeds (#74): the built-in erp and documents, and those added on the screen.
+        routes.MapGet("/integrations", async Task<Ok<IReadOnlyList<DeliveryFeedSummaryDto>>> (
+            IQueryHandler<ListDeliveryFeedsQuery, IReadOnlyList<DeliveryFeedSummaryDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListDeliveryFeedsQuery(), ct)))
+            .WithTags("Integrations")
+        .RequireAny(null, Permissions.IntegrationsView);
+
+        routes.MapPost("/integrations", async Task<Ok<VersionResponse>> (
+            CreateDeliveryFeedRequest request, ICommandHandler<CreateDeliveryFeedCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CreateDeliveryFeedCommand(request.Code, request.Name, request.Kind), ct)))
+            .WithTags("Integrations")
+        .RequirePermission(Permissions.Integrations);
+
+        // One group per feed (D-061, #74): /integrations/{code}.
+        var integrations = routes.MapGroup("/integrations/{feed:regex(^[a-z][a-z0-9_-]{{1,29}}$)}").WithTags("Integrations");
 
         integrations.MapGet("/", async Task<Ok<DeliveryStatusDto>> (string feed, IQueryHandler<GetDeliveryStatusQuery, DeliveryStatusDto> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new GetDeliveryStatusQuery(feed), ct)))
@@ -27,10 +40,14 @@ internal static class IntegrationEndpoints
         integrations.MapGet("/deliveries", async Task<Ok<IReadOnlyList<DeliveryDto>>> (
             string feed,
             string? status,
+            string? search,
+            string? type,
+            DateTimeOffset? from,
+            DateTimeOffset? to,
             int? limit,
             IQueryHandler<ListDeliveriesQuery, IReadOnlyList<DeliveryDto>> handler,
             CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new ListDeliveriesQuery(status, limit ?? 200, feed), ct)))
+            TypedResults.Ok(await handler.HandleAsync(new ListDeliveriesQuery(status, limit ?? 200, feed) { Search = search, Type = type, From = from, To = to }, ct)))
         .RequireAny(null, Permissions.IntegrationsView);
 
         integrations.MapPost("/deliveries/{id:guid}/retry", async Task<Ok<RetryDeliveriesResponse>> (
@@ -58,7 +75,7 @@ internal static class IntegrationEndpoints
             string feed, SaveDeliveryFeedSettingsRequest request, ICommandHandler<SaveDeliveryFeedSettingsCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new SaveDeliveryFeedSettingsCommand(
                 feed, request.Version, request.Enabled, request.Url, request.EventKinds, request.IncludeFiles, request.MaxAttempts, request.TimeoutSeconds,
-                request.PollSeconds, request.StartFromNow), ct)))
+                request.PollSeconds, request.StartFromNow, request.Name, request.Topic), ct)))
         .RequirePermission(Permissions.Integrations);
 
         // A receiver's acknowledgement (#73): no sign-in; signed with the feed's secret like Pulaski's own messages, and fresh (5 minutes).

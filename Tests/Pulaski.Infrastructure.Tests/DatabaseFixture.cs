@@ -208,7 +208,9 @@ internal sealed class TestDeliveryTargets : Application.Integrations.IDeliveryTa
 {
     public const string Sink = "webhook:test";
 
-    public Application.Integrations.DeliveryTarget Erp { get; } = new(Sink, true, "erp.test", ["pulaski.lot."]);
+    public Application.Integrations.DeliveryTarget Erp { get; } = new(Sink, true, "erp.test", ["pulaski.lot."]) { IsBuiltIn = true };
 
-    public Application.Integrations.DeliveryTarget? Find(string feed) => feed == "erp" ? Erp : null;
+    // The ERP feed points at the test sink; any other code is a feed added on the screen, with nothing configured (#74).
+    public Application.Integrations.DeliveryTarget? Find(string feed) =>
+        feed == "erp" ? Erp : new Application.Integrations.DeliveryTarget($"webhook:{feed}", false, null, []) { Feed = feed, Label = feed };
 }

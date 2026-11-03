@@ -84,6 +84,11 @@ public sealed record DeliveryFeedSettingsDto
 {
     public required string Feed { get; init; }
     public required string Label { get; init; }
+
+    /// <summary><c>webhook</c> or <c>mqtt</c> (#74), fixed; an MQTT feed has a topic template.</summary>
+    public string Kind { get; init; } = "webhook";
+    public string? Topic { get; init; }
+    public bool IsBuiltIn { get; init; }
     public bool IsSaved { get; init; }
     public bool Enabled { get; init; }
     public string? Url { get; init; }
@@ -117,6 +122,18 @@ public sealed record SaveDeliveryFeedSettingsRequest
     public int TimeoutSeconds { get; init; } = 15;
     public int PollSeconds { get; init; } = 5;
     public bool StartFromNow { get; init; } = true;
+    public string? Name { get; init; }
+    public string? Topic { get; init; }
+}
+
+/// <summary>A feed in the Integrations screen's list (#74).</summary>
+public sealed record DeliveryFeedSummaryDto(string Feed, string Label, string Kind, bool IsBuiltIn, bool Enabled, string? TargetHost);
+
+public sealed record CreateDeliveryFeedRequest
+{
+    public string Code { get; init; } = "";
+    public string Name { get; init; } = "";
+    public string Kind { get; init; } = "webhook";
 }
 
 /// <summary>

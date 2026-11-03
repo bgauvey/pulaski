@@ -1329,7 +1329,7 @@ An outage only delays: rows stay pending.
 
 Each appends `pulaski.delivery.retried.v1` or `pulaski.delivery.skipped.v1`. Routes: `GET /api/integrations/erp`, `GET /api/integrations/erp/deliveries?status=`, `POST …/deliveries/{id}/retry`, `…/{id}/skip`, `…/retry-failed`.
 
-**Not done.** No reconciliation from the ERP, no ERP-specific adapters or message brokers, no retention of delivered rows. A second sink, for a document system, came with D-086; a settings screen, more event kinds and acknowledgements with D-087.
+**Not done.** No reconciliation from the ERP, no ERP-specific adapters, no Kafka. A second sink, for a document system, came with D-086; a settings screen, more event kinds and acknowledgements with D-087; feeds added on the screen, MQTT, search and retention with D-088.
 
 ## Reason trees (D-062, proposed)
 
@@ -2232,9 +2232,59 @@ The screen saves kinds. Configured prefixes that no kind covers are shown until 
 - At-least-once delivery and per-subject ordering are unchanged.
 
 **Not done:**
-- several receivers per feed and queue sinks (#74);
-- search and retention of deliveries (#74);
 - reconciliation (comparing what the ERP booked with what Pulaski sent).
+
+More feeds, MQTT, search and retention came with D-088.
+
+## More feeds, MQTT, delivery search and retention (D-088, proposed)
+
+Issue #74. There was one HTTPS receiver per purpose, no message queue, a list of the newest 200 deliveries with no search, and delivered rows
+were kept for good.
+
+**Feeds added on the screen** (the user's choice). A feed is a `core.delivery_feed` row with a code, a name and a kind. Code and kind are fixed,
+since the sink (`kind:code`) names its queue and checkpoint.
+- `CreateDeliveryFeedCommand` (`POST /api/integrations`, `integrations.manage`) adds one switched off, sending inventory movements. An MQTT feed
+  gets the topic `pulaski/{type}`.
+- `ListDeliveryFeedsQuery` (`GET /api/integrations`) lists the built-in `erp` and `documents`, then the rest by code.
+- Every feed has its own checkpoint, event kinds and settings (D-087) under `/api/integrations/{code}/…`.
+- Built-in feeds keep their configured sink whatever is saved, and run on their configuration until first saved. An added feed must have its row
+  (`DeliveryFeeds.ResolveAsync`, else 404).
+- Secrets stay in configuration under `Integrations:Feeds:{code}`: `Secret` for signing and acknowledgements, and a broker's `Username` and
+  `Password`.
+
+**One relay for every feed.** `WebhookDeliveryService` lists the feeds every second. It runs a round for each that is ready and due (its own
+poll interval), side by side, each under its sink's advisory lock. A feed added on the screen starts without a restart.
+
+**MQTT** (the user's choice over Kafka, which would add a client library and its native dependency). `MqttFeedSender` (MQTTnet, as Sparkplug B
+uses) publishes over MQTT 5:
+- the same CloudEvents JSON as a webhook, QoS 1, content type `application/cloudevents+json`;
+- on the topic from the feed's template (`DeliveryFeedKinds.Topic`);
+- with the event id as the `Idempotency-Key` user property, and with a secret the timestamp and signature as user properties.
+
+It keeps one connection per feed, made again when the address or sign-in changes. The broker's answer maps onto the delivery policy
+(`MqttFeedSender.Code`): published or no subscribers is delivered; not authorised and an invalid topic or payload fail at once; quota exceeded
+and anything else are retried. A broker gives no acknowledgement in its answer; a receiver behind it can post one back (D-087).
+`DeliveryFeedSettings.Problems` checks an `mqtt://` or `mqtts://` address, and a topic without wildcards that doesn't start with `/`.
+
+**Search.** `ListDeliveriesQuery` takes:
+- `Search`: a subject's id, or a lot's number in any case;
+- `Type`: any part of the event type;
+- `From` and `To`: by the event's time;
+- status and limit (up to 1000).
+
+`GET …/deliveries?status=&search=&type=&from=&to=&limit=`.
+
+**Retention, from configuration, delivered rows only** (the user's choice). `DeliveryRetentionService` (API, hourly) calls `evt.purge_delivered`.
+That is a SECURITY DEFINER function, since the app role has no DELETE; it keeps at least 7 days, and the default is
+`Retention:DeliveredDays` = 90. It deletes delivered rows older than that (`delivery_delivered_ix`).
+- Pending, failed and skipped rows stay, and the event log is never touched.
+- The checkpoint keeps a deleted row from being captured again.
+
+**Not done:**
+- Kafka and other brokers;
+- adapters for a particular ERP's own API;
+- retention per feed;
+- paging through more than 1000 deliveries.
 
 ## Application architecture
 

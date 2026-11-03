@@ -105,51 +105,85 @@ public sealed class WebhookSender(HttpClient http)
 }
 
 /// <summary>
-/// Relays events to one feed (D-061, #78), the ERP or a document system: every few seconds, while holding the sink's lock, it copies new matching events into the
-/// delivery queue and sends what is due, in commit order, holding a subject's later events behind an undelivered one. An outage only
-/// delays: everything stays queued and is retried with growing waits, then marked failed for someone to retry or skip.
+/// Relays events to every feed (D-061, #73, #74), the built-in ERP and document feeds and those added on the screen, webhook or MQTT. Each
+/// tick it lists the feeds, and runs a round for each that is ready and due (its own poll interval), side by side, each under its sink's lock
+/// so several API servers never send one feed at once. A round copies new matching events into the queue and sends what is due, in commit
+/// order, holding a subject's later events behind an undelivered one. An outage only delays.
 /// </summary>
 public sealed class WebhookDeliveryService(
     DeliveryRelay relay,
     IHttpClientFactory clients,
+    MqttFeedSender mqtt,
     IConfiguration configuration,
     TimeProvider time,
-    ILogger<WebhookDeliveryService> logger,
-    string feed = WebhookFeedOptions.Erp) : BackgroundService
+    ILogger<WebhookDeliveryService> logger) : BackgroundService
 {
     private const int Batch = 200;
 
-    private static readonly TimeSpan Idle = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Tick = TimeSpan.FromSeconds(1);
 
-    // Settings are read each round (#73): a change on the screen takes effect on the next one, with no restart.
+    private readonly Dictionary<string, Task> _running = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTimeOffset> _next = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _warned = new(StringComparer.Ordinal);
+
+    // Feeds and their settings are read each tick (#73, #74): a change, or a new feed, takes effect without a restart.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var warned = false;
         while (!stoppingToken.IsCancellationRequested)
         {
-            var wait = Idle;
             try
             {
-                var options = WebhookFeedOptions.From(configuration, feed).Apply(await relay.GetFeedSettingsAsync(feed, stoppingToken));
-                if (options.Enabled && Uri.TryCreate(options.Url, UriKind.Absolute, out var url) && !string.IsNullOrEmpty(options.Secret))
+                var saved = (await relay.ListFeedSettingsAsync(stoppingToken)).ToDictionary(f => f.Feed, StringComparer.Ordinal);
+                foreach (var feed in WebhookFeedOptions.Feeds.Union(saved.Keys))
                 {
-                    warned = false;
-                    wait = TimeSpan.FromSeconds(Math.Max(1, options.PollSeconds));
-                    await relay.WithLockAsync(options.Sink, () => RoundAsync(options, url, stoppingToken), stoppingToken);
-                }
-                else if (options.Enabled && !warned)
-                {
-                    warned = true;
-                    logger.LogWarning("The {Feed} feed is on but its URL or secret is missing; nothing is delivered.", options.Label);
+                    Launch(WebhookFeedOptions.From(configuration, feed).Apply(saved.GetValueOrDefault(feed)), stoppingToken);
                 }
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
             {
-                logger.LogError(ex, "The {Feed} feed couldn't read or update its queue; trying again shortly.", feed);
+                logger.LogError(ex, "The delivery relay couldn't read its feeds; trying again shortly.");
             }
 
-            await Task.Delay(wait, time, stoppingToken);
+            await Task.Delay(Tick, time, stoppingToken);
         }
+
+        await Task.WhenAll(_running.Values);
+    }
+
+    private void Launch(WebhookFeedOptions options, CancellationToken stoppingToken)
+    {
+        if (!options.IsReady(out var url))
+        {
+            if (options.Enabled && _warned.Add(options.Feed))
+            {
+                logger.LogWarning("The {Feed} feed is on but its address or secret is missing; nothing is delivered.", options.Label);
+            }
+
+            return;
+        }
+
+        _warned.Remove(options.Feed);
+        var now = time.GetUtcNow();
+        if (_running.TryGetValue(options.Feed, out var running) && !running.IsCompleted || _next.GetValueOrDefault(options.Feed) > now)
+        {
+            return;
+        }
+
+        _next[options.Feed] = now.AddSeconds(Math.Max(1, options.PollSeconds));
+        _running[options.Feed] = Task.Run(async () =>
+        {
+            try
+            {
+                await relay.WithLockAsync(options.Sink, () => RoundAsync(options, url!, stoppingToken), stoppingToken);
+            }
+            catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
+            {
+                logger.LogError(ex, "The {Feed} feed couldn't read or update its queue; trying again shortly.", options.Label);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+            }
+        }, CancellationToken.None);
     }
 
     /// <summary>One round: capture what is new, then send what is due. Public for tests.</summary>
@@ -162,7 +196,7 @@ public sealed class WebhookDeliveryService(
         }
         while (scanned == Batch);
 
-        var sender = new WebhookSender(clients.CreateClient(WebhookSender.ClientName));
+        var webhook = new WebhookSender(clients.CreateClient(WebhookSender.ClientName));
         var blocked = new HashSet<Guid>();
         foreach (var due in await relay.DueAsync(options.Sink, time.GetUtcNow(), Batch, cancellationToken))
         {
@@ -179,7 +213,9 @@ public sealed class WebhookDeliveryService(
                 : due;
 
             var now = time.GetUtcNow();
-            var (code, error, acknowledgement) = await sender.SendAsync(url, options.Secret!, e, now, cancellationToken, TimeSpan.FromSeconds(options.TimeoutSeconds));
+            var (code, error, acknowledgement) = options.Kind == DeliveryFeedKinds.Mqtt
+                ? await PublishAsync(options, url, e, now, cancellationToken)
+                : await webhook.SendAsync(url, options.Secret!, e, now, cancellationToken, TimeSpan.FromSeconds(options.TimeoutSeconds));
             var outcome = DeliveryPolicy.AfterAttempt(e.Attempts + 1, code, error, now, options.MaxAttempts);
 
             // Delivered but rejected in the answer (#73): it fails as a refused delivery does, holding the subject's later events.
@@ -195,5 +231,44 @@ public sealed class WebhookDeliveryService(
                 logger.LogWarning("{Feed} delivery of {Type} {EventId} {Status}: {Error}", options.Label, e.Type, e.EventId, outcome.Status, outcome.Error);
             }
         }
+    }
+
+    // A broker gives no acknowledgement in its answer; a receiver behind it can still post one back.
+    private async Task<(int? StatusCode, string? Error, Acknowledgement? Acknowledgement)> PublishAsync(
+        WebhookFeedOptions options, Uri url, OutboundEvent e, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var (code, error) = await mqtt.SendAsync(options, url, e, now, cancellationToken);
+        return (code, error, null);
+    }
+}
+
+/// <summary>
+/// Clears delivered rows older than <c>Retention:DeliveredDays</c> (90 by default, at least 7) once an hour (#74), through
+/// <c>evt.purge_delivered</c>. Failed, pending and skipped rows stay, and the event log is never touched. Failures are retried next time.
+/// </summary>
+internal sealed class DeliveryRetentionService(DeliveryRelay relay, IConfiguration configuration, ILogger<DeliveryRetentionService> logger) : BackgroundService
+{
+    private static readonly TimeSpan Interval = TimeSpan.FromHours(1);
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var keepDays = Math.Max(7, configuration.GetValue("Retention:DeliveredDays", 90));
+        using var timer = new PeriodicTimer(Interval);
+        do
+        {
+            try
+            {
+                var deleted = await relay.PurgeDeliveredAsync(keepDays, stoppingToken);
+                if (deleted > 0)
+                {
+                    logger.LogInformation("Cleared {Count} deliveries delivered more than {Days} days ago.", deleted, keepDays);
+                }
+            }
+            catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
+            {
+                logger.LogError(ex, "Couldn't clear old deliveries; trying again in {Interval}.", Interval);
+            }
+        }
+        while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 }

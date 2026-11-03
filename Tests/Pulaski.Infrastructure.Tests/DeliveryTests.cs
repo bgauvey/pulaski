@@ -113,6 +113,59 @@ public sealed class DeliveryTests(DatabaseFixture db)
             "SELECT EXISTS (SELECT 1 FROM evt.event WHERE type = 'pulaski.delivery_feed.settings_saved.v1' AND data->'after'->>'url' = 'https://erp.example.com/pulaski')"));
     }
 
+    [Fact]
+    public async Task Feeds_are_added_on_the_screen_deliveries_are_searched_and_old_delivered_rows_are_cleared()
+    {
+        var relay = db.Services.GetRequiredService<DeliveryRelay>();
+        var code = "wms-" + _suffix[..6];
+
+        // An MQTT feed: its code and kind are fixed, it starts off, and the relay sees it on its next tick.
+        await db.SendAsync(new CreateDeliveryFeedCommand(code, "Warehouse", "mqtt"));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new CreateDeliveryFeedCommand(code, "Again", "webhook")));
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new CreateDeliveryFeedCommand("erp", "Mine", "webhook")));
+        var settings = await QueryAsync<GetDeliveryFeedSettingsQuery, DeliveryFeedSettingsDto>(new GetDeliveryFeedSettingsQuery(code));
+        Assert.Equal(("mqtt", "pulaski/{type}", false, "Warehouse"), (settings.Kind, settings.Topic, settings.Enabled, settings.Label));
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new SaveDeliveryFeedSettingsCommand(
+            code, settings.Version, true, "https://wms.example.com", ["inventory"], false, 12, 15, 5, true, null, "pulaski/{type}")));
+        await db.SendAsync(new SaveDeliveryFeedSettingsCommand(
+            code, settings.Version, true, "mqtts://broker.example.com", ["inventory"], false, 12, 15, 5, true, "Warehouse system", "plant1/{type}"));
+        var seen = Assert.Single(await relay.ListFeedSettingsAsync(CancellationToken.None), f => f.Feed == code);
+        Assert.Equal(($"mqtt:{code}", "plant1/{type}", "Warehouse system"), (seen.Sink, seen.Topic, seen.Name));
+        Assert.Contains(await QueryAsync<ListDeliveryFeedsQuery, IReadOnlyList<DeliveryFeedSummaryDto>>(new ListDeliveryFeedsQuery()),
+            f => f.Feed == code && f.Kind == "mqtt" && f.Enabled && f.TargetHost == "broker.example.com");
+        await Assert.ThrowsAsync<NotFoundException>(() => QueryAsync<GetDeliveryStatusQuery, DeliveryStatusDto>(new GetDeliveryStatusQuery("nobody")));
+
+        // Its own sink and checkpoint: it queues what it takes, apart from the ERP feed.
+        await relay.CaptureAsync(seen.Sink, ["pulaski.lot."], fromNow: true, 1000, CancellationToken.None);
+        await DrainAsync(relay, seen.Sink);
+        var (material, location, reason) = await PlantAsync();
+        var lot = await db.SendAsync(new ReceiveLotCommand(material, location, "DS-" + _suffix, 10m, db.UomId));
+        await db.SendAsync(new WriteUpLotCommand(lot.LotId, lot.Version, 1m, db.UomId, reason));
+        await relay.CaptureAsync(seen.Sink, ["pulaski.lot."], fromNow: true, 1000, CancellationToken.None);
+
+        // Search by lot number, type and time.
+        async Task<IReadOnlyList<DeliveryDto>> Search(string? search = null, string? type = null, DateTimeOffset? from = null) =>
+            await QueryAsync<ListDeliveriesQuery, IReadOnlyList<DeliveryDto>>(new ListDeliveriesQuery(Feed: code) { Search = search, Type = type, From = from });
+        Assert.Equal(2, (await Search("ds-" + _suffix)).Count);
+        Assert.Equal("pulaski.lot.written_up.v1", Assert.Single(await Search(lot.LotId.ToString(), "written")).EventType);
+        Assert.Empty(await Search("DS-" + _suffix, from: DateTimeOffset.UtcNow.AddMinutes(5)));
+
+        // Retention: only delivered rows older than the age go; a failed one stays however old.
+        var rows = await Search("DS-" + _suffix);
+        var now = DateTimeOffset.UtcNow;
+        await relay.RecordAsync(rows[0].Id, DeliveryPolicy.AfterAttempt(1, 200, null, now), 200, now, CancellationToken.None);
+        await relay.RecordAsync(rows[1].Id, DeliveryPolicy.AfterAttempt(1, 400, "bad", now), 400, now, CancellationToken.None);
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE evt.delivery SET delivered_at = now() - interval '100 days', created_at = now() - interval '100 days' WHERE sink = @Sink",
+                new { Sink = seen.Sink });
+        }
+
+        Assert.True(await relay.PurgeDeliveredAsync(90, CancellationToken.None) >= 1);
+        Assert.Equal([DeliveryStatuses.Failed], (await Search("DS-" + _suffix)).Select(d => d.Status));
+        await Assert.ThrowsAsync<Npgsql.PostgresException>(() => relay.PurgeDeliveredAsync(3, CancellationToken.None));
+    }
+
     private async Task<(Guid Material, Guid Location, Guid Reason)> PlantAsync()
     {
         CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "DENT-" + _suffix, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));

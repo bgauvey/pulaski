@@ -73,6 +73,9 @@ BEGIN
     IF to_regprocedure('ts.drop_old_process_values(integer)') IS NOT NULL THEN
         GRANT EXECUTE ON FUNCTION ts.drop_old_process_values(integer) TO pulaski_app;
     END IF;
+    IF to_regprocedure('evt.purge_delivered(integer)') IS NOT NULL THEN
+        GRANT EXECUTE ON FUNCTION evt.purge_delivered(integer) TO pulaski_app;
+    END IF;
     IF to_regclass('public.schema_migration') IS NOT NULL THEN
         GRANT SELECT ON public.schema_migration TO pulaski_app;
     END IF;

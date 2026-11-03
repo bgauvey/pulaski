@@ -287,6 +287,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`DeliveryKinds`) name prefix sets. Acks in the 2xx answer body (`Acknowledgement.FromResponse`) or by signed callback
   (`POST /api/integrations/{feed}/acknowledgements`, `AcknowledgementSignature`, actor `receiver:{feed}`); a rejection fails the delivery and holds
   the subject, a callback acceptance delivers it. Columns `evt.delivery.ack_*`.
+- More feeds, MQTT, search, retention (D-088, proposed): feeds are `core.delivery_feed` rows (code + kind fixed; sink `kind:code`; built-in erp/
+  documents keep their sinks) added on Configure → Integrations (`CreateDeliveryFeedCommand`); secrets under `Integrations:Feeds:{code}`. One
+  `WebhookDeliveryService` runs every ready feed on its own poll; `MqttFeedSender` publishes QoS 1 CloudEvents (MQTT 5, topic template,
+  user properties). Delivery search by subject/lot number, type, time. `DeliveryRetentionService` → `evt.purge_delivered` (delivered rows older
+  than `Retention:DeliveredDays`, 90).
 - Line batch sizes (D-065, proposed): `core.equipment_capability.batch_size` (null = the material's; only for a batch material; rule stays the
   material's, `Batching.OnLine`; a line tolerance too since D-075, `batch_tolerance_pct`, `ILineBatchSizes.GetTolerancesAsync`). `ILineBatchSizes` (in-transaction) feeds order creation (`Batching.ShareBySize`: whole
   batches of each line's size adding up exactly, else refused with the nearest quantities), job create/move/assign/start-on-line checks

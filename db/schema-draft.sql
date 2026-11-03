@@ -2204,21 +2204,29 @@ CREATE TABLE evt.delivery (
 CREATE INDEX delivery_due_ix ON evt.delivery (sink, next_attempt_at) WHERE status = 'pending';
 CREATE INDEX delivery_subject_ix ON evt.delivery (sink, subject, tx_id, position) WHERE status IN ('pending','failed');
 CREATE INDEX delivery_status_ix ON evt.delivery (sink, status, created_at);
+-- Retention (#74) clears delivered rows by age.
+CREATE INDEX delivery_delivered_ix ON evt.delivery (delivered_at) WHERE status = 'delivered';
 
--- A webhook feed's settings as kept on Configure → Integrations (#73): everything but the secret, which stays in configuration. No row: the
--- configuration's values. Event kinds are named sets of event type prefixes (DeliveryKinds).
+-- A delivery feed's settings as kept on Configure → Integrations (#73, #74): everything but the secrets, which stay in configuration. The
+-- built-in erp and documents feeds may have no row (their configuration's values); feeds added on the screen always have one. Event kinds are
+-- named sets of event type prefixes (DeliveryKinds). The code and kind are fixed: the sink, and so the queue, is kind:code.
 CREATE TABLE core.delivery_feed (
-    feed                text PRIMARY KEY CHECK (feed IN ('erp','documents')),
+    feed                text PRIMARY KEY,
+    name                text NOT NULL DEFAULT '',
+    kind                text NOT NULL DEFAULT 'webhook' CHECK (kind IN ('webhook','mqtt')),
     enabled             boolean NOT NULL DEFAULT false,
-    url                 text,
+    url                 text,                                       -- https:// for a webhook, mqtt:// or mqtts:// for a broker
+    topic               text,                                       -- an MQTT feed's topic template, e.g. pulaski/{type}
     event_kinds         text[] NOT NULL DEFAULT '{}',
     include_files       boolean NOT NULL DEFAULT false,
     max_attempts        integer NOT NULL DEFAULT 12 CHECK (max_attempts BETWEEN 1 AND 50),
     timeout_seconds     integer NOT NULL DEFAULT 15 CHECK (timeout_seconds BETWEEN 1 AND 120),
     poll_seconds        integer NOT NULL DEFAULT 5 CHECK (poll_seconds BETWEEN 1 AND 300),
     start_from_now      boolean NOT NULL DEFAULT true,
+    created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
-    updated_by          text
+    updated_by          text,
+    CONSTRAINT delivery_feed_code_ck CHECK (feed ~ '^[a-z][a-z0-9_-]{1,29}$')
 );
 
 -- Grants (role names are deployment-specific):
@@ -2340,6 +2348,28 @@ END $$;
 
 REVOKE ALL ON FUNCTION ts.drop_old_process_values(integer) FROM PUBLIC;
 
+-- Deletes delivered rows of evt.delivery delivered more than p_keep_days ago (#74); returns how many. SECURITY DEFINER: the app role has no
+-- DELETE there. Failed, pending and skipped rows stay, and so does the event log; checkpoints keep a deleted row from being captured again.
+CREATE FUNCTION evt.purge_delivered(p_keep_days integer)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+    v_deleted integer;
+BEGIN
+    IF p_keep_days IS NULL OR p_keep_days < 7 THEN
+        RAISE EXCEPTION 'purge_delivered: keep at least 7 days, not %', p_keep_days;
+    END IF;
+
+    DELETE FROM evt.delivery WHERE status = 'delivered' AND delivered_at < now() - make_interval(days => p_keep_days);
+    GET DIAGNOSTICS v_deleted = ROW_COUNT;
+    RETURN v_deleted;
+END $$;
+
+REVOKE ALL ON FUNCTION evt.purge_delivered(integer) FROM PUBLIC;
+
 -- =====================================================================
 -- 16. SCHEMA VERSION (D-028)
 --     Each db/migrations file brings an existing database up to this
@@ -2405,7 +2435,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0051_partial_receipts_lead_times'),
     ('0052_allocation_refinements'),
     ('0053_quality'),
-    ('0054_delivery_feed_settings');
+    ('0054_delivery_feed_settings'),
+    ('0055_delivery_feeds');
 
 -- =====================================================================
 -- 17. SEED DATA

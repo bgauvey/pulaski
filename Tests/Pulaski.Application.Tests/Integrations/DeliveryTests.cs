@@ -66,7 +66,7 @@ public class DeliveryTests
         deliveries.Add(Sink, DeliveryStatuses.Failed);
         deliveries.Add(Sink, DeliveryStatuses.Failed);
         deliveries.Add("webhook:other", DeliveryStatuses.Failed);
-        var handler = new RetryFailedDeliveriesHandler(f.Stores.UnitOfWork, deliveries, new Targets(), f.Stores.Events, f.Events, new FixedRequestContext(), f.Time);
+        var handler = new RetryFailedDeliveriesHandler(f.Stores.UnitOfWork, deliveries, new Targets(), deliveries, f.Stores.Events, f.Events, new FixedRequestContext(), f.Time);
 
         Assert.Equal(2, (await handler.HandleAsync(new RetryFailedDeliveriesCommand(), CancellationToken.None)).Retried);
         Assert.Single(f.Stores.Events.Appended);
@@ -115,9 +115,29 @@ public class DeliveryTests
         Assert.Same(configured, DeliveryFeeds.Effective(configured, null));
     }
 
+    [Fact]
+    public void Feed_codes_topics_and_mqtt_settings_are_checked()
+    {
+        Assert.Null(DeliveryFeedKinds.CodeProblem("wms-1"));
+        Assert.NotNull(DeliveryFeedKinds.CodeProblem("WMS"));
+        Assert.NotNull(DeliveryFeedKinds.CodeProblem("1wms"));
+        Assert.Equal("mqtt:wms", DeliveryFeedKinds.Sink(DeliveryFeedKinds.Mqtt, "wms"));
+        var subject = Guid.CreateVersion7();
+        Assert.Equal($"plant1/pulaski/lot/received/v1/lot/{subject}", DeliveryFeedKinds.Topic("plant1/{type}/{subjectType}/{subject}", "pulaski.lot.received.v1", "lot", subject));
+
+        DeliveryFeedSettings Mqtt(string? url = "mqtt://broker:1883", string? topic = "pulaski/{type}") =>
+            new("wms", true, url, ["inventory"], false, 12, 15, 5, true, "Warehouse", DeliveryFeedKinds.Mqtt, topic);
+        Assert.Empty(Mqtt().Problems());
+        Assert.Empty(Mqtt(url: "mqtts://broker.example.com").Problems());
+        Assert.Contains(Mqtt(url: "https://broker").Problems(), p => p.Contains("mqtt://", StringComparison.Ordinal));
+        Assert.Contains(Mqtt(topic: "pulaski/#").Problems(), p => p.Contains("topic", StringComparison.Ordinal));
+        Assert.Contains(Mqtt(topic: null).Problems(), p => p.Contains("topic", StringComparison.Ordinal));
+        Assert.Contains((Mqtt() with { Kind = "kafka" }).Problems(), p => p.Contains("webhook or an MQTT broker", StringComparison.Ordinal));
+    }
+
     internal sealed class Targets : IDeliveryTargets
     {
-        public DeliveryTarget Erp { get; } = new(Sink, true, "erp.test", ["pulaski.lot."]);
+        public DeliveryTarget Erp { get; } = new(Sink, true, "erp.test", ["pulaski.lot."]) { IsBuiltIn = true };
 
         public DeliveryTarget? Find(string feed) => feed == "erp" ? Erp : null;
     }

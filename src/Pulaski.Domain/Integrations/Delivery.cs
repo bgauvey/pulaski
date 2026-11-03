@@ -156,20 +156,75 @@ public sealed record Acknowledgement(string Status, string? Reference, string? M
         string.IsNullOrWhiteSpace(text) ? null : text.Trim() is var t && t.Length > MaxText ? t[..MaxText] : text.Trim();
 }
 
+/// <summary>What a feed sends to (#74). Values match <c>core.delivery_feed.kind</c>; a feed's sink is <c>kind:code</c>.</summary>
+public static class DeliveryFeedKinds
+{
+    /// <summary>An HTTPS webhook (D-061): one signed POST per event.</summary>
+    public const string Webhook = "webhook";
+
+    /// <summary>An MQTT broker: one QoS 1 message per event, on a topic from the feed's template.</summary>
+    public const string Mqtt = "mqtt";
+
+    public static IReadOnlyList<string> All { get; } = [Webhook, Mqtt];
+
+    /// <summary>The built-in feeds, which run on their configuration until first saved and whose code and kind never change.</summary>
+    public static IReadOnlyList<string> BuiltIn { get; } = ["erp", "documents"];
+
+    public static string Sink(string kind, string feed) => $"{kind}:{feed}";
+
+    /// <returns>Why a feed code isn't acceptable, or null: 2 to 30 lower-case letters, digits, '-' or '_', starting with a letter.</returns>
+    public static string? CodeProblem(string code) =>
+        System.Text.RegularExpressions.Regex.IsMatch(code, "^[a-z][a-z0-9_-]{1,29}$")
+            ? null
+            : "Use 2 to 30 lower-case letters, digits, '-' and '_', starting with a letter.";
+
+    /// <summary>
+    /// An MQTT topic for an event from a feed's template (#74): <c>{type}</c>, <c>{subjectType}</c> and <c>{subject}</c> are filled in; the
+    /// type's dots become slashes, so <c>pulaski/{type}</c> gives <c>pulaski/pulaski/lot/received/v1</c>.
+    /// </summary>
+    public static string Topic(string template, string type, string subjectType, Guid subject) =>
+        template.Replace("{type}", type.Replace('.', '/'), StringComparison.Ordinal)
+            .Replace("{subjectType}", subjectType, StringComparison.Ordinal)
+            .Replace("{subject}", subject.ToString(), StringComparison.Ordinal);
+}
+
 /// <summary>
-/// A feed's settings as kept from the screen (#73): everything but the secret. Checked here: an absolute http(s) address (plain http only for
-/// this machine), known event kinds, and attempts, timeout and poll within range.
+/// A feed's settings as kept from the screen (#73, #74): everything but the secrets. Checked here: an address that fits the kind (https for a
+/// webhook, plain http only for this machine; mqtt:// or mqtts:// for a broker), an MQTT topic without wildcards, known event kinds, and attempts,
+/// timeout and poll within range.
 /// </summary>
 public sealed record DeliveryFeedSettings(
     string Feed, bool Enabled, string? Url, IReadOnlyList<string> EventKinds, bool IncludeFiles, int MaxAttempts, int TimeoutSeconds, int PollSeconds,
-    bool StartFromNow)
+    bool StartFromNow, string Name = "", string Kind = DeliveryFeedKinds.Webhook, string? Topic = null)
 {
+    public const int MaxName = 100;
+
+    public string Sink => DeliveryFeedKinds.Sink(Kind, Feed);
+
     public IReadOnlyList<string> Problems()
     {
         var problems = new List<string>();
+        if (Name.Length > MaxName)
+        {
+            problems.Add($"The name is at most {MaxName} characters.");
+        }
+
+        if (!DeliveryFeedKinds.All.Contains(Kind))
+        {
+            problems.Add("A feed is a webhook or an MQTT broker.");
+        }
+
         if (Url is { } url)
         {
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http"))
+            var parsed = Uri.TryCreate(url, UriKind.Absolute, out var uri);
+            if (Kind == DeliveryFeedKinds.Mqtt)
+            {
+                if (!parsed || uri!.Scheme is not ("mqtt" or "mqtts"))
+                {
+                    problems.Add("A broker's address is mqtt://host:port or mqtts://host:port.");
+                }
+            }
+            else if (!parsed || uri!.Scheme is not ("https" or "http"))
             {
                 problems.Add("The address must be a full https:// URL.");
             }
@@ -191,6 +246,11 @@ public sealed record DeliveryFeedSettings(
         if (Enabled && EventKinds.Count == 0)
         {
             problems.Add("Choose at least one kind of event to send.");
+        }
+
+        if (Kind == DeliveryFeedKinds.Mqtt && (string.IsNullOrWhiteSpace(Topic) || Topic.IndexOfAny(['#', '+']) >= 0 || Topic.StartsWith('/')))
+        {
+            problems.Add("Give the topic to publish to, such as pulaski/{type}, without # or + and not starting with /.");
         }
 
         if (MaxAttempts is < 1 or > 50)

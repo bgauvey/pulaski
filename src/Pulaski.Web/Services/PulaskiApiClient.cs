@@ -354,8 +354,16 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<DeliveryStatusDto> GetDeliveryStatusAsync(string feed, CancellationToken ct = default) =>
         GetAsync<DeliveryStatusDto>($"api/integrations/{feed}", ct);
 
-    public Task<IReadOnlyList<DeliveryDto>> ListDeliveriesAsync(string feed, string? status, CancellationToken ct = default) =>
-        GetAsync<IReadOnlyList<DeliveryDto>>(Query($"api/integrations/{feed}/deliveries", ("status", status)), ct);
+    public Task<IReadOnlyList<DeliveryDto>> ListDeliveriesAsync(
+        string feed, string? status, string? search = null, string? type = null, DateTimeOffset? from = null, DateTimeOffset? to = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<DeliveryDto>>(Query($"api/integrations/{feed}/deliveries",
+            ("status", status), ("search", search), ("type", type), ("from", from?.ToString("o")), ("to", to?.ToString("o"))), ct);
+
+    public Task<IReadOnlyList<DeliveryFeedSummaryDto>> ListDeliveryFeedsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<DeliveryFeedSummaryDto>>("api/integrations", ct);
+
+    public Task<VersionResponse> CreateDeliveryFeedAsync(CreateDeliveryFeedRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, "api/integrations", request, ct);
 
     public Task<RetryDeliveriesResponse> RetryDeliveryAsync(string feed, Guid id, CancellationToken ct = default) =>
         SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/{feed}/deliveries/{id}/retry", new { }, ct);

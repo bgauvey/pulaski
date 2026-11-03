@@ -184,6 +184,27 @@ public sealed class IntegrationEndpointTests(ApiFactory factory) : IClassFixture
         Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(bytes)), file.GetProperty("sha256").GetString());
     }
 
+    [Fact]
+    public async Task Feeds_are_listed_added_and_searched_and_a_brokers_answer_maps_to_the_delivery_policy()
+    {
+        var admin = factory.CreateClient();
+        var added = await admin.PostAsJsonAsync("/api/integrations", new CreateDeliveryFeedRequest { Code = "wms", Name = "Warehouse", Kind = "mqtt" });
+        Assert.Equal(HttpStatusCode.OK, added.StatusCode);
+        var feeds = await admin.GetFromJsonAsync<List<DeliveryFeedSummaryDto>>("/api/integrations");
+        Assert.Equal(["erp", "documents", "wms"], feeds!.Select(f => f.Feed));
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync("/api/integrations/nobody")).StatusCode);
+
+        var lot = Guid.CreateVersion7();
+        factory.Stores.Deliveries.Add("mqtt:wms", DeliveryStatuses.Pending, subject: lot);
+        factory.Stores.Deliveries.Add("mqtt:wms", DeliveryStatuses.Pending);
+        var found = await admin.GetFromJsonAsync<List<DeliveryDto>>($"/api/integrations/wms/deliveries?search={lot}&type=received");
+        Assert.Equal(lot, Assert.Single(found!).Subject);
+
+        Assert.Equal((200, (string?)null), MqttFeedSender.Code(MQTTnet.Client.MqttClientPublishReasonCode.NoMatchingSubscribers, null));
+        Assert.Equal(403, MqttFeedSender.Code(MQTTnet.Client.MqttClientPublishReasonCode.NotAuthorized, null).StatusCode);
+        Assert.Equal(503, MqttFeedSender.Code(MQTTnet.Client.MqttClientPublishReasonCode.UnspecifiedError, null).StatusCode);
+    }
+
     private sealed class Capture : HttpMessageHandler
     {
         public HttpRequestMessage? Request { get; private set; }
