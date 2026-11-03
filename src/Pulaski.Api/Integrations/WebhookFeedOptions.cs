@@ -51,6 +51,26 @@ public sealed class WebhookFeedOptions
 
     public bool SendsFiles => IncludeFiles ?? Feed == Documents;
 
+    /// <summary>
+    /// The feed's settings saved from the screen (#73) over these, which keep the secret; null (never saved) leaves the configuration's.
+    /// </summary>
+    public WebhookFeedOptions Apply(Pulaski.Domain.Integrations.DeliveryFeedSettings? saved)
+    {
+        if (saved is not null)
+        {
+            Enabled = saved.Enabled;
+            Url = saved.Url;
+            EventTypes = [.. Pulaski.Domain.Integrations.DeliveryKinds.PrefixesOf(saved.EventKinds)];
+            IncludeFiles = saved.IncludeFiles;
+            MaxAttempts = saved.MaxAttempts;
+            TimeoutSeconds = saved.TimeoutSeconds;
+            PollSeconds = saved.PollSeconds;
+            StartFromNow = saved.StartFromNow;
+        }
+
+        return this;
+    }
+
     /// <summary>The ERP feed's settings.</summary>
     public static WebhookFeedOptions From(IConfiguration configuration) => From(configuration, Erp);
 
@@ -86,6 +106,34 @@ internal sealed class DeliveryTargets(IConfiguration configuration) : IDeliveryT
             Feed = feed,
             Label = options.Label,
             IncludesFiles = options.SendsFiles,
+            Url = options.Url,
+            MaxAttempts = options.MaxAttempts,
+            TimeoutSeconds = options.TimeoutSeconds,
+            PollSeconds = options.PollSeconds,
+            StartFromNow = options.StartFromNow,
+            SecretConfigured = !string.IsNullOrEmpty(options.Secret),
         };
+    }
+}
+
+/// <summary>
+/// Checks a receiver's signed acknowledgement (#73): <c>X-Pulaski-Signature</c> must be <c>sha256=</c> and the hex HMAC-SHA256, with the feed's
+/// secret, of <c>X-Pulaski-Timestamp</c>, a full stop and the body, as Pulaski signs its own messages; the timestamp within five minutes.
+/// </summary>
+public static class AcknowledgementSignature
+{
+    public static readonly TimeSpan MaxSkew = TimeSpan.FromMinutes(5);
+
+    public static bool IsValid(string secret, string? timestamp, string? signature, string body, DateTimeOffset now)
+    {
+        if (!long.TryParse(timestamp, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var seconds)
+            || (now - DateTimeOffset.FromUnixTimeSeconds(seconds)).Duration() > MaxSkew
+            || signature is null)
+        {
+            return false;
+        }
+
+        var expected = System.Text.Encoding.ASCII.GetBytes(WebhookSender.Signature(secret, timestamp!, body));
+        return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(expected, System.Text.Encoding.ASCII.GetBytes(signature));
     }
 }

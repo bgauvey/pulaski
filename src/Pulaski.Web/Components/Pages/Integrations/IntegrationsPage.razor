@@ -44,7 +44,7 @@
                         else
                         {
                             <span class="chip chip-muted">Off</span>
-                            <span class="text-muted ms-1">Turned on in the API's configuration (@(s.Feed == "documents" ? "Integrations:Documents" : "Integrations:Erp")); nothing is queued while it's off.</span>
+                            <span class="text-muted ms-1">Nothing is queued while it's off. @(CanManage ? "Switch it on under Settings below." : "Whoever manages integrations switches it on.")</span>
                         }
                     </td>
                 </tr>
@@ -83,6 +83,11 @@
             </tbody>
         </table>
     </div>
+}
+
+@if (CanManage)
+{
+    <FeedSettingsPanel @key="_feed" Feed="@_feed" Saved="LoadAsync" />
 }
 
 @if (_message is not null)
@@ -146,6 +151,13 @@ else
                                 <span class="fw-semibold">@answer</span>
                             }
                             @d.LastError
+                            @if (d.AckStatus is { } ack)
+                            {
+                                <div title="@($"{(d.AckSource == "callback" ? "Posted back" : "In the answer")}{(d.AckAt is { } at ? $" at {Display.SiteTime(at, null)} UTC" : "")}")">
+                                    <span class="chip @(ack == "rejected" ? "chip-warn" : "chip-ok")">@(ack == "rejected" ? "Rejected" : "Accepted")</span>
+                                    @(d.AckReference is { } reference ? $" {reference}" : "")@(d.AckMessage is { } m && ack != "rejected" ? $" · {m}" : "")
+                                </div>
+                            }
                         </td>
                         @if (CanManage)
                         {

@@ -363,6 +363,12 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<RetryDeliveriesResponse> SkipDeliveryAsync(string feed, Guid id, SkipDeliveryRequest request, CancellationToken ct = default) =>
         SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/{feed}/deliveries/{id}/skip", request, ct);
 
+    public Task<DeliveryFeedSettingsDto> GetDeliveryFeedSettingsAsync(string feed, CancellationToken ct = default) =>
+        GetAsync<DeliveryFeedSettingsDto>($"api/integrations/{feed}/settings", ct);
+
+    public Task<VersionResponse> SaveDeliveryFeedSettingsAsync(string feed, SaveDeliveryFeedSettingsRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/integrations/{feed}/settings", request, ct);
+
     public Task<RetryDeliveriesResponse> RetryFailedDeliveriesAsync(string feed, CancellationToken ct = default) =>
         SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/{feed}/deliveries/retry-failed", new { }, ct);
 

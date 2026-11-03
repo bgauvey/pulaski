@@ -1329,7 +1329,7 @@ An outage only delays: rows stay pending.
 
 Each appends `pulaski.delivery.retried.v1` or `pulaski.delivery.skipped.v1`. Routes: `GET /api/integrations/erp`, `GET /api/integrations/erp/deliveries?status=`, `POST …/deliveries/{id}/retry`, `…/{id}/skip`, `…/retry-failed`.
 
-**Not done.** No inbound acknowledgement or reconciliation from the ERP, no ERP-specific adapters or message brokers, no retention of delivered rows. A second sink, for a document system, came with D-086.
+**Not done.** No reconciliation from the ERP, no ERP-specific adapters or message brokers, no retention of delivered rows. A second sink, for a document system, came with D-086; a settings screen, more event kinds and acknowledgements with D-087.
 
 ## Reason trees (D-062, proposed)
 
@@ -2181,6 +2181,60 @@ unchanged. `GET /api/lot-attributes/values` lists the same as JSON, and the Lots
 - a signed download link instead of inline files;
 - events for documents carried to other lots by split or merge;
 - an import from other sources (B2MML, an API).
+
+## Delivery settings screen, event kinds and acknowledgements (D-087, proposed)
+
+Issue #73. Feeds (D-061, D-086) were configured in the API's settings only, sent inventory movements only, and read nothing back.
+
+**Settings on the screen** (the user's choice: the screen owns everything but the secret). `core.delivery_feed`, one row per feed, holds:
+enabled, URL, event kinds, include files, attempts, timeout, poll and start-from-now.
+- The secret stays in configuration, never in the database.
+- No row means the feed runs on its configuration, which the screen shows as the starting point.
+- `SaveDeliveryFeedSettingsCommand` (`PUT /api/integrations/{feed}/settings`, `integrations.manage`) checks `DeliveryFeedSettings.Problems`:
+  - an absolute https URL, or http only to this machine;
+  - an address and at least one kind when the feed is on;
+  - attempts, timeout and poll within range.
+- Concurrency is by `xmin`. A first save makes the row under lock, at version 0. The save appends `pulaski.delivery_feed.settings_saved.v1`
+  with before and after.
+- Reading the settings (`GET …/settings`) shows the full address, so it needs `integrations.manage` too. The status keeps showing the host only.
+- `WebhookDeliveryService` reads the settings each round (`DeliveryRelay.GetFeedSettingsAsync`, `WebhookFeedOptions.Apply`), so a change needs no
+  restart. A feed that is off checks again every 30 s. Each attempt has the feed's own timeout; the HTTP client's is only the longest allowed.
+- `DeliveryFeeds.Effective` gives the status the same merge.
+
+**Event kinds.** `DeliveryKinds` names sets of type prefixes. Kinds may overlap; capture still takes each event once.
+
+| Kind | Prefixes |
+| --- | --- |
+| `inventory` | `pulaski.lot.` |
+| `certificates` | `pulaski.lot_document.` |
+| `orders` | `pulaski.work_order.`, `pulaski.job.` |
+| `production` | `pulaski.job.production_`, `pulaski.partial_batch.` |
+| `labor` | `pulaski.labor.` |
+| `stops` | `pulaski.downtime.` |
+| `quality` | `pulaski.quality_result.` |
+
+The screen saves kinds. Configured prefixes that no kind covers are shown until the first save.
+
+**Acknowledgements, both ways** (the user's choice).
+- **In the answer:** a 2xx answer whose body is `{"status":"accepted"|"rejected","reference":…,"message":…}` is recorded on the delivery with
+  source `response` (`Acknowledgement.FromResponse`). Any other body is no acknowledgement.
+- **By callback:** `POST /api/integrations/{feed}/acknowledgements` with `{eventId, status, reference, message}`.
+  - No sign-in. It is signed like Pulaski's own messages: HMAC-SHA256 with the feed's secret of `"{timestamp}.{body}"`, and the timestamp must be
+    within 5 minutes (`AcknowledgementSignature`).
+  - The actor is `receiver:{feed}`. It is recorded with source `callback` and appends `pulaski.delivery.acknowledged.v1`.
+  - An unknown event is 404, and a bad or stale signature 401.
+- Stored on `evt.delivery` as `ack_status`, `ack_reference`, `ack_message`, `ack_source` and `ack_at`.
+
+**A rejection fails the delivery** (the user's choice). A rejection, in the answer or later by callback, makes the delivery `failed` with
+"Rejected by the receiver: …" as its last error. That holds the subject's later events (D-061) until someone retries or skips it.
+- An acceptance by callback delivers a pending or failed delivery, so a receiver that fixed things can release the subject.
+- A skipped delivery only records the acknowledgement.
+- At-least-once delivery and per-subject ordering are unchanged.
+
+**Not done:**
+- several receivers per feed and queue sinks (#74);
+- search and retention of deliveries (#74);
+- reconciliation (comparing what the ERP booked with what Pulaski sent).
 
 ## Application architecture
 

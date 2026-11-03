@@ -57,3 +57,157 @@ public static class DeliveryPolicy
         return new DeliveryOutcome(DeliveryStatuses.Pending, now + wait, reason);
     }
 }
+
+/// <summary>A named set of event types a feed can send (#73): what screens offer instead of raw type prefixes.</summary>
+public sealed record DeliveryKind(string Code, string Label, IReadOnlyList<string> Prefixes);
+
+/// <summary>The kinds of events a feed can send (#73). Prefixes may overlap; an event goes once whichever kinds match it.</summary>
+public static class DeliveryKinds
+{
+    public const string Inventory = "inventory";
+    public const string Certificates = "certificates";
+    public const string Orders = "orders";
+    public const string Production = "production";
+    public const string Labor = "labor";
+    public const string Stops = "stops";
+    public const string Quality = "quality";
+
+    public static IReadOnlyList<DeliveryKind> All { get; } =
+    [
+        new(Inventory, "Inventory movements", ["pulaski.lot."]),
+        new(Certificates, "Certificates and lot documents", ["pulaski.lot_document."]),
+        new(Orders, "Work orders and jobs", ["pulaski.work_order.", "pulaski.job."]),
+        new(Production, "Production reports and partial batches", ["pulaski.job.production_", "pulaski.partial_batch."]),
+        new(Labor, "Labor sessions, breaks and approvals", ["pulaski.labor."]),
+        new(Stops, "Machine stops coded and adjusted", ["pulaski.downtime."]),
+        new(Quality, "Quality results", ["pulaski.quality_result."]),
+    ];
+
+    /// <summary>The type prefixes of the kinds, each once, in catalog order.</summary>
+    public static IReadOnlyList<string> PrefixesOf(IEnumerable<string> kinds)
+    {
+        var wanted = kinds.ToHashSet(StringComparer.Ordinal);
+        return [.. All.Where(k => wanted.Contains(k.Code)).SelectMany(k => k.Prefixes).Distinct()];
+    }
+
+    /// <summary>The kinds whose prefixes are all among <paramref name="prefixes"/>: a configuration's prefixes as the screen shows them.</summary>
+    public static IReadOnlyList<string> KindsOf(IReadOnlyCollection<string> prefixes) =>
+        [.. All.Where(k => k.Prefixes.All(prefixes.Contains)).Select(k => k.Code)];
+}
+
+/// <summary>What a receiver said it did with an event (#73). Values match <c>evt.delivery.ack_status</c>.</summary>
+public static class AcknowledgementStatuses
+{
+    public const string Accepted = "accepted";
+    public const string Rejected = "rejected";
+
+    public static IReadOnlyList<string> All { get; } = [Accepted, Rejected];
+}
+
+/// <summary>Where an acknowledgement came from. Values match <c>evt.delivery.ack_source</c>.</summary>
+public static class AcknowledgementSources
+{
+    /// <summary>In the body of the webhook's own 2xx answer.</summary>
+    public const string Response = "response";
+
+    /// <summary>Posted back later, signed with the feed's secret.</summary>
+    public const string Callback = "callback";
+}
+
+/// <summary>
+/// A receiver's answer about one event (#73): accepted or rejected, its own reference for what it booked, and a message. Rejected after
+/// the HTTP delivery succeeded, the delivery fails and holds the subject's later events, as a refused delivery does.
+/// </summary>
+public sealed record Acknowledgement(string Status, string? Reference, string? Message)
+{
+    public const int MaxText = 500;
+
+    /// <summary>
+    /// An acknowledgement in a webhook's answer body: a JSON object with <c>status</c> <c>accepted</c> or <c>rejected</c>, and optional
+    /// <c>reference</c> and <c>message</c>. Anything else (no body, not JSON, no or another status) is no acknowledgement.
+    /// </summary>
+    public static Acknowledgement? FromResponse(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body) || body.TrimStart()[0] != '{')
+        {
+            return null;
+        }
+
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(body);
+            string? Text(string name) =>
+                json.RootElement.TryGetProperty(name, out var value) && value.ValueKind == System.Text.Json.JsonValueKind.String ? Trim(value.GetString()) : null;
+            var status = Text("status")?.ToLowerInvariant();
+            return status is not null && AcknowledgementStatuses.All.Contains(status) ? new Acknowledgement(status, Text("reference"), Text("message")) : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    public bool IsRejected => Status == AcknowledgementStatuses.Rejected;
+
+    /// <summary>Why a rejected delivery failed, for its last error.</summary>
+    public string RejectionText => $"Rejected by the receiver{(Message is { } m ? $": {m}" : ".")}";
+
+    public static string? Trim(string? text) =>
+        string.IsNullOrWhiteSpace(text) ? null : text.Trim() is var t && t.Length > MaxText ? t[..MaxText] : text.Trim();
+}
+
+/// <summary>
+/// A feed's settings as kept from the screen (#73): everything but the secret. Checked here: an absolute http(s) address (plain http only for
+/// this machine), known event kinds, and attempts, timeout and poll within range.
+/// </summary>
+public sealed record DeliveryFeedSettings(
+    string Feed, bool Enabled, string? Url, IReadOnlyList<string> EventKinds, bool IncludeFiles, int MaxAttempts, int TimeoutSeconds, int PollSeconds,
+    bool StartFromNow)
+{
+    public IReadOnlyList<string> Problems()
+    {
+        var problems = new List<string>();
+        if (Url is { } url)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http"))
+            {
+                problems.Add("The address must be a full https:// URL.");
+            }
+            else if (uri.Scheme == "http" && !uri.IsLoopback)
+            {
+                problems.Add("Use https:// for a receiver on another machine; plain http only for this one.");
+            }
+        }
+        else if (Enabled)
+        {
+            problems.Add("Give the receiver's address before switching the feed on.");
+        }
+
+        if (EventKinds.Except(DeliveryKinds.All.Select(k => k.Code)).FirstOrDefault() is { } unknown)
+        {
+            problems.Add($"'{unknown}' isn't a kind of event.");
+        }
+
+        if (Enabled && EventKinds.Count == 0)
+        {
+            problems.Add("Choose at least one kind of event to send.");
+        }
+
+        if (MaxAttempts is < 1 or > 50)
+        {
+            problems.Add("Attempts must be 1 to 50.");
+        }
+
+        if (TimeoutSeconds is < 1 or > 120)
+        {
+            problems.Add("The timeout must be 1 to 120 seconds.");
+        }
+
+        if (PollSeconds is < 1 or > 300)
+        {
+            problems.Add("Checking for new events must be every 1 to 300 seconds.");
+        }
+
+        return problems;
+    }
+}

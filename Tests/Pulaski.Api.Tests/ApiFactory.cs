@@ -67,6 +67,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:Pulaski", "Host=unused.invalid;Database=none");
         builder.UseSetting("Pulaski:DatabaseMaintenance", "false");
         builder.UseSetting("Security:SigningKey", "api-tests-signing-key-0123456789abcdef0123");
+        builder.UseSetting("Integrations:Erp:Secret", "api-tests-erp-secret");
         builder.ConfigureTestServices(services => Stores.Register(services));
     }
 

@@ -282,6 +282,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   through `LotAttributeWriter`, shared with the lot page). Export `values.csv` is the import format. Webhook feeds `erp` and `documents`
   (`WebhookFeedOptions`, one `WebhookDeliveryService` each, `/api/integrations/{feed}`); `IncludeFiles` puts a certificate's file base64 in
   `data.file` of `lot_document.attached` at send time (`DeliveryRelay.GetDocumentFileAsync`).
+- Delivery settings and acknowledgements (D-087, proposed): `core.delivery_feed` per feed (all but the secret, saved from Configure → Integrations,
+  `integrations.manage`, audited) over configuration (`WebhookFeedOptions.Apply`, read each round; `DeliveryFeeds.Effective`). Event kinds
+  (`DeliveryKinds`) name prefix sets. Acks in the 2xx answer body (`Acknowledgement.FromResponse`) or by signed callback
+  (`POST /api/integrations/{feed}/acknowledgements`, `AcknowledgementSignature`, actor `receiver:{feed}`); a rejection fails the delivery and holds
+  the subject, a callback acceptance delivers it. Columns `evt.delivery.ack_*`.
 - Line batch sizes (D-065, proposed): `core.equipment_capability.batch_size` (null = the material's; only for a batch material; rule stays the
   material's, `Batching.OnLine`; a line tolerance too since D-075, `batch_tolerance_pct`, `ILineBatchSizes.GetTolerancesAsync`). `ILineBatchSizes` (in-transaction) feeds order creation (`Batching.ShareBySize`: whole
   batches of each line's size adding up exactly, else refused with the nearest quantities), job create/move/assign/start-on-line checks

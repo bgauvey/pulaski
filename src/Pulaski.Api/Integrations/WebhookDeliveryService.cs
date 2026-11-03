@@ -61,8 +61,12 @@ public sealed class WebhookSender(HttpClient http)
     public static string Signature(string secret, string timestamp, string body) =>
         "sha256=" + Convert.ToHexStringLower(HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes($"{timestamp}.{body}")));
 
-    /// <summary>The receiver's status code, or null with why when there was no answer.</summary>
-    public async Task<(int? StatusCode, string? Error)> SendAsync(Uri url, string secret, OutboundEvent e, DateTimeOffset now, CancellationToken cancellationToken)
+    /// <summary>
+    /// The receiver's status code, or null with why when there was no answer; with a 2xx, any acknowledgement in its body (#73). The attempt
+    /// gives up after <paramref name="timeout"/> (default: the client's own).
+    /// </summary>
+    public async Task<(int? StatusCode, string? Error, Acknowledgement? Acknowledgement)> SendAsync(
+        Uri url, string secret, OutboundEvent e, DateTimeOffset now, CancellationToken cancellationToken, TimeSpan? timeout = null)
     {
         var body = Body(e);
         var timestamp = now.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
@@ -73,19 +77,27 @@ public sealed class WebhookSender(HttpClient http)
         request.Headers.Add("Idempotency-Key", e.EventId.ToString());
         request.Headers.Add("X-Pulaski-Timestamp", timestamp);
         request.Headers.Add("X-Pulaski-Signature", Signature(secret, timestamp, body));
+        using var attempt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (timeout is { } limit)
+        {
+            attempt.CancelAfter(limit);
+        }
+
         try
         {
-            using var response = await http.SendAsync(request, cancellationToken);
-            var detail = response.IsSuccessStatusCode ? null : Trim(await response.Content.ReadAsStringAsync(cancellationToken));
-            return ((int)response.StatusCode, detail);
+            using var response = await http.SendAsync(request, attempt.Token);
+            var text = await response.Content.ReadAsStringAsync(attempt.Token);
+            return response.IsSuccessStatusCode
+                ? ((int)response.StatusCode, null, Acknowledgement.FromResponse(text))
+                : ((int)response.StatusCode, Trim(text), null);
         }
         catch (HttpRequestException ex)
         {
-            return (null, $"Couldn't reach the receiver: {ex.Message}");
+            return (null, $"Couldn't reach the receiver: {ex.Message}", null);
         }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return (null, "The receiver didn't answer in time.");
+            return (null, "The receiver didn't answer in time.", null);
         }
     }
 
@@ -107,32 +119,37 @@ public sealed class WebhookDeliveryService(
 {
     private const int Batch = 200;
 
+    private static readonly TimeSpan Idle = TimeSpan.FromSeconds(30);
+
+    // Settings are read each round (#73): a change on the screen takes effect on the next one, with no restart.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var options = WebhookFeedOptions.From(configuration, feed);
-        if (!options.Enabled || !Uri.TryCreate(options.Url, UriKind.Absolute, out var url) || string.IsNullOrEmpty(options.Secret))
+        var warned = false;
+        while (!stoppingToken.IsCancellationRequested)
         {
-            if (options.Enabled)
-            {
-                logger.LogWarning("The {Feed} feed is enabled but its URL or secret is missing; nothing is delivered.", options.Label);
-            }
-
-            return;
-        }
-
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(1, options.PollSeconds)));
-        do
-        {
+            var wait = Idle;
             try
             {
-                await relay.WithLockAsync(options.Sink, () => RoundAsync(options, url, stoppingToken), stoppingToken);
+                var options = WebhookFeedOptions.From(configuration, feed).Apply(await relay.GetFeedSettingsAsync(feed, stoppingToken));
+                if (options.Enabled && Uri.TryCreate(options.Url, UriKind.Absolute, out var url) && !string.IsNullOrEmpty(options.Secret))
+                {
+                    warned = false;
+                    wait = TimeSpan.FromSeconds(Math.Max(1, options.PollSeconds));
+                    await relay.WithLockAsync(options.Sink, () => RoundAsync(options, url, stoppingToken), stoppingToken);
+                }
+                else if (options.Enabled && !warned)
+                {
+                    warned = true;
+                    logger.LogWarning("The {Feed} feed is on but its URL or secret is missing; nothing is delivered.", options.Label);
+                }
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
             {
-                logger.LogError(ex, "The {Feed} feed couldn't read or update its queue; trying again shortly.", options.Label);
+                logger.LogError(ex, "The {Feed} feed couldn't read or update its queue; trying again shortly.", feed);
             }
+
+            await Task.Delay(wait, time, stoppingToken);
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
     /// <summary>One round: capture what is new, then send what is due. Public for tests.</summary>
@@ -162,9 +179,16 @@ public sealed class WebhookDeliveryService(
                 : due;
 
             var now = time.GetUtcNow();
-            var (code, error) = await sender.SendAsync(url, options.Secret!, e, now, cancellationToken);
+            var (code, error, acknowledgement) = await sender.SendAsync(url, options.Secret!, e, now, cancellationToken, TimeSpan.FromSeconds(options.TimeoutSeconds));
             var outcome = DeliveryPolicy.AfterAttempt(e.Attempts + 1, code, error, now, options.MaxAttempts);
-            await relay.RecordAsync(e.DeliveryId, outcome, code, now, cancellationToken);
+
+            // Delivered but rejected in the answer (#73): it fails as a refused delivery does, holding the subject's later events.
+            if (outcome.Status == DeliveryStatuses.Delivered && acknowledgement is { IsRejected: true })
+            {
+                outcome = new DeliveryOutcome(DeliveryStatuses.Failed, now, acknowledgement.RejectionText);
+            }
+
+            await relay.RecordAsync(e.DeliveryId, outcome, code, now, cancellationToken, acknowledgement);
             if (outcome.Status != DeliveryStatuses.Delivered)
             {
                 blocked.Add(e.Subject);

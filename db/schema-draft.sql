@@ -2191,13 +2191,35 @@ CREATE TABLE evt.delivery (
     delivered_at        timestamptz,
     resolved_by         text,                                       -- who retried or skipped it
     resolve_note        text,
+    ack_status          text CHECK (ack_status IN ('accepted','rejected')),  -- the receiver's acknowledgement (#73)
+    ack_reference       text,                                       -- its own id for what it booked
+    ack_message         text,
+    ack_source          text CHECK (ack_source IN ('response','callback')),
+    ack_at              timestamptz,
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT delivery_event_uq UNIQUE (sink, event_id)
+    CONSTRAINT delivery_event_uq UNIQUE (sink, event_id),
+    CONSTRAINT delivery_ack_ck CHECK ((ack_status IS NULL) = (ack_at IS NULL) AND (ack_status IS NULL) = (ack_source IS NULL))
 );
 CREATE INDEX delivery_due_ix ON evt.delivery (sink, next_attempt_at) WHERE status = 'pending';
 CREATE INDEX delivery_subject_ix ON evt.delivery (sink, subject, tx_id, position) WHERE status IN ('pending','failed');
 CREATE INDEX delivery_status_ix ON evt.delivery (sink, status, created_at);
+
+-- A webhook feed's settings as kept on Configure → Integrations (#73): everything but the secret, which stays in configuration. No row: the
+-- configuration's values. Event kinds are named sets of event type prefixes (DeliveryKinds).
+CREATE TABLE core.delivery_feed (
+    feed                text PRIMARY KEY CHECK (feed IN ('erp','documents')),
+    enabled             boolean NOT NULL DEFAULT false,
+    url                 text,
+    event_kinds         text[] NOT NULL DEFAULT '{}',
+    include_files       boolean NOT NULL DEFAULT false,
+    max_attempts        integer NOT NULL DEFAULT 12 CHECK (max_attempts BETWEEN 1 AND 50),
+    timeout_seconds     integer NOT NULL DEFAULT 15 CHECK (timeout_seconds BETWEEN 1 AND 120),
+    poll_seconds        integer NOT NULL DEFAULT 5 CHECK (poll_seconds BETWEEN 1 AND 300),
+    start_from_now      boolean NOT NULL DEFAULT true,
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    updated_by          text
+);
 
 -- Grants (role names are deployment-specific):
 --   GRANT INSERT, SELECT ON evt.event TO pulaski_app;
@@ -2382,7 +2404,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0050_mixing_containers'),
     ('0051_partial_receipts_lead_times'),
     ('0052_allocation_refinements'),
-    ('0053_quality');
+    ('0053_quality'),
+    ('0054_delivery_feed_settings');
 
 -- =====================================================================
 -- 17. SEED DATA

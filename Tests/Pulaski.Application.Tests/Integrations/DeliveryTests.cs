@@ -74,6 +74,47 @@ public class DeliveryTests
         Assert.Single(f.Stores.Events.Appended);
     }
 
+    [Fact]
+    public void An_answer_body_acknowledges_only_with_a_known_status_and_kinds_map_to_type_prefixes()
+    {
+        Assert.Equal(new Acknowledgement("rejected", "ERP-1", "Unknown item"),
+            Acknowledgement.FromResponse("""{"status":"Rejected","reference":"ERP-1","message":" Unknown item "}"""));
+        Assert.Equal(new Acknowledgement("accepted", null, null), Acknowledgement.FromResponse("""{"status":"accepted"}"""));
+        Assert.Null(Acknowledgement.FromResponse("""{"status":"maybe"}"""));
+        Assert.Null(Acknowledgement.FromResponse("OK"));
+        Assert.Null(Acknowledgement.FromResponse("""{"status":"""));
+        Assert.Null(Acknowledgement.FromResponse(null));
+        Assert.Equal("Rejected by the receiver.", new Acknowledgement("rejected", null, null).RejectionText);
+
+        Assert.Equal(["pulaski.work_order.", "pulaski.job.", "pulaski.job.production_", "pulaski.partial_batch."],
+            DeliveryKinds.PrefixesOf([DeliveryKinds.Production, DeliveryKinds.Orders]));
+        Assert.Equal([DeliveryKinds.Inventory], DeliveryKinds.KindsOf(["pulaski.lot.", "pulaski.job."]));
+    }
+
+    [Fact]
+    public void Feed_settings_need_an_https_address_when_on_and_values_in_range()
+    {
+        DeliveryFeedSettings With(bool enabled = true, string? url = "https://erp.example.com/in", string[]? kinds = null, int attempts = 12) =>
+            new("erp", enabled, url, kinds ?? ["inventory"], false, attempts, 15, 5, true);
+
+        Assert.Empty(With().Problems());
+        Assert.Empty(With(url: "http://localhost:5000/in").Problems());
+        Assert.Empty(With(enabled: false, url: null, kinds: []).Problems());
+        Assert.Contains(With(url: null).Problems(), p => p.Contains("address", StringComparison.Ordinal));
+        Assert.Contains(With(url: "http://erp.example.com/in").Problems(), p => p.Contains("https://", StringComparison.Ordinal));
+        Assert.Contains(With(url: "ftp://x/y").Problems(), p => p.Contains("full https://", StringComparison.Ordinal));
+        Assert.Contains(With(kinds: []).Problems(), p => p.Contains("at least one kind", StringComparison.Ordinal));
+        Assert.Contains(With(kinds: ["everything"]).Problems(), p => p.Contains("'everything'", StringComparison.Ordinal));
+        Assert.Contains(With(attempts: 0).Problems(), p => p.Contains("Attempts", StringComparison.Ordinal));
+
+        // Saved settings take over from the configuration; the configuration's secret stays.
+        var configured = new DeliveryTarget("webhook:erp", false, null, ["pulaski.lot."]) { SecretConfigured = true };
+        var effective = DeliveryFeeds.Effective(configured, With(kinds: ["labor"]));
+        Assert.Equal((true, "erp.example.com", true), (effective.Enabled, effective.TargetHost, effective.SecretConfigured));
+        Assert.Equal(["pulaski.labor."], effective.EventTypes);
+        Assert.Same(configured, DeliveryFeeds.Effective(configured, null));
+    }
+
     internal sealed class Targets : IDeliveryTargets
     {
         public DeliveryTarget Erp { get; } = new(Sink, true, "erp.test", ["pulaski.lot."]);

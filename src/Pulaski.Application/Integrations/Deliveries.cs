@@ -23,6 +23,32 @@ public sealed record DeliveryTarget(string Sink, bool Enabled, string? TargetHos
 
     /// <summary>A certificate's stored file goes with its event (#78).</summary>
     public bool IncludesFiles { get; init; }
+
+    /// <summary>The receiver's full address: only for the settings screen, which needs it to change it (#73).</summary>
+    public string? Url { get; init; }
+    public int MaxAttempts { get; init; } = DeliveryPolicy.DefaultMaxAttempts;
+    public int TimeoutSeconds { get; init; } = 15;
+    public int PollSeconds { get; init; } = 5;
+    public bool StartFromNow { get; init; } = true;
+
+    /// <summary>The secret is set in the API's configuration; without it nothing is sent.</summary>
+    public bool SecretConfigured { get; init; }
+}
+
+/// <summary>A feed's settings as saved from the screen (#73), with their version and who saved them.</summary>
+public sealed record StoredFeedSettings(DeliveryFeedSettings Settings, long Version, DateTimeOffset UpdatedAt, string? UpdatedBy);
+
+/// <summary>A feed's saved settings (#73). Reads on their own connection; saving runs inside the current <see cref="IUnitOfWork"/>.</summary>
+public interface IDeliveryFeedStore
+{
+    /// <summary>The saved settings; null when the feed has never been saved and runs on its configuration.</summary>
+    Task<StoredFeedSettings?> GetAsync(string feed, CancellationToken cancellationToken);
+
+    /// <summary>The saved settings locked; the row is made first when there is none, and then its version is 0.</summary>
+    Task<StoredFeedSettings> GetForUpdateAsync(string feed, DeliveryFeedSettings defaults, CancellationToken cancellationToken);
+
+    /// <returns>The new version.</returns>
+    Task<long> SaveAsync(DeliveryFeedSettings settings, string actor, DateTimeOffset at, CancellationToken cancellationToken);
 }
 
 /// <summary>Operators' side of outbound deliveries (D-061); runs inside the current <see cref="IUnitOfWork"/> for changes.</summary>
@@ -37,6 +63,12 @@ public interface IDeliveryStore
     /// <summary>Sets a delivery's status, due now, with who resolved it and why.</summary>
     Task ResolveAsync(Guid id, string status, string actor, string? note, DateTimeOffset at, CancellationToken cancellationToken);
 
+    /// <summary>The sink's delivery of the event, locked; null when it never captured it.</summary>
+    Task<DeliveryRecord?> GetByEventForUpdateAsync(string sink, Guid eventId, CancellationToken cancellationToken);
+
+    /// <summary>Records a receiver's acknowledgement (#73); with <paramref name="status"/>, also sets the status and, for a failure, why (<paramref name="failure"/>).</summary>
+    Task AcknowledgeAsync(Guid id, Acknowledgement acknowledgement, string source, string? status, string? failure, DateTimeOffset at, CancellationToken cancellationToken);
+
     /// <summary>Every failed delivery of the sink back to pending, due now; returns how many.</summary>
     Task<int> RetryFailedAsync(string sink, string actor, DateTimeOffset at, CancellationToken cancellationToken);
 }
@@ -50,10 +82,47 @@ public interface IDeliveryTargets
     DeliveryTarget? Find(string feed);
 }
 
-internal static class DeliveryFeeds
+public static class DeliveryFeeds
 {
     public static DeliveryTarget Target(IDeliveryTargets targets, string? feed) =>
         targets.Find(feed ?? "erp") ?? throw new NotFoundException($"There is no feed '{feed}'.");
+
+    /// <summary>
+    /// The feed as it runs (#73): its saved settings over its configuration, which keeps the secret. A feed never saved runs on its
+    /// configuration alone.
+    /// </summary>
+    public static DeliveryTarget Effective(DeliveryTarget configured, DeliveryFeedSettings? saved)
+    {
+        if (saved is null)
+        {
+            return configured;
+        }
+
+        var host = Uri.TryCreate(saved.Url, UriKind.Absolute, out var uri) ? uri.Host : null;
+        return configured with
+        {
+            Enabled = saved.Enabled && host is not null,
+            TargetHost = host,
+            EventTypes = DeliveryKinds.PrefixesOf(saved.EventKinds),
+            IncludesFiles = saved.IncludeFiles,
+            Url = saved.Url,
+            MaxAttempts = saved.MaxAttempts,
+            TimeoutSeconds = saved.TimeoutSeconds,
+            PollSeconds = saved.PollSeconds,
+            StartFromNow = saved.StartFromNow,
+        };
+    }
+
+    public static async Task<DeliveryTarget> EffectiveAsync(IDeliveryTargets targets, IDeliveryFeedStore? feeds, string? feed, CancellationToken cancellationToken)
+    {
+        var configured = Target(targets, feed);
+        return feeds is null ? configured : Effective(configured, (await feeds.GetAsync(configured.Feed, cancellationToken))?.Settings);
+    }
+
+    /// <summary>The configuration's values as settings, the starting point before the screen first saves.</summary>
+    public static DeliveryFeedSettings FromConfiguration(DeliveryTarget configured) => new(
+        configured.Feed, configured.Enabled, configured.Url, DeliveryKinds.KindsOf(configured.EventTypes), configured.IncludesFiles, configured.MaxAttempts,
+        configured.TimeoutSeconds, configured.PollSeconds, configured.StartFromNow);
 }
 
 public sealed record GetDeliveryStatusQuery(string Feed = "erp") : IQuery<DeliveryStatusDto>;
@@ -72,11 +141,12 @@ public sealed record RetryFailedDeliveriesCommand(string Feed = "erp") : IComman
 /// </summary>
 public sealed record SkipDeliveryCommand(Guid Id, string Reason) : ICommand<RetryDeliveriesResponse>;
 
-internal sealed class GetDeliveryStatusHandler(IDeliveryStore store, IDeliveryTargets targets, TimeProvider time) : IQueryHandler<GetDeliveryStatusQuery, DeliveryStatusDto>
+internal sealed class GetDeliveryStatusHandler(IDeliveryStore store, IDeliveryTargets targets, TimeProvider time, IDeliveryFeedStore? feeds = null)
+    : IQueryHandler<GetDeliveryStatusQuery, DeliveryStatusDto>
 {
     public async Task<DeliveryStatusDto> HandleAsync(GetDeliveryStatusQuery query, CancellationToken cancellationToken)
     {
-        var target = DeliveryFeeds.Target(targets, query.Feed);
+        var target = await DeliveryFeeds.EffectiveAsync(targets, feeds, query.Feed, cancellationToken);
         var counts = await store.CountAsync(target.Sink, time.GetUtcNow(), cancellationToken);
         return new DeliveryStatusDto
         {

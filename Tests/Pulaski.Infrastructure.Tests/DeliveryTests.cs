@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Integrations;
 using Pulaski.Application.EquipmentModel;
+using Pulaski.Application.Errors;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.Materials;
 using Pulaski.Contracts.Common;
@@ -68,6 +69,48 @@ public sealed class DeliveryTests(DatabaseFixture db)
         await using var connection = await db.AdminDataSource.OpenConnectionAsync();
         Assert.Equal("Booked by hand in the ERP", await connection.ExecuteScalarAsync<string>(
             "SELECT resolve_note FROM evt.delivery WHERE id = @Id", new { Id = mine[0].DeliveryId }));
+    }
+
+    [Fact]
+    public async Task Acknowledgements_are_recorded_from_the_answer_or_a_callback_and_feed_settings_are_saved_audited_and_read_by_the_relay()
+    {
+        var relay = db.Services.GetRequiredService<DeliveryRelay>();
+        var sink = TestDeliveryTargets.Sink;
+        await relay.CaptureAsync(sink, ["pulaski.lot."], fromNow: true, 1000, CancellationToken.None);
+        await DrainAsync(relay, sink);
+        var (material, location, _) = await PlantAsync();
+        var lot = await db.SendAsync(new ReceiveLotCommand(material, location, "DK-" + _suffix, 10m, db.UomId));
+        await relay.CaptureAsync(sink, ["pulaski.lot."], fromNow: true, 1000, CancellationToken.None);
+        var due = Assert.Single(await relay.DueAsync(sink, DateTimeOffset.UtcNow.AddMinutes(1), 1000, CancellationToken.None), e => e.Subject == lot.LotId);
+
+        // Accepted in the answer: delivered, with the receiver's reference.
+        var now = DateTimeOffset.UtcNow;
+        await relay.RecordAsync(due.DeliveryId, DeliveryPolicy.AfterAttempt(1, 200, null, now), 200, now, CancellationToken.None,
+            new Acknowledgement(AcknowledgementStatuses.Accepted, "GR-1001", null));
+        DeliveryDto Mine(IReadOnlyList<DeliveryDto> all) => all.Single(d => d.Id == due.DeliveryId);
+        var row = Mine(await QueryAsync<ListDeliveriesQuery, IReadOnlyList<DeliveryDto>>(new ListDeliveriesQuery()));
+        Assert.Equal((DeliveryStatuses.Delivered, "accepted", "GR-1001", "response"), (row.Status, row.AckStatus, row.AckReference, row.AckSource));
+
+        // Rejected later by callback: it fails and holds the lot's later events, as a refused delivery does.
+        var answer = await db.SendAsync(new AcknowledgeDeliveryCommand("erp", due.EventId, "rejected", "GR-1001", "Reversed in the ERP: wrong plant"));
+        Assert.Equal(DeliveryStatuses.Failed, answer.DeliveryStatus);
+        row = Mine(await QueryAsync<ListDeliveriesQuery, IReadOnlyList<DeliveryDto>>(new ListDeliveriesQuery()));
+        Assert.Equal((DeliveryStatuses.Failed, "callback", "Rejected by the receiver: Reversed in the ERP: wrong plant"), (row.Status, row.AckSource, row.LastError));
+        await Assert.ThrowsAsync<NotFoundException>(() => db.SendAsync(new AcknowledgeDeliveryCommand("erp", Guid.CreateVersion7(), "accepted", null, null)));
+
+        // Settings saved from the screen: versioned, audited, and what the relay reads on its next round.
+        var before = await QueryAsync<GetDeliveryFeedSettingsQuery, DeliveryFeedSettingsDto>(new GetDeliveryFeedSettingsQuery("erp"));
+        var saved = await db.SendAsync(new SaveDeliveryFeedSettingsCommand(
+            "erp", before.Version, true, "https://erp.example.com/pulaski", ["inventory", "labor"], false, 6, 20, 10, true));
+        var after = await QueryAsync<GetDeliveryFeedSettingsQuery, DeliveryFeedSettingsDto>(new GetDeliveryFeedSettingsQuery("erp"));
+        Assert.Equal((true, saved.Version, "https://erp.example.com/pulaski"), (after.IsSaved, after.Version, after.Url));
+        Assert.Equal(["inventory", "labor"], after.EventKinds);
+        Assert.Equal(["inventory", "labor"], (await relay.GetFeedSettingsAsync("erp", CancellationToken.None))!.EventKinds);
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new SaveDeliveryFeedSettingsCommand(
+            "erp", before.Version, false, null, [], false, 6, 20, 10, true)));
+        await using var connection = await db.AdminDataSource.OpenConnectionAsync();
+        Assert.True(await connection.ExecuteScalarAsync<bool>(
+            "SELECT EXISTS (SELECT 1 FROM evt.event WHERE type = 'pulaski.delivery_feed.settings_saved.v1' AND data->'after'->>'url' = 'https://erp.example.com/pulaski')"));
     }
 
     private async Task<(Guid Material, Guid Location, Guid Reason)> PlantAsync()

@@ -24,6 +24,7 @@ internal sealed class DeliveryStore(DbSession session, NpgsqlDataSource dataSour
     private const string List = $"""
         SELECT d.id, d.sink, d.event_id, d.event_type, d.subject, d.event_recorded_at AS occurred_at, d.status, d.attempts, d.next_attempt_at,
                d.last_attempt_at, d.last_status_code, d.last_error, d.delivered_at, d.resolved_by, d.resolve_note, d.created_at,
+               d.ack_status, d.ack_reference, d.ack_message, d.ack_source, d.ack_at,
                (d.status = 'pending' AND {DeliverySql.HeldBy}) AS is_held,
                l.lot_number, coalesce(l.is_bulk, false) AS is_bulk, loc.code AS location_code
         FROM evt.delivery d
@@ -54,6 +55,22 @@ internal sealed class DeliveryStore(DbSession session, NpgsqlDataSource dataSour
         WHERE id = @Id
         """;
 
+    private const string GetByEvent = """
+        SELECT id, sink, event_id, event_type, subject, status, attempts FROM evt.delivery WHERE sink = @Sink AND event_id = @EventId FOR UPDATE
+        """;
+
+    // The status changes only when given; a failure keeps its reason in last_error, as a refused delivery does.
+    private const string Acknowledge = """
+        UPDATE evt.delivery
+        SET ack_status = @AckStatus, ack_reference = @Reference, ack_message = @Message, ack_source = @Source, ack_at = @At,
+            status = coalesce(@Status, status),
+            last_error = CASE WHEN @Status = 'failed' THEN @Failure WHEN @Status = 'delivered' THEN NULL ELSE last_error END,
+            delivered_at = CASE WHEN @Status = 'delivered' THEN coalesce(delivered_at, @At) ELSE delivered_at END,
+            next_attempt_at = CASE WHEN @Status IS NULL THEN next_attempt_at ELSE @At END,
+            updated_at = @At
+        WHERE id = @Id
+        """;
+
     private const string RetryFailed = """
         UPDATE evt.delivery SET status = 'pending', next_attempt_at = @At, resolved_by = @Actor, resolve_note = NULL, updated_at = @At
         WHERE sink = @Sink AND status = 'failed'
@@ -77,6 +94,26 @@ internal sealed class DeliveryStore(DbSession session, NpgsqlDataSource dataSour
 
     public Task ResolveAsync(Guid id, string status, string actor, string? note, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteAsync(Resolve, new { Id = id, Status = status, Actor = actor, Note = note, At = at }, cancellationToken);
+
+    public Task<DeliveryRecord?> GetByEventForUpdateAsync(string sink, Guid eventId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<DeliveryRecord>(GetByEvent, new { Sink = sink, EventId = eventId }, cancellationToken);
+
+    public Task AcknowledgeAsync(
+        Guid id, Acknowledgement acknowledgement, string source, string? status, string? failure, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(
+            Acknowledge,
+            new
+            {
+                Id = id,
+                AckStatus = acknowledgement.Status,
+                acknowledgement.Reference,
+                acknowledgement.Message,
+                Source = source,
+                Status = status,
+                Failure = failure,
+                At = at,
+            },
+            cancellationToken);
 
     public Task<int> RetryFailedAsync(string sink, string actor, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteAsync(RetryFailed, new { Sink = sink, Actor = actor, At = at }, cancellationToken);
@@ -168,7 +205,11 @@ public sealed class DeliveryRelay(NpgsqlDataSource dataSource)
     private const string Record = """
         UPDATE evt.delivery
         SET status = @Status, attempts = attempts + 1, next_attempt_at = @Next, last_attempt_at = @At, last_status_code = @Code,
-            last_error = @Error, delivered_at = CASE WHEN @Status = 'delivered' THEN @At END, updated_at = @At
+            last_error = @Error, delivered_at = CASE WHEN @Status = 'delivered' THEN @At END, updated_at = @At,
+            ack_status = coalesce(@AckStatus, ack_status), ack_reference = CASE WHEN @AckStatus IS NULL THEN ack_reference ELSE @AckReference END,
+            ack_message = CASE WHEN @AckStatus IS NULL THEN ack_message ELSE @AckMessage END,
+            ack_source = CASE WHEN @AckStatus IS NULL THEN ack_source ELSE 'response' END,
+            ack_at = CASE WHEN @AckStatus IS NULL THEN ack_at ELSE @At END
         WHERE id = @Id AND status = 'pending'
         """;
 
@@ -233,13 +274,33 @@ public sealed class DeliveryRelay(NpgsqlDataSource dataSource)
     }
 
     /// <summary>Records an attempt's outcome; a delivery an operator resolved meanwhile is left as they set it.</summary>
-    public async Task RecordAsync(Guid deliveryId, DeliveryOutcome outcome, int? statusCode, DateTimeOffset at, CancellationToken cancellationToken)
+    public async Task RecordAsync(
+        Guid deliveryId, DeliveryOutcome outcome, int? statusCode, DateTimeOffset at, CancellationToken cancellationToken, Acknowledgement? acknowledgement = null)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await connection.ExecuteAsync(new CommandDefinition(
             Record,
-            new { Id = deliveryId, outcome.Status, Next = outcome.NextAttemptAt, At = at, Code = statusCode, Error = outcome.Error },
+            new
+            {
+                Id = deliveryId,
+                outcome.Status,
+                Next = outcome.NextAttemptAt,
+                At = at,
+                Code = statusCode,
+                Error = outcome.Error,
+                AckStatus = acknowledgement?.Status,
+                AckReference = acknowledgement?.Reference,
+                AckMessage = acknowledgement?.Message,
+            },
             cancellationToken: cancellationToken));
+    }
+
+    /// <summary>A feed's saved settings (#73), read each round so a change on the screen takes effect without a restart.</summary>
+    public async Task<DeliveryFeedSettings?> GetFeedSettingsAsync(string feed, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return (await connection.QuerySingleOrDefaultAsync<DeliveryFeedStore.Row>(
+            new CommandDefinition(DeliveryFeedStore.Select, new { Feed = feed }, cancellationToken: cancellationToken)))?.ToSettings();
     }
 
     // The same on every instance and run, unlike string.GetHashCode (FNV-1a, 31 bits).

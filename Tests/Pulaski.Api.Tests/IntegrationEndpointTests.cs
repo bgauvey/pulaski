@@ -39,6 +39,72 @@ public sealed class IntegrationEndpointTests(ApiFactory factory) : IClassFixture
     }
 
     [Fact]
+    public async Task Feed_settings_are_saved_from_the_screen_checked_and_take_over_from_the_configuration()
+    {
+        var admin = factory.CreateClient();
+        var settings = await admin.GetFromJsonAsync<DeliveryFeedSettingsDto>("/api/integrations/documents/settings");
+        Assert.Equal((false, false, true), (settings!.IsSaved, settings.SecretConfigured, settings.IncludeFiles));
+        Assert.Equal(["certificates"], settings.EventKinds);
+
+        // On without an address, or plain http to another machine, is refused.
+        var refused = await admin.PutAsJsonAsync("/api/integrations/documents/settings", new SaveDeliveryFeedSettingsRequest { Version = 0, Enabled = true, EventKinds = ["inventory"] });
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync("/api/integrations/documents/settings",
+            new SaveDeliveryFeedSettingsRequest { Version = 0, Enabled = true, Url = "http://erp.example.com/in", EventKinds = ["inventory"] })).StatusCode);
+
+        var saved = await admin.PutAsJsonAsync("/api/integrations/documents/settings", new SaveDeliveryFeedSettingsRequest
+        {
+            Version = 0,
+            Enabled = true,
+            Url = "https://erp.example.com/in",
+            EventKinds = ["certificates", "production"],
+            MaxAttempts = 5,
+            TimeoutSeconds = 10,
+            PollSeconds = 3,
+        });
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        var status = await admin.GetFromJsonAsync<DeliveryStatusDto>("/api/integrations/documents");
+        Assert.Equal((true, "erp.example.com"), (status!.Enabled, status.TargetHost));
+        Assert.Contains("pulaski.job.production_", status.EventTypes);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PutAsJsonAsync("/api/integrations/documents/settings", new SaveDeliveryFeedSettingsRequest { Version = 0 })).StatusCode);
+
+        // Only whoever manages integrations sees the full address.
+        var auditor = await factory.CreateClientAsAsync(Roles.Auditor, Guid.CreateVersion7());
+        Assert.Equal(HttpStatusCode.Forbidden, (await auditor.GetAsync("/api/integrations/documents/settings")).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_signed_acknowledgement_rejecting_a_delivered_event_fails_it_and_a_bad_signature_is_refused()
+    {
+        var delivered = factory.Stores.Deliveries.Add(WebhookFeedOptions.SinkName, DeliveryStatuses.Delivered);
+        var client = factory.CreateSignedOutClient();
+        var now = DateTimeOffset.UtcNow;
+        HttpRequestMessage Signed(string body, string secret = "api-tests-erp-secret", DateTimeOffset? at = null)
+        {
+            var timestamp = (at ?? now).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/integrations/erp/acknowledgements") { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+            request.Headers.Add("X-Pulaski-Timestamp", timestamp);
+            request.Headers.Add("X-Pulaski-Signature", WebhookSender.Signature(secret, timestamp, body));
+            return request;
+        }
+
+        var body = $$"""{"eventId":"{{delivered.EventId}}","status":"rejected","reference":"ERP-9","message":"Unknown material"}""";
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(Signed(body, secret: "wrong"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(Signed(body, at: now.AddMinutes(-10)))).StatusCode);
+
+        var answer = await client.SendAsync(Signed(body));
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        var row = factory.Stores.Deliveries.Get(delivered.Id);
+        Assert.Equal((DeliveryStatuses.Failed, "rejected", "ERP-9", "callback"), (row.Status, row.AckStatus, row.AckReference, row.AckSource));
+        Assert.Equal("Rejected by the receiver: Unknown material", row.LastError);
+
+        // Accepted later, after it was put right, it is delivered after all; an unknown event is not found.
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(Signed($$"""{"eventId":"{{delivered.EventId}}","status":"accepted"}"""))).StatusCode);
+        Assert.Equal(DeliveryStatuses.Delivered, factory.Stores.Deliveries.Get(delivered.Id).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(Signed($$"""{"eventId":"{{Guid.CreateVersion7()}}","status":"accepted"}"""))).StatusCode);
+    }
+
+    [Fact]
     public async Task The_webhook_gets_a_signed_cloudevent_keyed_by_the_event_id()
     {
         var e = new OutboundEvent
@@ -57,7 +123,7 @@ public sealed class IntegrationEndpointTests(ApiFactory factory) : IClassFixture
         var handler = new Capture();
         var sender = new WebhookSender(new HttpClient(handler));
 
-        var (code, error) = await sender.SendAsync(new Uri("https://erp.test/hook"), "s3cret", e, e.OccurredAt, CancellationToken.None);
+        var (code, error, _) = await sender.SendAsync(new Uri("https://erp.test/hook"), "s3cret", e, e.OccurredAt, CancellationToken.None);
 
         Assert.Equal((202, (string?)null), (code, error));
         var request = handler.Request!;
@@ -75,7 +141,7 @@ public sealed class IntegrationEndpointTests(ApiFactory factory) : IClassFixture
         Assert.Equal(10, body.RootElement.GetProperty("data").GetProperty("quantity").GetInt32());
 
         handler.Fail = true;
-        var (none, why) = await sender.SendAsync(new Uri("https://erp.test/hook"), "s3cret", e, e.OccurredAt, CancellationToken.None);
+        var (none, why, _) = await sender.SendAsync(new Uri("https://erp.test/hook"), "s3cret", e, e.OccurredAt, CancellationToken.None);
         Assert.Null(none);
         Assert.StartsWith("Couldn't reach the receiver", why, StringComparison.Ordinal);
     }

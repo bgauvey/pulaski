@@ -190,6 +190,7 @@ public sealed class InMemoryStores
         services.RemoveAll<IBadgeHasher>();
         services.RemoveAll<IQualificationReadStore>();
         services.RemoveAll<IDeliveryStore>();
+        services.RemoveAll<IDeliveryFeedStore>();
         services.RemoveAll<IAllocationRepository>();
         services.RemoveAll<IAllocationReadStore>();
         services.RemoveAll<ILineBatchSizes>();
@@ -265,6 +266,7 @@ public sealed class InMemoryStores
         services.AddSingleton<ITerminalReadStore>(Terminals);
         services.AddSingleton<IBadgeHasher>(new ReversingBadgeHasher());
         services.AddSingleton<IDeliveryStore>(Deliveries);
+        services.AddSingleton<IDeliveryFeedStore>(Deliveries);
         services.AddSingleton<IAllocationRepository>(Allocations);
         services.AddSingleton<IAllocationReadStore>(Allocations);
         services.AddSingleton<ILineBatchSizes>(LineBatchSizes);

@@ -1807,6 +1807,25 @@ Every command appends its CloudEvents event here in the same transaction as the 
 | `data` | jsonb | no | Payload; changes carry `before` and `after`. |
 | `prev_hash`, `hash` | bytea | yes | Optional per-site hash chain for tamper evidence. |
 
+### core.delivery_feed — a webhook feed's settings (#73, D-087) · *In use*
+
+Kept from Configure → Integrations: everything but the secret, which stays in the API's configuration. No row: the feed runs on its configuration.
+The relay reads the row each round, so a change takes effect without a restart. Saved with an event (`pulaski.delivery_feed.settings_saved.v1`,
+before and after). Version by `xmin`, 0 while there is no row.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `feed` | text | no | Primary key: `erp` or `documents`. |
+| `enabled` | boolean | no | Send to the receiver. Needs an address and at least one kind. |
+| `url` | text | yes | The receiver's address: https, or plain http only to this machine. |
+| `event_kinds` | text[] | no | What it sends: `inventory`, `certificates`, `orders`, `production`, `labor`, `stops`, `quality` (`DeliveryKinds`, each a set of event type prefixes). |
+| `include_files` | boolean | no | Send a certificate's file with its event (D-086). |
+| `max_attempts` | integer | no | Attempts before a delivery fails, 1 to 50. Default 12. |
+| `timeout_seconds` | integer | no | How long one attempt waits, 1 to 120. Default 15. |
+| `poll_seconds` | integer | no | How often the relay looks for new events, 1 to 300. Default 5. |
+| `start_from_now` | boolean | no | The first time the feed starts: after the events already logged (true) or from the beginning. |
+| `updated_at`, `updated_by` | timestamptz, text | no, yes | Last saved, and by whom. |
+
 ### evt.sink_checkpoint — outbox progress per adapter (D-061) · *In use*
 
 How far an adapter has read `evt.event`. Each webhook feed (`webhook:erp`, and since D-086 `webhook:documents`) moves it as it copies matching events into `evt.delivery`, in the same statement, so a crash never loses or repeats a capture. Its first row starts at the latest event when `StartFromNow` is on (the default), else at the beginning.
@@ -1840,6 +1859,10 @@ The queue and record of what was sent where. A row is added for each matching ev
 | `delivered_at` | timestamptz | yes | When the receiver accepted it. |
 | `resolved_by` | text | yes | Who last retried or skipped it. |
 | `resolve_note` | text | yes | The reason given for a skip. |
+| `ack_status` | text | yes | The receiver's acknowledgement (#73, D-087): `accepted` or `rejected`. A rejection fails the delivery (`last_error` says why); an acceptance delivers a failed one. |
+| `ack_reference`, `ack_message` | text | yes | The receiver's own reference for what it booked, and its message; up to 500 characters each. |
+| `ack_source` | text | yes | `response` (in the webhook's 2xx answer body) or `callback` (posted back later, signed). |
+| `ack_at` | timestamptz | yes | When it came. `ack_status`, `ack_source` and `ack_at` are set together (`delivery_ack_ck`). |
 | `created_at`, `updated_at` | timestamptz | no | Captured; last changed. |
 
 Indexes: due rows per sink (`next_attempt_at`, pending only), undelivered rows per subject in order (for holding), and per sink and status (for the screen).

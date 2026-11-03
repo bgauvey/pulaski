@@ -1,0 +1,169 @@
+@inject PulaskiApiClient Api
+
+@* A feed's settings (#73): everything but the secret, which stays in the API's configuration. Saved, the relay uses them from its next round. *@
+<section class="inv-facts mb-3" aria-labelledby="feed-settings">
+    <h2 class="h6" id="feed-settings">Settings</h2>
+    <ProblemAlert Error="_error" />
+    @if (_settings is null)
+    {
+        @if (_error is null)
+        {
+            <p class="small text-muted mb-0">Loading…</p>
+        }
+    }
+    else
+    {
+        <p class="small text-muted">
+            @(_settings.IsSaved
+                ? $"Saved{(_settings.UpdatedBy is { } by ? $" by {by}" : "")}{(_settings.UpdatedAt is { } at ? $" on {at:yyyy-MM-dd HH:mm} UTC" : "")}. The API's configuration now holds only the secret."
+                : "Not saved yet: these are the API's configuration. Once you save, the screen's settings are used and the configuration keeps only the secret.")
+            @(_settings.SecretConfigured ? "" : " The secret isn't set in the API's configuration, so nothing is sent until it is.")
+        </p>
+        <form class="row g-2 align-items-end" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+            <div class="col-12 form-check ms-2">
+                <input id="feed-on" type="checkbox" class="form-check-input" @bind="_enabled" />
+                <label class="form-check-label" for="feed-on">Send to this receiver</label>
+            </div>
+            <div class="col-12 col-md-8">
+                <label class="form-label small fw-semibold" for="feed-url">Receiver's address</label>
+                <input id="feed-url" class="form-control form-control-sm" placeholder="https://erp.example.com/pulaski/events" @bind="_url" />
+            </div>
+            <div class="col-12">
+                <div class="small fw-semibold mb-1">What it sends</div>
+                @foreach (var kind in _settings.Kinds)
+                {
+                    <div class="form-check form-check-inline" @key="kind.Code">
+                        <input id="@($"kind-{kind.Code}")" type="checkbox" class="form-check-input" checked="@_kinds.Contains(kind.Code)"
+                               @onchange="e => Toggle(kind.Code, e.Value is true)" />
+                        <label class="form-check-label small" for="@($"kind-{kind.Code}")" title="@string.Join(", ", kind.Prefixes)">@kind.Label</label>
+                    </div>
+                }
+                @if (_settings.OtherEventTypes.Count > 0)
+                {
+                    <div class="small text-warning-strong mt-1">
+                        The configuration also sends @string.Join(", ", _settings.OtherEventTypes), which no kind covers; saving keeps only the kinds ticked.
+                    </div>
+                }
+            </div>
+            <div class="col-12 form-check ms-2">
+                <input id="feed-files" type="checkbox" class="form-check-input" @bind="_includeFiles" />
+                <label class="form-check-label small" for="feed-files">Send a certificate's file with its event</label>
+            </div>
+            <div class="col-4 col-md-2">
+                <label class="form-label small fw-semibold" for="feed-attempts">Attempts</label>
+                <input id="feed-attempts" type="number" min="1" max="50" class="form-control form-control-sm" @bind="_attempts" />
+            </div>
+            <div class="col-4 col-md-2">
+                <label class="form-label small fw-semibold" for="feed-timeout">Timeout (s)</label>
+                <input id="feed-timeout" type="number" min="1" max="120" class="form-control form-control-sm" @bind="_timeout" />
+            </div>
+            <div class="col-4 col-md-2">
+                <label class="form-label small fw-semibold" for="feed-poll">Check every (s)</label>
+                <input id="feed-poll" type="number" min="1" max="300" class="form-control form-control-sm" @bind="_poll" />
+            </div>
+            <div class="col-12 col-md-6 form-check ms-2">
+                <input id="feed-now" type="checkbox" class="form-check-input" @bind="_fromNow" />
+                <label class="form-check-label small" for="feed-now">The first time it's switched on, start from now (not the whole history)</label>
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-sm btn-primary" disabled="@_busy">Save settings</button>
+                <span class="small text-muted ms-2">
+                    Receivers may acknowledge by answering with <code>{"status":"accepted"|"rejected","reference":…,"message":…}</code>, or later by posting
+                    the event id with that to <code>@_settings.AcknowledgementPath</code>, signed like Pulaski's messages.
+                </span>
+            </div>
+        </form>
+        @if (_saved)
+        {
+            <p class="small text-muted mt-2 mb-0">Saved. The feed uses them from its next round.</p>
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Feed { get; set; } = "erp";
+
+    [Parameter] public EventCallback Saved { get; set; }
+
+    private DeliveryFeedSettingsDto? _settings;
+    private string? _loadedFor;
+    private bool _enabled;
+    private string? _url;
+    private HashSet<string> _kinds = [];
+    private bool _includeFiles;
+    private int _attempts;
+    private int _timeout;
+    private int _poll;
+    private bool _fromNow;
+    private bool _busy;
+    private bool _saved;
+    private ApiException? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor != Feed)
+        {
+            _loadedFor = Feed;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _settings = await Api.GetDeliveryFeedSettingsAsync(Feed);
+            (_enabled, _url, _kinds, _includeFiles) = (_settings.Enabled, _settings.Url, [.. _settings.EventKinds], _settings.IncludeFiles);
+            (_attempts, _timeout, _poll, _fromNow) = (_settings.MaxAttempts, _settings.TimeoutSeconds, _settings.PollSeconds, _settings.StartFromNow);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private void Toggle(string kind, bool on)
+    {
+        if (on)
+        {
+            _kinds.Add(kind);
+        }
+        else
+        {
+            _kinds.Remove(kind);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        _saved = false;
+        try
+        {
+            await Api.SaveDeliveryFeedSettingsAsync(Feed, new SaveDeliveryFeedSettingsRequest
+            {
+                Version = _settings!.Version,
+                Enabled = _enabled,
+                Url = _url,
+                EventKinds = [.. _settings.Kinds.Select(k => k.Code).Where(_kinds.Contains)],
+                IncludeFiles = _includeFiles,
+                MaxAttempts = _attempts,
+                TimeoutSeconds = _timeout,
+                PollSeconds = _poll,
+                StartFromNow = _fromNow,
+            });
+            await LoadAsync();
+            _saved = true;
+            await Saved.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

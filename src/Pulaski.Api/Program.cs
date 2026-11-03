@@ -76,8 +76,8 @@ if (builder.Configuration.GetValue("Pulaski:DatabaseMaintenance", true))
 builder.Services.AddSingleton<IDeliveryTargets, DeliveryTargets>();
 builder.Services.AddSingleton<Pulaski.Application.Materials.IMaterialConnectionFetcher, ODataMaterialFetcher>();
 builder.Services.AddHttpClient(ODataMaterialFetcher.ClientName, client => client.Timeout = TimeSpan.FromSeconds(60));
-builder.Services.AddHttpClient(WebhookSender.ClientName, (services, client) =>
-    client.Timeout = TimeSpan.FromSeconds(WebhookFeedOptions.From(services.GetRequiredService<IConfiguration>()).TimeoutSeconds));
+// Each attempt has its feed's own timeout (#73); the client's is only the longest a feed may set.
+builder.Services.AddHttpClient(WebhookSender.ClientName, client => client.Timeout = TimeSpan.FromSeconds(125));
 
 var app = builder.Build();
 
