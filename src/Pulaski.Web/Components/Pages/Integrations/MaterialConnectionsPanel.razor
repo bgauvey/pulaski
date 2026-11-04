@@ -1,7 +1,7 @@
 @inject PulaskiApiClient Api
 @inject CurrentUser User
 
-@* External sources of material master data Pulaski pulls from (D-068): OData v4 services. Set up by whoever manages integrations;
+@* External sources of material master data Pulaski pulls from (D-068): OData v4, REST JSON and SOAP services, and PostgreSQL queries (#72). Set up by whoever manages integrations;
    checked and imported by whoever manages materials, all or nothing, as a file is. *@
 <section class="inv-facts mb-3" aria-labelledby="connections-title">
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
@@ -12,9 +12,10 @@
         }
     </div>
     <p class="small text-muted">
-        An OData v4 service your ERP or item master offers. Pulaski reads its items, maps each to the import's fields, and imports them like a
-        materials file: matched on the connection's external system and each item's key, so running it again updates rather than duplicates.
-        Credentials are kept in the API's configuration, never here.
+        An OData v4, REST (JSON) or SOAP service your ERP or item master offers, or a read-only query of a PostgreSQL database. Pulaski reads its
+        items, maps each to the import's fields, and imports them like a materials file: matched on the connection's external system and each
+        item's key, so running it again updates rather than duplicates. Credentials and database connection strings are kept in the API's
+        configuration, never here.
     </p>
 
     <ProblemAlert Error="_error" />
@@ -35,26 +36,71 @@
                     <label class="form-label small" for="mc-system">External system</label>
                     <input id="mc-system" class="form-control form-control-sm" maxlength="100" placeholder="e.g. ERP1" @bind="form.ExternalSystem" />
                 </div>
-                <div class="col-sm-6">
-                    <label class="form-label small" for="mc-url">Service root</label>
-                    <input id="mc-url" class="form-control form-control-sm" maxlength="500" placeholder="https://erp.example.com/odata/v4/items" @bind="form.BaseUrl" />
-                </div>
                 <div class="col-sm-3">
-                    <label class="form-label small" for="mc-set">Entity set</label>
-                    <input id="mc-set" class="form-control form-control-sm" maxlength="100" placeholder="Products" @bind="form.EntitySet" />
+                    <label class="form-label small" for="mc-kind">Kind</label>
+                    <select id="mc-kind" class="form-select form-select-sm" disabled="@(form.Id is not null)" @bind="form.Kind">
+                        <option value="odata">OData v4</option>
+                        <option value="rest">REST (JSON)</option>
+                        <option value="soap">SOAP</option>
+                        <option value="database">PostgreSQL query</option>
+                    </select>
                 </div>
+                @if (form.Kind != "database")
+                {
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="mc-url">@(form.Kind == "odata" ? "Service root" : "Address")</label>
+                        <input id="mc-url" class="form-control form-control-sm" maxlength="500" @bind="form.BaseUrl"
+                               placeholder="@(form.Kind switch { "rest" => "https://erp.example.com/api/items?plant=1000", "soap" => "https://erp.example.com/soap/items", _ => "https://erp.example.com/odata/v4/items" })" />
+                    </div>
+                    <div class="col-sm-3">
+                        <label class="form-label small" for="mc-set">@(form.Kind switch { "rest" => "Items at", "soap" => "Item element", _ => "Entity set" })</label>
+                        <input id="mc-set" class="form-control form-control-sm" maxlength="100" @bind="form.EntitySet"
+                               placeholder="@(form.Kind switch { "rest" => "data.items (blank: the whole answer)", "soap" => "Material", _ => "Products" })" />
+                    </div>
+                }
                 <div class="col-sm-3">
                     <div class="form-check mt-4">
                         <input class="form-check-input" type="checkbox" id="mc-active" @bind="form.IsActive" />
                         <label class="form-check-label small" for="mc-active">Active</label>
                     </div>
                 </div>
-                <div class="col-12">
-                    <label class="form-label small" for="mc-filter">Filter <span class="text-muted">(optional, OData $filter)</span></label>
-                    <input id="mc-filter" class="form-control form-control-sm" maxlength="1000" placeholder="Plant eq '1000' and Blocked eq false" @bind="form.Filter" />
-                </div>
+                @if (form.Kind == "odata")
+                {
+                    <div class="col-12">
+                        <label class="form-label small" for="mc-filter">Filter <span class="text-muted">(optional, OData $filter)</span></label>
+                        <input id="mc-filter" class="form-control form-control-sm" maxlength="1000" placeholder="Plant eq '1000' and Blocked eq false" @bind="form.Filter" />
+                    </div>
+                }
+                else if (form.Kind == "rest")
+                {
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="mc-next">Next page at <span class="text-muted">(optional)</span></label>
+                        <input id="mc-next" class="form-control form-control-sm" maxlength="100" placeholder="links.next" @bind="form.NextLinkPath" />
+                    </div>
+                }
+                else if (form.Kind == "soap")
+                {
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="mc-action">SOAPAction <span class="text-muted">(optional)</span></label>
+                        <input id="mc-action" class="form-control form-control-sm" maxlength="500" @bind="form.SoapAction" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small" for="mc-body">Request envelope</label>
+                        <textarea id="mc-body" class="form-control form-control-sm font-monospace" rows="6" maxlength="20000" @bind="form.RequestBody"></textarea>
+                    </div>
+                }
+                else
+                {
+                    <div class="col-12">
+                        <label class="form-label small" for="mc-query">Query <span class="text-muted">(one SELECT, run read-only; the connection string is <code>MaterialConnections:&lt;code&gt;:ConnectionString</code>)</span></label>
+                        <textarea id="mc-query" class="form-control form-control-sm font-monospace" rows="5" maxlength="4000" @bind="form.Query"
+                                  placeholder="SELECT item_no, description, uom FROM erp.items WHERE plant = '1000'"></textarea>
+                    </div>
+                }
             </div>
-            <div class="small fw-semibold mt-3 mb-1">Fields: Pulaski's field ← the service's property (use / for a property of a property, such as Unit/Code)</div>
+            <div class="small fw-semibold mt-3 mb-1">
+                @(form.Kind == "database" ? "Fields: Pulaski's field ← the query's column" : "Fields: Pulaski's field ← the item's property (use / for a property of a property, such as Unit/Code)")
+            </div>
             <div class="row g-2">
                 @foreach (var field in ConnectionForm.Fields)
                 {
@@ -93,7 +139,7 @@
                     {
                         <tr @key="c.Id" class="@(c.IsActive ? "" : "text-muted")">
                             <td><span class="fw-semibold">@c.Code</span><div class="small text-muted">@c.Name@(c.IsActive ? "" : " · off")</div></td>
-                            <td class="small text-break">@c.BaseUrl/@c.EntitySet@(c.Filter is { } f ? $" · {f}" : "")</td>
+                            <td class="small text-break">@MaterialConnectionView.Source(c)</td>
                             <td class="small">@c.ExternalSystem</td>
                             <td class="small">@(c.HasCredentials ? "Configured" : "None configured")</td>
                             <td class="small">@(c.LastRunAt is { } at ? $"{Display.SiteTime(at, null)} UTC by {c.LastRunBy}: {c.LastRunSummary}" : "Never")</td>
@@ -235,7 +281,12 @@
         public long Version { get; private init; }
         public string? Code { get; set; }
         public string? Name { get; set; }
+        public string Kind { get; set; } = "odata";
         public string? BaseUrl { get; set; }
+        public string? NextLinkPath { get; set; }
+        public string? RequestBody { get; set; }
+        public string? SoapAction { get; set; }
+        public string? Query { get; set; }
         public string? EntitySet { get; set; }
         public string? Filter { get; set; }
         public string? ExternalSystem { get; set; }
@@ -250,7 +301,12 @@
             Version = c.Version,
             Code = c.Code,
             Name = c.Name,
+            Kind = c.Kind,
             BaseUrl = c.BaseUrl,
+            NextLinkPath = c.NextLinkPath,
+            RequestBody = c.RequestBody,
+            SoapAction = c.SoapAction,
+            Query = c.Query,
             EntitySet = c.EntitySet,
             Filter = c.Filter,
             ExternalSystem = c.ExternalSystem,
@@ -263,12 +319,19 @@
             Version = Version,
             Code = Code ?? "",
             Name = Name ?? "",
-            BaseUrl = BaseUrl ?? "",
-            EntitySet = EntitySet ?? "",
-            Filter = Filter,
+            Kind = Kind,
+            BaseUrl = Kind == "database" ? null : Blank(BaseUrl),
+            EntitySet = Kind == "database" ? "" : EntitySet ?? "",
+            Filter = Kind == "odata" ? Blank(Filter) : null,
+            NextLinkPath = Kind == "rest" ? Blank(NextLinkPath) : null,
+            RequestBody = Kind == "soap" ? Blank(RequestBody) : null,
+            SoapAction = Kind == "soap" ? Blank(SoapAction) : null,
+            Query = Kind == "database" ? Blank(Query) : null,
             ExternalSystem = ExternalSystem ?? "",
             IsActive = IsActive,
             FieldMap = Map.Where(m => !string.IsNullOrWhiteSpace(m.Value)).ToDictionary(m => m.Key, m => m.Value.Trim()),
         };
+
+        private static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
     }
 }

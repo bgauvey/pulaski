@@ -110,4 +110,46 @@ public class MaterialConnectionTests
         public Task<ImportMaterialsResponse> HandleAsync(ImportMaterialsCommand command, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Not reached.");
     }
+
+    [Fact]
+    public void Each_kind_needs_its_own_fields_and_only_odata_takes_a_filter()
+    {
+        var odata = Connection();
+        Assert.Empty(MaterialConnectionRules.KindProblems(odata));
+
+        var rest = odata with { Kind = "rest", BaseUrl = "https://erp.example/api/items?plant=1", EntitySet = "", NextLinkPath = "links.next" };
+        Assert.Empty(MaterialConnectionRules.KindProblems(rest));
+        Assert.Contains(MaterialConnectionRules.KindProblems(rest with { Filter = "x eq 1" }), p => p.StartsWith("Filter", StringComparison.Ordinal));
+        Assert.Contains(MaterialConnectionRules.KindProblems(rest with { NextLinkPath = "links next" }), p => p.StartsWith("NextLinkPath", StringComparison.Ordinal));
+
+        var soap = odata with { Kind = "soap", EntitySet = "Material", RequestBody = "<Envelope/>" };
+        Assert.Empty(MaterialConnectionRules.KindProblems(soap));
+        Assert.Contains(MaterialConnectionRules.KindProblems(soap with { RequestBody = "GetMaterials" }), p => p.StartsWith("RequestBody", StringComparison.Ordinal));
+
+        var database = odata with { Kind = "database", BaseUrl = null, EntitySet = "", Query = "WITH i AS (SELECT 1 AS n) SELECT n FROM i;" };
+        Assert.Empty(MaterialConnectionRules.KindProblems(database));
+        Assert.NotEmpty(MaterialConnectionRules.KindProblems(database with { Query = "DELETE FROM erp.items" }));
+        Assert.NotEmpty(MaterialConnectionRules.KindProblems(database with { Query = "SELECT 1; DROP TABLE erp.items" }));
+    }
+
+    [Fact]
+    public void Rest_and_soap_answers_and_database_rows_become_items_the_field_map_reads()
+    {
+        using var answer = JsonDocument.Parse("""{"data": {"items": [{"No": "A"}]}, "next": "?page=2"}""");
+        Assert.Equal("A", Assert.Single(ConnectionItems.Rest(answer.RootElement, "data/items").Items!).GetProperty("No").GetString());
+        Assert.Equal("?page=2", ConnectionItems.NextLink(answer.RootElement, "next"));
+        Assert.Null(ConnectionItems.NextLink(answer.RootElement, null));
+        Assert.Contains("isn't an array", ConnectionItems.Rest(answer.RootElement, "").Problem, StringComparison.Ordinal);
+
+        var (items, problem) = ConnectionItems.Soap("<r><Item><No>A</No><No>ignored</No><Empty/></Item><Item><No>B</No></Item></r>", "Item");
+        Assert.Null(problem);
+        Assert.Equal(["A", "B"], items!.Select(i => i.GetProperty("No").GetString()));
+        Assert.Equal(JsonValueKind.Null, items![0].GetProperty("Empty").ValueKind);
+        Assert.Contains("well-formed", ConnectionItems.Soap("<!DOCTYPE r [<!ENTITY x \"y\">]><r/>", "Item").Problem, StringComparison.Ordinal);
+
+        var row = ConnectionItems.Row([("code", "PP-1"), ("shelf", 180), ("lot", true), ("price", 1.5m), ("none", DBNull.Value)]);
+        var source = ODataMaterialRows.Read([row], Connection(new Dictionary<string, string> { ["code"] = "code", ["external_key"] = "code", ["shelf_life_days"] = "shelf", ["lot_tracked"] = "lot" }));
+        Assert.Equal(("PP-1", 180, true), (source.Rows[0].Code, source.Rows[0].ShelfLifeDays!.Value!.Value, source.Rows[0].IsLotTracked!.Value));
+        Assert.Equal(JsonValueKind.Null, row.GetProperty("none").ValueKind);
+    }
 }

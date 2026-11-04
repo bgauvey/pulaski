@@ -50,6 +50,34 @@ public class ImportCapabilitiesHandlerTests
     }
 
     [Fact]
+    public async Task A_dated_row_is_its_own_period_ending_the_open_one_before_it_and_any_other_overlap_is_refused()
+    {
+        const string Dated = "material,line,ideal_rate,rate_unit,effective_from,effective_to\n";
+        await RunAsync(Dated + "PRF-1,EXT-01,900,m,,\n");
+        var nov = new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero);
+
+        // From 1 November: the open capability from now ends there, and the planning rate stays with the one in effect.
+        var later = await RunAsync(Dated + "PRF-1,EXT-01,1100,m,2026-11-01,\n");
+        var row = Assert.Single(later.Rows);
+        Assert.Equal("create", row.Action);
+        Assert.Contains(row.Notes, n => n.Contains("now ends where this one starts", StringComparison.Ordinal));
+        var periods = Capabilities.On(_line.Id, _profile.Id).OrderBy(c => c.EffectiveFrom).ToList();
+        Assert.Equal([(HandlerFixture.Now, (DateTimeOffset?)nov, 900m), (nov, null, 1100m)], periods.Select(c => (c.EffectiveFrom, c.EffectiveTo, c.IdealRatePerHour)));
+        Assert.Equal(900m, Capabilities.StandardFor(_line.Id, _profile.Id)!.CalculatedRatePerHour);
+
+        // The same start date names that period, so it can be given an end.
+        var ended = await RunAsync(Dated + "PRF-1,EXT-01,1100,m,2026-11-01,2026-12-01\n");
+        Assert.Equal(["effective_to"], Assert.Single(ended.Rows).Changes);
+        Assert.Equal(new DateTimeOffset(2026, 12, 1, 0, 0, 0, TimeSpan.Zero), Capabilities.On(_line.Id, _profile.Id).Single(c => c.EffectiveFrom == nov).EffectiveTo);
+
+        // Overlapping a period that has an end is refused, and nothing changes.
+        var overlap = await RunAsync(Dated + "PRF-1,EXT-01,800,m,2026-10-20,2026-11-15\n");
+        Assert.False(overlap.Applied);
+        Assert.Contains("can't overlap", Assert.Single(overlap.Rows).Message, StringComparison.Ordinal);
+        Assert.Equal(2, Capabilities.On(_line.Id, _profile.Id).Count);
+    }
+
+    [Fact]
     public async Task The_capability_in_effect_is_changed_in_place_keeping_what_the_file_leaves_out_and_can_be_ended()
     {
         await RunAsync(Header + "PRF-1,EXT-01,900,m,45,2,yes,\n");

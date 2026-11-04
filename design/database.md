@@ -263,24 +263,30 @@ Per-site mapping of raw state to an OEE category (D-005). Raw state is always st
 
 ## 3. Material, BOM and capability
 
-### core.material_connection — external sources of material master data (D-068) · *In use*
+### core.material_connection — external sources of material master data (D-068, D-089) · *In use*
 
-An OData v4 service Pulaski pulls items from, on demand, through the materials import (D-034, D-053): the same rules, events and all-or-nothing transaction as a file. No secrets: credentials are in the API's configuration under `MaterialConnections:<code>`.
+A source Pulaski pulls items from, on demand, through the materials import (D-034, D-053): an OData v4, REST (JSON) or SOAP service, or a read-only query of a PostgreSQL database. The same rules, events and all-or-nothing transaction as a file. No secrets: credentials and connection strings are in the API's configuration under `MaterialConnections:<code>`.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
 | `code` | text | no | Unique, upper case, fixed once created: it names the connection's configuration section. |
 | `name` | text | no | For screens, and each event's reason (*<name> import*). |
-| `kind` | text | no | `odata` (OData v4). |
-| `base_url` | text | no | The service root: https (http only on the API's own machine). |
-| `entity_set` | text | no | The entity set holding the items, such as `Products`. |
-| `filter` | text | yes | An OData `$filter` sent with the request. |
+| `kind` | text | no | `odata` (default), `rest`, `soap` or `database` (D-089). Fixed once created. |
+| `base_url` | text | yes | The address: https (http only on the API's own machine). OData: the service root; REST: the first page, query allowed; SOAP: where the envelope is posted. Null exactly for `database`. |
+| `entity_set` | text | no | OData: the entity set, such as `Products`. REST: where the items array is in the answer (`data.items`; empty = the whole answer). SOAP: the element that holds one item. Empty for `database`. |
+| `filter` | text | yes | An OData `$filter` sent with the request; only for `odata`. |
+| `next_link_path` | text | yes | REST: where the answer gives the next page's address (`links.next`), relative to the page. |
+| `request_body` | text | yes | SOAP: the envelope to post (≤ 20,000 characters). Set exactly for `soap`. |
+| `soap_action` | text | yes | SOAP: the `SOAPAction` header, if the service wants one. |
+| `query` | text | yes | Database: one `SELECT` or `WITH` statement (≤ 4,000 characters), run read-only with a 30 s timeout. Set exactly for `database`. |
 | `external_system` | text | no | The system the items belong to; with each item's key it is what the import matches on (D-033). |
-| `field_map` | jsonb | no | Import field → the service's property (or `A/B` path): `{"code": "Number", "external_key": "Id", ...}`. Code and external key are required. |
+| `field_map` | jsonb | no | Import field → the item's property (or `A/B` path), or the query's column: `{"code": "Number", "external_key": "Id", ...}`. Code and external key are required. |
 | `is_active` | boolean | no | False: it can't be run. |
 | `last_run_at`, `last_run_by`, `last_run_summary` | timestamptz, text, text | yes | The last import (not a check): when, who and what it did. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+`material_connection_kind_ck` keeps the kind and its columns consistent.
 
 ### core.material_class — material groups · *In use*
 

@@ -1303,6 +1303,21 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     }
 
     /// <summary>Imports lot attribute values (#78); <paramref name="dryRun"/> checks without saving.</summary>
+    /// <summary>B2MML material lots at a site (#72): new lots received, known ones' properties set as attributes.</summary>
+    public async Task<ImportMaterialsResponse> ImportB2mmlLotsAsync(Guid siteId, string xml, bool dryRun, CancellationToken ct = default)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/lots/import/b2mml?siteId={siteId}&dryRun={(dryRun ? "true" : "false")}")
+        {
+            Content = new StringContent(xml, System.Text.Encoding.UTF8, "application/xml"),
+        };
+        using var response = await SendCoreAsync(request, ct);
+        return await ReadAsync<ImportMaterialsResponse>(response, ct);
+    }
+
+    /// <summary>Every class and material as B2MML (#72), which the B2MML import reads back.</summary>
+    public Task<(byte[] Content, string ContentType, string FileName)> GetMaterialsB2mmlAsync(CancellationToken ct = default) =>
+        GetFileAsync("api/materials/export/b2mml", ct);
+
     public async Task<ImportMaterialsResponse> ImportLotAttributeValuesAsync(Guid siteId, string csv, bool dryRun, CancellationToken ct = default)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"api/lot-attributes/values/import?siteId={siteId}&dryRun={(dryRun ? "true" : "false")}")

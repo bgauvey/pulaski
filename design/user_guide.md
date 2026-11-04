@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-01 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-04 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -1141,6 +1141,19 @@ The **Incoming** tab lists purchases and transfers expected to arrive, for the s
 5. When nothing more of a partly received delivery is coming, click **Close as complete**. (**Cancel** is only for one where nothing arrived.)
 6. Tick **Show received and cancelled** to see closed ones.
 
+**Receive lots from a B2MML file**
+
+An ERP or a supplier's system can send the lots that arrived as B2MML material lots.
+
+1. On **Inventory → Incoming**, under **Receive lots from a B2MML file**, click **Download a template** to see the format, or **Choose File** and pick the file.
+2. Pulaski checks it and says how many lots it would receive, update or leave unchanged, and lists any errors.
+3. When there are none, click **Import**. As with every import, it is all or nothing.
+
+- **A lot the site doesn't have** (by lot number and material) is received: its `Quantity` and `UnitOfMeasure` at the location whose code is its `StorageLocation`, expiring at its `ExpirationTime` (a date alone is midnight UTC), with a `SupplierLot` property as its supplier lot. The receive rules apply as on screen. Where lots mix, it joins the location's balance, and its properties aren't recorded.
+- **A lot the site has** keeps its quantity, location and expiry; the file only adds its properties.
+- **Properties.** A `MaterialLotProperty` whose `ID` is a [lot attribute](#lot-attributes-and-certificates) code, in any case, sets that attribute, read as on the lot page; an empty value leaves it alone. Other properties are listed as left out.
+- Needs permission to receive lots. For scripts: `POST /api/lots/import/b2mml?siteId=…&dryRun=true`, and `GET /api/lots/import/b2mml/template`. At most 5 MB and 5,000 lots.
+
 **In detail**
 
 - **Who:** anyone who can see inventory sees them; adding, changing and cancelling needs permission to receive lots.
@@ -1646,10 +1659,18 @@ For example:
 - **Other properties are skipped.** Properties Pulaski has no field for (density, colour…) are ignored, unlike an unknown CSV column. Property IDs are compared ignoring case, spaces and underscores, so `Shelf life days` and `shelf_life_days` work too. Giving a field twice, such as a class by `MaterialClassID` and by a property, is an error on that material.
 - **Left out or blank** works as in CSV: a property that isn't there keeps what the material has, and one with an empty value clears an optional field.
 - Any B2MML namespace version (or none) works, inside `MaterialInformation`, a wrapper such as `SyncMaterialInformation`, or as a bare `MaterialDefinition`. The *Line* is where the material's `MaterialDefinition` starts. Further class IDs and descriptions (other languages) are ignored. Files with a `DOCTYPE` are refused. At most 5 MB and 5,000 materials per file.
+- **Classes.** Each `MaterialClass` in the file (its `ID` the code, its `Description` the name) is added if Pulaski doesn't have it and renamed if its name differs, before the materials, whether or not **Create missing classes** is ticked: the file states the class itself. The result says which classes it creates or renames. Whether a class is switched on stays as Pulaski has it. A file can hold only classes.
+
+#### Export materials as B2MML
+
+1. On the Materials tab, click **Export B2MML**.
+2. Pulaski downloads `materials.xml`: every class as a `MaterialClass`, then every material (switched off ones too) as a `MaterialDefinition` with its class and every field the import reads as a property.
+
+The file is in the format the B2MML import reads, so it can go to another Pulaski or back in unchanged. Anyone who can see materials can export. For scripts: `GET /api/materials/export/b2mml`.
 
 ### Import materials from a connection
 
-Instead of a file, Pulaski can read items straight from an **OData v4** service, which many ERPs and item masters offer. Someone who manages integrations sets the connection up once; anyone who maintains materials can then check and import it whenever the item master changes.
+Instead of a file, Pulaski can read items straight from an **OData v4**, **REST** (JSON) or **SOAP** service, which many ERPs and item masters offer, or from a **query of a PostgreSQL database**. Someone who manages integrations sets the connection up once; anyone who maintains materials can then check and import it whenever the item master changes.
 
 1. Open **Materials**, click **Import file**, and find **Material connections** under the file import (or open **Configure → Integrations**).
 2. Click **Check** on the connection's row. Pulaski reads every item and says what an import would do: how many to create, update or leave unchanged, and any items with errors, with why.
@@ -1660,16 +1681,22 @@ Instead of a file, Pulaski can read items straight from an **OData v4** service,
 
 1. On **Configure → Integrations**, under **Material connections**, click **Add connection**.
 2. Give it a **Code** (fixed once saved: it names the credentials in the configuration), a **Name**, and the **External system** the items belong to, such as *ERP1*. Items are matched on that system and each item's key, so the same item is never made twice.
-3. Enter the **Service root** (an https address) and the **Entity set** holding the items, such as *Products*, and optionally a **Filter** in OData syntax to take only some of them.
-4. Under **Fields**, type, for each Pulaski field, the name of the service's property that holds it: at least **code** and **external_key**, and for new items **name**, **type** and **base_unit**. Use `/` for a property of a property, such as `Unit/Code`. A field left blank isn't read: materials keep what they have.
+3. Choose its **Kind** (fixed once saved) and fill in what that kind needs:
+   - **OData v4:** the **Service root** (an https address), the **Entity set** holding the items, such as *Products*, and optionally a **Filter** in OData syntax to take only some of them.
+   - **REST (JSON):** the **Address** that answers with the items (a query such as `?plant=1000` is fine), where the items are in the answer under **Items at** (such as `data.items`; blank when the answer is the list itself), and optionally where the answer gives the next page under **Next page at** (such as `links.next`).
+   - **SOAP:** the **Address** the request is posted to, the **Request envelope** to post, the **SOAPAction** if the service wants one, and the **Item element** that holds one item in the answer, such as *Material*.
+   - **PostgreSQL query:** one **Query** (`SELECT …` or `WITH … SELECT …`). The database's connection string goes in the API's configuration, not here.
+4. Under **Fields**, type, for each Pulaski field, the name of the item's property (or the query's column) that holds it: at least **code** and **external_key**, and for new items **name**, **type** and **base_unit**. Use `/` for a property of a property, such as `Unit/Code`. A field left blank isn't read: materials keep what they have.
 5. Click **Save**.
 
 **In detail**
 
-- **Credentials** never go in the database. Put them in the API's settings or environment under `MaterialConnections:<code>`: `BearerToken`, or `Username` and `Password` for basic authentication. The list says whether credentials are configured.
+- **Credentials** never go in the database. Put them in the API's settings or environment under `MaterialConnections:<code>`: `BearerToken`, or `Username` and `Password` for basic authentication; for a database, `ConnectionString`. The list says whether credentials are configured.
 - **What is read.** Pulaski asks for only the properties the fields name (`$select`), applies the filter, and follows the service's next-page links, up to 5,000 items (an import's limit). A property the item doesn't have leaves that field as the material has it; a null clears an optional field. Values are read as from a file: yes/no and true/false, whole days.
 - **The rules are the import's.** For an ERP item the ERP owns its code, name, base unit and type; Pulaski owns the rest. Each change is recorded with the reason *<connection name> import*, and the list shows the last import, who ran it and what it did. A check is not recorded.
-- **Only OData v4**, read on demand: nothing runs on a timer.
+- **REST** follows the next-page link (relative addresses are read against the page) up to 200 pages. **SOAP** reads every element with the item element's name, anywhere in the answer, as an item of its child elements (nested ones as properties of properties; of repeated names, the first). A SOAP fault is reported with its message. Files and answers with a `DOCTYPE` are refused.
+- **A database query** runs read-only, with a 30-second limit, and stops at 5,000 rows. Each column is a field by its name. Give the connection a login that can only read.
+- **Read on demand:** nothing runs on a timer.
 
 ### Import capabilities from a CSV file
 
@@ -1688,13 +1715,16 @@ Set up which lines can run which materials, and how fast, for many materials at 
    | `batch_size` | The line's own batch size in the material's base unit, for a material made in batches; blank for the material's. |
    | `batch_tolerance` | The line's own batch tolerance in percent, 0 to 50, for a material made in batches; blank for the material's. |
    | `active` | `no` ends the capability now. |
+   | `effective_from` | The day the capability starts, at the line's site (`yyyy-MM-dd`). Blank: the capability in effect now. |
+   | `effective_to` | The day after its last day (`yyyy-MM-dd`); blank on a dated row: no end. |
 
 3. Click **Choose File** and pick the file. Each row shows **Create** (a new capability from now), **Update** (with what changes), **Unchanged** or **Error**, with what happens to the line's planning rate.
 4. When every row is fine, click **Import N capabilities**.
 
 **In detail**
 
-- **Which capability a row is.** The one for that material and line in effect now. If there is one, its values change in place and its period stays. If there is none, a new one starts now with no end. `active` = `no` ends the one in effect now. Capabilities that start later or ended earlier are left alone, and nothing is ever deleted. To plan a future period, use the material page.
+- **Which capability a row is.** Without `effective_from`, the one for that material and line in effect now. If there is one, its values change in place and its period stays. If there is none, a new one starts now with no end. `active` = `no` ends the one in effect now. Nothing is ever deleted.
+- **Periods.** With `effective_from`, the row is the capability that starts that day: if there is one, it changes in place (and `effective_to` can end it); if not, one is added from that day. Adding it ends a capability with no end that started earlier on the day the new one starts (the row says so). Any other overlap is an error on the row, so the whole file waits until it is fixed. A future capability doesn't change the planning rate until it is in effect.
 - **The planning rate follows** as on the material page: a new capability sets it from the ideal rate when the line has none, and a new ideal rate recalculates it while it is still based on the ideal rate. A modified rate stays in force.
 - **Left out or blank.** A column the file doesn't have keeps what the capability has. A blank `changeover_minutes`, `crew_size`, `batch_size` or `batch_tolerance` clears it.
 - **The rules are the material page's:** the line must be active and run jobs, the material active, and the rate's unit must convert to the material's base unit. A material and line can appear only once in a file. Every line must be at a site where you may maintain processes.
@@ -2500,7 +2530,7 @@ Between two production jobs on different materials, a line needs a changeover. P
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
 - **Labor:** people come from HR or the ERP only as a file you import: nothing fetches them on a timer, someone missing from a file isn't switched off (send them with `active` = no), and qualifications aren't imported. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
-- **Materials import** from CSV or B2MML files, from an OData v4 connection on demand, or one item at a time through the API. Nothing fetches items on a timer, other kinds of service (plain REST, SOAP, a database) have no connection yet, and there are no adapters for label printing. Capabilities import from CSV only, and only for now: a future or past period is set on the material page. B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
+- **Materials import** from CSV or B2MML files, from an OData, REST, SOAP or PostgreSQL connection on demand, or one item at a time through the API. Nothing fetches items on a timer, connections can't sign in with OAuth, and there are no adapters for label printing. Capabilities import from CSV only. Pulaski exports materials and classes as B2MML, but not lots; B2MML sublots, assemblies and other languages aren't read.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.

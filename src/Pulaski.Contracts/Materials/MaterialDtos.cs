@@ -247,6 +247,9 @@ public sealed record ImportMaterialsResponse
 
     /// <summary>The codes of the classes the import created, or would create, because the file named them and they were missing (D-055).</summary>
     public IReadOnlyList<string> CreatedClasses { get; init; } = [];
+
+    /// <summary>The codes of the classes the import renamed, or would rename, from a source that states classes (#72).</summary>
+    public IReadOnlyList<string> RenamedClasses { get; init; } = [];
     public IReadOnlyList<ImportRowResultDto> Rows { get; init; } = [];
 }
 
@@ -289,5 +292,5 @@ public sealed record SetBatchingRequest
 /// <summary>The capabilities CSV file (D-055): its header line with every column, for a template.</summary>
 public static class CapabilityCsvFormat
 {
-    public const string Header = "material,site,line,ideal_rate,rate_unit,changeover_minutes,crew_size,preferred,batch_size,batch_tolerance,active";
+    public const string Header = "material,site,line,ideal_rate,rate_unit,changeover_minutes,crew_size,preferred,batch_size,batch_tolerance,active,effective_from,effective_to";
 }

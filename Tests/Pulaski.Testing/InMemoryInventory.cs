@@ -632,6 +632,14 @@ public sealed class InMemoryInventory : IInventoryRepository, IInventoryReadStor
     public Task<Guid?> FindUomIdByCodeAsync(string code, CancellationToken cancellationToken) =>
         Task.FromResult(UomCodes.TryGetValue(code, out var id) ? id : (Guid?)null);
 
+    public Task<Guid?> FindLocationIdByCodeAsync(Guid siteId, string code, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_locations.Values.FirstOrDefault(l => l.SiteId == siteId && l.Code == code)?.Id);
+        }
+    }
+
     public Task<bool> IsSiteAsync(Guid id, CancellationToken cancellationToken)
     {
         lock (_lock)

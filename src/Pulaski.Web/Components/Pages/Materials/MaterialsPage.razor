@@ -3,6 +3,7 @@
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
 @inject CurrentUser User
+@inject Downloads Downloads
 
 <PageTitle>Materials · Pulaski</PageTitle>
 
@@ -14,6 +15,7 @@
         </p>
     </div>
     <div class="inv-head-tools">
+        <button type="button" class="btn btn-outline-secondary" title="Every class and material as B2MML, which the B2MML import reads back" @onclick="ExportAsync">Export B2MML</button>
         @if (User.Can(PermissionCodes.Materials))
         {
             <button type="button" class="btn btn-outline-secondary" @onclick="() => _importing = !_importing">Import file</button>
@@ -247,6 +249,20 @@ else
             _materials = await Api.ListAllMaterialsAsync();
             _classes = await Api.ListMaterialClassesAsync();
             _uoms = await Api.ListUomsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        _error = null;
+        try
+        {
+            var (content, type, name) = await Api.GetMaterialsB2mmlAsync();
+            await Downloads.FileAsync(name, content, type);
         }
         catch (ApiException ex)
         {

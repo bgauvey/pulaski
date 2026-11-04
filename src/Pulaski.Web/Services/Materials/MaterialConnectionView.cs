@@ -11,4 +11,16 @@ public static class MaterialConnectionView
         : r.Errors > 0 ? $"{code}: {r.Errors} {(r.Errors == 1 ? "item has" : "items have")} errors, so nothing can be imported yet. Fix them at the source or in the field map, then check again."
         : r.Created + r.Updated == 0 ? $"{code} is up to date: {r.Unchanged} unchanged."
         : $"{code} is ready: {r.Created} to create, {r.Updated} to update, {r.Unchanged} unchanged. Click Import.";
+
+    /// <summary>Where a connection reads from, by its kind (#72).</summary>
+    public static string Source(MaterialConnectionDto c) => c.Kind switch
+    {
+        "database" => $"PostgreSQL query: {Shorten(c.Query)}",
+        "soap" => $"SOAP {c.BaseUrl} · items <{c.EntitySet}>",
+        "rest" => $"REST {c.BaseUrl}{(c.EntitySet.Length > 0 ? $" · items at {c.EntitySet}" : "")}{(c.NextLinkPath is { } next ? $" · next at {next}" : "")}",
+        _ => $"{c.BaseUrl}/{c.EntitySet}{(c.Filter is { } f ? $" · {f}" : "")}",
+    };
+
+    private static string Shorten(string? text) =>
+        text is null ? "" : text.Length <= 80 ? text : string.Concat(text.AsSpan(0, 79), "…");
 }

@@ -1023,7 +1023,7 @@ Closes the D-033 / D-034 next step: material master data from sources other than
 
 **Screen.** Configure → Materials → **Import file** picks the format from the API's list and shows an *External system* field for B2MML. Changing either checks the picked file again.
 
-**Not yet.** Label printing (BarTender and the like), ERP feeds pushed or pulled on a timer, B2MML material lots and classes as their own records, and exporting B2MML.
+**Not yet.** Label printing (BarTender and the like) and ERP feeds pulled on a timer. B2MML material classes and lots as their own records, and exporting B2MML, came with D-089.
 
 ## People from HR and ERP sources (D-054, proposed)
 
@@ -1082,7 +1082,7 @@ Issue #20: the CSV import (D-034) couldn't take capabilities, create classes, or
 | `active = no` | `End(now)` the one in effect; none → unchanged with a note. |
 
 - Columns left out keep the capability's values, and blank changeover or crew clears them.
-- Periods are never set by the file; future and past periods stay on the material page.
+- Periods are never set by the file; future and past periods stay on the material page. Since D-089, `effective_from` and `effective_to` set them.
 - All or nothing with a dry run, like D-034. Events are `capability.added` / `changed` / `ended` with the reason. Notes (planning rate, open jobs left) come back on each row (`ImportRowResultDto.Notes`).
 
 **Locking and access.** Equipment codes are unique only within a site, so the handler first locks every line the file names with `LockLinesByCodeAsync`: lower-case codes, `ORDER BY id FOR UPDATE OF e`. Materials are locked after that (D-017). A row's line is its code at the row's `site`, else at the only site that has it. An ambiguous code is an error asking for the site. The endpoint `POST /api/capabilities/import/csv` needs `processes.manage` somewhere, as a single capability does at its line. It passes the caller's sites (`Visible.SitesAsync`), and a line at any other site is an error on its row.
@@ -1494,7 +1494,7 @@ Issue #18. Materials came from files (CSV, B2MML) or one at a time through the A
 
 **Permissions.** Setting up (`POST`/`PUT /api/material-connections`) needs `integrations.manage`, because it decides where the API connects. Running needs `materials.manage`. Seeing the list needs `integrations.view` or `materials.view`. The panel is on Configure → Integrations and in the Materials import area. Events: `pulaski.material_connection.added.v1`, `…changed.v1`.
 
-**Not done.** Schedules, other protocols (plain REST, SOAP, database), OAuth client-credential flows, and connections for other master data (people, capabilities).
+**Not done.** Schedules, OAuth client-credential flows, and connections for other master data (people, capabilities). REST, SOAP and PostgreSQL connections came with D-089.
 
 ## Stop adjustments (D-069, proposed)
 
@@ -2285,6 +2285,54 @@ That is a SECURITY DEFINER function, since the app role has no DELETE; it keeps 
 - adapters for a particular ERP's own API;
 - retention per feed;
 - paging through more than 1000 deliveries.
+
+## Material import gaps: more connection kinds, capability periods, B2MML classes, lots and export (D-089, proposed)
+
+Issue #72. Material connections spoke only OData (D-068); the capabilities file could only touch the capability in effect now (D-055);
+and B2MML was read only for material definitions (D-053), with no way to write it.
+
+**Connection kinds** (the user's choice: REST, SOAP and a PostgreSQL database). `core.material_connection.kind` is `odata`, `rest`, `soap` or
+`database`, fixed once made. `MaterialConnectionRules.KindProblems` checks what each kind needs, and one CHECK keeps the columns consistent.
+
+| Kind | Reads | Fields |
+| --- | --- | --- |
+| `odata` | as D-068 | `base_url`, `entity_set`, optional `filter` |
+| `rest` | GET, JSON | `base_url` (a query is allowed), `entity_set` = where the items array is (`data.items`, blank = the whole answer), optional `next_link_path` (relative links resolve against the page) |
+| `soap` | POST of `request_body` (`text/xml`, optional `SOAPAction`) | `base_url` (https), `entity_set` = the element that holds one item; a SOAP fault is a problem, even on a 500 |
+| `database` | one `SELECT`/`WITH` (≤ 4000 characters, no second statement) | `query`, no URL; the connection string is configuration (`MaterialConnections:<code>:ConnectionString`), never the database |
+
+- `ConnectionItems` (pure) turns each answer into JSON objects: REST by path; SOAP elements as objects of their children (nested ones as
+  objects, the first of repeated names, at most 5 deep, DTDs refused); a database row by column name. Every kind then goes through
+  `ODataMaterialRows.Read` and the unchanged `ImportMaterialsCommand`.
+- The database query runs in a `READ ONLY` transaction with a 30 s statement timeout and stops at the row limit. Use a login that can only read.
+
+**Capability periods** (the user's choice: end the open one, refuse others). The capabilities CSV gains `effective_from` and `effective_to`
+(`yyyy-MM-dd`, site-local days, `LockLinesByCodeAsync` now returns the site's time zone; `effective_to` is the day after the last).
+- With `effective_from`, the row is the capability that starts that day: changed if there is one, else added. Adding it ends an open-ended
+  capability that starts earlier where the new one starts (`capability.ended`, noted on the row). Any other overlap refuses the row, so the
+  import stays all or nothing.
+- `effective_to` sets or clears the end of the row's capability; the overlap check runs again.
+- The planning rate follows only a capability in effect now.
+
+**B2MML classes.** `MaterialB2mml.Parse` reads `MaterialClass` (`ID` = code, `Description` = name) into `MaterialImportSource.Classes`.
+`ImportMaterialsCommand` adds missing ones and renames changed ones before the rows (no `createClasses` needed: the file states them), with
+`material_class.created`/`updated`; `ImportMaterialsResponse.RenamedClasses` lists renames. Whether a class is on stays Pulaski's.
+
+**B2MML lots** (the user's choice: receive new, update attributes). `LotB2mml.Parse` (pure) reads `MaterialLot`: `ID` = lot number,
+`MaterialDefinitionID`, `Quantity` (`QuantityString` + `UnitOfMeasure`), `StorageLocation` (a location code at the site), `ExpirationTime`
+(a date alone is midnight UTC), and `MaterialLotProperty` (`SupplierLot` and `ExpirationDate` are the receipt's; the rest by ID).
+`ImportB2mmlLotsCommand` (`POST /api/lots/import/b2mml?siteId=&dryRun=`, `lot.receive`), all or nothing:
+- A lot the site doesn't have (number + material) is received through `ReceiveLotHandler.ReceiveAsync`, the receive rules in the import's
+  transaction. Where lots mix it joins the balance, and its properties aren't recorded.
+- A lot it has keeps its quantity, location and expiry (noted).
+- Then every lot with properties is locked in id order, and each property whose ID is a lot attribute code (any case) is set through
+  `LotAttributeWriter`; an empty value leaves it alone. Other properties are noted as left out.
+
+**Export** (the user's choice: materials and classes). `GET /api/materials/export/b2mml` (`materials.view`) writes `MaterialInformation`:
+a `MaterialClass` per class, then a `MaterialDefinition` per material (inactive too) with `MaterialClassID` and every import field as a
+property. It reads back through the import unchanged (tested). Lots are not exported.
+
+**Not done:** exporting lots; B2MML `MaterialSubLot`, `MaterialLotID` assembly and multiple languages; OAuth flows; scheduled connection runs.
 
 ## Application architecture
 

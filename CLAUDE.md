@@ -309,6 +309,12 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   canonical field → property path). `ODataMaterialRows.Read` (pure) → `MaterialImportRow`s via `MaterialImportFields.ToRow`, then the unchanged
   `ImportMaterialsCommand`. `ODataMaterialFetcher` (API; `$select`, `@odata.nextLink`, ≤ 5000 items; credentials from `MaterialConnections:<code>`,
   never the DB). Set up with `integrations.manage`, run (dry run first) with `materials.manage`; on demand only.
+- Material import gaps (D-089, proposed): connection `kind` odata / rest / soap / database (fixed; `KindProblems`; `ConnectionItems` turns answers into
+  items for `ODataMaterialRows.Read`; database = one SELECT, read-only, connection string `MaterialConnections:<code>:ConnectionString`). Capability CSV
+  `effective_from`/`effective_to` (site-local days): a dated row is the period starting that day; adding one ends an earlier open one there, any other
+  overlap refuses. B2MML `MaterialClass` → `MaterialImportSource.Classes` (added/renamed first); `LotB2mml` → `ImportB2mmlLotsCommand`
+  (`POST /lots/import/b2mml`, `lot.receive`): new lots via `ReceiveLotHandler.ReceiveAsync` (caller's transaction), known lots keep quantity, properties →
+  lot attributes (`LotAttributeWriter`). `MaterialB2mml.Write` / `GET /materials/export/b2mml` reads back through the import.
 - Stop adjustments (D-069, proposed): enter (`EnterStopCommand`), split, merge stops; never edit: the old rows get `superseded_at`/`_by`, new
   `ts.downtime` rows carry `source` (machine/manual/split/merge), `replaces_ids`, `adjusted_*`. Every reader of stops (OEE, list, uncoded)
   filters `superseded_at IS NULL`; current stops never overlap (`StopAdjustments`). Closed stops only, ≤ 31 days; lock equipment

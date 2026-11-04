@@ -89,6 +89,15 @@ internal sealed class ReceiveLotHandler(
 {
     public async Task<LotTransactionResponse> HandleAsync(ReceiveLotCommand command, CancellationToken cancellationToken)
     {
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var response = await ReceiveAsync(command, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return response;
+    }
+
+    /// <summary>Receives inside the caller's transaction, for imports that receive many lots all or nothing (#72).</summary>
+    internal async Task<LotTransactionResponse> ReceiveAsync(ReceiveLotCommand command, CancellationToken cancellationToken)
+    {
         var lotNumber = InventoryRules.Text(command.LotNumber);
         var comment = InventoryRules.Text(command.Comment);
         new Validator()
@@ -101,7 +110,6 @@ internal sealed class ReceiveLotHandler(
             .RequireComment(command.Comment)
             .ThrowIfInvalid();
 
-        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var material = await InventoryRules.MaterialAsync(inventory, command.MaterialId, cancellationToken);
         if (!material.IsActive)
         {
@@ -183,11 +191,9 @@ internal sealed class ReceiveLotHandler(
         if (location.ComminglesLots && !received.IsBulk)
         {
             var (balance, balanceVersion, note) = await Commingling.MergeArrivalAsync(inventory, eventLog, events, ids, received, location.Code, comment, now, cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
             return InventoryRules.Response(balance, balanceVersion, [note]);
         }
 
-        await transaction.CommitAsync(cancellationToken);
         return InventoryRules.Response(received, version);
     }
 }

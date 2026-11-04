@@ -309,6 +309,9 @@ public interface IInventoryRepository
     /// <summary>The unit with this code; null when none.</summary>
     Task<Guid?> FindUomIdByCodeAsync(string code, CancellationToken cancellationToken);
 
+    /// <summary>The site's equipment with this code (unique within a site); null when none (#72).</summary>
+    Task<Guid?> FindLocationIdByCodeAsync(Guid siteId, string code, CancellationToken cancellationToken);
+
     Task InsertEventAsync(LotEventRow row, DateTimeOffset at, CancellationToken cancellationToken);
 
     /// <summary>A location read <c>FOR SHARE</c>; null when the equipment doesn't exist.</summary>

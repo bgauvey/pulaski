@@ -75,6 +75,10 @@
             </div>
         </div>
     </form>
+    @if (Sites.SiteId is { } importSite)
+    {
+        <LotB2mmlImport @key="importSite" SiteId="importSite" />
+    }
 }
 
 <div class="inv-toolbar">

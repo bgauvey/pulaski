@@ -8,10 +8,29 @@ using Pulaski.Domain;
 
 namespace Pulaski.Application.Materials;
 
-/// <summary>A material connection as the commands use it (D-068).</summary>
+/// <summary>What a material connection reads (D-068, #72). Values match <c>core.material_connection.kind</c>; fixed once made.</summary>
+public static class MaterialConnectionKinds
+{
+    /// <summary>An OData v4 service: an entity set, with <c>$select</c>, <c>$filter</c> and next links.</summary>
+    public const string OData = "odata";
+
+    /// <summary>A plain REST service answering JSON: the items at a path in the answer, with an optional next-page address.</summary>
+    public const string Rest = "rest";
+
+    /// <summary>A SOAP service: an envelope POSTed, the items the answer's elements of one name.</summary>
+    public const string Soap = "soap";
+
+    /// <summary>A PostgreSQL database: a SELECT whose rows are the items, run read-only.</summary>
+    public const string Database = "database";
+
+    public static IReadOnlyList<string> All { get; } = [OData, Rest, Soap, Database];
+}
+
+/// <summary>A material connection as the commands use it (D-068, #72). What <see cref="EntitySet"/> means depends on the kind.</summary>
 public sealed record MaterialConnection(
-    Guid Id, string Code, string Name, string Kind, string BaseUrl, string EntitySet, string? Filter, string ExternalSystem,
-    IReadOnlyDictionary<string, string> FieldMap, bool IsActive);
+    Guid Id, string Code, string Name, string Kind, string? BaseUrl, string EntitySet, string? Filter, string ExternalSystem,
+    IReadOnlyDictionary<string, string> FieldMap, bool IsActive, string? NextLinkPath = null, string? RequestBody = null, string? SoapAction = null,
+    string? Query = null);
 
 /// <summary>What a pull fetched: the items as the service sent them, and problems with the fetch as a whole.</summary>
 public sealed record MaterialConnectionFetch(IReadOnlyList<JsonElement> Items, IReadOnlyList<string> Problems);
@@ -172,10 +191,56 @@ internal static partial class MaterialConnectionRules
     [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_.]{0,99}$")]
     public static partial Regex EntitySetPattern();
 
-    /// <summary>An https service, or http on this machine only, for trying one out.</summary>
-    public static bool IsAllowedUrl(string url) =>
-        Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Query.Length == 0 && uri.Fragment.Length == 0
+    /// <summary>An https service, or http on this machine only, for trying one out; a query only where the kind allows one (REST).</summary>
+    public static bool IsAllowedUrl(string url, bool allowQuery = false) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && (allowQuery || uri.Query.Length == 0) && uri.Fragment.Length == 0
         && (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback));
+
+    [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_-]{0,99}([./][A-Za-z_][A-Za-z0-9_-]{0,99}){0,5}$")]
+    public static partial Regex PathPattern();
+
+    [GeneratedRegex(@"^\s*(SELECT|WITH)\b", RegexOptions.IgnoreCase)]
+    public static partial Regex ReadQuery();
+
+    /// <summary>What a connection of its kind still needs; empty when it can be saved.</summary>
+    public static IReadOnlyList<string> KindProblems(MaterialConnection c)
+    {
+        var problems = new List<string>();
+        void Need(bool ok, string problem)
+        {
+            if (!ok)
+            {
+                problems.Add(problem);
+            }
+        }
+
+        switch (c.Kind)
+        {
+            case MaterialConnectionKinds.Database:
+                Need(c.Query is { Length: > 0 and <= 4000 } q && ReadQuery().IsMatch(q) && !q.TrimEnd().TrimEnd(';').Contains(';', StringComparison.Ordinal),
+                    "Query: one SELECT (or WITH … SELECT) statement, at most 4000 characters.");
+                break;
+            case MaterialConnectionKinds.Soap:
+                Need(c.BaseUrl is { } soapUrl && IsAllowedUrl(soapUrl), "BaseUrl: the service's https address.");
+                Need(c.RequestBody is { Length: > 0 and <= 20000 } body && body.TrimStart().StartsWith('<'), "RequestBody: the SOAP envelope to post, at most 20,000 characters.");
+                Need(EntitySetPattern().IsMatch(c.EntitySet), "EntitySet: the name of the element that holds one item, such as Material.");
+                Need(c.SoapAction is null || c.SoapAction.Length <= 500, "SoapAction: at most 500 characters.");
+                break;
+            case MaterialConnectionKinds.Rest:
+                Need(c.BaseUrl is { } restUrl && IsAllowedUrl(restUrl, allowQuery: true), "BaseUrl: the https address that answers with the items.");
+                Need(c.EntitySet.Length == 0 || PathPattern().IsMatch(c.EntitySet), "EntitySet: where the items are in the answer, such as data.items, or blank for the whole answer.");
+                Need(c.NextLinkPath is null || PathPattern().IsMatch(c.NextLinkPath), "NextLinkPath: where the answer gives the next page's address, such as links.next.");
+                break;
+            default:
+                Need(c.BaseUrl is { } odataUrl && IsAllowedUrl(odataUrl), "BaseUrl: the service root as an https address, without a query (http only on this machine).");
+                Need(EntitySetPattern().IsMatch(c.EntitySet), "EntitySet: the entity set's name, such as Products.");
+                break;
+        }
+
+        Need(c.BaseUrl is null || c.BaseUrl.Length <= 500, "BaseUrl: at most 500 characters.");
+        Need(c.Kind == MaterialConnectionKinds.OData || c.Filter is null, "Filter: only an OData connection takes a filter.");
+        return problems;
+    }
 
     public static string Summary(ImportMaterialsResponse result) =>
         result.Applied
@@ -200,6 +265,10 @@ internal sealed class ListMaterialConnectionsHandler(IUnitOfWork unitOfWork, IMa
             BaseUrl = c.Value.BaseUrl,
             EntitySet = c.Value.EntitySet,
             Filter = c.Value.Filter,
+            NextLinkPath = c.Value.NextLinkPath,
+            RequestBody = c.Value.RequestBody,
+            SoapAction = c.Value.SoapAction,
+            Query = c.Value.Query,
             ExternalSystem = c.Value.ExternalSystem,
             FieldMap = c.Value.FieldMap,
             IsActive = c.Value.IsActive,
@@ -219,22 +288,27 @@ internal sealed class SaveMaterialConnectionHandler(
     public async Task<CreatedResponse> HandleAsync(SaveMaterialConnectionCommand command, CancellationToken cancellationToken)
     {
         var r = command.Connection;
+        static string? Text(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         var code = r.Code.Trim().ToUpperInvariant();
         var name = r.Name.Trim();
-        var url = r.BaseUrl.Trim().TrimEnd('/');
-        var entitySet = r.EntitySet.Trim();
-        var filter = string.IsNullOrWhiteSpace(r.Filter) ? null : r.Filter.Trim();
+        var kind = (r.Kind ?? MaterialConnectionKinds.OData).Trim().ToLowerInvariant();
         var system = r.ExternalSystem.Trim();
         var map = r.FieldMap.Where(m => !string.IsNullOrWhiteSpace(m.Value))
             .ToDictionary(m => m.Key.Trim().ToLowerInvariant(), m => m.Value.Trim(), StringComparer.Ordinal);
+        var asked = new MaterialConnection(
+            Guid.Empty, code, name, kind, kind == MaterialConnectionKinds.Database ? null : Text(r.BaseUrl)?.TrimEnd('/'), (r.EntitySet ?? "").Trim(),
+            kind == MaterialConnectionKinds.OData ? Text(r.Filter) : null, system, map, r.IsActive,
+            kind == MaterialConnectionKinds.Rest ? Text(r.NextLinkPath) : null,
+            kind == MaterialConnectionKinds.Soap ? Text(r.RequestBody) : null,
+            kind == MaterialConnectionKinds.Soap ? Text(r.SoapAction) : null,
+            kind == MaterialConnectionKinds.Database ? Text(r.Query) : null);
         var mapProblems = ODataMaterialRows.Problems(map);
+        var kindProblems = MaterialConnectionKinds.All.Contains(kind) ? MaterialConnectionRules.KindProblems(asked) : ["odata, rest, soap or database."];
         new Validator()
             .Require(MaterialConnectionRules.CodePattern().IsMatch(code), "Code", "Letters, digits, '-' or '_', up to 30.")
             .RequireText(name, "Name", 100)
-            .Require(MaterialConnectionRules.IsAllowedUrl(url), "BaseUrl", "The service root as an https address, without a query (http only on this machine).")
-            .Require(url.Length <= 500, "BaseUrl", "At most 500 characters.")
-            .Require(MaterialConnectionRules.EntitySetPattern().IsMatch(entitySet), "EntitySet", "The entity set's name, such as Products.")
-            .Require(filter is null || filter.Length <= 1000, "Filter", "At most 1000 characters.")
+            .Require(kindProblems.Count == 0, "Kind", string.Join(" ", kindProblems))
+            .Require(asked.Filter is null || asked.Filter.Length <= 1000, "Filter", "At most 1000 characters.")
             .RequireText(system, "ExternalSystem", 100)
             .Require(mapProblems.Count == 0, "FieldMap", string.Join(" ", mapProblems))
             .ThrowIfInvalid();
@@ -255,7 +329,12 @@ internal sealed class SaveMaterialConnectionHandler(
                 throw new DomainRuleException($"A connection's code is fixed once made: it names its credentials in the configuration ({current.Value.Code}).");
             }
 
-            var after = current.Value with { Name = name, BaseUrl = url, EntitySet = entitySet, Filter = filter, ExternalSystem = system, FieldMap = map, IsActive = r.IsActive };
+            if (current.Value.Kind != kind)
+            {
+                throw new DomainRuleException($"A connection's kind is fixed once made ({current.Value.Kind}); add another connection instead.");
+            }
+
+            var after = asked with { Id = current.Value.Id };
             var envelope = events.Create(EventTypes.MaterialConnectionChanged, "material_connection", after.Id, new { Before = current.Value, After = after });
             version = await store.UpdateAsync(after, envelope.OccurredAt, cancellationToken);
             await eventLog.AppendAsync(envelope, cancellationToken);
@@ -268,7 +347,7 @@ internal sealed class SaveMaterialConnectionHandler(
                 throw new ConflictException($"There is already a material connection {code}.");
             }
 
-            var made = new MaterialConnection(ids.NewId(), code, name, "odata", url, entitySet, filter, system, map, r.IsActive);
+            var made = asked with { Id = ids.NewId() };
             var envelope = events.Create(EventTypes.MaterialConnectionAdded, "material_connection", made.Id, new { After = made });
             version = await store.InsertAsync(made, envelope.OccurredAt, cancellationToken);
             await eventLog.AppendAsync(envelope, cancellationToken);

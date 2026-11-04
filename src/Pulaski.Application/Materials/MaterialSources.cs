@@ -120,3 +120,14 @@ internal sealed class ImportMaterialFileHandler(
         return import.HandleAsync(new ImportMaterialsCommand(adapter.Read(command.Text, system), command.DryRun, $"{adapter.DisplayName} import", command.CreateClasses), cancellationToken);
     }
 }
+
+/// <summary>Every class and material as B2MML material information (#72), which the B2MML import reads back.</summary>
+public sealed record ExportMaterialsB2mmlQuery : IQuery<string>;
+
+internal sealed class ExportMaterialsB2mmlHandler(ReferenceData.IReferenceDataReadStore store) : IQueryHandler<ExportMaterialsB2mmlQuery, string>
+{
+    public async Task<string> HandleAsync(ExportMaterialsB2mmlQuery query, CancellationToken cancellationToken) =>
+        MaterialB2mml.Write(
+            await store.ListMaterialClassesAsync(cancellationToken),
+            await store.ListMaterialsAsync(includeInactive: true, cancellationToken));
+}

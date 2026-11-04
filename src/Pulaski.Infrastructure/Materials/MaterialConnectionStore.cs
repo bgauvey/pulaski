@@ -9,19 +9,23 @@ namespace Pulaski.Infrastructure.Materials;
 internal sealed class MaterialConnectionStore(DbSession session) : IMaterialConnectionStore
 {
     private const string Columns = """
-        id, code, name, kind, base_url, entity_set, filter, external_system, field_map::text AS field_map, is_active, xmin::text::bigint AS version
+        id, code, name, kind, base_url, entity_set, filter, external_system, field_map::text AS field_map, is_active, next_link_path, request_body,
+        soap_action, query, xmin::text::bigint AS version
         """;
 
     private const string Insert = """
-        INSERT INTO core.material_connection (id, code, name, kind, base_url, entity_set, filter, external_system, field_map, is_active, created_at, updated_at)
-        VALUES (@Id, @Code, @Name, @Kind, @BaseUrl, @EntitySet, @Filter, @ExternalSystem, @FieldMap::jsonb, @IsActive, @At, @At)
+        INSERT INTO core.material_connection (id, code, name, kind, base_url, entity_set, filter, external_system, field_map, is_active, next_link_path,
+                                              request_body, soap_action, query, created_at, updated_at)
+        VALUES (@Id, @Code, @Name, @Kind, @BaseUrl, @EntitySet, @Filter, @ExternalSystem, @FieldMap::jsonb, @IsActive, @NextLinkPath,
+                @RequestBody, @SoapAction, @Query, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     private const string Update = """
         UPDATE core.material_connection
         SET name = @Name, base_url = @BaseUrl, entity_set = @EntitySet, filter = @Filter, external_system = @ExternalSystem,
-            field_map = @FieldMap::jsonb, is_active = @IsActive, updated_at = @At
+            field_map = @FieldMap::jsonb, is_active = @IsActive, next_link_path = @NextLinkPath, request_body = @RequestBody, soap_action = @SoapAction,
+            query = @Query, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -63,6 +67,10 @@ internal sealed class MaterialConnectionStore(DbSession session) : IMaterialConn
         c.ExternalSystem,
         FieldMap = JsonSerializer.Serialize(c.FieldMap),
         c.IsActive,
+        c.NextLinkPath,
+        c.RequestBody,
+        c.SoapAction,
+        c.Query,
         At = at,
     };
 
@@ -72,17 +80,21 @@ internal sealed class MaterialConnectionStore(DbSession session) : IMaterialConn
         public string Code { get; init; } = "";
         public string Name { get; init; } = "";
         public string Kind { get; init; } = "";
-        public string BaseUrl { get; init; } = "";
+        public string? BaseUrl { get; init; }
         public string EntitySet { get; init; } = "";
         public string? Filter { get; init; }
         public string ExternalSystem { get; init; } = "";
         public string FieldMap { get; init; } = "{}";
         public bool IsActive { get; init; }
+        public string? NextLinkPath { get; init; }
+        public string? RequestBody { get; init; }
+        public string? SoapAction { get; init; }
+        public string? Query { get; init; }
         public long Version { get; init; }
 
         public Versioned<MaterialConnection> ToVersioned() => new(
             new MaterialConnection(Id, Code, Name, Kind, BaseUrl, EntitySet, Filter, ExternalSystem,
-                JsonSerializer.Deserialize<Dictionary<string, string>>(FieldMap) ?? [], IsActive),
+                JsonSerializer.Deserialize<Dictionary<string, string>>(FieldMap) ?? [], IsActive, NextLinkPath, RequestBody, SoapAction, Query),
             Version);
     }
 

@@ -1,0 +1,108 @@
+@inject PulaskiApiClient Api
+
+@* Material lots from a B2MML file (#72): new lots are received, lots Pulaski has get their properties as lot attributes and keep their
+   quantity. Checked first, then imported all or nothing. *@
+<section class="inv-facts mb-3" aria-labelledby="lots-b2mml">
+    <h2 class="h6" id="lots-b2mml">Receive lots from a B2MML file</h2>
+    <p class="small text-muted mb-2">
+        Each <code>MaterialLot</code> is one lot: <code>ID</code> the lot number, <code>MaterialDefinitionID</code> the material. A lot this site
+        doesn't have is received: its <code>Quantity</code> (with <code>UnitOfMeasure</code>) at the <code>StorageLocation</code> with that code,
+        expiring at <code>ExpirationTime</code>, with a <code>SupplierLot</code> property as its supplier lot. A lot the site has keeps its
+        quantity. Other <code>MaterialLotProperty</code> values whose ID is a lot attribute code set that attribute. Nothing is saved until every
+        lot is valid.
+        <a href="@TemplateHref" download="lots.xml">Download a template</a>
+    </p>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+        <InputFile OnChange="PickAsync" accept=".xml,application/xml,text/xml" class="form-control form-control-sm" style="max-width: 24rem"
+                   aria-label="B2MML lots file" disabled="@_busy" />
+        <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || _check is not { Errors: 0, Applied: false } || _check.Created + _check.Updated == 0)"
+                @onclick="ImportAsync">Import</button>
+    </div>
+    <ProblemAlert Error="_error" />
+    @if (_check is { } c)
+    {
+        <p class="small mt-2 mb-1 @(c.Errors > 0 ? "text-danger" : "")">
+            @(c.FileProblems.Count > 0 ? string.Join(" ", c.FileProblems)
+                : c.Errors > 0 ? $"{c.Errors} lots have errors, so nothing can be imported yet. Fix them and pick the file again."
+                : $"{(c.Applied ? "Imported" : "Ready")}: {c.Created} to receive, {c.Updated} to update, {c.Unchanged} unchanged.")
+        </p>
+        @foreach (var row in c.Rows.Where(r => c.Errors == 0 || r.Action == "error").Take(50))
+        {
+            <div class="small @(row.Action == "error" ? "text-danger" : "text-muted")">
+                Line @row.Line, @row.Code: @(row.Message ?? string.Join("; ", row.Changes.Concat(row.Notes)))
+            </div>
+        }
+    }
+</section>
+
+@code {
+    private const int MaxFileBytes = 5 * 1024 * 1024;
+
+    private const string Template = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <MaterialInformation xmlns="http://www.mesa.org/xml/B2MML">
+          <MaterialLot>
+            <ID>L-1001</ID>
+            <MaterialDefinitionID>PP-1</MaterialDefinitionID>
+            <StorageLocation>WH-RECV</StorageLocation>
+            <Quantity><QuantityString>1000</QuantityString><UnitOfMeasure>kg</UnitOfMeasure></Quantity>
+            <ExpirationTime>2027-06-30</ExpirationTime>
+            <MaterialLotProperty><ID>SupplierLot</ID><Value><ValueString>S-55821</ValueString></Value></MaterialLotProperty>
+          </MaterialLot>
+        </MaterialInformation>
+
+        """;
+
+    [Parameter, EditorRequired] public Guid SiteId { get; set; }
+
+    private string? _xml;
+    private ImportMaterialsResponse? _check;
+    private bool _busy;
+    private ApiException? _error;
+
+    private static string TemplateHref => $"data:application/xml;charset=utf-8,{Uri.EscapeDataString(Template)}";
+
+    private async Task PickAsync(InputFileChangeEventArgs e)
+    {
+        (_check, _xml, _error) = (null, null, null);
+        if (e.File.Size > MaxFileBytes)
+        {
+            _error = new ApiException(400, "Too large", $"{e.File.Name} is larger than 5 MB; split it.", null);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(MaxFileBytes));
+            _xml = await reader.ReadToEndAsync();
+            _check = await Api.ImportB2mmlLotsAsync(SiteId, _xml, dryRun: true);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _check = await Api.ImportB2mmlLotsAsync(SiteId, _xml!, dryRun: false);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

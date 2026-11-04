@@ -289,10 +289,14 @@ CREATE TABLE core.material_connection (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     code                text NOT NULL UNIQUE,                   -- upper case, fixed once created; names the configuration section
     name                text NOT NULL,
-    kind                text NOT NULL DEFAULT 'odata' CHECK (kind IN ('odata')),
-    base_url            text NOT NULL,                          -- the service root, https
-    entity_set          text NOT NULL,                          -- e.g. Products
+    kind                text NOT NULL DEFAULT 'odata',          -- odata, rest, soap or database (#72); fixed once made
+    base_url            text,                                   -- the service's address, https; none for a database
+    entity_set          text NOT NULL,                          -- OData: the entity set; REST: the items' path ('' for the root); SOAP: the item element
     filter              text,                                   -- an OData $filter, as the service takes it
+    next_link_path      text,                                   -- REST: where an answer gives the next page's address
+    request_body        text,                                   -- SOAP: the envelope POSTed
+    soap_action         text,                                   -- SOAP: the SOAPAction header
+    query               text,                                   -- database: the SELECT that returns one item per row
     external_system     text NOT NULL,                          -- what the items are matched on with their key (D-033)
     field_map           jsonb NOT NULL,                         -- {"code": "ProductNumber", "external_key": "ProductID", ...}
     is_active           boolean NOT NULL DEFAULT true,
@@ -301,7 +305,12 @@ CREATE TABLE core.material_connection (
     last_run_summary    text,                                   -- what the last import (not a check) did, for the screen
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT material_connection_external_ck CHECK (length(external_system) BETWEEN 1 AND 100)
+    CONSTRAINT material_connection_external_ck CHECK (length(external_system) BETWEEN 1 AND 100),
+    CONSTRAINT material_connection_kind_ck CHECK (
+        kind IN ('odata','rest','soap','database')
+        AND (kind = 'database') = (base_url IS NULL)
+        AND (kind = 'database') = (query IS NOT NULL)
+        AND (kind = 'soap') = (request_body IS NOT NULL))
 );
 
 CREATE TABLE core.material_class (
@@ -2436,7 +2445,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0052_allocation_refinements'),
     ('0053_quality'),
     ('0054_delivery_feed_settings'),
-    ('0055_delivery_feeds');
+    ('0055_delivery_feeds'),
+    ('0056_material_sources');
 
 -- =====================================================================
 -- 17. SEED DATA

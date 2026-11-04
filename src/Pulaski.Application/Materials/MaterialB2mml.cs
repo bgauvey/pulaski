@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
+using Pulaski.Contracts.ReferenceData;
 
 namespace Pulaski.Application.Materials;
 
@@ -35,6 +37,10 @@ public static class MaterialB2mml
     public const string Template = """
         <?xml version="1.0" encoding="UTF-8"?>
         <MaterialInformation xmlns="http://www.mesa.org/xml/B2MML">
+          <MaterialClass>
+            <ID>RESIN</ID>
+            <Description>Resins</Description>
+          </MaterialClass>
           <MaterialDefinition>
             <ID>PP-1</ID>
             <Description>Polypropylene, natural</Description>
@@ -70,7 +76,8 @@ public static class MaterialB2mml
         }
 
         var definitions = document.Descendants().Where(e => e.Name.LocalName == "MaterialDefinition").ToList();
-        if (definitions.Count == 0)
+        var hasClasses = document.Descendants().Any(e => e.Name.LocalName == "MaterialClass");
+        if (definitions.Count == 0 && !hasClasses)
         {
             return new MaterialImportSource([], ["The file has no MaterialDefinition elements; B2MML material information has one per material."]);
         }
@@ -80,8 +87,15 @@ public static class MaterialB2mml
             return new MaterialImportSource([], [$"The file has {definitions.Count} materials; import at most {MaterialImportFields.MaxRows} at a time."]);
         }
 
+        // MaterialClass elements are classes in their own right (#72): ID the code, the first Description the name.
+        var classes = document.Descendants().Where(e => e.Name.LocalName == "MaterialClass")
+            .Select(c => new MaterialClassImportRow(
+                ((IXmlLineInfo)c).HasLineInfo() ? ((IXmlLineInfo)c).LineNumber : 0,
+                Children(c, "ID").FirstOrDefault()?.Value.Trim() ?? "",
+                Children(c, "Description").FirstOrDefault()?.Value.Trim() ?? Children(c, "ID").FirstOrDefault()?.Value.Trim() ?? ""))
+            .ToList();
         var system = string.IsNullOrWhiteSpace(externalSystem) ? null : externalSystem.Trim();
-        return new MaterialImportSource([.. definitions.Select(d => ToRow(d, system))], []);
+        return new MaterialImportSource([.. definitions.Select(d => ToRow(d, system))], []) { Classes = classes };
     }
 
     private static MaterialImportRow ToRow(XElement definition, string? system)
@@ -136,6 +150,32 @@ public static class MaterialB2mml
 
         var line = ((IXmlLineInfo)definition).HasLineInfo() ? ((IXmlLineInfo)definition).LineNumber : 0;
         return MaterialImportFields.ToRow(line, f => fields.GetValueOrDefault(f), problems);
+    }
+
+    /// <summary>
+    /// Classes and materials as B2MML material information (#72), in the form <see cref="Parse"/> reads back: a <c>MaterialClass</c> per
+    /// class, then a <c>MaterialDefinition</c> per material with every import field as a property.
+    /// </summary>
+    public static string Write(IEnumerable<MaterialClassDto> classes, IEnumerable<MaterialDto> materials)
+    {
+        XNamespace ns = "http://www.mesa.org/xml/B2MML";
+        static XElement Property(XNamespace ns, string id, string? value) =>
+            new(ns + "MaterialDefinitionProperty", new XElement(ns + "ID", id), new XElement(ns + "Value", new XElement(ns + "ValueString", value ?? "")));
+        static string YesNo(bool value) => value ? "yes" : "no";
+
+        var root = new XElement(ns + "MaterialInformation",
+            classes.Select(c => new XElement(ns + "MaterialClass", new XElement(ns + "ID", c.Code), new XElement(ns + "Description", c.Name))),
+            materials.Select(m => new XElement(ns + "MaterialDefinition",
+                new XElement(ns + "ID", m.Code),
+                new XElement(ns + "Description", m.Name),
+                m.MaterialClassCode is { } classCode ? new XElement(ns + "MaterialClassID", classCode) : null,
+                Property(ns, "MaterialType", m.MaterialType),
+                Property(ns, "BaseUnit", m.BaseUomCode),
+                Property(ns, "LotTracked", YesNo(m.IsLotTracked)),
+                Property(ns, "ShelfLifeDays", m.ShelfLifeDays?.ToString(CultureInfo.InvariantCulture)),
+                Property(ns, "Active", YesNo(m.IsActive)),
+                Property(ns, "Description", m.Description))));
+        return new XDocument(new XDeclaration("1.0", "utf-8", null), root).Declaration + Environment.NewLine + root + Environment.NewLine;
     }
 
     private static IEnumerable<XElement> Children(XElement parent, string localName) =>

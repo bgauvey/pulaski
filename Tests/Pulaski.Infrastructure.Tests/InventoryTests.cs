@@ -1378,6 +1378,57 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal(pdf, file.Value.Content);
     }
 
+    [Fact]
+    public async Task B2mml_lots_receive_new_lots_and_set_attributes_on_known_ones_without_changing_their_quantity()
+    {
+        var plant = await CreatePlantAsync();
+        await db.SendAsync(new CreateLotAttributeCommand(plant.Site, "MFI", "Melt index", "number", null, [], true, [], 1));
+        var known = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "BX-A-" + _suffix, 100m, plant.Kg));
+        string Lot(string number, string? location, string quantity, string mfi) => $"""
+            <MaterialLot>
+              <ID>{number}</ID>
+              <MaterialDefinitionID>RESIN-{_suffix}</MaterialDefinitionID>
+              {(location is null ? "" : $"<StorageLocation>{location}</StorageLocation>")}
+              <Quantity><QuantityString>{quantity}</QuantityString><UnitOfMeasure>kg{_suffix}</UnitOfMeasure></Quantity>
+              <ExpirationTime>2027-06-30</ExpirationTime>
+              <MaterialLotProperty><ID>SupplierLot</ID><Value><ValueString>S-1</ValueString></Value></MaterialLotProperty>
+              <MaterialLotProperty><ID>mfi</ID><Value><ValueString>{mfi}</ValueString></Value></MaterialLotProperty>
+              <MaterialLotProperty><ID>Colour</ID><Value><ValueString>natural</ValueString></Value></MaterialLotProperty>
+            </MaterialLot>
+            """;
+        string File(params string[] lots) => $"<MaterialInformation xmlns=\"http://www.mesa.org/xml/B2MML\">{string.Concat(lots)}</MaterialInformation>";
+
+        // An unknown location is an error, and nothing is saved, not even the other lot's attribute.
+        var bad = await db.SendAsync(new ImportB2mmlLotsCommand(plant.Site, File(Lot("BX-A-" + _suffix, null, "5", "11"), Lot("BX-B-" + _suffix, "NOWHERE", "250", "9")), DryRun: false));
+        Assert.Equal((false, 1), (bad.Applied, bad.Errors));
+        Assert.Contains("NOWHERE", Assert.Single(bad.Rows, r => r.Action == "error").Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(await QueryAsync<ListLotAttributeValuesQuery, IReadOnlyList<LotAttributeExportDto>>(new ListLotAttributeValuesQuery(plant.Site)), v => v.LotId == known.LotId);
+
+        var file = File(Lot("bx-a-" + _suffix, null, "5", "11"), Lot("BX-B-" + _suffix, plant.StoresCode, "250", "9.5"));
+        var dry = await db.SendAsync(new ImportB2mmlLotsCommand(plant.Site, file, DryRun: true));
+        Assert.Equal((false, 1, 1, 0), (dry.Applied, dry.Created, dry.Updated, dry.Errors));
+        var applied = await db.SendAsync(new ImportB2mmlLotsCommand(plant.Site, file, DryRun: false));
+        Assert.Equal((true, 1, 1), (applied.Applied, applied.Created, applied.Updated));
+
+        // The known lot keeps its quantity and gets its attribute; a property that isn't an attribute is reported as left out.
+        var a = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(known.LotId))).Lot;
+        Assert.Equal(100m, a.Quantity);
+        Assert.Contains(applied.Rows[0].Notes, n => n.Contains("quantity stays", StringComparison.Ordinal));
+        Assert.Contains(applied.Rows[0].Notes, n => n.Contains("Colour", StringComparison.Ordinal));
+
+        // The new lot is received with its supplier lot and expiry, and its attribute too.
+        var values = await QueryAsync<ListLotAttributeValuesQuery, IReadOnlyList<LotAttributeExportDto>>(new ListLotAttributeValuesQuery(plant.Site));
+        var b = Assert.Single(values, v => v.LotNumber == "BX-B-" + _suffix);
+        Assert.Equal(("MFI", "9.5"), (b.AttributeCode, b.Value));
+        Assert.Equal(("MFI", "11"), values.Where(v => v.LotId == known.LotId).Select(v => (v.AttributeCode, v.Value)).Single());
+        var received = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(b.LotId))).Lot;
+        Assert.Equal((250m, "S-1", new DateTimeOffset(2027, 6, 30, 0, 0, 0, TimeSpan.Zero)), (received.Quantity, received.SupplierLot, received.ExpiresAt));
+
+        // Sent again, both lots are as the file has them.
+        var again = await db.SendAsync(new ImportB2mmlLotsCommand(plant.Site, file, DryRun: true));
+        Assert.Equal((0, 0, 2), (again.Created, again.Updated, again.Unchanged));
+    }
+
     private async Task<Plant> CreatePlantAsync()
     {
         CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(

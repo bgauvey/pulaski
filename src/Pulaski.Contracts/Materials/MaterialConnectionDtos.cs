@@ -7,11 +7,19 @@ public sealed record MaterialConnectionDto
     public required string Code { get; init; }
     public required string Name { get; init; }
 
-    /// <summary><c>odata</c>: an OData v4 service.</summary>
+    /// <summary><c>odata</c>, <c>rest</c>, <c>soap</c> or <c>database</c> (#72).</summary>
     public required string Kind { get; init; }
-    public required string BaseUrl { get; init; }
+
+    /// <summary>The service's address; none for a database.</summary>
+    public string? BaseUrl { get; init; }
+
+    /// <summary>OData: the entity set; REST: where the items are in the answer (blank: the answer); SOAP: the element holding one item.</summary>
     public required string EntitySet { get; init; }
     public string? Filter { get; init; }
+    public string? NextLinkPath { get; init; }
+    public string? RequestBody { get; init; }
+    public string? SoapAction { get; init; }
+    public string? Query { get; init; }
     public required string ExternalSystem { get; init; }
 
     /// <summary>Pulaski's import field (code, name, base_unit, external_key…) → the service's property name, or a path such as <c>Unit/Code</c>.</summary>
@@ -31,9 +39,16 @@ public sealed record SaveMaterialConnectionRequest
     public long Version { get; init; }
     public string Code { get; init; } = "";
     public string Name { get; init; } = "";
-    public string BaseUrl { get; init; } = "";
+
+    /// <summary>Fixed once made: <c>odata</c> (default), <c>rest</c>, <c>soap</c> or <c>database</c>.</summary>
+    public string Kind { get; init; } = "odata";
+    public string? BaseUrl { get; init; }
     public string EntitySet { get; init; } = "";
     public string? Filter { get; init; }
+    public string? NextLinkPath { get; init; }
+    public string? RequestBody { get; init; }
+    public string? SoapAction { get; init; }
+    public string? Query { get; init; }
     public string ExternalSystem { get; init; } = "";
     public IReadOnlyDictionary<string, string> FieldMap { get; init; } = new Dictionary<string, string>();
     public bool IsActive { get; init; } = true;

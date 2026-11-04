@@ -134,4 +134,71 @@ public class MaterialB2mmlTests
         var big = "<MaterialInformation>" + string.Concat(Enumerable.Repeat("<MaterialDefinition><ID>M</ID></MaterialDefinition>", MaterialImportFields.MaxRows + 1)) + "</MaterialInformation>";
         Assert.Contains("at most", Assert.Single(MaterialB2mml.Parse(big, null).Problems), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Material_classes_are_read_as_records_and_a_file_of_classes_alone_is_fine()
+    {
+        var source = MaterialB2mml.Parse("""
+            <MaterialInformation>
+              <MaterialClass><ID>RESIN</ID><Description>Resins</Description></MaterialClass>
+              <MaterialClass><ID>CAPS</ID></MaterialClass>
+            </MaterialInformation>
+            """, externalSystem: null);
+
+        Assert.Empty(source.Problems);
+        Assert.Empty(source.Rows);
+        Assert.Equal([("RESIN", "Resins"), ("CAPS", "CAPS")], source.Classes.Select(c => (c.Code, c.Name)));
+    }
+
+    [Fact]
+    public void The_template_reads_cleanly_and_an_export_reads_back_as_it_was_written()
+    {
+        var template = MaterialB2mml.Parse(MaterialB2mml.Template, null);
+        Assert.Empty(template.Problems);
+        Assert.Equal(("RESIN", 1), (Assert.Single(template.Classes).Code, template.Rows.Count));
+
+        var written = MaterialB2mml.Write(
+            [new Contracts.ReferenceData.MaterialClassDto { Id = Guid.CreateVersion7(), Code = "RESIN", Name = "Resins & co" }],
+            [new Contracts.ReferenceData.MaterialDto
+            {
+                Id = Guid.CreateVersion7(), Code = "PP-1", Name = "Polypropylene", MaterialType = "raw", BaseUomId = Guid.CreateVersion7(), BaseUomCode = "kg",
+                MaterialClassCode = "RESIN", IsLotTracked = false, ShelfLifeDays = 180, IsActive = true, Description = "Natural",
+            }]);
+        var read = MaterialB2mml.Parse(written, null);
+
+        Assert.Empty(read.Problems);
+        Assert.Equal(("RESIN", "Resins & co"), (Assert.Single(read.Classes).Code, read.Classes[0].Name));
+        var row = Assert.Single(read.Rows);
+        Assert.Equal(("PP-1", "Polypropylene", "raw", "kg", "RESIN"), (row.Code, row.Name, row.MaterialType, row.BaseUomCode, row.ClassCode!.Value));
+        Assert.Equal((false, 180, true, "Natural"), (row.IsLotTracked!.Value, row.ShelfLifeDays!.Value, row.IsActive!.Value, row.Description!.Value));
+        Assert.Empty(row.Problems);
+    }
+
+    [Fact]
+    public void Material_lots_are_read_with_their_quantity_location_expiry_supplier_lot_and_other_properties()
+    {
+        var source = Pulaski.Application.Inventory.LotB2mml.Parse("""
+            <SyncMaterialInformation xmlns="http://www.mesa.org/xml/B2MML"><DataArea><MaterialInformation>
+              <MaterialLot>
+                <ID>L-1</ID><MaterialDefinitionID>PP-1</MaterialDefinitionID><StorageLocation>WH-1</StorageLocation>
+                <Quantity><QuantityString>1,250.5</QuantityString><UnitOfMeasure>kg</UnitOfMeasure></Quantity>
+                <MaterialLotProperty><ID>Vendor Lot</ID><Value><ValueString>S-9</ValueString></Value></MaterialLotProperty>
+                <MaterialLotProperty><ID>ExpirationDate</ID><Value><ValueString>2027-01-31T12:00:00+01:00</ValueString></Value></MaterialLotProperty>
+                <MaterialLotProperty><ID>MFI</ID><Value><ValueString>12.4</ValueString></Value></MaterialLotProperty>
+              </MaterialLot>
+              <MaterialLot><ID>L-2</ID><Quantity><QuantityString>lots</QuantityString></Quantity><ExpirationTime>soon</ExpirationTime></MaterialLot>
+            </MaterialInformation></DataArea></SyncMaterialInformation>
+            """);
+
+        Assert.Empty(source.Problems);
+        var first = source.Rows[0];
+        Assert.Equal(("L-1", "PP-1", 1250.5m, "kg", "WH-1", "S-9"), (first.LotNumber, first.MaterialCode, first.Quantity!.Value, first.UomCode!, first.LocationCode!, first.SupplierLot!));
+        Assert.Equal(new DateTimeOffset(2027, 1, 31, 11, 0, 0, TimeSpan.Zero), first.ExpiresAt);
+        Assert.Equal([("MFI", "12.4")], first.Properties);
+        Assert.Empty(first.Problems);
+
+        Assert.Equal(3, source.Rows[1].Problems.Count);
+        Assert.Contains(Pulaski.Application.Inventory.LotB2mml.Parse("<MaterialInformation/>").Problems, p => p.Contains("no MaterialLot", StringComparison.Ordinal));
+        Assert.Empty(Pulaski.Application.Inventory.LotB2mml.Parse(Pulaski.Application.Inventory.LotB2mml.Template).Rows[0].Problems);
+    }
 }

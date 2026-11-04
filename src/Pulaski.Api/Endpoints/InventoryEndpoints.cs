@@ -650,6 +650,35 @@ internal static class InventoryEndpoints
         })
         .RequirePermission(Permissions.LotRecords, Site.Query());
 
+        var lotImports = routes.MapGroup("/lots/import").WithTags("Inventory");
+
+        // A B2MML lot file to start from (#72).
+        lotImports.MapGet("/b2mml/template", () =>
+            TypedResults.File(System.Text.Encoding.UTF8.GetBytes(LotB2mml.Template), "application/xml", "lots.xml"))
+        .RequireAny(Site.Query(), Permissions.InventoryView);
+
+        // B2MML material lots at a site (#72), all or nothing: new lots are received, known ones get their properties as attributes and keep
+        // their quantity. ?dryRun=true checks and reports without saving. The body is the XML.
+        lotImports.MapPost("/b2mml", async Task<Ok<Pulaski.Contracts.Materials.ImportMaterialsResponse>> (
+            HttpContext http, Guid siteId, bool? dryRun,
+            ICommandHandler<ImportB2mmlLotsCommand, Pulaski.Contracts.Materials.ImportMaterialsResponse> handler, CancellationToken ct) =>
+        {
+            const int MaxBytes = 5 * 1024 * 1024;
+            using var reader = new StreamReader(http.Request.Body);
+            var text = http.Request.ContentLength > MaxBytes ? null : await reader.ReadToEndAsync(ct);
+            if (text is null || text.Length > MaxBytes)
+            {
+                throw new Pulaski.Application.Errors.ValidationException(new Dictionary<string, string[]>
+                {
+                    ["file"] = ["The file is larger than 5 MB; split it."],
+                });
+            }
+
+            return TypedResults.Ok(await handler.HandleAsync(new ImportB2mmlLotsCommand(siteId, text, dryRun ?? false), ct));
+        })
+        .RequirePermission(Permissions.LotReceive, Site.Query())
+        .Accepts<string>("application/xml", "text/xml", "text/plain");
+
         attributes.MapPost("/", async Task<Created<CreatedResponse>> (
             CreateLotAttributeRequest request,
             ICommandHandler<CreateLotAttributeCommand, CreatedResponse> handler,
