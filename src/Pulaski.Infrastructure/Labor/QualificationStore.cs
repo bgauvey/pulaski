@@ -17,6 +17,11 @@ internal sealed class QualificationRepository(DbSession session) : IQualificatio
 
     private const string CodeExists = "SELECT EXISTS (SELECT 1 FROM core.qualification WHERE site_id = @SiteId AND code = @Code)";
 
+    private const string ByCode = """
+        SELECT id, site_id, code, name, description, validity_months, is_active, xmin::text::bigint AS version
+        FROM core.qualification WHERE site_id = @SiteId AND code = @Code FOR SHARE
+        """;
+
     private const string Insert = """
         INSERT INTO core.qualification (id, site_id, code, name, description, validity_months, is_active, created_at, updated_at)
         VALUES (@Id, @SiteId, @Code, @Name, @Description, @ValidityMonths, @IsActive, @At, @At)
@@ -62,6 +67,11 @@ internal sealed class QualificationRepository(DbSession session) : IQualificatio
 
     public Task<bool> CodeExistsAsync(Guid siteId, string code, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(CodeExists, new { SiteId = siteId, Code = code }, cancellationToken);
+
+    public async Task<QualificationRecord?> FindQualificationByCodeAsync(Guid siteId, string code, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<QualificationRow>(ByCode, new { SiteId = siteId, Code = code }, cancellationToken) is { } r
+            ? new QualificationRecord(r.Id, r.SiteId, r.Code, r.Name, r.Description, r.ValidityMonths, r.IsActive)
+            : null;
 
     public Task<long> InsertQualificationAsync(QualificationRecord q, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(Insert, new { q.Id, q.SiteId, q.Code, q.Name, q.Description, q.ValidityMonths, q.IsActive, At = at }, cancellationToken);

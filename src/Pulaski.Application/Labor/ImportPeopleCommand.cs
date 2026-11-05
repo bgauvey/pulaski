@@ -3,6 +3,7 @@ using Pulaski.Application.Errors;
 using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.Materials;
 using Pulaski.Domain;
+using Pulaski.Domain.Labor;
 
 namespace Pulaski.Application.Labor;
 
@@ -17,14 +18,24 @@ namespace Pulaski.Application.Labor;
 /// <param name="Rows">The rows, and any problem with their source as a whole.</param>
 /// <param name="DryRun">True to check the rows and report what would happen, saving nothing.</param>
 /// <param name="Source">What the rows came from, such as "CSV import"; recorded as each event's reason.</param>
-public sealed record ImportPeopleCommand(Guid SiteId, PersonImportSource Rows, bool DryRun, string Source) : ICommand<ImportPeopleResponse>;
+public sealed record ImportPeopleCommand(Guid SiteId, PersonImportSource Rows, bool DryRun, string Source) : ICommand<ImportPeopleResponse>
+{
+    /// <summary>
+    /// A full import of one external system's people (#71): those of the site it has and the source no longer lists are switched off. Someone
+    /// clocked on stays on, noted, until a later import finds them clocked off.
+    /// </summary>
+    public bool SwitchOffMissing { get; init; }
+}
 
 internal sealed class ImportPeopleHandler(
     IUnitOfWork unitOfWork,
     ILaborRepository labor,
     IEventLog eventLog,
     IEventFactory events,
-    IIdGenerator ids) : ICommandHandler<ImportPeopleCommand, ImportPeopleResponse>
+    IIdGenerator ids,
+    IQualificationRepository? qualifications = null,
+    IRequestContext? request = null,
+    TimeProvider? time = null) : ICommandHandler<ImportPeopleCommand, ImportPeopleResponse>
 {
     public const string Create = "create";
     public const string Update = "update";
@@ -38,6 +49,14 @@ internal sealed class ImportPeopleHandler(
             return new ImportPeopleResponse { FileProblems = command.Rows.Problems, Errors = command.Rows.Problems.Count };
         }
 
+        // Who is missing is only clear for a full list of one system's people; an empty list switches no one off.
+        var systems = command.Rows.Rows.Select(r => r.ExternalSystem?.Trim()).Distinct().ToList();
+        if (command.SwitchOffMissing && (systems.Count != 1 || systems[0] is null || command.Rows.Rows.Count == 0))
+        {
+            const string Problem = "Switching off people who are missing needs every row to be one external system's person: name the system and give each an external_key.";
+            return new ImportPeopleResponse { FileProblems = [Problem], Errors = 1 };
+        }
+
         var results = new List<ImportRowResultDto>();
         var numbers = new HashSet<string>(StringComparer.Ordinal);
         var keys = new HashSet<(string, string)>();
@@ -49,6 +68,9 @@ internal sealed class ImportPeopleHandler(
             throw new DomainRuleException("People are imported into a site; choose one.");
         }
 
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(await labor.GetSiteTimeZoneAsync(command.SiteId, cancellationToken) ?? "UTC");
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime((time ?? TimeProvider.System).GetUtcNow(), zone).DateTime);
+        var listedKeys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var row in command.Rows.Rows)
         {
             var number = row.EmployeeNumber.Trim();
@@ -70,12 +92,25 @@ internal sealed class ImportPeopleHandler(
                     throw new DomainRuleException($"{system} key {key} appears earlier in the file.");
                 }
 
-                results.Add(await ImportRowAsync(command.SiteId, row, number, command.Source, cancellationToken));
+                var (result, personId) = await ImportRowAsync(command.SiteId, row, number, command.Source, cancellationToken);
+                if (row.ExternalKey is { } listed)
+                {
+                    listedKeys.Add(listed.Trim());
+                }
+
+                results.Add(row.Qualifications is { Count: > 0 } items
+                    ? await GrantAsync(result, personId, command.SiteId, items, today, command.Source, cancellationToken)
+                    : result);
             }
             catch (Exception ex) when (ex is DomainRuleException or ValidationException)
             {
                 results.Add(new ImportRowResultDto { Line = row.Line, Code = number, Action = Error, Message = Message(ex) });
             }
+        }
+
+        if (command.SwitchOffMissing)
+        {
+            results.AddRange(await SwitchOffMissingAsync(command.SiteId, systems[0]!, listedKeys, command.Source, cancellationToken));
         }
 
         var errors = results.Count(r => r.Action == Error);
@@ -96,7 +131,7 @@ internal sealed class ImportPeopleHandler(
         };
     }
 
-    private async Task<ImportRowResultDto> ImportRowAsync(Guid siteId, PersonImportRow row, string number, string source, CancellationToken cancellationToken)
+    private async Task<(ImportRowResultDto Result, Guid PersonId)> ImportRowAsync(Guid siteId, PersonImportRow row, string number, string source, CancellationToken cancellationToken)
     {
         var name = row.DisplayName.Trim();
         var system = row.ExternalSystem?.Trim();
@@ -144,12 +179,12 @@ internal sealed class ImportPeopleHandler(
             var created = events.Create(EventTypes.PersonCreated, "person", updated.Id, new { After = updated }, source);
             await labor.InsertPersonAsync(updated, created.OccurredAt, cancellationToken);
             await eventLog.AppendAsync(created, cancellationToken);
-            return new ImportRowResultDto { Line = row.Line, Code = number, Action = Create };
+            return (new ImportRowResultDto { Line = row.Line, Code = number, Action = Create }, updated.Id);
         }
 
         if (updated == current.Value)
         {
-            return new ImportRowResultDto { Line = row.Line, Code = number, Action = Unchanged };
+            return (new ImportRowResultDto { Line = row.Line, Code = number, Action = Unchanged }, updated.Id);
         }
 
         // Someone who leaves stops their time: they can't be switched off while on a line, from any source.
@@ -161,7 +196,98 @@ internal sealed class ImportPeopleHandler(
         var envelope = events.Create(EventTypes.PersonUpdated, "person", updated.Id, new { Before = current.Value, After = updated }, source);
         await labor.UpdatePersonAsync(updated, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
-        return new ImportRowResultDto { Line = row.Line, Code = number, Action = Update, Changes = Changes(current.Value, updated) };
+        return (new ImportRowResultDto { Line = row.Line, Code = number, Action = Update, Changes = Changes(current.Value, updated) }, updated.Id);
+    }
+
+    /// <summary>
+    /// The qualifications the source lists (#71): each the person isn't covered for is granted (<see cref="QualificationRules.ImportGrant"/>),
+    /// recorded as a grant by hand is; none is ever revoked.
+    /// </summary>
+    private async Task<ImportRowResultDto> GrantAsync(
+        ImportRowResultDto result, Guid personId, Guid siteId, IReadOnlyList<QualificationImportItem> items, DateOnly today, string source,
+        CancellationToken cancellationToken)
+    {
+        if (qualifications is null)
+        {
+            throw new DomainRuleException("Qualifications can't be imported here.");
+        }
+
+        var held = await labor.ListGrantsOfPersonAsync(personId, cancellationToken);
+        var granted = new List<string>();
+        foreach (var item in items.DistinctBy(i => i.Code))
+        {
+            var qualification = await qualifications.FindQualificationByCodeAsync(siteId, item.Code, cancellationToken)
+                ?? throw new DomainRuleException($"The site has no qualification {item.Code}.");
+            if (QualificationRules.ImportGrant(held.Where(g => g.QualificationId == qualification.Id), item.ValidFrom, item.ExpiresOn, today, qualification.ValidityMonths)
+                is not { } days)
+            {
+                continue;
+            }
+
+            if (!qualification.IsActive)
+            {
+                throw new DomainRuleException($"{qualification.Code} is switched off, so it can't be granted.");
+            }
+
+            QualificationWriter.ValidateDays(days.ValidFrom, days.ExpiresOn);
+            var grant = new GrantRecord(ids.NewId(), personId, qualification.Id, days.ValidFrom, days.ExpiresOn, null, request?.ActorId ?? "system", null, null, null);
+            var envelope = events.Create(EventTypes.QualificationGranted, "person", personId, new { After = grant }, source);
+            await qualifications.InsertGrantAsync(grant, envelope.OccurredAt, cancellationToken);
+            await eventLog.AppendAsync(envelope, cancellationToken);
+            granted.Add($"qualification {qualification.Code}{(days.ExpiresOn is { } until ? $" until {until:yyyy-MM-dd}" : "")}");
+        }
+
+        if (granted.Count == 0)
+        {
+            return result;
+        }
+
+        return result.Action == Create
+            ? result with { Notes = [.. result.Notes, .. granted.Select(g => $"Granted {g}.")] }
+            : result with { Action = Update, Changes = [.. result.Changes, .. granted] };
+    }
+
+    /// <summary>
+    /// The site's active people of the system the source no longer lists (#71), switched off in id order. Someone clocked on stays on with a note,
+    /// so the rest of the import isn't held up; a later full import switches them off.
+    /// </summary>
+    private async Task<IReadOnlyList<ImportRowResultDto>> SwitchOffMissingAsync(
+        Guid siteId, string system, HashSet<string> listedKeys, string source, CancellationToken cancellationToken)
+    {
+        var results = new List<ImportRowResultDto>();
+        foreach (var current in await labor.ListActivePeopleOfSystemForUpdateAsync(siteId, system, cancellationToken))
+        {
+            if (current.Value.ExternalKey is { } key && listedKeys.Contains(key))
+            {
+                continue;
+            }
+
+            var person = current.Value;
+            if ((await labor.ListOpenSessionsOfPersonForUpdateAsync(person.Id, cancellationToken)).Count > 0)
+            {
+                results.Add(new ImportRowResultDto
+                {
+                    Code = person.EmployeeNumber,
+                    Action = Unchanged,
+                    Notes = [$"{person.DisplayName} isn't in the source but is clocked on, so stays on until a later import."],
+                });
+                continue;
+            }
+
+            var updated = person with { IsActive = false };
+            var envelope = events.Create(EventTypes.PersonUpdated, "person", updated.Id, new { Before = person, After = updated }, source);
+            await labor.UpdatePersonAsync(updated, envelope.OccurredAt, cancellationToken);
+            await eventLog.AppendAsync(envelope, cancellationToken);
+            results.Add(new ImportRowResultDto
+            {
+                Code = person.EmployeeNumber,
+                Action = Update,
+                Changes = ["active"],
+                Notes = [$"{person.DisplayName} isn't in the source any more, so is switched off."],
+            });
+        }
+
+        return results;
     }
 
     /// <summary>The person a row is: by external key, else (to link them) a hand-kept person with its employee number.</summary>

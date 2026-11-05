@@ -1023,7 +1023,7 @@ Closes the D-033 / D-034 next step: material master data from sources other than
 
 **Screen.** Configure → Materials → **Import file** picks the format from the API's list and shows an *External system* field for B2MML. Changing either checks the picked file again.
 
-**Not yet.** Label printing (BarTender and the like), ERP feeds pushed or pulled on a timer, B2MML material lots and classes as their own records, and exporting B2MML.
+**Not yet.** Label printing (BarTender and the like) and ERP feeds pulled on a timer. B2MML material classes and lots as their own records, and exporting B2MML, came with D-089.
 
 ## People from HR and ERP sources (D-054, proposed)
 
@@ -1061,7 +1061,7 @@ Issue #19. Until now people were kept by hand on Configure → People (D-040); `
 
 **API and screen.** `GET /api/people/import/sources` (any view) lists the adapters. `POST /api/people/import/{source}?siteId=&dryRun=&externalSystem=` (`people.manage` at the site, at most 5 MB and 5,000 rows) runs an import. Configure → People has **Import file** (`PeopleFileImport`). Imported people show their system as a chip, and their name and active box are read-only. Migration `0023_person_import`.
 
-**Not yet.** A live SCIM endpoint (`/scim/v2/Users`) that HR or an identity provider pushes to; fetching from a source on a timer; switching off people a full file leaves out; moving a person between sites; qualifications from HR.
+**Not yet.** A live SCIM endpoint (`/scim/v2/Users`) that HR or an identity provider pushes to; moving a person between sites. Fetching from a source on a timer, switching off people a full import leaves out, and qualifications from HR came with D-090.
 
 ## Completing the materials import (D-055, proposed)
 
@@ -1082,7 +1082,7 @@ Issue #20: the CSV import (D-034) couldn't take capabilities, create classes, or
 | `active = no` | `End(now)` the one in effect; none → unchanged with a note. |
 
 - Columns left out keep the capability's values, and blank changeover or crew clears them.
-- Periods are never set by the file; future and past periods stay on the material page.
+- Periods are never set by the file; future and past periods stay on the material page. Since D-089, `effective_from` and `effective_to` set them.
 - All or nothing with a dry run, like D-034. Events are `capability.added` / `changed` / `ended` with the reason. Notes (planning rate, open jobs left) come back on each row (`ImportRowResultDto.Notes`).
 
 **Locking and access.** Equipment codes are unique only within a site, so the handler first locks every line the file names with `LockLinesByCodeAsync`: lower-case codes, `ORDER BY id FOR UPDATE OF e`. Materials are locked after that (D-017). A row's line is its code at the row's `site`, else at the only site that has it. An ambiguous code is an error asking for the site. The endpoint `POST /api/capabilities/import/csv` needs `processes.manage` somewhere, as a single capability does at its line. It passes the caller's sites (`Visible.SitesAsync`), and a line at any other site is an error on its row.
@@ -1329,7 +1329,7 @@ An outage only delays: rows stay pending.
 
 Each appends `pulaski.delivery.retried.v1` or `pulaski.delivery.skipped.v1`. Routes: `GET /api/integrations/erp`, `GET /api/integrations/erp/deliveries?status=`, `POST …/deliveries/{id}/retry`, `…/{id}/skip`, `…/retry-failed`.
 
-**Not done.** No inbound acknowledgement or reconciliation from the ERP, no ERP-specific adapters or message brokers, no retention of delivered rows. A second sink, for a document system, came with D-086.
+**Not done.** No reconciliation from the ERP, no ERP-specific adapters, no Kafka. A second sink, for a document system, came with D-086; a settings screen, more event kinds and acknowledgements with D-087; feeds added on the screen, MQTT, search and retention with D-088.
 
 ## Reason trees (D-062, proposed)
 
@@ -1494,7 +1494,7 @@ Issue #18. Materials came from files (CSV, B2MML) or one at a time through the A
 
 **Permissions.** Setting up (`POST`/`PUT /api/material-connections`) needs `integrations.manage`, because it decides where the API connects. Running needs `materials.manage`. Seeing the list needs `integrations.view` or `materials.view`. The panel is on Configure → Integrations and in the Materials import area. Events: `pulaski.material_connection.added.v1`, `…changed.v1`.
 
-**Not done.** Schedules, other protocols (plain REST, SOAP, database), OAuth client-credential flows, and connections for other master data (people, capabilities).
+**Not done.** OAuth client-credential flows, and connections for capabilities. REST, SOAP and PostgreSQL connections came with D-089; schedules and people connections with D-090.
 
 ## Stop adjustments (D-069, proposed)
 
@@ -2181,6 +2181,198 @@ unchanged. `GET /api/lot-attributes/values` lists the same as JSON, and the Lots
 - a signed download link instead of inline files;
 - events for documents carried to other lots by split or merge;
 - an import from other sources (B2MML, an API).
+
+## Delivery settings screen, event kinds and acknowledgements (D-087, proposed)
+
+Issue #73. Feeds (D-061, D-086) were configured in the API's settings only, sent inventory movements only, and read nothing back.
+
+**Settings on the screen** (the user's choice: the screen owns everything but the secret). `core.delivery_feed`, one row per feed, holds:
+enabled, URL, event kinds, include files, attempts, timeout, poll and start-from-now.
+- The secret stays in configuration, never in the database.
+- No row means the feed runs on its configuration, which the screen shows as the starting point.
+- `SaveDeliveryFeedSettingsCommand` (`PUT /api/integrations/{feed}/settings`, `integrations.manage`) checks `DeliveryFeedSettings.Problems`:
+  - an absolute https URL, or http only to this machine;
+  - an address and at least one kind when the feed is on;
+  - attempts, timeout and poll within range.
+- Concurrency is by `xmin`. A first save makes the row under lock, at version 0. The save appends `pulaski.delivery_feed.settings_saved.v1`
+  with before and after.
+- Reading the settings (`GET …/settings`) shows the full address, so it needs `integrations.manage` too. The status keeps showing the host only.
+- `WebhookDeliveryService` reads the settings each round (`DeliveryRelay.GetFeedSettingsAsync`, `WebhookFeedOptions.Apply`), so a change needs no
+  restart. A feed that is off checks again every 30 s. Each attempt has the feed's own timeout; the HTTP client's is only the longest allowed.
+- `DeliveryFeeds.Effective` gives the status the same merge.
+
+**Event kinds.** `DeliveryKinds` names sets of type prefixes. Kinds may overlap; capture still takes each event once.
+
+| Kind | Prefixes |
+| --- | --- |
+| `inventory` | `pulaski.lot.` |
+| `certificates` | `pulaski.lot_document.` |
+| `orders` | `pulaski.work_order.`, `pulaski.job.` |
+| `production` | `pulaski.job.production_`, `pulaski.partial_batch.` |
+| `labor` | `pulaski.labor.` |
+| `stops` | `pulaski.downtime.` |
+| `quality` | `pulaski.quality_result.` |
+
+The screen saves kinds. Configured prefixes that no kind covers are shown until the first save.
+
+**Acknowledgements, both ways** (the user's choice).
+- **In the answer:** a 2xx answer whose body is `{"status":"accepted"|"rejected","reference":…,"message":…}` is recorded on the delivery with
+  source `response` (`Acknowledgement.FromResponse`). Any other body is no acknowledgement.
+- **By callback:** `POST /api/integrations/{feed}/acknowledgements` with `{eventId, status, reference, message}`.
+  - No sign-in. It is signed like Pulaski's own messages: HMAC-SHA256 with the feed's secret of `"{timestamp}.{body}"`, and the timestamp must be
+    within 5 minutes (`AcknowledgementSignature`).
+  - The actor is `receiver:{feed}`. It is recorded with source `callback` and appends `pulaski.delivery.acknowledged.v1`.
+  - An unknown event is 404, and a bad or stale signature 401.
+- Stored on `evt.delivery` as `ack_status`, `ack_reference`, `ack_message`, `ack_source` and `ack_at`.
+
+**A rejection fails the delivery** (the user's choice). A rejection, in the answer or later by callback, makes the delivery `failed` with
+"Rejected by the receiver: …" as its last error. That holds the subject's later events (D-061) until someone retries or skips it.
+- An acceptance by callback delivers a pending or failed delivery, so a receiver that fixed things can release the subject.
+- A skipped delivery only records the acknowledgement.
+- At-least-once delivery and per-subject ordering are unchanged.
+
+**Not done:**
+- reconciliation (comparing what the ERP booked with what Pulaski sent).
+
+More feeds, MQTT, search and retention came with D-088.
+
+## More feeds, MQTT, delivery search and retention (D-088, proposed)
+
+Issue #74. There was one HTTPS receiver per purpose, no message queue, a list of the newest 200 deliveries with no search, and delivered rows
+were kept for good.
+
+**Feeds added on the screen** (the user's choice). A feed is a `core.delivery_feed` row with a code, a name and a kind. Code and kind are fixed,
+since the sink (`kind:code`) names its queue and checkpoint.
+- `CreateDeliveryFeedCommand` (`POST /api/integrations`, `integrations.manage`) adds one switched off, sending inventory movements. An MQTT feed
+  gets the topic `pulaski/{type}`.
+- `ListDeliveryFeedsQuery` (`GET /api/integrations`) lists the built-in `erp` and `documents`, then the rest by code.
+- Every feed has its own checkpoint, event kinds and settings (D-087) under `/api/integrations/{code}/…`.
+- Built-in feeds keep their configured sink whatever is saved, and run on their configuration until first saved. An added feed must have its row
+  (`DeliveryFeeds.ResolveAsync`, else 404).
+- Secrets stay in configuration under `Integrations:Feeds:{code}`: `Secret` for signing and acknowledgements, and a broker's `Username` and
+  `Password`.
+
+**One relay for every feed.** `WebhookDeliveryService` lists the feeds every second. It runs a round for each that is ready and due (its own
+poll interval), side by side, each under its sink's advisory lock. A feed added on the screen starts without a restart.
+
+**MQTT** (the user's choice over Kafka, which would add a client library and its native dependency). `MqttFeedSender` (MQTTnet, as Sparkplug B
+uses) publishes over MQTT 5:
+- the same CloudEvents JSON as a webhook, QoS 1, content type `application/cloudevents+json`;
+- on the topic from the feed's template (`DeliveryFeedKinds.Topic`);
+- with the event id as the `Idempotency-Key` user property, and with a secret the timestamp and signature as user properties.
+
+It keeps one connection per feed, made again when the address or sign-in changes. The broker's answer maps onto the delivery policy
+(`MqttFeedSender.Code`): published or no subscribers is delivered; not authorised and an invalid topic or payload fail at once; quota exceeded
+and anything else are retried. A broker gives no acknowledgement in its answer; a receiver behind it can post one back (D-087).
+`DeliveryFeedSettings.Problems` checks an `mqtt://` or `mqtts://` address, and a topic without wildcards that doesn't start with `/`.
+
+**Search.** `ListDeliveriesQuery` takes:
+- `Search`: a subject's id, or a lot's number in any case;
+- `Type`: any part of the event type;
+- `From` and `To`: by the event's time;
+- status and limit (up to 1000).
+
+`GET …/deliveries?status=&search=&type=&from=&to=&limit=`.
+
+**Retention, from configuration, delivered rows only** (the user's choice). `DeliveryRetentionService` (API, hourly) calls `evt.purge_delivered`.
+That is a SECURITY DEFINER function, since the app role has no DELETE; it keeps at least 7 days, and the default is
+`Retention:DeliveredDays` = 90. It deletes delivered rows older than that (`delivery_delivered_ix`).
+- Pending, failed and skipped rows stay, and the event log is never touched.
+- The checkpoint keeps a deleted row from being captured again.
+
+**Not done:**
+- Kafka and other brokers;
+- adapters for a particular ERP's own API;
+- retention per feed;
+- paging through more than 1000 deliveries.
+
+## Material import gaps: more connection kinds, capability periods, B2MML classes, lots and export (D-089, proposed)
+
+Issue #72. Material connections spoke only OData (D-068); the capabilities file could only touch the capability in effect now (D-055);
+and B2MML was read only for material definitions (D-053), with no way to write it.
+
+**Connection kinds** (the user's choice: REST, SOAP and a PostgreSQL database). `core.material_connection.kind` is `odata`, `rest`, `soap` or
+`database`, fixed once made. `MaterialConnectionRules.KindProblems` checks what each kind needs, and one CHECK keeps the columns consistent.
+
+| Kind | Reads | Fields |
+| --- | --- | --- |
+| `odata` | as D-068 | `base_url`, `entity_set`, optional `filter` |
+| `rest` | GET, JSON | `base_url` (a query is allowed), `entity_set` = where the items array is (`data.items`, blank = the whole answer), optional `next_link_path` (relative links resolve against the page) |
+| `soap` | POST of `request_body` (`text/xml`, optional `SOAPAction`) | `base_url` (https), `entity_set` = the element that holds one item; a SOAP fault is a problem, even on a 500 |
+| `database` | one `SELECT`/`WITH` (≤ 4000 characters, no second statement) | `query`, no URL; the connection string is configuration (`MaterialConnections:<code>:ConnectionString`), never the database |
+
+- `ConnectionItems` (pure) turns each answer into JSON objects: REST by path; SOAP elements as objects of their children (nested ones as
+  objects, the first of repeated names, at most 5 deep, DTDs refused); a database row by column name. Every kind then goes through
+  `ODataMaterialRows.Read` and the unchanged `ImportMaterialsCommand`.
+- The database query runs in a `READ ONLY` transaction with a 30 s statement timeout and stops at the row limit. Use a login that can only read.
+
+**Capability periods** (the user's choice: end the open one, refuse others). The capabilities CSV gains `effective_from` and `effective_to`
+(`yyyy-MM-dd`, site-local days, `LockLinesByCodeAsync` now returns the site's time zone; `effective_to` is the day after the last).
+- With `effective_from`, the row is the capability that starts that day: changed if there is one, else added. Adding it ends an open-ended
+  capability that starts earlier where the new one starts (`capability.ended`, noted on the row). Any other overlap refuses the row, so the
+  import stays all or nothing.
+- `effective_to` sets or clears the end of the row's capability; the overlap check runs again.
+- The planning rate follows only a capability in effect now.
+
+**B2MML classes.** `MaterialB2mml.Parse` reads `MaterialClass` (`ID` = code, `Description` = name) into `MaterialImportSource.Classes`.
+`ImportMaterialsCommand` adds missing ones and renames changed ones before the rows (no `createClasses` needed: the file states them), with
+`material_class.created`/`updated`; `ImportMaterialsResponse.RenamedClasses` lists renames. Whether a class is on stays Pulaski's.
+
+**B2MML lots** (the user's choice: receive new, update attributes). `LotB2mml.Parse` (pure) reads `MaterialLot`: `ID` = lot number,
+`MaterialDefinitionID`, `Quantity` (`QuantityString` + `UnitOfMeasure`), `StorageLocation` (a location code at the site), `ExpirationTime`
+(a date alone is midnight UTC), and `MaterialLotProperty` (`SupplierLot` and `ExpirationDate` are the receipt's; the rest by ID).
+`ImportB2mmlLotsCommand` (`POST /api/lots/import/b2mml?siteId=&dryRun=`, `lot.receive`), all or nothing:
+- A lot the site doesn't have (number + material) is received through `ReceiveLotHandler.ReceiveAsync`, the receive rules in the import's
+  transaction. Where lots mix it joins the balance, and its properties aren't recorded.
+- A lot it has keeps its quantity, location and expiry (noted).
+- Then every lot with properties is locked in id order, and each property whose ID is a lot attribute code (any case) is set through
+  `LotAttributeWriter`; an empty value leaves it alone. Other properties are noted as left out.
+
+**Export** (the user's choice: materials and classes). `GET /api/materials/export/b2mml` (`materials.view`) writes `MaterialInformation`:
+a `MaterialClass` per class, then a `MaterialDefinition` per material (inactive too) with `MaterialClassID` and every import field as a
+property. It reads back through the import unchanged (tested). Lots are not exported.
+
+**Not done:** exporting lots; B2MML `MaterialSubLot`, `MaterialLotID` assembly and multiple languages; OAuth flows. Scheduled runs came with D-090.
+
+## Scheduled connections, people sources, leavers and qualifications (D-090, proposed)
+
+Issue #71. Connections ran only on demand and only for materials; people came only from files; someone missing from a file stayed on; and
+qualifications weren't imported.
+
+**Connections for both** (the user's choice). `core.material_connection` (the name kept from D-068) gains `target`: `materials`, or `people`
+with a `site_id` (fixed once made, like code and kind). People connections take every kind plus `scim`: `GET {base}/Users`
+(RFC 7644), paged by `startIndex`/`count` (100) until `totalResults`, with an optional SCIM filter; the users are read by `PeopleScim.Read`
+as a SCIM file is, so they need no field map. Other kinds map items through `ConnectionPeopleRows` (`employee_number`, `name` and
+`external_key` required) and `PersonImportFields.ToRow`; the field reading is shared (`ConnectionFields`). `/api/people-connections`
+(`?siteId=`; set up with `integrations.manage` at the site, run with `people.manage` there, `SiteOf.Connection`) beside
+`/api/material-connections`; both have `/{id}/runs`.
+
+**Schedules** (the user's choice: every N hours or daily times). `schedule_every_hours` (1–168) or `schedule_daily_at` (up to 4 UTC
+times), never both; neither = on demand. `ConnectionSchedule.Next` (pure) gives `next_run_at`: the interval after, or the next daily time
+after, the moment it is worked out, so a late run never catches up on missed ones. Saving keeps `next_run_at` unless the schedule or the
+switch changed. `ConnectionScheduleService` (API, every `Connections:Schedule:PollSeconds`, 60; off with `Connections:Schedule:Enabled`)
+calls `ScheduledConnections.RunDueAsync`: due connections are claimed first (`UPDATE … WHERE next_run_at = @Due`), so with several API
+instances each run happens once, then run as `system` with the reason "*<name> import (scheduled)*". Stored options apply: `create_classes`
+(materials) and `switch_off_missing` (people). A run that throws is recorded as failed; the schedule carries on.
+
+**Runs recorded.** Every import (not a check) goes into `ts.connection_run` (partitioned by `started_at`; trigger manual/schedule, outcome
+`applied` / `not_applied` (row errors, nothing saved) / `failed` (source unreadable or the run stopped), counts, summary, actor) and sets
+`last_run_*` and `last_run_outcome`. The list flags a failed or not-applied last run; *History* shows the latest 50. Dry runs stay available
+and unrecorded.
+
+**Leavers** (the user's choice: leave a clocked-on one on). `ImportPeopleCommand.SwitchOffMissing` (file `?switchOffMissing=true`, or the
+connection's option) needs every row to be one external system's (an empty source is refused). After the rows, the site's active people of
+that system whose key wasn't listed are locked in id order (`ListActivePeopleOfSystemForUpdateAsync`) and switched off (`person.updated`). One
+still clocked on stays on, with a note; a later full import switches them off. Local people are never touched.
+
+**Qualifications** (the user's choice: add and renew only). A `qualifications` field (CSV column, or a mapped property): codes separated by
+`;` or `|`, each optionally `CODE:valid-from:expires-on`. For each, `QualificationRules.ImportGrant` grants unless an unrevoked grant covers it:
+with no dates, one valid today; with a valid-from, one valid that day; with an expiry, one from no later expiring no sooner (or never), so a
+later expiry renews. The same import twice grants nothing; nothing is ever revoked. An unknown code is a row error, a switched-off one too when
+a grant is due. Grants are `qualification.granted` with the import's reason. SCIM users carry no qualifications.
+
+**Not done:** schedules in a site's time zone; retries sooner than the next scheduled run; qualifications from SCIM; revoking what a source
+drops; connections for capabilities.
 
 ## Application architecture
 

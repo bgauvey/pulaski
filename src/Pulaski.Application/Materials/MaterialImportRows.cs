@@ -35,4 +35,11 @@ public sealed record MaterialImportRow
 }
 
 /// <summary>Rows from a source, and what was wrong with the source as a whole (a missing or unknown column).</summary>
-public sealed record MaterialImportSource(IReadOnlyList<MaterialImportRow> Rows, IReadOnlyList<string> Problems);
+public sealed record MaterialImportSource(IReadOnlyList<MaterialImportRow> Rows, IReadOnlyList<string> Problems)
+{
+    /// <summary>Classes the source states as records of their own (#72: B2MML <c>MaterialClass</c>), added or renamed before the materials.</summary>
+    public IReadOnlyList<MaterialClassImportRow> Classes { get; init; } = [];
+}
+
+/// <summary>A material class from a source (#72): its code (fixed in Pulaski) and name.</summary>
+public sealed record MaterialClassImportRow(int Line, string Code, string Name);

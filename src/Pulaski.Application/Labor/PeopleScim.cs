@@ -59,6 +59,12 @@ public static class PeopleScim
         }
     }
 
+    /// <summary>Users a SCIM connection fetched (#71), every one that system's person.</summary>
+    public static PersonImportSource Read(IReadOnlyList<JsonElement> users, string externalSystem) =>
+        users.Count > PersonImportFields.MaxRows
+            ? new PersonImportSource([], [$"The service sent {users.Count} users; one import takes at most {PersonImportFields.MaxRows}. Narrow it with a filter."])
+            : new PersonImportSource([.. users.Select((u, i) => ToRow(u, i + 1, externalSystem.Trim()))], []);
+
     private static PersonImportRow ToRow(JsonElement user, int position, string? system)
     {
         var problems = new List<string>();

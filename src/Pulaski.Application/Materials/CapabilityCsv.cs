@@ -26,6 +26,15 @@ public sealed record CapabilityImportRow
 
     /// <summary>False ends the capability in effect now; true or left out keeps or adds one.</summary>
     public Supplied<bool>? IsActive { get; init; }
+
+    /// <summary>
+    /// The period the row is for (#72), from the start of that day at the line's site; left out, the capability in effect now. A capability that
+    /// starts on that day is changed; otherwise one is added from it, ending an open-ended one before it.
+    /// </summary>
+    public DateOnly? EffectiveFrom { get; init; }
+
+    /// <summary>The day after the period's last, its end; blank for open-ended; left out, kept as it is (open-ended for a new one).</summary>
+    public Supplied<DateOnly?>? EffectiveTo { get; init; }
     public IReadOnlyList<string> Problems { get; init; } = [];
 }
 
@@ -54,6 +63,8 @@ public static class CapabilityCsv
         ["batch_size"] = ["line_batch_size"],
         ["batch_tolerance"] = ["batch_tolerance_pct", "line_batch_tolerance"],
         ["active"] = ["is_active"],
+        ["effective_from"] = ["from", "valid_from", "start"],
+        ["effective_to"] = ["to", "valid_to", "end"],
     };
 
     private static readonly string[] Required = ["material", "line", "ideal_rate", "rate_unit"];
@@ -165,6 +176,29 @@ public static class CapabilityCsv
             }
         }
 
+        DateOnly? Day(string? value, string column)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return null;
+            }
+
+            if (DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+            {
+                return day;
+            }
+
+            problems.Add($"{column}: '{value}' isn't a date; use yyyy-MM-dd.");
+            return null;
+        }
+
+        var from = Day(Cell("effective_from"), "effective_from");
+        Supplied<DateOnly?>? to = Cell("effective_to") is { } end ? new(Day(end, "effective_to")) : null;
+        if (from is { } f && to?.Value is { } t && t <= f)
+        {
+            problems.Add("effective_to must be after effective_from.");
+        }
+
         return new CapabilityImportRow
         {
             Line = record.Line,
@@ -179,6 +213,8 @@ public static class CapabilityCsv
             BatchSize = Cell("batch_size") is { } batch ? new(batch.Length == 0 ? null : Number(batch, "batch_size")) : null,
             BatchTolerancePct = Cell("batch_tolerance") is { } tolerance ? new(tolerance.Length == 0 ? null : Number(tolerance, "batch_tolerance")) : null,
             IsActive = Flag("active"),
+            EffectiveFrom = from,
+            EffectiveTo = to,
             Problems = problems,
         };
     }

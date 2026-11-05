@@ -183,6 +183,9 @@ public sealed class InMemoryLabor : ILaborRepository, ILaborReadStore, IQualific
     public Task<Versioned<PersonRecord>?> FindPersonByNumberForUpdateAsync(Guid siteId, string employeeNumber, CancellationToken cancellationToken) =>
         Locked(() => _people.Values.FirstOrDefault(p => p.Value.SiteId == siteId && p.Value.EmployeeNumber == employeeNumber));
 
+    public Task<IReadOnlyList<Versioned<PersonRecord>>> ListActivePeopleOfSystemForUpdateAsync(Guid siteId, string externalSystem, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<Versioned<PersonRecord>>>(() => [.. _people.Values.Where(p => p.Value.SiteId == siteId && p.Value.ExternalSystem == externalSystem && p.Value.IsActive)]);
+
     public Task<CrewRecord?> FindCrewByCodeAsync(Guid siteId, string code, CancellationToken cancellationToken) =>
         Locked(() => _crews.Values.Select(c => c.Value).FirstOrDefault(c => c.SiteId == siteId && c.Code == code));
 
@@ -310,6 +313,9 @@ public sealed class InMemoryLabor : ILaborRepository, ILaborReadStore, IQualific
             .Select(g => new PersonGrant(g.Value.PersonId, DomainGrant(g.Value)))]);
 
     public Task<Versioned<QualificationRecord>?> GetQualificationForUpdateAsync(Guid id, CancellationToken cancellationToken) => Locked(() => _qualifications.GetValueOrDefault(id));
+
+    public Task<QualificationRecord?> FindQualificationByCodeAsync(Guid siteId, string code, CancellationToken cancellationToken) =>
+        Locked(() => _qualifications.Values.Select(q => q.Value).FirstOrDefault(q => q.SiteId == siteId && q.Code == code));
 
     public Task<bool> CodeExistsAsync(Guid siteId, string code, CancellationToken cancellationToken) =>
         Locked(() => _qualifications.Values.Any(q => q.Value.SiteId == siteId && q.Value.Code == code));

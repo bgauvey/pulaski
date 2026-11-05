@@ -285,24 +285,52 @@ CREATE TABLE core.oee_state_category (
 -- An external source of material master data that Pulaski pulls from (D-068): an OData v4 service and the entity set holding its items,
 -- with a map from Pulaski's import fields to the service's property names. Rows go through the materials import (D-034, D-053) as a
 -- file's do. No secrets here: credentials are in the API's configuration, under MaterialConnections:<code>.
+-- Connections to external sources of master data: materials (D-068) or, since #71, people at a site. The name is kept from D-068.
 CREATE TABLE core.material_connection (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     code                text NOT NULL UNIQUE,                   -- upper case, fixed once created; names the configuration section
     name                text NOT NULL,
-    kind                text NOT NULL DEFAULT 'odata' CHECK (kind IN ('odata')),
-    base_url            text NOT NULL,                          -- the service root, https
-    entity_set          text NOT NULL,                          -- e.g. Products
+    target              text NOT NULL DEFAULT 'materials',      -- materials or people (#71); fixed once made
+    site_id             uuid REFERENCES core.equipment(id),     -- people: the site they are imported into
+    kind                text NOT NULL DEFAULT 'odata',          -- odata, rest, soap, database (#72) or scim (people, #71); fixed once made
+    base_url            text,                                   -- the service's address, https; none for a database
+    entity_set          text NOT NULL,                          -- OData: the entity set; REST: the items' path ('' for the root); SOAP: the item element
     filter              text,                                   -- an OData $filter, as the service takes it
+    next_link_path      text,                                   -- REST: where an answer gives the next page's address
+    request_body        text,                                   -- SOAP: the envelope POSTed
+    soap_action         text,                                   -- SOAP: the SOAPAction header
+    query               text,                                   -- database: the SELECT that returns one item per row
     external_system     text NOT NULL,                          -- what the items are matched on with their key (D-033)
     field_map           jsonb NOT NULL,                         -- {"code": "ProductNumber", "external_key": "ProductID", ...}
     is_active           boolean NOT NULL DEFAULT true,
+    schedule_every_hours smallint,                              -- run every this many hours (#71); null with no daily times = on demand
+    schedule_daily_at   time[],                                 -- or daily at these UTC times (up to 4)
+    next_run_at         timestamptz,                            -- when the scheduler runs it next; null when not scheduled
+    create_classes      boolean NOT NULL DEFAULT false,         -- materials: create classes the items name (D-055)
+    switch_off_missing  boolean NOT NULL DEFAULT false,         -- people: switch off the system's people the source no longer has
     last_run_at         timestamptz,
     last_run_by         text,
     last_run_summary    text,                                   -- what the last import (not a check) did, for the screen
+    last_run_outcome    text,                                   -- applied, not_applied or failed (#71)
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT material_connection_external_ck CHECK (length(external_system) BETWEEN 1 AND 100)
+    CONSTRAINT material_connection_external_ck CHECK (length(external_system) BETWEEN 1 AND 100),
+    CONSTRAINT material_connection_kind_ck CHECK (
+        kind IN ('odata','rest','soap','database','scim')
+        AND (kind = 'database') = (base_url IS NULL)
+        AND (kind = 'database') = (query IS NOT NULL)
+        AND (kind = 'soap') = (request_body IS NOT NULL)),
+    CONSTRAINT material_connection_target_ck CHECK (
+        target IN ('materials','people')
+        AND (target = 'people') = (site_id IS NOT NULL)
+        AND (kind <> 'scim' OR target = 'people')),
+    CONSTRAINT material_connection_schedule_ck CHECK (
+        (schedule_every_hours IS NULL OR schedule_every_hours BETWEEN 1 AND 168)
+        AND (schedule_daily_at IS NULL OR cardinality(schedule_daily_at) BETWEEN 1 AND 4)
+        AND NOT (schedule_every_hours IS NOT NULL AND schedule_daily_at IS NOT NULL)),
+    CONSTRAINT material_connection_outcome_ck CHECK (last_run_outcome IN ('applied','not_applied','failed'))
 );
+CREATE INDEX material_connection_due_ix ON core.material_connection (next_run_at) WHERE next_run_at IS NOT NULL;
 
 CREATE TABLE core.material_class (
     id          uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -2065,6 +2093,24 @@ CREATE INDEX quality_sample_site_ix ON ts.quality_sample (site_id, occurred_at);
 CREATE INDEX quality_sample_lot_ix ON ts.quality_sample (lot_id, occurred_at) WHERE lot_id IS NOT NULL;
 CREATE INDEX quality_sample_job_ix ON ts.quality_sample (job_id, occurred_at) WHERE job_id IS NOT NULL;
 
+-- Every import a connection ran (#71): on demand or by its schedule, with what it did or why it failed. Checks aren't recorded.
+CREATE TABLE ts.connection_run (
+    id                  uuid NOT NULL DEFAULT uuidv7(),
+    started_at          timestamptz NOT NULL,
+    finished_at         timestamptz NOT NULL,
+    connection_id       uuid NOT NULL REFERENCES core.material_connection(id),
+    trigger             text NOT NULL CHECK (trigger IN ('manual','schedule')),
+    outcome             text NOT NULL CHECK (outcome IN ('applied','not_applied','failed')),
+    created_count       integer NOT NULL DEFAULT 0,
+    updated_count       integer NOT NULL DEFAULT 0,
+    unchanged_count     integer NOT NULL DEFAULT 0,
+    error_count         integer NOT NULL DEFAULT 0,
+    summary             text NOT NULL CHECK (length(summary) <= 2000),
+    actor               text NOT NULL,
+    PRIMARY KEY (id, started_at)
+) PARTITION BY RANGE (started_at);
+CREATE INDEX connection_run_connection_ix ON ts.connection_run (connection_id, started_at DESC);
+
 CREATE TABLE ts.spc_violation (
     id                  uuid NOT NULL DEFAULT uuidv7(),
     occurred_at         timestamptz NOT NULL,
@@ -2191,13 +2237,43 @@ CREATE TABLE evt.delivery (
     delivered_at        timestamptz,
     resolved_by         text,                                       -- who retried or skipped it
     resolve_note        text,
+    ack_status          text CHECK (ack_status IN ('accepted','rejected')),  -- the receiver's acknowledgement (#73)
+    ack_reference       text,                                       -- its own id for what it booked
+    ack_message         text,
+    ack_source          text CHECK (ack_source IN ('response','callback')),
+    ack_at              timestamptz,
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT delivery_event_uq UNIQUE (sink, event_id)
+    CONSTRAINT delivery_event_uq UNIQUE (sink, event_id),
+    CONSTRAINT delivery_ack_ck CHECK ((ack_status IS NULL) = (ack_at IS NULL) AND (ack_status IS NULL) = (ack_source IS NULL))
 );
 CREATE INDEX delivery_due_ix ON evt.delivery (sink, next_attempt_at) WHERE status = 'pending';
 CREATE INDEX delivery_subject_ix ON evt.delivery (sink, subject, tx_id, position) WHERE status IN ('pending','failed');
 CREATE INDEX delivery_status_ix ON evt.delivery (sink, status, created_at);
+-- Retention (#74) clears delivered rows by age.
+CREATE INDEX delivery_delivered_ix ON evt.delivery (delivered_at) WHERE status = 'delivered';
+
+-- A delivery feed's settings as kept on Configure → Integrations (#73, #74): everything but the secrets, which stay in configuration. The
+-- built-in erp and documents feeds may have no row (their configuration's values); feeds added on the screen always have one. Event kinds are
+-- named sets of event type prefixes (DeliveryKinds). The code and kind are fixed: the sink, and so the queue, is kind:code.
+CREATE TABLE core.delivery_feed (
+    feed                text PRIMARY KEY,
+    name                text NOT NULL DEFAULT '',
+    kind                text NOT NULL DEFAULT 'webhook' CHECK (kind IN ('webhook','mqtt')),
+    enabled             boolean NOT NULL DEFAULT false,
+    url                 text,                                       -- https:// for a webhook, mqtt:// or mqtts:// for a broker
+    topic               text,                                       -- an MQTT feed's topic template, e.g. pulaski/{type}
+    event_kinds         text[] NOT NULL DEFAULT '{}',
+    include_files       boolean NOT NULL DEFAULT false,
+    max_attempts        integer NOT NULL DEFAULT 12 CHECK (max_attempts BETWEEN 1 AND 50),
+    timeout_seconds     integer NOT NULL DEFAULT 15 CHECK (timeout_seconds BETWEEN 1 AND 120),
+    poll_seconds        integer NOT NULL DEFAULT 5 CHECK (poll_seconds BETWEEN 1 AND 300),
+    start_from_now      boolean NOT NULL DEFAULT true,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    updated_by          text,
+    CONSTRAINT delivery_feed_code_ck CHECK (feed ~ '^[a-z][a-z0-9_-]{1,29}$')
+);
 
 -- Grants (role names are deployment-specific):
 --   GRANT INSERT, SELECT ON evt.event TO pulaski_app;
@@ -2318,6 +2394,28 @@ END $$;
 
 REVOKE ALL ON FUNCTION ts.drop_old_process_values(integer) FROM PUBLIC;
 
+-- Deletes delivered rows of evt.delivery delivered more than p_keep_days ago (#74); returns how many. SECURITY DEFINER: the app role has no
+-- DELETE there. Failed, pending and skipped rows stay, and so does the event log; checkpoints keep a deleted row from being captured again.
+CREATE FUNCTION evt.purge_delivered(p_keep_days integer)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+    v_deleted integer;
+BEGIN
+    IF p_keep_days IS NULL OR p_keep_days < 7 THEN
+        RAISE EXCEPTION 'purge_delivered: keep at least 7 days, not %', p_keep_days;
+    END IF;
+
+    DELETE FROM evt.delivery WHERE status = 'delivered' AND delivered_at < now() - make_interval(days => p_keep_days);
+    GET DIAGNOSTICS v_deleted = ROW_COUNT;
+    RETURN v_deleted;
+END $$;
+
+REVOKE ALL ON FUNCTION evt.purge_delivered(integer) FROM PUBLIC;
+
 -- =====================================================================
 -- 16. SCHEMA VERSION (D-028)
 --     Each db/migrations file brings an existing database up to this
@@ -2382,7 +2480,11 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0050_mixing_containers'),
     ('0051_partial_receipts_lead_times'),
     ('0052_allocation_refinements'),
-    ('0053_quality');
+    ('0053_quality'),
+    ('0054_delivery_feed_settings'),
+    ('0055_delivery_feeds'),
+    ('0056_material_sources'),
+    ('0057_connection_schedules');
 
 -- =====================================================================
 -- 17. SEED DATA

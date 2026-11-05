@@ -55,6 +55,8 @@
         <p class="small text-muted mb-2">
             One row per material and line; material, line, ideal_rate (per hour) and rate_unit are required, and site only when the line
             code is used at more than one site. A row changes the capability in effect now, or adds one from now; active = no ends it.
+            With effective_from (a site-local date, yyyy-MM-dd) a row is the period starting that day: an open-ended period starting earlier
+            ends there, and any other overlap is an error. effective_to (the day after the last) ends a period.
             The planning rate follows the ideal rate as on the material page. Nothing is saved until every row is valid.
         </p>
         <p class="small mb-2"><span class="text-muted">All columns:</span> <code>@CapabilityCsvFormat.Header</code></p>
@@ -74,7 +76,9 @@
         <p class="small text-muted mb-2">
             @Source.Description Each <code>MaterialDefinition</code> is one material: its <code>ID</code> is the code, its
             <code>Description</code> the name and its <code>MaterialClassID</code> the class. Type, base unit, lot tracking, shelf life
-            and active come from properties with those IDs, such as <code>MaterialType</code> and <code>BaseUnit</code>.
+            and active come from properties with those IDs, such as <code>MaterialType</code> and <code>BaseUnit</code>. Each
+            <code>MaterialClass</code> (its <code>ID</code> the code, its <code>Description</code> the name) is added if it is new and
+            renamed if its name differs, whatever <em>Create missing classes</em> says. <em>Export B2MML</em> on this page writes this format.
             @(Source.TakesExternalSystem ? "With an external system, the materials are that system's items, matched on their ID; without one, they are Pulaski materials matched on their code. " : "")
             Nothing is saved until every material is valid.
         </p>
@@ -87,7 +91,7 @@
     <div class="d-flex flex-wrap gap-2 align-items-center">
         <InputFile OnChange="PickAsync" accept="@string.Join(",", Source.FileTypes)" class="form-control" style="max-width: 28rem"
                    aria-label="@($"{Source.DisplayName} file")" disabled="@_busy" />
-        <button type="button" class="btn btn-primary" disabled="@(_busy || _result is not { Errors: 0, Applied: false } || _result.Created + _result.Updated == 0)"
+        <button type="button" class="btn btn-primary" disabled="@(_busy || _result is not { Errors: 0, Applied: false } || _result.Created + _result.Updated + _result.CreatedClasses.Count + _result.RenamedClasses.Count == 0)"
                 @onclick="ImportAsync">
             @ImportLabel
         </button>
@@ -129,6 +133,10 @@
                 @if (r.CreatedClasses.Count > 0)
                 {
                     @($" {(r.Applied ? "Created" : "Creates")} {Count(r.CreatedClasses.Count, "class", "classes")}: {string.Join(", ", r.CreatedClasses)}.")
+                }
+                @if (r.RenamedClasses.Count > 0)
+                {
+                    @($" {(r.Applied ? "Renamed" : "Renames")} {Count(r.RenamedClasses.Count, "class", "classes")}: {string.Join(", ", r.RenamedClasses)}.")
                 }
             </span>
         </div>

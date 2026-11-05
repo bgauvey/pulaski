@@ -63,21 +63,21 @@ if (builder.Configuration.GetValue("Pulaski:DatabaseMaintenance", true))
     builder.Services.AddHostedService<SchemaVersionCheck>();
     builder.Services.AddHostedService<PartitionMaintenance>();
     builder.Services.AddHostedService<BootstrapAdministrator>();
-    // One relay per feed (D-061, #78): the ERP and the document system.
-    foreach (var feed in WebhookFeedOptions.Feeds)
-    {
-        builder.Services.AddSingleton<IHostedService>(services => ActivatorUtilities.CreateInstance<WebhookDeliveryService>(services, feed));
-    }
+    // One relay for every feed (D-061, #74), and the retention of what it delivered.
+    builder.Services.AddHostedService<WebhookDeliveryService>();
+    builder.Services.AddHostedService<DeliveryRetentionService>();
     builder.Services.AddHostedService<OeeRollupService>();
     builder.Services.AddHostedService<AllocationRefreshService>();
+    builder.Services.AddHostedService<ConnectionScheduleService>();
 }
 
 // The ERP feed (D-061): its settings for screens, and the HTTP client it sends with.
 builder.Services.AddSingleton<IDeliveryTargets, DeliveryTargets>();
+builder.Services.AddSingleton<MqttFeedSender>();
 builder.Services.AddSingleton<Pulaski.Application.Materials.IMaterialConnectionFetcher, ODataMaterialFetcher>();
 builder.Services.AddHttpClient(ODataMaterialFetcher.ClientName, client => client.Timeout = TimeSpan.FromSeconds(60));
-builder.Services.AddHttpClient(WebhookSender.ClientName, (services, client) =>
-    client.Timeout = TimeSpan.FromSeconds(WebhookFeedOptions.From(services.GetRequiredService<IConfiguration>()).TimeoutSeconds));
+// Each attempt has its feed's own timeout (#73); the client's is only the longest a feed may set.
+builder.Services.AddHttpClient(WebhookSender.ClientName, client => client.Timeout = TimeSpan.FromSeconds(125));
 
 var app = builder.Build();
 

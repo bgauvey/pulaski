@@ -537,5 +537,5 @@ public sealed record ImportPeopleResponse
 /// <summary>The people CSV file (D-054): its header line with every column, for a template.</summary>
 public static class PeopleCsvFormat
 {
-    public const string Header = "employee_number,name,active,crew,username,origin,external_system,external_key,external_version";
+    public const string Header = "employee_number,name,active,crew,username,origin,external_system,external_key,external_version,qualifications";
 }

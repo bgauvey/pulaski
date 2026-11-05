@@ -62,13 +62,15 @@ internal static class LaborEndpoints
         .RequireAnyView();
 
         // Many people into a site from a file read by a source adapter (csv, scim), all or nothing; ?dryRun=true checks them and
-        // saves nothing. ?externalSystem= names the HR or ERP system they belong to, so later imports match them on its key (D-054).
+        // saves nothing. ?externalSystem= names the HR or ERP system they belong to, so later imports match them on its key (D-054);
+        // ?switchOffMissing=true makes it a full list of that system's people: those it no longer has are switched off (#71).
         people.MapPost("/import/{source}", async Task<Ok<ImportPeopleResponse>> (
             string source,
             Guid siteId,
             HttpRequest http,
             bool? dryRun,
             string? externalSystem,
+            bool? switchOffMissing,
             ICommandHandler<ImportPeopleFileCommand, ImportPeopleResponse> handler,
             CancellationToken ct) =>
         {
@@ -82,7 +84,8 @@ internal static class LaborEndpoints
                 });
             }
 
-            return TypedResults.Ok(await handler.HandleAsync(new ImportPeopleFileCommand(siteId, source, text, externalSystem, dryRun ?? false), ct));
+            return TypedResults.Ok(await handler.HandleAsync(
+                new ImportPeopleFileCommand(siteId, source, text, externalSystem, dryRun ?? false) { SwitchOffMissing = switchOffMissing ?? false }, ct));
         })
         .RequirePermission(Permissions.People, Site.Query())
         .Accepts<string>("text/csv", "text/plain", "application/scim+json", "application/json");

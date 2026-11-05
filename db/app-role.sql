@@ -48,6 +48,8 @@ GRANT SELECT, INSERT, UPDATE ON ts.downtime TO pulaski_app;
 -- through ts.drop_old_process_values.
 GRANT SELECT, INSERT, UPDATE ON ts.equipment_alarm TO pulaski_app;
 GRANT SELECT, INSERT ON ts.process_value TO pulaski_app;
+-- Connection runs (#71) are appended, never changed.
+GRANT SELECT, INSERT ON ts.connection_run TO pulaski_app;
 -- Quality results (#65) are appended; a wrong one is excluded with a reason, which is all that may change.
 GRANT SELECT, INSERT ON ts.quality_sample TO pulaski_app;
 GRANT UPDATE (is_excluded, exclusion_reason_id, excluded_note, excluded_by, excluded_at) ON ts.quality_sample TO pulaski_app;
@@ -72,6 +74,9 @@ BEGIN
     END IF;
     IF to_regprocedure('ts.drop_old_process_values(integer)') IS NOT NULL THEN
         GRANT EXECUTE ON FUNCTION ts.drop_old_process_values(integer) TO pulaski_app;
+    END IF;
+    IF to_regprocedure('evt.purge_delivered(integer)') IS NOT NULL THEN
+        GRANT EXECUTE ON FUNCTION evt.purge_delivered(integer) TO pulaski_app;
     END IF;
     IF to_regclass('public.schema_migration') IS NOT NULL THEN
         GRANT SELECT ON public.schema_migration TO pulaski_app;

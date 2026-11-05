@@ -1,20 +1,33 @@
+@using System.Globalization
 @inject PulaskiApiClient Api
 @inject CurrentUser User
 
-@* External sources of material master data Pulaski pulls from (D-068): OData v4 services. Set up by whoever manages integrations;
-   checked and imported by whoever manages materials, all or nothing, as a file is. *@
-<section class="inv-facts mb-3" aria-labelledby="connections-title">
+@* External sources Pulaski pulls master data from (D-068, #72, #71): materials, or people at a site. OData v4, REST JSON and SOAP services,
+   PostgreSQL queries, and SCIM for people. Set up by whoever manages integrations; checked and imported by whoever maintains materials or
+   people, all or nothing, as a file is; on demand or on a schedule, every import recorded. *@
+<section class="inv-facts mb-3" aria-labelledby="connections-title-@Target">
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-        <h2 class="h6 mb-0 me-auto" id="connections-title">Material connections</h2>
+        <h2 class="h6 mb-0 me-auto" id="connections-title-@Target">@(IsPeople ? "People connections" : "Material connections")</h2>
         @if (CanConfigure && _form is null)
         {
-            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => _form = ConnectionForm.New()">Add connection</button>
+            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => _form = ConnectionForm.New(IsPeople)">Add connection</button>
         }
     </div>
     <p class="small text-muted">
-        An OData v4 service your ERP or item master offers. Pulaski reads its items, maps each to the import's fields, and imports them like a
-        materials file: matched on the connection's external system and each item's key, so running it again updates rather than duplicates.
-        Credentials are kept in the API's configuration, never here.
+        @if (IsPeople)
+        {
+            @:An HR or identity system's SCIM 2.0 users, an OData v4, REST (JSON) or SOAP service, or a read-only query of a PostgreSQL database.
+            @:Pulaski reads its people and imports them into this site like a people file: matched on the connection's external system and each
+            @:person's key, so running it again updates rather than duplicates.
+        }
+        else
+        {
+            @:An OData v4, REST (JSON) or SOAP service your ERP or item master offers, or a read-only query of a PostgreSQL database. Pulaski reads its
+            @:items, maps each to the import's fields, and imports them like a materials file: matched on the connection's external system and each
+            @:item's key, so running it again updates rather than duplicates.
+        }
+        A connection runs when you click Import, or on its schedule. Credentials and database connection strings are kept in the API's
+        configuration, never here.
     </p>
 
     <ProblemAlert Error="_error" />
@@ -24,47 +37,152 @@
         <form class="border rounded p-3 mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
             <div class="row g-2">
                 <div class="col-sm-3">
-                    <label class="form-label small" for="mc-code">Code</label>
-                    <input id="mc-code" class="form-control form-control-sm" maxlength="30" placeholder="ERP-ITEMS" disabled="@(form.Id is not null)" @bind="form.Code" />
+                    <label class="form-label small" for="mc-code-@Target">Code</label>
+                    <input id="mc-code-@Target" class="form-control form-control-sm" maxlength="30" placeholder="@(IsPeople ? "HR-PEOPLE" : "ERP-ITEMS")" disabled="@(form.Id is not null)" @bind="form.Code" />
                 </div>
                 <div class="col-sm-5">
-                    <label class="form-label small" for="mc-name">Name</label>
-                    <input id="mc-name" class="form-control form-control-sm" maxlength="100" @bind="form.Name" />
+                    <label class="form-label small" for="mc-name-@Target">Name</label>
+                    <input id="mc-name-@Target" class="form-control form-control-sm" maxlength="100" @bind="form.Name" />
                 </div>
                 <div class="col-sm-4">
-                    <label class="form-label small" for="mc-system">External system</label>
-                    <input id="mc-system" class="form-control form-control-sm" maxlength="100" placeholder="e.g. ERP1" @bind="form.ExternalSystem" />
-                </div>
-                <div class="col-sm-6">
-                    <label class="form-label small" for="mc-url">Service root</label>
-                    <input id="mc-url" class="form-control form-control-sm" maxlength="500" placeholder="https://erp.example.com/odata/v4/items" @bind="form.BaseUrl" />
+                    <label class="form-label small" for="mc-system-@Target">External system</label>
+                    <input id="mc-system-@Target" class="form-control form-control-sm" maxlength="100" placeholder="@(IsPeople ? "e.g. HR1" : "e.g. ERP1")" @bind="form.ExternalSystem" />
                 </div>
                 <div class="col-sm-3">
-                    <label class="form-label small" for="mc-set">Entity set</label>
-                    <input id="mc-set" class="form-control form-control-sm" maxlength="100" placeholder="Products" @bind="form.EntitySet" />
+                    <label class="form-label small" for="mc-kind-@Target">Kind</label>
+                    <select id="mc-kind-@Target" class="form-select form-select-sm" disabled="@(form.Id is not null)" @bind="form.Kind">
+                        @if (IsPeople)
+                        {
+                            <option value="scim">SCIM 2.0</option>
+                        }
+                        <option value="odata">OData v4</option>
+                        <option value="rest">REST (JSON)</option>
+                        <option value="soap">SOAP</option>
+                        <option value="database">PostgreSQL query</option>
+                    </select>
                 </div>
+                @if (form.Kind != "database")
+                {
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="mc-url-@Target">@(form.Kind switch { "odata" => "Service root", "scim" => "SCIM base address", _ => "Address" })</label>
+                        <input id="mc-url-@Target" class="form-control form-control-sm" maxlength="500" @bind="form.BaseUrl"
+                               placeholder="@(form.Kind switch { "rest" => "https://erp.example.com/api/items?plant=1000", "soap" => "https://erp.example.com/soap/items", "scim" => "https://hr.example.com/scim/v2", _ => "https://erp.example.com/odata/v4/items" })" />
+                    </div>
+                    @if (form.Kind != "scim")
+                    {
+                        <div class="col-sm-3">
+                            <label class="form-label small" for="mc-set-@Target">@(form.Kind switch { "rest" => "Items at", "soap" => "Item element", _ => "Entity set" })</label>
+                            <input id="mc-set-@Target" class="form-control form-control-sm" maxlength="100" @bind="form.EntitySet"
+                                   placeholder="@(form.Kind switch { "rest" => "data.items (blank: the whole answer)", "soap" => "Material", _ => "Products" })" />
+                        </div>
+                    }
+                }
                 <div class="col-sm-3">
                     <div class="form-check mt-4">
-                        <input class="form-check-input" type="checkbox" id="mc-active" @bind="form.IsActive" />
-                        <label class="form-check-label small" for="mc-active">Active</label>
+                        <input class="form-check-input" type="checkbox" id="mc-active-@Target" @bind="form.IsActive" />
+                        <label class="form-check-label small" for="mc-active-@Target">Active</label>
                     </div>
                 </div>
-                <div class="col-12">
-                    <label class="form-label small" for="mc-filter">Filter <span class="text-muted">(optional, OData $filter)</span></label>
-                    <input id="mc-filter" class="form-control form-control-sm" maxlength="1000" placeholder="Plant eq '1000' and Blocked eq false" @bind="form.Filter" />
-                </div>
-            </div>
-            <div class="small fw-semibold mt-3 mb-1">Fields: Pulaski's field ← the service's property (use / for a property of a property, such as Unit/Code)</div>
-            <div class="row g-2">
-                @foreach (var field in ConnectionForm.Fields)
+                @if (form.Kind is "odata" or "scim")
                 {
-                    <div class="col-sm-3" @key="field">
-                        <label class="form-label small mb-0" for="mc-f-@field">@field@(field is "code" or "external_key" ? " (required)" : "")</label>
-                        <input id="mc-f-@field" class="form-control form-control-sm" maxlength="400" value="@form.Map.GetValueOrDefault(field)"
-                               @onchange="e => form.Map[field] = e.Value?.ToString() ?? string.Empty" />
+                    <div class="col-12">
+                        <label class="form-label small" for="mc-filter-@Target">Filter <span class="text-muted">(optional, @(form.Kind == "scim" ? "SCIM filter" : "OData $filter"))</span></label>
+                        <input id="mc-filter-@Target" class="form-control form-control-sm" maxlength="1000" @bind="form.Filter"
+                               placeholder="@(form.Kind == "scim" ? "active eq true" : "Plant eq '1000' and Blocked eq false")" />
+                    </div>
+                }
+                else if (form.Kind == "rest")
+                {
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="mc-next-@Target">Next page at <span class="text-muted">(optional)</span></label>
+                        <input id="mc-next-@Target" class="form-control form-control-sm" maxlength="100" placeholder="links.next" @bind="form.NextLinkPath" />
+                    </div>
+                }
+                else if (form.Kind == "soap")
+                {
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="mc-action-@Target">SOAPAction <span class="text-muted">(optional)</span></label>
+                        <input id="mc-action-@Target" class="form-control form-control-sm" maxlength="500" @bind="form.SoapAction" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small" for="mc-body-@Target">Request envelope</label>
+                        <textarea id="mc-body-@Target" class="form-control form-control-sm font-monospace" rows="6" maxlength="20000" @bind="form.RequestBody"></textarea>
+                    </div>
+                }
+                else if (form.Kind == "database")
+                {
+                    <div class="col-12">
+                        <label class="form-label small" for="mc-query-@Target">Query <span class="text-muted">(one SELECT, run read-only; the connection string is <code>MaterialConnections:&lt;code&gt;:ConnectionString</code>)</span></label>
+                        <textarea id="mc-query-@Target" class="form-control form-control-sm font-monospace" rows="5" maxlength="4000" @bind="form.Query"
+                                  placeholder="@(IsPeople ? "SELECT emp_no, full_name, active FROM hr.employees WHERE plant = '1000'" : "SELECT item_no, description, uom FROM erp.items WHERE plant = '1000'")"></textarea>
                     </div>
                 }
             </div>
+
+            <div class="row g-2 mt-1 align-items-end">
+                <div class="col-sm-3">
+                    <label class="form-label small" for="mc-when-@Target">Runs</label>
+                    <select id="mc-when-@Target" class="form-select form-select-sm" @bind="form.ScheduleMode">
+                        <option value="none">When you click Import</option>
+                        <option value="hours">Every so many hours</option>
+                        <option value="daily">Daily at set times</option>
+                    </select>
+                </div>
+                @if (form.ScheduleMode == "hours")
+                {
+                    <div class="col-sm-2">
+                        <label class="form-label small" for="mc-hours-@Target">Every (hours)</label>
+                        <input id="mc-hours-@Target" type="number" min="1" max="168" class="form-control form-control-sm" @bind="form.EveryHours" />
+                    </div>
+                }
+                else if (form.ScheduleMode == "daily")
+                {
+                    <div class="col-sm-4">
+                        <label class="form-label small" for="mc-times-@Target">At (UTC, up to 4)</label>
+                        <input id="mc-times-@Target" class="form-control form-control-sm" maxlength="40" placeholder="02:00, 14:00" @bind="form.DailyTimes" />
+                    </div>
+                }
+                <div class="col-sm">
+                    @if (IsPeople)
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="mc-missing-@Target" @bind="form.SwitchOffMissing" />
+                            <label class="form-check-label small" for="mc-missing-@Target">Switch off people the source no longer has</label>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="mc-classes-saved-@Target" @bind="form.CreateClasses" />
+                            <label class="form-check-label small" for="mc-classes-saved-@Target">Create missing classes</label>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @if (form.Kind == "scim")
+            {
+                <p class="small text-muted mt-3 mb-0">
+                    SCIM users are read as a SCIM file is: the enterprise extension's <code>employeeNumber</code>, <code>displayName</code>,
+                    <code>active</code>, and <code>externalId</code> (else <code>id</code>) as the key. No fields to map.
+                </p>
+            }
+            else
+            {
+                <div class="small fw-semibold mt-3 mb-1">
+                    @(form.Kind == "database" ? "Fields: Pulaski's field ← the query's column" : "Fields: Pulaski's field ← the item's property (use / for a property of a property, such as Unit/Code)")
+                </div>
+                <div class="row g-2">
+                    @foreach (var field in Fields)
+                    {
+                        <div class="col-sm-3" @key="field">
+                            <label class="form-label small mb-0" for="mc-f-@Target-@field">@field@(Required.Contains(field) ? " (required)" : "")</label>
+                            <input id="mc-f-@Target-@field" class="form-control form-control-sm" maxlength="400" value="@form.Map.GetValueOrDefault(field)"
+                                   @onchange="e => form.Map[field] = e.Value?.ToString() ?? string.Empty" />
+                        </div>
+                    }
+                </div>
+            }
             <div class="d-flex gap-2 mt-3">
                 <button type="submit" class="btn btn-sm btn-primary" disabled="@_busy">Save</button>
                 <button type="button" class="btn btn-sm btn-link" @onclick="() => _form = null">Cancel</button>
@@ -87,16 +205,35 @@
     {
         <div class="table-panel">
             <table class="table table-sm align-middle mb-0">
-                <thead><tr><th>Connection</th><th>Service</th><th>Items are</th><th>Credentials</th><th>Last import</th><th></th></tr></thead>
+                <thead><tr><th>Connection</th><th>Source</th><th>Runs</th><th>Credentials</th><th>Last import</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var c in _connections)
                     {
                         <tr @key="c.Id" class="@(c.IsActive ? "" : "text-muted")">
-                            <td><span class="fw-semibold">@c.Code</span><div class="small text-muted">@c.Name@(c.IsActive ? "" : " · off")</div></td>
-                            <td class="small text-break">@c.BaseUrl/@c.EntitySet@(c.Filter is { } f ? $" · {f}" : "")</td>
-                            <td class="small">@c.ExternalSystem</td>
+                            <td><span class="fw-semibold">@c.Code</span><div class="small text-muted">@c.Name · @c.ExternalSystem@(c.IsActive ? "" : " · off")</div></td>
+                            <td class="small text-break">@MaterialConnectionView.Source(c)</td>
+                            <td class="small">
+                                @MaterialConnectionView.Schedule(c)
+                                @if (c.NextRunAt is { } next && c.IsActive)
+                                {
+                                    <div class="text-muted">Next @Display.SiteTime(next, null) UTC</div>
+                                }
+                            </td>
                             <td class="small">@(c.HasCredentials ? "Configured" : "None configured")</td>
-                            <td class="small">@(c.LastRunAt is { } at ? $"{Display.SiteTime(at, null)} UTC by {c.LastRunBy}: {c.LastRunSummary}" : "Never")</td>
+                            <td class="small">
+                                @if (c.LastRunAt is { } at)
+                                {
+                                    @if (c.LastRunOutcome is "failed" or "not_applied")
+                                    {
+                                        <span class="chip chip-warn">@MaterialConnectionView.Outcome(c.LastRunOutcome)</span>
+                                    }
+                                    <div>@($"{Display.SiteTime(at, null)} UTC by {c.LastRunBy}: {c.LastRunSummary}")</div>
+                                }
+                                else
+                                {
+                                    @:Never
+                                }
+                            </td>
                             <td class="text-end text-nowrap">
                                 @if (CanRun && c.IsActive)
                                 {
@@ -104,17 +241,50 @@
                                     <button type="button" class="btn btn-sm btn-primary ms-1" disabled="@(_busy || !ReadyToImport(c))" @onclick="() => RunAsync(c, dryRun: false)"
                                             title="Check first; import when the check finds no errors">Import</button>
                                 }
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => ToggleHistoryAsync(c)">@(_historyFor == c.Id ? "Hide history" : "History")</button>
                                 @if (CanConfigure)
                                 {
                                     <button type="button" class="btn btn-sm btn-link" @onclick="() => _form = ConnectionForm.For(c)">Edit</button>
                                 }
                             </td>
                         </tr>
+                        @if (_historyFor == c.Id)
+                        {
+                            <tr @key="@($"{c.Id}-history")">
+                                <td colspan="6">
+                                    @if (_history is null)
+                                    {
+                                        <p class="small text-muted mb-0">Loading…</p>
+                                    }
+                                    else if (_history.Count == 0)
+                                    {
+                                        <p class="small text-muted mb-0">No imports yet. Checks aren't recorded.</p>
+                                    }
+                                    else
+                                    {
+                                        <table class="table table-sm mb-0">
+                                            <thead><tr><th>Started (UTC)</th><th>By</th><th>Outcome</th><th>What it did</th></tr></thead>
+                                            <tbody>
+                                                @foreach (var run in _history)
+                                                {
+                                                    <tr @key="run.Id" class="@(run.Outcome == "applied" ? "" : "table-warning")">
+                                                        <td class="small text-nowrap">@Display.SiteTime(run.StartedAt, null)</td>
+                                                        <td class="small">@(run.Trigger == "schedule" ? "Schedule" : run.Actor)</td>
+                                                        <td class="small">@MaterialConnectionView.Outcome(run.Outcome)</td>
+                                                        <td class="small">@run.Summary</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    }
+                                </td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
         </div>
-        @if (CanRun)
+        @if (CanRun && !IsPeople)
         {
             <div class="form-check mt-2">
                 <input class="form-check-input" type="checkbox" id="mc-classes" @bind="_createClasses" />
@@ -132,14 +302,18 @@
         <div class="drawer-alert @(r.Errors > 0 || r.FileProblems.Count > 0 ? "is-warning" : "") mt-3" role="status">
             <span>@MaterialConnectionView.Summary(ran.Code, r)</span>
         </div>
-        @if (r.Rows.Any(x => x.Action == "error"))
+        @if (r.Rows.Any(x => x.Action == "error" || x.Notes.Count > 0))
         {
             <table class="table table-sm mt-2 mb-0">
-                <thead><tr><th>Item</th><th>Code</th><th>Problem</th></tr></thead>
+                <thead><tr><th>Item</th><th>Code</th><th>What</th></tr></thead>
                 <tbody>
-                    @foreach (var row in r.Rows.Where(x => x.Action == "error").Take(200))
+                    @foreach (var row in r.Rows.Where(x => x.Action == "error" || x.Notes.Count > 0).Take(200))
                     {
-                        <tr @key="row.Line"><td>@row.Line</td><td>@row.Code</td><td class="small">@row.Message</td></tr>
+                        <tr @key="@($"{row.Line}-{row.Code}")" class="@(row.Action == "error" ? "is-error" : "")">
+                            <td>@(row.Line == 0 ? "" : row.Line)</td>
+                            <td>@row.Code</td>
+                            <td class="small">@(row.Message ?? string.Join(" ", row.Notes))</td>
+                        </tr>
                     }
                 </tbody>
             </table>
@@ -148,7 +322,21 @@
 </section>
 
 @code {
-    /// <summary>Called after an import changed materials, so the page can reload them.</summary>
+    private static readonly string[] MaterialFields =
+        ["code", "name", "type", "base_unit", "class", "class_name", "description", "lot_tracked", "shelf_life_days", "active", "external_key", "external_version"];
+
+    private static readonly string[] PeopleFields =
+        ["employee_number", "name", "active", "crew", "username", "origin", "external_key", "external_version", "qualifications"];
+
+    /// <summary><c>materials</c> (the default) or <c>people</c>.</summary>
+    [Parameter]
+    public string Target { get; set; } = "materials";
+
+    /// <summary>People: the site whose connections these are.</summary>
+    [Parameter]
+    public Guid? SiteId { get; set; }
+
+    /// <summary>Called after an import changed materials or people, so the page can reload them.</summary>
     [Parameter]
     public EventCallback OnImported { get; set; }
 
@@ -160,22 +348,32 @@
     private MaterialConnectionDto? _runFor;
     private ImportMaterialsResponse? _result;
     private bool _resultWasCheck;
+    private Guid? _historyFor;
+    private IReadOnlyList<ConnectionRunDto>? _history;
 
-    private bool CanConfigure => User.Can(PermissionCodes.Integrations);
+    private bool IsPeople => Target == "people";
 
-    private bool CanRun => User.Can(PermissionCodes.Materials);
+    private string[] Fields => IsPeople ? PeopleFields : MaterialFields;
+
+    private string[] Required => IsPeople ? ["employee_number", "name", "external_key"] : ["code", "external_key"];
+
+    private bool CanConfigure => IsPeople ? User.Can(PermissionCodes.Integrations, SiteId) : User.Can(PermissionCodes.Integrations);
+
+    private bool CanRun => IsPeople ? User.Can(PermissionCodes.People, SiteId) : User.Can(PermissionCodes.Materials);
 
     // Import comes after a clean check of the same connection, as for a file.
     private bool ReadyToImport(MaterialConnectionDto c) =>
         _resultWasCheck && _runFor?.Id == c.Id && _result is { Errors: 0, FileProblems.Count: 0 } r && r.Created + r.Updated > 0;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    protected override Task OnParametersSetAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
         try
         {
-            _connections = await Api.ListMaterialConnectionsAsync();
+            _connections = IsPeople
+                ? SiteId is { } site ? await Api.ListPeopleConnectionsAsync(site) : []
+                : await Api.ListMaterialConnectionsAsync();
         }
         catch (ApiException ex)
         {
@@ -185,11 +383,18 @@
 
     private async Task SaveAsync()
     {
-        _busy = true;
         _error = null;
+        if (_form!.ScheduleMode == "daily" && MaterialConnectionView.ParseTimes(_form.DailyTimes) is not { Count: > 0 })
+        {
+            _error = new ApiException(400, "Times", "Give the daily times as hours and minutes in UTC, such as 02:00, 14:30.", null);
+            return;
+        }
+
+        _busy = true;
         try
         {
-            await Api.SaveMaterialConnectionAsync(_form!.Id, _form.ToRequest());
+            var request = _form.ToRequest(SiteId);
+            _ = IsPeople ? await Api.SavePeopleConnectionAsync(_form.Id, request) : await Api.SaveMaterialConnectionAsync(_form.Id, request);
             _form = null;
             await LoadAsync();
         }
@@ -208,12 +413,22 @@
         (_busy, _error, _runFor, _result) = (true, null, connection, null);
         try
         {
-            _result = await Api.RunMaterialConnectionAsync(connection.Id, new RunMaterialConnectionRequest { DryRun = dryRun, CreateClasses = _createClasses });
+            _result = IsPeople
+                ? MaterialConnectionView.AsImport(await Api.RunPeopleConnectionAsync(connection.Id, new RunPeopleConnectionRequest { DryRun = dryRun }))
+                : await Api.RunMaterialConnectionAsync(connection.Id, new RunMaterialConnectionRequest { DryRun = dryRun, CreateClasses = _createClasses });
             _resultWasCheck = dryRun;
-            if (!dryRun && _result.Applied)
+            if (!dryRun)
             {
                 await LoadAsync();
-                await OnImported.InvokeAsync();
+                if (_historyFor == connection.Id)
+                {
+                    _history = await Api.ListConnectionRunsAsync(Target, connection.Id);
+                }
+
+                if (_result.Applied)
+                {
+                    await OnImported.InvokeAsync();
+                }
             }
         }
         catch (ApiException ex)
@@ -226,23 +441,49 @@
         }
     }
 
+    private async Task ToggleHistoryAsync(MaterialConnectionDto connection)
+    {
+        if (_historyFor == connection.Id)
+        {
+            (_historyFor, _history) = (null, null);
+            return;
+        }
+
+        (_historyFor, _history) = (connection.Id, null);
+        try
+        {
+            _history = await Api.ListConnectionRunsAsync(Target, connection.Id);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
     private sealed class ConnectionForm
     {
-        public static readonly string[] Fields =
-            ["code", "name", "type", "base_unit", "class", "class_name", "description", "lot_tracked", "shelf_life_days", "active", "external_key", "external_version"];
-
         public Guid? Id { get; private init; }
         public long Version { get; private init; }
         public string? Code { get; set; }
         public string? Name { get; set; }
+        public string Kind { get; set; } = "odata";
         public string? BaseUrl { get; set; }
         public string? EntitySet { get; set; }
         public string? Filter { get; set; }
+        public string? NextLinkPath { get; set; }
+        public string? RequestBody { get; set; }
+        public string? SoapAction { get; set; }
+        public string? Query { get; set; }
         public string? ExternalSystem { get; set; }
         public bool IsActive { get; set; } = true;
+        public string ScheduleMode { get; set; } = "none";
+        public int? EveryHours { get; set; } = 24;
+        public string? DailyTimes { get; set; }
+        public bool CreateClasses { get; set; }
+        public bool SwitchOffMissing { get; set; }
         public Dictionary<string, string> Map { get; private init; } = [];
 
-        public static ConnectionForm New() => new();
+        public static ConnectionForm New(bool people) => new() { Kind = people ? "scim" : "odata" };
 
         public static ConnectionForm For(MaterialConnectionDto c) => new()
         {
@@ -250,25 +491,47 @@
             Version = c.Version,
             Code = c.Code,
             Name = c.Name,
+            Kind = c.Kind,
             BaseUrl = c.BaseUrl,
             EntitySet = c.EntitySet,
             Filter = c.Filter,
+            NextLinkPath = c.NextLinkPath,
+            RequestBody = c.RequestBody,
+            SoapAction = c.SoapAction,
+            Query = c.Query,
             ExternalSystem = c.ExternalSystem,
             IsActive = c.IsActive,
+            ScheduleMode = c.ScheduleEveryHours is not null ? "hours" : c.ScheduleDailyAt.Count > 0 ? "daily" : "none",
+            EveryHours = c.ScheduleEveryHours ?? 24,
+            DailyTimes = string.Join(", ", c.ScheduleDailyAt.Select(t => t.ToString("HH:mm", CultureInfo.InvariantCulture))),
+            CreateClasses = c.CreateClasses,
+            SwitchOffMissing = c.SwitchOffMissing,
             Map = new Dictionary<string, string>(c.FieldMap),
         };
 
-        public SaveMaterialConnectionRequest ToRequest() => new()
+        public SaveMaterialConnectionRequest ToRequest(Guid? siteId) => new()
         {
             Version = Version,
             Code = Code ?? "",
             Name = Name ?? "",
-            BaseUrl = BaseUrl ?? "",
-            EntitySet = EntitySet ?? "",
-            Filter = Filter,
+            Kind = Kind,
+            BaseUrl = Kind == "database" ? null : Blank(BaseUrl),
+            EntitySet = Kind is "database" or "scim" ? "" : EntitySet ?? "",
+            Filter = Kind is "odata" or "scim" ? Blank(Filter) : null,
+            NextLinkPath = Kind == "rest" ? Blank(NextLinkPath) : null,
+            RequestBody = Kind == "soap" ? Blank(RequestBody) : null,
+            SoapAction = Kind == "soap" ? Blank(SoapAction) : null,
+            Query = Kind == "database" ? Blank(Query) : null,
             ExternalSystem = ExternalSystem ?? "",
             IsActive = IsActive,
-            FieldMap = Map.Where(m => !string.IsNullOrWhiteSpace(m.Value)).ToDictionary(m => m.Key, m => m.Value.Trim()),
+            FieldMap = Kind == "scim" ? new Dictionary<string, string>() : Map.Where(m => !string.IsNullOrWhiteSpace(m.Value)).ToDictionary(m => m.Key, m => m.Value.Trim()),
+            SiteId = siteId,
+            ScheduleEveryHours = ScheduleMode == "hours" ? EveryHours : null,
+            ScheduleDailyAt = ScheduleMode == "daily" ? MaterialConnectionView.ParseTimes(DailyTimes) ?? [] : [],
+            CreateClasses = CreateClasses,
+            SwitchOffMissing = SwitchOffMissing,
         };
+
+        private static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
     }
 }

@@ -66,7 +66,7 @@ public class DeliveryTests
         deliveries.Add(Sink, DeliveryStatuses.Failed);
         deliveries.Add(Sink, DeliveryStatuses.Failed);
         deliveries.Add("webhook:other", DeliveryStatuses.Failed);
-        var handler = new RetryFailedDeliveriesHandler(f.Stores.UnitOfWork, deliveries, new Targets(), f.Stores.Events, f.Events, new FixedRequestContext(), f.Time);
+        var handler = new RetryFailedDeliveriesHandler(f.Stores.UnitOfWork, deliveries, new Targets(), deliveries, f.Stores.Events, f.Events, new FixedRequestContext(), f.Time);
 
         Assert.Equal(2, (await handler.HandleAsync(new RetryFailedDeliveriesCommand(), CancellationToken.None)).Retried);
         Assert.Single(f.Stores.Events.Appended);
@@ -74,9 +74,70 @@ public class DeliveryTests
         Assert.Single(f.Stores.Events.Appended);
     }
 
+    [Fact]
+    public void An_answer_body_acknowledges_only_with_a_known_status_and_kinds_map_to_type_prefixes()
+    {
+        Assert.Equal(new Acknowledgement("rejected", "ERP-1", "Unknown item"),
+            Acknowledgement.FromResponse("""{"status":"Rejected","reference":"ERP-1","message":" Unknown item "}"""));
+        Assert.Equal(new Acknowledgement("accepted", null, null), Acknowledgement.FromResponse("""{"status":"accepted"}"""));
+        Assert.Null(Acknowledgement.FromResponse("""{"status":"maybe"}"""));
+        Assert.Null(Acknowledgement.FromResponse("OK"));
+        Assert.Null(Acknowledgement.FromResponse("""{"status":"""));
+        Assert.Null(Acknowledgement.FromResponse(null));
+        Assert.Equal("Rejected by the receiver.", new Acknowledgement("rejected", null, null).RejectionText);
+
+        Assert.Equal(["pulaski.work_order.", "pulaski.job.", "pulaski.job.production_", "pulaski.partial_batch."],
+            DeliveryKinds.PrefixesOf([DeliveryKinds.Production, DeliveryKinds.Orders]));
+        Assert.Equal([DeliveryKinds.Inventory], DeliveryKinds.KindsOf(["pulaski.lot.", "pulaski.job."]));
+    }
+
+    [Fact]
+    public void Feed_settings_need_an_https_address_when_on_and_values_in_range()
+    {
+        DeliveryFeedSettings With(bool enabled = true, string? url = "https://erp.example.com/in", string[]? kinds = null, int attempts = 12) =>
+            new("erp", enabled, url, kinds ?? ["inventory"], false, attempts, 15, 5, true);
+
+        Assert.Empty(With().Problems());
+        Assert.Empty(With(url: "http://localhost:5000/in").Problems());
+        Assert.Empty(With(enabled: false, url: null, kinds: []).Problems());
+        Assert.Contains(With(url: null).Problems(), p => p.Contains("address", StringComparison.Ordinal));
+        Assert.Contains(With(url: "http://erp.example.com/in").Problems(), p => p.Contains("https://", StringComparison.Ordinal));
+        Assert.Contains(With(url: "ftp://x/y").Problems(), p => p.Contains("full https://", StringComparison.Ordinal));
+        Assert.Contains(With(kinds: []).Problems(), p => p.Contains("at least one kind", StringComparison.Ordinal));
+        Assert.Contains(With(kinds: ["everything"]).Problems(), p => p.Contains("'everything'", StringComparison.Ordinal));
+        Assert.Contains(With(attempts: 0).Problems(), p => p.Contains("Attempts", StringComparison.Ordinal));
+
+        // Saved settings take over from the configuration; the configuration's secret stays.
+        var configured = new DeliveryTarget("webhook:erp", false, null, ["pulaski.lot."]) { SecretConfigured = true };
+        var effective = DeliveryFeeds.Effective(configured, With(kinds: ["labor"]));
+        Assert.Equal((true, "erp.example.com", true), (effective.Enabled, effective.TargetHost, effective.SecretConfigured));
+        Assert.Equal(["pulaski.labor."], effective.EventTypes);
+        Assert.Same(configured, DeliveryFeeds.Effective(configured, null));
+    }
+
+    [Fact]
+    public void Feed_codes_topics_and_mqtt_settings_are_checked()
+    {
+        Assert.Null(DeliveryFeedKinds.CodeProblem("wms-1"));
+        Assert.NotNull(DeliveryFeedKinds.CodeProblem("WMS"));
+        Assert.NotNull(DeliveryFeedKinds.CodeProblem("1wms"));
+        Assert.Equal("mqtt:wms", DeliveryFeedKinds.Sink(DeliveryFeedKinds.Mqtt, "wms"));
+        var subject = Guid.CreateVersion7();
+        Assert.Equal($"plant1/pulaski/lot/received/v1/lot/{subject}", DeliveryFeedKinds.Topic("plant1/{type}/{subjectType}/{subject}", "pulaski.lot.received.v1", "lot", subject));
+
+        DeliveryFeedSettings Mqtt(string? url = "mqtt://broker:1883", string? topic = "pulaski/{type}") =>
+            new("wms", true, url, ["inventory"], false, 12, 15, 5, true, "Warehouse", DeliveryFeedKinds.Mqtt, topic);
+        Assert.Empty(Mqtt().Problems());
+        Assert.Empty(Mqtt(url: "mqtts://broker.example.com").Problems());
+        Assert.Contains(Mqtt(url: "https://broker").Problems(), p => p.Contains("mqtt://", StringComparison.Ordinal));
+        Assert.Contains(Mqtt(topic: "pulaski/#").Problems(), p => p.Contains("topic", StringComparison.Ordinal));
+        Assert.Contains(Mqtt(topic: null).Problems(), p => p.Contains("topic", StringComparison.Ordinal));
+        Assert.Contains((Mqtt() with { Kind = "kafka" }).Problems(), p => p.Contains("webhook or an MQTT broker", StringComparison.Ordinal));
+    }
+
     internal sealed class Targets : IDeliveryTargets
     {
-        public DeliveryTarget Erp { get; } = new(Sink, true, "erp.test", ["pulaski.lot."]);
+        public DeliveryTarget Erp { get; } = new(Sink, true, "erp.test", ["pulaski.lot."]) { IsBuiltIn = true };
 
         public DeliveryTarget? Find(string feed) => feed == "erp" ? Erp : null;
     }

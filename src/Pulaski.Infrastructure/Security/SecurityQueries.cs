@@ -121,6 +121,7 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
             SiteOf.Badge => "SELECT p.site_id FROM sec.badge b JOIN core.person p ON p.id = b.person_id WHERE b.id = @Id",
             SiteOf.LotAttribute => "SELECT site_id FROM core.lot_attribute WHERE id = @Id",
             SiteOf.LotDocument => "SELECT site_id FROM core.lot_document WHERE id = @Id",
+            SiteOf.Connection => "SELECT site_id FROM core.material_connection WHERE id = @Id",
             SiteOf.ExpectedReceipt => "SELECT site_id FROM core.expected_receipt WHERE id = @Id",
             SiteOf.Container => "SELECT site_id FROM core.container WHERE id = @Id",
             SiteOf.LaborBreak => "SELECT site_id FROM core.labor_break WHERE id = @Id",

@@ -263,24 +263,39 @@ Per-site mapping of raw state to an OEE category (D-005). Raw state is always st
 
 ## 3. Material, BOM and capability
 
-### core.material_connection — external sources of material master data (D-068) · *In use*
+### core.material_connection — external sources of material master data (D-068, D-089) · *In use*
 
-An OData v4 service Pulaski pulls items from, on demand, through the materials import (D-034, D-053): the same rules, events and all-or-nothing transaction as a file. No secrets: credentials are in the API's configuration under `MaterialConnections:<code>`.
+A source Pulaski pulls items from, on demand, through the materials import (D-034, D-053): an OData v4, REST (JSON) or SOAP service, or a read-only query of a PostgreSQL database. The same rules, events and all-or-nothing transaction as a file. No secrets: credentials and connection strings are in the API's configuration under `MaterialConnections:<code>`.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
 | `code` | text | no | Unique, upper case, fixed once created: it names the connection's configuration section. |
 | `name` | text | no | For screens, and each event's reason (*<name> import*). |
-| `kind` | text | no | `odata` (OData v4). |
-| `base_url` | text | no | The service root: https (http only on the API's own machine). |
-| `entity_set` | text | no | The entity set holding the items, such as `Products`. |
-| `filter` | text | yes | An OData `$filter` sent with the request. |
+| `kind` | text | no | `odata` (default), `rest`, `soap` or `database` (D-089). Fixed once created. |
+| `base_url` | text | yes | The address: https (http only on the API's own machine). OData: the service root; REST: the first page, query allowed; SOAP: where the envelope is posted. Null exactly for `database`. |
+| `entity_set` | text | no | OData: the entity set, such as `Products`. REST: where the items array is in the answer (`data.items`; empty = the whole answer). SOAP: the element that holds one item. Empty for `database`. |
+| `filter` | text | yes | An OData `$filter` sent with the request; only for `odata`. |
+| `next_link_path` | text | yes | REST: where the answer gives the next page's address (`links.next`), relative to the page. |
+| `request_body` | text | yes | SOAP: the envelope to post (≤ 20,000 characters). Set exactly for `soap`. |
+| `soap_action` | text | yes | SOAP: the `SOAPAction` header, if the service wants one. |
+| `query` | text | yes | Database: one `SELECT` or `WITH` statement (≤ 4,000 characters), run read-only with a 30 s timeout. Set exactly for `database`. |
 | `external_system` | text | no | The system the items belong to; with each item's key it is what the import matches on (D-033). |
-| `field_map` | jsonb | no | Import field → the service's property (or `A/B` path): `{"code": "Number", "external_key": "Id", ...}`. Code and external key are required. |
+| `field_map` | jsonb | no | Import field → the item's property (or `A/B` path), or the query's column: `{"code": "Number", "external_key": "Id", ...}`. Code and external key are required. |
 | `is_active` | boolean | no | False: it can't be run. |
+| `target` | text | no | `materials` (default) or `people` (D-090). Fixed once created. |
+| `site_id` | uuid | yes | FK → `core.equipment`. People: the site they are imported into; set exactly for `people`. Fixed once created. |
+| `schedule_every_hours` | smallint | yes | Runs every this many hours (1–168). |
+| `schedule_daily_at` | time[] | yes | Or daily at these UTC times (1–4); not both. Neither: on demand only. |
+| `next_run_at` | timestamptz | yes | When the scheduler runs it next; null when not scheduled or switched off. Indexed (`material_connection_due_ix`). |
+| `create_classes` | boolean | no | Materials: a scheduled (or manual) run creates the classes its items name (D-055). |
+| `switch_off_missing` | boolean | no | People: the source is a full list; the system's people it no longer has are switched off. |
 | `last_run_at`, `last_run_by`, `last_run_summary` | timestamptz, text, text | yes | The last import (not a check): when, who and what it did. |
+| `last_run_outcome` | text | yes | `applied`, `not_applied` (row errors, nothing saved) or `failed`. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+`material_connection_kind_ck` keeps the kind and its columns consistent (`scim` since D-090); `material_connection_target_ck` keeps target, site
+and kind consistent (SCIM is for people); `material_connection_schedule_ck` allows one kind of schedule.
 
 ### core.material_class — material groups · *In use*
 
@@ -1690,6 +1705,21 @@ One row for every job status change, written in the same transaction as the chan
 | `actor_user_id` | uuid | yes | Who, once `sec.app_user` exists. |
 | `actor_id` | text | yes | Who, as on `evt.event` (`issuer\|subject`, `anonymous` until sign-in). |
 
+### ts.connection_run — every import a connection ran (D-090) · *In use*
+
+Partitioned by month on `started_at`. One row per import (not a check), on demand or by the schedule. Appended only.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id`, `started_at` | uuid, timestamptz | no | Primary key; when the run began. |
+| `finished_at` | timestamptz | no | When it was recorded. |
+| `connection_id` | uuid | no | FK → `core.material_connection`. |
+| `trigger` | text | no | `manual` or `schedule`. |
+| `outcome` | text | no | `applied`, `not_applied` (some rows had errors, nothing saved) or `failed` (the source couldn't be read, or the run stopped). |
+| `created_count`, `updated_count`, `unchanged_count`, `error_count` | integer | no | What the import did. |
+| `summary` | text | no | The words shown on the screen (≤ 2000), such as the service's error. |
+| `actor` | text | no | Who ran it; `system` for the schedule. |
+
 ### ts.quality_sample — quality results, one sample per row (#65, D-085) · *In use*
 
 Variables store the values and their statistics; attributes store inspected and defective counts. The specification item in force and whether
@@ -1807,6 +1837,31 @@ Every command appends its CloudEvents event here in the same transaction as the 
 | `data` | jsonb | no | Payload; changes carry `before` and `after`. |
 | `prev_hash`, `hash` | bytea | yes | Optional per-site hash chain for tamper evidence. |
 
+### core.delivery_feed — a delivery feed and its settings (#73, #74, D-087, D-088) · *In use*
+
+Kept from Configure → Integrations: everything but the secrets (signing, a broker's sign-in), which stay in the API's configuration. The built-in
+`erp` and `documents` feeds may have no row and then run on their configuration; a feed added on the screen always has one. Code and kind are
+fixed: the feed's sink, and so its queue and checkpoint, is `kind:code`.
+The relay reads the row each round, so a change takes effect without a restart. Saved with an event (`pulaski.delivery_feed.settings_saved.v1`,
+before and after). Version by `xmin`, 0 while there is no row.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `feed` | text | no | Primary key: the feed's code, 2 to 30 lower-case letters, digits, `-` and `_` (`delivery_feed_code_ck`); `erp` and `documents` are built in. |
+| `name` | text | no | What the screen calls it; blank for a built-in feed's default name. |
+| `kind` | text | no | `webhook` (an HTTPS receiver) or `mqtt` (a broker, D-088). Fixed. |
+| `enabled` | boolean | no | Send to the receiver. Needs an address and at least one kind. |
+| `url` | text | yes | A webhook's address (https, or plain http only to this machine), or a broker's (`mqtt://` or `mqtts://` host and port). |
+| `topic` | text | yes | An MQTT feed's topic template, such as `pulaski/{type}`; `{type}` (dots as slashes), `{subjectType}` and `{subject}` are filled in. |
+| `event_kinds` | text[] | no | What it sends: `inventory`, `certificates`, `orders`, `production`, `labor`, `stops`, `quality` (`DeliveryKinds`, each a set of event type prefixes). |
+| `include_files` | boolean | no | Send a certificate's file with its event (D-086). |
+| `max_attempts` | integer | no | Attempts before a delivery fails, 1 to 50. Default 12. |
+| `timeout_seconds` | integer | no | How long one attempt waits, 1 to 120. Default 15. |
+| `poll_seconds` | integer | no | How often the relay looks for new events, 1 to 300. Default 5. |
+| `start_from_now` | boolean | no | The first time the feed starts: after the events already logged (true) or from the beginning. |
+| `created_at` | timestamptz | no | Added. |
+| `updated_at`, `updated_by` | timestamptz, text | no, yes | Last saved, and by whom. |
+
 ### evt.sink_checkpoint — outbox progress per adapter (D-061) · *In use*
 
 How far an adapter has read `evt.event`. Each webhook feed (`webhook:erp`, and since D-086 `webhook:documents`) moves it as it copies matching events into `evt.delivery`, in the same statement, so a crash never loses or repeats a capture. Its first row starts at the latest event when `StartFromNow` is on (the default), else at the beginning.
@@ -1825,7 +1880,7 @@ The queue and record of what was sent where. A row is added for each matching ev
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `sink` | text | no | The adapter: `webhook:erp` or `webhook:documents` (D-086). |
+| `sink` | text | no | The feed's sink: `webhook:erp`, `webhook:documents` (D-086), or `kind:code` for a feed added on the screen, such as `mqtt:wms` (D-088). Delivered rows older than `Retention:DeliveredDays` (90) are deleted by `evt.purge_delivered` (`delivery_delivered_ix`); other rows stay. |
 | `event_id` | uuid | no | The event (`evt.event.id`; no FK, it is partitioned). Also the message's `Idempotency-Key`. Unique with `sink`. |
 | `event_recorded_at` | timestamptz | no | The event's `recorded_at`, to find it in its partition. |
 | `tx_id`, `position` | xid8, bigint | no | The event's order, copied so the queue sorts and holds without the join. |
@@ -1835,11 +1890,15 @@ The queue and record of what was sent where. A row is added for each matching ev
 | `attempts` | integer | no | Attempts so far. A retry carries on counting. |
 | `next_attempt_at` | timestamptz | no | When a pending row is next due; growing waits after each failure, now after a retry. |
 | `last_attempt_at` | timestamptz | yes | When it was last tried. |
-| `last_status_code` | integer | yes | The receiver's last HTTP status; null when there was no answer. |
+| `last_status_code` | integer | yes | The receiver's last HTTP status; null when there was no answer. For an MQTT feed, the broker's answer as one: 200 published, 403 not allowed, 400 refused, 429 over quota, 503 anything else. |
 | `last_error` | text | yes | What went wrong, up to 300 characters of the receiver's answer. |
 | `delivered_at` | timestamptz | yes | When the receiver accepted it. |
 | `resolved_by` | text | yes | Who last retried or skipped it. |
 | `resolve_note` | text | yes | The reason given for a skip. |
+| `ack_status` | text | yes | The receiver's acknowledgement (#73, D-087): `accepted` or `rejected`. A rejection fails the delivery (`last_error` says why); an acceptance delivers a failed one. |
+| `ack_reference`, `ack_message` | text | yes | The receiver's own reference for what it booked, and its message; up to 500 characters each. |
+| `ack_source` | text | yes | `response` (in the webhook's 2xx answer body) or `callback` (posted back later, signed). |
+| `ack_at` | timestamptz | yes | When it came. `ack_status`, `ack_source` and `ack_at` are set together (`delivery_ack_ck`). |
 | `created_at`, `updated_at` | timestamptz | no | Captured; last changed. |
 
 Indexes: due rows per sink (`next_attempt_at`, pending only), undelivered rows per subject in order (for holding), and per sink and status (for the screen).

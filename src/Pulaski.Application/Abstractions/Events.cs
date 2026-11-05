@@ -182,6 +182,9 @@ public static class EventTypes
     public const string ContainerRetired = "pulaski.container.retired.v1";
     public const string DeliveryRetried = "pulaski.delivery.retried.v1";
     public const string DeliverySkipped = "pulaski.delivery.skipped.v1";
+    public const string DeliveryAcknowledged = "pulaski.delivery.acknowledged.v1";
+    public const string DeliveryFeedSettingsSaved = "pulaski.delivery_feed.settings_saved.v1";
+    public const string DeliveryFeedCreated = "pulaski.delivery_feed.created.v1";
     public const string LotStatusChanged = "pulaski.lot.status_changed.v1";
     public const string LotConsumed = "pulaski.lot.consumed.v1";
     public const string LotProduced = "pulaski.lot.produced.v1";

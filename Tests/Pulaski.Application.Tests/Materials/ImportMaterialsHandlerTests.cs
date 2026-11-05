@@ -44,6 +44,37 @@ public class ImportMaterialsHandlerTests
     }
 
     [Fact]
+    public async Task Classes_stated_in_a_b2mml_file_are_added_or_renamed_before_the_materials_that_name_them()
+    {
+        Admin.AddClass("RESIN");
+        const string File = """
+            <MaterialInformation>
+              <MaterialClass><ID>resin</ID><Description>Resins</Description></MaterialClass>
+              <MaterialClass><ID>CAPS</ID><Description>End caps</Description></MaterialClass>
+              <MaterialDefinition>
+                <ID>CAP-1</ID><Description>End cap</Description><MaterialClassID>CAPS</MaterialClassID>
+                <MaterialDefinitionProperty><ID>MaterialType</ID><Value><ValueString>packaging</ValueString></Value></MaterialDefinitionProperty>
+                <MaterialDefinitionProperty><ID>BaseUnit</ID><Value><ValueString>kg</ValueString></Value></MaterialDefinitionProperty>
+              </MaterialDefinition>
+            </MaterialInformation>
+            """;
+        Task<Contracts.Materials.ImportMaterialsResponse> Run(bool dryRun) =>
+            new ImportMaterialsHandler(_f.Stores.UnitOfWork, Admin, _f.Stores.Events, _f.Events, _f.Ids)
+                .HandleAsync(new ImportMaterialsCommand(MaterialB2mml.Parse(File, null), dryRun, "B2MML import"), CancellationToken.None);
+
+        var result = await Run(dryRun: false);
+
+        Assert.True(result.Applied);
+        Assert.Equal(["CAPS"], result.CreatedClasses);
+        Assert.Equal(["RESIN"], result.RenamedClasses);
+        Assert.Equal("Resins", (await Admin.FindClassByCodeAsync("RESIN", CancellationToken.None))!.Name);
+        Assert.Equal((await Admin.FindClassByCodeAsync("CAPS", CancellationToken.None))!.Id, ByCode("CAP-1").MaterialClassId);
+
+        var again = await Run(dryRun: true);
+        Assert.Equal((0, 0, 1), (again.CreatedClasses.Count, again.RenamedClasses.Count, again.Unchanged));
+    }
+
+    [Fact]
     public async Task Erp_rows_match_on_their_key_and_set_pulaskis_fields_too()
     {
         await RunAsync("code,name,type,base_unit,external_system,external_key,shelf_life_days\nR-1,Resin,raw,kg,ERP1,77,90\n");

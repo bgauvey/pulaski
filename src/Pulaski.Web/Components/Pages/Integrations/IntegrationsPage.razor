@@ -24,10 +24,50 @@
 <ProblemAlert Error="_error" />
 <ViewOnlyNote Permission="@PermissionCodes.Integrations" What="retry or skip deliveries" />
 
-<div class="btn-group mb-3" role="group" aria-label="Feed">
-    <button type="button" class="btn btn-sm @(_feed == "erp" ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => SwitchAsync("erp"))">ERP</button>
-    <button type="button" class="btn btn-sm @(_feed == "documents" ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => SwitchAsync("documents"))">Document system</button>
+<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+    <div class="btn-group flex-wrap" role="group" aria-label="Feed">
+        @foreach (var f in _feeds)
+        {
+            <button type="button" class="btn btn-sm @(_feed == f.Feed ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => SwitchAsync(f.Feed))"
+                    title="@($"{(f.Kind == "mqtt" ? "MQTT broker" : "Webhook")}{(f.Enabled ? $" to {f.TargetHost}" : ", off")}")">
+                @(f.Feed == "erp" ? "ERP" : f.Feed == "documents" ? "Document system" : f.Label)
+            </button>
+        }
+    </div>
+    @if (CanManage)
+    {
+        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => _adding = !_adding">Add a feed</button>
+    }
 </div>
+
+@if (_adding)
+{
+    <form class="inv-facts mb-3 row g-2 align-items-end" @onsubmit="AddFeedAsync" @onsubmit:preventDefault>
+        <div class="col-6 col-md-2">
+            <label class="form-label small fw-semibold" for="new-feed-code">Code</label>
+            <input id="new-feed-code" class="form-control form-control-sm" maxlength="30" placeholder="wms" @bind="_newCode" />
+        </div>
+        <div class="col-6 col-md-4">
+            <label class="form-label small fw-semibold" for="new-feed-name">Name</label>
+            <input id="new-feed-name" class="form-control form-control-sm" maxlength="100" placeholder="Warehouse system" @bind="_newName" />
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small fw-semibold" for="new-feed-kind">Sends to</label>
+            <select id="new-feed-kind" class="form-select form-select-sm" @bind="_newKind">
+                <option value="webhook">A webhook (HTTPS)</option>
+                <option value="mqtt">An MQTT broker</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-3 d-flex gap-2">
+            <button type="submit" class="btn btn-sm btn-primary" disabled="@_busy">Add</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _adding = false">Cancel</button>
+        </div>
+        <div class="col-12 small text-muted">
+            The code and what it sends to can't change later. It starts switched off: set its address and what it sends under Settings. Its secret
+            (and a broker's username and password) go in the API's configuration under <code>Integrations:Feeds:&lt;code&gt;</code>.
+        </div>
+    </form>
+}
 
 @if (_status is { } s)
 {
@@ -35,7 +75,7 @@
         <table class="table align-middle mb-0">
             <tbody>
                 <tr>
-                    <th style="width: 14rem">@(s.Feed == "documents" ? "Document system webhook" : "ERP webhook")</th>
+                    <th style="width: 14rem">@(s.Feed == "documents" ? "Document system" : s.Feed == "erp" ? "ERP" : s.Label)</th>
                     <td>
                         @if (s.Enabled)
                         {
@@ -44,7 +84,7 @@
                         else
                         {
                             <span class="chip chip-muted">Off</span>
-                            <span class="text-muted ms-1">Turned on in the API's configuration (@(s.Feed == "documents" ? "Integrations:Documents" : "Integrations:Erp")); nothing is queued while it's off.</span>
+                            <span class="text-muted ms-1">Nothing is queued while it's off. @(CanManage ? "Switch it on under Settings below." : "Whoever manages integrations switches it on.")</span>
                         }
                     </td>
                 </tr>
@@ -85,6 +125,11 @@
     </div>
 }
 
+@if (CanManage)
+{
+    <FeedSettingsPanel @key="_feed" Feed="@_feed" Saved="LoadAsync" />
+}
+
 @if (_message is not null)
 {
     <p class="small text-muted">@_message</p>
@@ -98,7 +143,12 @@
         <option value="skipped">Skipped</option>
         <option value="">All</option>
     </select>
-    <span class="text-muted small">Newest first, up to 200.</span>
+    <input class="form-control w-auto" placeholder="Lot number or subject id" aria-label="Subject" @bind="_search" />
+    <input class="form-control w-auto" placeholder="Event type, e.g. consumed" aria-label="Event type" @bind="_type" />
+    <input type="date" class="form-control w-auto" aria-label="From" @bind="_from" />
+    <input type="date" class="form-control w-auto" aria-label="To" @bind="_to" />
+    <button type="button" class="btn btn-outline-secondary" @onclick="SearchAsync">Search</button>
+    <span class="text-muted small">Newest first, up to 200. Delivered rows are cleared after @RetentionNote.</span>
 </div>
 
 @if (_deliveries is null)
@@ -146,6 +196,13 @@ else
                                 <span class="fw-semibold">@answer</span>
                             }
                             @d.LastError
+                            @if (d.AckStatus is { } ack)
+                            {
+                                <div title="@($"{(d.AckSource == "callback" ? "Posted back" : "In the answer")}{(d.AckAt is { } at ? $" at {Display.SiteTime(at, null)} UTC" : "")}")">
+                                    <span class="chip @(ack == "rejected" ? "chip-warn" : "chip-ok")">@(ack == "rejected" ? "Rejected" : "Accepted")</span>
+                                    @(d.AckReference is { } reference ? $" {reference}" : "")@(d.AckMessage is { } m && ack != "rejected" ? $" · {m}" : "")
+                                </div>
+                            }
                         </td>
                         @if (CanManage)
                         {
@@ -190,6 +247,18 @@ else
     private bool _busy;
     private string? _filter = "failed";
     private string _feed = "erp";
+    private IReadOnlyList<DeliveryFeedSummaryDto> _feeds = [];
+    private bool _adding;
+    private string? _newCode;
+    private string? _newName;
+    private string _newKind = "webhook";
+    private string? _search;
+    private string? _type;
+    private DateOnly? _from;
+    private DateOnly? _to;
+
+    // What the API is configured to keep; the page only says it.
+    private static string RetentionNote => "90 days unless set otherwise (Retention:DeliveredDays)";
     private string? _message;
     private DeliveryDto? _skipping;
     private string? _skipReason;
@@ -209,8 +278,11 @@ else
         _error = null;
         try
         {
+            _feeds = await Api.ListDeliveryFeedsAsync();
             _status = await Api.GetDeliveryStatusAsync(_feed);
-            _deliveries = await Api.ListDeliveriesAsync(_feed, _filter);
+            _deliveries = await Api.ListDeliveriesAsync(_feed, _filter, _search, _type,
+                _from is { } from ? new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero) : null,
+                _to is { } to ? new DateTimeOffset(to.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero) : null);
         }
         catch (ApiException ex)
         {
@@ -231,6 +303,20 @@ else
         (_status, _deliveries, _message, _skipping) = (null, null, null, null);
         await LoadAsync();
     }
+
+    private async Task SearchAsync()
+    {
+        _deliveries = null;
+        await LoadAsync();
+    }
+
+    private Task AddFeedAsync() => RunAsync(async () =>
+    {
+        var code = (_newCode ?? "").Trim().ToLowerInvariant();
+        await Api.CreateDeliveryFeedAsync(new CreateDeliveryFeedRequest { Code = code, Name = _newName ?? "", Kind = _newKind });
+        (_adding, _newCode, _newName, _feed) = (false, null, null, code);
+        _message = $"Added {code}. Set its address and what it sends under Settings, then switch it on.";
+    });
 
     private void StartSkip(DeliveryDto d)
     {

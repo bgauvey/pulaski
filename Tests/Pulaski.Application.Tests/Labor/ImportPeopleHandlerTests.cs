@@ -18,9 +18,69 @@ public class ImportPeopleHandlerTests
 
     private InMemoryLabor Labor => _f.Stores.Labor;
 
-    private Task<ImportPeopleResponse> RunAsync(string csv, string? system = "HR1", bool dryRun = false, string source = "csv", Guid? site = null) =>
-        new ImportPeopleFileHandler(_adapters, new ImportPeopleHandler(_f.Stores.UnitOfWork, Labor, _f.Stores.Events, _f.Events, _f.Ids))
-            .HandleAsync(new ImportPeopleFileCommand(site ?? _site, source, csv, system, dryRun), CancellationToken.None);
+    private Task<ImportPeopleResponse> RunAsync(
+        string csv, string? system = "HR1", bool dryRun = false, string source = "csv", Guid? site = null, bool switchOffMissing = false) =>
+        new ImportPeopleFileHandler(
+                _adapters,
+                new ImportPeopleHandler(_f.Stores.UnitOfWork, Labor, _f.Stores.Events, _f.Events, _f.Ids, Labor, new FixedRequestContext("hr-sync"), _f.Time))
+            .HandleAsync(new ImportPeopleFileCommand(site ?? _site, source, csv, system, dryRun) { SwitchOffMissing = switchOffMissing }, CancellationToken.None);
+
+    [Fact]
+    public async Task A_full_import_switches_off_the_systems_people_it_no_longer_lists_but_not_someone_clocked_on()
+    {
+        await RunAsync("employee_number,name,external_key\n1001,Ana Ng,W-1\n1002,Bo Li,W-2\n1003,Cy Ito,W-3\n");
+        var local = Labor.AddPerson(_site, "Kept by hand");
+        var cy = ByNumber("1003").Value;
+        await Labor.InsertSessionAsync(
+            new SessionRecord(Guid.CreateVersion7(), _site, cy.Id, Guid.CreateVersion7(), null, "direct", null, HandlerFixture.Now.AddHours(-1), null, 100m,
+                DateOnly.FromDateTime(HandlerFixture.Now.UtcDateTime), null, null, "manual", null, false, null, "test"),
+            HandlerFixture.Now, CancellationToken.None);
+
+        // Without a system there is no telling who is missing.
+        var noSystem = await RunAsync("employee_number,name\n1001,Ana Ng\n", system: null, switchOffMissing: true);
+        Assert.Contains("external system", Assert.Single(noSystem.FileProblems), StringComparison.Ordinal);
+
+        var full = await RunAsync("employee_number,name,external_key\n1001,Ana Ng,W-1\n", switchOffMissing: true);
+
+        Assert.True(full.Applied);
+        Assert.False(ByNumber("1002").Value.IsActive);
+        Assert.True(ByNumber("1003").Value.IsActive);
+        Assert.Contains("clocked on", Assert.Single(full.Rows, r => r.Code == "1003").Notes[0], StringComparison.Ordinal);
+        Assert.Equal(["active"], Assert.Single(full.Rows, r => r.Code == "1002").Changes);
+        Assert.True((await Labor.GetPersonForUpdateAsync(local, CancellationToken.None))!.Value.IsActive);
+
+        // Without the option nobody is switched off.
+        await RunAsync("employee_number,name,external_key\n1001,Ana Ng,W-1\n");
+        Assert.True(ByNumber("1003").Value.IsActive);
+    }
+
+    [Fact]
+    public async Task Listed_qualifications_are_granted_once_and_renewed_by_a_later_expiry_never_revoked()
+    {
+        var fork = new QualificationRecord(Guid.CreateVersion7(), _site, "FORK", "Forklift", null, 12, true);
+        await Labor.InsertQualificationAsync(fork, HandlerFixture.Now, CancellationToken.None);
+
+        var bad = await RunAsync("employee_number,name,external_key,qualifications\n9001,Di Oh,W-9,WELD\n");
+        Assert.Contains("no qualification WELD", Assert.Single(bad.Rows).Message, StringComparison.Ordinal);
+
+        var first = await RunAsync("employee_number,name,external_key,qualifications\n1001,Ana Ng,W-1,fork\n");
+        Assert.Contains("Granted qualification FORK until 2027-10-11.", Assert.Single(first.Rows).Notes);
+        var ana = ByNumber("1001").Value;
+        var grant = Assert.Single(await Labor.ListGrantsOfPersonAsync(ana.Id, CancellationToken.None));
+        Assert.Equal((new DateOnly(2026, 10, 12), (DateOnly?)new DateOnly(2027, 10, 11)), (grant.ValidFrom, grant.ExpiresOn));
+        Assert.Equal((EventTypes.QualificationGranted, "CSV import"), (_f.Stores.Events.Appended[^1].Type, _f.Stores.Events.Appended[^1].Reason));
+
+        var again = await RunAsync("employee_number,name,external_key,qualifications\n1001,Ana Ng,W-1,FORK\n");
+        Assert.Equal("unchanged", Assert.Single(again.Rows).Action);
+
+        var renewed = await RunAsync("employee_number,name,external_key,qualifications\n1001,Ana Ng,W-1,FORK:2027-10-01:2028-09-30\n");
+        Assert.Equal(["qualification FORK until 2028-09-30"], Assert.Single(renewed.Rows).Changes);
+        Assert.Equal(2, (await Labor.ListGrantsOfPersonAsync(ana.Id, CancellationToken.None)).Count);
+
+        // Leaving it out revokes nothing.
+        await RunAsync("employee_number,name,external_key,qualifications\n1001,Ana Ng,W-1,\n");
+        Assert.All(await Labor.ListGrantsOfPersonAsync(ana.Id, CancellationToken.None), g => Assert.Null(g.RevokedAt));
+    }
 
     private Versioned<PersonRecord> ByNumber(string number) => Labor.FindPersonByNumberForUpdateAsync(_site, number, CancellationToken.None).Result!;
 

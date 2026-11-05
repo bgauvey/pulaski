@@ -120,10 +120,11 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     /// <summary>Checks (<paramref name="dryRun"/>) or imports a people file into a site, read by the named source adapter (D-054).</summary>
     public async Task<ImportPeopleResponse> ImportPeopleAsync(
-        Guid siteId, string source, string text, string? externalSystem, bool dryRun, string mediaType, CancellationToken ct = default)
+        Guid siteId, string source, string text, string? externalSystem, bool dryRun, string mediaType, bool switchOffMissing = false, CancellationToken ct = default)
     {
         var query = $"siteId={siteId}&dryRun={(dryRun ? "true" : "false")}"
-            + (string.IsNullOrWhiteSpace(externalSystem) ? "" : $"&externalSystem={Uri.EscapeDataString(externalSystem.Trim())}");
+            + (string.IsNullOrWhiteSpace(externalSystem) ? "" : $"&externalSystem={Uri.EscapeDataString(externalSystem.Trim())}")
+            + (switchOffMissing ? "&switchOffMissing=true" : "");
         var request = new HttpRequestMessage(HttpMethod.Post, $"api/people/import/{Uri.EscapeDataString(source)}?{query}")
         {
             Content = new StringContent(text, System.Text.Encoding.UTF8, mediaType),
@@ -349,19 +350,50 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ImportMaterialsResponse> RunMaterialConnectionAsync(Guid id, RunMaterialConnectionRequest request, CancellationToken ct = default) =>
         SendAsync<ImportMaterialsResponse>(HttpMethod.Post, $"api/material-connections/{id}/run", request, ct);
 
+    // People connections at a site (#71), and every connection's run history.
+
+    public Task<IReadOnlyList<MaterialConnectionDto>> ListPeopleConnectionsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MaterialConnectionDto>>($"api/people-connections?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> SavePeopleConnectionAsync(Guid? id, SaveMaterialConnectionRequest request, CancellationToken ct = default) =>
+        id is { } existing
+            ? SendAsync<CreatedResponse>(HttpMethod.Put, $"api/people-connections/{existing}", request, ct)
+            : SendAsync<CreatedResponse>(HttpMethod.Post, "api/people-connections", request, ct);
+
+    public Task<ImportPeopleResponse> RunPeopleConnectionAsync(Guid id, RunPeopleConnectionRequest request, CancellationToken ct = default) =>
+        SendAsync<ImportPeopleResponse>(HttpMethod.Post, $"api/people-connections/{id}/run", request, ct);
+
+    /// <summary>A connection's imports, newest first; <paramref name="target"/> is <c>materials</c> or <c>people</c>.</summary>
+    public Task<IReadOnlyList<ConnectionRunDto>> ListConnectionRunsAsync(string target, Guid id, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ConnectionRunDto>>($"api/{(target == "people" ? "people" : "material")}-connections/{id}/runs", ct);
+
     // Outbound deliveries (D-061): the ERP feed (erp) and the document system's (documents, #78)
 
     public Task<DeliveryStatusDto> GetDeliveryStatusAsync(string feed, CancellationToken ct = default) =>
         GetAsync<DeliveryStatusDto>($"api/integrations/{feed}", ct);
 
-    public Task<IReadOnlyList<DeliveryDto>> ListDeliveriesAsync(string feed, string? status, CancellationToken ct = default) =>
-        GetAsync<IReadOnlyList<DeliveryDto>>(Query($"api/integrations/{feed}/deliveries", ("status", status)), ct);
+    public Task<IReadOnlyList<DeliveryDto>> ListDeliveriesAsync(
+        string feed, string? status, string? search = null, string? type = null, DateTimeOffset? from = null, DateTimeOffset? to = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<DeliveryDto>>(Query($"api/integrations/{feed}/deliveries",
+            ("status", status), ("search", search), ("type", type), ("from", from?.ToString("o")), ("to", to?.ToString("o"))), ct);
+
+    public Task<IReadOnlyList<DeliveryFeedSummaryDto>> ListDeliveryFeedsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<DeliveryFeedSummaryDto>>("api/integrations", ct);
+
+    public Task<VersionResponse> CreateDeliveryFeedAsync(CreateDeliveryFeedRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, "api/integrations", request, ct);
 
     public Task<RetryDeliveriesResponse> RetryDeliveryAsync(string feed, Guid id, CancellationToken ct = default) =>
         SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/{feed}/deliveries/{id}/retry", new { }, ct);
 
     public Task<RetryDeliveriesResponse> SkipDeliveryAsync(string feed, Guid id, SkipDeliveryRequest request, CancellationToken ct = default) =>
         SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/{feed}/deliveries/{id}/skip", request, ct);
+
+    public Task<DeliveryFeedSettingsDto> GetDeliveryFeedSettingsAsync(string feed, CancellationToken ct = default) =>
+        GetAsync<DeliveryFeedSettingsDto>($"api/integrations/{feed}/settings", ct);
+
+    public Task<VersionResponse> SaveDeliveryFeedSettingsAsync(string feed, SaveDeliveryFeedSettingsRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/integrations/{feed}/settings", request, ct);
 
     public Task<RetryDeliveriesResponse> RetryFailedDeliveriesAsync(string feed, CancellationToken ct = default) =>
         SendAsync<RetryDeliveriesResponse>(HttpMethod.Post, $"api/integrations/{feed}/deliveries/retry-failed", new { }, ct);
@@ -1289,6 +1321,21 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     }
 
     /// <summary>Imports lot attribute values (#78); <paramref name="dryRun"/> checks without saving.</summary>
+    /// <summary>B2MML material lots at a site (#72): new lots received, known ones' properties set as attributes.</summary>
+    public async Task<ImportMaterialsResponse> ImportB2mmlLotsAsync(Guid siteId, string xml, bool dryRun, CancellationToken ct = default)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/lots/import/b2mml?siteId={siteId}&dryRun={(dryRun ? "true" : "false")}")
+        {
+            Content = new StringContent(xml, System.Text.Encoding.UTF8, "application/xml"),
+        };
+        using var response = await SendCoreAsync(request, ct);
+        return await ReadAsync<ImportMaterialsResponse>(response, ct);
+    }
+
+    /// <summary>Every class and material as B2MML (#72), which the B2MML import reads back.</summary>
+    public Task<(byte[] Content, string ContentType, string FileName)> GetMaterialsB2mmlAsync(CancellationToken ct = default) =>
+        GetFileAsync("api/materials/export/b2mml", ct);
+
     public async Task<ImportMaterialsResponse> ImportLotAttributeValuesAsync(Guid siteId, string csv, bool dryRun, CancellationToken ct = default)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"api/lot-attributes/values/import?siteId={siteId}&dryRun={(dryRun ? "true" : "false")}")

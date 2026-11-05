@@ -27,9 +27,18 @@ public sealed record PersonImportRow
     /// <summary>The Pulaski user they sign in as; a blank value unlinks them. Pulaski's field, as the crew.</summary>
     public Supplied<string?>? Username { get; init; }
 
+    /// <summary>
+    /// Qualifications the source says the person holds (#71), each granted unless a grant already covers it; null when the source doesn't say.
+    /// An import never revokes one.
+    /// </summary>
+    public IReadOnlyList<QualificationImportItem>? Qualifications { get; init; }
+
     /// <summary>Problems reading the row's values, such as a yes/no that is neither.</summary>
     public IReadOnlyList<string> Problems { get; init; } = [];
 }
+
+/// <summary>A qualification a person holds by their source (#71): its code at the site, and the grant's days when the source gives them.</summary>
+public sealed record QualificationImportItem(string Code, DateOnly? ValidFrom, DateOnly? ExpiresOn);
 
 /// <summary>The rows a source produced, and any problem with the source as a whole (then there are no rows).</summary>
 public sealed record PersonImportSource(IReadOnlyList<PersonImportRow> Rows, IReadOnlyList<string> Problems);
@@ -55,7 +64,46 @@ public static class PersonImportFields
         ["external_system"] = [],
         ["external_key"] = [],
         ["external_version"] = [],
+        ["qualifications"] = ["qualification", "certifications"],
     };
+
+    /// <summary>
+    /// Reads a qualifications value (#71): codes separated by <c>;</c> or <c>|</c>, each optionally with its grant's days as
+    /// <c>CODE:valid-from:expires-on</c> (<c>yyyy-MM-dd</c>, either may be blank), such as <c>FORKLIFT; FIRST-AID:2026-03-01:2028-02-29</c>.
+    /// </summary>
+    public static IReadOnlyList<QualificationImportItem> Qualifications(string text, List<string> problems)
+    {
+        var items = new List<QualificationImportItem>();
+        foreach (var part in text.Split([';', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var bits = part.Split(':', StringSplitOptions.TrimEntries);
+            DateOnly? Day(int i)
+            {
+                if (bits.Length <= i || bits[i].Length == 0)
+                {
+                    return null;
+                }
+
+                if (DateOnly.TryParseExact(bits[i], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var day))
+                {
+                    return day;
+                }
+
+                problems.Add($"qualifications: '{bits[i]}' in '{part}' isn't a yyyy-MM-dd date.");
+                return null;
+            }
+
+            if (bits.Length > 3 || bits[0].Length == 0)
+            {
+                problems.Add($"qualifications: '{part}' isn't CODE or CODE:valid-from:expires-on.");
+                continue;
+            }
+
+            items.Add(new QualificationImportItem(bits[0].ToUpperInvariant(), Day(1), Day(2)));
+        }
+
+        return items;
+    }
 
     /// <summary>The canonical name for <paramref name="name"/> (already normalized), or null when it names no field.</summary>
     public static string? Canonical(string name) =>
@@ -99,6 +147,7 @@ public static class PersonImportFields
             IsActive = active,
             CrewCode = field("crew") is { } crew ? new(Blank(crew)) : null,
             Username = field("username") is { } user ? new(Blank(user)) : null,
+            Qualifications = field("qualifications") is { } list ? Qualifications(list, rowProblems) : null,
             Problems = rowProblems,
         };
     }

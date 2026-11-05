@@ -22,6 +22,7 @@ public static class DependencyInjection
         services.AddScoped<MachineData.OeeTargetWrites>();
         services.AddScoped<Inventory.FeedCounterPoster>();
         services.AddScoped<Inventory.AllocationAutoRefresh>();
+        services.AddScoped<Materials.ScheduledConnections>();
 
         var handlerInterfaces = new[] { typeof(ICommandHandler<,>), typeof(IQueryHandler<,>) };
         var handlers = typeof(DependencyInjection).Assembly.GetTypes()

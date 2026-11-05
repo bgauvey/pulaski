@@ -16,4 +16,18 @@ public class MaterialConnectionViewTests
         Assert.Equal("ERP can't be imported: down.", MaterialConnectionView.Summary("ERP", new ImportMaterialsResponse { FileProblems = ["down."] }));
         Assert.StartsWith("Imported from ERP: 2 created", MaterialConnectionView.Summary("ERP", new ImportMaterialsResponse { Applied = true, Created = 2 }), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Daily_times_are_read_as_typed_and_a_schedule_reads_as_words()
+    {
+        Assert.Equal([new TimeOnly(2, 0), new TimeOnly(14, 30)], MaterialConnectionView.ParseTimes("2:00, 14:30")!);
+        Assert.Null(MaterialConnectionView.ParseTimes("2pm"));
+        Assert.Empty(MaterialConnectionView.ParseTimes(" ")!);
+
+        var c = new MaterialConnectionDto { Id = Guid.CreateVersion7(), Code = "HR", Name = "HR", Kind = "scim", EntitySet = "", ExternalSystem = "HR1" };
+        Assert.Equal("On demand", MaterialConnectionView.Schedule(c));
+        Assert.Equal("Every 6 hours", MaterialConnectionView.Schedule(c with { ScheduleEveryHours = 6 }));
+        Assert.Equal("Daily at 02:00, 14:30 UTC", MaterialConnectionView.Schedule(c with { ScheduleDailyAt = [new(2, 0), new(14, 30)] }));
+        Assert.Equal("Not imported (errors)", MaterialConnectionView.Outcome("not_applied"));
+    }
 }

@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-01 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-05 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -1141,6 +1141,19 @@ The **Incoming** tab lists purchases and transfers expected to arrive, for the s
 5. When nothing more of a partly received delivery is coming, click **Close as complete**. (**Cancel** is only for one where nothing arrived.)
 6. Tick **Show received and cancelled** to see closed ones.
 
+**Receive lots from a B2MML file**
+
+An ERP or a supplier's system can send the lots that arrived as B2MML material lots.
+
+1. On **Inventory → Incoming**, under **Receive lots from a B2MML file**, click **Download a template** to see the format, or **Choose File** and pick the file.
+2. Pulaski checks it and says how many lots it would receive, update or leave unchanged, and lists any errors.
+3. When there are none, click **Import**. As with every import, it is all or nothing.
+
+- **A lot the site doesn't have** (by lot number and material) is received: its `Quantity` and `UnitOfMeasure` at the location whose code is its `StorageLocation`, expiring at its `ExpirationTime` (a date alone is midnight UTC), with a `SupplierLot` property as its supplier lot. The receive rules apply as on screen. Where lots mix, it joins the location's balance, and its properties aren't recorded.
+- **A lot the site has** keeps its quantity, location and expiry; the file only adds its properties.
+- **Properties.** A `MaterialLotProperty` whose `ID` is a [lot attribute](#lot-attributes-and-certificates) code, in any case, sets that attribute, read as on the lot page; an empty value leaves it alone. Other properties are listed as left out.
+- Needs permission to receive lots. For scripts: `POST /api/lots/import/b2mml?siteId=…&dryRun=true`, and `GET /api/lots/import/b2mml/template`. At most 5 MB and 5,000 lots.
+
 **In detail**
 
 - **Who:** anyone who can see inventory sees them; adding, changing and cancelling needs permission to receive lots.
@@ -1331,13 +1344,33 @@ The **Scan** tab is for a barcode scanner that types like a keyboard (most USB a
 
 ### Send movements to the ERP and certificates to a document system
 
-Pulaski can send every inventory movement (received, moved, consumed, produced, written up or off, shipped, held and so on) to your ERP as it happens, so the ERP's stock follows the floor's. A second feed sends certificates and other lot documents, as they are attached and withdrawn, to a document system, with their files. Each is switched on in the API's configuration by whoever runs Pulaski (see *In detail*); **Configure → Integrations** shows how each is doing and is where failures are put right.
+Pulaski can send every inventory movement (received, moved, consumed, produced, written up or off, shipped, held and so on) to your ERP as it happens, so the ERP's stock follows the floor's, and also production reports, orders and jobs, labor, machine stops and quality results if you choose. A second feed sends certificates and other lot documents, as they are attached and withdrawn, to a document system, with their files. **Configure → Integrations** is where each feed is set up, shows how it is doing, and is where failures are put right.
+
+**Set a feed up** (you need permission to manage integrations):
+
+1. Open **Configure → Integrations** and choose the feed: **ERP** or **Document system**.
+2. Under **Settings**, type the **Receiver's address** (an `https://` address) and tick **Send to this receiver**.
+3. Under **What it sends**, tick the kinds of events: *Inventory movements*, *Certificates and lot documents*, *Work orders and jobs*, *Production reports and partial batches*, *Labor sessions, breaks and approvals*, *Machine stops coded and adjusted*, *Quality results*.
+4. Tick **Send a certificate's file with its event** if the receiver should get the file itself.
+5. Leave **Attempts**, **Timeout** and **Check every** as they are unless the receiver needs otherwise, then click **Save settings**.
+
+The feed uses the new settings within seconds; nothing needs restarting. The shared secret that signs every message stays in the API's configuration, where whoever runs Pulaski sets it: until it is set, the panel says so and nothing is sent.
+
+**Add another feed** (another system, or a message broker):
+
+1. Click **Add a feed**.
+2. Type a **Code** (2 to 30 lower-case letters, digits, `-` or `_`, such as `wms`) and a **Name**, and choose what it **Sends to**: *A webhook (HTTPS)* or *An MQTT broker*. Neither can change later.
+3. Click **Add**. The new feed gets its own tab, switched off.
+4. Under **Settings**, give the address (`https://…` for a webhook, `mqtt://host:1883` or `mqtts://host:8883` for a broker) and, for a broker, the **Topic**, then choose what it sends and switch it on.
+
+Whoever runs Pulaski puts the feed's secret (and a broker's username and password) in the API's configuration under `Integrations:Feeds:<code>`. Each feed keeps its own queue and place in the event log, so feeds never hold each other up.
 
 1. Open **Configure → Integrations** and choose the feed: **ERP** or **Document system**. The top panel says whether the ERP webhook is **On** and where it sends, how many movements are waiting, how many have **failed**, and how many were delivered in the last 24 hours.
 2. The list starts on **Failed**. Each row shows the movement, the lot, how many attempts were made and the ERP's last answer (its status code and message).
 3. Put the cause right (the ERP rejected an unknown material, say, or a lot it doesn't know), then choose **Retry** on the row, or **Retry all failed** in the panel. It goes again within a few seconds.
 4. If it shouldn't be sent at all (you have booked it in the ERP by hand, for example), choose **Skip…**, give the reason and choose **Skip it**. The ERP won't get that movement.
 5. Choose **Refresh** to see the latest; switch the list to **Queued, retrying or held**, **Delivered**, **Skipped** or **All** to see the rest.
+6. To find a particular delivery, type a **lot number** (or a subject's id), part of the **event type** (such as `consumed`), and dates, then click **Search**.
 
 **In detail**
 
@@ -1345,9 +1378,17 @@ Pulaski can send every inventory movement (received, moved, consumed, produced, 
 - **A refusal fails at once.** Any other 4xx answer (400, 401, 404, 422 …) means trying again won't help until something is fixed, so the delivery is marked failed straight away.
 - **A lot's movements arrive in order.** While one of a lot's movements is waiting or failed, that lot's later movements are **held** behind it (shown as *Held*); other lots carry on. Retrying or skipping the failed one lets the held ones go.
 - **Sent twice is safe.** Pulaski may send a movement again if it didn't hear the ERP's answer (at least once). Every message carries the movement's event id as its `Idempotency-Key`; the receiver should ignore an id it has already booked.
+- **Acknowledgements.** A receiver can say what it did with each event, and Pulaski records it on the delivery (*Accepted* or *Rejected*, with its reference) in the **Last answer** column:
+  - in its answer: a 2xx response whose body is `{"status":"accepted"}` or `{"status":"rejected"}`, optionally with `"reference"` (its own id for what it booked) and `"message"`;
+  - or later: by posting `{"eventId": "…", "status": "…", "reference": "…", "message": "…"}` to `/api/integrations/erp/acknowledgements` (or `…/documents/…`), signed like Pulaski's messages with the same secret (`X-Pulaski-Timestamp` and `X-Pulaski-Signature`, within five minutes). A bad or old signature is refused.
+
+  A **rejection** turns the delivery into **failed**, with the receiver's message, and holds back that lot's (or order's, job's …) later events, just as a refused delivery does: put it right, then **Retry** or **Skip…**. An acceptance posted later releases a failed delivery as delivered.
 - **The message** is a CloudEvents 1.0 JSON document (`application/cloudevents+json`) holding the event as Pulaski recorded it: its type (`pulaski.lot.received.v1` …), the lot as its subject, the time, who did it, the reason and the movement's details. It is signed: `X-Pulaski-Signature` is `sha256=` and the hex HMAC-SHA256, with the shared secret, of the `X-Pulaski-Timestamp` value, a full stop, and the body. A receiver should check the signature and refuse old timestamps.
-- **Switching it on.** In the API's settings (or environment), section `Integrations:Erp`: `Enabled` true, `Url` (the HTTPS address to post to) and `Secret` (shared with the receiver; keep it in a secret store or environment variable, not in a file in source control). Optional: `EventTypes` (type prefixes to send, default `pulaski.lot.`), `MaxAttempts` (12), `TimeoutSeconds` (15), `PollSeconds` (5) and `StartFromNow` (true: the first time it is switched on, only movements from then on are sent; false sends the whole history). Restart the API after a change.
+- **The secret, and the configuration.** In the API's settings (or environment), section `Integrations:Erp` (or `Integrations:Documents`): `Secret`, shared with the receiver; keep it in a secret store or environment variable, not in a file in source control. Until **Save settings** is first used, the feed also takes the rest from there: `Enabled`, `Url`, `EventTypes` (type prefixes, default `pulaski.lot.`), `IncludeFiles`, `MaxAttempts` (12), `TimeoutSeconds` (15), `PollSeconds` (5) and `StartFromNow` (true: the first time it is switched on, only events from then on are sent; false sends the whole history). After that the screen's settings are used and only the secret comes from the configuration. Changing the secret needs an API restart.
+- **Settings are recorded.** Each save is an event (`pulaski.delivery_feed.settings_saved.v1`) with the settings before and after and who saved them. The full address is shown only to those who may change it; everyone else sees the receiver's host.
 - **The document feed.** Section `Integrations:Documents`, with the same settings as the ERP's. It sends `pulaski.lot_document.attached.v1` and `…withdrawn.v1` (default `EventTypes` `pulaski.lot_document.`), each holding the document's kind, title, number, issuer, issue date, URL, file name, type, size and SHA-256 and the lot it was attached to; a withdrawal has the reason. With `IncludeFiles` (on for this feed, off for the ERP's unless set), the attached event also carries the stored file in `data.file`: `fileName`, `contentType`, `sizeBytes`, `sha256` and `contentBase64`. The ERP feed can take certificates too: add `pulaski.lot_document.` to its `EventTypes`. A certificate's later events wait behind an undelivered earlier one, as a lot's do. Documents carried to other lots by a split or merge send nothing of their own.
+- **An MQTT feed** publishes each event as the same CloudEvents JSON a webhook gets, with quality of service 1, on the topic from its template: `{type}` becomes the event type with slashes for dots (`pulaski/lot/received/v1`), and `{subjectType}` and `{subject}` are filled in too. It uses MQTT 5: the event id goes as the `Idempotency-Key` user property, and with a secret the timestamp and signature as `X-Pulaski-Timestamp` and `X-Pulaski-Signature`. An event counts as delivered when the broker accepts it; a broker that refuses it (not allowed, bad topic) fails it at once, and one that is busy or unreachable is retried. Whatever reads from the broker can post an acknowledgement back to the feed's address, as a webhook receiver can.
+- **Delivered rows are cleared** after 90 days (`Retention:DeliveredDays` in the API's configuration, at least 7). Failed, waiting and skipped deliveries stay until someone deals with them, and the events themselves are always kept.
 - **Several API servers** share the work safely: only one sends each feed at a time.
 - **Who.** Anyone who can see Integrations (Administrator, Manager and Auditor to start with) sees the status and the deliveries; retrying and skipping need *integrations.manage* (Administrator to start with). Each retry and skip is recorded as an event with who did it, and a skip keeps its reason on the delivery.
 
@@ -1618,10 +1659,18 @@ For example:
 - **Other properties are skipped.** Properties Pulaski has no field for (density, colour…) are ignored, unlike an unknown CSV column. Property IDs are compared ignoring case, spaces and underscores, so `Shelf life days` and `shelf_life_days` work too. Giving a field twice, such as a class by `MaterialClassID` and by a property, is an error on that material.
 - **Left out or blank** works as in CSV: a property that isn't there keeps what the material has, and one with an empty value clears an optional field.
 - Any B2MML namespace version (or none) works, inside `MaterialInformation`, a wrapper such as `SyncMaterialInformation`, or as a bare `MaterialDefinition`. The *Line* is where the material's `MaterialDefinition` starts. Further class IDs and descriptions (other languages) are ignored. Files with a `DOCTYPE` are refused. At most 5 MB and 5,000 materials per file.
+- **Classes.** Each `MaterialClass` in the file (its `ID` the code, its `Description` the name) is added if Pulaski doesn't have it and renamed if its name differs, before the materials, whether or not **Create missing classes** is ticked: the file states the class itself. The result says which classes it creates or renames. Whether a class is switched on stays as Pulaski has it. A file can hold only classes.
+
+#### Export materials as B2MML
+
+1. On the Materials tab, click **Export B2MML**.
+2. Pulaski downloads `materials.xml`: every class as a `MaterialClass`, then every material (switched off ones too) as a `MaterialDefinition` with its class and every field the import reads as a property.
+
+The file is in the format the B2MML import reads, so it can go to another Pulaski or back in unchanged. Anyone who can see materials can export. For scripts: `GET /api/materials/export/b2mml`.
 
 ### Import materials from a connection
 
-Instead of a file, Pulaski can read items straight from an **OData v4** service, which many ERPs and item masters offer. Someone who manages integrations sets the connection up once; anyone who maintains materials can then check and import it whenever the item master changes.
+Instead of a file, Pulaski can read items straight from an **OData v4**, **REST** (JSON) or **SOAP** service, which many ERPs and item masters offer, or from a **query of a PostgreSQL database**. Someone who manages integrations sets the connection up once; anyone who maintains materials can then check and import it whenever the item master changes.
 
 1. Open **Materials**, click **Import file**, and find **Material connections** under the file import (or open **Configure → Integrations**).
 2. Click **Check** on the connection's row. Pulaski reads every item and says what an import would do: how many to create, update or leave unchanged, and any items with errors, with why.
@@ -1632,16 +1681,23 @@ Instead of a file, Pulaski can read items straight from an **OData v4** service,
 
 1. On **Configure → Integrations**, under **Material connections**, click **Add connection**.
 2. Give it a **Code** (fixed once saved: it names the credentials in the configuration), a **Name**, and the **External system** the items belong to, such as *ERP1*. Items are matched on that system and each item's key, so the same item is never made twice.
-3. Enter the **Service root** (an https address) and the **Entity set** holding the items, such as *Products*, and optionally a **Filter** in OData syntax to take only some of them.
-4. Under **Fields**, type, for each Pulaski field, the name of the service's property that holds it: at least **code** and **external_key**, and for new items **name**, **type** and **base_unit**. Use `/` for a property of a property, such as `Unit/Code`. A field left blank isn't read: materials keep what they have.
+3. Choose its **Kind** (fixed once saved) and fill in what that kind needs:
+   - **OData v4:** the **Service root** (an https address), the **Entity set** holding the items, such as *Products*, and optionally a **Filter** in OData syntax to take only some of them.
+   - **REST (JSON):** the **Address** that answers with the items (a query such as `?plant=1000` is fine), where the items are in the answer under **Items at** (such as `data.items`; blank when the answer is the list itself), and optionally where the answer gives the next page under **Next page at** (such as `links.next`).
+   - **SOAP:** the **Address** the request is posted to, the **Request envelope** to post, the **SOAPAction** if the service wants one, and the **Item element** that holds one item in the answer, such as *Material*.
+   - **PostgreSQL query:** one **Query** (`SELECT …` or `WITH … SELECT …`). The database's connection string goes in the API's configuration, not here.
+4. Under **Fields**, type, for each Pulaski field, the name of the item's property (or the query's column) that holds it: at least **code** and **external_key**, and for new items **name**, **type** and **base_unit**. Use `/` for a property of a property, such as `Unit/Code`. A field left blank isn't read: materials keep what they have.
 5. Click **Save**.
 
 **In detail**
 
-- **Credentials** never go in the database. Put them in the API's settings or environment under `MaterialConnections:<code>`: `BearerToken`, or `Username` and `Password` for basic authentication. The list says whether credentials are configured.
+- **Credentials** never go in the database. Put them in the API's settings or environment under `MaterialConnections:<code>`: `BearerToken`, or `Username` and `Password` for basic authentication; for a database, `ConnectionString`. The list says whether credentials are configured.
 - **What is read.** Pulaski asks for only the properties the fields name (`$select`), applies the filter, and follows the service's next-page links, up to 5,000 items (an import's limit). A property the item doesn't have leaves that field as the material has it; a null clears an optional field. Values are read as from a file: yes/no and true/false, whole days.
 - **The rules are the import's.** For an ERP item the ERP owns its code, name, base unit and type; Pulaski owns the rest. Each change is recorded with the reason *<connection name> import*, and the list shows the last import, who ran it and what it did. A check is not recorded.
-- **Only OData v4**, read on demand: nothing runs on a timer.
+- **REST** follows the next-page link (relative addresses are read against the page) up to 200 pages. **SOAP** reads every element with the item element's name, anywhere in the answer, as an item of its child elements (nested ones as properties of properties; of repeated names, the first). A SOAP fault is reported with its message. Files and answers with a `DOCTYPE` are refused.
+- **A database query** runs read-only, with a 30-second limit, and stops at 5,000 rows. Each column is a field by its name. Give the connection a login that can only read.
+- **When it runs.** Under **Runs**, choose **When you click Import**, **Every so many hours** (1 to 168), or **Daily at set times** (up to four, in UTC, such as `02:00, 14:00`). A scheduled run imports straight away, all or nothing, as *system*, with the reason *<name> import (scheduled)*; a saved **Create missing classes** applies to it. The list shows the schedule and the next run. A run that comes late is followed by the next one due, not by those it missed. Switching a connection off stops its schedule.
+- **History.** Every import, on demand or scheduled, is recorded; checks aren't. The list marks a last run that **Failed** (the source couldn't be read) or was **Not imported** because some items had errors. Click **History** for the latest 50 runs: when, by whom or the schedule, and what each did or why it failed. For scripts: `GET /api/material-connections/{id}/runs` (or `/api/people-connections/{id}/runs`).
 
 ### Import capabilities from a CSV file
 
@@ -1660,13 +1716,16 @@ Set up which lines can run which materials, and how fast, for many materials at 
    | `batch_size` | The line's own batch size in the material's base unit, for a material made in batches; blank for the material's. |
    | `batch_tolerance` | The line's own batch tolerance in percent, 0 to 50, for a material made in batches; blank for the material's. |
    | `active` | `no` ends the capability now. |
+   | `effective_from` | The day the capability starts, at the line's site (`yyyy-MM-dd`). Blank: the capability in effect now. |
+   | `effective_to` | The day after its last day (`yyyy-MM-dd`); blank on a dated row: no end. |
 
 3. Click **Choose File** and pick the file. Each row shows **Create** (a new capability from now), **Update** (with what changes), **Unchanged** or **Error**, with what happens to the line's planning rate.
 4. When every row is fine, click **Import N capabilities**.
 
 **In detail**
 
-- **Which capability a row is.** The one for that material and line in effect now. If there is one, its values change in place and its period stays. If there is none, a new one starts now with no end. `active` = `no` ends the one in effect now. Capabilities that start later or ended earlier are left alone, and nothing is ever deleted. To plan a future period, use the material page.
+- **Which capability a row is.** Without `effective_from`, the one for that material and line in effect now. If there is one, its values change in place and its period stays. If there is none, a new one starts now with no end. `active` = `no` ends the one in effect now. Nothing is ever deleted.
+- **Periods.** With `effective_from`, the row is the capability that starts that day: if there is one, it changes in place (and `effective_to` can end it); if not, one is added from that day. Adding it ends a capability with no end that started earlier on the day the new one starts (the row says so). Any other overlap is an error on the row, so the whole file waits until it is fixed. A future capability doesn't change the planning rate until it is in effect.
 - **The planning rate follows** as on the material page: a new capability sets it from the ideal rate when the line has none, and a new ideal rate recalculates it while it is still based on the ideal rate. A modified rate stays in force.
 - **Left out or blank.** A column the file doesn't have keeps what the capability has. A blank `changeover_minutes`, `crew_size`, `batch_size` or `batch_tolerance` clears it.
 - **The rules are the material page's:** the line must be active and run jobs, the material active, and the rate's unit must convert to the material's base unit. A material and line can appear only once in a file. Every line must be at a site where you may maintain processes.
@@ -1952,12 +2011,28 @@ Load everyone at once, and keep them up to date, from a file your HR system or E
    | `crew`, `username` | A crew code on the Crews tab, and the Pulaski user they sign in as. |
    | `origin` | `hr` (the default) or `erp`. |
    | `external_system`, `external_version` | The system, if the file names it per row, and the source's version for reference. |
+   | `qualifications` | The qualifications they hold, by code, separated by `;`, such as `FORKLIFT; FIRST-AID`. Each may give its grant's days as `CODE:valid-from:expires-on` (`yyyy-MM-dd`, either may be blank). |
 
    For SCIM, each user's `employeeNumber` (from the enterprise extension) is the employee number, `displayName` (or the parts of `name`) the name, `active` whether they work here, and `externalId` (or `id`) their key.
 5. Click **Choose File** and pick the file. Pulaski checks it straight away and saves nothing yet: each row shows **Create**, **Update** (with what changes), **Unchanged** or **Error** with the reason.
 6. Fix any errors and pick the file again, then click **Import N people**. The list updates, and imported people show their system's name next to their employee number.
 
 Import the same file, or next week's, as often as you like: people are matched on their key, so nobody is added twice.
+
+**In detail**
+
+- **Leavers.** Tick **The file is all of the system's people** (with an external system named) and the site's people from that system who aren't in the file are switched off; each is listed. Someone still clocked on stays on, with a note, and a later full import switches them off. People kept by hand in Pulaski are never touched, and a file with no people switches no one off.
+- **Qualifications** are added, never taken away. A listed one is granted unless the person already holds it: with no dates, a grant valid today is enough, and a new one runs from today for the qualification's usual validity; with a later expiry than the one they hold, it is renewed with a new grant. Importing the same file again grants nothing. Leaving a qualification out of the file doesn't revoke it; revoke it on the person's page. A code the site doesn't have is an error on the row. SCIM users carry no qualifications.
+
+### Import people from a connection
+
+Instead of a file, Pulaski can read people straight from your HR or identity system: its **SCIM 2.0** users, an OData, REST or SOAP service, or a query of a PostgreSQL database. The connection belongs to the site.
+
+1. On **Configure → People**, choose the site and click **Import file**. **People connections** is under the file import.
+2. Click **Check** on a connection: Pulaski reads everyone and says what an import would do, saving nothing. Then click **Import**.
+3. **Set one up** (needs *integrations.manage* at the site): click **Add connection**, give it a **Code**, **Name** and **External system**, pick the **Kind**, fill in its address (for SCIM, the base address before `/Users`, and optionally a filter such as `active eq true`), and for other kinds the fields as for [material connections](#import-materials-from-a-connection), with `employee_number`, `name` and `external_key` required and `qualifications` optional. Tick **Switch off people the source no longer has** to treat it as a full list. Choose when it **Runs** (see below) and click **Save**.
+
+Running it needs permission to maintain people at the site. Credentials go in the API's configuration under `MaterialConnections:<code>`, as for materials.
 
 ### Check a crew onto a line
 
@@ -2471,8 +2546,8 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
-- **Labor:** people come from HR or the ERP only as a file you import: nothing fetches them on a timer, someone missing from a file isn't switched off (send them with `active` = no), and qualifications aren't imported. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
-- **Materials import** from CSV or B2MML files, from an OData v4 connection on demand, or one item at a time through the API. Nothing fetches items on a timer, other kinds of service (plain REST, SOAP, a database) have no connection yet, and there are no adapters for label printing. Capabilities import from CSV only, and only for now: a future or past period is set on the material page. B2MML material lots and classes aren't read as records of their own, and Pulaski doesn't export B2MML.
+- **Labor:** people from HR or the ERP come from a file or a connection; schedules are in UTC, not the site's time, and a failed scheduled run waits for the next one. Qualifications are only added by an import, never revoked, and SCIM users carry none. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
+- **Materials import** from CSV or B2MML files, from an OData, REST, SOAP or PostgreSQL connection on demand or on a schedule, or one item at a time through the API. Connections can't sign in with OAuth, and there are no adapters for label printing. Capabilities import from CSV only. Pulaski exports materials and classes as B2MML, but not lots; B2MML sublots, assemblies and other languages aren't read.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
@@ -2481,7 +2556,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Only a number attribute standing for a quality characteristic is checked against specification limits. Balances' attribute values aren't in the values file.
 - **Reversing:** a chain undo follows a lot and the lots split off it, not merges into other lots, consumption into jobs or the output made from it; corrections made before this version can't be reversed.
 - **Genealogy through a silo is an estimate** from the declared movements. A level tag's readings confirm when it was empty and check the declared stock (see [How a silo flows](#how-a-silo-flows)), but they don't change how much each arrival gave. A reversed movement and its reversal are left out of the estimate, as if neither happened.
-- **Sending to the ERP and a document system** is one HTTPS webhook each, configured in the API's settings (not on a screen). Pulaski doesn't read anything back, so the receivers' answers don't change anything in Pulaski; there is no adapter for a particular ERP's or document system's own API, and no message queue (MQTT, Kafka and the like). A certificate's file goes inline in the event, up to 10 MB; there is no download link for a receiver to fetch it later. The delivery list shows the newest 200 of a kind, with no search; delivered rows are kept for good, with nothing to clear them out yet.
+- **Sending to other systems** is by HTTPS webhook or MQTT; there is no Kafka or other message queue yet, and retention is the same for every feed. Receivers' acknowledgements are recorded on the delivery, but nothing compares what the ERP booked with what Pulaski sent; there is no adapter for a particular ERP's or document system's own API. A certificate's file goes inline in the event, up to 10 MB; there is no download link for a receiver to fetch it later. The delivery list shows at most 200 at a time, with no paging beyond that.
 - **Allocations:** the background refresh is all or nothing for a site, and any change anywhere makes it run. Preferences are per site, not per material. A picking list is printed, not confirmed: fetching the lot is still an ordinary move. Approved alternates show only in allocations and on consumption, not in an order's planned components, and only a BOM's approved alternates can be allocated.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** has no quality figures or SPC alerts yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.

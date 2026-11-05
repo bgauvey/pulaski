@@ -43,6 +43,8 @@ internal sealed class ImportMaterialsHandler(
 
         // One transaction: the rows see each other's changes, and an error anywhere leaves nothing saved.
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var renamedClasses = new List<string>();
+        await ClassesAsync(command, results, createdClasses, renamedClasses, cancellationToken);
         foreach (var row in command.Rows.Rows)
         {
             var code = row.Code.Trim();
@@ -87,6 +89,7 @@ internal sealed class ImportMaterialsHandler(
             Unchanged = results.Count(r => r.Action == Unchanged),
             Errors = errors,
             CreatedClasses = createdClasses,
+            RenamedClasses = renamedClasses,
             Rows = results,
         };
     }
@@ -191,6 +194,53 @@ internal sealed class ImportMaterialsHandler(
             row.IsLotTracked?.Value ?? current?.IsLotTracked ?? true,
             row.ShelfLifeDays is { } days ? days.Value : current?.ShelfLifeDays,
             row.IsActive?.Value ?? current?.IsActive ?? true);
+
+    /// <summary>
+    /// Classes the source states as records (#72): a missing one is added and a renamed one renamed, before the materials that name them. Its
+    /// code is fixed; whether it is on stays as Pulaski has it.
+    /// </summary>
+    private async Task ClassesAsync(
+        ImportMaterialsCommand command, List<ImportRowResultDto> results, List<string> created, List<string> renamed, CancellationToken cancellationToken)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var row in command.Rows.Classes)
+        {
+            var code = row.Code.Trim().ToUpperInvariant();
+            var name = row.Name.Trim();
+            try
+            {
+                new Validator().RequireText(code, "class", 30).RequireText(name, "class_name", 100).ThrowIfInvalid();
+                if (!seen.Add(code))
+                {
+                    throw new DomainRuleException($"Class {code} appears earlier in the file.");
+                }
+
+                if (await materials.FindClassByCodeAsync(code, cancellationToken) is { } existing)
+                {
+                    if (existing.Name != name)
+                    {
+                        var after = existing with { Name = name };
+                        var changed = events.Create(EventTypes.MaterialClassUpdated, "material_class", after.Id, new { Before = existing, After = after }, command.Source);
+                        await materials.UpdateClassAsync(after, changed.OccurredAt, cancellationToken);
+                        await eventLog.AppendAsync(changed, cancellationToken);
+                        renamed.Add(code);
+                    }
+
+                    continue;
+                }
+
+                var made = new MaterialClass(ids.NewId(), code, name, IsActive: true);
+                var envelope = events.Create(EventTypes.MaterialClassCreated, "material_class", made.Id, new { After = made }, command.Source);
+                await materials.InsertClassAsync(made, envelope.OccurredAt, cancellationToken);
+                await eventLog.AppendAsync(envelope, cancellationToken);
+                created.Add(code);
+            }
+            catch (Exception ex) when (ex is DomainRuleException or ValidationException)
+            {
+                results.Add(new ImportRowResultDto { Line = row.Line, Code = $"class {code}", Action = Error, Message = Message(ex) });
+            }
+        }
+    }
 
     /// <summary>
     /// The class the row names; an inactive one is allowed only for a material already in it. A missing one is created when the import

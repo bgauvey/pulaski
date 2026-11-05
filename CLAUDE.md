@@ -282,6 +282,16 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   through `LotAttributeWriter`, shared with the lot page). Export `values.csv` is the import format. Webhook feeds `erp` and `documents`
   (`WebhookFeedOptions`, one `WebhookDeliveryService` each, `/api/integrations/{feed}`); `IncludeFiles` puts a certificate's file base64 in
   `data.file` of `lot_document.attached` at send time (`DeliveryRelay.GetDocumentFileAsync`).
+- Delivery settings and acknowledgements (D-087, proposed): `core.delivery_feed` per feed (all but the secret, saved from Configure → Integrations,
+  `integrations.manage`, audited) over configuration (`WebhookFeedOptions.Apply`, read each round; `DeliveryFeeds.Effective`). Event kinds
+  (`DeliveryKinds`) name prefix sets. Acks in the 2xx answer body (`Acknowledgement.FromResponse`) or by signed callback
+  (`POST /api/integrations/{feed}/acknowledgements`, `AcknowledgementSignature`, actor `receiver:{feed}`); a rejection fails the delivery and holds
+  the subject, a callback acceptance delivers it. Columns `evt.delivery.ack_*`.
+- More feeds, MQTT, search, retention (D-088, proposed): feeds are `core.delivery_feed` rows (code + kind fixed; sink `kind:code`; built-in erp/
+  documents keep their sinks) added on Configure → Integrations (`CreateDeliveryFeedCommand`); secrets under `Integrations:Feeds:{code}`. One
+  `WebhookDeliveryService` runs every ready feed on its own poll; `MqttFeedSender` publishes QoS 1 CloudEvents (MQTT 5, topic template,
+  user properties). Delivery search by subject/lot number, type, time. `DeliveryRetentionService` → `evt.purge_delivered` (delivered rows older
+  than `Retention:DeliveredDays`, 90).
 - Line batch sizes (D-065, proposed): `core.equipment_capability.batch_size` (null = the material's; only for a batch material; rule stays the
   material's, `Batching.OnLine`; a line tolerance too since D-075, `batch_tolerance_pct`, `ILineBatchSizes.GetTolerancesAsync`). `ILineBatchSizes` (in-transaction) feeds order creation (`Batching.ShareBySize`: whole
   batches of each line's size adding up exactly, else refused with the nearest quantities), job create/move/assign/start-on-line checks
@@ -299,6 +309,17 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   canonical field → property path). `ODataMaterialRows.Read` (pure) → `MaterialImportRow`s via `MaterialImportFields.ToRow`, then the unchanged
   `ImportMaterialsCommand`. `ODataMaterialFetcher` (API; `$select`, `@odata.nextLink`, ≤ 5000 items; credentials from `MaterialConnections:<code>`,
   never the DB). Set up with `integrations.manage`, run (dry run first) with `materials.manage`; on demand only.
+- Material import gaps (D-089, proposed): connection `kind` odata / rest / soap / database (fixed; `KindProblems`; `ConnectionItems` turns answers into
+  items for `ODataMaterialRows.Read`; database = one SELECT, read-only, connection string `MaterialConnections:<code>:ConnectionString`). Capability CSV
+  `effective_from`/`effective_to` (site-local days): a dated row is the period starting that day; adding one ends an earlier open one there, any other
+  overlap refuses. B2MML `MaterialClass` → `MaterialImportSource.Classes` (added/renamed first); `LotB2mml` → `ImportB2mmlLotsCommand`
+  (`POST /lots/import/b2mml`, `lot.receive`): new lots via `ReceiveLotHandler.ReceiveAsync` (caller's transaction), known lots keep quantity, properties →
+  lot attributes (`LotAttributeWriter`). `MaterialB2mml.Write` / `GET /materials/export/b2mml` reads back through the import.
+- Scheduled connections and people sources (D-090, proposed): `material_connection.target` materials / people (+ `site_id`, kind `scim` = `/Users` paged,
+  read by `PeopleScim.Read`; others via `ConnectionPeopleRows`); `/api/people-connections`. Schedule every N hours or ≤ 4 daily UTC times
+  (`ConnectionSchedule.Next`); `ConnectionScheduleService` → `ScheduledConnections.RunDueAsync` claims (`ClaimAsync`) then runs as `system`. Every
+  import → `ts.connection_run` (applied / not_applied / failed). `ImportPeopleCommand.SwitchOffMissing` switches off the system's unlisted people
+  (clocked on: stays, noted); `qualifications` field grants via `QualificationRules.ImportGrant` (add and renew, never revoke).
 - Stop adjustments (D-069, proposed): enter (`EnterStopCommand`), split, merge stops; never edit: the old rows get `superseded_at`/`_by`, new
   `ts.downtime` rows carry `source` (machine/manual/split/merge), `replaces_ids`, `adjusted_*`. Every reader of stops (OEE, list, uncoded)
   filters `superseded_at IS NULL`; current stops never overlap (`StopAdjustments`). Closed stops only, ≤ 31 days; lock equipment

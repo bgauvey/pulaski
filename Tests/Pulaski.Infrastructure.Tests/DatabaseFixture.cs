@@ -66,6 +66,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         await ExecuteAsync("SELECT ts.create_month_partitions('ts.equipment_alarm', current_date - 31, 3)");
         await ExecuteAsync("SELECT ts.create_month_partitions('ts.process_value', current_date - 31, 3)");
         await ExecuteAsync("SELECT ts.create_month_partitions('ts.quality_sample', current_date - 31, 3)");
+        await ExecuteAsync("SELECT ts.create_month_partitions('ts.connection_run', current_date - 31, 3)");
         await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(dbDir, "seed-reasons.sql")));
 
         UomId = Guid.CreateVersion7();
@@ -208,7 +209,9 @@ internal sealed class TestDeliveryTargets : Application.Integrations.IDeliveryTa
 {
     public const string Sink = "webhook:test";
 
-    public Application.Integrations.DeliveryTarget Erp { get; } = new(Sink, true, "erp.test", ["pulaski.lot."]);
+    public Application.Integrations.DeliveryTarget Erp { get; } = new(Sink, true, "erp.test", ["pulaski.lot."]) { IsBuiltIn = true };
 
-    public Application.Integrations.DeliveryTarget? Find(string feed) => feed == "erp" ? Erp : null;
+    // The ERP feed points at the test sink; any other code is a feed added on the screen, with nothing configured (#74).
+    public Application.Integrations.DeliveryTarget? Find(string feed) =>
+        feed == "erp" ? Erp : new Application.Integrations.DeliveryTarget($"webhook:{feed}", false, null, []) { Feed = feed, Label = feed };
 }

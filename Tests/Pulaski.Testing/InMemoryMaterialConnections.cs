@@ -9,7 +9,6 @@ public sealed class InMemoryMaterialConnections : IMaterialConnectionStore
 {
     private readonly Lock _lock = new();
     private readonly Dictionary<Guid, Versioned<MaterialConnection>> _rows = [];
-    private readonly Dictionary<Guid, (DateTimeOffset At, string? By, string? Summary)> _runs = [];
 
     public Task<IReadOnlyList<Versioned<MaterialConnection>>> ListAsync(CancellationToken cancellationToken)
     {
@@ -47,21 +46,68 @@ public sealed class InMemoryMaterialConnections : IMaterialConnectionStore
         }
     }
 
-    public Task RecordRunAsync(Guid id, string actor, string summary, DateTimeOffset at, CancellationToken cancellationToken)
+    /// <summary>Sites the fake treats as sites, as a test sets them.</summary>
+    public HashSet<Guid> Sites { get; } = [];
+
+    /// <summary>Every run recorded, oldest first.</summary>
+    public List<ConnectionRunRecord> Runs { get; } = [];
+
+    public Task RecordRunAsync(ConnectionRunRecord run, CancellationToken cancellationToken)
     {
         lock (_lock)
         {
-            _runs[id] = (at, actor, summary);
+            Runs.Add(run);
         }
 
         return Task.CompletedTask;
     }
 
-    public Task<IReadOnlyDictionary<Guid, (DateTimeOffset At, string? By, string? Summary)>> LastRunsAsync(CancellationToken cancellationToken)
+    public Task<IReadOnlyDictionary<Guid, LastConnectionRun>> LastRunsAsync(CancellationToken cancellationToken)
     {
         lock (_lock)
         {
-            return Task.FromResult<IReadOnlyDictionary<Guid, (DateTimeOffset At, string? By, string? Summary)>>(new Dictionary<Guid, (DateTimeOffset, string?, string?)>(_runs));
+            return Task.FromResult<IReadOnlyDictionary<Guid, LastConnectionRun>>(Runs
+                .GroupBy(r => r.ConnectionId)
+                .ToDictionary(g => g.Key, g => g.Last() is var r ? new LastConnectionRun(r.FinishedAt, r.Actor, r.Summary, r.Outcome) : null!));
+        }
+    }
+
+    public Task<IReadOnlyList<ConnectionRunRecord>> ListRunsAsync(Guid connectionId, int limit, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<ConnectionRunRecord>>([.. Runs.Where(r => r.ConnectionId == connectionId).Reverse().Take(limit)]);
+        }
+    }
+
+    public Task<IReadOnlyList<MaterialConnection>> ListDueAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<MaterialConnection>>([.. _rows.Values.Select(r => r.Value)
+                .Where(c => c.IsActive && c.NextRunAt is { } at && at <= now).OrderBy(c => c.NextRunAt)]);
+        }
+    }
+
+    public Task<bool> ClaimAsync(Guid id, DateTimeOffset due, DateTimeOffset? following, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            if (!_rows.TryGetValue(id, out var current) || !current.Value.IsActive || current.Value.NextRunAt != due)
+            {
+                return Task.FromResult(false);
+            }
+
+            _rows[id] = new(current.Value with { NextRunAt = following }, current.Version + 1);
+            return Task.FromResult(true);
+        }
+    }
+
+    public Task<bool> IsSiteAsync(Guid siteId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(Sites.Contains(siteId));
         }
     }
 }

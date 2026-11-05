@@ -68,6 +68,7 @@ else if (_tab == "people")
         @if (_importing && Sites.SiteId is { } importSite)
         {
             <PeopleFileImport SiteId="importSite" OnImported="LoadAsync" OnClose="() => _importing = false" />
+            <Pulaski.Web.Components.Pages.Integrations.MaterialConnectionsPanel @key="importSite" Target="people" SiteId="importSite" OnImported="LoadAsync" />
         }
     }
 

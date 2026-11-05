@@ -323,6 +323,8 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     private const string UomByCode = "SELECT id FROM core.uom WHERE code = @Code";
 
+    private const string LocationByCode = "SELECT id FROM core.equipment WHERE site_id = @SiteId AND code = @Code";
+
     private const string IsSite = "SELECT EXISTS (SELECT 1 FROM core.equipment WHERE id = @Id AND level = 'site' FOR SHARE)";
 
     private const string PlansComponent = """
@@ -621,6 +623,9 @@ internal sealed class InventoryRepository(DbSession session) : IInventoryReposit
 
     public Task<Guid?> FindUomIdByCodeAsync(string code, CancellationToken cancellationToken) =>
         session.QuerySingleOrDefaultAsync<Guid?>(UomByCode, new { Code = code }, cancellationToken);
+
+    public Task<Guid?> FindLocationIdByCodeAsync(Guid siteId, string code, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<Guid?>(LocationByCode, new { SiteId = siteId, Code = code }, cancellationToken);
 
     public Task<bool> IsSiteAsync(Guid id, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(IsSite, new { Id = id }, cancellationToken);

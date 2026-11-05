@@ -108,6 +108,7 @@ public static class DependencyInjection
         services.AddScoped<IExpectedReceiptRepository, ExpectedReceiptRepository>();
         services.AddScoped<IContainerRepository, ContainerRepository>();
         services.AddScoped<IDeliveryStore, DeliveryStore>();
+        services.AddScoped<IDeliveryFeedStore, DeliveryFeedStore>();
         services.AddSingleton<DeliveryRelay>();
         services.AddScoped<IMaterialAdminRepository, MaterialAdminRepository>();
         services.AddScoped<ICapabilityRepository, CapabilityRepository>();

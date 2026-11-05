@@ -9,6 +9,9 @@ internal sealed class HttpRequestContext(IHttpContextAccessor accessor, IIdGener
 {
     public const string CorrelationHeader = "X-Correlation-Id";
 
+    /// <summary>An item an endpoint sets to name a caller that isn't a signed-in user.</summary>
+    public const string ActorItem = "pulaski.actor";
+
     private Guid? _correlationId;
 
     public string ActorId
@@ -19,6 +22,12 @@ internal sealed class HttpRequestContext(IHttpContextAccessor accessor, IIdGener
             if (accessor.HttpContext?.Items[Security.TerminalFilter.ItemKey] is Application.Labor.TerminalRecord terminal)
             {
                 return terminal.ActorId;
+            }
+
+            // A machine caller verified by its own means, such as a receiver's signed acknowledgement (#73), names itself.
+            if (accessor.HttpContext?.Items[ActorItem] is string actor)
+            {
+                return actor;
             }
 
             // Background work (no request), such as keeping allocations current (#82), acts as the system.

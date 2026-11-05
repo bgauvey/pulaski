@@ -78,6 +78,11 @@ internal static class MaterialEndpoints
         })
         .RequireAny(null, Permissions.MaterialsView);
 
+        // Every class and material as B2MML material information, which the B2MML import reads back (#72).
+        materials.MapGet("/export/b2mml", async Task<FileContentHttpResult> (IQueryHandler<ExportMaterialsB2mmlQuery, string> handler, CancellationToken ct) =>
+            TypedResults.File(System.Text.Encoding.UTF8.GetBytes(await handler.HandleAsync(new ExportMaterialsB2mmlQuery(), ct)), "application/xml", "materials.xml"))
+        .RequireAny(null, Permissions.MaterialsView);
+
         // Many materials from a file read by a source adapter (csv, b2mml), all or nothing; ?dryRun=true checks them and saves
         // nothing (D-034, D-053). ?externalSystem= names the system the items belong to, for a format that doesn't say;
         // ?createClasses=true creates the classes it names that don't exist yet (D-055).

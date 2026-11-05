@@ -78,7 +78,7 @@ public interface IMaterialAdminRepository
 public sealed record CapabilityLine(Guid Id, string Code, bool CanRunJob, bool IsActive);
 
 /// <summary>A line an import names by code, with its site (equipment codes are unique only within a site).</summary>
-public sealed record SiteLine(CapabilityLine Line, Guid? SiteId, string? SiteCode);
+public sealed record SiteLine(CapabilityLine Line, Guid? SiteId, string? SiteCode, string? TimeZone = null);
 
 /// <summary>Write side for capabilities and the run standards they seed (D-020, D-034); runs inside the current <see cref="IUnitOfWork"/>.</summary>
 /// <summary>

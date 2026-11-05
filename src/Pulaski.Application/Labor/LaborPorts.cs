@@ -95,6 +95,9 @@ public interface ILaborRepository
     /// <summary>The site's person with this employee number, locked; null when none.</summary>
     Task<Versioned<PersonRecord>?> FindPersonByNumberForUpdateAsync(Guid siteId, string employeeNumber, CancellationToken cancellationToken);
 
+    /// <summary>The site's active people from <paramref name="externalSystem"/>, locked in id order (#71: switching off who a source no longer has).</summary>
+    Task<IReadOnlyList<Versioned<PersonRecord>>> ListActivePeopleOfSystemForUpdateAsync(Guid siteId, string externalSystem, CancellationToken cancellationToken);
+
     /// <summary>The site's crew with this code (upper case); null when none.</summary>
     Task<CrewRecord?> FindCrewByCodeAsync(Guid siteId, string code, CancellationToken cancellationToken);
 

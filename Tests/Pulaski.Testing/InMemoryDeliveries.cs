@@ -5,8 +5,10 @@ using Pulaski.Domain.Integrations;
 namespace Pulaski.Testing;
 
 /// <summary>In-memory outbound deliveries (D-061); queuing and sending are covered by the Infrastructure tests.</summary>
-public sealed class InMemoryDeliveries : IDeliveryStore
+public sealed class InMemoryDeliveries : IDeliveryStore, IDeliveryFeedStore
 {
+    private readonly Dictionary<string, StoredFeedSettings> _feeds = [];
+
     private readonly Lock _lock = new();
     private readonly List<DeliveryDto> _rows = [];
 
@@ -41,11 +43,16 @@ public sealed class InMemoryDeliveries : IDeliveryStore
         }
     }
 
-    public Task<IReadOnlyList<DeliveryDto>> ListAsync(string sink, string? status, int limit, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<DeliveryDto>> ListAsync(string sink, DeliveryFilter filter, CancellationToken cancellationToken)
     {
         lock (_lock)
         {
-            return Task.FromResult<IReadOnlyList<DeliveryDto>>([.. _rows.Where(r => r.Sink == sink && (status is null || r.Status == status)).Take(limit)]);
+            return Task.FromResult<IReadOnlyList<DeliveryDto>>([.. _rows
+                .Where(r => r.Sink == sink && (filter.Status is null || r.Status == filter.Status))
+                .Where(r => filter.Search is null || r.Subject.ToString() == filter.Search || string.Equals(r.LotNumber, filter.Search, StringComparison.OrdinalIgnoreCase))
+                .Where(r => filter.Type is null || r.EventType.Contains(filter.Type, StringComparison.OrdinalIgnoreCase))
+                .Where(r => (filter.From is null || r.OccurredAt >= filter.From) && (filter.To is null || r.OccurredAt < filter.To))
+                .Take(filter.Limit)]);
         }
     }
 
@@ -73,6 +80,36 @@ public sealed class InMemoryDeliveries : IDeliveryStore
         }
     }
 
+    public Task<DeliveryRecord?> GetByEventForUpdateAsync(string sink, Guid eventId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var r = _rows.FirstOrDefault(r => r.Sink == sink && r.EventId == eventId);
+            return Task.FromResult(r is null ? null : new DeliveryRecord(r.Id, r.Sink, r.EventId, r.EventType, r.Subject, r.Status, r.Attempts));
+        }
+    }
+
+    public Task AcknowledgeAsync(
+        Guid id, Acknowledgement acknowledgement, string source, string? status, string? failure, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var i = _rows.FindIndex(r => r.Id == id);
+            _rows[i] = _rows[i] with
+            {
+                AckStatus = acknowledgement.Status,
+                AckReference = acknowledgement.Reference,
+                AckMessage = acknowledgement.Message,
+                AckSource = source,
+                AckAt = at,
+                Status = status ?? _rows[i].Status,
+                LastError = status == DeliveryStatuses.Failed ? failure : status == DeliveryStatuses.Delivered ? null : _rows[i].LastError,
+            };
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task ResolveAsync(Guid id, string status, string actor, string? note, DateTimeOffset at, CancellationToken cancellationToken)
     {
         lock (_lock)
@@ -95,6 +132,48 @@ public sealed class InMemoryDeliveries : IDeliveryStore
             }
 
             return Task.FromResult(failed.Count);
+        }
+    }
+
+    public Task<StoredFeedSettings?> GetAsync(string feed, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_feeds.GetValueOrDefault(feed));
+        }
+    }
+
+    public Task<StoredFeedSettings> GetForUpdateAsync(string feed, DeliveryFeedSettings defaults, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_feeds.TryGetValue(feed, out var saved) ? saved : new StoredFeedSettings(defaults, 0, DateTimeOffset.UtcNow, null));
+        }
+    }
+
+    public Task<long> SaveAsync(DeliveryFeedSettings settings, string actor, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var version = (_feeds.TryGetValue(settings.Feed, out var saved) ? saved.Version : 0) + 1;
+            _feeds[settings.Feed] = new StoredFeedSettings(settings, version, at, actor);
+            return Task.FromResult(version);
+        }
+    }
+
+    public Task<IReadOnlyList<StoredFeedSettings>> ListAsync(CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<StoredFeedSettings>>([.. _feeds.Values.OrderBy(f => f.Settings.Feed, StringComparer.Ordinal)]);
+        }
+    }
+
+    public Task<bool> InsertAsync(DeliveryFeedSettings settings, string actor, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_feeds.TryAdd(settings.Feed, new StoredFeedSettings(settings, 1, at, actor)));
         }
     }
 }

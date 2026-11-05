@@ -10,8 +10,10 @@ namespace Pulaski.Application.Materials;
 /// <summary>
 /// Loads capabilities in bulk (D-055), all or nothing like the materials import (D-034). Each row is a material on a line: the
 /// capability in effect now is changed in place (the run standard follows its ideal rate as on the material page), a new one is added
-/// from now when there is none, and <c>active = no</c> ends it. Capabilities are never deleted, and future or past periods are left
-/// alone. Every line the file names is locked first, in id order, then the materials (D-017).
+/// from now when there is none, and <c>active = no</c> ends it. With <c>effective_from</c> (#72) a row is for the period starting that day at
+/// the line's site: the capability starting then is changed, else one is added from then, an open-ended one before it ended where it starts;
+/// any other overlap is refused. Capabilities are never deleted. Every line the file names is locked first, in id order, then the materials
+/// (D-017).
 /// </summary>
 /// <param name="Rows">The rows, and any problem with the file as a whole.</param>
 /// <param name="DryRun">True to check the rows and report what would happen, saving nothing.</param>
@@ -119,11 +121,15 @@ internal sealed class ImportCapabilitiesHandler(
             throw new DomainRuleException($"{label} appears earlier in the file.");
         }
 
-        var current = (await capabilities.ListOnLineAsync(line.Line.Id, material.Id, cancellationToken)).FirstOrDefault(c => c.IsInEffect(now));
+        var all = await capabilities.ListOnLineAsync(line.Line.Id, material.Id, cancellationToken);
+        var from = row.EffectiveFrom is { } day ? Start(day, line.TimeZone) : (DateTimeOffset?)null;
+        var current = from is { } start ? all.FirstOrDefault(c => c.EffectiveFrom == start) : all.FirstOrDefault(c => c.IsInEffect(now));
         if (ending)
         {
             return await EndAsync(row, label, current, line.Line, material, command.Source, writes, now, cancellationToken);
         }
+
+        DateTimeOffset? until = row.EffectiveTo is { } to ? to.Value is { } end ? Start(end, line.TimeZone) : null : current?.EffectiveTo;
 
         var unit = await materials.FindUomAsync(row.RateUnit.Trim(), cancellationToken)
             ?? throw new DomainRuleException($"There is no unit '{row.RateUnit.Trim()}' in Pulaski.");
@@ -134,8 +140,8 @@ internal sealed class ImportCapabilitiesHandler(
             row.ChangeoverMinutes is { } minutes ? minutes.Value : Minutes(current?.StandardChangeover),
             row.CrewSize is { } crew ? crew.Value : current?.StandardCrewSize,
             row.IsPreferred?.Value ?? current?.IsPreferred ?? false,
-            current?.EffectiveFrom ?? now,
-            current?.EffectiveTo,
+            current?.EffectiveFrom ?? from ?? now,
+            until,
             row.BatchSize is { } batch ? batch.Value : current?.BatchSize,
             row.BatchTolerancePct is { } tolerance ? tolerance.Value : current?.BatchTolerancePct);
         await writes.MaterialForRateAsync(material.Id, unit.Id, current?.RateUomId, cancellationToken);
@@ -154,13 +160,24 @@ internal sealed class ImportCapabilitiesHandler(
             }
 
             var added = Capability.Create(ids.NewId(), line.Line.Id, material.Id, change);
+            var addedNotes = new List<string>();
+            if (from is not null)
+            {
+                addedNotes.AddRange(await EndOpenBeforeAsync(added, all, line.Line, material, command.Source, writes, now, cancellationToken));
+            }
+
             await writes.EnsureNoOverlapAsync(added, line.Line.Code, material.Code, cancellationToken);
             await writes.CheckBatchSizeAsync(added, null, material, line.Line.Code, cancellationToken);
             var envelope = events.Create(EventTypes.CapabilityAdded, "equipment_capability", added.Id, new { After = added }, command.Source);
             await capabilities.InsertAsync(added, cancellationToken);
             await eventLog.AppendAsync(envelope, cancellationToken);
-            var note = await writes.FollowIdealRateAsync(added, unitCode, now, cancellationToken);
-            return new ImportRowResultDto { Line = row.Line, Code = label, Action = Create, Notes = note is null ? [] : [note] };
+            // The planning rate follows the capability in effect; a future one takes over when it starts.
+            if (added.IsInEffect(now))
+            {
+                addedNotes.AddIfSet(await writes.FollowIdealRateAsync(added, unitCode, now, cancellationToken));
+            }
+
+            return new ImportRowResultDto { Line = row.Line, Code = label, Action = Create, Notes = addedNotes };
         }
 
         var updated = current.Edit(change);
@@ -169,12 +186,17 @@ internal sealed class ImportCapabilitiesHandler(
             return new ImportRowResultDto { Line = row.Line, Code = label, Action = Unchanged };
         }
 
+        if (updated.EffectiveTo != current.EffectiveTo)
+        {
+            await writes.EnsureNoOverlapAsync(updated, line.Line.Code, material.Code, cancellationToken);
+        }
+
         await writes.CheckBatchSizeAsync(updated, current, material, line.Line.Code, cancellationToken);
         var changed = events.Create(EventTypes.CapabilityChanged, "equipment_capability", updated.Id, new { Before = current, After = updated }, command.Source);
         await capabilities.UpdateAsync(updated, cancellationToken);
         await eventLog.AppendAsync(changed, cancellationToken);
         var notes = new List<string>();
-        if (updated.IdealRatePerHour != current.IdealRatePerHour || updated.RateUomId != current.RateUomId)
+        if ((updated.IdealRatePerHour != current.IdealRatePerHour || updated.RateUomId != current.RateUomId) && updated.IsInEffect(now))
         {
             notes.AddIfSet(await writes.FollowIdealRateAsync(updated, unitCode, now, cancellationToken));
         }
@@ -197,6 +219,36 @@ internal sealed class ImportCapabilitiesHandler(
         await eventLog.AppendAsync(envelope, cancellationToken);
         var note = await writes.OpenJobsLeftAsync(current, ended, line.Code, material.Code, now, cancellationToken);
         return new ImportRowResultDto { Line = row.Line, Code = label, Action = Update, Changes = ["ended"], Notes = note is null ? [] : [note] };
+    }
+
+    /// <summary>The start of <paramref name="day"/> at the line's site (#72), as capabilities' periods are kept.</summary>
+    private static DateTimeOffset Start(DateOnly day, string? timeZone)
+    {
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(timeZone ?? "UTC");
+        var local = day.ToDateTime(TimeOnly.MinValue);
+        return new DateTimeOffset(local, zone.GetUtcOffset(local)).ToUniversalTime();
+    }
+
+    /// <summary>
+    /// A new period from a date (#72) ends the open-ended capability running before it, the day it starts, as a change from that date; it
+    /// never touches any other, which the overlap check then refuses.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> EndOpenBeforeAsync(
+        Capability added, IReadOnlyList<Capability> all, CapabilityLine line, Material material, string source, CapabilityWrites writes, DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var notes = new List<string>();
+        foreach (var open in all.Where(c => c.EffectiveTo is null && c.EffectiveFrom < added.EffectiveFrom))
+        {
+            var ended = open.End(added.EffectiveFrom);
+            var envelope = events.Create(EventTypes.CapabilityEnded, "equipment_capability", ended.Id, new { Before = open, After = ended }, source);
+            await capabilities.UpdateAsync(ended, cancellationToken);
+            await eventLog.AppendAsync(envelope, cancellationToken);
+            notes.Add($"The capability from {open.EffectiveFrom:yyyy-MM-dd} now ends where this one starts.");
+            notes.AddIfSet(await writes.OpenJobsLeftAsync(open, ended, line.Code, material.Code, now, cancellationToken));
+        }
+
+        return notes;
     }
 
     /// <summary>The line the row names: its code at the row's site, or at the only site that has it.</summary>
@@ -235,6 +287,7 @@ internal sealed class ImportCapabilitiesHandler(
         Add(before.IsPreferred != after.IsPreferred, "preferred");
         Add(before.BatchSize != after.BatchSize, "batch_size");
         Add(before.BatchTolerancePct != after.BatchTolerancePct, "batch_tolerance");
+        Add(before.EffectiveTo != after.EffectiveTo, "effective_to");
         return changes;
     }
 
