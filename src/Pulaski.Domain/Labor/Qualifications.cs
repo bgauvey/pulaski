@@ -39,6 +39,28 @@ public static class QualificationRules
     /// <summary>The last valid day of a grant from <paramref name="from"/> lasting <paramref name="months"/> months; null when it doesn't expire.</summary>
     public static DateOnly? DefaultExpiry(DateOnly from, int? months) => months is > 0 ? from.AddMonths(months.Value).AddDays(-1) : null;
 
+    /// <summary>
+    /// What an import's listed qualification grants (#71: add and renew, never revoke): null when an unrevoked grant already covers it, else the
+    /// new grant's days. With no dates, a grant valid on <paramref name="today"/> covers it and a new one runs from today for its usual
+    /// validity. With a valid-from day, one valid that day covers it. With an expiry, one from no later and expiring no sooner (or never) covers
+    /// it, so a source that sends a later expiry renews. Running the same import again therefore grants nothing.
+    /// </summary>
+    /// <param name="held">The person's grants of this qualification.</param>
+    /// <param name="validFrom">The day the source says the grant starts; null for today.</param>
+    /// <param name="expiresOn">The last day the source says it is valid; null for its usual validity.</param>
+    /// <param name="today">The site-local day of the import.</param>
+    /// <param name="validityMonths">The qualification's usual validity.</param>
+    public static (DateOnly ValidFrom, DateOnly? ExpiresOn)? ImportGrant(
+        IEnumerable<QualificationGrant> held, DateOnly? validFrom, DateOnly? expiresOn, DateOnly today, int? validityMonths)
+    {
+        var from = validFrom ?? today;
+        var standing = held.Where(g => g.RevokedAt is null).ToList();
+        var covered = expiresOn is { } until
+            ? standing.Any(g => g.ValidFrom <= from && (g.ExpiresOn is null || g.ExpiresOn >= until))
+            : standing.Any(g => g.ValidFrom <= from && (g.ExpiresOn is null || g.ExpiresOn >= from));
+        return covered ? null : (from, expiresOn ?? DefaultExpiry(from, validityMonths));
+    }
+
     /// <returns>What is wrong with a grant's days; null when it can be saved.</returns>
     public static string? GrantProblem(DateOnly validFrom, DateOnly? expiresOn) =>
         validFrom == default ? "Choose the day it is valid from."

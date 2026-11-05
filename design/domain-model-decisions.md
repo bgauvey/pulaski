@@ -1061,7 +1061,7 @@ Issue #19. Until now people were kept by hand on Configure → People (D-040); `
 
 **API and screen.** `GET /api/people/import/sources` (any view) lists the adapters. `POST /api/people/import/{source}?siteId=&dryRun=&externalSystem=` (`people.manage` at the site, at most 5 MB and 5,000 rows) runs an import. Configure → People has **Import file** (`PeopleFileImport`). Imported people show their system as a chip, and their name and active box are read-only. Migration `0023_person_import`.
 
-**Not yet.** A live SCIM endpoint (`/scim/v2/Users`) that HR or an identity provider pushes to; fetching from a source on a timer; switching off people a full file leaves out; moving a person between sites; qualifications from HR.
+**Not yet.** A live SCIM endpoint (`/scim/v2/Users`) that HR or an identity provider pushes to; moving a person between sites. Fetching from a source on a timer, switching off people a full import leaves out, and qualifications from HR came with D-090.
 
 ## Completing the materials import (D-055, proposed)
 
@@ -1494,7 +1494,7 @@ Issue #18. Materials came from files (CSV, B2MML) or one at a time through the A
 
 **Permissions.** Setting up (`POST`/`PUT /api/material-connections`) needs `integrations.manage`, because it decides where the API connects. Running needs `materials.manage`. Seeing the list needs `integrations.view` or `materials.view`. The panel is on Configure → Integrations and in the Materials import area. Events: `pulaski.material_connection.added.v1`, `…changed.v1`.
 
-**Not done.** Schedules, OAuth client-credential flows, and connections for other master data (people, capabilities). REST, SOAP and PostgreSQL connections came with D-089.
+**Not done.** OAuth client-credential flows, and connections for capabilities. REST, SOAP and PostgreSQL connections came with D-089; schedules and people connections with D-090.
 
 ## Stop adjustments (D-069, proposed)
 
@@ -2332,7 +2332,47 @@ and B2MML was read only for material definitions (D-053), with no way to write i
 a `MaterialClass` per class, then a `MaterialDefinition` per material (inactive too) with `MaterialClassID` and every import field as a
 property. It reads back through the import unchanged (tested). Lots are not exported.
 
-**Not done:** exporting lots; B2MML `MaterialSubLot`, `MaterialLotID` assembly and multiple languages; OAuth flows; scheduled connection runs.
+**Not done:** exporting lots; B2MML `MaterialSubLot`, `MaterialLotID` assembly and multiple languages; OAuth flows. Scheduled runs came with D-090.
+
+## Scheduled connections, people sources, leavers and qualifications (D-090, proposed)
+
+Issue #71. Connections ran only on demand and only for materials; people came only from files; someone missing from a file stayed on; and
+qualifications weren't imported.
+
+**Connections for both** (the user's choice). `core.material_connection` (the name kept from D-068) gains `target`: `materials`, or `people`
+with a `site_id` (fixed once made, like code and kind). People connections take every kind plus `scim`: `GET {base}/Users`
+(RFC 7644), paged by `startIndex`/`count` (100) until `totalResults`, with an optional SCIM filter; the users are read by `PeopleScim.Read`
+as a SCIM file is, so they need no field map. Other kinds map items through `ConnectionPeopleRows` (`employee_number`, `name` and
+`external_key` required) and `PersonImportFields.ToRow`; the field reading is shared (`ConnectionFields`). `/api/people-connections`
+(`?siteId=`; set up with `integrations.manage` at the site, run with `people.manage` there, `SiteOf.Connection`) beside
+`/api/material-connections`; both have `/{id}/runs`.
+
+**Schedules** (the user's choice: every N hours or daily times). `schedule_every_hours` (1–168) or `schedule_daily_at` (up to 4 UTC
+times), never both; neither = on demand. `ConnectionSchedule.Next` (pure) gives `next_run_at`: the interval after, or the next daily time
+after, the moment it is worked out, so a late run never catches up on missed ones. Saving keeps `next_run_at` unless the schedule or the
+switch changed. `ConnectionScheduleService` (API, every `Connections:Schedule:PollSeconds`, 60; off with `Connections:Schedule:Enabled`)
+calls `ScheduledConnections.RunDueAsync`: due connections are claimed first (`UPDATE … WHERE next_run_at = @Due`), so with several API
+instances each run happens once, then run as `system` with the reason "*<name> import (scheduled)*". Stored options apply: `create_classes`
+(materials) and `switch_off_missing` (people). A run that throws is recorded as failed; the schedule carries on.
+
+**Runs recorded.** Every import (not a check) goes into `ts.connection_run` (partitioned by `started_at`; trigger manual/schedule, outcome
+`applied` / `not_applied` (row errors, nothing saved) / `failed` (source unreadable or the run stopped), counts, summary, actor) and sets
+`last_run_*` and `last_run_outcome`. The list flags a failed or not-applied last run; *History* shows the latest 50. Dry runs stay available
+and unrecorded.
+
+**Leavers** (the user's choice: leave a clocked-on one on). `ImportPeopleCommand.SwitchOffMissing` (file `?switchOffMissing=true`, or the
+connection's option) needs every row to be one external system's (an empty source is refused). After the rows, the site's active people of
+that system whose key wasn't listed are locked in id order (`ListActivePeopleOfSystemForUpdateAsync`) and switched off (`person.updated`). One
+still clocked on stays on, with a note; a later full import switches them off. Local people are never touched.
+
+**Qualifications** (the user's choice: add and renew only). A `qualifications` field (CSV column, or a mapped property): codes separated by
+`;` or `|`, each optionally `CODE:valid-from:expires-on`. For each, `QualificationRules.ImportGrant` grants unless an unrevoked grant covers it:
+with no dates, one valid today; with a valid-from, one valid that day; with an expiry, one from no later expiring no sooner (or never), so a
+later expiry renews. The same import twice grants nothing; nothing is ever revoked. An unknown code is a row error, a switched-off one too when
+a grant is due. Grants are `qualification.granted` with the import's reason. SCIM users carry no qualifications.
+
+**Not done:** schedules in a site's time zone; retries sooner than the next scheduled run; qualifications from SCIM; revoking what a source
+drops; connections for capabilities.
 
 ## Application architecture
 

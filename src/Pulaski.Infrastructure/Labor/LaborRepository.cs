@@ -37,6 +37,9 @@ internal sealed class LaborRepository(DbSession session) : ILaborRepository
 
     private const string PersonByNumber = $"SELECT {PersonColumns} FROM core.person WHERE site_id = @SiteId AND employee_number = @Number FOR UPDATE";
 
+    private const string PeopleOfSystem =
+        $"SELECT {PersonColumns} FROM core.person WHERE site_id = @SiteId AND external_system = @System AND is_active ORDER BY id FOR UPDATE";
+
     private const string CrewByCode = "SELECT id, site_id, code, name, is_active FROM core.crew WHERE site_id = @SiteId AND code = @Code";
 
     private const string NumberExists = "SELECT EXISTS (SELECT 1 FROM core.person WHERE site_id = @SiteId AND employee_number = @Number)";
@@ -242,6 +245,9 @@ internal sealed class LaborRepository(DbSession session) : ILaborRepository
 
     public async Task<Versioned<PersonRecord>?> FindPersonByNumberForUpdateAsync(Guid siteId, string employeeNumber, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<PersonRow>(PersonByNumber, new { SiteId = siteId, Number = employeeNumber }, cancellationToken))?.ToVersioned();
+
+    public async Task<IReadOnlyList<Versioned<PersonRecord>>> ListActivePeopleOfSystemForUpdateAsync(Guid siteId, string externalSystem, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<PersonRow>(PeopleOfSystem, new { SiteId = siteId, System = externalSystem }, cancellationToken)).Select(r => r.ToVersioned())];
 
     public async Task<CrewRecord?> FindCrewByCodeAsync(Guid siteId, string code, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<CrewRow>(CrewByCode, new { SiteId = siteId, Code = code }, cancellationToken) is { } r

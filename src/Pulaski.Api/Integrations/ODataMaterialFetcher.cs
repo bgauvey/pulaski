@@ -6,7 +6,7 @@ using Pulaski.Application.Materials;
 namespace Pulaski.Api.Integrations;
 
 /// <summary>
-/// Fetches a material connection's items (D-068, #72). REST: <c>GET</c> the address, the items at a path, following a next-page address. SOAP:
+/// Fetches a connection's items (D-068, #72, #71). SCIM (people): <c>GET {base}/Users</c>, paged by <c>startIndex</c>. REST: <c>GET</c> the address, the items at a path, following a next-page address. SOAP:
 /// <c>POST</c> the envelope, the items the answer's elements of one name. Database: the connection's SELECT on a PostgreSQL database
 /// (<c>ConnectionString</c>), read-only with a 30 s statement timeout. OData: from its OData v4 service: <c>GET {root}/{entity set}?$select=…&amp;$filter=…</c>, following
 /// <c>@odata.nextLink</c> page by page. Credentials come from <c>MaterialConnections:&lt;code&gt;</c> in configuration: <c>BearerToken</c>, or
@@ -17,6 +17,8 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
     public const string ClientName = "material-connections";
     public const string Section = "MaterialConnections";
     private const int MaxPages = 200;
+
+    private const int ScimPageSize = 100;
 
     public bool HasCredentials(string code)
     {
@@ -29,6 +31,7 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
         MaterialConnectionKinds.Rest => RestAsync(connection, maxItems, cancellationToken),
         MaterialConnectionKinds.Soap => SoapAsync(connection, maxItems, cancellationToken),
         MaterialConnectionKinds.Database => DatabaseAsync(connection, maxItems, cancellationToken),
+        MaterialConnectionKinds.Scim => ScimAsync(connection, maxItems, cancellationToken),
         _ => ODataAsync(connection, maxItems, cancellationToken),
     };
 
@@ -77,6 +80,66 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
         }
 
         return new MaterialConnectionFetch(items, []);
+    }
+
+    /// <summary>
+    /// SCIM 2.0 users (RFC 7644 §3.4.2): <c>GET {base}/Users</c> with the filter, a page of <see cref="ScimPageSize"/> at a time by
+    /// <c>startIndex</c>, until <c>totalResults</c> are read or a page comes back empty (#71).
+    /// </summary>
+    private async Task<MaterialConnectionFetch> ScimAsync(MaterialConnection connection, int maxItems, CancellationToken cancellationToken)
+    {
+        var http = clients.CreateClient(ClientName);
+        var items = new List<JsonElement>();
+        for (var page = 0; ; page++)
+        {
+            if (page == MaxPages)
+            {
+                return Problem(connection, $"the service sent more than {MaxPages} pages.");
+            }
+
+            var address = $"{connection.BaseUrl!.TrimEnd('/')}/Users?startIndex={items.Count + 1}&count={ScimPageSize}"
+                + (connection.Filter is { } filter ? $"&filter={Uri.EscapeDataString(filter)}" : "");
+            using var request = new HttpRequestMessage(HttpMethod.Get, address);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/scim+json"));
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            Authorize(request, connection.Code);
+            var (body, problem) = await SendAsync(http, request, connection, cancellationToken);
+            if (problem is not null)
+            {
+                return new MaterialConnectionFetch([], [problem]);
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(body!);
+                var root = document.RootElement;
+                // An empty ListResponse may leave Resources out, but always says totalResults.
+                var hasResources = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("Resources", out _);
+                if (root.ValueKind != JsonValueKind.Object || (!hasResources && !root.TryGetProperty("totalResults", out _)))
+                {
+                    return Problem(connection, "the answer isn't a SCIM ListResponse.");
+                }
+
+                var users = root.TryGetProperty("Resources", out var resources) && resources.ValueKind == JsonValueKind.Array
+                    ? [.. resources.EnumerateArray().Select(e => e.Clone())]
+                    : new List<JsonElement>();
+                items.AddRange(users);
+                if (items.Count > maxItems)
+                {
+                    return Problem(connection, $"the service has more than {maxItems} users; one import takes at most that. Narrow it with a filter.");
+                }
+
+                var total = root.TryGetProperty("totalResults", out var t) && t.TryGetInt32(out var n) ? n : items.Count;
+                if (users.Count == 0 || items.Count >= total)
+                {
+                    return new MaterialConnectionFetch(items, []);
+                }
+            }
+            catch (JsonException)
+            {
+                return Problem(connection, "the answer isn't JSON.");
+            }
+        }
     }
 
     private async Task<MaterialConnectionFetch> SoapAsync(MaterialConnection connection, int maxItems, CancellationToken cancellationToken)

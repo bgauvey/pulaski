@@ -148,6 +148,9 @@ public enum SiteOf
     FeedShortfall,
     LabelPrinter,
     SupplierBarcodeFormat,
+
+    /// <summary>A people connection (#71): the site its people are imported into.</summary>
+    Connection,
 }
 
 /// <summary>Finds the site something belongs to, so a role held at that site can be checked (D-037).</summary>

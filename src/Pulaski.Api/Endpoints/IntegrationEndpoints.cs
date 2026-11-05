@@ -5,7 +5,9 @@ using Pulaski.Application.Integrations;
 using Pulaski.Application.Materials;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Integrations;
+using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.Materials;
+using Pulaski.Application.Security;
 using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
@@ -120,6 +122,40 @@ internal static class IntegrationEndpoints
             Guid id, RunMaterialConnectionRequest request, ICommandHandler<RunMaterialConnectionCommand, ImportMaterialsResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new RunMaterialConnectionCommand(id, request.DryRun, request.CreateClasses), ct)))
         .RequirePermission(Permissions.Materials);
+
+        // Its imports, on demand and scheduled, newest first (#71).
+        connections.MapGet("/{id:guid}/runs", async Task<Ok<IReadOnlyList<ConnectionRunDto>>> (
+            Guid id, int? limit, IQueryHandler<ListConnectionRunsQuery, IReadOnlyList<ConnectionRunDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListConnectionRunsQuery(id, ConnectionTargets.Materials, limit ?? 50), ct)))
+        .RequireAny(null, Permissions.IntegrationsView, Permissions.MaterialsView);
+
+        // Sources of people at a site (#71): set up by whoever manages integrations there, run by whoever maintains its people.
+        var people = routes.MapGroup("/people-connections").WithTags("Integrations");
+
+        people.MapGet("/", async Task<Ok<IReadOnlyList<MaterialConnectionDto>>> (
+            Guid siteId, IQueryHandler<ListMaterialConnectionsQuery, IReadOnlyList<MaterialConnectionDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListMaterialConnectionsQuery(ConnectionTargets.People, siteId), ct)))
+        .RequireAny(Site.Query(), Permissions.IntegrationsView, Permissions.LaborView);
+
+        people.MapPost("/", async Task<Ok<CreatedResponse>> (
+            SaveMaterialConnectionRequest request, ICommandHandler<SaveMaterialConnectionCommand, CreatedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SaveMaterialConnectionCommand(null, request, ConnectionTargets.People), ct)))
+        .RequirePermission(Permissions.Integrations, Site.FromBody<SaveMaterialConnectionRequest>(SiteOf.Equipment, r => r.SiteId));
+
+        people.MapPut("/{id:guid}", async Task<Ok<CreatedResponse>> (
+            Guid id, SaveMaterialConnectionRequest request, ICommandHandler<SaveMaterialConnectionCommand, CreatedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SaveMaterialConnectionCommand(id, request, ConnectionTargets.People), ct)))
+        .RequirePermission(Permissions.Integrations, Site.Of(SiteOf.Connection));
+
+        people.MapPost("/{id:guid}/run", async Task<Ok<ImportPeopleResponse>> (
+            Guid id, RunPeopleConnectionRequest request, ICommandHandler<RunPeopleConnectionCommand, ImportPeopleResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RunPeopleConnectionCommand(id, request.DryRun), ct)))
+        .RequirePermission(Permissions.People, Site.Of(SiteOf.Connection));
+
+        people.MapGet("/{id:guid}/runs", async Task<Ok<IReadOnlyList<ConnectionRunDto>>> (
+            Guid id, int? limit, IQueryHandler<ListConnectionRunsQuery, IReadOnlyList<ConnectionRunDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListConnectionRunsQuery(id, ConnectionTargets.People, limit ?? 50), ct)))
+        .RequireAny(Site.Of(SiteOf.Connection), Permissions.IntegrationsView, Permissions.LaborView);
 
         return routes;
     }

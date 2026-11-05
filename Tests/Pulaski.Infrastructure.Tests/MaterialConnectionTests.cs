@@ -1,7 +1,10 @@
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.EquipmentModel;
+using Pulaski.Application.Labor;
 using Pulaski.Application.Materials;
+using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Materials;
 
 namespace Pulaski.Infrastructure.Tests;
@@ -65,5 +68,65 @@ public sealed class MaterialConnectionTests(DatabaseFixture db)
         var listed = Assert.Single(await QueryAsync<ListMaterialConnectionsQuery, IReadOnlyList<MaterialConnectionDto>>(new ListMaterialConnectionsQuery()), c => c.Id == saved.Id);
         Assert.Equal("0 created, 1 updated, 1 unchanged.", listed.LastRunSummary);
         Assert.Equal("Number", listed.FieldMap["code"]);
+    }
+
+    [Fact]
+    public async Task A_scheduled_people_connection_runs_when_due_grants_qualifications_switches_off_leavers_and_keeps_its_history()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "ENT-" + _suffix, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse site = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "SITE-" + _suffix, "Site", null, "site", "site", false, false, false, "America/Chicago"));
+        await db.SendAsync(new CreateQualificationCommand(site.Id, "FORK", "Forklift", null, 12));
+        var code = "HR-" + _suffix;
+        var system = "HR-" + _suffix;
+        var saved = await db.SendAsync(new SaveMaterialConnectionCommand(null, new SaveMaterialConnectionRequest
+        {
+            Code = code,
+            Name = "HR people",
+            Kind = "rest",
+            BaseUrl = "https://hr.example/api/people",
+            ExternalSystem = system,
+            SiteId = site.Id,
+            ScheduleDailyAt = [new TimeOnly(14, 0), new TimeOnly(2, 0)],
+            SwitchOffMissing = true,
+            FieldMap = new Dictionary<string, string>
+            {
+                ["employee_number"] = "No",
+                ["name"] = "Name",
+                ["external_key"] = "Id",
+                ["qualifications"] = "Certs",
+            },
+        }, ConnectionTargets.People));
+
+        var listed = Assert.Single(await QueryAsync<ListMaterialConnectionsQuery, IReadOnlyList<MaterialConnectionDto>>(new ListMaterialConnectionsQuery(ConnectionTargets.People, site.Id)));
+        Assert.Equal([new TimeOnly(2, 0), new TimeOnly(14, 0)], listed.ScheduleDailyAt);
+        Assert.NotNull(listed.NextRunAt);
+
+        db.MaterialConnectionFetcher.Json[code] = $$"""
+            [{"No": "1-{{_suffix}}", "Name": "Ana Ng", "Id": "A", "Certs": "FORK"},
+             {"No": "2-{{_suffix}}", "Name": "Bo Li", "Id": "B", "Certs": ""}]
+            """;
+        await using var admin = await db.AdminDataSource.OpenConnectionAsync();
+        async Task RunDueAsync()
+        {
+            await admin.ExecuteAsync("UPDATE core.material_connection SET next_run_at = now() - interval '1 minute' WHERE id = @Id", new { saved.Id });
+            await using var scope = db.Services.CreateAsyncScope();
+            Assert.True(await scope.ServiceProvider.GetRequiredService<ScheduledConnections>().RunDueAsync(CancellationToken.None) >= 1);
+        }
+
+        await RunDueAsync();
+        Assert.Equal(1, await admin.ExecuteScalarAsync<int>(
+            "SELECT count(*)::int FROM core.person_qualification g JOIN core.person p ON p.id = g.person_id WHERE p.external_system = @System", new { System = system }));
+
+        // Bo has left: the next full import switches him off; Ana's grant isn't repeated.
+        db.MaterialConnectionFetcher.Json[code] = $$"""[{"No": "1-{{_suffix}}", "Name": "Ana Ng", "Id": "A", "Certs": "FORK"}]""";
+        await RunDueAsync();
+        Assert.False(await admin.ExecuteScalarAsync<bool>("SELECT is_active FROM core.person WHERE external_system = @System AND external_key = 'B'", new { System = system }));
+        Assert.Equal(1, await admin.ExecuteScalarAsync<int>(
+            "SELECT count(*)::int FROM core.person_qualification g JOIN core.person p ON p.id = g.person_id WHERE p.external_system = @System", new { System = system }));
+
+        var runs = await QueryAsync<ListConnectionRunsQuery, IReadOnlyList<ConnectionRunDto>>(new ListConnectionRunsQuery(saved.Id, ConnectionTargets.People));
+        Assert.Equal([("schedule", "applied"), ("schedule", "applied")], runs.Select(r => (r.Trigger, r.Outcome)));
+        Assert.Equal((0, 1), (runs[0].Created, runs[0].Updated));
+        Assert.True(await admin.ExecuteScalarAsync<DateTimeOffset>("SELECT next_run_at FROM core.material_connection WHERE id = @Id", new { saved.Id }) > DateTimeOffset.UtcNow);
     }
 }

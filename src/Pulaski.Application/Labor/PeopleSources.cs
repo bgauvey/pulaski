@@ -63,7 +63,11 @@ public sealed record ListPeopleSourcesQuery : IQuery<IReadOnlyList<PeopleSourceD
 /// <param name="Text">The file's contents.</param>
 /// <param name="ExternalSystem">The HR or ERP system the file's people belong to, such as <c>HR1</c>; null for Pulaski people.</param>
 /// <param name="DryRun">True to check the file and report what would happen, saving nothing.</param>
-public sealed record ImportPeopleFileCommand(Guid SiteId, string Source, string Text, string? ExternalSystem, bool DryRun) : ICommand<ImportPeopleResponse>;
+public sealed record ImportPeopleFileCommand(Guid SiteId, string Source, string Text, string? ExternalSystem, bool DryRun) : ICommand<ImportPeopleResponse>
+{
+    /// <summary>The file is every one of the system's people (#71): those of the site it doesn't list are switched off.</summary>
+    public bool SwitchOffMissing { get; init; }
+}
 
 internal sealed class ListPeopleSourcesHandler(IEnumerable<IPeopleSourceAdapter> adapters) : IQueryHandler<ListPeopleSourcesQuery, IReadOnlyList<PeopleSourceDto>>
 {
@@ -89,6 +93,10 @@ internal sealed class ImportPeopleFileHandler(
         new Validator().Require(system is null || system.Length <= 100, "externalSystem", "At most 100 characters.").ThrowIfInvalid();
 
         return import.HandleAsync(
-            new ImportPeopleCommand(command.SiteId, adapter.Read(command.Text, system), command.DryRun, $"{adapter.DisplayName} import"), cancellationToken);
+            new ImportPeopleCommand(command.SiteId, adapter.Read(command.Text, system), command.DryRun, $"{adapter.DisplayName} import")
+            {
+                SwitchOffMissing = command.SwitchOffMissing,
+            },
+            cancellationToken);
     }
 }

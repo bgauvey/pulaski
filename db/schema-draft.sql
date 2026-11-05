@@ -285,11 +285,14 @@ CREATE TABLE core.oee_state_category (
 -- An external source of material master data that Pulaski pulls from (D-068): an OData v4 service and the entity set holding its items,
 -- with a map from Pulaski's import fields to the service's property names. Rows go through the materials import (D-034, D-053) as a
 -- file's do. No secrets here: credentials are in the API's configuration, under MaterialConnections:<code>.
+-- Connections to external sources of master data: materials (D-068) or, since #71, people at a site. The name is kept from D-068.
 CREATE TABLE core.material_connection (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     code                text NOT NULL UNIQUE,                   -- upper case, fixed once created; names the configuration section
     name                text NOT NULL,
-    kind                text NOT NULL DEFAULT 'odata',          -- odata, rest, soap or database (#72); fixed once made
+    target              text NOT NULL DEFAULT 'materials',      -- materials or people (#71); fixed once made
+    site_id             uuid REFERENCES core.equipment(id),     -- people: the site they are imported into
+    kind                text NOT NULL DEFAULT 'odata',          -- odata, rest, soap, database (#72) or scim (people, #71); fixed once made
     base_url            text,                                   -- the service's address, https; none for a database
     entity_set          text NOT NULL,                          -- OData: the entity set; REST: the items' path ('' for the root); SOAP: the item element
     filter              text,                                   -- an OData $filter, as the service takes it
@@ -300,18 +303,34 @@ CREATE TABLE core.material_connection (
     external_system     text NOT NULL,                          -- what the items are matched on with their key (D-033)
     field_map           jsonb NOT NULL,                         -- {"code": "ProductNumber", "external_key": "ProductID", ...}
     is_active           boolean NOT NULL DEFAULT true,
+    schedule_every_hours smallint,                              -- run every this many hours (#71); null with no daily times = on demand
+    schedule_daily_at   time[],                                 -- or daily at these UTC times (up to 4)
+    next_run_at         timestamptz,                            -- when the scheduler runs it next; null when not scheduled
+    create_classes      boolean NOT NULL DEFAULT false,         -- materials: create classes the items name (D-055)
+    switch_off_missing  boolean NOT NULL DEFAULT false,         -- people: switch off the system's people the source no longer has
     last_run_at         timestamptz,
     last_run_by         text,
     last_run_summary    text,                                   -- what the last import (not a check) did, for the screen
+    last_run_outcome    text,                                   -- applied, not_applied or failed (#71)
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT material_connection_external_ck CHECK (length(external_system) BETWEEN 1 AND 100),
     CONSTRAINT material_connection_kind_ck CHECK (
-        kind IN ('odata','rest','soap','database')
+        kind IN ('odata','rest','soap','database','scim')
         AND (kind = 'database') = (base_url IS NULL)
         AND (kind = 'database') = (query IS NOT NULL)
-        AND (kind = 'soap') = (request_body IS NOT NULL))
+        AND (kind = 'soap') = (request_body IS NOT NULL)),
+    CONSTRAINT material_connection_target_ck CHECK (
+        target IN ('materials','people')
+        AND (target = 'people') = (site_id IS NOT NULL)
+        AND (kind <> 'scim' OR target = 'people')),
+    CONSTRAINT material_connection_schedule_ck CHECK (
+        (schedule_every_hours IS NULL OR schedule_every_hours BETWEEN 1 AND 168)
+        AND (schedule_daily_at IS NULL OR cardinality(schedule_daily_at) BETWEEN 1 AND 4)
+        AND NOT (schedule_every_hours IS NOT NULL AND schedule_daily_at IS NOT NULL)),
+    CONSTRAINT material_connection_outcome_ck CHECK (last_run_outcome IN ('applied','not_applied','failed'))
 );
+CREATE INDEX material_connection_due_ix ON core.material_connection (next_run_at) WHERE next_run_at IS NOT NULL;
 
 CREATE TABLE core.material_class (
     id          uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -2074,6 +2093,24 @@ CREATE INDEX quality_sample_site_ix ON ts.quality_sample (site_id, occurred_at);
 CREATE INDEX quality_sample_lot_ix ON ts.quality_sample (lot_id, occurred_at) WHERE lot_id IS NOT NULL;
 CREATE INDEX quality_sample_job_ix ON ts.quality_sample (job_id, occurred_at) WHERE job_id IS NOT NULL;
 
+-- Every import a connection ran (#71): on demand or by its schedule, with what it did or why it failed. Checks aren't recorded.
+CREATE TABLE ts.connection_run (
+    id                  uuid NOT NULL DEFAULT uuidv7(),
+    started_at          timestamptz NOT NULL,
+    finished_at         timestamptz NOT NULL,
+    connection_id       uuid NOT NULL REFERENCES core.material_connection(id),
+    trigger             text NOT NULL CHECK (trigger IN ('manual','schedule')),
+    outcome             text NOT NULL CHECK (outcome IN ('applied','not_applied','failed')),
+    created_count       integer NOT NULL DEFAULT 0,
+    updated_count       integer NOT NULL DEFAULT 0,
+    unchanged_count     integer NOT NULL DEFAULT 0,
+    error_count         integer NOT NULL DEFAULT 0,
+    summary             text NOT NULL CHECK (length(summary) <= 2000),
+    actor               text NOT NULL,
+    PRIMARY KEY (id, started_at)
+) PARTITION BY RANGE (started_at);
+CREATE INDEX connection_run_connection_ix ON ts.connection_run (connection_id, started_at DESC);
+
 CREATE TABLE ts.spc_violation (
     id                  uuid NOT NULL DEFAULT uuidv7(),
     occurred_at         timestamptz NOT NULL,
@@ -2446,7 +2483,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0053_quality'),
     ('0054_delivery_feed_settings'),
     ('0055_delivery_feeds'),
-    ('0056_material_sources');
+    ('0056_material_sources'),
+    ('0057_connection_schedules');
 
 -- =====================================================================
 -- 17. SEED DATA

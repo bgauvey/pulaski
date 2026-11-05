@@ -120,10 +120,11 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     /// <summary>Checks (<paramref name="dryRun"/>) or imports a people file into a site, read by the named source adapter (D-054).</summary>
     public async Task<ImportPeopleResponse> ImportPeopleAsync(
-        Guid siteId, string source, string text, string? externalSystem, bool dryRun, string mediaType, CancellationToken ct = default)
+        Guid siteId, string source, string text, string? externalSystem, bool dryRun, string mediaType, bool switchOffMissing = false, CancellationToken ct = default)
     {
         var query = $"siteId={siteId}&dryRun={(dryRun ? "true" : "false")}"
-            + (string.IsNullOrWhiteSpace(externalSystem) ? "" : $"&externalSystem={Uri.EscapeDataString(externalSystem.Trim())}");
+            + (string.IsNullOrWhiteSpace(externalSystem) ? "" : $"&externalSystem={Uri.EscapeDataString(externalSystem.Trim())}")
+            + (switchOffMissing ? "&switchOffMissing=true" : "");
         var request = new HttpRequestMessage(HttpMethod.Post, $"api/people/import/{Uri.EscapeDataString(source)}?{query}")
         {
             Content = new StringContent(text, System.Text.Encoding.UTF8, mediaType),
@@ -348,6 +349,23 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<ImportMaterialsResponse> RunMaterialConnectionAsync(Guid id, RunMaterialConnectionRequest request, CancellationToken ct = default) =>
         SendAsync<ImportMaterialsResponse>(HttpMethod.Post, $"api/material-connections/{id}/run", request, ct);
+
+    // People connections at a site (#71), and every connection's run history.
+
+    public Task<IReadOnlyList<MaterialConnectionDto>> ListPeopleConnectionsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MaterialConnectionDto>>($"api/people-connections?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> SavePeopleConnectionAsync(Guid? id, SaveMaterialConnectionRequest request, CancellationToken ct = default) =>
+        id is { } existing
+            ? SendAsync<CreatedResponse>(HttpMethod.Put, $"api/people-connections/{existing}", request, ct)
+            : SendAsync<CreatedResponse>(HttpMethod.Post, "api/people-connections", request, ct);
+
+    public Task<ImportPeopleResponse> RunPeopleConnectionAsync(Guid id, RunPeopleConnectionRequest request, CancellationToken ct = default) =>
+        SendAsync<ImportPeopleResponse>(HttpMethod.Post, $"api/people-connections/{id}/run", request, ct);
+
+    /// <summary>A connection's imports, newest first; <paramref name="target"/> is <c>materials</c> or <c>people</c>.</summary>
+    public Task<IReadOnlyList<ConnectionRunDto>> ListConnectionRunsAsync(string target, Guid id, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ConnectionRunDto>>($"api/{(target == "people" ? "people" : "material")}-connections/{id}/runs", ct);
 
     // Outbound deliveries (D-061): the ERP feed (erp) and the document system's (documents, #78)
 

@@ -22,6 +22,9 @@ public interface IQualificationRepository
 
     Task<bool> CodeExistsAsync(Guid siteId, string code, CancellationToken cancellationToken);
 
+    /// <summary>The site's qualification with this code, read <c>FOR SHARE</c>; null when none (#71).</summary>
+    Task<QualificationRecord?> FindQualificationByCodeAsync(Guid siteId, string code, CancellationToken cancellationToken);
+
     Task<long> InsertQualificationAsync(QualificationRecord qualification, DateTimeOffset at, CancellationToken cancellationToken);
 
     Task<long> UpdateQualificationAsync(QualificationRecord qualification, DateTimeOffset at, CancellationToken cancellationToken);

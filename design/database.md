@@ -283,10 +283,19 @@ A source Pulaski pulls items from, on demand, through the materials import (D-03
 | `external_system` | text | no | The system the items belong to; with each item's key it is what the import matches on (D-033). |
 | `field_map` | jsonb | no | Import field → the item's property (or `A/B` path), or the query's column: `{"code": "Number", "external_key": "Id", ...}`. Code and external key are required. |
 | `is_active` | boolean | no | False: it can't be run. |
+| `target` | text | no | `materials` (default) or `people` (D-090). Fixed once created. |
+| `site_id` | uuid | yes | FK → `core.equipment`. People: the site they are imported into; set exactly for `people`. Fixed once created. |
+| `schedule_every_hours` | smallint | yes | Runs every this many hours (1–168). |
+| `schedule_daily_at` | time[] | yes | Or daily at these UTC times (1–4); not both. Neither: on demand only. |
+| `next_run_at` | timestamptz | yes | When the scheduler runs it next; null when not scheduled or switched off. Indexed (`material_connection_due_ix`). |
+| `create_classes` | boolean | no | Materials: a scheduled (or manual) run creates the classes its items name (D-055). |
+| `switch_off_missing` | boolean | no | People: the source is a full list; the system's people it no longer has are switched off. |
 | `last_run_at`, `last_run_by`, `last_run_summary` | timestamptz, text, text | yes | The last import (not a check): when, who and what it did. |
+| `last_run_outcome` | text | yes | `applied`, `not_applied` (row errors, nothing saved) or `failed`. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
-`material_connection_kind_ck` keeps the kind and its columns consistent.
+`material_connection_kind_ck` keeps the kind and its columns consistent (`scim` since D-090); `material_connection_target_ck` keeps target, site
+and kind consistent (SCIM is for people); `material_connection_schedule_ck` allows one kind of schedule.
 
 ### core.material_class — material groups · *In use*
 
@@ -1695,6 +1704,21 @@ One row for every job status change, written in the same transaction as the chan
 | `source_ref` | uuid | yes | What caused it: the production report, or the machine count (`ts.production_count.id`); for a shortfall's resolution, the shortfall. Indexed. Loads at feed points read this table by `to_location_id` and `from_location_id` (indexed with `effective_at`). |
 | `actor_user_id` | uuid | yes | Who, once `sec.app_user` exists. |
 | `actor_id` | text | yes | Who, as on `evt.event` (`issuer\|subject`, `anonymous` until sign-in). |
+
+### ts.connection_run — every import a connection ran (D-090) · *In use*
+
+Partitioned by month on `started_at`. One row per import (not a check), on demand or by the schedule. Appended only.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id`, `started_at` | uuid, timestamptz | no | Primary key; when the run began. |
+| `finished_at` | timestamptz | no | When it was recorded. |
+| `connection_id` | uuid | no | FK → `core.material_connection`. |
+| `trigger` | text | no | `manual` or `schedule`. |
+| `outcome` | text | no | `applied`, `not_applied` (some rows had errors, nothing saved) or `failed` (the source couldn't be read, or the run stopped). |
+| `created_count`, `updated_count`, `unchanged_count`, `error_count` | integer | no | What the import did. |
+| `summary` | text | no | The words shown on the screen (≤ 2000), such as the service's error. |
+| `actor` | text | no | Who ran it; `system` for the schedule. |
 
 ### ts.quality_sample — quality results, one sample per row (#65, D-085) · *In use*
 

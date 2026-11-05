@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-04 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-05 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -1696,7 +1696,8 @@ Instead of a file, Pulaski can read items straight from an **OData v4**, **REST*
 - **The rules are the import's.** For an ERP item the ERP owns its code, name, base unit and type; Pulaski owns the rest. Each change is recorded with the reason *<connection name> import*, and the list shows the last import, who ran it and what it did. A check is not recorded.
 - **REST** follows the next-page link (relative addresses are read against the page) up to 200 pages. **SOAP** reads every element with the item element's name, anywhere in the answer, as an item of its child elements (nested ones as properties of properties; of repeated names, the first). A SOAP fault is reported with its message. Files and answers with a `DOCTYPE` are refused.
 - **A database query** runs read-only, with a 30-second limit, and stops at 5,000 rows. Each column is a field by its name. Give the connection a login that can only read.
-- **Read on demand:** nothing runs on a timer.
+- **When it runs.** Under **Runs**, choose **When you click Import**, **Every so many hours** (1 to 168), or **Daily at set times** (up to four, in UTC, such as `02:00, 14:00`). A scheduled run imports straight away, all or nothing, as *system*, with the reason *<name> import (scheduled)*; a saved **Create missing classes** applies to it. The list shows the schedule and the next run. A run that comes late is followed by the next one due, not by those it missed. Switching a connection off stops its schedule.
+- **History.** Every import, on demand or scheduled, is recorded; checks aren't. The list marks a last run that **Failed** (the source couldn't be read) or was **Not imported** because some items had errors. Click **History** for the latest 50 runs: when, by whom or the schedule, and what each did or why it failed. For scripts: `GET /api/material-connections/{id}/runs` (or `/api/people-connections/{id}/runs`).
 
 ### Import capabilities from a CSV file
 
@@ -2010,12 +2011,28 @@ Load everyone at once, and keep them up to date, from a file your HR system or E
    | `crew`, `username` | A crew code on the Crews tab, and the Pulaski user they sign in as. |
    | `origin` | `hr` (the default) or `erp`. |
    | `external_system`, `external_version` | The system, if the file names it per row, and the source's version for reference. |
+   | `qualifications` | The qualifications they hold, by code, separated by `;`, such as `FORKLIFT; FIRST-AID`. Each may give its grant's days as `CODE:valid-from:expires-on` (`yyyy-MM-dd`, either may be blank). |
 
    For SCIM, each user's `employeeNumber` (from the enterprise extension) is the employee number, `displayName` (or the parts of `name`) the name, `active` whether they work here, and `externalId` (or `id`) their key.
 5. Click **Choose File** and pick the file. Pulaski checks it straight away and saves nothing yet: each row shows **Create**, **Update** (with what changes), **Unchanged** or **Error** with the reason.
 6. Fix any errors and pick the file again, then click **Import N people**. The list updates, and imported people show their system's name next to their employee number.
 
 Import the same file, or next week's, as often as you like: people are matched on their key, so nobody is added twice.
+
+**In detail**
+
+- **Leavers.** Tick **The file is all of the system's people** (with an external system named) and the site's people from that system who aren't in the file are switched off; each is listed. Someone still clocked on stays on, with a note, and a later full import switches them off. People kept by hand in Pulaski are never touched, and a file with no people switches no one off.
+- **Qualifications** are added, never taken away. A listed one is granted unless the person already holds it: with no dates, a grant valid today is enough, and a new one runs from today for the qualification's usual validity; with a later expiry than the one they hold, it is renewed with a new grant. Importing the same file again grants nothing. Leaving a qualification out of the file doesn't revoke it; revoke it on the person's page. A code the site doesn't have is an error on the row. SCIM users carry no qualifications.
+
+### Import people from a connection
+
+Instead of a file, Pulaski can read people straight from your HR or identity system: its **SCIM 2.0** users, an OData, REST or SOAP service, or a query of a PostgreSQL database. The connection belongs to the site.
+
+1. On **Configure → People**, choose the site and click **Import file**. **People connections** is under the file import.
+2. Click **Check** on a connection: Pulaski reads everyone and says what an import would do, saving nothing. Then click **Import**.
+3. **Set one up** (needs *integrations.manage* at the site): click **Add connection**, give it a **Code**, **Name** and **External system**, pick the **Kind**, fill in its address (for SCIM, the base address before `/Users`, and optionally a filter such as `active eq true`), and for other kinds the fields as for [material connections](#import-materials-from-a-connection), with `employee_number`, `name` and `external_key` required and `qualifications` optional. Tick **Switch off people the source no longer has** to treat it as a full list. Choose when it **Runs** (see below) and click **Save**.
+
+Running it needs permission to maintain people at the site. Credentials go in the API's configuration under `MaterialConnections:<code>`, as for materials.
 
 ### Check a crew onto a line
 
@@ -2529,8 +2546,8 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
-- **Labor:** people come from HR or the ERP only as a file you import: nothing fetches them on a timer, someone missing from a file isn't switched off (send them with `active` = no), and qualifications aren't imported. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
-- **Materials import** from CSV or B2MML files, from an OData, REST, SOAP or PostgreSQL connection on demand, or one item at a time through the API. Nothing fetches items on a timer, connections can't sign in with OAuth, and there are no adapters for label printing. Capabilities import from CSV only. Pulaski exports materials and classes as B2MML, but not lots; B2MML sublots, assemblies and other languages aren't read.
+- **Labor:** people from HR or the ERP come from a file or a connection; schedules are in UTC, not the site's time, and a failed scheduled run waits for the next one. Qualifications are only added by an import, never revoked, and SCIM users carry none. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
+- **Materials import** from CSV or B2MML files, from an OData, REST, SOAP or PostgreSQL connection on demand or on a schedule, or one item at a time through the API. Connections can't sign in with OAuth, and there are no adapters for label printing. Capabilities import from CSV only. Pulaski exports materials and classes as B2MML, but not lots; B2MML sublots, assemblies and other languages aren't read.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
 - **Production is reported by hand.** Machine counts are recorded but aren't production reports. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.

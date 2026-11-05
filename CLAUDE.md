@@ -315,6 +315,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   overlap refuses. B2MML `MaterialClass` → `MaterialImportSource.Classes` (added/renamed first); `LotB2mml` → `ImportB2mmlLotsCommand`
   (`POST /lots/import/b2mml`, `lot.receive`): new lots via `ReceiveLotHandler.ReceiveAsync` (caller's transaction), known lots keep quantity, properties →
   lot attributes (`LotAttributeWriter`). `MaterialB2mml.Write` / `GET /materials/export/b2mml` reads back through the import.
+- Scheduled connections and people sources (D-090, proposed): `material_connection.target` materials / people (+ `site_id`, kind `scim` = `/Users` paged,
+  read by `PeopleScim.Read`; others via `ConnectionPeopleRows`); `/api/people-connections`. Schedule every N hours or ≤ 4 daily UTC times
+  (`ConnectionSchedule.Next`); `ConnectionScheduleService` → `ScheduledConnections.RunDueAsync` claims (`ClaimAsync`) then runs as `system`. Every
+  import → `ts.connection_run` (applied / not_applied / failed). `ImportPeopleCommand.SwitchOffMissing` switches off the system's unlisted people
+  (clocked on: stays, noted); `qualifications` field grants via `QualificationRules.ImportGrant` (add and renew, never revoke).
 - Stop adjustments (D-069, proposed): enter (`EnterStopCommand`), split, merge stops; never edit: the old rows get `superseded_at`/`_by`, new
   `ts.downtime` rows carry `source` (machine/manual/split/merge), `replaces_ids`, `adjusted_*`. Every reader of stops (OEE, list, uncoded)
   filters `superseded_at IS NULL`; current stops never overlap (`StopAdjustments`). Closed stops only, ≤ 31 days; lock equipment

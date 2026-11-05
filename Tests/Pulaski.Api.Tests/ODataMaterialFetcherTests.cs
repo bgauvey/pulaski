@@ -110,6 +110,27 @@ public sealed class ODataMaterialFetcherTests
         Assert.True(Fetcher(new Pages(), ("MaterialConnections:ERP-ITEMS:ConnectionString", "Host=erp")).HasCredentials("ERP-ITEMS"));
     }
 
+    [Fact]
+    public async Task A_scim_connection_pages_through_users_by_start_index_with_its_filter()
+    {
+        var scim = Connection with { Kind = "scim", BaseUrl = "https://hr.example/scim/v2", EntitySet = "", Filter = "active eq true" };
+        var handler = new Pages(
+            """{"totalResults": 3, "startIndex": 1, "itemsPerPage": 2, "Resources": [{"id": "u1"}, {"id": "u2"}]}""",
+            """{"totalResults": 3, "startIndex": 3, "itemsPerPage": 2, "Resources": [{"id": "u3"}]}""");
+
+        var result = await Fetcher(handler).FetchAsync(scim, 5000, CancellationToken.None);
+
+        Assert.Empty(result.Problems);
+        Assert.Equal(["u1", "u2", "u3"], result.Items.Select(i => i.GetProperty("id").GetString()));
+        Assert.Equal("https://hr.example/scim/v2/Users?startIndex=1&count=100&filter=active%20eq%20true", handler.Requests[0].RequestUri!.OriginalString);
+        Assert.StartsWith("https://hr.example/scim/v2/Users?startIndex=3&", handler.Requests[1].RequestUri!.OriginalString, StringComparison.Ordinal);
+
+        var empty = await Fetcher(new Pages("""{"totalResults": 0}""")).FetchAsync(scim, 5000, CancellationToken.None);
+        Assert.Equal((0, 0), (empty.Items.Count, empty.Problems.Count));
+        var odd = await Fetcher(new Pages("""[{"id": "u1"}]""")).FetchAsync(scim, 5000, CancellationToken.None);
+        Assert.Contains("isn't a SCIM ListResponse", Assert.Single(odd.Problems), StringComparison.Ordinal);
+    }
+
     private static ODataMaterialFetcher Fetcher(Pages handler, params (string Key, string Value)[] settings) => new(
         new Clients(handler),
         new ConfigurationBuilder().AddInMemoryCollection(settings.Select(s => new KeyValuePair<string, string?>(s.Key, s.Value))).Build());
