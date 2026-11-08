@@ -19,6 +19,47 @@ internal sealed class SecurityOptions
 
     /// <summary>The administrator created when the database has no users at all.</summary>
     public BootstrapAdminOptions BootstrapAdmin { get; set; } = new();
+
+    /// <summary>OpenID Connect identity providers by name (D-091): <c>Security:Providers:{name}</c>. The name is in the sign-in URL.</summary>
+    public Dictionary<string, IdentityProviderOptions> Providers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary><c>everyone</c> (default), or <c>administrators</c>: only administrators and service accounts sign in with a password (D-091).</summary>
+    public string LocalSignIn { get; set; } = LocalSignInModes.Everyone;
+
+    public bool LocalSignInForAdministratorsOnly => string.Equals(LocalSignIn, LocalSignInModes.Administrators, StringComparison.OrdinalIgnoreCase);
+}
+
+internal static class LocalSignInModes
+{
+    public const string Everyone = "everyone";
+    public const string Administrators = "administrators";
+}
+
+/// <summary>
+/// One OpenID Connect provider (D-091): Entra ID, AD FS, Keycloak, Okta or any other that publishes its discovery document. Pulaski is a
+/// confidential client using the authorization code flow with PKCE; the secret stays in configuration, never in the database.
+/// </summary>
+internal sealed class IdentityProviderOptions
+{
+    /// <summary>For the sign-in button, such as "Contoso (Entra ID)".</summary>
+    public string DisplayName { get; set; } = "";
+
+    /// <summary>The issuer address; its <c>/.well-known/openid-configuration</c> is read. For Entra ID, the tenant's, never <c>common</c>.</summary>
+    public string Authority { get; set; } = "";
+
+    public string ClientId { get; set; } = "";
+
+    public string ClientSecret { get; set; } = "";
+
+    public string Scopes { get; set; } = "openid profile email";
+
+    /// <summary>The ID token claim holding the person's name.</summary>
+    public string NameClaim { get; set; } = "name";
+
+    /// <summary>The ID token claim holding their e-mail; Entra ID may need <c>preferred_username</c> or <c>upn</c>.</summary>
+    public string EmailClaim { get; set; } = "email";
+
+    public bool IsUsable => Authority.Length > 0 && ClientId.Length > 0 && ClientSecret.Length > 0;
 }
 
 internal sealed class BootstrapAdminOptions

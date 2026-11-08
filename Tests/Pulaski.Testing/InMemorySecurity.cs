@@ -109,7 +109,7 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
             var grants = _assignments.Values.Where(a => a.UserId == user.Id && a.IsActiveAt(now)).Where(a => _roles[a.RoleCode].Value.IsActive)
                 .Select(a => new RoleGrant(a.Id, a.RoleCode, _roles[a.RoleCode].Value.Name, a.SiteId, _roles[a.RoleCode].Value.Permissions)).ToList();
             return Task.FromResult<UserAccess?>(new UserAccess(
-                user.Id, user.Username ?? user.Subject, user.DisplayName, Issuers.ActorId(user.Issuer, user.Subject), user.IsActive, grants,
+                user.Id, user.Username ?? user.Email ?? user.Subject, user.DisplayName, Issuers.ActorId(user.Issuer, user.Subject), user.IsActive, grants,
                 _credentials.GetValueOrDefault(user.Id)?.MustChange == true));
         }
     }
@@ -119,6 +119,18 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
         lock (_lock)
         {
             return Task.FromResult<IReadOnlyList<UserDto>>([.. _users.Values.Select(u => ToDto(u, now)).OrderBy(u => u.Username, StringComparer.Ordinal)]);
+        }
+    }
+
+    /// <summary>How many users there are, for tests.</summary>
+    public int UserCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _users.Count;
+            }
         }
     }
 
@@ -210,6 +222,14 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
         lock (_lock)
         {
             return Task.FromResult(_users.Values.FirstOrDefault(u => u.Value.Issuer == Issuers.Local && u.Value.Username == username));
+        }
+    }
+
+    public Task<Versioned<SecurityUser>?> FindUserByIdentityForUpdateAsync(string issuer, string subject, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_users.Values.FirstOrDefault(u => u.Value.Issuer == issuer && u.Value.Subject == subject));
         }
     }
 
@@ -331,7 +351,8 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
         return new UserDto
         {
             Id = user.Value.Id,
-            Username = user.Value.Username ?? user.Value.Subject,
+            Username = user.Value.Username ?? user.Value.Email ?? user.Value.Subject,
+            IsServiceAccount = user.Value.IsServiceAccount,
             DisplayName = user.Value.DisplayName,
             Email = user.Value.Email,
             IsActive = user.Value.IsActive,

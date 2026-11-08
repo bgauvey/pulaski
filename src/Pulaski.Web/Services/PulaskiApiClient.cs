@@ -31,6 +31,27 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     // Security (D-037)
 
     /// <summary>Checks a user name and password; the only call made without signing in.</summary>
+    /// <summary>How people may sign in (D-091); asked before anyone has.</summary>
+    public async Task<SignInOptionsDto> GetSignInOptionsAsync(CancellationToken ct = default)
+    {
+        using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Get, "api/auth/options"), ct, signedIn: false);
+        return await ReadAsync<SignInOptionsDto>(response, ct);
+    }
+
+    public async Task<StartProviderSignInResponse> StartProviderSignInAsync(string provider, StartProviderSignInRequest request, CancellationToken ct = default)
+    {
+        var message = new HttpRequestMessage(HttpMethod.Post, $"api/auth/providers/{Uri.EscapeDataString(provider)}/start") { Content = JsonContent.Create(request) };
+        using var response = await SendCoreAsync(message, ct, signedIn: false);
+        return await ReadAsync<StartProviderSignInResponse>(response, ct);
+    }
+
+    public async Task<SignInResponse> CompleteProviderSignInAsync(string provider, CompleteProviderSignInRequest request, CancellationToken ct = default)
+    {
+        var message = new HttpRequestMessage(HttpMethod.Post, $"api/auth/providers/{Uri.EscapeDataString(provider)}/complete") { Content = JsonContent.Create(request) };
+        using var response = await SendCoreAsync(message, ct, signedIn: false);
+        return await ReadAsync<SignInResponse>(response, ct);
+    }
+
     public async Task<SignInResponse> SignInAsync(SignInRequest request, CancellationToken ct = default)
     {
         var message = new HttpRequestMessage(HttpMethod.Post, "api/auth/sign-in") { Content = JsonContent.Create(request) };

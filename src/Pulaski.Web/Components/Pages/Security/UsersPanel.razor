@@ -120,12 +120,22 @@ else
                                 <span class="chip me-1">@(r.SiteCode is null ? r.RoleName : $"{r.RoleName} · {r.SiteCode}")</span>
                             }
                         </td>
-                        <td class="small">@(u.Issuer == "pulaski-local" ? "Pulaski password" : u.Issuer)</td>
+                        <td class="small text-break">
+                            @(u.Issuer == "pulaski-local" ? "Pulaski password" : u.Issuer)
+                            @if (u.IsServiceAccount)
+                            {
+                                <div class="text-muted">Service account</div>
+                            }
+                        </td>
                         <td class="small">@(u.LastLoginAt is { } at ? at.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "Never")</td>
                         <td class="small">
                             @if (!u.IsActive)
                             {
                                 <span class="chip">Switched off</span>
+                            }
+                            else if (u.IsAwaitingRole)
+                            {
+                                <span class="chip chip-warn" title="Signed in through an identity provider; give them a role to let them in">Awaiting a role</span>
                             }
                             else if (u.IsLocked)
                             {
@@ -166,6 +176,19 @@ else
                                                 Can sign in@(u.Id == User.Me?.Id ? " (you can't switch yourself off)" : "")
                                             </label>
                                         </div>
+                                        @if (u.Issuer == "pulaski-local")
+                                        {
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="edit-service-@u.Id" @bind="edit.IsServiceAccount" />
+                                                <label class="form-check-label small" for="edit-service-@u.Id">
+                                                    Service account (a machine, such as the edge): keeps its password when only administrators sign in with one
+                                                </label>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <p class="small text-muted mb-2">Signs in through @u.Issuer; the provider keeps their name and e-mail up to date.</p>
+                                        }
                                         <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save details</button>
                                     </form>
 
@@ -318,6 +341,7 @@ else
             DisplayName = _edit.DisplayName,
             Email = string.IsNullOrWhiteSpace(_edit.Email) ? null : _edit.Email,
             IsActive = _edit.IsActive,
+            IsServiceAccount = user.Issuer == "pulaski-local" ? _edit.IsServiceAccount : null,
         });
         _message = $"Saved {_edit.DisplayName}.";
     });
@@ -388,12 +412,21 @@ else
 
         public bool IsActive { get; set; }
 
+        public bool IsServiceAccount { get; set; }
+
         public string RoleCode { get; set; } = "";
 
         public Guid? SiteId { get; set; }
 
         public string TemporaryPassword { get; set; } = "";
 
-        public static UserEdit From(UserDto user) => new() { Version = user.Version, DisplayName = user.DisplayName, Email = user.Email, IsActive = user.IsActive };
+        public static UserEdit From(UserDto user) => new()
+        {
+            Version = user.Version,
+            DisplayName = user.DisplayName,
+            Email = user.Email,
+            IsActive = user.IsActive,
+            IsServiceAccount = user.IsServiceAccount,
+        };
     }
 }

@@ -36,6 +36,50 @@ public class SecurityHandlerTests
 
     private AssignRoleHandler Assign() => new(_f.Stores.UnitOfWork, Security, As(_admin), _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
 
+    private ProviderSignInHandler ProviderSignIn() => new(_f.Stores.UnitOfWork, Security, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
+
+    [Fact]
+    public async Task Someone_new_from_a_provider_is_kept_without_a_role_and_let_in_once_given_one()
+    {
+        var command = new ProviderSignInCommand("Contoso", "https://login.contoso.example/tenant/v2.0", "abc-123", "Ana Ng", "ana@contoso.example");
+
+        var refused = await Assert.ThrowsAsync<UnauthorizedException>(() => ProviderSignIn().HandleAsync(command, CancellationToken.None));
+        Assert.Contains("no role yet", refused.Message, StringComparison.Ordinal);
+        var ana = (await Security.FindUserByIdentityForUpdateAsync(command.Issuer, command.Subject, CancellationToken.None))!.Value;
+        Assert.Equal(("Ana Ng", "ana@contoso.example", (string?)null), (ana.DisplayName, ana.Email, ana.Username));
+        Assert.Equal(("Contoso sign-in", EventTypes.UserCreated), (_f.Stores.Events.Appended[^1].Reason, _f.Stores.Events.Appended[^1].Type));
+        Assert.True((await Security.GetUserAsync(ana.Id, HandlerFixture.Now, CancellationToken.None))!.IsAwaitingRole);
+
+        // Signing in again doesn't add them twice; still no role.
+        await Assert.ThrowsAsync<UnauthorizedException>(() => ProviderSignIn().HandleAsync(command, CancellationToken.None));
+        Assert.Equal(2, Security.UserCount);
+
+        await Assign().HandleAsync(new AssignRoleCommand(ana.Id, Roles.Operator, _site), CancellationToken.None);
+        var signedIn = await ProviderSignIn().HandleAsync(command with { DisplayName = "Ana Ng-Berg" }, CancellationToken.None);
+        Assert.Equal((ana.Id, command.Issuer, "abc-123", "Ana Ng-Berg", false), (signedIn.UserId, signedIn.Issuer, signedIn.Subject, signedIn.DisplayName, signedIn.MustChangePassword));
+        Assert.Equal(EventTypes.SignedIn, _f.Stores.Events.Appended[^1].Type);
+
+        // A provider can't vouch for a Pulaski password user, and a switched-off user stays out.
+        await Assert.ThrowsAsync<UnauthorizedException>(() => ProviderSignIn().HandleAsync(command with { Issuer = Issuers.Local, Subject = "admin" }, CancellationToken.None));
+        var current = (await Security.GetUserForUpdateAsync(ana.Id, CancellationToken.None))!;
+        await Update(_admin).HandleAsync(new UpdateUserCommand(ana.Id, current.Version, "Ana Ng-Berg", "ana@contoso.example", false), CancellationToken.None);
+        Assert.Contains("switched off", (await Assert.ThrowsAsync<UnauthorizedException>(() => ProviderSignIn().HandleAsync(command, CancellationToken.None))).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task With_passwords_for_administrators_only_others_are_sent_to_the_provider_but_machines_keep_theirs()
+    {
+        await Create().HandleAsync(new CreateUserCommand("planner1", "P", null, "Temporary-pass-1", Roles.Planner, _site), CancellationToken.None);
+        var edge = await Create().HandleAsync(new CreateUserCommand("edge1", "Edge", null, "Temporary-pass-1", Roles.EdgeNode, _site), CancellationToken.None);
+
+        Assert.Contains("organisation's sign-in", (await Assert.ThrowsAsync<UnauthorizedException>(() =>
+            SignIn().HandleAsync(new SignInCommand("planner1", "Temporary-pass-1", AdministratorsOnly: true), CancellationToken.None))).Message, StringComparison.Ordinal);
+        await SignIn().HandleAsync(new SignInCommand("admin", Password, AdministratorsOnly: true), CancellationToken.None);
+        Assert.True((await Security.GetUserForUpdateAsync(edge.Id, CancellationToken.None))!.Value.IsServiceAccount);
+        await SignIn().HandleAsync(new SignInCommand("edge1", "Temporary-pass-1", AdministratorsOnly: true), CancellationToken.None);
+        await SignIn().HandleAsync(new SignInCommand("planner1", "Temporary-pass-1"), CancellationToken.None);
+    }
+
     [Fact]
     public async Task A_new_user_comes_with_a_role_and_a_temporary_password()
     {

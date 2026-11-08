@@ -26,6 +26,32 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
     }
 
     [Fact]
+    public async Task Sign_in_options_are_open_and_a_provider_users_token_is_them_by_issuer_and_subject()
+    {
+        var options = await factory.CreateSignedOutClient().GetFromJsonAsync<SignInOptionsDto>(new Uri("/api/auth/options", UriKind.Relative));
+        Assert.Equal((0, "everyone"), (options!.Providers.Count, options.LocalSignIn));
+
+        // Someone a provider vouched for: Pulaski's token carries the provider's issuer, which access and history use.
+        const string Issuer = "https://login.contoso.example/tenant/v2.0";
+        var user = new SecurityUser(Guid.CreateVersion7(), Issuer, "abc-123", null, "Ana Ng", "ana@contoso.example", IsActive: true);
+        await factory.Stores.Security.InsertUserAsync(user, DateTimeOffset.UtcNow, CancellationToken.None);
+        await factory.Stores.Security.InsertAssignmentAsync(
+            new RoleAssignment(Guid.CreateVersion7(), user.Id, Roles.Administrator, null, DateTimeOffset.UtcNow.AddMinutes(-1), null), null, CancellationToken.None);
+        var issuer = (Api.Security.TokenIssuer)factory.Services.GetService(typeof(Api.Security.TokenIssuer))!;
+        var (token, _) = issuer.Issue(new SignedInUser(user.Id, Issuer, "abc-123", "ana@contoso.example", "Ana Ng", MustChangePassword: false));
+        var client = factory.CreateSignedOutClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var me = await client.GetFromJsonAsync<MeDto>(new Uri("/api/me", UriKind.Relative));
+        Assert.Equal((user.Id, "ana@contoso.example", $"{Issuer}|abc-123"), (me!.Id, me.Username, me.ActorId));
+
+        // An unknown provider is 404, not a crash.
+        var start = await factory.CreateSignedOutClient().PostAsJsonAsync("/api/auth/providers/okta/start",
+            new StartProviderSignInRequest { RedirectUri = "https://mes.example/account/oidc/callback" });
+        Assert.Equal(HttpStatusCode.NotFound, start.StatusCode);
+    }
+
+    [Fact]
     public async Task A_garbage_token_is_401()
     {
         var client = factory.CreateSignedOutClient();

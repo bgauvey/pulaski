@@ -679,11 +679,11 @@ Who owns the configuration: equipment, units → Administrator; shift schedules 
 - **Tokens.** `POST /api/auth/sign-in` returns a bearer token (HMAC-SHA256 JWT, issuer `pulaski-local`, audience `pulaski`, 12 hours) signed with `Security:SigningKey` (at least 32 characters; the API won't start without it). What the user may do is read from the database on every request, so switching a user off or taking a role away applies at once.
 - **The UI** keeps the token in an HTTP-only session cookie that ends with it. Signing in and changing a password are plain (not interactive) pages, because they set the cookie. When the API stops accepting the token, the UI signs the user out and asks them to sign in again.
 - **The first administrator** is created at API start when there are no users at all, from `Security:BootstrapAdmin` (user name and a temporary password).
-- **Identity providers** (Okta, Entra ID, AD FS, Keycloak; the charter's OpenID Connect) come later as another JWT bearer scheme in the API. `sec.app_user` already keys users by `(idp_issuer, idp_subject)`, and roles stay in Pulaski; `idp_group` on `sec.role_assignment` is reserved for mapping a provider's groups to roles.
+- **Identity providers** (Okta, Entra ID, AD FS, Keycloak; the charter's OpenID Connect) came with D-091: the API redeems the provider's code and issues its own token, not another bearer scheme. `sec.app_user` keys users by `(idp_issuer, idp_subject)`, and roles stay in Pulaski; `idp_group` on `sec.role_assignment` is reserved for mapping a provider's groups to roles.
 
 **Events:** `pulaski.user.signed_in.v1`, `…sign_in_failed.v1`, `…password_changed.v1`, `…password_reset.v1`, `…created.v1`, `…updated.v1`, `…role_assigned.v1`, `…role_ended.v1`, on the user. Event actors are the signed-in user (local users by user name).
 
-**Not yet:** a role held everywhere other than the administrator; signing in through an identity provider; correcting reported production or consumption (no command exists yet, so the Auditor's "correct production values" waits for it); site settings screens (the API is guarded).
+**Not yet:** a role held everywhere other than the administrator; correcting reported production or consumption (no command exists yet, so the Auditor's "correct production values" waits for it); site settings screens (the API is guarded).
 
 ## Shift schedules (D-038, proposed)
 
@@ -2373,6 +2373,38 @@ a grant is due. Grants are `qualification.granted` with the import's reason. SCI
 
 **Not done:** schedules in a site's time zone; retries sooner than the next scheduled run; qualifications from SCIM; revoking what a source
 drops; connections for capabilities.
+
+## Signing in through OpenID Connect providers (D-091, proposed)
+
+Issue #50. Users had only Pulaski passwords; D-037 had reserved issuer + subject keys for providers.
+
+**The API is the client** (the user's choice). Providers are configuration only (`Security:Providers:{name}`: display name, authority, client
+id, client secret, scopes, name and e-mail claims; never the database). `IdentityProviderClient` (API) runs the authorization code flow with
+PKCE (S256) as a confidential client:
+- `POST /api/auth/providers/{name}/start` (signed out) checks the redirect address (https, or http on loopback, ending in
+  `/account/oidc/callback`), reads the provider's discovery document (cached `ConfigurationManager`), and returns the authorization address
+  and a **sealed transaction**: provider, state, nonce, code verifier, redirect address and a 10-minute expiry, AES-GCM under a key derived
+  (HKDF) from `Security:SigningKey`, so any API instance opens it and the browser can't read it.
+- The UI keeps it in an HTTP-only cookie on the callback path, sends the browser on, and at `/account/oidc/callback` posts code, state and
+  transaction to `POST /api/auth/providers/{name}/complete`. The API checks state (fixed-time), provider and expiry, redeems the code
+  (`client_secret_post`, code verifier), and validates the ID token: signature by the provider's keys, issuer = the discovery issuer,
+  audience = client id, lifetime (2 min skew), nonce. An e-mail with `email_verified = false` is dropped.
+- `ProviderSignInCommand` then signs them in, and the API issues its usual token (issuer `pulaski-local`) with an `idp` claim holding the
+  provider's issuer; access and actor (`issuer|subject`) are read by `TokenIssuer.IssuerOf` (`idp`, else `iss`). Nothing downstream changes.
+  Failures reach the sign-in page through a short-lived cookie, never the address. `GET /api/auth/options` lists providers for the page.
+
+**First sign-in waits for a role** (the user's choice). An unknown issuer + subject is added (name and e-mail from the token, no user name, no
+role; `user.created` with the reason "*<provider> sign-in*") and refused with a welcome saying an administrator must give them a role. This is
+the one way a user exists without a role; Configure → Users marks them **Awaiting a role** (`UserDto.IsAwaitingRole`). At each sign-in the
+provider's name and e-mail replace Pulaski's (`user.updated`); a switched-off user stays out. A provider can never vouch for `pulaski-local`.
+
+**Passwords, configurable** (the user's choice). `Security:LocalSignIn` = `everyone` (default) or `administrators`: then `SignInCommand`
+refuses a password from anyone but an administrator or a **service account** (`sec.app_user.is_service_account`, local users only, set on
+Configure → Users; users created with the Edge node role get it). The bootstrap administrator and any administrator's password always work,
+for recovery. Deployment guidance per provider: `deploy/identity/README.md`.
+
+**Not done:** groups to roles (`idp_group`); single sign-out at the provider; refreshing a session from the provider (sessions still end
+after 12 hours); a provider configured on screen.
 
 ## Application architecture
 

@@ -72,6 +72,32 @@ public sealed class SecurityTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_provider_user_is_kept_by_issuer_and_subject_and_signs_in_once_given_a_role()
+    {
+        var site = await SiteAsync();
+        var issuer = $"https://idp-{_s}.example/realms/plant";
+        var command = new ProviderSignInCommand("Plant sign-in", issuer, "sub-" + _s, "Ana " + _s, $"ana-{_s}@example.com");
+
+        await Assert.ThrowsAsync<UnauthorizedException>(() => db.SendAsync(command));
+        var listed = Assert.Single(await QueryAsync<ListUsersQuery, IReadOnlyList<UserDto>>(new ListUsersQuery()), u => u.Issuer == issuer);
+        Assert.Equal(($"ana-{_s}@example.com", true, false), (listed.Username, listed.IsAwaitingRole, listed.IsServiceAccount));
+
+        await db.SendAsync(new AssignRoleCommand(listed.Id, Roles.Operator, site));
+        var signedIn = await db.SendAsync(command);
+        Assert.Equal(listed.Id, signedIn.UserId);
+
+        await using var scope = db.Services.CreateAsyncScope();
+        var access = await scope.ServiceProvider.GetRequiredService<ISecurityReadStore>().GetAccessAsync(issuer, "sub-" + _s, DateTimeOffset.UtcNow, CancellationToken.None);
+        Assert.Equal(($"{issuer}|sub-{_s}", true), (access!.ActorId, access.Can(Permissions.JobExecute, site)));
+
+        // A local account can be a machine's; a provider's can't.
+        CreatedResponse edge = await db.SendAsync(new CreateUserCommand("edge." + _s, "Edge " + _s, null, "Temporary-pass-1", Roles.EdgeNode, site));
+        Assert.True((await QueryAsync<GetUserQuery, UserDto>(new GetUserQuery(edge.Id))).IsServiceAccount);
+        var user = await QueryAsync<GetUserQuery, UserDto>(new GetUserQuery(listed.Id));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new UpdateUserCommand(listed.Id, user.Version, user.DisplayName, user.Email, true, IsServiceAccount: true)));
+    }
+
+    [Fact]
     public async Task Roles_are_ended_not_deleted_and_the_lookup_finds_sites()
     {
         var site = await SiteAsync();

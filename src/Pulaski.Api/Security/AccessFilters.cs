@@ -18,7 +18,7 @@ internal static class CallerAccess
         }
 
         UserAccess? access = null;
-        var issuer = http.User.FindFirst("iss")?.Value;
+        var issuer = TokenIssuer.IssuerOf(http.User);
         var subject = http.User.FindFirst("sub")?.Value;
         if (http.User.Identity?.IsAuthenticated == true && issuer is not null && subject is not null)
         {

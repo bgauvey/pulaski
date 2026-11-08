@@ -724,6 +724,9 @@ Users, their passwords while Pulaski signs them in itself, and roles held at sit
 | `last_login_at` | timestamptz | yes | Last successful sign-in. |
 | `created_at` | timestamptz | no | Insert time. |
 | `updated_at` | timestamptz | no | Last change to the user. |
+| `is_service_account` | boolean | no | A machine's local account, such as the edge's (D-091): it keeps its password when `Security:LocalSignIn` is `administrators`. Only for `pulaski-local` users. |
+
+A user from an identity provider is added at their first sign-in with no role (D-091); until an administrator gives them one they can't sign in.
 
 ### sec.local_credential — a local user's password · *Built (D-037)*
 

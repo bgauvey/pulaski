@@ -18,7 +18,11 @@ public static class Issuers
 }
 
 /// <summary>A user as the security commands see them.</summary>
-public sealed record SecurityUser(Guid Id, string Issuer, string Subject, string? Username, string DisplayName, string? Email, bool IsActive);
+public sealed record SecurityUser(Guid Id, string Issuer, string Subject, string? Username, string DisplayName, string? Email, bool IsActive)
+{
+    /// <summary>A machine's local account, such as the edge's (D-091): it keeps its password when only administrators sign in with one.</summary>
+    public bool IsServiceAccount { get; init; }
+}
 
 /// <summary>A local user's password and lockout state.</summary>
 public sealed record LocalCredential(Guid UserId, string PasswordHash, bool MustChange, int FailedAttempts, DateTimeOffset? LockedUntil);
@@ -64,6 +68,9 @@ public interface ISecurityReadStore
 public interface ISecurityRepository
 {
     Task<Versioned<SecurityUser>?> FindLocalUserForUpdateAsync(string username, CancellationToken cancellationToken);
+
+    /// <summary>The user an identity provider knows by <paramref name="issuer"/> and <paramref name="subject"/>, locked (D-091); null when Pulaski doesn't.</summary>
+    Task<Versioned<SecurityUser>?> FindUserByIdentityForUpdateAsync(string issuer, string subject, CancellationToken cancellationToken);
 
     Task<Versioned<SecurityUser>?> GetUserForUpdateAsync(Guid id, CancellationToken cancellationToken);
 

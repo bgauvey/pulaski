@@ -38,7 +38,7 @@ internal sealed class HttpRequestContext(IHttpContextAccessor accessor, IIdGener
 
             var user = accessor.HttpContext?.User;
             var subject = user?.FindFirst("sub")?.Value;
-            var issuer = user?.FindFirst("iss")?.Value;
+            var issuer = TokenIssuer.IssuerOf(user);
             return subject is null ? "anonymous" : Issuers.ActorId(issuer ?? "", subject);
         }
     }

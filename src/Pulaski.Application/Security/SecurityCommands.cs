@@ -9,8 +9,17 @@ namespace Pulaski.Application.Security;
 /// <summary>Who signed in, for the API to issue a token to (D-037).</summary>
 public sealed record SignedInUser(Guid UserId, string Issuer, string Subject, string Username, string DisplayName, bool MustChangePassword);
 
-/// <summary>Checks a local user's password (D-037). Five failures in a row lock the user for 15 minutes.</summary>
-public sealed record SignInCommand(string Username, string Password) : ICommand<SignedInUser>;
+/// <summary>
+/// Checks a local user's password (D-037). Five failures in a row lock the user for 15 minutes. With <paramref name="AdministratorsOnly"/>
+/// (D-091), only administrators and service accounts may sign in with a password; everyone else signs in through the identity provider.
+/// </summary>
+public sealed record SignInCommand(string Username, string Password, bool AdministratorsOnly = false) : ICommand<SignedInUser>;
+
+/// <summary>
+/// Signs in someone an identity provider vouched for (D-091), keyed by its issuer and their subject. Someone Pulaski doesn't know is added
+/// with no role and refused until an administrator gives them one; the provider's name and e-mail are kept current.
+/// </summary>
+public sealed record ProviderSignInCommand(string Provider, string Issuer, string Subject, string? DisplayName, string? Email) : ICommand<SignedInUser>;
 
 /// <summary>The signed-in user replaces their password, also a temporary one.</summary>
 public sealed record ChangePasswordCommand(Guid UserId, string CurrentPassword, string NewPassword) : ICommand<VersionResponse>;
@@ -19,7 +28,8 @@ public sealed record ChangePasswordCommand(Guid UserId, string CurrentPassword, 
 public sealed record CreateUserCommand(string Username, string DisplayName, string? Email, string TemporaryPassword, string RoleCode, Guid? SiteId)
     : ICommand<CreatedResponse>;
 
-public sealed record UpdateUserCommand(Guid Id, long ExpectedVersion, string DisplayName, string? Email, bool IsActive) : ICommand<VersionResponse>;
+public sealed record UpdateUserCommand(Guid Id, long ExpectedVersion, string DisplayName, string? Email, bool IsActive, bool? IsServiceAccount = null)
+    : ICommand<VersionResponse>;
 
 /// <summary>Gives a local user a new temporary password and unlocks them.</summary>
 public sealed record ResetPasswordCommand(Guid Id, string TemporaryPassword) : ICommand<VersionResponse>;
@@ -114,9 +124,16 @@ internal sealed class SignInHandler(
         }
 
         // Every user belongs to a role (D-037): without one there is nothing they may do.
-        if ((await security.ListActiveAssignmentsForUpdateAsync(user.Value.Id, now, cancellationToken)).Count == 0)
+        var assignments = await security.ListActiveAssignmentsForUpdateAsync(user.Value.Id, now, cancellationToken);
+        if (assignments.Count == 0)
         {
             throw new UnauthorizedException($"{user.Value.DisplayName} has no role yet; ask an administrator to give you one.");
+        }
+
+        // With an identity provider in charge (D-091), a password stays only for recovery and machines.
+        if (command.AdministratorsOnly && !user.Value.IsServiceAccount && !assignments.Any(a => a.RoleCode == Roles.Administrator))
+        {
+            throw new UnauthorizedException("Sign in through your organisation's sign-in instead; Pulaski passwords are for administrators and machines only.");
         }
 
         await security.UpsertCredentialAsync(credential with { FailedAttempts = 0, LockedUntil = null }, now, cancellationToken);
@@ -192,7 +209,11 @@ internal sealed class CreateUserHandler(
         }
 
         var role = await SecurityRules.EnsureRoleAsync(security, command.RoleCode, command.SiteId, cancellationToken);
-        var user = new SecurityUser(ids.NewId(), Issuers.Local, username, username, displayName, email, IsActive: true);
+        // The edge's account is a machine's (D-091): it keeps its password whoever else may use one.
+        var user = new SecurityUser(ids.NewId(), Issuers.Local, username, username, displayName, email, IsActive: true)
+        {
+            IsServiceAccount = role.Code == Roles.EdgeNode,
+        };
         var envelope = events.Create(EventTypes.UserCreated, "app_user", user.Id, new { After = user, Role = role.Code, command.SiteId });
         var version = await security.InsertUserAsync(user, envelope.OccurredAt, cancellationToken);
         await security.UpsertCredentialAsync(new LocalCredential(user.Id, hasher.Hash(command.TemporaryPassword), MustChange: true, 0, null), now, cancellationToken);
@@ -227,7 +248,18 @@ internal sealed class UpdateUserHandler(
             throw new ConflictException($"{current.Value.DisplayName} was changed by someone else. Reload and try again.");
         }
 
-        var updated = current.Value with { DisplayName = displayName, Email = email, IsActive = command.IsActive };
+        var updated = current.Value with
+        {
+            DisplayName = displayName,
+            Email = email,
+            IsActive = command.IsActive,
+            IsServiceAccount = command.IsServiceAccount ?? current.Value.IsServiceAccount,
+        };
+        if (updated.IsServiceAccount && updated.Issuer != Issuers.Local)
+        {
+            throw new DomainRuleException($"{updated.DisplayName} signs in through {updated.Issuer}; only a Pulaski account can be a service account.");
+        }
+
         if (current.Value.IsActive && !updated.IsActive)
         {
             if (request.UserId == updated.Id)
@@ -342,4 +374,69 @@ internal sealed class EndRoleHandler(
         await transaction.CommitAsync(cancellationToken);
         return new VersionResponse(user.Version);
     }
+}
+
+internal sealed class ProviderSignInHandler(
+    IUnitOfWork unitOfWork,
+    ISecurityRepository security,
+    IEventLog eventLog,
+    IEventFactory events,
+    IIdGenerator ids,
+    TimeProvider timeProvider) : ICommandHandler<ProviderSignInCommand, SignedInUser>
+{
+    public async Task<SignedInUser> HandleAsync(ProviderSignInCommand command, CancellationToken cancellationToken)
+    {
+        var issuer = command.Issuer.Trim();
+        var subject = command.Subject.Trim();
+        var email = string.IsNullOrWhiteSpace(command.Email) || command.Email.Trim().Length > 254 ? null : command.Email.Trim();
+        var name = (string.IsNullOrWhiteSpace(command.DisplayName) ? email ?? subject : command.DisplayName.Trim()) is var n && n.Length > 200 ? n[..200] : n;
+        if (issuer.Length == 0 || subject.Length == 0 || issuer == Issuers.Local)
+        {
+            throw new UnauthorizedException("The identity provider's answer didn't say who signed in.");
+        }
+
+        var now = timeProvider.GetUtcNow();
+        var reason = $"{command.Provider} sign-in";
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var found = await security.FindUserByIdentityForUpdateAsync(issuer, subject, cancellationToken);
+        if (found is null)
+        {
+            // Known to the provider, not yet to Pulaski: kept, with no role, for an administrator to let in (D-091).
+            var user = new SecurityUser(ids.NewId(), issuer, subject, null, name, email, IsActive: true);
+            var created = events.Create(EventTypes.UserCreated, "app_user", user.Id, new { After = user }, reason);
+            await security.InsertUserAsync(user, created.OccurredAt, cancellationToken);
+            await eventLog.AppendAsync(created, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            throw new UnauthorizedException(AwaitingRole(name));
+        }
+
+        var current = found.Value;
+        if (!current.IsActive)
+        {
+            throw new UnauthorizedException($"{current.DisplayName} is switched off in Pulaski; ask an administrator.");
+        }
+
+        // The provider owns who they are: a new name or e-mail there shows here at the next sign-in.
+        var updated = current with { DisplayName = name, Email = email ?? current.Email };
+        if (updated != current)
+        {
+            var changed = events.Create(EventTypes.UserUpdated, "app_user", updated.Id, new { Before = current, After = updated }, reason);
+            await security.UpdateUserAsync(updated, changed.OccurredAt, cancellationToken);
+            await eventLog.AppendAsync(changed, cancellationToken);
+        }
+
+        if ((await security.ListActiveAssignmentsForUpdateAsync(current.Id, now, cancellationToken)).Count == 0)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            throw new UnauthorizedException(AwaitingRole(updated.DisplayName));
+        }
+
+        await security.SetLastLoginAsync(current.Id, now, cancellationToken);
+        await eventLog.AppendAsync(events.Create(EventTypes.SignedIn, "app_user", current.Id, new { Provider = command.Provider, updated.Email }, reason), cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new SignedInUser(current.Id, issuer, subject, updated.Email ?? updated.DisplayName, updated.DisplayName, MustChangePassword: false);
+    }
+
+    private static string AwaitingRole(string name) =>
+        $"Welcome, {name}. Pulaski knows you now, but you have no role yet: ask an administrator to give you one on Configure → Users, then sign in again.";
 }

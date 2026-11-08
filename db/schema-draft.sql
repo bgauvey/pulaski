@@ -791,6 +791,7 @@ CREATE TABLE sec.app_user (
     created_at      timestamptz NOT NULL DEFAULT now(),
     username        text,                                       -- for local sign-in (D-037): the subject under issuer 'pulaski-local'
     updated_at      timestamptz NOT NULL DEFAULT now(),
+    is_service_account boolean NOT NULL DEFAULT false,          -- a machine's local account (the edge), allowed passwords when only administrators are (D-091)
     CONSTRAINT app_user_idp_uq UNIQUE (idp_issuer, idp_subject)
 );
 CREATE UNIQUE INDEX app_user_username_uq ON sec.app_user (lower(username)) WHERE username IS NOT NULL;
@@ -2484,7 +2485,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0054_delivery_feed_settings'),
     ('0055_delivery_feeds'),
     ('0056_material_sources'),
-    ('0057_connection_schedules');
+    ('0057_connection_schedules'),
+    ('0058_identity_providers');
 
 -- =====================================================================
 -- 17. SEED DATA

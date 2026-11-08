@@ -10,7 +10,7 @@ namespace Pulaski.Infrastructure.Security;
 internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityReadStore, ISiteLookup
 {
     private const string Access = """
-        SELECT u.id, u.username, u.idp_subject AS subject, u.display_name, u.is_active, coalesce(c.must_change, false) AS must_change
+        SELECT u.id, coalesce(u.username, u.email) AS username, u.idp_subject AS subject, u.display_name, u.is_active, coalesce(c.must_change, false) AS must_change
         FROM sec.app_user u
         LEFT JOIN sec.local_credential c ON c.app_user_id = u.id
         WHERE u.idp_issuer = @Issuer AND u.idp_subject = @Subject
@@ -28,7 +28,7 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
         """;
 
     private const string Users = """
-        SELECT u.id, coalesce(u.username, u.idp_subject) AS username, u.display_name, u.email, u.is_active, u.idp_issuer AS issuer,
+        SELECT u.id, coalesce(u.username, u.email, u.idp_subject) AS username, u.display_name, u.email, u.is_active, u.is_service_account, u.idp_issuer AS issuer,
                u.last_login_at, coalesce(c.must_change, false) AS must_change_password, coalesce(c.locked_until > @At, false) AS is_locked,
                u.xmin::text::bigint AS version
         FROM sec.app_user u

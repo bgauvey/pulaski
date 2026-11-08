@@ -44,9 +44,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - API is CQRS (D-013): commands and queries in `Pulaski.Application` with hand-written handlers
   injected into minimal-API endpoints. No MediatR.
 - UI is Blazor Web App, interactive server (D-011); it calls the API only, never the database.
-- Identity (D-037, proposed): local sign-in now (`pulaski-local`, PBKDF2 hashes in `sec.local_credential`, API-issued
-  HMAC JWT from `Security:SigningKey`); OpenID Connect (Okta, Entra ID, AD FS, Keycloak) later as another bearer scheme.
-  Users are keyed by issuer + subject. The UI keeps the token in a cookie session and sends it on every API call.
+- Identity (D-037, D-091, proposed): local sign-in (`pulaski-local`, PBKDF2 hashes in `sec.local_credential`) and OpenID Connect providers
+  (`Security:Providers:{name}`; `IdentityProviderClient`: code flow + PKCE, sealed transaction, ID token checked) both end in the API's own
+  HMAC JWT from `Security:SigningKey`, provider users with an `idp` claim (`TokenIssuer.IssuerOf`). Users are keyed by issuer + subject; a new
+  provider user waits for a role. `Security:LocalSignIn` = administrators limits passwords to administrators and service accounts. The UI keeps
+  the token in a cookie session and sends it on every API call.
 - Machine data: MQTT Sparkplug B, OPC UA and EtherNet/IP, built on the connector SDK (`src/Pulaski.Connectors`: `IConnector`, samples;
   `Pulaski.Connectors.Sparkplug`: hand-written protobuf codec, host logic in `SparkplugHost`, MQTTnet 4; `Pulaski.Connectors.OpcUa`:
   OPC Foundation stack 2.0 behind `IOpcUaSession`; `Pulaski.Connectors.EthernetIp`: libplctag behind `ICipTagReader`). `src/Pulaski.Edge`

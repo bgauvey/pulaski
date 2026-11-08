@@ -32,7 +32,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApplicationExceptionHandler>();
 builder.Services.AddOpenApi();
 
-// Sign-in (D-037): Pulaski's own tokens now; an identity provider becomes another bearer scheme.
+// Sign-in (D-037): Pulaski's own tokens, also for people an OpenID Connect provider vouched for (D-091), whose real issuer is the 'idp' claim.
 var security = builder.Configuration.GetSection(SecurityOptions.Section).Get<SecurityOptions>() ?? new SecurityOptions();
 if (security.SigningKey.Length < 32)
 {
@@ -41,6 +41,8 @@ if (security.SigningKey.Length < 32)
 
 builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.Section));
 builder.Services.AddSingleton<TokenIssuer>();
+builder.Services.AddSingleton<IdentityProviderClient>();
+builder.Services.AddHttpClient(IdentityProviderClient.ClientName, client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton<BadgeTickets>();
 builder.Services.AddSingleton<Pulaski.Application.Labor.IBadgeHasher, BadgeHasher>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

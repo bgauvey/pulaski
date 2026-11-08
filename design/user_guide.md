@@ -1816,7 +1816,8 @@ Everyone signs in to Pulaski. Your **roles** decide what you **see** and what yo
 ### Sign in
 
 1. Open Pulaski. It shows **Sign in**.
-2. Type your **User name** and **Password** and click **Sign in**.
+2. If your organisation set up its own sign-in, click **Sign in with …** and sign in there; Pulaski opens when you come back. Otherwise type your **User name** and **Password** and click **Sign in**.
+   The first time you use your organisation's sign-in, Pulaski says you have no role yet: an administrator gives you one, and then you sign in again.
 3. The first time, or after an administrator reset your password, Pulaski asks you to **Change your password**: type the temporary password, then your new one twice, and click **Change password**.
 4. To sign out, click the door at the top right.
 
@@ -1868,6 +1869,14 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 - **No screens at all.** Someone whose roles let them see nothing lands on **Nothing to see here yet**, with a button to sign out. Ask an administrator for a role.
 - **Sites.** A role held at one site shows that site's data only: other sites' work orders, lots, lines and schedules aren't listed.
 
+### Let in someone from your organisation's sign-in (administrators)
+
+1. Ask them to sign in once with **Sign in with …**. Pulaski adds them and tells them they have no role yet.
+2. On **Configure → Users**, they show **Awaiting a role**. Click **Change**, choose a role and site under **Add a role…**, and click **Add**.
+3. Ask them to sign in again.
+
+Their name and e-mail come from your organisation's sign-in and are kept up to date at every sign-in; they have no Pulaski password to reset. Setting up the sign-in is a job for whoever runs Pulaski: see `deploy/identity/README.md`.
+
 ### Add a user (administrators)
 
 1. Open **Configure → Users** (the **Users** tab) and click **New user**.
@@ -1878,7 +1887,7 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 ### Change a user's roles, details or password (administrators)
 
 1. On **Configure → Users**, **Users** tab, click **Change** on the user's row.
-2. **Details:** change the name or e-mail, or untick **Can sign in** to switch them off; click **Save details**.
+2. **Details:** change the name or e-mail, or untick **Can sign in** to switch them off; for a Pulaski account, tick **Service account** if a machine (such as the edge) uses it. Click **Save details**.
 3. **Roles:** choose a role (and site) under **Add a role…** and click **Add**; click **Take away** to end one.
 4. **Password:** type a **Temporary password** and click **Reset password**. They must change it when they next sign in; this also unlocks them.
 
@@ -1910,6 +1919,8 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 - **History** names who did what by user name, such as *oli.operator* on a lot's history.
 - **Changes apply at once.** Switching someone off or taking a role away takes effect on their next click, without waiting for their session to end.
 - **Ended, not deleted.** Taking a role away from someone ends it, and a role or permission is switched off rather than deleted; Pulaski keeps who held which role when, and who changed a role.
+- **Your organisation's sign-in.** People who use it are known by who it says they are, not by name or e-mail, so a renamed person keeps their history. Switching them off in Pulaski keeps them out even when the sign-in lets them in. Roles always come from Pulaski.
+- **Passwords only for administrators.** Whoever runs Pulaski can set it so that, besides your organisation's sign-in, only administrators and service accounts use a Pulaski password. Anyone else trying one is told to use the organisation's sign-in. An administrator's password always works, so you can get in if the organisation's sign-in is down.
 - **The first administrator** is created when Pulaski starts with no users, from the `Security:BootstrapAdmin` settings, with a temporary password to change at the first sign-in.
 - **For integrators:** the API takes a bearer token from `POST /api/auth/sign-in`; every other call needs one, and a call without the permission is refused with 403 and the permission in words.
 
@@ -2562,7 +2573,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **The Overview** has no quality figures or SPC alerts yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
 - **Quality:** there are no SPC charts, control limits or alerts yet, and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
-- **Signing in through your company's identity provider** (Okta, Entra ID, AD FS, Keycloak) isn't built yet: users have Pulaski passwords, and an administrator resets forgotten ones (Pulaski sends no e-mail).
+- **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by an administrator (Pulaski sends no e-mail).
 - **A switched-off button's reason** shows when you point at it with the mouse, but not when you move to it with the keyboard (switched-off buttons are skipped); screen readers announce it as unavailable without the reason. Screens that are view-only for you say so in a note at the top instead.
 - **Only Administrator is held everywhere;** every role you create is held at a site.
 
