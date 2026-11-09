@@ -57,3 +57,40 @@ public static class LotActions
         _ => action.ToString(),
     };
 }
+
+/// <summary>
+/// Why a lot's action can't be taken now (#47), for the button's reason; null when it can. Only the lot's state: whether the user may is
+/// decided elsewhere, and an action they may never take isn't shown at all.
+/// </summary>
+public static class LotActionAvailability
+{
+    public static string? Why(LotAction action, string status, decimal quantity, bool expired)
+    {
+        var gone = status switch
+        {
+            "available" or "on_hold" or "quarantine" => null,
+            "consumed" => "The lot is used up.",
+            "shipped" => "The lot has been shipped.",
+            "scrapped" => "The lot was written off.",
+            "cancelled" => "The lot's receipt was reversed.",
+            "planned" or "in_production" => "The lot isn't made yet.",
+            _ => "The lot isn't in stock.",
+        };
+        const string Expired = "The lot has expired; correct its expiry first if quality extended it.";
+        const string Empty = "None of the lot is left.";
+        var notUsable = gone
+            ?? (status == "on_hold" ? "The lot is on hold; release it first."
+            : status == "quarantine" ? "The lot is in quarantine; release it first."
+            : quantity <= 0 ? Empty
+            : expired ? Expired
+            : null);
+        return action switch
+        {
+            LotAction.Consume or LotAction.Ship => notUsable,
+            LotAction.Move or LotAction.Load or LotAction.Hold => gone,
+            LotAction.Split or LotAction.WriteOff => gone ?? (quantity <= 0 ? Empty : null),
+            LotAction.Merge => gone ?? (expired ? Expired : null),
+            _ => null,
+        };
+    }
+}

@@ -15,9 +15,9 @@
 
     <div class="d-flex flex-wrap gap-2 align-items-center">
         <InputFile OnChange="PickAsync" accept=".csv,text/csv,text/plain" class="form-control" style="max-width: 28rem" aria-label="CSV file" disabled="@_busy" />
-        <button type="button" class="btn btn-primary" disabled="@(_busy || _result is not { Errors: 0, Applied: false } || Changes(_result) == 0)" @onclick="ImportAsync">
+        <ActionButton Class="btn btn-primary" Busy="_busy" Reason="@ImportReadiness.Why(_result is not null, _result?.Applied == true, _result?.FileProblems.Count ?? 0, _result?.Errors ?? 0, _result is null ? 0 : Changes(_result))" OnClick="ImportAsync">
             Import
-        </button>
+        </ActionButton>
         <button type="button" class="btn btn-outline-secondary" @onclick="OnClose">Close</button>
     </div>
 

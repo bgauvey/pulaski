@@ -1,0 +1,40 @@
+@* A button that can be unavailable for a reason (#47). With a Reason it stays in the tab order (aria-disabled, clicks ignored), looks
+   switched off like every other button, and says why: in a tip on hover and on keyboard focus, and to screen readers through
+   aria-describedby. Busy (saving) switches it off plainly, as a native disabled button. *@
+<span class="action-button">
+    <button type="@Type" class="@Class" disabled="@Busy" aria-disabled="@(Unavailable ? "true" : null)" aria-describedby="@(Unavailable ? _reasonId : null)"
+            title="@(Unavailable ? null : Title)" @onclick="ClickAsync" @onclick:preventDefault="Unavailable" @attributes="Attributes">
+        @ChildContent
+    </button>
+    @if (Unavailable)
+    {
+        <span id="@_reasonId" role="tooltip" class="action-reason">@Reason</span>
+    }
+</span>
+
+@code {
+    private readonly string _reasonId = $"why-{Guid.NewGuid():N}";
+
+    /// <summary>Why it can't be used now; null when it can.</summary>
+    [Parameter] public string? Reason { get; set; }
+
+    /// <summary>Switched off while something is saving: no reason needed.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public string Class { get; set; } = "btn btn-sm btn-outline-secondary";
+
+    [Parameter] public string Type { get; set; } = "button";
+
+    /// <summary>A hint while it can be used.</summary>
+    [Parameter] public string? Title { get; set; }
+
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? Attributes { get; set; }
+
+    private bool Unavailable => Reason is not null;
+
+    private Task ClickAsync() => Unavailable || Busy ? Task.CompletedTask : OnClick.InvokeAsync();
+}

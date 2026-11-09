@@ -15,8 +15,7 @@
     <div class="d-flex flex-wrap gap-2 align-items-center">
         <InputFile OnChange="PickAsync" accept=".xml,application/xml,text/xml" class="form-control form-control-sm" style="max-width: 24rem"
                    aria-label="B2MML lots file" disabled="@_busy" />
-        <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || _check is not { Errors: 0, Applied: false } || _check.Created + _check.Updated == 0)"
-                @onclick="ImportAsync">Import</button>
+        <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@ImportReadiness.Why(_check is not null, _check?.Applied == true, _check?.FileProblems.Count ?? 0, _check?.Errors ?? 0, _check is null ? 0 : _check.Created + _check.Updated)" OnClick="ImportAsync">Import</ActionButton>
     </div>
     <ProblemAlert Error="_error" />
     @if (_check is { } c)

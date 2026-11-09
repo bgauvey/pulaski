@@ -48,6 +48,14 @@ public sealed record BoardItem(Guid LineId, string LineCode, TimelineSegmentDto 
 
     private bool IsOpenForFloor => Segment.Status is "planned" or "dispatched" or "firmed";
 
+    /// <summary>Why it can't change line now (#47), for the buttons' reason; null when it can.</summary>
+    public string? WhyNoLineChange =>
+        CanChangeLine ? null
+        : IsPlaceholder ? "This is a placeholder, not a job yet."
+        : Segment.IsLocked ? "The job is pinned; unpin it to move it."
+        : IsFromGroup ? $"The job is {Segment.Status.Replace('_', ' ')}; it is on the floor now."
+        : $"The job is {Segment.Status.Replace('_', ' ')}; only planned and firmed jobs change line.";
+
     /// <summary>The board only shows open jobs, and any open job can be pinned or cancelled.</summary>
     public bool CanPin => !IsPlaceholder;
 

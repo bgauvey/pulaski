@@ -2450,6 +2450,27 @@ changed. An administrator's reset and a password change revoke open links too; t
 
 **Not done:** retrying an e-mail the server refused; HTML e-mail; e-mail for anything else; a reset for provider users (their provider owns it).
 
+## Unavailable actions on screen (D-094, proposed)
+
+Issue #47. Screens didn't treat actions a user can't take alike, and a switched-off button's reason was a hover-only title on a natively
+disabled button, which keyboards skip and screen readers announce without a reason.
+
+**What is hidden, what is switched off.** An action the user's roles never allow there is **left out**, and the screen says so once
+(`ViewOnlyNote`; on the Schedule a lock note per site); the API decides regardless. An action they may take but can't **now** stays and is
+**switched off with its reason**. One that is off only while something saves is plainly disabled, without a reason. A form's Save waiting on a
+field beside it, and an Export with nothing to export, are plainly disabled too: the reason is in view.
+
+**`ActionButton`** (the user's choice: focusable, reason on focus). With a `Reason` it renders `aria-disabled="true"` (not `disabled`), so it
+stays in the tab order; clicks are ignored; it looks switched off like every other button (`.btn[aria-disabled]`); and the reason is a tip
+(`role="tooltip"`) shown on hover and keyboard focus and tied to the button with `aria-describedby`, so screen readers read it. `Busy` is a
+native `disabled`. Reasons come from the state, in pure helpers where they are more than one line: `LotActionAvailability` (lot actions),
+`ImportReadiness` (every file import: check first, fix errors, nothing to change), `ScheduleItem.WhyNoLineChange`. Converted: lot actions, a job's
+consume/declare, start/resume on the Floor, the schedule drawer's line changes, bulk work-order changes, approving a shift, adding a capability,
+taking away a user's last role, retiring a container, arranging/splitting process operations, releasing a BOM or specification version with
+unsaved changes, every file import's Import, a connection's Import, new shift schedule, expand/collapse while searching.
+
+**Not done:** checkboxes and other inputs switched off with a reason (the Permissions tab's implied views) still use a title.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

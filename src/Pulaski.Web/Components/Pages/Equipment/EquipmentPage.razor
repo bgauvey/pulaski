@@ -31,14 +31,14 @@ else
                         <Icon Name="plus" Size="16" />@(_equipment.Count == 0 ? "Add enterprise" : "Add child")
                     </button>
                 }
-                <button type="button" class="btn btn-outline-secondary btn-sm btn-square" title="Expand all" aria-label="Expand all"
-                        disabled="@(IsFiltering)" @onclick="ExpandAll">
+                <ActionButton Class="btn btn-outline-secondary btn-sm btn-square" Title="Expand all" aria-label="Expand all"
+                              Reason="@(IsFiltering ? "Clear the search first: while searching, every match is shown open." : null)" OnClick="ExpandAll">
                     <Icon Name="expand-all" Size="16" />
-                </button>
-                <button type="button" class="btn btn-outline-secondary btn-sm btn-square" title="Collapse all" aria-label="Collapse all"
-                        disabled="@(IsFiltering)" @onclick="CollapseAll">
+                </ActionButton>
+                <ActionButton Class="btn btn-outline-secondary btn-sm btn-square" Title="Collapse all" aria-label="Collapse all"
+                              Reason="@(IsFiltering ? "Clear the search first: while searching, every match is shown open." : null)" OnClick="CollapseAll">
                     <Icon Name="collapse-all" Size="16" />
-                </button>
+                </ActionButton>
                 <input type="search" class="form-control tree-filter" placeholder="Filter by code or name"
                        aria-label="Filter equipment by code or name" @bind="_filter" @bind:event="oninput" />
             </div>

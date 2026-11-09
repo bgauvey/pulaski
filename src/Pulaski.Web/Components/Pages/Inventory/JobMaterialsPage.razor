@@ -19,15 +19,18 @@
         {
             // Declarations go into the job's runs (D-035): from its first start until it is closed.
             var open = job.Job.Status is "running" or "paused" or "completed";
+            var whyClosed = open ? null
+                : job.Job.Status is "closed" or "cancelled" ? $"The job is {job.Job.Status}; nothing more is declared on it."
+                : "The job hasn't started yet: declarations go into its runs.";
             <a class="btn btn-outline-secondary" href="jobs/@JobId">Runs and reports</a>
             <a class="btn btn-outline-secondary" href="inventory/journal?jobId=@JobId">Movements</a>
             @if (User.Can(LotActions.Permission(LotAction.Consume), Sites.SiteId))
             {
-                <button type="button" class="btn btn-outline-secondary" disabled="@(!open)" @onclick="() => _action = LotAction.Consume">Consume a lot</button>
+                <ActionButton Class="btn btn-outline-secondary" Reason="@whyClosed" OnClick="() => _action = LotAction.Consume">Consume a lot</ActionButton>
             }
             @if (User.Can(LotActions.Permission(LotAction.Produce), Sites.SiteId))
             {
-                <button type="button" class="btn btn-primary" disabled="@(!open)" @onclick="() => _action = LotAction.Produce">Declare production</button>
+                <ActionButton Class="btn btn-primary" Reason="@whyClosed" OnClick="() => _action = LotAction.Produce">Declare production</ActionButton>
             }
         }
     </Actions>

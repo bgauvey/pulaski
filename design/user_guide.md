@@ -1864,7 +1864,7 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 
 Equipment (with machine profiles and edge nodes), units and retrying or skipping deliveries to the ERP (**Integrations**) belong to the Administrator. Someone with two roles can do what either allows.
 
-When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator. A switched-off button is greyed out the same way everywhere; point at it to see why, when it says. Permissions held at one site count only there: on the **Schedule**, at a site where you can't plan, jobs don't drag and a job's panel shows a lock note instead of *Move*, *Pins* and *Cancel*; where you can't manage work orders, cards don't drag between Kanban columns and an order's panel has no status buttons.
+When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator. A switched-off button is greyed out the same way everywhere. When it is off because of the state of something, such as a lot on hold, a shift that hasn't ended or a file not checked yet, it says why: point at it, or move to it with the Tab key, and a small note appears; screen readers read the note with the button. A button that is off only while Pulaski saves says nothing and comes back by itself. Permissions held at one site count only there: on the **Schedule**, at a site where you can't plan, jobs don't drag and a job's panel shows a lock note instead of *Move*, *Pins* and *Cancel*; where you can't manage work orders, cards don't drag between Kanban columns and an order's panel has no status buttons.
 
 ### What each role can see
 
@@ -2592,7 +2592,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Notes** can only be written when the order is created.
 - **Quality:** there are no SPC charts, control limits or alerts yet, and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
 - **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.
-- **A switched-off button's reason** shows when you point at it with the mouse, but not when you move to it with the keyboard (switched-off buttons are skipped); screen readers announce it as unavailable without the reason. Screens that are view-only for you say so in a note at the top instead.
+- **Some switched-off controls give no reason yet:** a form's Save waiting on a field next to it, an Export with nothing to export, and the locked boxes on the Permissions tab (point at those with the mouse to see why).
 
 ---
 

@@ -205,9 +205,9 @@ else
                                             {
                                                 <li class="d-flex align-items-center gap-2 mb-1" @key="r.AssignmentId">
                                                     <span>@r.RoleName@(r.SiteCode is null ? " at every site" : $" at {r.SiteCode}")</span>
-                                                    <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-auto" disabled="@(_saving || u.Roles.Count == 1)"
-                                                            title="@(u.Roles.Count == 1 ? "Every user needs a role: add another first" : "Take this role away")"
-                                                            @onclick="() => EndRoleAsync(u, r)">Take away</button>
+                                                    <ActionButton Class="btn btn-sm btn-link text-danger p-0 ms-auto" Busy="_saving" Title="Take this role away"
+                                                                  Reason="@(u.Roles.Count == 1 ? "Every user needs a role: add another first, or switch them off." : null)"
+                                                                  OnClick="() => EndRoleAsync(u, r)">Take away</ActionButton>
                                                 </li>
                                             }
                                         </ul>

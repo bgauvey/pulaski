@@ -152,9 +152,9 @@
                 <span class="ms-auto"></span>
                 @if (IsDraft)
                 {
-                    <button type="button" class="btn btn-outline-secondary btn-sm btn-with-icon" disabled="@(_definition.Operations.Count < 2)" @onclick="ArrangeAsync">
+                    <ActionButton Class="btn btn-outline-secondary btn-sm btn-with-icon" Reason="@(_definition.Operations.Count < 2 ? "There is only one operation to arrange." : null)" OnClick="ArrangeAsync">
                         <Icon Name="arrange" Size="16" /> Arrange
-                    </button>
+                    </ActionButton>
                 }
                 <button type="button" class="btn btn-outline-secondary btn-sm btn-square" aria-pressed="@(_hideProperties ? "false" : "true")"
                         aria-label="@(_hideProperties ? "Show" : "Hide") properties" title="@(_hideProperties ? "Show" : "Hide") properties"
@@ -685,8 +685,8 @@ else if (_error is null)
                         <option value="@e.Id">@e.Code · @e.Name</option>
                     }
                 </select>
-                <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@(op.Equipment.Count < 2)"
-                        @onclick="() => ChangeOperationAsync(op.Id, ProcessEditing.SplitEvenly)">Split evenly</button>
+                <ActionButton Class="btn btn-outline-secondary btn-sm" Reason="@(op.Equipment.Count < 2 ? "Add a second line or department to share the work between." : null)"
+                              OnClick="() => ChangeOperationAsync(op.Id, ProcessEditing.SplitEvenly)">Split evenly</ActionButton>
                 <button type="button" class="btn btn-outline-danger btn-sm btn-with-icon" @onclick="() => RemoveOperationAsync(op.Id)">
                     <Icon Name="trash" Size="16" /> Delete operation
                 </button>

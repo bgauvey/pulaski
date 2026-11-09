@@ -121,7 +121,7 @@ else
                     <label class="form-label" for="note">Release note</label>
                     <input id="note" class="form-control" maxlength="500" @bind="_note" />
                 </div>
-                <button type="button" class="btn btn-success" disabled="@(_saving || _dirty)" @onclick="ReleaseAsync">Release version @_version.Number</button>
+                <ActionButton Class="btn btn-success" Busy="_saving" Reason="@(_dirty ? "Save the draft first: the version released is the one saved." : null)" OnClick="ReleaseAsync">Release version @_version.Number</ActionButton>
             </div>
         }
     }

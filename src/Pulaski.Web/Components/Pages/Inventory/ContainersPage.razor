@@ -98,7 +98,7 @@ else
                                 {
                                     <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => TakeOutAsync(c)">Take out of @c.ParentContainerCode</button>
                                 }
-                                <button type="button" class="btn btn-sm btn-link" disabled="@(_busy || c.LotCount + c.ContainerCount > 0)" title="@(c.LotCount + c.ContainerCount > 0 ? "Empty it first" : null)" @onclick="() => RetireAsync(c)">Retire</button>
+                                <ActionButton Class="btn btn-sm btn-link" Busy="_busy" Reason="@(c.LotCount + c.ContainerCount > 0 ? "Empty it first: it still holds lots or containers." : null)" OnClick="() => RetireAsync(c)">Retire</ActionButton>
                             }
                         </td>
                     </tr>

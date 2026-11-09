@@ -130,6 +130,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`Permissions.Implied`). Reads use `.RequireAny(site, views…)`, `.RequireAnyAtSite` (no site = every site) or
   `.RequireAnyView()` for lookups; lists filter with `.At(Visible.SitesAsync(...))`. Web pages carry
   `[RequiresView(...)]`, checked in `MainLayout` (not found, or the no-access panel); cross-screen links use `ScreenLink`.
+  Unavailable actions (D-094): never allowed → left out (+ `ViewOnlyNote`); not possible now → `<ActionButton Reason=…>` (aria-disabled,
+  focusable, reason tip via aria-describedby); `Busy` only while saving.
   Every user keeps a role; a held role can't be switched off.
 - Shift schedules (D-038, proposed): `core.shift_schedule` per site (cycle of 1–56 days from `cycle_start`, shifts as one
   `jsonb` document); equipment `calendar_mode` inherit / schedule / around_the_clock, nearest non-inherit ancestor wins.

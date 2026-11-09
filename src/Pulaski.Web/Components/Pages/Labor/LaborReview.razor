@@ -49,8 +49,8 @@ else if (_shift is { } detail)
                 {
                     <div class="d-flex gap-2 align-items-center">
                         <input class="form-control form-control-sm" style="width: 16rem" maxlength="500" placeholder="Note (optional)" aria-label="Approval note" @bind="_approveNote" />
-                        <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || !HasEnded(s))" title="@(HasEnded(s) ? "Lock this shift's labor" : "The shift hasn't ended yet")"
-                                @onclick="ApproveAsync">Approve shift</button>
+                        <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Title="Lock this shift's labor"
+                                      Reason="@(HasEnded(s) ? null : "The shift hasn't ended yet; approve it once it has.")" OnClick="ApproveAsync">Approve shift</ActionButton>
                     </div>
                 }
             </div>

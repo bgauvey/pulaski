@@ -63,8 +63,7 @@ else
             </p>
             <div class="d-flex flex-wrap gap-2 align-items-center">
                 <InputFile OnChange="PickAsync" accept=".csv,text/csv,text/plain" class="form-control" style="max-width: 28rem" aria-label="Changeover rules file" disabled="@_saving" />
-                <button type="button" class="btn btn-primary btn-sm" disabled="@(_saving || _check is not { Errors: 0, Applied: false } || _check.Created + _check.Updated == 0)"
-                        @onclick="ImportAsync">Import</button>
+                <ActionButton Class="btn btn-primary btn-sm" Busy="_saving" Reason="@ImportReadiness.Why(_check is not null, _check?.Applied == true, _check?.FileProblems.Count ?? 0, _check?.Errors ?? 0, _check is null ? 0 : _check.Created + _check.Updated)" OnClick="ImportAsync">Import</ActionButton>
             </div>
             @if (_check is { } c)
             {

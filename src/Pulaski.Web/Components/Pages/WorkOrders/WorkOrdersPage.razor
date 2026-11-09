@@ -146,10 +146,11 @@
                             {
                                 var eligible = selectedOrders.Count(o => o.Order.NextStatuses.Contains(status) && MayMove(o.Order, status));
                                 <li role="none">
-                                    <button type="button" role="menuitem" class="wo-menu-item @(status == "cancelled" ? "is-danger" : "")"
-                                            disabled="@(eligible == 0)" @onclick="() => StartSelectedStatus(status)">
+                                    <ActionButton role="menuitem" Class="@($"wo-menu-item {(status == "cancelled" ? "is-danger" : "")}")"
+                                                  Reason="@(eligible == 0 ? $"None of the selected orders can move to {Display.Label(status).ToLowerInvariant()}, or you may not do it." : null)"
+                                                  OnClick="() => StartSelectedStatus(status)">
                                         @label <span class="text-muted">@eligible of @selectedOrders.Count</span>
-                                    </button>
+                                    </ActionButton>
                                 </li>
                             }
                             <li role="none"><span class="wo-menu-note">Print and schedule actions are available for one selected order.</span></li>
