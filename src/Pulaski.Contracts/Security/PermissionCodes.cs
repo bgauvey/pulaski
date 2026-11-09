@@ -62,6 +62,7 @@ public static class PermissionCodes
     public const string Integrations = "integrations.manage";
     public const string LotAttributes = "lot_attributes.manage";
     public const string Security = "security.manage";
+    public const string SecurityGrantEverywhere = "security.grant_everywhere";
     public const string EdgeIngest = "edge.ingest";
     public const string DowntimeCode = "downtime.code";
     public const string DowntimeAdjust = "downtime.adjust";

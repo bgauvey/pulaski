@@ -679,11 +679,11 @@ Who owns the configuration: equipment, units → Administrator; shift schedules 
 - **Tokens.** `POST /api/auth/sign-in` returns a bearer token (HMAC-SHA256 JWT, issuer `pulaski-local`, audience `pulaski`, 12 hours) signed with `Security:SigningKey` (at least 32 characters; the API won't start without it). What the user may do is read from the database on every request, so switching a user off or taking a role away applies at once.
 - **The UI** keeps the token in an HTTP-only session cookie that ends with it. Signing in and changing a password are plain (not interactive) pages, because they set the cookie. When the API stops accepting the token, the UI signs the user out and asks them to sign in again.
 - **The first administrator** is created at API start when there are no users at all, from `Security:BootstrapAdmin` (user name and a temporary password).
-- **Identity providers** (Okta, Entra ID, AD FS, Keycloak; the charter's OpenID Connect) come later as another JWT bearer scheme in the API. `sec.app_user` already keys users by `(idp_issuer, idp_subject)`, and roles stay in Pulaski; `idp_group` on `sec.role_assignment` is reserved for mapping a provider's groups to roles.
+- **Identity providers** (Okta, Entra ID, AD FS, Keycloak; the charter's OpenID Connect) came with D-091: the API redeems the provider's code and issues its own token, not another bearer scheme. `sec.app_user` keys users by `(idp_issuer, idp_subject)`, and roles stay in Pulaski; `idp_group` on `sec.role_assignment` is reserved for mapping a provider's groups to roles.
 
 **Events:** `pulaski.user.signed_in.v1`, `…sign_in_failed.v1`, `…password_changed.v1`, `…password_reset.v1`, `…created.v1`, `…updated.v1`, `…role_assigned.v1`, `…role_ended.v1`, on the user. Event actors are the signed-in user (local users by user name).
 
-**Not yet:** a role held everywhere other than the administrator; signing in through an identity provider; correcting reported production or consumption (no command exists yet, so the Auditor's "correct production values" waits for it); site settings screens (the API is guarded).
+**Not yet:** correcting reported production or consumption (no command exists yet, so the Auditor's "correct production values" waits for it); site settings screens (the API is guarded).
 
 ## Shift schedules (D-038, proposed)
 
@@ -2373,6 +2373,103 @@ a grant is due. Grants are `qualification.granted` with the import's reason. SCI
 
 **Not done:** schedules in a site's time zone; retries sooner than the next scheduled run; qualifications from SCIM; revoking what a source
 drops; connections for capabilities.
+
+## Signing in through OpenID Connect providers (D-091, proposed)
+
+Issue #50. Users had only Pulaski passwords; D-037 had reserved issuer + subject keys for providers.
+
+**The API is the client** (the user's choice). Providers are configuration only (`Security:Providers:{name}`: display name, authority, client
+id, client secret, scopes, name and e-mail claims; never the database). `IdentityProviderClient` (API) runs the authorization code flow with
+PKCE (S256) as a confidential client:
+- `POST /api/auth/providers/{name}/start` (signed out) checks the redirect address (https, or http on loopback, ending in
+  `/account/oidc/callback`), reads the provider's discovery document (cached `ConfigurationManager`), and returns the authorization address
+  and a **sealed transaction**: provider, state, nonce, code verifier, redirect address and a 10-minute expiry, AES-GCM under a key derived
+  (HKDF) from `Security:SigningKey`, so any API instance opens it and the browser can't read it.
+- The UI keeps it in an HTTP-only cookie on the callback path, sends the browser on, and at `/account/oidc/callback` posts code, state and
+  transaction to `POST /api/auth/providers/{name}/complete`. The API checks state (fixed-time), provider and expiry, redeems the code
+  (`client_secret_post`, code verifier), and validates the ID token: signature by the provider's keys, issuer = the discovery issuer,
+  audience = client id, lifetime (2 min skew), nonce. An e-mail with `email_verified = false` is dropped.
+- `ProviderSignInCommand` then signs them in, and the API issues its usual token (issuer `pulaski-local`) with an `idp` claim holding the
+  provider's issuer; access and actor (`issuer|subject`) are read by `TokenIssuer.IssuerOf` (`idp`, else `iss`). Nothing downstream changes.
+  Failures reach the sign-in page through a short-lived cookie, never the address. `GET /api/auth/options` lists providers for the page.
+
+**First sign-in waits for a role** (the user's choice). An unknown issuer + subject is added (name and e-mail from the token, no user name, no
+role; `user.created` with the reason "*<provider> sign-in*") and refused with a welcome saying an administrator must give them a role. This is
+the one way a user exists without a role; Configure → Users marks them **Awaiting a role** (`UserDto.IsAwaitingRole`). At each sign-in the
+provider's name and e-mail replace Pulaski's (`user.updated`); a switched-off user stays out. A provider can never vouch for `pulaski-local`.
+
+**Passwords, configurable** (the user's choice). `Security:LocalSignIn` = `everyone` (default) or `administrators`: then `SignInCommand`
+refuses a password from anyone but an administrator or a **service account** (`sec.app_user.is_service_account`, local users only, set on
+Configure → Users; users created with the Edge node role get it). The bootstrap administrator and any administrator's password always work,
+for recovery. Deployment guidance per provider: `deploy/identity/README.md`.
+
+**Not done:** groups to roles (`idp_group`); single sign-out at the provider; refreshing a session from the provider (sessions still end
+after 12 hours); a provider configured on screen.
+
+## Roles held at every site (D-092, proposed)
+
+Issue #49. Only the administrator could be held everywhere; a regional quality lead needed the same role at each site, one assignment each.
+
+**Roles marked for it** (the user's choice). `sec.role.allows_every_site` (off by default and for every starting role), switched on the Roles
+tab. Only such a role may be assigned with no site (`SecurityRules.EnsureRoleAsync`); switching it off is refused while anyone holds it at every
+site (`CountEverywhereHoldersAsync`). Site assignments of it work as before.
+
+**What a grant everywhere means.** A null-site `RoleGrant` (`IsEverywhere`) allows **its role's own** permissions at every site; only the
+administrator (`IsAdministrator`) allows every permission. `UserAccess.Can`, `SitesFor`/`SitesForAny` (null = every site, so lists and pickers
+show all sites) and the new `CanEverywhere` follow that; nothing else changed for site roles.
+
+**A permission of its own** (the user's choice). `security.grant_everywhere` (Administration; only the administrator to start with) is needed,
+**held at every site**, beside `security.manage` to create a user with, give, or take away a role at every site
+(`RequireForEverySiteGrant`; the assignment's site comes from `SiteOf.RoleAssignment`). So someone who manages one site's users can't give
+themselves or others reach over every site, even holding it there. Configure → Users offers *Every site* only for a role allowed it and only
+to whoever may grant it; such grants show as "*Role · every site*", marked apart from site grants, and the Roles tab counts them.
+
+**Not done:** roles held at a group of sites (a region); every-site grants from a provider's groups.
+
+## Password reset by e-mail (D-093, proposed)
+
+Issue #87. Pulaski sent no e-mail, so only an administrator could reset a forgotten password.
+
+**Off by default.** On only with `Security:PasswordReset:Enabled`, the UI's public address (`UiBaseUrl`, https; the link is made from it,
+never from the request's host, which a caller chooses) and an SMTP server and sender in the `Email` section (configuration only, never the
+database). `GET /api/auth/options` says whether it is on; the sign-in page then links to *Forgotten your password?*.
+
+**Asking** (`POST /api/auth/password-reset`, signed out; `RequestPasswordResetCommand`). The user name, or an e-mail address (the user's
+choice) that is exactly one active local user's. Eligible: active, local, an e-mail address on file, not a service account, and, when only
+administrators use passwords (D-091), an administrator (the user's choice: everyone but machines). At most one link a minute and three an
+hour per user. A new link revokes the earlier open ones. The token is 32 random bytes (base64url) in the link only; `sec.password_reset`
+keeps its SHA-256, the user, and when it was asked and expires (30 minutes, 5 to 1440). Event `user.password_reset_requested` (without the
+token). **Every answer is the same sentence**, matched or not, eligible or not, rate-limited or not; and the e-mail is queued
+(`IMailOutbox` → `MailOutbox`, an in-memory channel sent by `MailSenderService` through `SmtpMailSender`, failures logged by the address's
+domain only), so the answer's timing doesn't tell either.
+
+**Completing** (`POST /api/auth/password-reset/complete`, `CompletePasswordResetCommand`). The token's hash must find an open, unexpired
+link of a user still eligible; otherwise one message ("expired or was already used"). The password rules apply; it sets the password (not
+temporary), unlocks, marks the link used and revokes the rest, records `user.password_reset` with `ByEmail`, and e-mails a notice that it
+changed. An administrator's reset and a password change revoke open links too; the administrator's reset stays as it was.
+
+**Not done:** retrying an e-mail the server refused; HTML e-mail; e-mail for anything else; a reset for provider users (their provider owns it).
+
+## Unavailable actions on screen (D-094, proposed)
+
+Issue #47. Screens didn't treat actions a user can't take alike, and a switched-off button's reason was a hover-only title on a natively
+disabled button, which keyboards skip and screen readers announce without a reason.
+
+**What is hidden, what is switched off.** An action the user's roles never allow there is **left out**, and the screen says so once
+(`ViewOnlyNote`; on the Schedule a lock note per site); the API decides regardless. An action they may take but can't **now** stays and is
+**switched off with its reason**. One that is off only while something saves is plainly disabled, without a reason. A form's Save waiting on a
+field beside it, and an Export with nothing to export, are plainly disabled too: the reason is in view.
+
+**`ActionButton`** (the user's choice: focusable, reason on focus). With a `Reason` it renders `aria-disabled="true"` (not `disabled`), so it
+stays in the tab order; clicks are ignored; it looks switched off like every other button (`.btn[aria-disabled]`); and the reason is a tip
+(`role="tooltip"`) shown on hover and keyboard focus and tied to the button with `aria-describedby`, so screen readers read it. `Busy` is a
+native `disabled`. Reasons come from the state, in pure helpers where they are more than one line: `LotActionAvailability` (lot actions),
+`ImportReadiness` (every file import: check first, fix errors, nothing to change), `ScheduleItem.WhyNoLineChange`. Converted: lot actions, a job's
+consume/declare, start/resume on the Floor, the schedule drawer's line changes, bulk work-order changes, approving a shift, adding a capability,
+taking away a user's last role, retiring a container, arranging/splitting process operations, releasing a BOM or specification version with
+unsaved changes, every file import's Import, a connection's Import, new shift schedule, expand/collapse while searching.
+
+**Not done:** checkboxes and other inputs switched off with a reason (the Permissions tab's implied views) still use a title.
 
 ## Application architecture
 

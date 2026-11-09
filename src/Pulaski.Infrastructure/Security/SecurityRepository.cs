@@ -9,21 +9,37 @@ namespace Pulaski.Infrastructure.Security;
 internal sealed class SecurityRepository(DbSession session) : ISecurityRepository
 {
     private const string UserColumns = """
-        id, idp_issuer AS issuer, idp_subject AS subject, username, display_name, email, is_active, xmin::text::bigint AS version
+        id, idp_issuer AS issuer, idp_subject AS subject, username, display_name, email, is_active, is_service_account, xmin::text::bigint AS version
         """;
 
     private const string FindLocal = $"SELECT {UserColumns} FROM sec.app_user WHERE idp_issuer = 'pulaski-local' AND lower(username) = @Username FOR UPDATE";
 
     private const string GetUser = $"SELECT {UserColumns} FROM sec.app_user WHERE id = @Id FOR UPDATE";
 
+    private const string FindByEmail =
+        $"SELECT {UserColumns} FROM sec.app_user WHERE idp_issuer = 'pulaski-local' AND is_active AND lower(email) = lower(@Email) ORDER BY id FOR UPDATE";
+
+    private const string InsertReset = """
+        INSERT INTO sec.password_reset (id, app_user_id, token_hash, requested_at, expires_at)
+        VALUES (@Id, @UserId, @TokenHash, @RequestedAt, @ExpiresAt)
+        """;
+
+    private const string FindOpenReset = """
+        SELECT id, app_user_id AS user_id, token_hash, requested_at, expires_at FROM sec.password_reset
+        WHERE token_hash = @TokenHash AND used_at IS NULL AND revoked_at IS NULL
+        FOR UPDATE
+        """;
+
+    private const string FindByIdentity = $"SELECT {UserColumns} FROM sec.app_user WHERE idp_issuer = @Issuer AND idp_subject = @Subject FOR UPDATE";
+
     private const string InsertUser = """
-        INSERT INTO sec.app_user (id, idp_issuer, idp_subject, username, display_name, email, is_active, created_at, updated_at)
-        VALUES (@Id, @Issuer, @Subject, @Username, @DisplayName, @Email, @IsActive, @At, @At)
+        INSERT INTO sec.app_user (id, idp_issuer, idp_subject, username, display_name, email, is_active, is_service_account, created_at, updated_at)
+        VALUES (@Id, @Issuer, @Subject, @Username, @DisplayName, @Email, @IsActive, @IsServiceAccount, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     private const string UpdateUser = """
-        UPDATE sec.app_user SET display_name = @DisplayName, email = @Email, is_active = @IsActive, updated_at = @At
+        UPDATE sec.app_user SET display_name = @DisplayName, email = @Email, is_active = @IsActive, is_service_account = @IsServiceAccount, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -81,21 +97,21 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
         """;
 
     private const string FindRole = """
-        SELECT r.id, r.code, r.name, r.description, r.is_active, r.xmin::text::bigint AS version,
+        SELECT r.id, r.code, r.name, r.description, r.is_active, r.allows_every_site, r.xmin::text::bigint AS version,
                array(SELECT rp.permission_code FROM sec.role_permission rp WHERE rp.role_id = r.id AND rp.is_granted ORDER BY rp.permission_code) AS permissions
         FROM sec.role r WHERE r.code = @Code
         FOR UPDATE OF r
         """;
 
     private const string InsertRole = """
-        INSERT INTO sec.role (id, code, name, description, is_active, is_system, created_at, updated_at)
-        VALUES (@Id, @Code, @Name, @Description, @IsActive, false, @At, @At)
+        INSERT INTO sec.role (id, code, name, description, is_active, is_system, allows_every_site, created_at, updated_at)
+        VALUES (@Id, @Code, @Name, @Description, @IsActive, false, @AllowsEverySite, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     // Also run after a permission changes, so the role's version moves on with it.
     private const string UpdateRole = """
-        UPDATE sec.role SET name = @Name, description = @Description, is_active = @IsActive, updated_at = @At
+        UPDATE sec.role SET name = @Name, description = @Description, is_active = @IsActive, allows_every_site = @AllowsEverySite, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -112,6 +128,11 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
         WHERE role_id = @RoleId AND valid_from <= @At AND (valid_to IS NULL OR valid_to > @At)
         """;
 
+    private const string CountEverywhereHolders = """
+        SELECT count(*)::int FROM sec.role_assignment
+        WHERE role_id = @RoleId AND scope_equipment_id IS NULL AND valid_from <= @At AND (valid_to IS NULL OR valid_to > @At)
+        """;
+
     private const string SyncPermission = """
         INSERT INTO sec.permission (code, description) VALUES (@Code, @Description)
         ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description WHERE sec.permission.description <> EXCLUDED.description
@@ -123,6 +144,35 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
 
     public async Task<Versioned<SecurityUser>?> FindLocalUserForUpdateAsync(string username, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<UserRow>(FindLocal, new { Username = username }, cancellationToken))?.ToVersioned();
+
+    public async Task<IReadOnlyList<Versioned<SecurityUser>>> FindLocalUsersByEmailForUpdateAsync(string email, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<UserRow>(FindByEmail, new { Email = email }, cancellationToken)).Select(r => r.ToVersioned())];
+
+    public Task InsertPasswordResetAsync(PasswordResetLink link, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(InsertReset, link, cancellationToken);
+
+    public async Task<PasswordResetLink?> FindOpenPasswordResetForUpdateAsync(string tokenHash, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<ResetRow>(FindOpenReset, new { TokenHash = tokenHash }, cancellationToken) is { } r
+            ? new PasswordResetLink(r.Id, r.UserId, r.TokenHash, r.RequestedAt, r.ExpiresAt)
+            : null;
+
+    public Task<int> CountPasswordResetsSinceAsync(Guid userId, DateTimeOffset since, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<int>(
+            "SELECT count(*)::int FROM sec.password_reset WHERE app_user_id = @UserId AND requested_at >= @Since", new { UserId = userId, Since = since }, cancellationToken);
+
+    public Task MarkPasswordResetUsedAsync(Guid id, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync("UPDATE sec.password_reset SET used_at = @At WHERE id = @Id", new { Id = id, At = at }, cancellationToken);
+
+    public Task RevokePasswordResetsAsync(Guid userId, DateTimeOffset at, Guid? exceptId, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(
+            """
+            UPDATE sec.password_reset SET revoked_at = @At
+            WHERE app_user_id = @UserId AND used_at IS NULL AND revoked_at IS NULL AND (@ExceptId::uuid IS NULL OR id <> @ExceptId)
+            """,
+            new { UserId = userId, At = at, ExceptId = exceptId }, cancellationToken);
+
+    public async Task<Versioned<SecurityUser>?> FindUserByIdentityForUpdateAsync(string issuer, string subject, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<UserRow>(FindByIdentity, new { Issuer = issuer, Subject = subject }, cancellationToken))?.ToVersioned();
 
     public async Task<Versioned<SecurityUser>?> GetUserForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<UserRow>(GetUser, new { Id = id }, cancellationToken))?.ToVersioned();
@@ -173,7 +223,7 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
 
     public async Task<Versioned<SecurityRole>?> FindRoleForUpdateAsync(string code, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<RoleRow>(FindRole, new { Code = code }, cancellationToken) is { } r
-            ? new Versioned<SecurityRole>(new SecurityRole(r.Id, r.Code, r.Name, r.Description, r.IsActive, r.Permissions), r.Version)
+            ? new Versioned<SecurityRole>(new SecurityRole(r.Id, r.Code, r.Name, r.Description, r.IsActive, r.Permissions) { AllowsEverySite = r.AllowsEverySite }, r.Version)
             : null;
 
     public Task<long> InsertRoleAsync(SecurityRole role, DateTimeOffset at, CancellationToken cancellationToken) =>
@@ -188,6 +238,9 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
     public Task<int> CountHoldersAsync(Guid roleId, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<int>(CountHolders, new { RoleId = roleId, At = at }, cancellationToken);
 
+    public Task<int> CountEverywhereHoldersAsync(Guid roleId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<int>(CountEverywhereHolders, new { RoleId = roleId, At = at }, cancellationToken);
+
     public async Task SyncPermissionsAsync(IReadOnlyList<PermissionInfo> catalog, CancellationToken cancellationToken)
     {
         foreach (var permission in catalog)
@@ -196,10 +249,10 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
         }
     }
 
-    private static object RoleArgs(SecurityRole r, DateTimeOffset at) => new { r.Id, r.Code, r.Name, r.Description, r.IsActive, At = at };
+    private static object RoleArgs(SecurityRole r, DateTimeOffset at) => new { r.Id, r.Code, r.Name, r.Description, r.IsActive, r.AllowsEverySite, At = at };
 
     private static object UserArgs(SecurityUser u, DateTimeOffset at) =>
-        new { u.Id, u.Issuer, u.Subject, u.Username, u.DisplayName, u.Email, u.IsActive, At = at };
+        new { u.Id, u.Issuer, u.Subject, u.Username, u.DisplayName, u.Email, u.IsActive, u.IsServiceAccount, At = at };
 
     private sealed class UserRow
     {
@@ -210,9 +263,11 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
         public string DisplayName { get; init; } = "";
         public string? Email { get; init; }
         public bool IsActive { get; init; }
+        public bool IsServiceAccount { get; init; }
         public long Version { get; init; }
 
-        public Versioned<SecurityUser> ToVersioned() => new(new SecurityUser(Id, Issuer, Subject, Username, DisplayName, Email, IsActive), Version);
+        public Versioned<SecurityUser> ToVersioned() =>
+            new(new SecurityUser(Id, Issuer, Subject, Username, DisplayName, Email, IsActive) { IsServiceAccount = IsServiceAccount }, Version);
     }
 
     private sealed class RoleRow
@@ -222,8 +277,18 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
         public string Name { get; init; } = "";
         public string Description { get; init; } = "";
         public bool IsActive { get; init; }
+        public bool AllowsEverySite { get; init; }
         public long Version { get; init; }
         public string[] Permissions { get; init; } = [];
+    }
+
+    private sealed class ResetRow
+    {
+        public Guid Id { get; init; }
+        public Guid UserId { get; init; }
+        public string TokenHash { get; init; } = "";
+        public DateTimeOffset RequestedAt { get; init; }
+        public DateTimeOffset ExpiresAt { get; init; }
     }
 
     private sealed class CredentialRow

@@ -30,7 +30,7 @@
         }
         @if (CanManage && _edit is null)
         {
-            <button type="button" class="btn btn-primary" disabled="@(Sites.SiteId is null)" @onclick="StartNew">New schedule</button>
+            <ActionButton Class="btn btn-primary" Reason="@(Sites.SiteId is null ? "Choose a site first: a schedule belongs to one." : null)" OnClick="StartNew">New schedule</ActionButton>
         }
     </div>
 </div>

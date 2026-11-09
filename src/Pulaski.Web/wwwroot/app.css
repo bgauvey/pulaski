@@ -186,6 +186,71 @@ fieldset:disabled .btn {
     cursor: not-allowed;
 }
 
+/* Unavailable for a reason (#47, ActionButton): focusable, so keyboard users reach it and hear or see why. */
+.btn[aria-disabled="true"] {
+    --bs-btn-color: var(--text-faint);
+    --bs-btn-bg: var(--surface-2);
+    --bs-btn-border-color: var(--border);
+    --bs-btn-hover-color: var(--text-faint);
+    --bs-btn-hover-bg: var(--surface-2);
+    --bs-btn-hover-border-color: var(--border);
+    --bs-btn-active-color: var(--text-faint);
+    --bs-btn-active-bg: var(--surface-2);
+    --bs-btn-active-border-color: var(--border);
+    cursor: not-allowed;
+}
+
+.btn-link[aria-disabled="true"] {
+    --bs-btn-bg: transparent;
+    --bs-btn-hover-bg: transparent;
+    --bs-btn-active-bg: transparent;
+    --bs-btn-border-color: transparent;
+    --bs-btn-hover-border-color: transparent;
+    --bs-btn-active-border-color: transparent;
+    text-decoration: none;
+}
+
+.action-button {
+    position: relative;
+    display: inline-flex;
+}
+
+.action-reason {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 4px);
+    left: 0;
+    width: max-content;
+    max-width: 18rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.8125rem;
+    font-weight: 400;
+    line-height: 1.35;
+    text-align: left;
+    white-space: normal;
+    box-shadow: 0 4px 12px rgb(0 0 0 / 12%);
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+    pointer-events: none;
+}
+
+.action-button:hover > .action-reason,
+.action-button:focus-within > .action-reason {
+    visibility: visible;
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .action-reason {
+        transition: none;
+    }
+}
+
 .btn-link:disabled,
 .btn-link.disabled,
 fieldset:disabled .btn-link {

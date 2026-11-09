@@ -66,6 +66,12 @@ public sealed record RoleDto
 
     /// <summary>The administrator: holds every permission and can't be changed.</summary>
     public bool IsLocked { get; init; }
+
+    /// <summary>May be given at every site as well as at one (D-092); always true for the administrator.</summary>
+    public bool AllowsEverySite { get; init; }
+
+    /// <summary>How many hold it at every site now.</summary>
+    public int EverywhereHolders { get; init; }
     public bool IsActive { get; init; } = true;
     public IReadOnlyList<string> Permissions { get; init; } = [];
 
@@ -88,6 +94,7 @@ public sealed record CreateRoleRequest
     public string Name { get; init; } = "";
     public string? Description { get; init; }
     public IReadOnlyList<string> Permissions { get; init; } = [];
+    public bool AllowsEverySite { get; init; }
 }
 
 public sealed record UpdateRoleRequest
@@ -97,6 +104,9 @@ public sealed record UpdateRoleRequest
     public string? Description { get; init; }
     public bool IsActive { get; init; } = true;
     public IReadOnlyList<string> Permissions { get; init; } = [];
+
+    /// <summary>Null leaves it as it is (D-092).</summary>
+    public bool? AllowsEverySite { get; init; }
 }
 
 /// <summary>Gives a role one permission, or takes it away (the Permissions screen).</summary>
@@ -119,8 +129,14 @@ public sealed record UserDto
     public DateTimeOffset? LastLoginAt { get; init; }
     public bool MustChangePassword { get; init; }
     public bool IsLocked { get; init; }
+
+    /// <summary>A machine's local account, such as the edge's (D-091): it keeps its password when only administrators sign in with one.</summary>
+    public bool IsServiceAccount { get; init; }
     public IReadOnlyList<RoleGrantDto> Roles { get; init; } = [];
     public long Version { get; init; }
+
+    /// <summary>Signed in through an identity provider and can't do anything until an administrator gives them a role (D-091).</summary>
+    public bool IsAwaitingRole => IsActive && Roles.Count == 0;
 }
 
 /// <summary>A new local user (D-037). Every user belongs to a role, so the first one comes with it.</summary>
@@ -144,6 +160,9 @@ public sealed record UpdateUserRequest
     public string DisplayName { get; init; } = "";
     public string? Email { get; init; }
     public bool IsActive { get; init; } = true;
+
+    /// <summary>Null leaves it as it is (D-091).</summary>
+    public bool? IsServiceAccount { get; init; }
 }
 
 public sealed record ResetPasswordRequest
@@ -155,4 +174,64 @@ public sealed record AssignRoleRequest
 {
     public string RoleCode { get; init; } = "";
     public Guid? SiteId { get; init; }
+}
+
+/// <summary>An identity provider users may sign in through (D-091), as the sign-in page offers it.</summary>
+public sealed record SignInProviderDto
+{
+    /// <summary>The name in the URL, <c>/account/oidc/{name}</c>.</summary>
+    public required string Name { get; init; }
+    public required string DisplayName { get; init; }
+}
+
+/// <summary>How people can sign in (D-091): the identity providers, and who may still use a Pulaski password.</summary>
+public sealed record SignInOptionsDto
+{
+    public IReadOnlyList<SignInProviderDto> Providers { get; init; } = [];
+
+    /// <summary><c>everyone</c>, or <c>administrators</c>: then only administrators and service accounts sign in with a password.</summary>
+    public string LocalSignIn { get; init; } = "everyone";
+
+    /// <summary>Whether someone who forgot their password may ask for a link by e-mail (D-093).</summary>
+    public bool PasswordResetByEmail { get; init; }
+}
+
+/// <summary>Asks for a password reset link (D-093): a user name or an e-mail address.</summary>
+public sealed record RequestPasswordResetRequest
+{
+    public string Login { get; init; } = "";
+}
+
+/// <summary>Sets a new password with a reset link's token (D-093).</summary>
+public sealed record CompletePasswordResetRequest
+{
+    public string Token { get; init; } = "";
+    public string NewPassword { get; init; } = "";
+}
+
+/// <summary>What the API says to a reset request: the same words whether or not an account matched.</summary>
+public sealed record PasswordResetAnswer
+{
+    public required string Message { get; init; }
+}
+
+/// <summary>Starts signing in through a provider (D-091): where the provider sends the browser back.</summary>
+public sealed record StartProviderSignInRequest
+{
+    public string RedirectUri { get; init; } = "";
+}
+
+/// <summary>Where to send the browser, and the sealed sign-in state to bring back with the answer; the UI keeps it in a short-lived cookie.</summary>
+public sealed record StartProviderSignInResponse
+{
+    public required string AuthorizationUrl { get; init; }
+    public required string Transaction { get; init; }
+}
+
+/// <summary>The provider's answer, with the state the sign-in started with (D-091).</summary>
+public sealed record CompleteProviderSignInRequest
+{
+    public string Code { get; init; } = "";
+    public string State { get; init; } = "";
+    public string Transaction { get; init; } = "";
 }

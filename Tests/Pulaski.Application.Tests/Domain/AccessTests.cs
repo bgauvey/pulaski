@@ -156,4 +156,25 @@ public class AccessTests
     [InlineData(Roles.ProcessEngineer, Permissions.FloorView, false)]
     public void The_starting_roles_see_what_was_agreed(string role, string view, bool expected) =>
         Assert.Equal(expected, User(true, (role, SiteA)).Can(view, SiteA));
+
+    [Fact]
+    public void A_role_held_at_every_site_allows_its_own_permissions_everywhere_and_no_more()
+    {
+        var auditor = Roles.Defaults.Single(r => r.Code == Roles.Auditor);
+        var everywhere = new UserAccess(Guid.CreateVersion7(), "a", "A", "a", true,
+            [new RoleGrant(Guid.CreateVersion7(), auditor.Code, auditor.Name, null, auditor.Permissions)]);
+
+        Assert.True(everywhere.Can(Permissions.InventoryCorrect, SiteA));
+        Assert.True(everywhere.Can(Permissions.InventoryCorrect, SiteB));
+        Assert.True(everywhere.CanEverywhere(Permissions.InventoryCorrect));
+        Assert.Null(everywhere.SitesFor(Permissions.InventoryCorrect));
+        Assert.Null(everywhere.SitesForAny([Permissions.InventoryView]));
+        Assert.False(everywhere.Can(Permissions.SchedulePlan, SiteA));
+        Assert.False(everywhere.IsAdministrator);
+        Assert.False(everywhere.CanEverywhere(Permissions.SecurityGrantEverywhere));
+
+        // At one site it isn't everywhere, whatever it allows there.
+        Assert.False(User(true, (Roles.Auditor, SiteA)).CanEverywhere(Permissions.InventoryCorrect));
+        Assert.True(User(true, (Roles.Administrator, null)).CanEverywhere(Permissions.SecurityGrantEverywhere));
+    }
 }

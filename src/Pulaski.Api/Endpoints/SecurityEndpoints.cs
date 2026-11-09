@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.Extensions.Options;
 using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Security;
@@ -22,12 +23,54 @@ internal static class SecurityEndpoints
             ISecurityReadStore store,
             TokenIssuer issuer,
             TimeProvider timeProvider,
+            IOptions<SecurityOptions> options,
             CancellationToken ct) =>
         {
-            var user = await handler.HandleAsync(new SignInCommand(request.Username, request.Password), ct);
-            var (token, expires) = issuer.Issue(user);
-            var access = await store.GetAccessAsync(user.Issuer, user.Subject, timeProvider.GetUtcNow(), ct);
-            return TypedResults.Ok(new SignInResponse { Token = token, ExpiresAt = expires, User = await me.HandleAsync(new GetMeQuery(access!), ct) });
+            var user = await handler.HandleAsync(new SignInCommand(request.Username, request.Password, options.Value.LocalSignInForAdministratorsOnly), ct);
+            return TypedResults.Ok(await SessionAsync(user, issuer, store, me, timeProvider, ct));
+        });
+
+        // How people may sign in (D-091): the identity providers, and who may still use a password.
+        auth.MapGet("/options", [AllowSignedOut] (IdentityProviderClient providers, IOptions<SecurityOptions> options, IPasswordResetSettings reset) =>
+            TypedResults.Ok(new SignInOptionsDto
+            {
+                Providers = [.. providers.Providers.Select(p => new SignInProviderDto { Name = p.Name, DisplayName = p.DisplayName })],
+                LocalSignIn = options.Value.LocalSignInForAdministratorsOnly ? LocalSignInModes.Administrators : LocalSignInModes.Everyone,
+                PasswordResetByEmail = reset.Enabled,
+            }));
+
+        // Forgotten passwords (D-093): the same answer whoever is asked about; the link and the new password come back separately.
+        auth.MapPost("/password-reset", [AllowSignedOut] async Task<Ok<PasswordResetAnswer>> (
+            RequestPasswordResetRequest request, ICommandHandler<RequestPasswordResetCommand, string> handler, CancellationToken ct) =>
+            TypedResults.Ok(new PasswordResetAnswer { Message = await handler.HandleAsync(new RequestPasswordResetCommand(request.Login), ct) }));
+
+        auth.MapPost("/password-reset/complete", [AllowSignedOut] async Task<Ok<VersionResponse>> (
+            CompletePasswordResetRequest request, ICommandHandler<CompletePasswordResetCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CompletePasswordResetCommand(request.Token, request.NewPassword), ct)));
+
+        // The code flow (D-091): the UI sends the browser to the provider, then hands its answer back with the sealed transaction.
+        auth.MapPost("/providers/{name}/start", [AllowSignedOut] async Task<Ok<StartProviderSignInResponse>> (
+            string name, StartProviderSignInRequest request, IdentityProviderClient providers, CancellationToken ct) =>
+        {
+            var (url, transaction) = await providers.StartAsync(name, request.RedirectUri, ct);
+            return TypedResults.Ok(new StartProviderSignInResponse { AuthorizationUrl = url, Transaction = transaction });
+        });
+
+        auth.MapPost("/providers/{name}/complete", [AllowSignedOut] async Task<Ok<SignInResponse>> (
+            string name,
+            CompleteProviderSignInRequest request,
+            IdentityProviderClient providers,
+            ICommandHandler<ProviderSignInCommand, SignedInUser> handler,
+            IQueryHandler<GetMeQuery, MeDto> me,
+            ISecurityReadStore store,
+            TokenIssuer issuer,
+            TimeProvider timeProvider,
+            CancellationToken ct) =>
+        {
+            var identity = await providers.CompleteAsync(name, request.Code, request.State, request.Transaction, ct);
+            var user = await handler.HandleAsync(
+                new ProviderSignInCommand(providers.DisplayName(name), identity.Issuer, identity.Subject, identity.Name, identity.Email), ct);
+            return TypedResults.Ok(await SessionAsync(user, issuer, store, me, timeProvider, ct));
         });
 
         auth.MapPost("/password", [AllowPasswordChange] async Task<Ok<VersionResponse>> (
@@ -53,13 +96,13 @@ internal static class SecurityEndpoints
 
         roles.MapPost("/", async Task<Created<CreatedResponse>> (CreateRoleRequest request, ICommandHandler<CreateRoleCommand, CreatedResponse> handler, CancellationToken ct) =>
         {
-            var created = await handler.HandleAsync(new CreateRoleCommand(request.Code, request.Name, request.Description, request.Permissions), ct);
+            var created = await handler.HandleAsync(new CreateRoleCommand(request.Code, request.Name, request.Description, request.Permissions, request.AllowsEverySite), ct);
             return TypedResults.Created($"/api/roles/{request.Code.Trim().ToLowerInvariant()}", created);
         }).RequirePermission(Permissions.Security);
 
         roles.MapPut("/{code}", async Task<Ok<VersionResponse>> (string code, UpdateRoleRequest request, ICommandHandler<UpdateRoleCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new UpdateRoleCommand(code, request.Version, request.Name, request.Description, request.IsActive, request.Permissions), ct)))
+                new UpdateRoleCommand(code, request.Version, request.Name, request.Description, request.IsActive, request.Permissions, request.AllowsEverySite), ct)))
             .RequirePermission(Permissions.Security);
 
         roles.MapPut("/{code}/permissions/{permission}", async Task<Ok<VersionResponse>> (
@@ -87,10 +130,11 @@ internal static class SecurityEndpoints
             var created = await handler.HandleAsync(
                 new CreateUserCommand(request.Username, request.DisplayName, request.Email, request.TemporaryPassword, request.RoleCode, request.SiteId), ct);
             return TypedResults.Created($"/api/users/{created.Id}", created);
-        }).RequirePermission(Permissions.Security);
+        }).RequirePermission(Permissions.Security)
+        .RequireForEverySiteGrant(c => ValueTask.FromResult(c.Arguments.OfType<CreateUserRequest>().FirstOrDefault() is { SiteId: null }));
 
         users.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (Guid id, UpdateUserRequest request, ICommandHandler<UpdateUserCommand, VersionResponse> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new UpdateUserCommand(id, request.Version, request.DisplayName, request.Email, request.IsActive), ct)))
+            TypedResults.Ok(await handler.HandleAsync(new UpdateUserCommand(id, request.Version, request.DisplayName, request.Email, request.IsActive, request.IsServiceAccount), ct)))
             .RequirePermission(Permissions.Security);
 
         users.MapPost("/{id:guid}/password", async Task<Ok<VersionResponse>> (Guid id, ResetPasswordRequest request, ICommandHandler<ResetPasswordCommand, VersionResponse> handler, CancellationToken ct) =>
@@ -101,12 +145,22 @@ internal static class SecurityEndpoints
         {
             var created = await handler.HandleAsync(new AssignRoleCommand(id, request.RoleCode, request.SiteId), ct);
             return TypedResults.Created($"/api/users/{id}", created);
-        }).RequirePermission(Permissions.Security);
+        }).RequirePermission(Permissions.Security)
+        .RequireForEverySiteGrant(c => ValueTask.FromResult(c.Arguments.OfType<AssignRoleRequest>().FirstOrDefault() is { SiteId: null }));
 
         users.MapPost("/roles/{assignmentId:guid}/end", async Task<Ok<VersionResponse>> (Guid assignmentId, ICommandHandler<EndRoleCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new EndRoleCommand(assignmentId), ct)))
-            .RequirePermission(Permissions.Security);
+            .RequirePermission(Permissions.Security)
+            .RequireForEverySiteGrant(async c => await Site.Of(SiteOf.RoleAssignment, "assignmentId")(c) is null);
 
         return routes;
+    }
+
+    private static async Task<SignInResponse> SessionAsync(
+        SignedInUser user, TokenIssuer issuer, ISecurityReadStore store, IQueryHandler<GetMeQuery, MeDto> me, TimeProvider timeProvider, CancellationToken ct)
+    {
+        var (token, expires) = issuer.Issue(user);
+        var access = await store.GetAccessAsync(user.Issuer, user.Subject, timeProvider.GetUtcNow(), ct);
+        return new SignInResponse { Token = token, ExpiresAt = expires, User = await me.HandleAsync(new GetMeQuery(access!), ct) };
     }
 }

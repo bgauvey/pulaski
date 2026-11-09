@@ -58,10 +58,9 @@
     <div class="d-flex flex-wrap gap-2 align-items-center">
         <InputFile OnChange="PickAsync" accept="@string.Join(",", Source.FileTypes)" class="form-control" style="max-width: 28rem"
                    aria-label="@($"{Source.DisplayName} file")" disabled="@_busy" />
-        <button type="button" class="btn btn-primary" disabled="@(_busy || _result is not { Errors: 0, Applied: false } || _result.Created + _result.Updated == 0)"
-                @onclick="ImportAsync">
+        <ActionButton Class="btn btn-primary" Busy="_busy" Reason="@ImportReadiness.Why(_result is not null, _result?.Applied == true, _result?.FileProblems.Count ?? 0, _result?.Errors ?? 0, _result is null ? 0 : _result.Created + _result.Updated)" OnClick="ImportAsync">
             @ImportLabel
-        </button>
+        </ActionButton>
         <button type="button" class="btn btn-outline-secondary" @onclick="OnClose">Close</button>
     </div>
 

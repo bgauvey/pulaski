@@ -44,9 +44,12 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - API is CQRS (D-013): commands and queries in `Pulaski.Application` with hand-written handlers
   injected into minimal-API endpoints. No MediatR.
 - UI is Blazor Web App, interactive server (D-011); it calls the API only, never the database.
-- Identity (D-037, proposed): local sign-in now (`pulaski-local`, PBKDF2 hashes in `sec.local_credential`, API-issued
-  HMAC JWT from `Security:SigningKey`); OpenID Connect (Okta, Entra ID, AD FS, Keycloak) later as another bearer scheme.
-  Users are keyed by issuer + subject. The UI keeps the token in a cookie session and sends it on every API call.
+- Identity (D-037, D-091, proposed): local sign-in (`pulaski-local`, PBKDF2 hashes in `sec.local_credential`) and OpenID Connect providers
+  (`Security:Providers:{name}`; `IdentityProviderClient`: code flow + PKCE, sealed transaction, ID token checked) both end in the API's own
+  HMAC JWT from `Security:SigningKey`, provider users with an `idp` claim (`TokenIssuer.IssuerOf`). Users are keyed by issuer + subject; a new
+  provider user waits for a role. `Security:LocalSignIn` = administrators limits passwords to administrators and service accounts. The UI keeps
+  the token in a cookie session and sends it on every API call. Password reset by e-mail (D-093) is off unless `Security:PasswordReset` +
+  `Email` (SMTP) are set: hashed single-use tokens in `sec.password_reset`, one answer for every request, mail queued (`IMailOutbox`).
 - Machine data: MQTT Sparkplug B, OPC UA and EtherNet/IP, built on the connector SDK (`src/Pulaski.Connectors`: `IConnector`, samples;
   `Pulaski.Connectors.Sparkplug`: hand-written protobuf codec, host logic in `SparkplugHost`, MQTTnet 4; `Pulaski.Connectors.OpcUa`:
   OPC Foundation stack 2.0 behind `IOpcUaSession`; `Pulaski.Connectors.EthernetIp`: libplctag behind `ICipTagReader`). `src/Pulaski.Edge`
@@ -121,11 +124,14 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   with areas; mirrored in `Contracts.Security.PermissionCodes`; synced into `sec.permission` at API start). Roles are data
   (`sec.role`, `sec.role_permission.is_granted`), maintained on the Roles/Permissions tabs of Configure → Users; only `administrator` is in
   code (all permissions, everywhere, unchangeable); `Roles.Defaults` seeds a new database. Every other role is held at a
-  site; every changing endpoint carries `.RequirePermission(permission, Site.…)`.
+  site, or at every site when `allows_every_site` (D-092: its own permissions everywhere, `RoleGrant.IsEverywhere`; granting needs
+  `security.grant_everywhere` everywhere, `RequireForEverySiteGrant`); every changing endpoint carries `.RequirePermission(permission, Site.…)`.
 - Viewing (D-039, proposed): the view permissions (`*.view`) decide screens and data; a change brings its views
   (`Permissions.Implied`). Reads use `.RequireAny(site, views…)`, `.RequireAnyAtSite` (no site = every site) or
   `.RequireAnyView()` for lookups; lists filter with `.At(Visible.SitesAsync(...))`. Web pages carry
   `[RequiresView(...)]`, checked in `MainLayout` (not found, or the no-access panel); cross-screen links use `ScreenLink`.
+  Unavailable actions (D-094): never allowed → left out (+ `ViewOnlyNote`); not possible now → `<ActionButton Reason=…>` (aria-disabled,
+  focusable, reason tip via aria-describedby); `Busy` only while saving.
   Every user keeps a role; a held role can't be switched off.
 - Shift schedules (D-038, proposed): `core.shift_schedule` per site (cycle of 1–56 days from `cycle_start`, shifts as one
   `jsonb` document); equipment `calendar_mode` inherit / schedule / around_the_clock, nearest non-inherit ancestor wins.

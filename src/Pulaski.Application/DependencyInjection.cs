@@ -24,6 +24,10 @@ public static class DependencyInjection
         services.AddScoped<Inventory.AllocationAutoRefresh>();
         services.AddScoped<Materials.ScheduledConnections>();
 
+        // Password reset by e-mail is off unless the host provides settings and a way to send (D-093).
+        services.TryAddSingleton<Security.IPasswordResetSettings, Security.PasswordResetOff>();
+        services.TryAddSingleton<Security.IMailOutbox, Security.NoMail>();
+
         var handlerInterfaces = new[] { typeof(ICommandHandler<,>), typeof(IQueryHandler<,>) };
         var handlers = typeof(DependencyInjection).Assembly.GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false });

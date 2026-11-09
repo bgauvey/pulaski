@@ -10,7 +10,7 @@ namespace Pulaski.Infrastructure.Security;
 internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityReadStore, ISiteLookup
 {
     private const string Access = """
-        SELECT u.id, u.username, u.idp_subject AS subject, u.display_name, u.is_active, coalesce(c.must_change, false) AS must_change
+        SELECT u.id, coalesce(u.username, u.email) AS username, u.idp_subject AS subject, u.display_name, u.is_active, coalesce(c.must_change, false) AS must_change
         FROM sec.app_user u
         LEFT JOIN sec.local_credential c ON c.app_user_id = u.id
         WHERE u.idp_issuer = @Issuer AND u.idp_subject = @Subject
@@ -28,7 +28,7 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
         """;
 
     private const string Users = """
-        SELECT u.id, coalesce(u.username, u.idp_subject) AS username, u.display_name, u.email, u.is_active, u.idp_issuer AS issuer,
+        SELECT u.id, coalesce(u.username, u.email, u.idp_subject) AS username, u.display_name, u.email, u.is_active, u.is_service_account, u.idp_issuer AS issuer,
                u.last_login_at, coalesce(c.must_change, false) AS must_change_password, coalesce(c.locked_until > @At, false) AS is_locked,
                u.xmin::text::bigint AS version
         FROM sec.app_user u
@@ -37,10 +37,12 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
 
     // The administrator's permissions come from the code (D-037), so its row lists none.
     private const string RoleList = """
-        SELECT r.id, r.code, r.name, r.description, r.is_active, r.xmin::text::bigint AS version,
+        SELECT r.id, r.code, r.name, r.description, r.is_active, r.allows_every_site, r.xmin::text::bigint AS version,
                array(SELECT rp.permission_code FROM sec.role_permission rp WHERE rp.role_id = r.id AND rp.is_granted ORDER BY rp.permission_code) AS permissions,
                (SELECT count(*)::int FROM sec.role_assignment a
-                WHERE a.role_id = r.id AND a.valid_from <= @At AND (a.valid_to IS NULL OR a.valid_to > @At)) AS holders
+                WHERE a.role_id = r.id AND a.valid_from <= @At AND (a.valid_to IS NULL OR a.valid_to > @At)) AS holders,
+               (SELECT count(*)::int FROM sec.role_assignment a
+                WHERE a.role_id = r.id AND a.scope_equipment_id IS NULL AND a.valid_from <= @At AND (a.valid_to IS NULL OR a.valid_to > @At)) AS everywhere_holders
         FROM sec.role r
         ORDER BY r.code = 'administrator' DESC, r.is_active DESC, r.name
         """;
@@ -83,6 +85,8 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
             IsActive = r.IsActive,
             Permissions = Roles.IsGlobal(r.Code) ? [.. Permissions.All.Keys] : r.Permissions,
             Holders = r.Holders,
+            AllowsEverySite = Roles.IsGlobal(r.Code) || r.AllowsEverySite,
+            EverywhereHolders = r.EverywhereHolders,
             Version = r.Version,
         })];
     }
@@ -122,6 +126,7 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
             SiteOf.LotAttribute => "SELECT site_id FROM core.lot_attribute WHERE id = @Id",
             SiteOf.LotDocument => "SELECT site_id FROM core.lot_document WHERE id = @Id",
             SiteOf.Connection => "SELECT site_id FROM core.material_connection WHERE id = @Id",
+            SiteOf.RoleAssignment => "SELECT scope_equipment_id FROM sec.role_assignment WHERE id = @Id",
             SiteOf.ExpectedReceipt => "SELECT site_id FROM core.expected_receipt WHERE id = @Id",
             SiteOf.Container => "SELECT site_id FROM core.container WHERE id = @Id",
             SiteOf.LaborBreak => "SELECT site_id FROM core.labor_break WHERE id = @Id",
@@ -195,5 +200,7 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
         public long Version { get; init; }
         public string[] Permissions { get; init; } = [];
         public int Holders { get; init; }
+        public bool AllowsEverySite { get; init; }
+        public int EverywhereHolders { get; init; }
     }
 }

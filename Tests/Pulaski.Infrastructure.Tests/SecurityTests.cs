@@ -72,6 +72,82 @@ public sealed class SecurityTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_provider_user_is_kept_by_issuer_and_subject_and_signs_in_once_given_a_role()
+    {
+        var site = await SiteAsync();
+        var issuer = $"https://idp-{_s}.example/realms/plant";
+        var command = new ProviderSignInCommand("Plant sign-in", issuer, "sub-" + _s, "Ana " + _s, $"ana-{_s}@example.com");
+
+        await Assert.ThrowsAsync<UnauthorizedException>(() => db.SendAsync(command));
+        var listed = Assert.Single(await QueryAsync<ListUsersQuery, IReadOnlyList<UserDto>>(new ListUsersQuery()), u => u.Issuer == issuer);
+        Assert.Equal(($"ana-{_s}@example.com", true, false), (listed.Username, listed.IsAwaitingRole, listed.IsServiceAccount));
+
+        await db.SendAsync(new AssignRoleCommand(listed.Id, Roles.Operator, site));
+        var signedIn = await db.SendAsync(command);
+        Assert.Equal(listed.Id, signedIn.UserId);
+
+        await using var scope = db.Services.CreateAsyncScope();
+        var access = await scope.ServiceProvider.GetRequiredService<ISecurityReadStore>().GetAccessAsync(issuer, "sub-" + _s, DateTimeOffset.UtcNow, CancellationToken.None);
+        Assert.Equal(($"{issuer}|sub-{_s}", true), (access!.ActorId, access.Can(Permissions.JobExecute, site)));
+
+        // A local account can be a machine's; a provider's can't.
+        CreatedResponse edge = await db.SendAsync(new CreateUserCommand("edge." + _s, "Edge " + _s, null, "Temporary-pass-1", Roles.EdgeNode, site));
+        Assert.True((await QueryAsync<GetUserQuery, UserDto>(new GetUserQuery(edge.Id))).IsServiceAccount);
+        var user = await QueryAsync<GetUserQuery, UserDto>(new GetUserQuery(listed.Id));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new UpdateUserCommand(listed.Id, user.Version, user.DisplayName, user.Email, true, IsServiceAccount: true)));
+    }
+
+    [Fact]
+    public async Task A_role_allowed_at_every_site_is_held_everywhere_and_counted_so()
+    {
+        var site = await SiteAsync();
+        var code = "regional_" + _s;
+        await db.SendAsync(new CreateRoleCommand(code, "Regional " + _s, null, [Permissions.LotHold], AllowsEverySite: true));
+        CreatedResponse user = await db.SendAsync(new CreateUserCommand("reg." + _s, "Reg " + _s, null, "Temporary-pass-1", Roles.Operator, site));
+        CreatedResponse grant = await db.SendAsync(new AssignRoleCommand(user.Id, code, null));
+
+        var role = Assert.Single(await QueryAsync<ListRolesQuery, IReadOnlyList<RoleDto>>(new ListRolesQuery()), r => r.Code == code);
+        Assert.Equal((true, 1, 1), (role.AllowsEverySite, role.Holders, role.EverywhereHolders));
+
+        await using var scope = db.Services.CreateAsyncScope();
+        var access = await scope.ServiceProvider.GetRequiredService<ISecurityReadStore>().GetAccessAsync(Issuers.Local, "reg." + _s, DateTimeOffset.UtcNow, CancellationToken.None);
+        Assert.True(access!.Can(Permissions.LotHold, Guid.CreateVersion7()));
+        var lookup = scope.ServiceProvider.GetRequiredService<ISiteLookup>();
+        Assert.Null(await lookup.SiteOfAsync(SiteOf.RoleAssignment, grant.Id, CancellationToken.None));
+        var siteGrant = Assert.Single((await QueryAsync<GetUserQuery, UserDto>(new GetUserQuery(user.Id))).Roles, r => r.SiteId is not null);
+        Assert.Equal(site, await lookup.SiteOfAsync(SiteOf.RoleAssignment, siteGrant.AssignmentId, CancellationToken.None));
+
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new UpdateRoleCommand(code, role.Version, role.Name, null, true, [Permissions.LotHold], AllowsEverySite: false)));
+    }
+
+    [Fact]
+    public async Task A_reset_link_is_kept_as_a_hash_found_by_address_used_once_and_ends_the_others()
+    {
+        var site = await SiteAsync();
+        var email = $"reset-{_s}@Example.com";
+        CreatedResponse user = await db.SendAsync(new CreateUserCommand("reset." + _s, "Reset " + _s, email, "Temporary-pass-1", Roles.Operator, site));
+
+        await db.SendAsync(new RequestPasswordResetCommand(email.ToUpperInvariant()));
+        var first = Token(email);
+        await using var admin = await db.AdminDataSource.OpenConnectionAsync();
+        await admin.ExecuteAsync("UPDATE sec.password_reset SET requested_at = requested_at - interval '2 minutes' WHERE app_user_id = @Id", new { user.Id });
+        await db.SendAsync(new RequestPasswordResetCommand("reset." + _s));
+        var second = Token(email);
+        Assert.NotEqual(first, second);
+        Assert.Equal(0, await admin.ExecuteScalarAsync<int>("SELECT count(*)::int FROM sec.password_reset WHERE token_hash = @Token", new { Token = second }));
+
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CompletePasswordResetCommand(first, "Brand-new-pass-9")));
+        await db.SendAsync(new CompletePasswordResetCommand(second, "Brand-new-pass-9"));
+        Assert.False((await db.SendAsync(new SignInCommand("reset." + _s, "Brand-new-pass-9"))).MustChangePassword);
+        Assert.Equal((1, 1), await admin.QuerySingleAsync<(int, int)>(
+            "SELECT count(*) FILTER (WHERE used_at IS NOT NULL)::int, count(*) FILTER (WHERE revoked_at IS NOT NULL)::int FROM sec.password_reset WHERE app_user_id = @Id",
+            new { user.Id }));
+    }
+
+    private string Token(string email) =>
+        System.Text.RegularExpressions.Regex.Match(db.Mail.Sent.Last(m => m.Recipient == email).Body, @"token=([A-Za-z0-9_-]+)").Groups[1].Value;
+
+    [Fact]
     public async Task Roles_are_ended_not_deleted_and_the_lookup_finds_sites()
     {
         var site = await SiteAsync();

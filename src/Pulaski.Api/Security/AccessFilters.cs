@@ -18,7 +18,7 @@ internal static class CallerAccess
         }
 
         UserAccess? access = null;
-        var issuer = http.User.FindFirst("iss")?.Value;
+        var issuer = TokenIssuer.IssuerOf(http.User);
         var subject = http.User.FindFirst("sub")?.Value;
         if (http.User.Identity?.IsAuthenticated == true && issuer is not null && subject is not null)
         {
@@ -149,6 +149,19 @@ internal sealed class ConditionalPermissionFilter<TRequest>(Func<TRequest, bool>
     }
 }
 
+internal sealed class EverySiteGrantFilter(Func<EndpointFilterInvocationContext, ValueTask<bool>> everySite) : IEndpointFilter
+{
+    public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        if (await everySite(context) && !(await CallerAccess.RequireAsync(context.HttpContext)).CanEverywhere(Permissions.SecurityGrantEverywhere))
+        {
+            throw new ForbiddenException("Giving or taking away a role at every site needs permission to grant roles everywhere.");
+        }
+
+        return await next(context);
+    }
+}
+
 /// <summary>Lookups many screens need, such as units or the equipment tree (D-039): for whoever may see any screen.</summary>
 internal sealed class AnyViewFilter : IEndpointFilter
 {
@@ -173,6 +186,13 @@ internal static class PermissionEndpointExtensions
     public static RouteHandlerBuilder RequireWhen<TRequest>(
         this RouteHandlerBuilder builder, Func<TRequest, bool> when, string permission, SiteResolver site, string message) =>
         builder.AddEndpointFilter(new ConditionalPermissionFilter<TRequest>(when, permission, site, message));
+
+    /// <summary>
+    /// Giving or taking away a role held at every site (D-092) also needs <c>security.grant_everywhere</c>, held at every site itself, so
+    /// someone who manages one site's people can't reach further. <paramref name="everySite"/> says whether the request is such a grant.
+    /// </summary>
+    public static RouteHandlerBuilder RequireForEverySiteGrant(this RouteHandlerBuilder builder, Func<EndpointFilterInvocationContext, ValueTask<bool>> everySite) =>
+        builder.AddEndpointFilter(new EverySiteGrantFilter(everySite));
 
     /// <summary>A back-dated request (D-057) also needs <c>inventory.backdate</c> at the site <paramref name="site"/> finds.</summary>
     public static RouteHandlerBuilder RequireToBackdate(this RouteHandlerBuilder builder, SiteResolver site) =>

@@ -724,6 +724,23 @@ Users, their passwords while Pulaski signs them in itself, and roles held at sit
 | `last_login_at` | timestamptz | yes | Last successful sign-in. |
 | `created_at` | timestamptz | no | Insert time. |
 | `updated_at` | timestamptz | no | Last change to the user. |
+| `is_service_account` | boolean | no | A machine's local account, such as the edge's (D-091): it keeps its password when `Security:LocalSignIn` is `administrators`. Only for `pulaski-local` users. |
+
+A user from an identity provider is added at their first sign-in with no role (D-091); until an administrator gives them one they can't sign in.
+
+### sec.password_reset — links to reset a forgotten password (D-093) · *In use*
+
+One row per link sent. The token itself is only in the e-mail; ended, never deleted.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `app_user_id` | uuid → app_user | no | Whose password it resets: an active local user with an e-mail address, not a service account. |
+| `token_hash` | text | no | Hex SHA-256 of the token in the link; unique (`password_reset_token_uq`). |
+| `requested_at` | timestamptz | no | When it was asked for; at most one a minute and three an hour per user. |
+| `expires_at` | timestamptz | no | When it stops working (`Security:PasswordReset:LinkMinutes`, 30). |
+| `used_at` | timestamptz | yes | The password was set with it. |
+| `revoked_at` | timestamptz | yes | Ended unused: another link was asked for, or the password was changed or reset otherwise. Not both with `used_at`. |
 
 ### sec.local_credential — a local user's password · *Built (D-037)*
 
@@ -757,6 +774,7 @@ One row per user who signs in with a Pulaski password.
 | `is_active` | boolean | no | False when switched off: it can't be given, and gives its holders nothing. A role someone holds can't be switched off. |
 | `created_at` | timestamptz | no | Insert time. |
 | `updated_at` | timestamptz | no | Last change, also to its permissions (which moves the role's version on). |
+| `allows_every_site` | boolean | no | May also be given at every site (D-092), not only at one; switched off only while nobody holds it everywhere. False for every starting role; the administrator is everywhere regardless. |
 
 ### sec.role_permission — permissions in a role · *Built (D-037)*
 
@@ -778,7 +796,7 @@ A role granted to one user (or, later, to an identity-provider group) at a site.
 | `role_id` | uuid → role | no | The role granted. |
 | `app_user_id` | uuid → app_user | yes | The user, or… |
 | `idp_group` | text | yes | …a group claim value (reserved for identity providers). Exactly one of the two is set. |
-| `scope_equipment_id` | uuid → equipment | yes | The site the role is held at; null for a role held everywhere (the administrator). |
+| `scope_equipment_id` | uuid → equipment | yes | The site the role is held at; null for a role held at every site: the administrator, or a role with `allows_every_site` (D-092), which then allows its own permissions at every site. |
 | `valid_from` | timestamptz | no | Start of the grant. |
 | `valid_to` | timestamptz | yes | When the role was taken away; null while it holds. |
 | `granted_by_user_id` | uuid → app_user | yes | Who granted it; null for the first administrator. |

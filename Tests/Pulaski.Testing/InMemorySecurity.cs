@@ -27,11 +27,11 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
     }
 
     /// <summary>Adds a role as an administrator would make it on the Roles screen.</summary>
-    public void AddRole(string code, string name, IReadOnlyList<string> permissions)
+    public void AddRole(string code, string name, IReadOnlyList<string> permissions, bool allowsEverySite = false)
     {
         lock (_lock)
         {
-            _roles[code] = new(new SecurityRole(Guid.CreateVersion7(), code, name, "", true, permissions), ++_next);
+            _roles[code] = new(new SecurityRole(Guid.CreateVersion7(), code, name, "", true, permissions) { AllowsEverySite = allowsEverySite }, ++_next);
         }
     }
 
@@ -109,7 +109,7 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
             var grants = _assignments.Values.Where(a => a.UserId == user.Id && a.IsActiveAt(now)).Where(a => _roles[a.RoleCode].Value.IsActive)
                 .Select(a => new RoleGrant(a.Id, a.RoleCode, _roles[a.RoleCode].Value.Name, a.SiteId, _roles[a.RoleCode].Value.Permissions)).ToList();
             return Task.FromResult<UserAccess?>(new UserAccess(
-                user.Id, user.Username ?? user.Subject, user.DisplayName, Issuers.ActorId(user.Issuer, user.Subject), user.IsActive, grants,
+                user.Id, user.Username ?? user.Email ?? user.Subject, user.DisplayName, Issuers.ActorId(user.Issuer, user.Subject), user.IsActive, grants,
                 _credentials.GetValueOrDefault(user.Id)?.MustChange == true));
         }
     }
@@ -119,6 +119,18 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
         lock (_lock)
         {
             return Task.FromResult<IReadOnlyList<UserDto>>([.. _users.Values.Select(u => ToDto(u, now)).OrderBy(u => u.Username, StringComparer.Ordinal)]);
+        }
+    }
+
+    /// <summary>How many users there are, for tests.</summary>
+    public int UserCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _users.Count;
+            }
         }
     }
 
@@ -145,6 +157,8 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
                 IsActive = r.Value.IsActive,
                 Permissions = r.Value.IsGlobal ? [.. Permissions.All.Keys] : r.Value.Permissions,
                 Holders = _assignments.Values.Count(a => a.RoleCode == r.Value.Code && a.IsActiveAt(now)),
+                AllowsEverySite = r.Value.IsGlobal || r.Value.AllowsEverySite,
+                EverywhereHolders = _assignments.Values.Count(a => a.RoleCode == r.Value.Code && a.SiteId is null && a.IsActiveAt(now)),
                 Version = r.Version,
             })]);
         }
@@ -191,6 +205,15 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
         return Task.CompletedTask;
     }
 
+    public Task<int> CountEverywhereHoldersAsync(Guid roleId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var code = _roles.Values.Single(r => r.Value.Id == roleId).Value.Code;
+            return Task.FromResult(_assignments.Values.Count(a => a.RoleCode == code && a.SiteId is null && a.IsActiveAt(at)));
+        }
+    }
+
     public Task<int> CountHoldersAsync(Guid roleId, DateTimeOffset at, CancellationToken cancellationToken)
     {
         lock (_lock)
@@ -210,6 +233,86 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
         lock (_lock)
         {
             return Task.FromResult(_users.Values.FirstOrDefault(u => u.Value.Issuer == Issuers.Local && u.Value.Username == username));
+        }
+    }
+
+    private readonly Dictionary<Guid, (PasswordResetLink Link, DateTimeOffset? UsedAt, DateTimeOffset? RevokedAt)> _resets = [];
+
+    /// <summary>The reset links, for tests: each with when it was used or revoked.</summary>
+    public IReadOnlyList<(PasswordResetLink Link, DateTimeOffset? UsedAt, DateTimeOffset? RevokedAt)> PasswordResets
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _resets.Values.OrderBy(r => r.Link.RequestedAt)];
+            }
+        }
+    }
+
+    public Task<IReadOnlyList<Versioned<SecurityUser>>> FindLocalUsersByEmailForUpdateAsync(string email, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<Versioned<SecurityUser>>>([.. _users.Values.Where(u =>
+                u.Value.Issuer == Issuers.Local && u.Value.IsActive && string.Equals(u.Value.Email, email, StringComparison.OrdinalIgnoreCase))]);
+        }
+    }
+
+    public Task InsertPasswordResetAsync(PasswordResetLink link, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _resets[link.Id] = (link, null, null);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<PasswordResetLink?> FindOpenPasswordResetForUpdateAsync(string tokenHash, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_resets.Values.Where(r => r.Link.TokenHash == tokenHash && r.UsedAt is null && r.RevokedAt is null).Select(r => r.Link).FirstOrDefault());
+        }
+    }
+
+    public Task<int> CountPasswordResetsSinceAsync(Guid userId, DateTimeOffset since, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_resets.Values.Count(r => r.Link.UserId == userId && r.Link.RequestedAt >= since));
+        }
+    }
+
+    public Task MarkPasswordResetUsedAsync(Guid id, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _resets[id] = _resets[id] with { UsedAt = at };
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task RevokePasswordResetsAsync(Guid userId, DateTimeOffset at, Guid? exceptId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            foreach (var (id, reset) in _resets.Where(r => r.Value.Link.UserId == userId && r.Value.UsedAt is null && r.Value.RevokedAt is null && r.Key != exceptId).ToList())
+            {
+                _resets[id] = reset with { RevokedAt = at };
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<Versioned<SecurityUser>?> FindUserByIdentityForUpdateAsync(string issuer, string subject, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_users.Values.FirstOrDefault(u => u.Value.Issuer == issuer && u.Value.Subject == subject));
         }
     }
 
@@ -321,6 +424,11 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
     {
         lock (_lock)
         {
+            if (kind == SiteOf.RoleAssignment)
+            {
+                return Task.FromResult(_assignments.GetValueOrDefault(id)?.SiteId);
+            }
+
             return Task.FromResult(_siteOf.TryGetValue((kind, id), out var site) ? site : (Guid?)null);
         }
     }
@@ -331,7 +439,8 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
         return new UserDto
         {
             Id = user.Value.Id,
-            Username = user.Value.Username ?? user.Value.Subject,
+            Username = user.Value.Username ?? user.Value.Email ?? user.Value.Subject,
+            IsServiceAccount = user.Value.IsServiceAccount,
             DisplayName = user.Value.DisplayName,
             Email = user.Value.Email,
             IsActive = user.Value.IsActive,
@@ -358,4 +467,24 @@ public sealed class PlainPasswordHasher : IPasswordHasher
     public string Hash(string password) => "plain$" + password;
 
     public bool Verify(string password, string hash) => hash == "plain$" + password;
+}
+
+/// <summary>Password reset settings as a test sets them (D-093).</summary>
+public sealed class FakePasswordResetSettings : IPasswordResetSettings
+{
+    public bool Enabled { get; set; } = true;
+
+    public TimeSpan LinkLifetime { get; set; } = TimeSpan.FromMinutes(30);
+
+    public string UiBaseUrl { get; set; } = "https://mes.example";
+
+    public bool AdministratorsOnly { get; set; }
+}
+
+/// <summary>The e-mails a test's commands would send.</summary>
+public sealed class FakeMailOutbox : IMailOutbox
+{
+    public List<(string Recipient, string Subject, string Body)> Sent { get; } = [];
+
+    public void Enqueue(string recipient, string subject, string body) => Sent.Add((recipient, subject, body));
 }

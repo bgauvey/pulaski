@@ -17,11 +17,10 @@
             }
             @if (CanCapabilities)
             {
-                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(_busy || !Material.IsActive)"
-                        title="@(Material.IsActive ? "Add a line that can run " + Material.Code : Material.Code + " is inactive")"
-                        @onclick="StartAdd">
+                <ActionButton Class="btn btn-sm btn-outline-secondary" Busy="_busy" Title="@($"Add a line that can run {Material.Code}")"
+                              Reason="@(Material.IsActive ? null : $"{Material.Code} is switched off; switch it on to add a line.")" OnClick="StartAdd">
                     Add line
-                </button>
+                </ActionButton>
             }
         </div>
     </div>

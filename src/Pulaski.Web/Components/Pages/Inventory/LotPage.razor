@@ -24,36 +24,35 @@
     <Actions>
         @if (_lot?.Lot is { } lot)
         {
-            var onHand = lot.Status is "available" or "on_hold" or "quarantine";
             var expired = lot.ExpiresAt is { } ends && ends <= Time.GetUtcNow();
-            var usable = lot.Status == "available" && lot.Quantity > 0 && !expired;
+            string? Why(LotAction action) => LotActionAvailability.Why(action, lot.Status, lot.Quantity, expired);
             <div class="inv-actions">
                 @if (May(LotAction.Consume))
                 {
-                    <button type="button" class="btn btn-primary" disabled="@(!usable)" @onclick="() => _action = LotAction.Consume">Consume</button>
+                    <ActionButton Class="btn btn-primary" Reason="@Why(LotAction.Consume)" OnClick="() => _action = LotAction.Consume">Consume</ActionButton>
                 }
                 @if (May(LotAction.Move))
                 {
-                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Move">Move</button>
+                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Move)" OnClick="() => _action = LotAction.Move">Move</ActionButton>
                 }
                 @if (May(LotAction.Load) && !lot.IsBulk)
                 {
-                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Load">Load</button>
+                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Load)" OnClick="() => _action = LotAction.Load">Load</ActionButton>
                 }
                 @if (!lot.IsBulk)
                 {
                     @if (May(LotAction.Split))
                     {
-                        <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || lot.Quantity == 0)" @onclick="() => _action = LotAction.Split">Split</button>
+                        <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Split)" OnClick="() => _action = LotAction.Split">Split</ActionButton>
                     }
                     @if (May(LotAction.Merge))
                     {
-                        <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || expired)" @onclick="() => _action = LotAction.Merge">Merge…</button>
+                        <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Merge)" OnClick="() => _action = LotAction.Merge">Merge…</ActionButton>
                     }
                 }
                 @if (May(LotAction.Ship))
                 {
-                    <button type="button" class="btn btn-outline-secondary" disabled="@(!usable)" @onclick="() => _action = LotAction.Ship">Ship</button>
+                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Ship)" OnClick="() => _action = LotAction.Ship">Ship</ActionButton>
                 }
                 @if (May(LotAction.WriteUp))
                 {
@@ -61,7 +60,7 @@
                 }
                 @if (May(LotAction.WriteOff))
                 {
-                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand || lot.Quantity == 0)" @onclick="() => _action = LotAction.WriteOff">Write off</button>
+                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.WriteOff)" OnClick="() => _action = LotAction.WriteOff">Write off</ActionButton>
                 }
                 @if (lot.Status is "on_hold" or "quarantine")
                 {
@@ -72,7 +71,7 @@
                 }
                 @if (May(LotAction.Hold))
                 {
-                    <button type="button" class="btn btn-outline-secondary" disabled="@(!onHand)" @onclick="() => _action = LotAction.Hold">@(lot.Status is "on_hold" or "quarantine" ? "Change hold…" : "Hold…")</button>
+                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Hold)" OnClick="() => _action = LotAction.Hold">@(lot.Status is "on_hold" or "quarantine" ? "Change hold…" : "Hold…")</ActionButton>
                 }
                 @if (May(LotAction.Correct))
                 {

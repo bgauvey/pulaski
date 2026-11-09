@@ -60,6 +60,8 @@ GRANT SELECT, INSERT, UPDATE ON ts.oee_rollup_site, ts.oee_rollup_day, ts.oee_ro
 -- code's permission catalog into sec.permission at start.
 GRANT USAGE ON SCHEMA sec TO pulaski_app;
 GRANT SELECT, INSERT, UPDATE ON sec.app_user, sec.role_assignment, sec.local_credential TO pulaski_app;
+-- Password reset links (D-093): ended, never deleted.
+GRANT SELECT, INSERT, UPDATE ON sec.password_reset TO pulaski_app;
 GRANT SELECT, INSERT, UPDATE ON sec.role, sec.permission, sec.role_permission TO pulaski_app;
 
 -- Shop-floor terminals and badges (D-049): enrolled, switched off and revoked, never deleted.

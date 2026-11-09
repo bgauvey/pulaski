@@ -63,6 +63,15 @@ else
                     <label class="form-label small" for="role-description">What it's for (optional)</label>
                     <input id="role-description" class="form-control" maxlength="500" @bind="edit.Description" />
                 </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="role-every-site" @bind="edit.AllowsEverySite" />
+                        <label class="form-check-label small" for="role-every-site">
+                            May be held at every site: then it can also be given for all sites at once, by someone who may grant roles everywhere.
+                            Leave it off for roles that belong to one plant.
+                        </label>
+                    </div>
+                </div>
                 @if (!edit.IsNew)
                 {
                     <div class="col-12">
@@ -121,7 +130,7 @@ else
                     <tr @key="r.Id" class="@(r.IsActive ? "" : "text-muted")">
                         <td>
                             <div class="fw-semibold">@r.Name</div>
-                            <div class="small text-muted">@r.Code@(r.IsGlobal ? " · everywhere" : " · held at a site")</div>
+                            <div class="small text-muted">@r.Code@(r.IsGlobal ? " · everywhere" : r.AllowsEverySite ? $" · at a site or every site{(r.EverywhereHolders > 0 ? $" ({r.EverywhereHolders} everywhere)" : "")}" : " · held at a site")</div>
                         </td>
                         <td class="small">@r.Description</td>
                         <td class="inv-num">@(r.IsLocked ? "All" : r.Permissions.Count.ToString(System.Globalization.CultureInfo.InvariantCulture))</td>
@@ -190,6 +199,7 @@ else
             Name = role.Name,
             Description = role.Description,
             IsActive = role.IsActive,
+            AllowsEverySite = role.AllowsEverySite,
             Version = role.Version,
             Permissions = [.. role.Permissions],
         };
@@ -217,7 +227,7 @@ else
         {
             if (edit.IsNew)
             {
-                await Api.CreateRoleAsync(new CreateRoleRequest { Code = edit.Code, Name = edit.Name, Description = edit.Description, Permissions = [.. edit.Permissions] });
+                await Api.CreateRoleAsync(new CreateRoleRequest { Code = edit.Code, Name = edit.Name, Description = edit.Description, Permissions = [.. edit.Permissions], AllowsEverySite = edit.AllowsEverySite });
                 _message = $"Created {edit.Name.Trim()}. Give it to users on the Users tab.";
             }
             else
@@ -229,6 +239,7 @@ else
                     Description = edit.Description,
                     IsActive = edit.IsActive,
                     Permissions = [.. edit.Permissions],
+                    AllowsEverySite = edit.AllowsEverySite,
                 });
                 _message = $"Saved {edit.Name.Trim()}.";
             }
@@ -263,6 +274,8 @@ else
         public string? Description { get; set; }
 
         public bool IsActive { get; set; }
+
+        public bool AllowsEverySite { get; set; }
 
         public long Version { get; init; }
 

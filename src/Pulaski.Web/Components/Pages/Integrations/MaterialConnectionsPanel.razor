@@ -238,8 +238,8 @@
                                 @if (CanRun && c.IsActive)
                                 {
                                     <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => RunAsync(c, dryRun: true)">Check</button>
-                                    <button type="button" class="btn btn-sm btn-primary ms-1" disabled="@(_busy || !ReadyToImport(c))" @onclick="() => RunAsync(c, dryRun: false)"
-                                            title="Check first; import when the check finds no errors">Import</button>
+                                    <ActionButton Class="btn btn-sm btn-primary ms-1" Busy="_busy" OnClick="() => RunAsync(c, dryRun: false)"
+                                                  Reason="@(ReadyToImport(c) ? null : "Check first: Import is ready once a check finds no errors and something to change.")">Import</ActionButton>
                                 }
                                 <button type="button" class="btn btn-sm btn-link" @onclick="() => ToggleHistoryAsync(c)">@(_historyFor == c.Id ? "Hide history" : "History")</button>
                                 @if (CanConfigure)

@@ -111,8 +111,8 @@
                                         <span class="chip @(candidate.FitsWindow ? "" : "chip-warning")">@(candidate.FitsWindow ? "Fits the window" : "Won't fit")</span>
                                         @if (!Controller.ReadOnly)
                                         {
-                                            <button type="button" class="btn btn-outline-primary btn-sm ms-auto" disabled="@(Busy(item) || !item.CanChangeLine)"
-                                                    @onclick="() => Controller.AssignJobAsync(item, candidate.LineId, null)">Run on @candidate.LineCode</button>
+                                            <ActionButton Class="btn btn-outline-primary btn-sm ms-auto" Busy="Busy(item)" Reason="@item.WhyNoLineChange"
+                                                          OnClick="() => Controller.AssignJobAsync(item, candidate.LineId, null)">Run on @candidate.LineCode</ActionButton>
                                         }
                                     </li>
                                 }
@@ -149,9 +149,9 @@
                             </div>
                         </div>
                         <div class="d-flex flex-wrap gap-2 mt-2">
-                            <button type="button" class="btn btn-primary btn-sm" disabled="@(Busy(item) || !item.CanChangeLine)" @onclick="() => MoveAsync(item)">Move</button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@(Busy(item) || !item.CanChangeLine)"
-                                    @onclick="() => Controller.AssignJobAsync(item, group.Id, null)">Send back to @group.Code</button>
+                            <ActionButton Class="btn btn-primary btn-sm" Busy="Busy(item)" Reason="@item.WhyNoLineChange" OnClick="() => MoveAsync(item)">Move</ActionButton>
+                            <ActionButton Class="btn btn-outline-secondary btn-sm" Busy="Busy(item)" Reason="@item.WhyNoLineChange"
+                                          OnClick="() => Controller.AssignJobAsync(item, group.Id, null)">Send back to @group.Code</ActionButton>
                         </div>
                     </section>
                 }

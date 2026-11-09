@@ -5,7 +5,7 @@
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
 
-@* Local sign-in (D-037). A plain form: signing in sets the session cookie, which needs a real request. *@
+@* Local sign-in (D-037) and identity providers (D-091). A plain form: signing in sets the session cookie, which needs a real request. *@
 <PageTitle>Sign in · Pulaski</PageTitle>
 
 <h1 class="h4 mb-3">Sign in</h1>
@@ -18,6 +18,19 @@
 @if (_error is not null)
 {
     <div class="alert alert-danger small" role="alert">@_error</div>
+}
+
+@if (_options.Providers.Count > 0)
+{
+    <div class="d-grid gap-2 mb-3">
+        @foreach (var provider in _options.Providers)
+        {
+            <a class="btn btn-outline-primary" href="@ProviderHref(provider)">Sign in with @provider.DisplayName</a>
+        }
+    </div>
+    <p class="small text-muted text-center mb-3">
+        @(_options.LocalSignIn == "administrators" ? "Administrators and service accounts:" : "Or with a Pulaski password:")
+    </p>
 }
 
 <EditForm Model="Input" FormName="sign-in" OnSubmit="SignInAsync" method="post">
@@ -33,7 +46,14 @@
     <button type="submit" class="btn btn-primary w-100">Sign in</button>
 </EditForm>
 
-<p class="small text-muted mt-3 mb-0">Forgotten your password? Ask an administrator to reset it.</p>
+@if (_options.PasswordResetByEmail)
+{
+    <p class="small mt-3 mb-0"><a href="account/forgot">Forgotten your password?</a></p>
+}
+else
+{
+    <p class="small text-muted mt-3 mb-0">Forgotten your password? Ask an administrator to reset it.</p>
+}
 
 @code {
     [CascadingParameter]
@@ -49,6 +69,29 @@
     private bool Expired { get; set; }
 
     private string? _error;
+    private SignInOptionsDto _options = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // A provider sign-in that didn't work leaves why in a cookie, said once.
+        if (HttpContext.Request.Cookies[AccountEndpoints.ProblemCookie] is { Length: > 0 } problem)
+        {
+            _error = problem;
+            HttpContext.Response.Cookies.Delete(AccountEndpoints.ProblemCookie, new CookieOptions { Path = AccountSession.LoginPath });
+        }
+
+        try
+        {
+            _options = await Api.GetSignInOptionsAsync();
+        }
+        catch (ApiException)
+        {
+            // Without the options the password form still works.
+        }
+    }
+
+    private string ProviderHref(SignInProviderDto provider) =>
+        $"account/oidc/{Uri.EscapeDataString(provider.Name)}?returnUrl={Uri.EscapeDataString(AccountSession.SafeReturnUrl(ReturnUrl))}";
 
     private async Task SignInAsync()
     {

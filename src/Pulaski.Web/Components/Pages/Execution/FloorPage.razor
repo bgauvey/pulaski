@@ -209,18 +209,18 @@ else
                                                     <option value="@l.LineId">@l.LineCode</option>
                                                 }
                                             </select>
-                                            <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || !job.IsReady || _groupLine == Guid.Empty)"
-                                                    @onclick="() => StartAsync(job, _groupLine)">Start</button>
+                                            <ActionButton Class="btn btn-sm btn-primary" Busy="_busy"
+                                                          Reason="@(!job.IsReady ? job.Waiting ?? "The job isn't ready to start yet." : _groupLine == Guid.Empty ? "Choose the line it runs on first." : null)"
+                                                          OnClick="() => StartAsync(job, _groupLine)">Start</ActionButton>
                                         </div>
                                     }
                                     else
                                     {
-                                        <button type="button" class="btn btn-sm @(FloorView.CanStart(job, row) ? "btn-primary" : "btn-outline-secondary")"
-                                                disabled="@(_busy || !FloorView.CanStart(job, row))"
-                                                title="@(row.Running is not null ? "Pause or complete " + row.Running.JobNumber + " first" : job.Waiting)"
-                                                @onclick="() => StartAsync(job, null)">
+                                        <ActionButton Class="@($"btn btn-sm {(FloorView.CanStart(job, row) ? "btn-primary" : "btn-outline-secondary")}")" Busy="_busy"
+                                                      Reason="@(FloorView.CanStart(job, row) ? null : row.Running is not null ? $"Pause or complete {row.Running.JobNumber} first." : job.Waiting ?? "The job isn't ready to start yet.")"
+                                                      OnClick="() => StartAsync(job, null)">
                                             @(job.Status == "paused" ? "Resume" : "Start")
-                                        </button>
+                                        </ActionButton>
                                     }
                                 </div>
                             </li>

@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-05 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-08 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -1816,7 +1816,8 @@ Everyone signs in to Pulaski. Your **roles** decide what you **see** and what yo
 ### Sign in
 
 1. Open Pulaski. It shows **Sign in**.
-2. Type your **User name** and **Password** and click **Sign in**.
+2. If your organisation set up its own sign-in, click **Sign in with …** and sign in there; Pulaski opens when you come back. Otherwise type your **User name** and **Password** and click **Sign in**.
+   The first time you use your organisation's sign-in, Pulaski says you have no role yet: an administrator gives you one, and then you sign in again.
 3. The first time, or after an administrator reset your password, Pulaski asks you to **Change your password**: type the temporary password, then your new one twice, and click **Change password**.
 4. To sign out, click the door at the top right.
 
@@ -1829,6 +1830,21 @@ Your session lasts up to 12 hours. When it ends, or an administrator switches yo
 3. Click **Change password**.
 
 A password needs at least 10 characters, with two of: lower case, upper case, digits, symbols, and must not contain your user name. Five wrong passwords in a row lock you out for 15 minutes; an administrator can unlock you sooner by resetting your password.
+
+### Forgotten your password?
+
+Where whoever runs Pulaski has switched it on, the sign-in page shows **Forgotten your password?**:
+
+1. Click **Forgotten your password?**, type your **User name or e-mail**, and click **Send the link**. Pulaski says a link is on its way if that matches an account; it says the same either way, so nobody can find out who has an account.
+2. Open the e-mail and its link within 30 minutes (or the time your organisation set). The link works once.
+3. Type the **New password** twice and click **Change password**, then sign in with it. Pulaski e-mails you that the password was changed.
+
+**In detail**
+
+- The link goes to the e-mail address on your user in Pulaski. Typing an address finds you only if it is yours alone; a user name always works.
+- Asking again sends a new link and the old one stops working. Pulaski sends at most one link a minute and three an hour per user; asking more often sends nothing more.
+- Resetting this way also unlocks you. A link stops working when an administrator resets your password, when you change it, or when you are switched off.
+- Machines' accounts (service accounts) never get links. When only administrators use Pulaski passwords, only administrators can reset theirs this way. Without the link on the sign-in page, ask an administrator.
 
 ### What each role can change
 
@@ -1848,7 +1864,7 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 
 Equipment (with machine profiles and edge nodes), units and retrying or skipping deliveries to the ERP (**Integrations**) belong to the Administrator. Someone with two roles can do what either allows.
 
-When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator. A switched-off button is greyed out the same way everywhere; point at it to see why, when it says. Permissions held at one site count only there: on the **Schedule**, at a site where you can't plan, jobs don't drag and a job's panel shows a lock note instead of *Move*, *Pins* and *Cancel*; where you can't manage work orders, cards don't drag between Kanban columns and an order's panel has no status buttons.
+When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator. A switched-off button is greyed out the same way everywhere. When it is off because of the state of something, such as a lot on hold, a shift that hasn't ended or a file not checked yet, it says why: point at it, or move to it with the Tab key, and a small note appears; screen readers read the note with the button. A button that is off only while Pulaski saves says nothing and comes back by itself. Permissions held at one site count only there: on the **Schedule**, at a site where you can't plan, jobs don't drag and a job's panel shows a lock note instead of *Move*, *Pins* and *Cancel*; where you can't manage work orders, cards don't drag between Kanban columns and an order's panel has no status buttons.
 
 ### What each role can see
 
@@ -1868,6 +1884,14 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 - **No screens at all.** Someone whose roles let them see nothing lands on **Nothing to see here yet**, with a button to sign out. Ask an administrator for a role.
 - **Sites.** A role held at one site shows that site's data only: other sites' work orders, lots, lines and schedules aren't listed.
 
+### Let in someone from your organisation's sign-in (administrators)
+
+1. Ask them to sign in once with **Sign in with …**. Pulaski adds them and tells them they have no role yet.
+2. On **Configure → Users**, they show **Awaiting a role**. Click **Change**, choose a role and site under **Add a role…**, and click **Add**.
+3. Ask them to sign in again.
+
+Their name and e-mail come from your organisation's sign-in and are kept up to date at every sign-in; they have no Pulaski password to reset. Setting up the sign-in is a job for whoever runs Pulaski: see `deploy/identity/README.md`.
+
 ### Add a user (administrators)
 
 1. Open **Configure → Users** (the **Users** tab) and click **New user**.
@@ -1878,8 +1902,8 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 ### Change a user's roles, details or password (administrators)
 
 1. On **Configure → Users**, **Users** tab, click **Change** on the user's row.
-2. **Details:** change the name or e-mail, or untick **Can sign in** to switch them off; click **Save details**.
-3. **Roles:** choose a role (and site) under **Add a role…** and click **Add**; click **Take away** to end one.
+2. **Details:** change the name or e-mail, or untick **Can sign in** to switch them off; for a Pulaski account, tick **Service account** if a machine (such as the edge) uses it. Click **Save details**.
+3. **Roles:** choose a role (and site) under **Add a role…** and click **Add**; click **Take away** to end one. For a role allowed at every site, the site list also offers **Every site** (if you may grant roles everywhere).
 4. **Password:** type a **Temporary password** and click **Reset password**. They must change it when they next sign in; this also unlocks them.
 
 ### Add or change a role (administrators)
@@ -1889,6 +1913,8 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 3. For a new role, type a **Code** (lower-case letters, digits and `_`, such as `line_lead`; it can't change later) and a **Name**. Add what it's for if you like.
 4. Under **May change**, tick each permission the role should have. They are grouped by area: Planning, Floor, Inventory, Configuration, Administration.
 5. Click **Create role** or **Save role**. Then give the role to people on the **Users** tab.
+
+Tick **May be held at every site** for a role that some people need at all sites at once, such as a regional quality lead. Leave it off for roles that belong to one plant. It can't be switched off while someone holds the role at every site.
 
 To stop using a role, untick **Active** and save. A role someone holds can't be switched off: give them another role and take this one away first. **Administrator** has every permission and can't be changed.
 
@@ -1905,11 +1931,14 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 - **Changes to a role apply at once** to everyone who holds it, on their next click.
 - **Every user needs a role.** A new user comes with one, and a user's last role can't be taken away: add another first, or switch them off.
 - **Someone stays administrator.** The last active administrator can't lose the role or be switched off, and nobody can switch themselves off.
-- **Roles are held at a site.** A Supervisor at PLT1 can start jobs at PLT1 only. Something that belongs to no site, such as a reason for every site or an enterprise-wide process, needs the permission at any site.
+- **Roles are held at a site.** A Supervisor at PLT1 can start jobs at PLT1 only.
+- **Or at every site.** A role allowed it can be given for every site at once: it then allows its own permissions at every site, now and any site added later, and nothing more (only Administrator holds every permission). Such grants show as *Role · every site*, highlighted on the Users tab. Giving or taking one away needs the **Give or take away a role held at every site** permission, held at every site itself, so someone who manages one site's users can't reach the others. Only Administrator holds it to start with. Something that belongs to no site, such as a reason for every site or an enterprise-wide process, needs the permission at any site.
 - **Partial batches:** whoever reported a partial batch can't approve or reject it; the job page says *You reported it: someone else decides*.
 - **History** names who did what by user name, such as *oli.operator* on a lot's history.
 - **Changes apply at once.** Switching someone off or taking a role away takes effect on their next click, without waiting for their session to end.
 - **Ended, not deleted.** Taking a role away from someone ends it, and a role or permission is switched off rather than deleted; Pulaski keeps who held which role when, and who changed a role.
+- **Your organisation's sign-in.** People who use it are known by who it says they are, not by name or e-mail, so a renamed person keeps their history. Switching them off in Pulaski keeps them out even when the sign-in lets them in. Roles always come from Pulaski.
+- **Passwords only for administrators.** Whoever runs Pulaski can set it so that, besides your organisation's sign-in, only administrators and service accounts use a Pulaski password. Anyone else trying one is told to use the organisation's sign-in. An administrator's password always works, so you can get in if the organisation's sign-in is down.
 - **The first administrator** is created when Pulaski starts with no users, from the `Security:BootstrapAdmin` settings, with a temporary password to change at the first sign-in.
 - **For integrators:** the API takes a bearer token from `POST /api/auth/sign-in`; every other call needs one, and a call without the permission is refused with 403 and the permission in words.
 
@@ -2562,9 +2591,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **The Overview** has no quality figures or SPC alerts yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
 - **Quality:** there are no SPC charts, control limits or alerts yet, and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
-- **Signing in through your company's identity provider** (Okta, Entra ID, AD FS, Keycloak) isn't built yet: users have Pulaski passwords, and an administrator resets forgotten ones (Pulaski sends no e-mail).
-- **A switched-off button's reason** shows when you point at it with the mouse, but not when you move to it with the keyboard (switched-off buttons are skipped); screen readers announce it as unavailable without the reason. Screens that are view-only for you say so in a note at the top instead.
-- **Only Administrator is held everywhere;** every role you create is held at a site.
+- **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.
+- **Some switched-off controls give no reason yet:** a form's Save waiting on a field next to it, an Export with nothing to export, and the locked boxes on the Permissions tab (point at those with the mouse to see why).
 
 ---
 
