@@ -106,4 +106,12 @@ public class RoleHandlerTests
         await Set().HandleAsync(new SetRolePermissionCommand(Roles.Operator, Permissions.LotShip, true), CancellationToken.None);
         Assert.True(await Can(Security, user));
     }
+
+    /// <summary>The role handlers for another test class's fixture.</summary>
+    internal sealed class Handlers(HandlerFixture f, IRequestContext request)
+    {
+        public CreateRoleHandler Create { get; } = new(f.Stores.UnitOfWork, f.Stores.Security, request, f.Stores.Events, f.Events, f.Ids, f.Time);
+
+        public UpdateRoleHandler Update { get; } = new(f.Stores.UnitOfWork, f.Stores.Security, request, f.Stores.Events, f.Events, f.Time);
+    }
 }

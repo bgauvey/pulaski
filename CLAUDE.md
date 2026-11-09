@@ -123,7 +123,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   with areas; mirrored in `Contracts.Security.PermissionCodes`; synced into `sec.permission` at API start). Roles are data
   (`sec.role`, `sec.role_permission.is_granted`), maintained on the Roles/Permissions tabs of Configure → Users; only `administrator` is in
   code (all permissions, everywhere, unchangeable); `Roles.Defaults` seeds a new database. Every other role is held at a
-  site; every changing endpoint carries `.RequirePermission(permission, Site.…)`.
+  site, or at every site when `allows_every_site` (D-092: its own permissions everywhere, `RoleGrant.IsEverywhere`; granting needs
+  `security.grant_everywhere` everywhere, `RequireForEverySiteGrant`); every changing endpoint carries `.RequirePermission(permission, Site.…)`.
 - Viewing (D-039, proposed): the view permissions (`*.view`) decide screens and data; a change brings its views
   (`Permissions.Implied`). Reads use `.RequireAny(site, views…)`, `.RequireAnyAtSite` (no site = every site) or
   `.RequireAnyView()` for lookups; lists filter with `.At(Visible.SitesAsync(...))`. Web pages carry

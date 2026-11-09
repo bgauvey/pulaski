@@ -24,6 +24,9 @@ public sealed class CurrentUser
         Me?.Permissions.FirstOrDefault(p => p.Code == permission) is { } grant
         && (grant.SiteIds is null || siteId is null || grant.SiteIds.Contains(siteId.Value));
 
+    /// <summary>Whether the user holds <paramref name="permission"/> at every site (D-092): the administrator, or a role held everywhere.</summary>
+    public bool CanEverywhere(string permission) => Me?.Permissions.FirstOrDefault(p => p.Code == permission) is { SiteIds: null };
+
     /// <summary>Whether the user holds any of <paramref name="permissions"/>, at <paramref name="siteId"/> or (without one) at any site.</summary>
     public bool CanAny(IEnumerable<string> permissions, Guid? siteId = null) => permissions.Any(p => Can(p, siteId));
 

@@ -65,6 +65,9 @@ public static class Permissions
     public const string LotAttributes = "lot_attributes.manage";
     public const string Specs = "specs.manage";
     public const string Security = "security.manage";
+
+    /// <summary>Give or take away a role held at every site (D-092); alone it does nothing, beside <see cref="Security"/>.</summary>
+    public const string SecurityGrantEverywhere = "security.grant_everywhere";
     public const string Integrations = "integrations.manage";
 
     // Machine data (D-050): what a Pulaski Edge node's service user holds.
@@ -128,6 +131,7 @@ public static class Permissions
         new(LotAttributes, "Configuration", "Maintain lot attribute definitions"),
         new(Specs, "Configuration", "Maintain quality characteristics and material specifications"),
         new(Security, "Administration", "Maintain users, roles and what each role may do"),
+        new(SecurityGrantEverywhere, "Administration", "Give or take away a role held at every site, rather than at one"),
         new(Integrations, "Administration", "Retry or skip failed deliveries to the ERP"),
         new(EdgeIngest, "Machine data", "Send machine data as a Pulaski Edge node: read its configuration and forward what it collects"),
     ];
@@ -275,14 +279,21 @@ public static class Roles
                 : null;
 }
 
-/// <summary>One of a user's roles, at a site or everywhere (null site, the administrator), with what the role allows now.</summary>
+/// <summary>
+/// One of a user's roles, at a site or at every site (null site: the administrator, or a role allowed everywhere, D-092), with what the role
+/// allows now. Held everywhere, a role allows its own permissions at every site; only the administrator allows every permission.
+/// </summary>
 public sealed record RoleGrant(Guid AssignmentId, string RoleCode, string RoleName, Guid? SiteId, IReadOnlyCollection<string> Permissions)
 {
-    public bool IsGlobal => Roles.IsGlobal(RoleCode);
+    /// <summary>The administrator: every permission, everywhere.</summary>
+    public bool IsAdministrator => Roles.IsGlobal(RoleCode);
+
+    /// <summary>Held at every site rather than at one (D-092).</summary>
+    public bool IsEverywhere => SiteId is null;
 
     /// <summary>The role holds the permission, or one that brings it with it (a change brings its views, D-039).</summary>
     public bool Allows(string permission) =>
-        IsGlobal || Permissions.Contains(permission)
+        IsAdministrator || Permissions.Contains(permission)
         || Permissions.Any(p => Security.Permissions.Implied.TryGetValue(p, out var views) && views.Contains(permission));
 }
 
@@ -295,7 +306,7 @@ public sealed record UserAccess(Guid UserId, string Username, string DisplayName
     /// <summary>A user without a role can't use Pulaski: every user must belong to one.</summary>
     public bool HasAnyRole => Grants.Count > 0;
 
-    public bool IsAdministrator => Grants.Any(g => g.IsGlobal);
+    public bool IsAdministrator => Grants.Any(g => g.IsAdministrator);
 
     /// <summary>Whether the user holds <paramref name="permission"/> at <paramref name="siteId"/>; for something that belongs to no site (null), at any site.</summary>
     public bool Can(string permission, Guid? siteId)
@@ -305,8 +316,11 @@ public sealed record UserAccess(Guid UserId, string Username, string DisplayName
             return false;
         }
 
-        return Grants.Any(g => g.Allows(permission) && (g.IsGlobal || siteId is null || g.SiteId == siteId));
+        return Grants.Any(g => g.Allows(permission) && (g.IsEverywhere || siteId is null || g.SiteId == siteId));
     }
+
+    /// <summary>Whether the user holds <paramref name="permission"/> at every site: through the administrator or a role held everywhere (D-092).</summary>
+    public bool CanEverywhere(string permission) => IsActive && Grants.Any(g => g.IsEverywhere && g.Allows(permission));
 
     /// <summary>Whether the user holds any of <paramref name="permissions"/> at <paramref name="siteId"/> (without a site, at any site).</summary>
     public bool CanAny(IEnumerable<string> permissions, Guid? siteId) => permissions.Any(p => Can(p, siteId));
@@ -317,18 +331,20 @@ public sealed record UserAccess(Guid UserId, string Username, string DisplayName
     /// <summary>The sites where the user holds any of <paramref name="permissions"/>, or null for everywhere (D-039).</summary>
     public IReadOnlyList<Guid>? SitesForAny(IEnumerable<string> permissions)
     {
-        if (IsAdministrator)
+        var wanted = permissions.ToList();
+        if (IsAdministrator || Grants.Any(g => g.IsEverywhere && wanted.Any(g.Allows)))
         {
             return null;
         }
 
-        var wanted = permissions.ToList();
         return [.. Grants.Where(g => g.SiteId is not null && wanted.Any(g.Allows)).Select(g => g.SiteId!.Value).Distinct()];
     }
 
     /// <summary>The sites where the user holds the permission, or null for everywhere.</summary>
     public IReadOnlyList<Guid>? SitesFor(string permission) =>
-        IsAdministrator ? null : [.. Grants.Where(g => g.Allows(permission) && g.SiteId is not null).Select(g => g.SiteId!.Value).Distinct()];
+        IsAdministrator || Grants.Any(g => g.IsEverywhere && g.Allows(permission))
+            ? null
+            : [.. Grants.Where(g => g.Allows(permission) && g.SiteId is not null).Select(g => g.SiteId!.Value).Distinct()];
 }
 
 /// <summary>The rules for a local password (D-037): at least 10 characters, not just one kind.</summary>

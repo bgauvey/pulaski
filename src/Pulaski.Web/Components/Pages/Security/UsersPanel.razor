@@ -64,8 +64,12 @@
             {
                 <div class="col-sm-3">
                     <label class="form-label small" for="new-site">At site</label>
-                    <select id="new-site" class="form-select" @bind="_new.SiteId">
+                    <select id="new-site" class="form-select" @bind="_new.SiteChoice">
                         <option value="">Choose a site…</option>
+                        @if (CanGiveEverywhere(_new.RoleCode))
+                        {
+                            <option value="@EverySite">Every site</option>
+                        }
                         @foreach (var s in Sites.AllSites)
                         {
                             <option value="@s.Id">@s.Code · @s.Name</option>
@@ -117,7 +121,9 @@ else
                         <td>
                             @foreach (var r in u.Roles)
                             {
-                                <span class="chip me-1">@(r.SiteCode is null ? r.RoleName : $"{r.RoleName} · {r.SiteCode}")</span>
+                                <span class="chip me-1@(r.SiteId is null && r.RoleCode != "administrator" ? " chip-warn" : "")" title="@(r.SiteId is null ? "Held at every site" : $"Held at {r.SiteCode}")">
+                                    @(r.SiteCode is null ? $"{r.RoleName} · every site" : $"{r.RoleName} · {r.SiteCode}")
+                                </span>
                             }
                         </td>
                         <td class="small text-break">
@@ -198,7 +204,7 @@ else
                                             @foreach (var r in u.Roles)
                                             {
                                                 <li class="d-flex align-items-center gap-2 mb-1" @key="r.AssignmentId">
-                                                    <span>@r.RoleName@(r.SiteCode is null ? " (everywhere)" : $" at {r.SiteCode}")</span>
+                                                    <span>@r.RoleName@(r.SiteCode is null ? " at every site" : $" at {r.SiteCode}")</span>
                                                     <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-auto" disabled="@(_saving || u.Roles.Count == 1)"
                                                             title="@(u.Roles.Count == 1 ? "Every user needs a role: add another first" : "Take this role away")"
                                                             @onclick="() => EndRoleAsync(u, r)">Take away</button>
@@ -215,8 +221,12 @@ else
                                             </select>
                                             @if (!IsGlobal(edit.RoleCode))
                                             {
-                                                <select class="form-select form-select-sm w-auto" aria-label="At site" @bind="edit.SiteId">
+                                                <select class="form-select form-select-sm w-auto" aria-label="At site" @bind="edit.SiteChoice">
                                                     <option value="">At site…</option>
+                                                    @if (CanGiveEverywhere(edit.RoleCode))
+                                                    {
+                                                        <option value="@EverySite">Every site</option>
+                                                    }
                                                     @foreach (var s in Sites.AllSites)
                                                     {
                                                         <option value="@s.Id">@s.Code</option>
@@ -224,7 +234,7 @@ else
                                                 </select>
                                             }
                                             <button type="submit" class="btn btn-sm btn-outline-primary"
-                                                    disabled="@(_saving || edit.RoleCode == "" || (!IsGlobal(edit.RoleCode) && edit.SiteId is null))">Add</button>
+                                                    disabled="@(_saving || edit.RoleCode == "" || (!IsGlobal(edit.RoleCode) && edit.SiteChoice == ""))">Add</button>
                                         </form>
                                     </div>
 
@@ -269,9 +279,15 @@ else
 
     private bool CanCreate =>
         !string.IsNullOrWhiteSpace(_new.Username) && !string.IsNullOrWhiteSpace(_new.DisplayName) && !string.IsNullOrEmpty(_new.TemporaryPassword)
-        && _new.RoleCode != "" && (IsGlobal(_new.RoleCode) || _new.SiteId is not null);
+        && _new.RoleCode != "" && (IsGlobal(_new.RoleCode) || _new.SiteChoice != "");
+
+    private const string EverySite = "every";
 
     private bool IsGlobal(string roleCode) => _roles.FirstOrDefault(r => r.Code == roleCode)?.IsGlobal == true;
+
+    // A role allowed at every site (D-092), for whoever may give roles everywhere.
+    private bool CanGiveEverywhere(string roleCode) =>
+        _roles.FirstOrDefault(r => r.Code == roleCode) is { IsGlobal: false, AllowsEverySite: true } && User.CanEverywhere(PermissionCodes.SecurityGrantEverywhere);
 
     protected override async Task OnInitializedAsync()
     {
@@ -351,7 +367,7 @@ else
         var global = IsGlobal(_edit!.RoleCode);
         await Api.AssignRoleAsync(user.Id, new AssignRoleRequest { RoleCode = _edit.RoleCode, SiteId = global ? null : _edit.SiteId });
         _message = $"{user.DisplayName} now holds {_roles.First(r => r.Code == _edit.RoleCode).Name}.";
-        _edit = _edit with { RoleCode = "", SiteId = null };
+        _edit = _edit with { RoleCode = "", SiteChoice = "" };
     });
 
     private Task EndRoleAsync(UserDto user, RoleGrantDto role) => RunAsync(async () =>
@@ -399,7 +415,10 @@ else
 
         public string RoleCode { get; set; } = "";
 
-        public Guid? SiteId { get; set; }
+        /// <summary>A site's id, "every" for every site (D-092), or blank.</summary>
+        public string SiteChoice { get; set; } = "";
+
+        public Guid? SiteId => Guid.TryParse(SiteChoice, out var id) ? id : null;
     }
 
     private sealed record UserEdit
@@ -416,7 +435,10 @@ else
 
         public string RoleCode { get; set; } = "";
 
-        public Guid? SiteId { get; set; }
+        /// <summary>A site's id, "every" for every site (D-092), or blank.</summary>
+        public string SiteChoice { get; set; } = "";
+
+        public Guid? SiteId => Guid.TryParse(SiteChoice, out var id) ? id : null;
 
         public string TemporaryPassword { get; set; } = "";
 

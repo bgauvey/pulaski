@@ -86,13 +86,13 @@ internal static class SecurityEndpoints
 
         roles.MapPost("/", async Task<Created<CreatedResponse>> (CreateRoleRequest request, ICommandHandler<CreateRoleCommand, CreatedResponse> handler, CancellationToken ct) =>
         {
-            var created = await handler.HandleAsync(new CreateRoleCommand(request.Code, request.Name, request.Description, request.Permissions), ct);
+            var created = await handler.HandleAsync(new CreateRoleCommand(request.Code, request.Name, request.Description, request.Permissions, request.AllowsEverySite), ct);
             return TypedResults.Created($"/api/roles/{request.Code.Trim().ToLowerInvariant()}", created);
         }).RequirePermission(Permissions.Security);
 
         roles.MapPut("/{code}", async Task<Ok<VersionResponse>> (string code, UpdateRoleRequest request, ICommandHandler<UpdateRoleCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new UpdateRoleCommand(code, request.Version, request.Name, request.Description, request.IsActive, request.Permissions), ct)))
+                new UpdateRoleCommand(code, request.Version, request.Name, request.Description, request.IsActive, request.Permissions, request.AllowsEverySite), ct)))
             .RequirePermission(Permissions.Security);
 
         roles.MapPut("/{code}/permissions/{permission}", async Task<Ok<VersionResponse>> (
@@ -120,7 +120,8 @@ internal static class SecurityEndpoints
             var created = await handler.HandleAsync(
                 new CreateUserCommand(request.Username, request.DisplayName, request.Email, request.TemporaryPassword, request.RoleCode, request.SiteId), ct);
             return TypedResults.Created($"/api/users/{created.Id}", created);
-        }).RequirePermission(Permissions.Security);
+        }).RequirePermission(Permissions.Security)
+        .RequireForEverySiteGrant(c => ValueTask.FromResult(c.Arguments.OfType<CreateUserRequest>().FirstOrDefault() is { SiteId: null }));
 
         users.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (Guid id, UpdateUserRequest request, ICommandHandler<UpdateUserCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new UpdateUserCommand(id, request.Version, request.DisplayName, request.Email, request.IsActive, request.IsServiceAccount), ct)))
@@ -134,11 +135,13 @@ internal static class SecurityEndpoints
         {
             var created = await handler.HandleAsync(new AssignRoleCommand(id, request.RoleCode, request.SiteId), ct);
             return TypedResults.Created($"/api/users/{id}", created);
-        }).RequirePermission(Permissions.Security);
+        }).RequirePermission(Permissions.Security)
+        .RequireForEverySiteGrant(c => ValueTask.FromResult(c.Arguments.OfType<AssignRoleRequest>().FirstOrDefault() is { SiteId: null }));
 
         users.MapPost("/roles/{assignmentId:guid}/end", async Task<Ok<VersionResponse>> (Guid assignmentId, ICommandHandler<EndRoleCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new EndRoleCommand(assignmentId), ct)))
-            .RequirePermission(Permissions.Security);
+            .RequirePermission(Permissions.Security)
+            .RequireForEverySiteGrant(async c => await Site.Of(SiteOf.RoleAssignment, "assignmentId")(c) is null);
 
         return routes;
     }

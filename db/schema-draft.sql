@@ -824,7 +824,8 @@ CREATE TABLE sec.role (
     description text NOT NULL DEFAULT '',
     is_active   boolean NOT NULL DEFAULT true,
     created_at  timestamptz NOT NULL DEFAULT now(),
-    updated_at  timestamptz NOT NULL DEFAULT now()
+    updated_at  timestamptz NOT NULL DEFAULT now(),
+    allows_every_site boolean NOT NULL DEFAULT false              -- may also be given at every site (D-092); the administrator always is
 );
 
 -- A permission taken away keeps its row with is_granted = false: the app role has no DELETE on security tables (D-037).
@@ -844,7 +845,7 @@ CREATE TABLE sec.role_assignment (
     role_id                 uuid NOT NULL REFERENCES sec.role(id),
     app_user_id             uuid REFERENCES sec.app_user(id),
     idp_group               text,                               -- group/role claim value from the IdP
-    scope_equipment_id      uuid REFERENCES core.equipment(id),  -- the site (D-037); null for a role held everywhere (administrator)
+    scope_equipment_id      uuid REFERENCES core.equipment(id),  -- the site (D-037); null for a role held at every site (administrator, D-092)
     valid_from              timestamptz NOT NULL DEFAULT now(),
     valid_to                timestamptz,                        -- set when the role is taken away; assignments are never deleted
     granted_by_user_id      uuid REFERENCES sec.app_user(id),
@@ -2486,7 +2487,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0055_delivery_feeds'),
     ('0056_material_sources'),
     ('0057_connection_schedules'),
-    ('0058_identity_providers');
+    ('0058_identity_providers'),
+    ('0059_every_site_roles');
 
 -- =====================================================================
 -- 17. SEED DATA

@@ -81,6 +81,29 @@ public class SecurityHandlerTests
     }
 
     [Fact]
+    public async Task Only_a_role_allowed_at_every_site_is_given_without_a_site_and_it_stays_allowed_while_held_so()
+    {
+        var roles = new RoleHandlerTests.Handlers(_f, As(_admin));
+        await roles.Create.HandleAsync(new CreateRoleCommand("regional_quality", "Regional quality", null, [Permissions.LotHold]), CancellationToken.None);
+        var user = await Create().HandleAsync(new CreateUserCommand("rq1", "R Q", null, "Temporary-pass-1", Roles.Operator, _site), CancellationToken.None);
+
+        Assert.Contains("allow it at every site", (await Assert.ThrowsAsync<DomainRuleException>(() =>
+            Assign().HandleAsync(new AssignRoleCommand(user.Id, "regional_quality", null), CancellationToken.None))).Message, StringComparison.Ordinal);
+
+        var version = (await Security.FindRoleForUpdateAsync("regional_quality", CancellationToken.None))!.Version;
+        await roles.Update.HandleAsync(new UpdateRoleCommand("regional_quality", version, "Regional quality", null, true, [Permissions.LotHold], AllowsEverySite: true), CancellationToken.None);
+        await Assign().HandleAsync(new AssignRoleCommand(user.Id, "regional_quality", null), CancellationToken.None);
+        Assert.Contains(Security.Assignments(user.Id), a => a.RoleCode == "regional_quality" && a.SiteId is null);
+
+        var access = (await Security.GetAccessAsync(Issuers.Local, "rq1", HandlerFixture.Now, CancellationToken.None))!;
+        Assert.True(access.Can(Permissions.LotHold, Guid.CreateVersion7()));
+
+        version = (await Security.FindRoleForUpdateAsync("regional_quality", CancellationToken.None))!.Version;
+        Assert.Contains("at every site", (await Assert.ThrowsAsync<DomainRuleException>(() => roles.Update.HandleAsync(
+            new UpdateRoleCommand("regional_quality", version, "Regional quality", null, true, [Permissions.LotHold], AllowsEverySite: false), CancellationToken.None))).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_new_user_comes_with_a_role_and_a_temporary_password()
     {
         var created = await Create().HandleAsync(new CreateUserCommand(" J.Smith ", "Jo Smith", null, "Temporary-pass-1", Roles.Operator, _site), CancellationToken.None);

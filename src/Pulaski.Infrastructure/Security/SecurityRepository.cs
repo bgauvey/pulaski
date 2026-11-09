@@ -83,21 +83,21 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
         """;
 
     private const string FindRole = """
-        SELECT r.id, r.code, r.name, r.description, r.is_active, r.xmin::text::bigint AS version,
+        SELECT r.id, r.code, r.name, r.description, r.is_active, r.allows_every_site, r.xmin::text::bigint AS version,
                array(SELECT rp.permission_code FROM sec.role_permission rp WHERE rp.role_id = r.id AND rp.is_granted ORDER BY rp.permission_code) AS permissions
         FROM sec.role r WHERE r.code = @Code
         FOR UPDATE OF r
         """;
 
     private const string InsertRole = """
-        INSERT INTO sec.role (id, code, name, description, is_active, is_system, created_at, updated_at)
-        VALUES (@Id, @Code, @Name, @Description, @IsActive, false, @At, @At)
+        INSERT INTO sec.role (id, code, name, description, is_active, is_system, allows_every_site, created_at, updated_at)
+        VALUES (@Id, @Code, @Name, @Description, @IsActive, false, @AllowsEverySite, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     // Also run after a permission changes, so the role's version moves on with it.
     private const string UpdateRole = """
-        UPDATE sec.role SET name = @Name, description = @Description, is_active = @IsActive, updated_at = @At
+        UPDATE sec.role SET name = @Name, description = @Description, is_active = @IsActive, allows_every_site = @AllowsEverySite, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -112,6 +112,11 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
     private const string CountHolders = """
         SELECT count(*)::int FROM sec.role_assignment
         WHERE role_id = @RoleId AND valid_from <= @At AND (valid_to IS NULL OR valid_to > @At)
+        """;
+
+    private const string CountEverywhereHolders = """
+        SELECT count(*)::int FROM sec.role_assignment
+        WHERE role_id = @RoleId AND scope_equipment_id IS NULL AND valid_from <= @At AND (valid_to IS NULL OR valid_to > @At)
         """;
 
     private const string SyncPermission = """
@@ -178,7 +183,7 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
 
     public async Task<Versioned<SecurityRole>?> FindRoleForUpdateAsync(string code, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<RoleRow>(FindRole, new { Code = code }, cancellationToken) is { } r
-            ? new Versioned<SecurityRole>(new SecurityRole(r.Id, r.Code, r.Name, r.Description, r.IsActive, r.Permissions), r.Version)
+            ? new Versioned<SecurityRole>(new SecurityRole(r.Id, r.Code, r.Name, r.Description, r.IsActive, r.Permissions) { AllowsEverySite = r.AllowsEverySite }, r.Version)
             : null;
 
     public Task<long> InsertRoleAsync(SecurityRole role, DateTimeOffset at, CancellationToken cancellationToken) =>
@@ -193,6 +198,9 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
     public Task<int> CountHoldersAsync(Guid roleId, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<int>(CountHolders, new { RoleId = roleId, At = at }, cancellationToken);
 
+    public Task<int> CountEverywhereHoldersAsync(Guid roleId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<int>(CountEverywhereHolders, new { RoleId = roleId, At = at }, cancellationToken);
+
     public async Task SyncPermissionsAsync(IReadOnlyList<PermissionInfo> catalog, CancellationToken cancellationToken)
     {
         foreach (var permission in catalog)
@@ -201,7 +209,7 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
         }
     }
 
-    private static object RoleArgs(SecurityRole r, DateTimeOffset at) => new { r.Id, r.Code, r.Name, r.Description, r.IsActive, At = at };
+    private static object RoleArgs(SecurityRole r, DateTimeOffset at) => new { r.Id, r.Code, r.Name, r.Description, r.IsActive, r.AllowsEverySite, At = at };
 
     private static object UserArgs(SecurityUser u, DateTimeOffset at) =>
         new { u.Id, u.Issuer, u.Subject, u.Username, u.DisplayName, u.Email, u.IsActive, u.IsServiceAccount, At = at };
@@ -229,6 +237,7 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
         public string Name { get; init; } = "";
         public string Description { get; init; } = "";
         public bool IsActive { get; init; }
+        public bool AllowsEverySite { get; init; }
         public long Version { get; init; }
         public string[] Permissions { get; init; } = [];
     }

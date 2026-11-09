@@ -760,6 +760,7 @@ One row per user who signs in with a Pulaski password.
 | `is_active` | boolean | no | False when switched off: it can't be given, and gives its holders nothing. A role someone holds can't be switched off. |
 | `created_at` | timestamptz | no | Insert time. |
 | `updated_at` | timestamptz | no | Last change, also to its permissions (which moves the role's version on). |
+| `allows_every_site` | boolean | no | May also be given at every site (D-092), not only at one; switched off only while nobody holds it everywhere. False for every starting role; the administrator is everywhere regardless. |
 
 ### sec.role_permission — permissions in a role · *Built (D-037)*
 
@@ -781,7 +782,7 @@ A role granted to one user (or, later, to an identity-provider group) at a site.
 | `role_id` | uuid → role | no | The role granted. |
 | `app_user_id` | uuid → app_user | yes | The user, or… |
 | `idp_group` | text | yes | …a group claim value (reserved for identity providers). Exactly one of the two is set. |
-| `scope_equipment_id` | uuid → equipment | yes | The site the role is held at; null for a role held everywhere (the administrator). |
+| `scope_equipment_id` | uuid → equipment | yes | The site the role is held at; null for a role held at every site: the administrator, or a role with `allows_every_site` (D-092), which then allows its own permissions at every site. |
 | `valid_from` | timestamptz | no | Start of the grant. |
 | `valid_to` | timestamptz | yes | When the role was taken away; null while it holds. |
 | `granted_by_user_id` | uuid → app_user | yes | Who granted it; null for the first administrator. |

@@ -98,6 +98,29 @@ public sealed class SecurityTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_role_allowed_at_every_site_is_held_everywhere_and_counted_so()
+    {
+        var site = await SiteAsync();
+        var code = "regional_" + _s;
+        await db.SendAsync(new CreateRoleCommand(code, "Regional " + _s, null, [Permissions.LotHold], AllowsEverySite: true));
+        CreatedResponse user = await db.SendAsync(new CreateUserCommand("reg." + _s, "Reg " + _s, null, "Temporary-pass-1", Roles.Operator, site));
+        CreatedResponse grant = await db.SendAsync(new AssignRoleCommand(user.Id, code, null));
+
+        var role = Assert.Single(await QueryAsync<ListRolesQuery, IReadOnlyList<RoleDto>>(new ListRolesQuery()), r => r.Code == code);
+        Assert.Equal((true, 1, 1), (role.AllowsEverySite, role.Holders, role.EverywhereHolders));
+
+        await using var scope = db.Services.CreateAsyncScope();
+        var access = await scope.ServiceProvider.GetRequiredService<ISecurityReadStore>().GetAccessAsync(Issuers.Local, "reg." + _s, DateTimeOffset.UtcNow, CancellationToken.None);
+        Assert.True(access!.Can(Permissions.LotHold, Guid.CreateVersion7()));
+        var lookup = scope.ServiceProvider.GetRequiredService<ISiteLookup>();
+        Assert.Null(await lookup.SiteOfAsync(SiteOf.RoleAssignment, grant.Id, CancellationToken.None));
+        var siteGrant = Assert.Single((await QueryAsync<GetUserQuery, UserDto>(new GetUserQuery(user.Id))).Roles, r => r.SiteId is not null);
+        Assert.Equal(site, await lookup.SiteOfAsync(SiteOf.RoleAssignment, siteGrant.AssignmentId, CancellationToken.None));
+
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new UpdateRoleCommand(code, role.Version, role.Name, null, true, [Permissions.LotHold], AllowsEverySite: false)));
+    }
+
+    [Fact]
     public async Task Roles_are_ended_not_deleted_and_the_lookup_finds_sites()
     {
         var site = await SiteAsync();

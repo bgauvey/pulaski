@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-05 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-08 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -1888,7 +1888,7 @@ Their name and e-mail come from your organisation's sign-in and are kept up to d
 
 1. On **Configure → Users**, **Users** tab, click **Change** on the user's row.
 2. **Details:** change the name or e-mail, or untick **Can sign in** to switch them off; for a Pulaski account, tick **Service account** if a machine (such as the edge) uses it. Click **Save details**.
-3. **Roles:** choose a role (and site) under **Add a role…** and click **Add**; click **Take away** to end one.
+3. **Roles:** choose a role (and site) under **Add a role…** and click **Add**; click **Take away** to end one. For a role allowed at every site, the site list also offers **Every site** (if you may grant roles everywhere).
 4. **Password:** type a **Temporary password** and click **Reset password**. They must change it when they next sign in; this also unlocks them.
 
 ### Add or change a role (administrators)
@@ -1898,6 +1898,8 @@ Their name and e-mail come from your organisation's sign-in and are kept up to d
 3. For a new role, type a **Code** (lower-case letters, digits and `_`, such as `line_lead`; it can't change later) and a **Name**. Add what it's for if you like.
 4. Under **May change**, tick each permission the role should have. They are grouped by area: Planning, Floor, Inventory, Configuration, Administration.
 5. Click **Create role** or **Save role**. Then give the role to people on the **Users** tab.
+
+Tick **May be held at every site** for a role that some people need at all sites at once, such as a regional quality lead. Leave it off for roles that belong to one plant. It can't be switched off while someone holds the role at every site.
 
 To stop using a role, untick **Active** and save. A role someone holds can't be switched off: give them another role and take this one away first. **Administrator** has every permission and can't be changed.
 
@@ -1914,7 +1916,8 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 - **Changes to a role apply at once** to everyone who holds it, on their next click.
 - **Every user needs a role.** A new user comes with one, and a user's last role can't be taken away: add another first, or switch them off.
 - **Someone stays administrator.** The last active administrator can't lose the role or be switched off, and nobody can switch themselves off.
-- **Roles are held at a site.** A Supervisor at PLT1 can start jobs at PLT1 only. Something that belongs to no site, such as a reason for every site or an enterprise-wide process, needs the permission at any site.
+- **Roles are held at a site.** A Supervisor at PLT1 can start jobs at PLT1 only.
+- **Or at every site.** A role allowed it can be given for every site at once: it then allows its own permissions at every site, now and any site added later, and nothing more (only Administrator holds every permission). Such grants show as *Role · every site*, highlighted on the Users tab. Giving or taking one away needs the **Give or take away a role held at every site** permission, held at every site itself, so someone who manages one site's users can't reach the others. Only Administrator holds it to start with. Something that belongs to no site, such as a reason for every site or an enterprise-wide process, needs the permission at any site.
 - **Partial batches:** whoever reported a partial batch can't approve or reject it; the job page says *You reported it: someone else decides*.
 - **History** names who did what by user name, such as *oli.operator* on a lot's history.
 - **Changes apply at once.** Switching someone off or taking a role away takes effect on their next click, without waiting for their session to end.
@@ -2575,7 +2578,6 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Quality:** there are no SPC charts, control limits or alerts yet, and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
 - **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by an administrator (Pulaski sends no e-mail).
 - **A switched-off button's reason** shows when you point at it with the mouse, but not when you move to it with the keyboard (switched-off buttons are skipped); screen readers announce it as unavailable without the reason. Screens that are view-only for you say so in a note at the top instead.
-- **Only Administrator is held everywhere;** every role you create is held at a site.
 
 ---
 

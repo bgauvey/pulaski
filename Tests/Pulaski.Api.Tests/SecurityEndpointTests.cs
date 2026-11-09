@@ -52,6 +52,30 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
     }
 
     [Fact]
+    public async Task Giving_or_ending_a_role_at_every_site_needs_the_grant_everywhere_permission_held_everywhere()
+    {
+        var site = Guid.CreateVersion7();
+        factory.Stores.Security.AddSite(site);
+        factory.Stores.Security.AddRole("regional", "Regional", [Permissions.LotHold], allowsEverySite: true);
+        factory.Stores.Security.AddRole("user_admin", "User admin", [Permissions.Security, Permissions.SecurityGrantEverywhere]);
+        var target = factory.Stores.Security.AddUser($"target-{Guid.CreateVersion7():N}"[..20], ApiFactory.Password, Roles.Operator, site);
+
+        // Managing users at a site, even with the grant permission there, doesn't reach every site.
+        var siteAdmin = await factory.CreateClientAsAsync("user_admin", site);
+        var everywhere = await siteAdmin.PostAsJsonAsync($"/api/users/{target.Id}/roles", new AssignRoleRequest { RoleCode = "regional" });
+        Assert.Equal(HttpStatusCode.Forbidden, everywhere.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await siteAdmin.PostAsJsonAsync($"/api/users/{target.Id}/roles", new AssignRoleRequest { RoleCode = "regional", SiteId = site })).StatusCode);
+
+        var admin = factory.CreateClient();
+        var given = await admin.PostAsJsonAsync($"/api/users/{target.Id}/roles", new AssignRoleRequest { RoleCode = "regional" });
+        Assert.Equal(HttpStatusCode.Created, given.StatusCode);
+        var assignment = (await given.Content.ReadFromJsonAsync<CreatedResponse>())!.Id;
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await siteAdmin.PostAsync(new Uri($"/api/users/roles/{assignment}/end", UriKind.Relative), null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsync(new Uri($"/api/users/roles/{assignment}/end", UriKind.Relative), null)).StatusCode);
+    }
+
+    [Fact]
     public async Task A_garbage_token_is_401()
     {
         var client = factory.CreateSignedOutClient();

@@ -36,7 +36,11 @@ public sealed record RoleAssignment(Guid Id, Guid UserId, string RoleCode, Guid?
 /// <summary>A role as the commands see it (D-037): what it allows, held at a site unless it is the administrator.</summary>
 public sealed record SecurityRole(Guid Id, string Code, string Name, string Description, bool IsActive, IReadOnlyList<string> Permissions)
 {
+    /// <summary>The administrator: every permission, held everywhere only.</summary>
     public bool IsGlobal => Roles.IsGlobal(Code);
+
+    /// <summary>May also be given at every site (D-092), not only at one; the administrator always is.</summary>
+    public bool AllowsEverySite { get; init; }
 }
 
 /// <summary>Hashes and checks passwords; the hash carries its own salt and work factor.</summary>
@@ -112,6 +116,9 @@ public interface ISecurityRepository
     /// <summary>How many active assignments of the role there are now.</summary>
     Task<int> CountHoldersAsync(Guid roleId, DateTimeOffset at, CancellationToken cancellationToken);
 
+    /// <summary>How many active assignments of the role are held at every site now (D-092).</summary>
+    Task<int> CountEverywhereHoldersAsync(Guid roleId, DateTimeOffset at, CancellationToken cancellationToken);
+
     /// <summary>Copies the code's permission catalog into <c>sec.permission</c>, so roles can name every permission.</summary>
     Task SyncPermissionsAsync(IReadOnlyList<PermissionInfo> catalog, CancellationToken cancellationToken);
 
@@ -158,6 +165,9 @@ public enum SiteOf
 
     /// <summary>A people connection (#71): the site its people are imported into.</summary>
     Connection,
+
+    /// <summary>A role assignment (D-092): its site, none when it is held at every site.</summary>
+    RoleAssignment,
 }
 
 /// <summary>Finds the site something belongs to, so a role held at that site can be checked (D-037).</summary>

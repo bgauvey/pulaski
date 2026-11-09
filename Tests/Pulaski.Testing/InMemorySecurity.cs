@@ -27,11 +27,11 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
     }
 
     /// <summary>Adds a role as an administrator would make it on the Roles screen.</summary>
-    public void AddRole(string code, string name, IReadOnlyList<string> permissions)
+    public void AddRole(string code, string name, IReadOnlyList<string> permissions, bool allowsEverySite = false)
     {
         lock (_lock)
         {
-            _roles[code] = new(new SecurityRole(Guid.CreateVersion7(), code, name, "", true, permissions), ++_next);
+            _roles[code] = new(new SecurityRole(Guid.CreateVersion7(), code, name, "", true, permissions) { AllowsEverySite = allowsEverySite }, ++_next);
         }
     }
 
@@ -157,6 +157,8 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
                 IsActive = r.Value.IsActive,
                 Permissions = r.Value.IsGlobal ? [.. Permissions.All.Keys] : r.Value.Permissions,
                 Holders = _assignments.Values.Count(a => a.RoleCode == r.Value.Code && a.IsActiveAt(now)),
+                AllowsEverySite = r.Value.IsGlobal || r.Value.AllowsEverySite,
+                EverywhereHolders = _assignments.Values.Count(a => a.RoleCode == r.Value.Code && a.SiteId is null && a.IsActiveAt(now)),
                 Version = r.Version,
             })]);
         }
@@ -201,6 +203,15 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
         }
 
         return Task.CompletedTask;
+    }
+
+    public Task<int> CountEverywhereHoldersAsync(Guid roleId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var code = _roles.Values.Single(r => r.Value.Id == roleId).Value.Code;
+            return Task.FromResult(_assignments.Values.Count(a => a.RoleCode == code && a.SiteId is null && a.IsActiveAt(at)));
+        }
     }
 
     public Task<int> CountHoldersAsync(Guid roleId, DateTimeOffset at, CancellationToken cancellationToken)
@@ -341,6 +352,11 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
     {
         lock (_lock)
         {
+            if (kind == SiteOf.RoleAssignment)
+            {
+                return Task.FromResult(_assignments.GetValueOrDefault(id)?.SiteId);
+            }
+
             return Task.FromResult(_siteOf.TryGetValue((kind, id), out var site) ? site : (Guid?)null);
         }
     }

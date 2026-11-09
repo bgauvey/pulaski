@@ -683,7 +683,7 @@ Who owns the configuration: equipment, units → Administrator; shift schedules 
 
 **Events:** `pulaski.user.signed_in.v1`, `…sign_in_failed.v1`, `…password_changed.v1`, `…password_reset.v1`, `…created.v1`, `…updated.v1`, `…role_assigned.v1`, `…role_ended.v1`, on the user. Event actors are the signed-in user (local users by user name).
 
-**Not yet:** a role held everywhere other than the administrator; correcting reported production or consumption (no command exists yet, so the Auditor's "correct production values" waits for it); site settings screens (the API is guarded).
+**Not yet:** correcting reported production or consumption (no command exists yet, so the Auditor's "correct production values" waits for it); site settings screens (the API is guarded).
 
 ## Shift schedules (D-038, proposed)
 
@@ -2405,6 +2405,26 @@ for recovery. Deployment guidance per provider: `deploy/identity/README.md`.
 
 **Not done:** groups to roles (`idp_group`); single sign-out at the provider; refreshing a session from the provider (sessions still end
 after 12 hours); a provider configured on screen.
+
+## Roles held at every site (D-092, proposed)
+
+Issue #49. Only the administrator could be held everywhere; a regional quality lead needed the same role at each site, one assignment each.
+
+**Roles marked for it** (the user's choice). `sec.role.allows_every_site` (off by default and for every starting role), switched on the Roles
+tab. Only such a role may be assigned with no site (`SecurityRules.EnsureRoleAsync`); switching it off is refused while anyone holds it at every
+site (`CountEverywhereHoldersAsync`). Site assignments of it work as before.
+
+**What a grant everywhere means.** A null-site `RoleGrant` (`IsEverywhere`) allows **its role's own** permissions at every site; only the
+administrator (`IsAdministrator`) allows every permission. `UserAccess.Can`, `SitesFor`/`SitesForAny` (null = every site, so lists and pickers
+show all sites) and the new `CanEverywhere` follow that; nothing else changed for site roles.
+
+**A permission of its own** (the user's choice). `security.grant_everywhere` (Administration; only the administrator to start with) is needed,
+**held at every site**, beside `security.manage` to create a user with, give, or take away a role at every site
+(`RequireForEverySiteGrant`; the assignment's site comes from `SiteOf.RoleAssignment`). So someone who manages one site's users can't give
+themselves or others reach over every site, even holding it there. Configure → Users offers *Every site* only for a role allowed it and only
+to whoever may grant it; such grants show as "*Role · every site*", marked apart from site grants, and the Roles tab counts them.
+
+**Not done:** roles held at a group of sites (a region); every-site grants from a provider's groups.
 
 ## Application architecture
 

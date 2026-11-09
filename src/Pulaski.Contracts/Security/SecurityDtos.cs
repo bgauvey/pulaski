@@ -66,6 +66,12 @@ public sealed record RoleDto
 
     /// <summary>The administrator: holds every permission and can't be changed.</summary>
     public bool IsLocked { get; init; }
+
+    /// <summary>May be given at every site as well as at one (D-092); always true for the administrator.</summary>
+    public bool AllowsEverySite { get; init; }
+
+    /// <summary>How many hold it at every site now.</summary>
+    public int EverywhereHolders { get; init; }
     public bool IsActive { get; init; } = true;
     public IReadOnlyList<string> Permissions { get; init; } = [];
 
@@ -88,6 +94,7 @@ public sealed record CreateRoleRequest
     public string Name { get; init; } = "";
     public string? Description { get; init; }
     public IReadOnlyList<string> Permissions { get; init; } = [];
+    public bool AllowsEverySite { get; init; }
 }
 
 public sealed record UpdateRoleRequest
@@ -97,6 +104,9 @@ public sealed record UpdateRoleRequest
     public string? Description { get; init; }
     public bool IsActive { get; init; } = true;
     public IReadOnlyList<string> Permissions { get; init; } = [];
+
+    /// <summary>Null leaves it as it is (D-092).</summary>
+    public bool? AllowsEverySite { get; init; }
 }
 
 /// <summary>Gives a role one permission, or takes it away (the Permissions screen).</summary>

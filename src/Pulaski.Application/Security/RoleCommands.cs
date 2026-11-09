@@ -7,10 +7,12 @@ using Pulaski.Domain.Security;
 namespace Pulaski.Application.Security;
 
 /// <summary>A new role, held at a site, with the permissions it allows (D-037). Its code is fixed once created.</summary>
-public sealed record CreateRoleCommand(string Code, string Name, string? Description, IReadOnlyList<string> Permissions) : ICommand<CreatedResponse>;
+public sealed record CreateRoleCommand(string Code, string Name, string? Description, IReadOnlyList<string> Permissions, bool AllowsEverySite = false)
+    : ICommand<CreatedResponse>;
 
 /// <summary>Renames a role, switches it on or off and sets all its permissions at once (the Roles screen).</summary>
-public sealed record UpdateRoleCommand(string Code, long ExpectedVersion, string Name, string? Description, bool IsActive, IReadOnlyList<string> Permissions)
+public sealed record UpdateRoleCommand(
+    string Code, long ExpectedVersion, string Name, string? Description, bool IsActive, IReadOnlyList<string> Permissions, bool? AllowsEverySite = null)
     : ICommand<VersionResponse>;
 
 /// <summary>Gives a role one permission or takes it away (the Permissions screen). Doing what is already so changes nothing.</summary>
@@ -93,7 +95,7 @@ internal sealed class CreateRoleHandler(
             throw new ConflictException($"There is already a role {code}.");
         }
 
-        var role = new SecurityRole(ids.NewId(), code, name, description, IsActive: true, []);
+        var role = new SecurityRole(ids.NewId(), code, name, description, IsActive: true, []) { AllowsEverySite = command.AllowsEverySite };
         var envelope = events.Create(EventTypes.RoleCreated, "role", role.Id, new { After = role with { Permissions = permissions } });
         var version = await security.InsertRoleAsync(role, envelope.OccurredAt, cancellationToken);
         await RoleRules.SetPermissionsAsync(security, role, permissions, now, request.UserId, cancellationToken);
@@ -133,8 +135,24 @@ internal sealed class UpdateRoleHandler(
             throw new DomainRuleException($"{holders} {(holders == 1 ? "user holds" : "users hold")} {current.Value.Name}; give them another role and take this one away first.");
         }
 
-        var updated = current.Value with { Name = name, Description = description, IsActive = command.IsActive, Permissions = [.. permissions.Order(StringComparer.Ordinal)] };
+        // Held everywhere by someone, it stays allowed everywhere until those grants end (D-092).
+        var everySite = command.AllowsEverySite ?? current.Value.AllowsEverySite;
+        if (current.Value.AllowsEverySite && !everySite && await security.CountEverywhereHoldersAsync(current.Value.Id, now, cancellationToken) is var everywhere and > 0)
+        {
+            throw new DomainRuleException(
+                $"{everywhere} {(everywhere == 1 ? "user holds" : "users hold")} {current.Value.Name} at every site; take those away or give it at a site first.");
+        }
+
+        var updated = current.Value with
+        {
+            Name = name,
+            Description = description,
+            IsActive = command.IsActive,
+            Permissions = [.. permissions.Order(StringComparer.Ordinal)],
+            AllowsEverySite = everySite,
+        };
         if (updated.Name == current.Value.Name && updated.Description == current.Value.Description && updated.IsActive == current.Value.IsActive
+            && updated.AllowsEverySite == current.Value.AllowsEverySite
             && updated.Permissions.SequenceEqual(current.Value.Permissions.Order(StringComparer.Ordinal)))
         {
             return new VersionResponse(current.Version);

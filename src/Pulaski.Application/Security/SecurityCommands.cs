@@ -68,7 +68,13 @@ internal static class SecurityRules
             throw new DomainRuleException($"{role.Name} is held everywhere, not at a site.");
         }
 
-        if (!role.IsGlobal && (siteId is not { } site || !await security.IsSiteAsync(site, cancellationToken)))
+        // Every site (no site) only for a role allowed it (D-092); the endpoint checks who may give it.
+        if (!role.IsGlobal && siteId is null && !role.AllowsEverySite)
+        {
+            throw new DomainRuleException($"{role.Name} is held at a site; choose one, or allow it at every site on the Roles tab.");
+        }
+
+        if (!role.IsGlobal && siteId is { } site && !await security.IsSiteAsync(site, cancellationToken))
         {
             throw new DomainRuleException($"{role.Name} is held at a site; choose one.");
         }
