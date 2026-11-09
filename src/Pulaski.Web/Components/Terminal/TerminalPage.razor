@@ -20,6 +20,9 @@
     <h1 class="h3">This terminal isn't enrolled</h1>
     <p>@(_error ?? "Ask a supervisor to enrol it.")</p>
     <a class="btn btn-primary btn-lg" href="@TerminalCookie.EnrolPath">Enrol it</a>
+
+    @* A post is matched to a form of its name in this render; without one, a terminal whose status can't be read would fail outright. *@
+    <EditForm Model="Input" FormName="terminal" OnSubmit="SubmitAsync" method="post" />
 }
 else
 {
@@ -137,10 +140,8 @@ else
             return;
         }
 
-        if (!HttpMethods.IsPost(HttpContext.Request.Method))
-        {
-            await LoadAsync();
-        }
+        // Also for a post: the form it answers is matched by name in this render, and is drawn only once the status is known.
+        await LoadAsync();
     }
 
     private async Task LoadAsync()
@@ -158,7 +159,6 @@ else
 
     private async Task SubmitAsync()
     {
-        await LoadAsync();
         if (_status is null)
         {
             return;
