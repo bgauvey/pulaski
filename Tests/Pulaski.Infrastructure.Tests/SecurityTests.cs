@@ -121,6 +121,33 @@ public sealed class SecurityTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_reset_link_is_kept_as_a_hash_found_by_address_used_once_and_ends_the_others()
+    {
+        var site = await SiteAsync();
+        var email = $"reset-{_s}@Example.com";
+        CreatedResponse user = await db.SendAsync(new CreateUserCommand("reset." + _s, "Reset " + _s, email, "Temporary-pass-1", Roles.Operator, site));
+
+        await db.SendAsync(new RequestPasswordResetCommand(email.ToUpperInvariant()));
+        var first = Token(email);
+        await using var admin = await db.AdminDataSource.OpenConnectionAsync();
+        await admin.ExecuteAsync("UPDATE sec.password_reset SET requested_at = requested_at - interval '2 minutes' WHERE app_user_id = @Id", new { user.Id });
+        await db.SendAsync(new RequestPasswordResetCommand("reset." + _s));
+        var second = Token(email);
+        Assert.NotEqual(first, second);
+        Assert.Equal(0, await admin.ExecuteScalarAsync<int>("SELECT count(*)::int FROM sec.password_reset WHERE token_hash = @Token", new { Token = second }));
+
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CompletePasswordResetCommand(first, "Brand-new-pass-9")));
+        await db.SendAsync(new CompletePasswordResetCommand(second, "Brand-new-pass-9"));
+        Assert.False((await db.SendAsync(new SignInCommand("reset." + _s, "Brand-new-pass-9"))).MustChangePassword);
+        Assert.Equal((1, 1), await admin.QuerySingleAsync<(int, int)>(
+            "SELECT count(*) FILTER (WHERE used_at IS NOT NULL)::int, count(*) FILTER (WHERE revoked_at IS NOT NULL)::int FROM sec.password_reset WHERE app_user_id = @Id",
+            new { user.Id }));
+    }
+
+    private string Token(string email) =>
+        System.Text.RegularExpressions.Regex.Match(db.Mail.Sent.Last(m => m.Recipient == email).Body, @"token=([A-Za-z0-9_-]+)").Groups[1].Value;
+
+    [Fact]
     public async Task Roles_are_ended_not_deleted_and_the_lookup_finds_sites()
     {
         var site = await SiteAsync();

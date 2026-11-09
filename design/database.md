@@ -728,6 +728,20 @@ Users, their passwords while Pulaski signs them in itself, and roles held at sit
 
 A user from an identity provider is added at their first sign-in with no role (D-091); until an administrator gives them one they can't sign in.
 
+### sec.password_reset — links to reset a forgotten password (D-093) · *In use*
+
+One row per link sent. The token itself is only in the e-mail; ended, never deleted.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `app_user_id` | uuid → app_user | no | Whose password it resets: an active local user with an e-mail address, not a service account. |
+| `token_hash` | text | no | Hex SHA-256 of the token in the link; unique (`password_reset_token_uq`). |
+| `requested_at` | timestamptz | no | When it was asked for; at most one a minute and three an hour per user. |
+| `expires_at` | timestamptz | no | When it stops working (`Security:PasswordReset:LinkMinutes`, 30). |
+| `used_at` | timestamptz | yes | The password was set with it. |
+| `revoked_at` | timestamptz | yes | Ended unused: another link was asked for, or the password was changed or reset otherwise. Not both with `used_at`. |
+
 ### sec.local_credential — a local user's password · *Built (D-037)*
 
 One row per user who signs in with a Pulaski password.

@@ -236,6 +236,78 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
         }
     }
 
+    private readonly Dictionary<Guid, (PasswordResetLink Link, DateTimeOffset? UsedAt, DateTimeOffset? RevokedAt)> _resets = [];
+
+    /// <summary>The reset links, for tests: each with when it was used or revoked.</summary>
+    public IReadOnlyList<(PasswordResetLink Link, DateTimeOffset? UsedAt, DateTimeOffset? RevokedAt)> PasswordResets
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _resets.Values.OrderBy(r => r.Link.RequestedAt)];
+            }
+        }
+    }
+
+    public Task<IReadOnlyList<Versioned<SecurityUser>>> FindLocalUsersByEmailForUpdateAsync(string email, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<Versioned<SecurityUser>>>([.. _users.Values.Where(u =>
+                u.Value.Issuer == Issuers.Local && u.Value.IsActive && string.Equals(u.Value.Email, email, StringComparison.OrdinalIgnoreCase))]);
+        }
+    }
+
+    public Task InsertPasswordResetAsync(PasswordResetLink link, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _resets[link.Id] = (link, null, null);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<PasswordResetLink?> FindOpenPasswordResetForUpdateAsync(string tokenHash, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_resets.Values.Where(r => r.Link.TokenHash == tokenHash && r.UsedAt is null && r.RevokedAt is null).Select(r => r.Link).FirstOrDefault());
+        }
+    }
+
+    public Task<int> CountPasswordResetsSinceAsync(Guid userId, DateTimeOffset since, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_resets.Values.Count(r => r.Link.UserId == userId && r.Link.RequestedAt >= since));
+        }
+    }
+
+    public Task MarkPasswordResetUsedAsync(Guid id, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _resets[id] = _resets[id] with { UsedAt = at };
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task RevokePasswordResetsAsync(Guid userId, DateTimeOffset at, Guid? exceptId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            foreach (var (id, reset) in _resets.Where(r => r.Value.Link.UserId == userId && r.Value.UsedAt is null && r.Value.RevokedAt is null && r.Key != exceptId).ToList())
+            {
+                _resets[id] = reset with { RevokedAt = at };
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task<Versioned<SecurityUser>?> FindUserByIdentityForUpdateAsync(string issuer, string subject, CancellationToken cancellationToken)
     {
         lock (_lock)
@@ -395,4 +467,24 @@ public sealed class PlainPasswordHasher : IPasswordHasher
     public string Hash(string password) => "plain$" + password;
 
     public bool Verify(string password, string hash) => hash == "plain$" + password;
+}
+
+/// <summary>Password reset settings as a test sets them (D-093).</summary>
+public sealed class FakePasswordResetSettings : IPasswordResetSettings
+{
+    public bool Enabled { get; set; } = true;
+
+    public TimeSpan LinkLifetime { get; set; } = TimeSpan.FromMinutes(30);
+
+    public string UiBaseUrl { get; set; } = "https://mes.example";
+
+    public bool AdministratorsOnly { get; set; }
+}
+
+/// <summary>The e-mails a test's commands would send.</summary>
+public sealed class FakeMailOutbox : IMailOutbox
+{
+    public List<(string Recipient, string Subject, string Body)> Sent { get; } = [];
+
+    public void Enqueue(string recipient, string subject, string body) => Sent.Add((recipient, subject, body));
 }

@@ -191,6 +191,28 @@ public sealed record SignInOptionsDto
 
     /// <summary><c>everyone</c>, or <c>administrators</c>: then only administrators and service accounts sign in with a password.</summary>
     public string LocalSignIn { get; init; } = "everyone";
+
+    /// <summary>Whether someone who forgot their password may ask for a link by e-mail (D-093).</summary>
+    public bool PasswordResetByEmail { get; init; }
+}
+
+/// <summary>Asks for a password reset link (D-093): a user name or an e-mail address.</summary>
+public sealed record RequestPasswordResetRequest
+{
+    public string Login { get; init; } = "";
+}
+
+/// <summary>Sets a new password with a reset link's token (D-093).</summary>
+public sealed record CompletePasswordResetRequest
+{
+    public string Token { get; init; } = "";
+    public string NewPassword { get; init; } = "";
+}
+
+/// <summary>What the API says to a reset request: the same words whether or not an account matched.</summary>
+public sealed record PasswordResetAnswer
+{
+    public required string Message { get; init; }
 }
 
 /// <summary>Starts signing in through a provider (D-091): where the provider sends the browser back.</summary>

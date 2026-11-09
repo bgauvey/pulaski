@@ -246,6 +246,7 @@ public static class EventTypes
     public const string SignInFailed = "pulaski.user.sign_in_failed.v1";
     public const string PasswordChanged = "pulaski.user.password_changed.v1";
     public const string PasswordReset = "pulaski.user.password_reset.v1";
+    public const string PasswordResetRequested = "pulaski.user.password_reset_requested.v1";
     public const string UserCreated = "pulaski.user.created.v1";
     public const string UserUpdated = "pulaski.user.updated.v1";
     public const string RoleAssigned = "pulaski.user.role_assigned.v1";

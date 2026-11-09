@@ -48,7 +48,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`Security:Providers:{name}`; `IdentityProviderClient`: code flow + PKCE, sealed transaction, ID token checked) both end in the API's own
   HMAC JWT from `Security:SigningKey`, provider users with an `idp` claim (`TokenIssuer.IssuerOf`). Users are keyed by issuer + subject; a new
   provider user waits for a role. `Security:LocalSignIn` = administrators limits passwords to administrators and service accounts. The UI keeps
-  the token in a cookie session and sends it on every API call.
+  the token in a cookie session and sends it on every API call. Password reset by e-mail (D-093) is off unless `Security:PasswordReset` +
+  `Email` (SMTP) are set: hashed single-use tokens in `sec.password_reset`, one answer for every request, mail queued (`IMailOutbox`).
 - Machine data: MQTT Sparkplug B, OPC UA and EtherNet/IP, built on the connector SDK (`src/Pulaski.Connectors`: `IConnector`, samples;
   `Pulaski.Connectors.Sparkplug`: hand-written protobuf codec, host logic in `SparkplugHost`, MQTTnet 4; `Pulaski.Connectors.OpcUa`:
   OPC Foundation stack 2.0 behind `IOpcUaSession`; `Pulaski.Connectors.EthernetIp`: libplctag behind `ICipTagReader`). `src/Pulaski.Edge`

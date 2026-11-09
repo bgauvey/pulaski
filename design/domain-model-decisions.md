@@ -2426,6 +2426,30 @@ to whoever may grant it; such grants show as "*Role · every site*", marked apar
 
 **Not done:** roles held at a group of sites (a region); every-site grants from a provider's groups.
 
+## Password reset by e-mail (D-093, proposed)
+
+Issue #87. Pulaski sent no e-mail, so only an administrator could reset a forgotten password.
+
+**Off by default.** On only with `Security:PasswordReset:Enabled`, the UI's public address (`UiBaseUrl`, https; the link is made from it,
+never from the request's host, which a caller chooses) and an SMTP server and sender in the `Email` section (configuration only, never the
+database). `GET /api/auth/options` says whether it is on; the sign-in page then links to *Forgotten your password?*.
+
+**Asking** (`POST /api/auth/password-reset`, signed out; `RequestPasswordResetCommand`). The user name, or an e-mail address (the user's
+choice) that is exactly one active local user's. Eligible: active, local, an e-mail address on file, not a service account, and, when only
+administrators use passwords (D-091), an administrator (the user's choice: everyone but machines). At most one link a minute and three an
+hour per user. A new link revokes the earlier open ones. The token is 32 random bytes (base64url) in the link only; `sec.password_reset`
+keeps its SHA-256, the user, and when it was asked and expires (30 minutes, 5 to 1440). Event `user.password_reset_requested` (without the
+token). **Every answer is the same sentence**, matched or not, eligible or not, rate-limited or not; and the e-mail is queued
+(`IMailOutbox` → `MailOutbox`, an in-memory channel sent by `MailSenderService` through `SmtpMailSender`, failures logged by the address's
+domain only), so the answer's timing doesn't tell either.
+
+**Completing** (`POST /api/auth/password-reset/complete`, `CompletePasswordResetCommand`). The token's hash must find an open, unexpired
+link of a user still eligible; otherwise one message ("expired or was already used"). The password rules apply; it sets the password (not
+temporary), unlocks, marks the link used and revokes the rest, records `user.password_reset` with `ByEmail`, and e-mails a notice that it
+changed. An administrator's reset and a password change revoke open links too; the administrator's reset stays as it was.
+
+**Not done:** retrying an e-mail the server refused; HTML e-mail; e-mail for anything else; a reset for provider users (their provider owns it).
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

@@ -18,6 +18,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// <summary>What material connections fetch (D-068), as a test sets it, in place of an OData service.</summary>
     public Testing.FakeMaterialConnectionFetcher MaterialConnectionFetcher { get; } = new();
 
+    /// <summary>The e-mails the commands would send (D-093); password reset by e-mail is on in these tests.</summary>
+    public Testing.FakeMailOutbox Mail { get; } = new();
+
     private const string DefaultAdminConnection = "Host=localhost;Database=postgres";
 
     private readonly string _adminConnection =
@@ -93,6 +96,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
         // The API keys badge hashes with its signing key (D-049); here a stand-in does.
         services.AddSingleton<Application.Labor.IBadgeHasher>(new ReversingBadgeHasher());
+        services.AddSingleton<Application.Security.IPasswordResetSettings>(new Testing.FakePasswordResetSettings());
+        services.AddSingleton<Application.Security.IMailOutbox>(Mail);
         Services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 

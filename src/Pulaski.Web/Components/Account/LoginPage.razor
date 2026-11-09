@@ -46,7 +46,14 @@
     <button type="submit" class="btn btn-primary w-100">Sign in</button>
 </EditForm>
 
-<p class="small text-muted mt-3 mb-0">Forgotten your password? Ask an administrator to reset it.</p>
+@if (_options.PasswordResetByEmail)
+{
+    <p class="small mt-3 mb-0"><a href="account/forgot">Forgotten your password?</a></p>
+}
+else
+{
+    <p class="small text-muted mt-3 mb-0">Forgotten your password? Ask an administrator to reset it.</p>
+}
 
 @code {
     [CascadingParameter]

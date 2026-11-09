@@ -52,6 +52,21 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         return await ReadAsync<SignInResponse>(response, ct);
     }
 
+    /// <summary>Asks for a password reset link (D-093); the answer is the same whether or not an account matched.</summary>
+    public async Task<PasswordResetAnswer> RequestPasswordResetAsync(RequestPasswordResetRequest request, CancellationToken ct = default)
+    {
+        var message = new HttpRequestMessage(HttpMethod.Post, "api/auth/password-reset") { Content = JsonContent.Create(request) };
+        using var response = await SendCoreAsync(message, ct, signedIn: false);
+        return await ReadAsync<PasswordResetAnswer>(response, ct);
+    }
+
+    public async Task CompletePasswordResetAsync(CompletePasswordResetRequest request, CancellationToken ct = default)
+    {
+        var message = new HttpRequestMessage(HttpMethod.Post, "api/auth/password-reset/complete") { Content = JsonContent.Create(request) };
+        using var response = await SendCoreAsync(message, ct, signedIn: false);
+        await ReadAsync<VersionResponse>(response, ct);
+    }
+
     public async Task<SignInResponse> SignInAsync(SignInRequest request, CancellationToken ct = default)
     {
         var message = new HttpRequestMessage(HttpMethod.Post, "api/auth/sign-in") { Content = JsonContent.Create(request) };

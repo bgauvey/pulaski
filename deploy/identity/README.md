@@ -113,3 +113,29 @@ Everyone else is told to use your organisation's sign-in.
   database as for any lost password, or ask another administrator.
 - Check the API's log for *refused the sign-in* (the provider's error code) or *couldn't be trusted* (the ID token failed a check:
   usually a wrong authority, a tenant mismatch or a clock far off).
+
+## Password reset by e-mail (optional)
+
+People with a Pulaski password can reset a forgotten one themselves (D-093). It is off until you set, in the API's settings:
+
+```json
+{
+  "Security": {
+    "PasswordReset": { "Enabled": true, "UiBaseUrl": "https://mes.example.com", "LinkMinutes": 30 }
+  },
+  "Email": {
+    "Host": "smtp.example.com",
+    "Port": 587,
+    "UseTls": true,
+    "Username": "pulaski@example.com",
+    "Password": "<from your secret store>",
+    "From": "pulaski@example.com",
+    "FromName": "Pulaski"
+  }
+}
+```
+
+- `UiBaseUrl` is the address people open Pulaski at; the link is built from it, never from the request.
+- The e-mail goes to the address on the user in Pulaski, so check that administrators keep those right.
+- Service accounts never get links; with `LocalSignIn` = `administrators`, only administrators do.
+- A message the server refuses is logged (*Couldn't send …*) and not retried; the person can ask again after a minute.

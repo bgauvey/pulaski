@@ -24,6 +24,32 @@ public sealed record SecurityUser(Guid Id, string Issuer, string Subject, string
     public bool IsServiceAccount { get; init; }
 }
 
+/// <summary>A password reset link as kept (D-093): only the token's hash.</summary>
+public sealed record PasswordResetLink(Guid Id, Guid UserId, string TokenHash, DateTimeOffset RequestedAt, DateTimeOffset ExpiresAt);
+
+/// <summary>
+/// Password reset by e-mail (D-093), from configuration: off unless switched on with an SMTP server and the UI's public address, which the link
+/// is made from (never from the request, whose host a caller chooses).
+/// </summary>
+public interface IPasswordResetSettings
+{
+    bool Enabled { get; }
+
+    TimeSpan LinkLifetime { get; }
+
+    /// <summary>The UI's public address, such as <c>https://mes.example.com</c>.</summary>
+    string UiBaseUrl { get; }
+
+    /// <summary>Only administrators and service accounts sign in with a password (D-091), so only administrators may reset one.</summary>
+    bool AdministratorsOnly { get; }
+}
+
+/// <summary>Sends an e-mail later, off the request (D-093), so how long an answer takes says nothing about whether an account exists.</summary>
+public interface IMailOutbox
+{
+    void Enqueue(string recipient, string subject, string body);
+}
+
 /// <summary>A local user's password and lockout state.</summary>
 public sealed record LocalCredential(Guid UserId, string PasswordHash, bool MustChange, int FailedAttempts, DateTimeOffset? LockedUntil);
 
@@ -72,6 +98,22 @@ public interface ISecurityReadStore
 public interface ISecurityRepository
 {
     Task<Versioned<SecurityUser>?> FindLocalUserForUpdateAsync(string username, CancellationToken cancellationToken);
+
+    /// <summary>The active local users with this e-mail address, ignoring case, locked (D-093).</summary>
+    Task<IReadOnlyList<Versioned<SecurityUser>>> FindLocalUsersByEmailForUpdateAsync(string email, CancellationToken cancellationToken);
+
+    Task InsertPasswordResetAsync(PasswordResetLink link, CancellationToken cancellationToken);
+
+    /// <summary>The open link (not used, not revoked) whose token hashes to <paramref name="tokenHash"/>, locked; null when none.</summary>
+    Task<PasswordResetLink?> FindOpenPasswordResetForUpdateAsync(string tokenHash, CancellationToken cancellationToken);
+
+    /// <summary>How many links were asked for the user since <paramref name="since"/>, for the rate limit.</summary>
+    Task<int> CountPasswordResetsSinceAsync(Guid userId, DateTimeOffset since, CancellationToken cancellationToken);
+
+    Task MarkPasswordResetUsedAsync(Guid id, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Ends every open link of the user, but <paramref name="exceptId"/>.</summary>
+    Task RevokePasswordResetsAsync(Guid userId, DateTimeOffset at, Guid? exceptId, CancellationToken cancellationToken);
 
     /// <summary>The user an identity provider knows by <paramref name="issuer"/> and <paramref name="subject"/>, locked (D-091); null when Pulaski doesn't.</summary>
     Task<Versioned<SecurityUser>?> FindUserByIdentityForUpdateAsync(string issuer, string subject, CancellationToken cancellationToken);

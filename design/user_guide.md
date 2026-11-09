@@ -1831,6 +1831,21 @@ Your session lasts up to 12 hours. When it ends, or an administrator switches yo
 
 A password needs at least 10 characters, with two of: lower case, upper case, digits, symbols, and must not contain your user name. Five wrong passwords in a row lock you out for 15 minutes; an administrator can unlock you sooner by resetting your password.
 
+### Forgotten your password?
+
+Where whoever runs Pulaski has switched it on, the sign-in page shows **Forgotten your password?**:
+
+1. Click **Forgotten your password?**, type your **User name or e-mail**, and click **Send the link**. Pulaski says a link is on its way if that matches an account; it says the same either way, so nobody can find out who has an account.
+2. Open the e-mail and its link within 30 minutes (or the time your organisation set). The link works once.
+3. Type the **New password** twice and click **Change password**, then sign in with it. Pulaski e-mails you that the password was changed.
+
+**In detail**
+
+- The link goes to the e-mail address on your user in Pulaski. Typing an address finds you only if it is yours alone; a user name always works.
+- Asking again sends a new link and the old one stops working. Pulaski sends at most one link a minute and three an hour per user; asking more often sends nothing more.
+- Resetting this way also unlocks you. A link stops working when an administrator resets your password, when you change it, or when you are switched off.
+- Machines' accounts (service accounts) never get links. When only administrators use Pulaski passwords, only administrators can reset theirs this way. Without the link on the sign-in page, ask an administrator.
+
 ### What each role can change
 
 A new Pulaski starts with these roles. Your administrator may have changed them or added others: the **Roles** and **Permissions** tabs of **Configure → Users** show what each role may do today.
@@ -2576,7 +2591,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **The Overview** has no quality figures or SPC alerts yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
 - **Quality:** there are no SPC charts, control limits or alerts yet, and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
-- **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by an administrator (Pulaski sends no e-mail).
+- **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.
 - **A switched-off button's reason** shows when you point at it with the mouse, but not when you move to it with the keyboard (switched-off buttons are skipped); screen readers announce it as unavailable without the reason. Screens that are view-only for you say so in a note at the top instead.
 
 ---

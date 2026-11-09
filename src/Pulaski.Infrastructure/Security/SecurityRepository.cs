@@ -16,6 +16,20 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
 
     private const string GetUser = $"SELECT {UserColumns} FROM sec.app_user WHERE id = @Id FOR UPDATE";
 
+    private const string FindByEmail =
+        $"SELECT {UserColumns} FROM sec.app_user WHERE idp_issuer = 'pulaski-local' AND is_active AND lower(email) = lower(@Email) ORDER BY id FOR UPDATE";
+
+    private const string InsertReset = """
+        INSERT INTO sec.password_reset (id, app_user_id, token_hash, requested_at, expires_at)
+        VALUES (@Id, @UserId, @TokenHash, @RequestedAt, @ExpiresAt)
+        """;
+
+    private const string FindOpenReset = """
+        SELECT id, app_user_id AS user_id, token_hash, requested_at, expires_at FROM sec.password_reset
+        WHERE token_hash = @TokenHash AND used_at IS NULL AND revoked_at IS NULL
+        FOR UPDATE
+        """;
+
     private const string FindByIdentity = $"SELECT {UserColumns} FROM sec.app_user WHERE idp_issuer = @Issuer AND idp_subject = @Subject FOR UPDATE";
 
     private const string InsertUser = """
@@ -131,6 +145,32 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
     public async Task<Versioned<SecurityUser>?> FindLocalUserForUpdateAsync(string username, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<UserRow>(FindLocal, new { Username = username }, cancellationToken))?.ToVersioned();
 
+    public async Task<IReadOnlyList<Versioned<SecurityUser>>> FindLocalUsersByEmailForUpdateAsync(string email, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<UserRow>(FindByEmail, new { Email = email }, cancellationToken)).Select(r => r.ToVersioned())];
+
+    public Task InsertPasswordResetAsync(PasswordResetLink link, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(InsertReset, link, cancellationToken);
+
+    public async Task<PasswordResetLink?> FindOpenPasswordResetForUpdateAsync(string tokenHash, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<ResetRow>(FindOpenReset, new { TokenHash = tokenHash }, cancellationToken) is { } r
+            ? new PasswordResetLink(r.Id, r.UserId, r.TokenHash, r.RequestedAt, r.ExpiresAt)
+            : null;
+
+    public Task<int> CountPasswordResetsSinceAsync(Guid userId, DateTimeOffset since, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<int>(
+            "SELECT count(*)::int FROM sec.password_reset WHERE app_user_id = @UserId AND requested_at >= @Since", new { UserId = userId, Since = since }, cancellationToken);
+
+    public Task MarkPasswordResetUsedAsync(Guid id, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync("UPDATE sec.password_reset SET used_at = @At WHERE id = @Id", new { Id = id, At = at }, cancellationToken);
+
+    public Task RevokePasswordResetsAsync(Guid userId, DateTimeOffset at, Guid? exceptId, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(
+            """
+            UPDATE sec.password_reset SET revoked_at = @At
+            WHERE app_user_id = @UserId AND used_at IS NULL AND revoked_at IS NULL AND (@ExceptId::uuid IS NULL OR id <> @ExceptId)
+            """,
+            new { UserId = userId, At = at, ExceptId = exceptId }, cancellationToken);
+
     public async Task<Versioned<SecurityUser>?> FindUserByIdentityForUpdateAsync(string issuer, string subject, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<UserRow>(FindByIdentity, new { Issuer = issuer, Subject = subject }, cancellationToken))?.ToVersioned();
 
@@ -240,6 +280,15 @@ internal sealed class SecurityRepository(DbSession session) : ISecurityRepositor
         public bool AllowsEverySite { get; init; }
         public long Version { get; init; }
         public string[] Permissions { get; init; } = [];
+    }
+
+    private sealed class ResetRow
+    {
+        public Guid Id { get; init; }
+        public Guid UserId { get; init; }
+        public string TokenHash { get; init; } = "";
+        public DateTimeOffset RequestedAt { get; init; }
+        public DateTimeOffset ExpiresAt { get; init; }
     }
 
     private sealed class CredentialRow

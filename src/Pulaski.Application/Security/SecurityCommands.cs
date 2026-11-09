@@ -177,6 +177,7 @@ internal sealed class ChangePasswordHandler(
 
         var now = timeProvider.GetUtcNow();
         await security.UpsertCredentialAsync(credential with { PasswordHash = hasher.Hash(command.NewPassword), MustChange = false, FailedAttempts = 0, LockedUntil = null }, now, cancellationToken);
+        await security.RevokePasswordResetsAsync(user.Value.Id, now, null, cancellationToken);
         await eventLog.AppendAsync(events.Create(EventTypes.PasswordChanged, "app_user", user.Value.Id, new { user.Value.Username }), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new VersionResponse(user.Version);
@@ -312,6 +313,9 @@ internal sealed class ResetPasswordHandler(
 
         SecurityRules.EnsurePassword(command.TemporaryPassword, user.Value.Username ?? "", nameof(command.TemporaryPassword));
         await security.UpsertCredentialAsync(new LocalCredential(user.Value.Id, hasher.Hash(command.TemporaryPassword), MustChange: true, 0, null), timeProvider.GetUtcNow(), cancellationToken);
+
+        // A reset link sent earlier (D-093) no longer works once an administrator has reset the password.
+        await security.RevokePasswordResetsAsync(user.Value.Id, timeProvider.GetUtcNow(), null, cancellationToken);
         await eventLog.AppendAsync(events.Create(EventTypes.PasswordReset, "app_user", user.Value.Id, new { user.Value.Username }), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new VersionResponse(user.Version);

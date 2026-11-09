@@ -806,6 +806,20 @@ CREATE TABLE sec.local_credential (
     changed_at          timestamptz NOT NULL DEFAULT now()
 );
 
+-- A link to reset a local password by e-mail (D-093): only the token's SHA-256 is kept; single use, expiring, ended when another is asked for.
+CREATE TABLE sec.password_reset (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    app_user_id     uuid NOT NULL REFERENCES sec.app_user(id),
+    token_hash      text NOT NULL,                              -- hex SHA-256 of the token in the link
+    requested_at    timestamptz NOT NULL,
+    expires_at      timestamptz NOT NULL,
+    used_at         timestamptz,                                -- the password was set with it
+    revoked_at      timestamptz,                                -- another link was asked for, or the password changed otherwise
+    CONSTRAINT password_reset_token_uq UNIQUE (token_hash),
+    CONSTRAINT password_reset_end_ck CHECK (used_at IS NULL OR revoked_at IS NULL)
+);
+CREATE INDEX password_reset_user_ix ON sec.password_reset (app_user_id, requested_at DESC);
+
 -- Permissions are code-defined strings ('job.dispatch', 'downtime.code',
 -- 'spc.limits.approve', 'lot.hold'); the table lists what the code knows.
 CREATE TABLE sec.permission (
@@ -2488,7 +2502,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0056_material_sources'),
     ('0057_connection_schedules'),
     ('0058_identity_providers'),
-    ('0059_every_site_roles');
+    ('0059_every_site_roles'),
+    ('0060_password_reset');
 
 -- =====================================================================
 -- 17. SEED DATA

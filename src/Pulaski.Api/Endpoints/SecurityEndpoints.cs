@@ -31,12 +31,22 @@ internal static class SecurityEndpoints
         });
 
         // How people may sign in (D-091): the identity providers, and who may still use a password.
-        auth.MapGet("/options", [AllowSignedOut] (IdentityProviderClient providers, IOptions<SecurityOptions> options) =>
+        auth.MapGet("/options", [AllowSignedOut] (IdentityProviderClient providers, IOptions<SecurityOptions> options, IPasswordResetSettings reset) =>
             TypedResults.Ok(new SignInOptionsDto
             {
                 Providers = [.. providers.Providers.Select(p => new SignInProviderDto { Name = p.Name, DisplayName = p.DisplayName })],
                 LocalSignIn = options.Value.LocalSignInForAdministratorsOnly ? LocalSignInModes.Administrators : LocalSignInModes.Everyone,
+                PasswordResetByEmail = reset.Enabled,
             }));
+
+        // Forgotten passwords (D-093): the same answer whoever is asked about; the link and the new password come back separately.
+        auth.MapPost("/password-reset", [AllowSignedOut] async Task<Ok<PasswordResetAnswer>> (
+            RequestPasswordResetRequest request, ICommandHandler<RequestPasswordResetCommand, string> handler, CancellationToken ct) =>
+            TypedResults.Ok(new PasswordResetAnswer { Message = await handler.HandleAsync(new RequestPasswordResetCommand(request.Login), ct) }));
+
+        auth.MapPost("/password-reset/complete", [AllowSignedOut] async Task<Ok<VersionResponse>> (
+            CompletePasswordResetRequest request, ICommandHandler<CompletePasswordResetCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CompletePasswordResetCommand(request.Token, request.NewPassword), ct)));
 
         // The code flow (D-091): the UI sends the browser to the provider, then hands its answer back with the sealed transaction.
         auth.MapPost("/providers/{name}/start", [AllowSignedOut] async Task<Ok<StartProviderSignInResponse>> (
