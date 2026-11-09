@@ -187,6 +187,8 @@ internal sealed class PasswordResetOff : IPasswordResetSettings
 /// <summary>Sends nothing, where no mail server is configured.</summary>
 internal sealed class NoMail : IMailOutbox
 {
+    public bool CanSend => false;
+
     public void Enqueue(string recipient, string subject, string body)
     {
     }

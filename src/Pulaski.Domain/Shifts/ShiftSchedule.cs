@@ -7,14 +7,32 @@ namespace Pulaski.Domain.Shifts;
 /// <see cref="Length"/>, and runs on the listed days of the cycle (0 is the cycle's first day). <see cref="Crew"/> is the
 /// code of the crew that works it (D-040); a rotation is several shifts at the same time on different days.
 /// </summary>
-public sealed record ShiftDefinition(string Code, string Name, TimeOnly Start, TimeSpan Length, IReadOnlyList<int> Days, string? Crew = null);
+public sealed record ShiftDefinition(string Code, string Name, TimeOnly Start, TimeSpan Length, IReadOnlyList<int> Days, string? Crew = null,
+    IReadOnlyList<PlannedBreak>? Breaks = null);
+
+/// <summary>
+/// A break planned in a shift (#84, D-095), such as lunch: it starts at <see cref="Start"/> (site-local clock time, within the shift) for
+/// <see cref="Length"/>. It is only a plan: screens offer it at that time and Shift review says who didn't take it; nothing is recorded by it.
+/// </summary>
+public sealed record PlannedBreak(string Name, TimeOnly Start, TimeSpan Length, bool IsPaid);
+
+/// <summary>A planned break on the calendar, within one shift occurrence.</summary>
+public sealed record PlannedBreakWindow(string Name, DateTimeOffset Start, DateTimeOffset End, bool IsPaid)
+{
+    /// <summary>Running at <paramref name="at"/>, or starting within <paramref name="lead"/> of it.</summary>
+    public bool IsNear(DateTimeOffset at, TimeSpan lead) => Start - lead <= at && at < End;
+}
 
 /// <summary>
 /// A shift on the calendar: when it runs, the production day it counts towards (the day it starts on) and its crew.
 /// <see cref="IsOverride"/> marks a shift that one date's override added or changed (D-042).
 /// </summary>
 public sealed record ShiftOccurrence(string Code, string Name, DateOnly ProductionDate, DateTimeOffset Start, DateTimeOffset End, string? Crew = null,
-    bool IsOverride = false);
+    bool IsOverride = false)
+{
+    /// <summary>The breaks planned in it (#84): the shift's own, at their clock times, those that fit when an override moved it.</summary>
+    public IReadOnlyList<PlannedBreakWindow> Breaks { get; init; } = [];
+}
 
 /// <summary>
 /// One date's change to a schedule (D-042), leaving the repeating cycle alone. On <see cref="ProductionDate"/> the shift
@@ -49,6 +67,9 @@ public sealed record ShiftSchedule(string Code, string Name, int CycleDays, Date
 {
     public const int MaxCycleDays = 56;
     public const int MaxOverrides = 1000;
+    public const int MaxBreaks = 6;
+    public static readonly TimeSpan MinBreak = TimeSpan.FromMinutes(5);
+    public static readonly TimeSpan MaxBreak = TimeSpan.FromHours(4);
     public const int MaxCodeLength = 30;
     public static readonly TimeSpan MinLength = TimeSpan.FromMinutes(15);
     public static readonly TimeSpan MaxLength = TimeSpan.FromHours(24);
@@ -81,13 +102,13 @@ public sealed record ShiftSchedule(string Code, string Name, int CycleDays, Date
         var byDate = overrides.Where(x => x.ProductionDate >= first && x.ProductionDate <= last).ToLookup(x => x.ProductionDate);
         var result = new List<ShiftOccurrence>();
 
-        void Add(DateOnly date, string code, string name, TimeOnly at, TimeSpan length, string? crew, bool isOverride)
+        void Add(DateOnly date, string code, string name, TimeOnly at, TimeSpan length, string? crew, bool isOverride, IReadOnlyList<PlannedBreak>? breaks)
         {
             var start = ToInstant(date.ToDateTime(at), zone);
             var end = start + length;
             if (end > from && start < to)
             {
-                result.Add(new ShiftOccurrence(code, name, date, start, end, crew, isOverride));
+                result.Add(new ShiftOccurrence(code, name, date, start, end, crew, isOverride) { Breaks = BreakWindows(date, at, start, end, breaks, zone) });
             }
         }
 
@@ -97,17 +118,41 @@ public sealed record ShiftSchedule(string Code, string Name, int CycleDays, Date
             var changed = byDate[date].ToDictionary(x => x.Code, StringComparer.OrdinalIgnoreCase);
             foreach (var shift in Shifts.Where(s => s.Days.Contains(day) && !changed.ContainsKey(s.Code)))
             {
-                Add(date, shift.Code, shift.Name, shift.Start, shift.Length, shift.Crew, isOverride: false);
+                Add(date, shift.Code, shift.Name, shift.Start, shift.Length, shift.Crew, isOverride: false, shift.Breaks);
             }
 
             // An override replaces the cycle's shift of its code that day, or adds one; a day off removes it.
             foreach (var entry in changed.Values.Where(x => x.IsWorking))
             {
-                Add(date, entry.Code, entry.Name, entry.Start, entry.Length, entry.Crew, isOverride: true);
+                Add(date, entry.Code, entry.Name, entry.Start, entry.Length, entry.Crew, isOverride: true,
+                    Shifts.FirstOrDefault(s => string.Equals(s.Code, entry.Code, StringComparison.OrdinalIgnoreCase))?.Breaks);
             }
         }
 
         return [.. result.OrderBy(o => o.Start)];
+    }
+
+    // A break at its clock time on the shift's first day, or the next when that is before the shift starts; only one that fits inside it.
+    private static IReadOnlyList<PlannedBreakWindow> BreakWindows(
+        DateOnly date, TimeOnly shiftStart, DateTimeOffset start, DateTimeOffset end, IReadOnlyList<PlannedBreak>? breaks, TimeZoneInfo zone)
+    {
+        if (breaks is not { Count: > 0 })
+        {
+            return [];
+        }
+
+        var windows = new List<PlannedBreakWindow>();
+        foreach (var b in breaks)
+        {
+            var day = b.Start >= shiftStart ? date : date.AddDays(1);
+            var at = ToInstant(day.ToDateTime(b.Start), zone);
+            if (at >= start && at + b.Length <= end)
+            {
+                windows.Add(new PlannedBreakWindow(b.Name, at, at + b.Length, b.IsPaid));
+            }
+        }
+
+        return [.. windows.OrderBy(w => w.Start)];
     }
 
     /// <summary>The schedule with one date's override for a shift set (added or replaced) or, with null, removed.</summary>
@@ -171,6 +216,8 @@ public sealed record ShiftSchedule(string Code, string Name, int CycleDays, Date
             {
                 problems.Add($"{label} names a day outside the {CycleDays}-day cycle.");
             }
+
+            problems.AddRange(BreakProblems(shift, label));
         }
 
         problems.AddRange(OverrideProblems());
@@ -190,6 +237,53 @@ public sealed record ShiftSchedule(string Code, string Name, int CycleDays, Date
         }
 
         return problems;
+    }
+
+    /// <summary>A shift's planned breaks (#84): named, 5 minutes to 4 hours, inside the shift, not overlapping, at most six.</summary>
+    private static IEnumerable<string> BreakProblems(ShiftDefinition shift, string label)
+    {
+        var breaks = shift.Breaks ?? [];
+        if (breaks.Count > MaxBreaks)
+        {
+            yield return $"{label} has more than {MaxBreaks} planned breaks.";
+        }
+
+        var spans = new List<(TimeSpan From, TimeSpan To, string Name)>();
+        foreach (var b in breaks)
+        {
+            var name = string.IsNullOrWhiteSpace(b.Name) ? "A break" : b.Name;
+            if (string.IsNullOrWhiteSpace(b.Name) || b.Name.Length > 40)
+            {
+                yield return $"{label}: each planned break needs a name of up to 40 characters.";
+            }
+
+            if (b.Length < MinBreak || b.Length > MaxBreak)
+            {
+                yield return $"{label}: {name} is 5 minutes to 4 hours long.";
+            }
+
+            var offset = b.Start.ToTimeSpan() - shift.Start.ToTimeSpan();
+            if (offset < TimeSpan.Zero)
+            {
+                offset += TimeSpan.FromDays(1);
+            }
+
+            if (offset + b.Length > shift.Length)
+            {
+                yield return $"{label}: {name} at {b.Start.ToString("HH:mm", CultureInfo.InvariantCulture)} isn't inside the shift.";
+            }
+
+            spans.Add((offset, offset + b.Length, name));
+        }
+
+        var ordered = spans.OrderBy(s => s.From).ToList();
+        for (var i = 1; i < ordered.Count; i++)
+        {
+            if (ordered[i].From < ordered[i - 1].To)
+            {
+                yield return $"{label}: {ordered[i - 1].Name} and {ordered[i].Name} overlap.";
+            }
+        }
     }
 
     private IEnumerable<string> OverrideProblems()

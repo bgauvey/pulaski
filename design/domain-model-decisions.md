@@ -774,7 +774,7 @@ Sharing out by overlap means nobody re-clocks when the job on a line changes. Ru
 
 **Events:** `pulaski.crew.created.v1`, `…updated.v1`, `pulaski.person.created.v1`, `…updated.v1`, `pulaski.labor.started.v1`, `…ended.v1`, `…changed.v1`, `…corrected.v1`, `…shift_approved.v1`.
 
-**Not yet:** labor by shift on the Overview; a person working at another site than their own; editing a session's job or type on the review screen (only times and share). Breaks are D-047, qualifications D-048, badges and terminals D-049, people from HR and the ERP D-054.
+**Not yet:** labor by shift on the Overview. Other sites and editing a session's job or kind on Shift review came with D-095. Breaks are D-047, qualifications D-048, badges and terminals D-049, people from HR and the ERP D-054.
 
 ## Shift overrides (D-042, proposed)
 
@@ -871,7 +871,7 @@ Amends D-040. Labor reports separate working time from breaks, so payroll and ef
 
 **Who and API.** An operator takes their own (`labor.record_own`, `POST /api/labor/me/breaks`, `…/me/breaks/{id}/end`); a supervisor records and changes others' (`labor.record`, `POST /api/labor/breaks`, `…/{id}/end`, `PUT /api/labor/breaks/{id}`); `POST /api/labor/breaks/{id}/correct` needs `labor.approve`. Sessions carry `hours` (worked) and `breakHours`; shifts and the by-person report carry paid and unpaid break hours; a shift's review lists its breaks. Events: `pulaski.labor.break_started.v1`, `…break_ended.v1`, `…break_changed.v1`, `…break_corrected.v1`.
 
-**Not yet:** breaks planned on a shift schedule (a fixed lunch), filled in on their own.
+**Not yet:** breaks filled in on their own. Breaks planned on shift schedules came with D-095, as a prompt and a check only.
 
 ## Qualifications (D-048, proposed)
 
@@ -887,7 +887,7 @@ Amends D-040 ("qualifications, not yet") and replaces the planned `core.qualific
 
 **Who and API.** `people.manage` maintains qualifications and grants (`GET/POST /api/qualifications`, `PUT /api/qualifications/{id}`, `GET/POST /api/qualifications/grants`, `PUT …/grants/{id}`, `POST …/grants/{id}/revoke`); the grants list filters by person, qualification and `expiringWithinDays`. `equipment.manage` sets requirements (`GET/PUT /api/equipment/{id}/qualifications`). Reads need `labor.view` (and `equipment.view` for the list and requirements). Events: `pulaski.qualification.created.v1`, `…updated.v1`, `…granted.v1`, `…grant_changed.v1`, `…revoked.v1`, `pulaski.equipment.qualification_set.v1`.
 
-**Not yet:** refusing unqualified people where a plant wants it; qualifications from HR; notices before a grant expires.
+**Not yet:** refusing unqualified people where a plant wants it. Qualifications from HR came with D-090, expiry notices with D-095.
 
 ## Shop-floor terminals and badges (D-049, proposed)
 
@@ -905,7 +905,7 @@ Amends D-037 and D-040. Many operators never sign in; at the start of a shift th
 
 **The screen** (`/terminal`, server-rendered forms, no sign-in): a badge field (readers that type the badge and Enter work as they are), then the PIN where asked, then the person's time and large buttons (clock on to each offered line, the first line highlighted; clock off; start a paid or unpaid break; end break). It goes back to waiting 20 seconds after a badge and a few seconds after an action.
 
-**Not yet:** signing in as a user on a terminal (`user_login`, dropped from the planned modes); recording setup, indirect or training time at a terminal; production or downtime reporting from it; a terminal for several sites.
+**Not yet:** signing in as a user on a terminal (`user_login`, dropped from the planned modes); production or downtime reporting from it; a terminal for several sites. Setup, indirect and training time came with D-095.
 
 ## Machine data, utilization and OEE (D-050, proposed)
 
@@ -2470,6 +2470,44 @@ taking away a user's last role, retiring a container, arranging/splitting proces
 unsaved changes, every file import's Import, a connection's Import, new shift schedule, expand/collapse while searching.
 
 **Not done:** checkboxes and other inputs switched off with a reason (the Permissions tab's implied views) still use a title.
+
+## Labor gaps: shift review, terminal time, planned breaks, other sites, expiry notices (D-095, proposed)
+
+Issue #84. Each reuses the labor writers and approval locks (D-040, D-047, D-049); corrections stay new sessions.
+
+**Shift review: job and kind.** The edit row chooses the kind (direct, setup, indirect, training), the job (from the line's jobs,
+`ListLineJobsQuery`, `GET /api/labor/lines/{id}/jobs`, `labor.view`) and an indirect reason. Before approval it changes the session
+(`UpdateLaborSessionCommand`); after, it is a correction (`CorrectLaborSessionCommand`): a new session replaces it. Setup needs a job and
+indirect a reason, as anywhere.
+
+**Terminals: kind first, then line** (the user's choice). After badging, Production / Setup / Indirect / Training toggles; Indirect then
+shows the site's indirect reasons as buttons (`TerminalStatusDto.IndirectReasons`); then the lines. Each step reposts the form and reads
+the person again by their ticket (`POST /api/terminal/person`). `TerminalClockOnCommand` takes `LaborType` and `ReasonCodeId`; setup goes to
+the line's job (`FindSetupJobAsync`: the running one, else the next open one by `sequence_rank`), refused when there is none.
+
+**Planned breaks: prompt, never record** (the user's choice). A shift in a schedule's `jsonb` lists up to six `PlannedBreak`s (name,
+site-local clock time, length 5 min–4 h, paid), inside the shift and not overlapping (`ShiftSchedule.Problems`). `Expand` puts them on each
+`ShiftOccurrence.Breaks` (an override keeps those of its code that fit). Operate → Labor shows the current shift's breaks (*now* while one
+runs); a terminal offers the one running or starting within 10 minutes first (`TerminalStatusDto.PlannedBreak`); Shift review lists the
+planned breaks and flags who was on a line all through one that ended and took no break (`PlannedBreakCheck.Missed`). Nothing is recorded
+unless someone starts a break.
+
+**Other sites: listed** (the user's choice). `core.person_site` lists the other sites a person also works at, set on Configure → People
+(`SetPersonSitesCommand`, `PUT /api/people/{id}/sites`, `people.manage` at their own site; a site they are clocked on at can't be taken off;
+event `person.sites_changed`). There they appear in people lists marked by their own site (`PersonDto.HomeSiteCode`, edited only at home),
+clock on (`LaborWriter.WorksAtAsync`) and badge at terminals; a session's `site_id` is the line's site (so its shift and approval are that
+site's), a break's the shift's. Qualifications of such a site may be granted to them; grant lists go by the qualification's site. A
+person's own sessions and breaks are read at whichever site (my time, the terminal).
+
+**Expiry notices: person and people managers** (the user's choice). `core.qualification.notice_days` (null = 30). `QualificationNoticeService`
+(API, every `Labor:ExpiryNotices:PollMinutes`, 60) runs `QualificationExpiryNotices.SendDueAsync` when a mail server is configured
+(`IMailOutbox.CanSend`, D-093): grants unrevoked, expiring within their notice days on the site's day, not yet expired, not followed by a
+longer grant, locked `SKIP LOCKED`; an e-mail to the person (their user's address) and one digest per site to the users holding
+`people.manage` there (administrators only when no one else does); then `person_qualification.expiry_noticed_at` and an event
+`qualification.expiry_noticed` per grant, the mail queued after commit.
+
+**Not done:** production or downtime reporting and user sign-in at terminals; planned breaks recorded automatically; notices for grants
+that already expired unnoticed; a terminal or person across sites beyond listing.
 
 ## Application architecture
 

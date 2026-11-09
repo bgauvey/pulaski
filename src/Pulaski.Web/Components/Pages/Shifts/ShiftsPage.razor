@@ -132,6 +132,30 @@
                                         @onclick="() => RemoveRowAsync(edit, row)">×</button>
                             </td>
                         </tr>
+                        @* Breaks planned in the shift (#84): offered at that time and checked on Shift review, never recorded by themselves. *@
+                        <tr @key="(row, true)" class="shift-breaks">
+                            <td colspan="@(6 + edit.CycleDays)" class="small">
+                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                    <span class="text-muted">Planned breaks:</span>
+                                    @foreach (var b in row.Breaks)
+                                    {
+                                        <span class="d-inline-flex align-items-center gap-1" @key="b">
+                                            <input class="form-control form-control-sm" style="width: 7rem" maxlength="40" aria-label="Break name in @row.Code" @bind="b.Name" />
+                                            <input type="time" class="form-control form-control-sm" style="width: 7rem" aria-label="Break starts at" @bind="b.Start" />
+                                            <input type="number" class="form-control form-control-sm" style="width: 5rem" min="5" max="240" aria-label="Break minutes" @bind="b.Minutes" />
+                                            <span>min</span>
+                                            <input class="form-check-input" type="checkbox" id="paid-@b.GetHashCode()" @bind="b.IsPaid" />
+                                            <label class="form-check-label" for="paid-@b.GetHashCode()">paid</label>
+                                            <button type="button" class="btn btn-sm btn-link text-danger p-0" aria-label="Remove break @b.Name" @onclick="() => row.Breaks.Remove(b)">×</button>
+                                        </span>
+                                    }
+                                    @if (row.Breaks.Count < 6)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link p-0" @onclick="() => row.Breaks.Add(new BreakRow { Start = row.Start.AddHours(4) })">+ Break</button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
                     }
                 </tbody>
             </table>
@@ -540,6 +564,8 @@ else
 
         public string? Crew { get; set; }
 
+        public List<BreakRow> Breaks { get; init; } = [];
+
         public static ShiftRow From(ShiftDto s) => new()
         {
             Code = s.Code,
@@ -548,6 +574,7 @@ else
             Hours = Math.Round(s.Minutes / 60m, 2),
             Days = [.. s.Days],
             Crew = s.Crew,
+            Breaks = [.. s.Breaks.Select(BreakRow.From)],
         };
 
         public ShiftDto ToDto() => new()
@@ -558,6 +585,28 @@ else
             Minutes = (int)Math.Round(Hours * 60),
             Days = [.. Days.Order()],
             Crew = string.IsNullOrEmpty(Crew) ? null : Crew,
+            Breaks = [.. Breaks.Select(b => b.ToDto())],
         };
+    }
+
+    private sealed class BreakRow
+    {
+        public string Name { get; set; } = "Lunch";
+
+        public TimeOnly Start { get; set; } = new(12, 0);
+
+        public int Minutes { get; set; } = 30;
+
+        public bool IsPaid { get; set; }
+
+        public static BreakRow From(PlannedBreakDto b) => new()
+        {
+            Name = b.Name,
+            Start = TimeOnly.TryParseExact(b.Start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var t) ? t : new TimeOnly(12, 0),
+            Minutes = b.Minutes,
+            IsPaid = b.IsPaid,
+        };
+
+        public PlannedBreakDto ToDto() => new() { Name = Name, Start = Start.ToString("HH:mm", CultureInfo.InvariantCulture), Minutes = Minutes, IsPaid = IsPaid };
     }
 }

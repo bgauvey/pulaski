@@ -101,6 +101,8 @@ public static class EventTypes
     public const string CrewUpdated = "pulaski.crew.updated.v1";
     public const string PersonCreated = "pulaski.person.created.v1";
     public const string PersonUpdated = "pulaski.person.updated.v1";
+    public const string PersonSitesChanged = "pulaski.person.sites_changed.v1";
+    public const string QualificationExpiryNoticed = "pulaski.qualification.expiry_noticed.v1";
     public const string LaborStarted = "pulaski.labor.started.v1";
     public const string LaborEnded = "pulaski.labor.ended.v1";
     public const string LaborChanged = "pulaski.labor.changed.v1";

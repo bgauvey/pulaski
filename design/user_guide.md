@@ -1961,8 +1961,11 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 3. Type a **Code** (such as `2X8`; it can't change later) and a **Name**.
 4. Set **Repeats every (days)** and **Cycle starts on**. For a weekly schedule leave 7 and a Monday.
 5. For each shift, set its **Shift** code, **Name**, **Starts** time, **Hours** and, if you record labor, the **Crew** that works it, and tick the days it runs. **Add shift** adds one that starts when the last one ends, on the same days; **×** removes one.
-6. Check **The next 7 days** below the grid: it lists the shifts as they will fall, and the hours per cycle. Problems, such as two shifts overlapping, show there instead.
-7. Click **Create schedule**.
+6. Under each shift, **Planned breaks** lists its breaks, such as lunch: **+ Break** adds one; give it a name, the time it starts, its minutes and whether it is **paid**. A break must fall inside its shift and not overlap another; up to six.
+7. Check **The next 7 days** below the grid: it lists the shifts as they will fall, and the hours per cycle. Problems, such as two shifts overlapping, show there instead.
+8. Click **Create schedule**.
+
+Planned breaks are a plan, not a record: at that time terminals offer them first and **Operate → Labor** shows them, and **Shift review** says who was on all through one without taking a break. A break is recorded only when someone starts it.
 
 ### Make a line follow it
 
@@ -2022,6 +2025,7 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 2. On **Crews**, type a **Code** (such as `RED`; it can't change later) and a **Name**, and click **Add crew**.
 3. On **People**, fill in **Employee no.**, **Name**, the **Crew** and, if they will clock themselves on, the Pulaski **User name** they sign in as. Click **Add person**.
 4. In **Configure → Shifts**, set the **Crew** of each shift.
+5. Someone who also works at another site: on **People**, click **Change** under **Also works at**, tick the other sites and click **Save sites**. There they show *From* their own site in the lists, can be checked in, clock on and badge at the terminals; their time there belongs to that site and is approved there. Their details stay at their own site. A site they are clocked on at can't be taken off.
 
 ### Import people from HR or the ERP
 
@@ -2081,7 +2085,8 @@ Running it needs permission to maintain people at the site. Credentials go in th
 ### Badge at a terminal (everyone)
 
 1. Hold your badge to the reader (or type its number and press Enter). If the terminal asks, type your **PIN** and press **Go**.
-2. The terminal greets you and shows what you are on. Press **Clock on** and a line (the highlighted one is this terminal's usual line), **Clock off**, **Start break**, **Start paid break** or **End break**.
+2. The terminal greets you and shows what you are on. Press **Clock on** and a line (the highlighted one is this terminal's usual line), **Clock off**, **Start break**, **Start paid break** or **End break**. When a break is planned now in your shift, **Start lunch** (or its name) comes first.
+   For time that isn't production, first press **Setup**, **Indirect** or **Training**, then the line. Setup is for the job on the line (the one running, else the next one planned); **Indirect** first asks what for, from the site's indirect reasons.
 3. It says what it did, and any warning (such as a missing qualification), then waits for the next person. **Not me / cancel** goes straight back.
 
 ### Set up a terminal (managers)
@@ -2111,13 +2116,14 @@ Running it needs permission to maintain people at the site. Credentials go in th
 3. Back on **Qualifications**, under **Who holds what**, choose the person and the qualification. **Valid from** is today and **until** is filled in from the months valid; change them if you need to. Click **Grant**.
 4. To extend one, click **Renew**: it starts the day after the current grant ends. **Change** fixes a grant's days; **Revoke** ends it, with a reason.
 5. Tick **Expiring in 30 days** to see who needs renewing soon, or click **Holders** on a qualification to see who holds it.
+6. **Notice days** on a qualification (30 when left empty) sets how long before a grant expires Pulaski e-mails about it: once, to the person (if their Pulaski user has an e-mail address) and in one list per site to whoever maintains people there. It needs the e-mail server set up by whoever runs Pulaski; without it nothing is sent. A grant already renewed by a longer one isn't mentioned.
 
 ### Review and approve a shift
 
 1. Open **Operate → Labor → Shift review** (or click **Labor to approve** on the Overview) and choose the **Day**. Each shift that has labor is a button; one with *approved* is locked. The first shift that has ended and isn't approved opens by itself.
-2. Check the people, times and hours. Click **Change** to fix a start, end or share, or **End** for someone still on.
+2. Check the people, times and hours. Click **Change** to fix a start, end or share, the kind of time (direct, setup, indirect, training), its job or its indirect reason, or **End** for someone still on. Setup needs a job and indirect a reason. Above the table, the shift's planned breaks are listed, with anyone who was on all through one and recorded no break; add the break if they took it.
 3. Once the shift has ended, add a note if you like and click **Approve shift**. Anyone still on is clocked off at the end of the shift.
-4. To fix an approved shift, click **Correct** (change the times or share) or **Remove**, say why, and click **Save**. The original row stays, struck through; the hours count the correction.
+4. To fix an approved shift, click **Correct** (change the times, share, kind, job or reason) or **Remove**, say why, and click **Save**. The original row stays, struck through; the hours count the correction.
 
 ### Labor reports
 
@@ -2141,7 +2147,7 @@ Running it needs permission to maintain people at the site. Credentials go in th
 - **Hours** are worked time: elapsed time outside the person's breaks × share; an open session counts until now. Someone on two lines at 50% who takes a 30-minute break loses 15 minutes on each, and has 30 minutes of break.
 - **Breaks:** a break must start while the person is on a line, belongs to that line's shift, lasts at most 4 hours and can't overlap another of theirs. Paid and unpaid breaks both come out of worked hours; paid ones are reported for payroll to add back. Breaks lock with their shift's approval, like time on a line.
 - **Qualifications** belong to a site. A grant is valid from its first day to its last, both included, in the site's time zone; a renewal is a new grant, and the old one stays in the list. A revoked grant no longer counts from the moment it is revoked. Switching a qualification off stops it being granted or required. The Labor screen marks someone on a line without what it requires **Not qualified**; point at it to see what is missing and why.
-- **Terminals:** a terminal records only the badged person's own time: direct time on a line it offers, ending their own sessions, and their breaks, under the same rules as clocking yourself on. Shift review shows *Badged at* and the terminal for that time. A badge that is unknown, revoked or from another site is just *not recognised*. Five wrong PINs in a row lock the badge for 5 minutes. A badge scan is good for 2 minutes; after that, badge again. Pulaski keeps only a scrambled form of badge numbers and PINs, so they can't be read back: to change a PIN, issue the badge again.
+- **Terminals:** a terminal records only the badged person's own time: direct, setup, indirect or training time on a line it offers, ending their own sessions, and their breaks, under the same rules as clocking yourself on. People of another site listed as also working here badge here too. Shift review shows *Badged at* and the terminal for that time. A badge that is unknown, revoked or from another site is just *not recognised*. Five wrong PINs in a row lock the badge for 5 minutes. A badge scan is good for 2 minutes; after that, badge again. Pulaski keeps only a scrambled form of badge numbers and PINs, so they can't be read back: to change a PIN, issue the badge again.
 - **Who:** registering terminals needs permission to register and enrol terminals (Manager); issuing badges, permission to maintain people and crews. People badging at a terminal need no Pulaski permission of their own: the terminal is trusted for that.
 - **Who:** qualifications and grants need permission to maintain people and crews; requiring them on equipment needs permission to maintain equipment. Recording breaks for others needs permission to record labor; taking your own, permission to clock yourself on.
 
@@ -2575,7 +2581,7 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
-- **Labor:** people from HR or the ERP come from a file or a connection; schedules are in UTC, not the site's time, and a failed scheduled run waits for the next one. Qualifications are only added by an import, never revoked, and SCIM users carry none. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
+- **Labor:** people from HR or the ERP come from a file or a connection; schedules are in UTC, not the site's time, and a failed scheduled run waits for the next one. Qualifications are only added by an import, never revoked, and SCIM users carry none. Terminals don't take production or downtime reports and can't sign anyone in as a user. Planned breaks are never recorded on their own. A grant that expired before its notice went out (say, while e-mail was off) gets no notice. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
 - **Materials import** from CSV or B2MML files, from an OData, REST, SOAP or PostgreSQL connection on demand or on a schedule, or one item at a time through the API. Connections can't sign in with OAuth, and there are no adapters for label printing. Capabilities import from CSV only. Pulaski exports materials and classes as B2MML, but not lots; B2MML sublots, assemblies and other languages aren't read.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.

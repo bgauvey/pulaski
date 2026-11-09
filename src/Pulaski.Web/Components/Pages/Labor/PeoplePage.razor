@@ -81,11 +81,23 @@ else if (_tab == "people")
         <fieldset class="view-only-scope" disabled="@(!CanManage)">
             <div class="table-panel">
                 <table class="table align-middle">
-                    <thead><tr><th>Employee no.</th><th>Name</th><th>Crew</th><th>Signs in as</th><th>Badge</th><th>Active</th><th></th></tr></thead>
+                    <thead><tr><th>Employee no.</th><th>Name</th><th>Crew</th><th>Signs in as</th><th>Badge</th><th>Active</th><th>Also works at</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var p in _people)
                         {
                             var edit = PersonEdit(p);
+                            @if (p.HomeSiteCode is { } home)
+                            {
+                                @* From another site (#84): kept at their own site, listed here because they also work here. *@
+                                <tr @key="p.Id" class="@(p.IsActive ? "" : "text-muted")">
+                                    <td class="fw-semibold text-nowrap">@p.EmployeeNumber <span class="chip" title="Their details are kept at @home">From @home</span></td>
+                                    <td>@p.DisplayName</td>
+                                    <td class="small text-muted" colspan="4">Kept at @home: change them there.</td>
+                                    <td class="small">@SiteCodes(p.ExtraSiteIds)</td>
+                                    <td></td>
+                                </tr>
+                                continue;
+                            }
                             <tr @key="p.Id" class="@(p.IsActive ? "" : "text-muted")">
                                 <td class="fw-semibold text-nowrap">
                                     @p.EmployeeNumber
@@ -108,6 +120,29 @@ else if (_tab == "people")
                                 <td><input class="form-control form-control-sm" maxlength="100" placeholder="No sign-in" aria-label="User name of @p.DisplayName" value="@edit.Username" @onchange="e => ChangePerson(p, x => x with { Username = NullIfBlank(Text(e)) })" /></td>
                                 <td class="text-nowrap"><BadgeCell Person="p" Badge="@_badges.FirstOrDefault(b => b.PersonId == p.Id && b.RevokedAt is null)" CanManage="CanManage" OnChanged="LoadAsync" /></td>
                                 <td><input class="form-check-input" type="checkbox" aria-label="@p.DisplayName active" checked="@edit.IsActive" disabled="@(p.Origin != "local")" @onchange="e => ChangePerson(p, x => x with { IsActive = e.Value is true })" /></td>
+                                <td class="small">
+                                    @if (_sitesFor == p.Id)
+                                    {
+                                        @foreach (var other in Sites.AllSites.Where(x => x.Id != p.SiteId))
+                                        {
+                                            <div class="form-check" @key="other.Id">
+                                                <input class="form-check-input" type="checkbox" id="site-@p.Id-@other.Id" checked="@_sitesPicked.Contains(other.Id)"
+                                                       @onchange="e => { if (e.Value is true) _sitesPicked.Add(other.Id); else _sitesPicked.Remove(other.Id); }" />
+                                                <label class="form-check-label" for="site-@p.Id-@other.Id">@other.Code</label>
+                                            </div>
+                                        }
+                                        <button type="button" class="btn btn-sm btn-primary mt-1" disabled="@_saving" @onclick="() => SaveSitesAsync(p)">Save sites</button>
+                                        <button type="button" class="btn btn-sm btn-link mt-1" @onclick="() => _sitesFor = null">Cancel</button>
+                                    }
+                                    else
+                                    {
+                                        @(p.ExtraSiteIds.Count == 0 ? "Only here" : SiteCodes(p.ExtraSiteIds))
+                                        @if (CanManage && Sites.AllSites.Count > 1)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-link p-0 ms-1" @onclick="() => { _sitesFor = p.Id; _sitesPicked = [.. p.ExtraSiteIds]; }">Change</button>
+                                        }
+                                    }
+                                </td>
                                 <td class="text-end">
                                     @if (_personEdits.ContainsKey(p.Id))
                                     {
@@ -174,6 +209,33 @@ else
 }
 
 @code {
+    private Guid? _sitesFor;
+    private HashSet<Guid> _sitesPicked = [];
+
+    private string SiteCodes(IReadOnlyList<Guid> ids) =>
+        string.Join(", ", ids.Select(id => Sites.AllSites.FirstOrDefault(x => x.Id == id)?.Code ?? "another site"));
+
+    // The other sites they also work at (#84): lists and terminals there offer them; their time belongs to the site worked.
+    private async Task SaveSitesAsync(PersonDto person)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await Api.SetPersonSitesAsync(person.Id, new SetPersonSitesRequest { SiteIds = [.. _sitesPicked] });
+            _sitesFor = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
     private string _tab = "people";
     private IReadOnlyList<PersonDto>? _people;
     private IReadOnlyList<BadgeDto> _badges = [];

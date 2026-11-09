@@ -104,7 +104,7 @@ internal sealed class StartBreakHandler(
         await BreakWriter.EnsureOpenAsync(labor, shift, cancellationToken);
 
         var source = command.PersonId is null ? LaborSources.Self : LaborSources.Supervisor;
-        var started = new BreakRecord(ids.NewId(), person.SiteId, person.Id, start, command.EndedAt, command.IsPaid, shift.ProductionDate, shift.ShiftScheduleId,
+        var started = new BreakRecord(ids.NewId(), shift.SiteId, person.Id, start, command.EndedAt, command.IsPaid, shift.ProductionDate, shift.ShiftScheduleId,
             shift.ShiftCode, source, null, false, LaborWriter.Clean(command.Note), request.ActorId);
         var version = await labor.InsertBreakAsync(started, now, cancellationToken);
         await eventLog.AppendAsync(events.Create(EventTypes.LaborBreakStarted, "labor_break", started.Id, new { After = started }), cancellationToken);

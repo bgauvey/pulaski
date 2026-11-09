@@ -16,6 +16,12 @@ public sealed record CreatePersonCommand(Guid SiteId, string EmployeeNumber, str
 /// <summary>Changes a person; for an imported one (D-054) only the crew and sign-in, since the source owns the rest.</summary>
 public sealed record UpdatePersonCommand(Guid Id, long ExpectedVersion, string DisplayName, Guid? CrewId, string? Username, bool IsActive) : ICommand<VersionResponse>;
 
+/// <summary>
+/// Sets the other sites a person also works at (#84), all at once. There they appear in lists and badge at terminals; their time belongs to the
+/// site worked. A site they are clocked on at can't be taken off.
+/// </summary>
+public sealed record SetPersonSitesCommand(Guid PersonId, IReadOnlyList<Guid> SiteIds) : ICommand<VersionResponse>;
+
 internal static class PeopleRules
 {
     /// <summary>The crew, when given, is an active crew of the person's site.</summary>
@@ -192,5 +198,53 @@ internal sealed class UpdatePersonHandler(IUnitOfWork unitOfWork, ILaborReposito
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new VersionResponse(version);
+    }
+}
+
+internal sealed class SetPersonSitesHandler(IUnitOfWork unitOfWork, ILaborRepository labor, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)
+    : ICommandHandler<SetPersonSitesCommand, VersionResponse>
+{
+    public async Task<VersionResponse> HandleAsync(SetPersonSitesCommand command, CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var person = await labor.GetPersonForUpdateAsync(command.PersonId, cancellationToken) ?? throw new NotFoundException($"Person {command.PersonId} not found.");
+        var wanted = command.SiteIds.Where(s => s != person.Value.SiteId).Distinct().ToList();
+        foreach (var site in wanted)
+        {
+            if (!await labor.IsSiteAsync(site, cancellationToken))
+            {
+                throw new DomainRuleException("Choose sites only.");
+            }
+        }
+
+        var current = await labor.ListExtraSitesForUpdateAsync(person.Value.Id, cancellationToken);
+        var removed = current.Except(wanted).ToList();
+        var open = await labor.ListOpenSessionsOfPersonForUpdateAsync(person.Value.Id, cancellationToken);
+        if (open.FirstOrDefault(s => removed.Contains(s.SiteId)) is { } there)
+        {
+            throw new DomainRuleException($"{person.Value.DisplayName} is clocked on at that site; end their time there first.");
+        }
+
+        var added = wanted.Except(current).ToList();
+        if (added.Count == 0 && removed.Count == 0)
+        {
+            return new VersionResponse(person.Version);
+        }
+
+        foreach (var site in added)
+        {
+            await labor.SetExtraSiteAsync(person.Value.Id, site, isActive: true, now, cancellationToken);
+        }
+
+        foreach (var site in removed)
+        {
+            await labor.SetExtraSiteAsync(person.Value.Id, site, isActive: false, now, cancellationToken);
+        }
+
+        await eventLog.AppendAsync(
+            events.Create(EventTypes.PersonSitesChanged, "person", person.Value.Id, new { Before = current, After = wanted }), cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new VersionResponse(person.Version);
     }
 }

@@ -54,6 +54,11 @@ internal static class LaborEndpoints
             TypedResults.Ok(await handler.HandleAsync(new UpdatePersonCommand(id, request.Version, request.DisplayName, request.CrewId, request.Username, request.IsActive), ct)))
         .RequirePermission(Permissions.People, Site.Of(SiteOf.Person));
 
+        // The other sites they also work at (#84), set at their own site.
+        people.MapPut("/{id:guid}/sites", async Task<Ok<VersionResponse>> (Guid id, SetPersonSitesRequest request, ICommandHandler<SetPersonSitesCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetPersonSitesCommand(id, request.SiteIds), ct)))
+        .RequirePermission(Permissions.People, Site.Of(SiteOf.Person));
+
         // The formats people can be imported from (D-054).
         people.MapGet("/import/sources", async Task<Ok<IReadOnlyList<PeopleSourceDto>>> (
             IQueryHandler<ListPeopleSourcesQuery, IReadOnlyList<PeopleSourceDto>> handler,
@@ -92,6 +97,12 @@ internal static class LaborEndpoints
 
         // ---- Labor ----
         var labor = routes.MapGroup("/labor").WithTags("Labor");
+
+        // A line's jobs, for choosing what a session's time is for (#84).
+        labor.MapGet("/lines/{equipmentId:guid}/jobs", async Task<Ok<IReadOnlyList<LineJobDto>>> (
+            Guid equipmentId, IQueryHandler<ListLineJobsQuery, IReadOnlyList<LineJobDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListLineJobsQuery(equipmentId), ct)))
+        .RequireAny(Site.Of(SiteOf.Equipment, "equipmentId"), Permissions.LaborView);
 
         // The signed-in user's own time: who they are as a person and what they are clocked on to.
         labor.MapGet("/me", async Task<Ok<MyLaborDto>> (IRequestContext request, IQueryHandler<GetMyLaborQuery, MyLaborDto> handler, CancellationToken ct) =>
@@ -166,13 +177,13 @@ internal static class LaborEndpoints
 
         qualifications.MapPost("/", async Task<Created<CreatedResponse>> (CreateQualificationRequest request, ICommandHandler<CreateQualificationCommand, CreatedResponse> handler, CancellationToken ct) =>
         {
-            var created = await handler.HandleAsync(new CreateQualificationCommand(request.SiteId, request.Code, request.Name, request.Description, request.ValidityMonths), ct);
+            var created = await handler.HandleAsync(new CreateQualificationCommand(request.SiteId, request.Code, request.Name, request.Description, request.ValidityMonths, request.NoticeDays), ct);
             return TypedResults.Created($"/api/qualifications/{created.Id}", created);
         })
         .RequirePermission(Permissions.People, Site.FromBody<CreateQualificationRequest>(SiteOf.Equipment, r => r.SiteId));
 
         qualifications.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (Guid id, UpdateQualificationRequest request, ICommandHandler<UpdateQualificationCommand, VersionResponse> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new UpdateQualificationCommand(id, request.Version, request.Name, request.Description, request.ValidityMonths, request.IsActive), ct)))
+            TypedResults.Ok(await handler.HandleAsync(new UpdateQualificationCommand(id, request.Version, request.Name, request.Description, request.ValidityMonths, request.IsActive, request.NoticeDays), ct)))
         .RequirePermission(Permissions.People, Site.Of(SiteOf.Qualification));
 
         qualifications.MapGet("/grants", async Task<Ok<IReadOnlyList<QualificationGrantDto>>> (

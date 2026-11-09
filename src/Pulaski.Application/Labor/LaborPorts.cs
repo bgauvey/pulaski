@@ -67,6 +67,18 @@ public interface ILaborRepository
 {
     Task<bool> IsSiteAsync(Guid siteId, CancellationToken cancellationToken);
 
+    /// <summary>The job setup on the line is for (#84): the one running there, else the next open one by its place in the schedule.</summary>
+    Task<Guid?> FindSetupJobAsync(Guid equipmentId, CancellationToken cancellationToken);
+
+    /// <summary>Whether the person also works at <paramref name="siteId"/> (an active <c>core.person_site</c>, #84), read <c>FOR SHARE</c>.</summary>
+    Task<bool> IsExtraSiteAsync(Guid personId, Guid siteId, CancellationToken cancellationToken);
+
+    /// <summary>The other sites the person works at now, locked.</summary>
+    Task<IReadOnlyList<Guid>> ListExtraSitesForUpdateAsync(Guid personId, CancellationToken cancellationToken);
+
+    /// <summary>Adds or switches on, or switches off, one of the person's other sites.</summary>
+    Task SetExtraSiteAsync(Guid personId, Guid siteId, bool isActive, DateTimeOffset at, CancellationToken cancellationToken);
+
     Task<Versioned<CrewRecord>?> GetCrewForUpdateAsync(Guid id, CancellationToken cancellationToken);
 
     Task<bool> CrewCodeExistsAsync(Guid siteId, string code, CancellationToken cancellationToken);
@@ -220,7 +232,7 @@ public interface ILaborReadStore
 
     Task<string?> GetSiteTimeZoneAsync(Guid siteId, CancellationToken cancellationToken);
 
-    /// <summary>Open sessions at the site, or of one person.</summary>
+    /// <summary>Open sessions at the site; or of one person, at whichever site they work (#84).</summary>
     Task<IReadOnlyList<SessionRow>> ListOpenSessionsAsync(Guid siteId, Guid? personId, CancellationToken cancellationToken);
 
     /// <summary>Sessions with a production day in the range, corrections and replaced ones too.</summary>
@@ -242,4 +254,10 @@ public interface ILaborReadStore
     Task<IReadOnlyList<LineRequirement>> ListLineRequirementsAsync(Guid siteId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<PersonGrant>> ListSiteGrantsAsync(Guid siteId, CancellationToken cancellationToken);
+
+    /// <summary>The site's active, selectable indirect labor reasons (#84), for the terminal.</summary>
+    Task<IReadOnlyList<TerminalReasonDto>> ListIndirectReasonsAsync(Guid siteId, CancellationToken cancellationToken);
+
+    /// <summary>The line's jobs, newest first, cancelled ones left out (#84): what a session's time can be for.</summary>
+    Task<IReadOnlyList<LineJobDto>> ListLineJobsAsync(Guid equipmentId, CancellationToken cancellationToken);
 }

@@ -84,6 +84,8 @@ else
 
         <EditForm Model="Input" FormName="terminal" OnSubmit="SubmitAsync" method="post">
             <input type="hidden" name="Input.Ticket" value="@Input.Ticket" />
+            <input type="hidden" name="Input.LaborKind" value="@Input.LaborKind" />
+            <input type="hidden" name="Input.ReasonId" value="@Input.ReasonId" />
             @* Only for saying thank you: who is acting is the ticket's, checked by the API. *@
             <input type="hidden" name="Input.Name" value="@_status.PersonName" />
             <div class="terminal-actions mb-3">
@@ -93,6 +95,13 @@ else
                 }
                 else if (_status.Sessions.Count > 0)
                 {
+                    @if (_status.PlannedBreak is { } planned)
+                    {
+                        @* The break planned now in their shift (#84), offered first; it is recorded only when they press it. *@
+                        <button type="submit" name="Input.Action" value="@(new TerminalAction(planned.IsPaid ? TerminalAction.PaidBreak : TerminalAction.Break, null).Value)" class="btn btn-primary">
+                            Start @planned.Name<span class="d-block small fw-normal">@planned.Start.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture)–@planned.End.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture)@(planned.IsPaid ? " · paid" : "")</span>
+                        </button>
+                    }
                     <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.Break, null).Value)" class="btn btn-outline-primary">Start break</button>
                     <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.PaidBreak, null).Value)" class="btn btn-outline-primary">Start paid break</button>
                 }
@@ -100,12 +109,37 @@ else
                 {
                     <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.ClockOff, s.Id).Value)" class="btn btn-outline-danger">Clock off @s.EquipmentCode</button>
                 }
+            </div>
+
+            @* What the time is for (#84): production unless chosen; setup is for the line's job, indirect needs a reason. *@
+            <div class="terminal-kinds mb-3" role="group" aria-label="What the time is for">
+                @foreach (var (code, label) in TerminalAction.Kinds)
+                {
+                    <button type="submit" name="Input.Action" value="@TerminalAction.KindValue(code)" aria-pressed="@(Kind == code ? "true" : "false")"
+                            class="btn @(Kind == code ? "btn-secondary" : "btn-outline-secondary")">@label</button>
+                }
+            </div>
+            <div class="terminal-actions mb-3">
+                @if (Kind == "indirect" && Input.ReasonId is null)
+                {
+                    @foreach (var reason in _status.IndirectReasons)
+                    {
+                        <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.ChooseReason, reason.Id).Value)" class="btn btn-outline-primary">@reason.Name</button>
+                    }
+                    @if (_status.IndirectReasons.Count == 0)
+                    {
+                        <p class="text-muted">There are no indirect reasons at this site yet; ask a supervisor.</p>
+                    }
+                }
+                else
+                {
                 @foreach (var line in _status.Lines.Where(l => _status.Sessions.All(s => s.EquipmentId != l.Id)))
                 {
                     <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.ClockOn, line.Id).Value)"
                             class="btn @(line.Id == _status.DefaultEquipmentId ? "btn-primary" : "btn-outline-primary")">
                         Clock on @line.Code<span class="d-block small fw-normal">@line.Name@(line.RunningJobNumber is { } job ? $" · {job}" : "")</span>
                     </button>
+                }
                 }
             </div>
             <button type="submit" name="Input.Action" value="@TerminalAction.Done" class="btn btn-link btn-lg w-100">Not me / cancel</button>
@@ -164,7 +198,22 @@ else
             return;
         }
 
+        // Choosing a kind or a reason is a step, not an action: show the person again with it chosen.
+        if (TerminalAction.ParseKind(Input.Action) is { } kind && !string.IsNullOrEmpty(Input.Ticket))
+        {
+            (Input.LaborKind, Input.ReasonId) = (kind, null);
+            await PersonAgainAsync();
+            return;
+        }
+
         var action = TerminalAction.Parse(Input.Action);
+        if (action is { Kind: TerminalAction.ChooseReason } && !string.IsNullOrEmpty(Input.Ticket))
+        {
+            Input.ReasonId = action.Id;
+            await PersonAgainAsync();
+            return;
+        }
+
         if (action is { Kind: TerminalAction.Done })
         {
             return;
@@ -211,16 +260,38 @@ else
             EquipmentId = action.Kind == TerminalAction.ClockOn ? action.Id : null,
             SessionId = action.Kind == TerminalAction.ClockOff ? action.Id : null,
             IsPaid = action.Kind == TerminalAction.PaidBreak,
+            LaborType = Kind,
+            ReasonCodeId = Kind == "indirect" ? Input.ReasonId : null,
         };
         var result = await Api.TerminalActAsync(Secret!, action.ApiAction!, request);
 
-        _done = action.Confirmation(string.IsNullOrWhiteSpace(Input.Name) ? "Done" : Input.Name, _status!.Lines.FirstOrDefault(l => l.Id == action.Id)?.Code);
+        _done = action.Confirmation(string.IsNullOrWhiteSpace(Input.Name) ? "Done" : Input.Name, _status!.Lines.FirstOrDefault(l => l.Id == action.Id)?.Code, Kind);
         _notes = result.Notes;
         _reset = DoneSeconds + (result.Notes.Count > 0 ? 6 : 0);
     }
 
+    private string Kind => Input.LaborKind is { Length: > 0 } k ? k : "direct";
+
+    private async Task PersonAgainAsync()
+    {
+        try
+        {
+            _status = await Api.GetTerminalPersonAsync(Secret!, Input.Ticket!);
+            _reset = IdleSeconds;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Detail ?? ex.Title;
+            _reset = DoneSeconds * 2;
+        }
+    }
+
     private sealed class TerminalForm
     {
+        public string? LaborKind { get; set; }
+
+        public Guid? ReasonId { get; set; }
+
         public string Badge { get; set; } = "";
 
         public string? Pin { get; set; }

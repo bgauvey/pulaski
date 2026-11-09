@@ -577,7 +577,7 @@ Shifts that repeat every `cycle_days` from `cycle_start`, in the site's time zon
 | `description` | text | yes | Notes. |
 | `cycle_days` | integer | no | Length of the cycle, 1 to 56: 7 for weekly, 28 for a four-week rotation. |
 | `cycle_start` | date | no | The cycle's first day (site-local). |
-| `shifts` | jsonb | no | The shifts, saved whole: an array of `{code, name, start "HH:mm", minutes, days [0…cycle_days − 1], crew}` (`crew`, D-040, is the code of an active crew of the site, or null). They don't overlap, also across the end of the cycle; each belongs to the day it starts on. |
+| `shifts` | jsonb | no | The shifts, saved whole: an array of `{code, name, start "HH:mm", minutes, days [0…cycle_days − 1], crew, breaks}` (`crew`, D-040, is the code of an active crew of the site, or null; `breaks`, D-095, up to six `{name, start "HH:mm", minutes, isPaid}` planned breaks inside the shift, not overlapping, a plan only). They don't overlap, also across the end of the cycle; each belongs to the day it starts on. |
 | `overrides` | jsonb | no | One-off changes to single production days (D-042), saved whole: an array of `{date, code, isWorking, name, start "HH:mm", minutes, crew, note}`, at most one per date and code. A code the cycle runs that day is replaced (or, with `isWorking` false, taken off); another code is an extra shift. They don't overlap the shifts around them. At most 1000. |
 | `is_active` | boolean | no | False when switched off: it can't be chosen. One that equipment follows can't be switched off. |
 | `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
@@ -872,6 +872,7 @@ A site's qualifications, maintained on Configure → People → Qualifications. 
 | `validity_months` | integer | yes | How long a new grant lasts by default, 1 to 120 months; null: it doesn't expire. |
 | `is_active` | boolean | no | False when switched off. |
 | `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
+| `notice_days` | smallint | yes | How many days before a grant expires its notice is e-mailed (D-095), 1 to 365 (`qualification_notice_days_ck`); null: 30. |
 
 ### core.person_qualification — who holds what, for which days · *In use (D-048)*
 
@@ -890,6 +891,19 @@ A grant. A renewal is a new grant, so a person may have several of one qualifica
 | `revoked_by` | text | yes | Who revoked it; set exactly when `revoked_at` is. |
 | `revoke_reason` | text | yes | Why. |
 | `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
+| `expiry_noticed_at` | timestamptz | yes | When its expiry notice went out (D-095); a grant is noticed once. |
+
+Since D-095 the qualification may be of another site the person also works at (`core.person_site`).
+
+### core.person_site — other sites a person also works at · *In use (D-095)*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `person_id`, `site_id` | uuid → person, uuid → equipment | no | Primary key: the person, and a site other than their own. |
+| `is_active` | boolean | no | False once taken off; a site they are clocked on at can't be. |
+| `created_at`, `updated_at` | timestamptz | no | Insert and last change. |
+
+There they appear in the site's people lists and badge at its terminals; their sessions and breaks there have that site's `site_id` and are approved there.
 
 ### core.equipment_qualification — what equipment requires · *In use (D-048)*
 

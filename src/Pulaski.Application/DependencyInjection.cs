@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<Inventory.FeedCounterPoster>();
         services.AddScoped<Inventory.AllocationAutoRefresh>();
         services.AddScoped<Materials.ScheduledConnections>();
+        services.AddScoped<Labor.QualificationExpiryNotices>();
 
         // Password reset by e-mail is off unless the host provides settings and a way to send (D-093).
         services.TryAddSingleton<Security.IPasswordResetSettings, Security.PasswordResetOff>();
