@@ -50,6 +50,18 @@ public sealed record PersonDto
     public string? ExternalKey { get; init; }
     public string? ExternalVersion { get; init; }
     public long Version { get; init; }
+
+    /// <summary>The code of their own site, when listed at another they also work at (#84); null at their own.</summary>
+    public string? HomeSiteCode { get; init; }
+
+    /// <summary>The other sites they also work at (#84).</summary>
+    public IReadOnlyList<Guid> ExtraSiteIds { get; init; } = [];
+}
+
+/// <summary>The other sites a person also works at (#84), all at once.</summary>
+public sealed record SetPersonSitesRequest
+{
+    public IReadOnlyList<Guid> SiteIds { get; init; } = [];
 }
 
 public sealed record CreatePersonRequest
@@ -209,6 +221,9 @@ public sealed record CurrentShiftDto
     public DateTimeOffset End { get; init; }
     public string? CrewCode { get; init; }
     public string? CrewName { get; init; }
+
+    /// <summary>The breaks planned in it (#84), site-local times.</summary>
+    public IReadOnlyList<PlannedBreakTimeDto> Breaks { get; init; } = [];
 }
 
 /// <summary>Who is on a line now (D-040).</summary>
@@ -261,6 +276,29 @@ public sealed record ShiftLaborDto
 
     /// <summary>The shift's breaks, corrections and replaced ones too (D-047).</summary>
     public IReadOnlyList<BreakDto> Breaks { get; init; } = [];
+
+    /// <summary>The breaks planned in the shift (#84).</summary>
+    public IReadOnlyList<PlannedBreakTimeDto> PlannedBreaks { get; init; } = [];
+
+    /// <summary>People on a line all through a planned break that has ended, who took no break then (#84): a flag, nothing recorded.</summary>
+    public IReadOnlyList<MissedBreakDto> MissedBreaks { get; init; } = [];
+}
+
+/// <summary>A planned break on the calendar (#84): site-local start and end.</summary>
+public sealed record PlannedBreakTimeDto
+{
+    public required string Name { get; init; }
+    public DateTimeOffset Start { get; init; }
+    public DateTimeOffset End { get; init; }
+    public bool IsPaid { get; init; }
+}
+
+/// <summary>Someone who didn't take a planned break (#84).</summary>
+public sealed record MissedBreakDto
+{
+    public required Guid PersonId { get; init; }
+    public required string PersonName { get; init; }
+    public required string BreakName { get; init; }
 }
 
 /// <summary>A site's shifts that have ended with labor not yet approved (D-040), oldest first, for the Overview.</summary>
@@ -412,6 +450,9 @@ public sealed record QualificationDto
     public int? ValidityMonths { get; init; }
     public bool IsActive { get; init; }
 
+    /// <summary>How many days before a grant expires its notice goes out (#84); null: 30.</summary>
+    public int? NoticeDays { get; init; }
+
     /// <summary>People holding a valid grant today.</summary>
     public int Holders { get; init; }
 
@@ -430,6 +471,9 @@ public sealed record CreateQualificationRequest
     public string Name { get; init; } = "";
     public string? Description { get; init; }
     public int? ValidityMonths { get; init; }
+
+    /// <summary>Days before a grant expires that its notice goes out (#84), 1 to 365; null: 30.</summary>
+    public int? NoticeDays { get; init; }
 }
 
 public sealed record UpdateQualificationRequest
@@ -438,6 +482,9 @@ public sealed record UpdateQualificationRequest
     public string Name { get; init; } = "";
     public string? Description { get; init; }
     public int? ValidityMonths { get; init; }
+
+    /// <summary>Days before a grant expires that its notice goes out (#84), 1 to 365; null: 30.</summary>
+    public int? NoticeDays { get; init; }
     public bool IsActive { get; init; } = true;
 }
 
@@ -538,4 +585,13 @@ public sealed record ImportPeopleResponse
 public static class PeopleCsvFormat
 {
     public const string Header = "employee_number,name,active,crew,username,origin,external_system,external_key,external_version,qualifications";
+}
+
+/// <summary>A job on a line, to choose for a labor session (#84): its number, status and material.</summary>
+public sealed record LineJobDto
+{
+    public required Guid Id { get; init; }
+    public required string JobNumber { get; init; }
+    public required string Status { get; init; }
+    public string? MaterialCode { get; init; }
 }

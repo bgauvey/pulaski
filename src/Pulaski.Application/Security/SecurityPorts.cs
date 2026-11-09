@@ -47,6 +47,9 @@ public interface IPasswordResetSettings
 /// <summary>Sends an e-mail later, off the request (D-093), so how long an answer takes says nothing about whether an account exists.</summary>
 public interface IMailOutbox
 {
+    /// <summary>Whether a mail server is configured, so what is queued goes out (#84).</summary>
+    bool CanSend { get; }
+
     void Enqueue(string recipient, string subject, string body);
 }
 

@@ -125,6 +125,12 @@ public sealed record TerminalStatusDto
     public string? PersonName { get; init; }
     public IReadOnlyList<LaborSessionDto> Sessions { get; init; } = [];
     public BreakDto? OpenBreak { get; init; }
+
+    /// <summary>A break planned in the shift of the person's line, running now or starting within 10 minutes (#84); offered first.</summary>
+    public PlannedBreakTimeDto? PlannedBreak { get; init; }
+
+    /// <summary>The site's indirect labor reasons, for indirect time at the terminal (#84).</summary>
+    public IReadOnlyList<TerminalReasonDto> IndirectReasons { get; init; } = [];
 }
 
 /// <summary>An action at the terminal for the person a badge identified.</summary>
@@ -135,4 +141,13 @@ public sealed record TerminalActionRequest
     public Guid? SessionId { get; init; }
     public Guid? BreakId { get; init; }
     public bool IsPaid { get; init; }
+
+    /// <summary>Clocking on: <c>direct</c> (default), <c>setup</c>, <c>indirect</c> or <c>training</c> (#84).</summary>
+    public string LaborType { get; init; } = "direct";
+
+    /// <summary>Indirect time's reason.</summary>
+    public Guid? ReasonCodeId { get; init; }
 }
+
+/// <summary>An indirect labor reason offered at a terminal (#84).</summary>
+public sealed record TerminalReasonDto(Guid Id, string Name);

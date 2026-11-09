@@ -93,7 +93,15 @@ internal static class LaborWriter
         }
 
         var start = input.StartedAt ?? now;
-        var equipment = await CheckAsync(labor, person.SiteId, input.EquipmentId, input.JobId, input.LaborType, input.ReasonCodeId, start, null, input.AllocationPct, now, cancellationToken);
+
+        // Time belongs to the site worked (#84): the person's own, or another site they are listed at.
+        var site = (await labor.GetEquipmentShiftsAsync(input.EquipmentId, cancellationToken))?.SiteId ?? person.SiteId;
+        if (!await WorksAtAsync(labor, person, site, cancellationToken))
+        {
+            throw new DomainRuleException($"{person.DisplayName} doesn't work at that site; add it to their sites on Configure → People.");
+        }
+
+        var equipment = await CheckAsync(labor, site, input.EquipmentId, input.JobId, input.LaborType, input.ReasonCodeId, start, null, input.AllocationPct, now, cancellationToken);
         var open = await labor.ListOpenSessionsOfPersonForUpdateAsync(person.Id, cancellationToken);
         if (open.Any(s => s.EquipmentId == input.EquipmentId))
         {
@@ -105,8 +113,8 @@ internal static class LaborWriter
             throw new DomainRuleException($"{person.DisplayName}: {problem}");
         }
 
-        var key = await OpenShiftAsync(labor, equipment, person.SiteId, start, cancellationToken);
-        var session = new SessionRecord(id, person.SiteId, person.Id, input.EquipmentId, input.JobId, input.LaborType,
+        var key = await OpenShiftAsync(labor, equipment, site, start, cancellationToken);
+        var session = new SessionRecord(id, site, person.Id, input.EquipmentId, input.JobId, input.LaborType,
             input.LaborType == LaborTypes.Indirect ? input.ReasonCodeId : null, start, null, input.AllocationPct,
             key.ProductionDate, key.ShiftScheduleId, key.ShiftCode, source, null, false, Clean(input.Note), actor);
         var version = await labor.InsertSessionAsync(session, now, cancellationToken);
@@ -127,6 +135,10 @@ internal static class LaborWriter
         var missing = QualificationRules.Missing(required, await labor.ListGrantsOfPersonAsync(person.Id, cancellationToken), day, at);
         return missing.Count == 0 ? null : QualificationRules.Describe(person.DisplayName, equipment.Code, missing);
     }
+
+    /// <summary>The person's own site, or one they are also listed at (#84).</summary>
+    public static async Task<bool> WorksAtAsync(ILaborRepository labor, PersonRecord person, Guid siteId, CancellationToken cancellationToken) =>
+        person.SiteId == siteId || await labor.IsExtraSiteAsync(person.Id, siteId, cancellationToken);
 
     public static string? Clean(string? note) => string.IsNullOrWhiteSpace(note) ? null : note.Trim()[..Math.Min(note.Trim().Length, 500)];
 

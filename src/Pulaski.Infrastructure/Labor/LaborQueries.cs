@@ -28,10 +28,19 @@ internal sealed class LaborQueries(NpgsqlDataSource dataSource) : ILaborReadStor
         LEFT JOIN sec.app_user u ON u.id = p.app_user_id
         """;
 
-    private const string People = $"""
-        {PersonSelect}
+    // The site's people, and those of other sites listed as also working here (#84), marked by their own site.
+    private const string People = """
+        SELECT p.id, p.site_id, p.employee_number, p.display_name, p.crew_id, c.code AS crew_code, u.username, p.is_active,
+               p.origin, p.external_system, p.external_key, p.external_version, p.xmin::text::bigint AS version,
+               CASE WHEN p.site_id = @SiteId THEN NULL ELSE hs.code END AS home_site_code,
+               array(SELECT ps.site_id FROM core.person_site ps WHERE ps.person_id = p.id AND ps.is_active ORDER BY ps.site_id) AS extra_site_ids
+        FROM core.person p
+        LEFT JOIN core.crew c ON c.id = p.crew_id
+        LEFT JOIN sec.app_user u ON u.id = p.app_user_id
+        JOIN core.equipment hs ON hs.id = p.site_id
         WHERE p.site_id = @SiteId
-        ORDER BY p.is_active DESC, p.display_name, p.employee_number
+           OR EXISTS (SELECT 1 FROM core.person_site ps WHERE ps.person_id = p.id AND ps.site_id = @SiteId AND ps.is_active)
+        ORDER BY p.site_id <> @SiteId, p.is_active DESC, p.display_name, p.employee_number
         """;
 
     private const string PersonOfUser = $"{PersonSelect} WHERE p.app_user_id = @UserId";
@@ -57,7 +66,7 @@ internal sealed class LaborQueries(NpgsqlDataSource dataSource) : ILaborReadStor
     private const string Open = $"""
         SELECT {LaborSql.RowColumns}
         {LaborSql.RowJoins}
-        WHERE s.site_id = @SiteId AND s.ended_at IS NULL AND (@PersonId::uuid IS NULL OR s.person_id = @PersonId)
+        WHERE (s.site_id = @SiteId OR @PersonId::uuid IS NOT NULL) AND s.ended_at IS NULL AND (@PersonId::uuid IS NULL OR s.person_id = @PersonId)
           AND NOT s.is_void AND NOT EXISTS (SELECT 1 FROM core.labor_session c WHERE c.corrects_session_id = s.id)
         ORDER BY e.code, p.display_name
         """;
@@ -179,7 +188,7 @@ internal sealed class LaborQueries(NpgsqlDataSource dataSource) : ILaborReadStor
         SELECT {LaborSql.BreakRowColumns}
         FROM core.labor_break b
         JOIN core.person p ON p.id = b.person_id
-        WHERE b.site_id = @SiteId AND (@PersonId::uuid IS NULL OR b.person_id = @PersonId)
+        WHERE (b.site_id = @SiteId OR @PersonId::uuid IS NOT NULL) AND (@PersonId::uuid IS NULL OR b.person_id = @PersonId)
           AND b.started_at < @To AND (b.ended_at IS NULL OR b.ended_at > @From)
         ORDER BY b.started_at
         """;
@@ -190,7 +199,7 @@ internal sealed class LaborQueries(NpgsqlDataSource dataSource) : ILaborReadStor
         """;
 
     private const string SiteGrants = $"""
-        SELECT {LaborSql.GrantColumns} FROM core.person_qualification g JOIN core.person p ON p.id = g.person_id WHERE p.site_id = @SiteId
+        SELECT {LaborSql.GrantColumns} FROM core.person_qualification g JOIN core.qualification q ON q.id = g.qualification_id WHERE q.site_id = @SiteId
         """;
 
     public async Task<IReadOnlyList<BreakRow>> ListBreaksAsync(Guid siteId, Guid? personId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken)
@@ -213,6 +222,32 @@ internal sealed class LaborQueries(NpgsqlDataSource dataSource) : ILaborReadStor
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         return [.. (await connection.QueryAsync<LaborSql.GrantDbRow>(new CommandDefinition(SiteGrants, new { SiteId = siteId }, cancellationToken: cancellationToken)))
             .Select(r => new PersonGrant(r.PersonId, new QualificationGrant(r.QualificationId, r.ValidFrom, r.ExpiresOn, r.RevokedAt)))];
+    }
+
+    public async Task<IReadOnlyList<TerminalReasonDto>> ListIndirectReasonsAsync(Guid siteId, CancellationToken cancellationToken)
+    {
+        const string Sql = """
+            SELECT id, name FROM core.reason_code
+            WHERE reason_kind = 'indirect_labor' AND is_active AND is_selectable AND (site_id IS NULL OR site_id = @SiteId)
+            ORDER BY sort_order, name
+            """;
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. (await connection.QueryAsync<(Guid Id, string Name)>(new CommandDefinition(Sql, new { SiteId = siteId }, cancellationToken: cancellationToken)))
+            .Select(r => new TerminalReasonDto(r.Id, r.Name))];
+    }
+
+    public async Task<IReadOnlyList<LineJobDto>> ListLineJobsAsync(Guid equipmentId, CancellationToken cancellationToken)
+    {
+        const string Sql = """
+            SELECT j.id, j.job_number, j.status, m.code AS material_code
+            FROM core.job j
+            LEFT JOIN core.material m ON m.id = j.material_id
+            WHERE j.equipment_id = @Id AND j.status <> 'cancelled'
+            ORDER BY j.created_at DESC, j.id
+            LIMIT 100
+            """;
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. await connection.QueryAsync<LineJobDto>(new CommandDefinition(Sql, new { Id = equipmentId }, cancellationToken: cancellationToken))];
     }
 
     public async Task<IReadOnlyDictionary<string, string>> CrewNamesAsync(Guid siteId, CancellationToken cancellationToken)

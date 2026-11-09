@@ -11,6 +11,18 @@ public sealed record ShiftDto
 
     /// <summary>The code of the crew that works it (D-040); null for none.</summary>
     public string? Crew { get; init; }
+
+    /// <summary>Breaks planned in it (#84), such as lunch; a plan only, nothing is recorded by it.</summary>
+    public IReadOnlyList<PlannedBreakDto> Breaks { get; init; } = [];
+}
+
+/// <summary>A break planned in a shift (#84): at <see cref="Start"/> ("HH:mm", site time, within the shift) for <see cref="Minutes"/>.</summary>
+public sealed record PlannedBreakDto
+{
+    public string Name { get; init; } = "Break";
+    public string Start { get; init; } = "12:00";
+    public int Minutes { get; init; } = 30;
+    public bool IsPaid { get; init; }
 }
 
 /// <summary>

@@ -293,7 +293,7 @@ public sealed class InMemoryLabor : ILaborRepository, ILaborReadStore, IQualific
     public Task<long> UpdateBreakAsync(BreakRecord record, DateTimeOffset at, CancellationToken cancellationToken) => Locked(() => Save(_breaks, record.Id, record));
 
     public Task<IReadOnlyList<BreakRow>> ListBreaksAsync(Guid siteId, Guid? personId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken) =>
-        Locked<IReadOnlyList<BreakRow>>(() => [.. BreakRows(b => b.SiteId == siteId && (personId is null || b.PersonId == personId)
+        Locked<IReadOnlyList<BreakRow>>(() => [.. BreakRows(b => (b.SiteId == siteId || personId is not null) && (personId is null || b.PersonId == personId)
             && b.StartedAt < windowEnd && (b.EndedAt is null || b.EndedAt > windowStart))]);
 
     // ---- Qualifications (D-048) ----
@@ -308,11 +308,66 @@ public sealed class InMemoryLabor : ILaborRepository, ILaborReadStore, IQualific
         Locked<IReadOnlyList<LineRequirement>>(() => [.. _equipment.Where(e => e.Value.SiteId == siteId)
             .SelectMany(e => Required(e.Key).Select(r => new LineRequirement(e.Key, new RequiredQualification(r.Q.Id, r.Q.Code, r.Q.Name))))]);
 
+    private readonly HashSet<(Guid PersonId, Guid SiteId)> _extraSites = [];
+
+    public Task<Guid?> FindSetupJobAsync(Guid equipmentId, CancellationToken cancellationToken) =>
+        Locked(() => _jobs.Values.FirstOrDefault(j => j.EquipmentId == equipmentId)?.Id);
+
+    public Task<IReadOnlyList<TerminalReasonDto>> ListIndirectReasonsAsync(Guid siteId, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<TerminalReasonDto>>(() => [.. _reasons.Where(r => r.Value is null || r.Value == siteId).Select(r => new TerminalReasonDto(r.Key, "Reason"))]);
+
+    public Task<bool> IsExtraSiteAsync(Guid personId, Guid siteId, CancellationToken cancellationToken) => Locked(() => _extraSites.Contains((personId, siteId)));
+
+    public Task<IReadOnlyList<Guid>> ListExtraSitesForUpdateAsync(Guid personId, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<Guid>>(() => [.. _extraSites.Where(e => e.PersonId == personId).Select(e => e.SiteId)]);
+
+    public Task SetExtraSiteAsync(Guid personId, Guid siteId, bool isActive, DateTimeOffset at, CancellationToken cancellationToken) =>
+        Locked(() => isActive ? _extraSites.Add((personId, siteId)) : _extraSites.Remove((personId, siteId)));
+
+    public Task<IReadOnlyList<LineJobDto>> ListLineJobsAsync(Guid equipmentId, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<LineJobDto>>(() => [.. _jobs.Values.Where(j => j.EquipmentId == equipmentId)
+            .Select(j => new LineJobDto { Id = j.Id, JobNumber = j.JobNumber, Status = "running" })]);
+
     public Task<IReadOnlyList<PersonGrant>> ListSiteGrantsAsync(Guid siteId, CancellationToken cancellationToken) =>
         Locked<IReadOnlyList<PersonGrant>>(() => [.. _grants.Values.Where(g => _people[g.Value.PersonId].Value.SiteId == siteId)
             .Select(g => new PersonGrant(g.Value.PersonId, DomainGrant(g.Value)))]);
 
     public Task<Versioned<QualificationRecord>?> GetQualificationForUpdateAsync(Guid id, CancellationToken cancellationToken) => Locked(() => _qualifications.GetValueOrDefault(id));
+
+    private readonly HashSet<Guid> _noticed = [];
+
+    /// <summary>Who maintains people at each site, for expiry digests (#84), as a test sets them.</summary>
+    public Dictionary<Guid, List<string>> PeopleManagers { get; } = [];
+
+    /// <summary>The e-mail address of each person's user, as a test sets them.</summary>
+    public Dictionary<Guid, string> PersonEmails { get; } = [];
+
+    public Task<IReadOnlyList<ExpiryNotice>> ListDueExpiryNoticesForUpdateAsync(DateTimeOffset now, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<ExpiryNotice>>(() =>
+        {
+            var today = DateOnly.FromDateTime(now.UtcDateTime);
+            return [.. _grants.Values.Select(g => g.Value)
+                .Where(g => g.RevokedAt is null && g.ExpiresOn is { } e && e >= today && !_noticed.Contains(g.Id)
+                    && _qualifications.TryGetValue(g.QualificationId, out var q) && q.Value.IsActive && e.AddDays(-(q.Value.NoticeDays ?? 30)) <= today
+                    && !_grants.Values.Any(r => r.Value.Id != g.Id && r.Value.PersonId == g.PersonId && r.Value.QualificationId == g.QualificationId
+                        && r.Value.RevokedAt is null && (r.Value.ExpiresOn is null || r.Value.ExpiresOn > e)))
+                .Select(g =>
+                {
+                    var q = _qualifications[g.QualificationId].Value;
+                    var person = _people[g.PersonId].Value;
+                    return new ExpiryNotice(g.Id, person.Id, person.DisplayName, PersonEmails.GetValueOrDefault(person.Id), q.SiteId, "SITE", q.Code, q.Name, g.ExpiresOn!.Value);
+                })];
+        });
+
+    public Task<IReadOnlyList<string>> ListPeopleManagerEmailsAsync(Guid siteId, DateTimeOffset now, CancellationToken cancellationToken) =>
+        Locked<IReadOnlyList<string>>(() => [.. PeopleManagers.GetValueOrDefault(siteId) ?? []]);
+
+    public Task MarkExpiryNoticedAsync(IReadOnlyCollection<Guid> grantIds, DateTimeOffset at, CancellationToken cancellationToken) =>
+        Locked(() =>
+        {
+            _noticed.UnionWith(grantIds);
+            return true;
+        });
 
     public Task<QualificationRecord?> FindQualificationByCodeAsync(Guid siteId, string code, CancellationToken cancellationToken) =>
         Locked(() => _qualifications.Values.Select(q => q.Value).FirstOrDefault(q => q.SiteId == siteId && q.Code == code));
@@ -401,7 +456,12 @@ public sealed class InMemoryLabor : ILaborRepository, ILaborReadStore, IQualific
         })]);
 
     public Task<IReadOnlyList<PersonDto>> ListPeopleAsync(Guid siteId, CancellationToken cancellationToken) =>
-        Locked<IReadOnlyList<PersonDto>>(() => [.. _people.Values.Where(p => p.Value.SiteId == siteId).Select(ToDto)]);
+        Locked<IReadOnlyList<PersonDto>>(() => [.. _people.Values.Where(p => p.Value.SiteId == siteId || _extraSites.Contains((p.Value.Id, siteId)))
+            .Select(p => ToDto(p) with
+            {
+                HomeSiteCode = p.Value.SiteId == siteId ? null : "HOME",
+                ExtraSiteIds = [.. _extraSites.Where(e => e.PersonId == p.Value.Id).Select(e => e.SiteId)],
+            })]);
 
     public Task<PersonDto?> GetPersonOfUserAsync(Guid userId, CancellationToken cancellationToken) =>
         Locked(() => _people.Values.FirstOrDefault(p => p.Value.AppUserId == userId) is { } p ? ToDto(p) : null);
@@ -413,7 +473,7 @@ public sealed class InMemoryLabor : ILaborRepository, ILaborReadStore, IQualific
         Locked<IReadOnlyList<EquipmentShifts>>(() => [.. equipmentIds.Select(Shifts).OfType<EquipmentShifts>()]);
 
     public Task<IReadOnlyList<SessionRow>> ListOpenSessionsAsync(Guid siteId, Guid? personId, CancellationToken cancellationToken) =>
-        Locked<IReadOnlyList<SessionRow>>(() => [.. Rows(s => s.SiteId == siteId && s.EndedAt is null && !s.IsVoid && (personId is null || s.PersonId == personId)).Where(r => !r.IsSuperseded)]);
+        Locked<IReadOnlyList<SessionRow>>(() => [.. Rows(s => (s.SiteId == siteId || personId is not null) && s.EndedAt is null && !s.IsVoid && (personId is null || s.PersonId == personId)).Where(r => !r.IsSuperseded)]);
 
     public Task<IReadOnlyList<SessionRow>> ListSessionsAsync(Guid siteId, DateOnly first, DateOnly last, CancellationToken cancellationToken) =>
         Locked<IReadOnlyList<SessionRow>>(() => [.. Rows(s => s.SiteId == siteId && s.ProductionDate >= first && s.ProductionDate <= last)]);

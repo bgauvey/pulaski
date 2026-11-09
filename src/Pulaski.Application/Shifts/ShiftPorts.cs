@@ -96,7 +96,12 @@ public static class ShiftMapping
         TimeOnly.TryParseExact(shift.Start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var start) ? start : TimeOnly.MinValue,
         TimeSpan.FromMinutes(shift.Minutes),
         [.. shift.Days.Distinct().Order()],
-        string.IsNullOrWhiteSpace(shift.Crew) ? null : shift.Crew.Trim().ToUpperInvariant());
+        string.IsNullOrWhiteSpace(shift.Crew) ? null : shift.Crew.Trim().ToUpperInvariant(),
+        [.. (shift.Breaks ?? []).Select(b => new PlannedBreak(
+            b.Name?.Trim() ?? "",
+            TimeOnly.TryParseExact(b.Start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var at) ? at : TimeOnly.MinValue,
+            TimeSpan.FromMinutes(b.Minutes),
+            b.IsPaid)).OrderBy(b => b.Start)]);
 
     /// <summary>The shifts as stored: trimmed, days sorted, each shift's name defaulting to its code.</summary>
     public static IReadOnlyList<ShiftDto> Normalize(IReadOnlyList<ShiftDto> shifts) =>
@@ -108,6 +113,13 @@ public static class ShiftMapping
             Minutes = (int)s.Length.TotalMinutes,
             Days = s.Days,
             Crew = s.Crew,
+            Breaks = [.. (s.Breaks ?? []).Select(b => new PlannedBreakDto
+            {
+                Name = b.Name,
+                Start = b.Start.ToString("HH:mm", CultureInfo.InvariantCulture),
+                Minutes = (int)b.Length.TotalMinutes,
+                IsPaid = b.IsPaid,
+            })],
         })];
 
     public static bool HasValidStart(ShiftDto shift) =>

@@ -1,6 +1,7 @@
 @using System.Globalization
 @inject PulaskiApiClient Api
 @inject CurrentUser User
+@inject TimeProvider Clock
 
 @* Who is on each line now (D-040): the shift and crew from the schedule the line follows, the people clocked on, and
    for a supervisor checking the crew in, adding someone and ending their time. *@
@@ -41,6 +42,12 @@ else
                             @if (line.Shift is { } shift)
                             {
                                 <span>Shift @shift.ShiftCode @shift.ShiftName, @Time(shift.Start)–@Time(shift.End)@(shift.CrewCode is { } crew ? $" · crew {crew}{(shift.CrewName is { } n && n != crew ? $" ({n})" : "")}" : "")</span>
+                                @foreach (var planned in shift.Breaks)
+                                {
+                                    var now = Clock.GetUtcNow();
+                                    <span class="chip ms-1 @(planned.Start <= now && now < planned.End ? "chip-warn" : "")"
+                                          title="@(planned.IsPaid ? "Planned paid break" : "Planned break")">@planned.Name @Time(planned.Start)–@Time(planned.End)@(planned.Start <= now && now < planned.End ? " · now" : "")</span>
+                                }
                             }
                             else
                             {

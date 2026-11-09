@@ -163,6 +163,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Breaks (D-047, proposed): `core.labor_break` per person (paid/unpaid), never a change to sessions; worked hours =
   session time outside the person's breaks × share (`LaborRules.WorkedHours`, also in `Attribute`). A break starts inside a
   session, takes its shift, locks with approval (corrections like sessions) and ends when the person leaves their last line.
+- Labor gaps (D-095, proposed): Shift review edits kind/job/reason (correction once approved; `ListLineJobsQuery`). Terminals: kind first
+  (`TerminalClockOnCommand.LaborType`, setup → `FindSetupJobAsync`, indirect reasons in `TerminalStatusDto`), `POST /terminal/person` by ticket.
+  Shifts' `PlannedBreak`s → `ShiftOccurrence.Breaks`: offered/flagged only (`PlannedBreakCheck.Missed`), never recorded. `core.person_site` = other
+  sites (`LaborWriter.WorksAtAsync`; session site = line's). Expiry notices: `qualification.notice_days`, `QualificationExpiryNotices` (hourly,
+  needs `IMailOutbox.CanSend`) → `person_qualification.expiry_noticed_at`.
 - Qualifications (D-048, proposed): per-site `core.qualification`; grants (`person_qualification`) for inclusive site-local days,
   renewed by a new grant, revoked not deleted; `equipment_qualification` applies down the closure. Clock-on/check-in warn
   (`QualificationRules.Missing`), never refuse.

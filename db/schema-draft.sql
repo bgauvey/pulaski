@@ -894,6 +894,18 @@ CREATE TABLE core.person (
 );
 CREATE UNIQUE INDEX person_external_uq ON core.person (external_system, external_key) WHERE external_key IS NOT NULL;
 
+-- Other sites a person also works at (#84, D-095): there they appear in check-in and clock-on lists and badge at terminals; their time
+-- belongs to the site worked. Switched off, never deleted.
+CREATE TABLE core.person_site (
+    person_id       uuid NOT NULL REFERENCES core.person(id),
+    site_id         uuid NOT NULL REFERENCES core.equipment(id),
+    is_active       boolean NOT NULL DEFAULT true,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (person_id, site_id)
+);
+CREATE INDEX person_site_site_ix ON core.person_site (site_id) WHERE is_active;
+
 -- Shop-floor terminals (D-049): shared tablets and panel PCs where people badge to record their labor. A terminal is
 -- registered for a site, area or line (its scope: the lines it offers) and enrolled once with a one-time code, which
 -- gives it a long random secret; only hashes of the code and the secret are kept. Switching it off cuts it off.
@@ -949,7 +961,9 @@ CREATE TABLE core.qualification (
     is_active       boolean NOT NULL DEFAULT true,
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT qualification_uq UNIQUE (site_id, code)
+    notice_days     smallint,                                       -- e-mail this many days before a grant expires (D-095); null: 30
+    CONSTRAINT qualification_uq UNIQUE (site_id, code),
+    CONSTRAINT qualification_notice_days_ck CHECK (notice_days BETWEEN 1 AND 365)
 );
 
 -- A grant (D-048): valid from valid_from to expires_on, whole site-local days, both inclusive. A renewal is a new grant.
@@ -966,6 +980,7 @@ CREATE TABLE core.person_qualification (
     revoke_reason       text,
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
+    expiry_noticed_at   timestamptz,                                -- when its expiry notice went out (D-095)
     CONSTRAINT person_qualification_days_ck CHECK (expires_on IS NULL OR expires_on >= valid_from),
     CONSTRAINT person_qualification_revoked_ck CHECK ((revoked_at IS NULL) = (revoked_by IS NULL))
 );
@@ -2503,7 +2518,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0057_connection_schedules'),
     ('0058_identity_providers'),
     ('0059_every_site_roles'),
-    ('0060_password_reset');
+    ('0060_password_reset'),
+    ('0061_labor_gaps');
 
 -- =====================================================================
 -- 17. SEED DATA

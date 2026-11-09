@@ -32,3 +32,16 @@
     letter-spacing: 0.1em;
     text-align: center;
 }
+
+/* What the time is for (#84): a row of big toggles above the lines. */
+.terminal-card ::deep .terminal-kinds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.terminal-card ::deep .terminal-kinds .btn {
+    flex: 1 1 8rem;
+    padding: 0.75rem 1rem;
+    font-size: 1.1rem;
+}

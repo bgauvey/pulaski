@@ -102,7 +102,8 @@ public sealed record IdentifyBadgeCommand(TerminalRecord Terminal, string BadgeV
 public sealed record BadgeIdentity(bool NeedsPin, Guid? PersonId);
 
 /// <summary>Clocks the identified person on to a line the terminal offers, as direct time from now (D-049).</summary>
-public sealed record TerminalClockOnCommand(TerminalRecord Terminal, Guid PersonId, Guid EquipmentId) : ICommand<LaborResponse>;
+public sealed record TerminalClockOnCommand(TerminalRecord Terminal, Guid PersonId, Guid EquipmentId, string LaborType = LaborTypes.Direct, Guid? ReasonCodeId = null)
+    : ICommand<LaborResponse>;
 
 /// <summary>Ends one of the identified person's open sessions now.</summary>
 public sealed record TerminalClockOffCommand(TerminalRecord Terminal, Guid PersonId, Guid SessionId) : ICommand<LaborResponse>;
@@ -151,7 +152,7 @@ internal static class TerminalWriter
     public static async Task<PersonRecord> PersonAsync(ILaborRepository labor, TerminalRecord terminal, Guid personId, CancellationToken cancellationToken)
     {
         var person = (await labor.GetPersonForUpdateAsync(personId, cancellationToken))?.Value ?? throw new NotFoundException("That person doesn't exist.");
-        if (person.SiteId != terminal.SiteId || !person.IsActive)
+        if (!person.IsActive || !await LaborWriter.WorksAtAsync(labor, person, terminal.SiteId, cancellationToken))
         {
             throw new ForbiddenException($"{person.DisplayName} can't record time at {terminal.Code}.");
         }
@@ -351,7 +352,7 @@ internal sealed class IdentifyBadgeHandler(
         await terminals.TouchAsync(command.Terminal.Id, now, cancellationToken);
         var badge = await terminals.FindActiveBadgeForUpdateAsync(badgeHasher.Hash(value), cancellationToken);
         var person = badge is null ? null : (await labor.GetPersonForUpdateAsync(badge.PersonId, cancellationToken))?.Value;
-        if (badge is null || person is null || !person.IsActive || person.SiteId != command.Terminal.SiteId)
+        if (badge is null || person is null || !person.IsActive || !await LaborWriter.WorksAtAsync(labor, person, command.Terminal.SiteId, cancellationToken))
         {
             await transaction.CommitAsync(cancellationToken);
             throw new DomainRuleException(NotRecognised);
@@ -402,8 +403,17 @@ internal sealed class TerminalClockOnHandler(
             throw new ForbiddenException($"{command.Terminal.Code} doesn't offer that line.");
         }
 
-        var (session, version, warning) = await LaborWriter.StartAsync(labor, person, new LaborInput(command.EquipmentId, null, LaborTypes.Direct, null, 100, null, null),
-            LaborSources.Terminal, command.Terminal.ActorId, timeProvider.GetUtcNow(), ids.NewId(), cancellationToken);
+        // Setup is for the job on the line (#84): the one running, else the next in the line's schedule.
+        Guid? jobId = null;
+        if (command.LaborType == LaborTypes.Setup)
+        {
+            jobId = await labor.FindSetupJobAsync(command.EquipmentId, cancellationToken)
+                ?? throw new DomainRuleException("There is no job on that line to set up for; ask a supervisor.");
+        }
+
+        var input = new LaborInput(command.EquipmentId, jobId, command.LaborType, command.LaborType == LaborTypes.Indirect ? command.ReasonCodeId : null, 100, null, null);
+        var (session, version, warning) = await LaborWriter.StartAsync(
+            labor, person, input, LaborSources.Terminal, command.Terminal.ActorId, timeProvider.GetUtcNow(), ids.NewId(), cancellationToken);
         await eventLog.AppendAsync(events.Create(EventTypes.LaborStarted, "labor_session", session.Id, new { After = session }), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new LaborResponse(session.Id, version, warning is null ? [] : [warning]);
@@ -455,7 +465,7 @@ internal sealed class TerminalStartBreakHandler(
         var shift = await BreakWriter.CheckAsync(labor, person, now, null, null, now, cancellationToken);
         await BreakWriter.EnsureOpenAsync(labor, shift, cancellationToken);
 
-        var started = new BreakRecord(ids.NewId(), person.SiteId, person.Id, now, null, command.IsPaid, shift.ProductionDate, shift.ShiftScheduleId, shift.ShiftCode,
+        var started = new BreakRecord(ids.NewId(), shift.SiteId, person.Id, now, null, command.IsPaid, shift.ProductionDate, shift.ShiftScheduleId, shift.ShiftCode,
             LaborSources.Terminal, null, false, null, command.Terminal.ActorId);
         var version = await labor.InsertBreakAsync(started, now, cancellationToken);
         await eventLog.AppendAsync(events.Create(EventTypes.LaborBreakStarted, "labor_break", started.Id, new { After = started }), cancellationToken);
@@ -515,7 +525,24 @@ internal sealed class GetTerminalStatusHandler(ITerminalReadStore terminals, ILa
             PersonName = people.FirstOrDefault(p => p.Id == personId)?.DisplayName,
             Sessions = [.. open.Select(r => LaborView.ToDto(r, now, LaborView.Counting(breaks)))],
             OpenBreak = onBreak is null ? null : LaborView.ToDto(onBreak, now),
+            IndirectReasons = await labor.ListIndirectReasonsAsync(terminal.SiteId, cancellationToken),
+            PlannedBreak = onBreak is null && open.Count > 0 ? await PlannedBreakNearAsync(open, now, cancellationToken) : null,
         };
+    }
+
+    // A break planned in the shift of a line the person is on, running now or starting within 10 minutes (#84).
+    private async Task<PlannedBreakTimeDto?> PlannedBreakNearAsync(IReadOnlyList<SessionRow> open, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        foreach (var calendar in await labor.ListEquipmentShiftsAsync([.. open.Select(s => s.Session.EquipmentId).Distinct()], cancellationToken))
+        {
+            if (calendar.Schedule?.ShiftAt(calendar.Zone, now, TimeSpan.Zero) is { } shift
+                && shift.Breaks.FirstOrDefault(b => b.IsNear(now, TimeSpan.FromMinutes(10))) is { } planned)
+            {
+                return LaborView.ToDto(planned, calendar.Zone);
+            }
+        }
+
+        return null;
     }
 }
 

@@ -93,8 +93,16 @@ internal static class TerminalEndpoints
             });
         });
 
+        // The badged person's status again, by the ticket their badge gave (#84): the screen asks between steps, such as after choosing a kind.
+        terminal.MapPost("/person", async Task<Ok<TerminalStatusDto>> (
+            TerminalActionRequest request, HttpContext http, BadgeTickets tickets, IQueryHandler<GetTerminalStatusQuery, TerminalStatusDto> status, CancellationToken ct) =>
+        {
+            var current = TerminalFilter.Current(http);
+            return TypedResults.Ok(await status.HandleAsync(new GetTerminalStatusQuery(current, tickets.PersonOf(request.Ticket, current.Id)), ct));
+        });
+
         terminal.MapPost("/clock-on", (TerminalActionRequest request, HttpContext http, BadgeTickets tickets, ICommandHandler<TerminalClockOnCommand, LaborResponse> handler, CancellationToken ct) =>
-            ActAsync(http, tickets, request, (t, person) => handler.HandleAsync(new TerminalClockOnCommand(t, person, request.EquipmentId ?? throw Missing("EquipmentId")), ct)));
+            ActAsync(http, tickets, request, (t, person) => handler.HandleAsync(new TerminalClockOnCommand(t, person, request.EquipmentId ?? throw Missing("EquipmentId"), request.LaborType, request.ReasonCodeId), ct)));
 
         terminal.MapPost("/clock-off", (TerminalActionRequest request, HttpContext http, BadgeTickets tickets, ICommandHandler<TerminalClockOffCommand, LaborResponse> handler, CancellationToken ct) =>
             ActAsync(http, tickets, request, (t, person) => handler.HandleAsync(new TerminalClockOffCommand(t, person, request.SessionId ?? throw Missing("SessionId")), ct)));

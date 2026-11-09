@@ -484,6 +484,8 @@ public sealed class FakePasswordResetSettings : IPasswordResetSettings
 /// <summary>The e-mails a test's commands would send.</summary>
 public sealed class FakeMailOutbox : IMailOutbox
 {
+    public bool CanSend { get; set; } = true;
+
     public List<(string Recipient, string Subject, string Body)> Sent { get; } = [];
 
     public void Enqueue(string recipient, string subject, string body) => Sent.Add((recipient, subject, body));

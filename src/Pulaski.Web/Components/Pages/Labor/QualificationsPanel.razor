@@ -38,6 +38,8 @@ else
                 <input class="form-control inv-grow" maxlength="100" placeholder="Name, e.g. Forklift" aria-label="Qualification name" @bind="_qual.Name" @bind:event="oninput" />
                 <input class="form-control" style="width: 14rem" maxlength="500" placeholder="Description (optional)" aria-label="Description" @bind="_qual.Description" />
                 <input type="number" class="form-control" style="width: 9rem" min="1" max="120" placeholder="Months valid" aria-label="Months a grant is valid (empty: no expiry)" @bind="_qual.ValidityMonths" />
+                <input type="number" class="form-control" style="width: 10rem" min="1" max="365" placeholder="Notice days (30)"
+                       title="E-mail the person and whoever maintains people this many days before a grant expires" aria-label="Days before expiry to send a notice (empty: 30)" @bind="_qual.NoticeDays" />
                 @if (_qual.Id is not null)
                 {
                     <div class="form-check align-self-center">
@@ -261,6 +263,7 @@ else
         Name = q.Name,
         Description = q.Description,
         ValidityMonths = q.ValidityMonths,
+        NoticeDays = q.NoticeDays,
         IsActive = q.IsActive,
     };
 
@@ -299,6 +302,7 @@ else
                 Name = _qual.Name,
                 Description = _qual.Description,
                 ValidityMonths = _qual.ValidityMonths,
+                NoticeDays = _qual.NoticeDays,
                 IsActive = _qual.IsActive,
             });
             _message = $"Saved {_qual.Code}.";
@@ -312,6 +316,7 @@ else
                 Name = _qual.Name,
                 Description = _qual.Description,
                 ValidityMonths = _qual.ValidityMonths,
+                NoticeDays = _qual.NoticeDays,
             });
             _message = $"Added {_qual.Code.Trim().ToUpperInvariant()}. Require it on a site, area or line on Equipment.";
         }
@@ -382,6 +387,8 @@ else
         public string? Description { get; set; }
 
         public int? ValidityMonths { get; set; }
+
+        public int? NoticeDays { get; set; }
 
         public bool IsActive { get; set; } = true;
     }

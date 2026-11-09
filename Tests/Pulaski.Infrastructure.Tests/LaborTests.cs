@@ -185,6 +185,51 @@ public sealed class LaborTests(DatabaseFixture db)
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new IdentifyBadgeCommand(terminal, "B-" + _s, "2468")));
     }
 
+    [Fact]
+    public async Task A_person_works_at_a_listed_site_setup_needs_a_job_and_expiry_notices_go_out_once()
+    {
+        CreatedResponse enterprise = await db.SendAsync(new CreateEquipmentCommand(null, "GENT-" + _s, "Enterprise", null, "enterprise", "enterprise", false, false, false, null));
+        CreatedResponse home = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "GH-" + _s, "Home", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse other = await db.SendAsync(new CreateEquipmentCommand(enterprise.Id, "GO-" + _s, "Other", null, "site", "site", false, false, false, "UTC"));
+        CreatedResponse line = await db.SendAsync(new CreateEquipmentCommand(other.Id, "GL-" + _s, "Line", null, "work_center", "production_line", true, true, false, null));
+        CreatedResponse user = await db.SendAsync(new Application.Security.CreateUserCommand("gp." + _s, "Ann " + _s, $"ann-{_s}@example.com", "Temporary-pass-1", Pulaski.Domain.Security.Roles.Operator, home.Id));
+        CreatedResponse ann = await db.SendAsync(new CreatePersonCommand(home.Id, "700-" + _s, "Ann " + _s, null, "gp." + _s));
+        await db.SendAsync(new Application.Security.CreateUserCommand("gm." + _s, "Lead " + _s, $"lead-{_s}@example.com", "Temporary-pass-1", Pulaski.Domain.Security.Roles.Manager, home.Id));
+
+        // Listed at the other site: there they appear, marked by their own, and clock on there; their time belongs to it.
+        var input = new LaborInput(line.Id, null, LaborTypes.Direct, null, 100, null, null);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new ClockOnCommand(ann.Id, input)));
+        await db.SendAsync(new SetPersonSitesCommand(ann.Id, [other.Id]));
+        var there = Assert.Single(await QueryAsync<ListPeopleQuery, IReadOnlyList<PersonDto>>(new ListPeopleQuery(other.Id)));
+        Assert.Equal("GH-" + _s, there.HomeSiteCode);
+        Assert.Equal([other.Id], there.ExtraSiteIds);
+        Assert.Null(Assert.Single(await QueryAsync<ListPeopleQuery, IReadOnlyList<PersonDto>>(new ListPeopleQuery(home.Id))).HomeSiteCode);
+        LaborResponse on = await db.SendAsync(new ClockOnCommand(ann.Id, input));
+        await using var admin = await db.AdminDataSource.OpenConnectionAsync();
+        Assert.Equal(other.Id, await admin.ExecuteScalarAsync<Guid>("SELECT site_id FROM core.labor_session WHERE id = @Id", new { on.Id }));
+        Assert.Empty(await QueryAsync<ListLineJobsQuery, IReadOnlyList<LineJobDto>>(new ListLineJobsQuery(line.Id)));
+
+        // Setup at a terminal needs a job on the line.
+        var terminal = new TerminalRecord(Guid.CreateVersion7(), other.Id, "GT", "Terminal", line.Id, line.Id, TerminalAuthModes.Badge, true, DateTimeOffset.UtcNow);
+        await db.SendAsync(new ClockOffCommand(on.Id, on.Version, null, OwnOnly: false));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new TerminalClockOnCommand(terminal, ann.Id, line.Id, LaborTypes.Setup)));
+
+        // A grant expiring within its notice days is noticed once, to the person and to who maintains people at its site.
+        CreatedResponse fork = await db.SendAsync(new CreateQualificationCommand(home.Id, "FK" + _s, "Forklift", null, 12, NoticeDays: 10));
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        await db.SendAsync(new GrantQualificationCommand(ann.Id, fork.Id, today.AddMonths(-11), today.AddDays(5), null));
+        await using var scope = db.Services.CreateAsyncScope();
+        var notices = scope.ServiceProvider.GetRequiredService<QualificationExpiryNotices>();
+        Assert.True(await notices.SendDueAsync(CancellationToken.None) >= 1);
+        Assert.Contains(db.Mail.Sent, m => m.Recipient == $"ann-{_s}@example.com");
+        Assert.Contains(db.Mail.Sent, m => m.Recipient == $"lead-{_s}@example.com" && m.Body.Contains("Ann " + _s, StringComparison.Ordinal));
+        var sent = db.Mail.Sent.Count;
+        await notices.SendDueAsync(CancellationToken.None);
+        Assert.DoesNotContain(db.Mail.Sent.Skip(sent), m => m.Recipient == $"ann-{_s}@example.com");
+        Assert.NotNull(await admin.ExecuteScalarAsync<DateTimeOffset?>(
+            "SELECT expiry_noticed_at FROM core.person_qualification WHERE person_id = @Id", new { ann.Id }));
+    }
+
     private async Task<TerminalRecord> TerminalAsync(string secret)
     {
         await using var scope = db.Services.CreateAsyncScope();

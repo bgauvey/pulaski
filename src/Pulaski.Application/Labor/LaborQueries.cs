@@ -15,6 +15,9 @@ public sealed record GetMyLaborQuery(Guid? UserId) : IQuery<MyLaborDto>;
 /// <summary>Each line of a site with its shift, crew and who is on it now (D-040).</summary>
 public sealed record ListLineLaborQuery(Guid SiteId) : IQuery<IReadOnlyList<LineLaborDto>>;
 
+/// <summary>A line's jobs to choose from for a session (#84).</summary>
+public sealed record ListLineJobsQuery(Guid EquipmentId) : IQuery<IReadOnlyList<LineJobDto>>;
+
 /// <summary>The shifts worked at a site on a day, for review and approval.</summary>
 public sealed record ListLaborShiftsQuery(Guid SiteId, DateOnly Date) : IQuery<IReadOnlyList<LaborShiftDto>>;
 
@@ -115,6 +118,15 @@ internal static class LaborView
     public static LaborSpan Span(SessionRecord s) => new(s.Id, s.PersonId, s.EquipmentId, s.JobId, s.LaborType, s.StartedAt, s.EndedAt, s.AllocationPct);
 
     public static TimeZoneInfo Zone(string? timeZone) => TimeZoneInfo.FindSystemTimeZoneById(timeZone ?? "UTC");
+
+    /// <summary>A planned break as screens show it (#84), in the site's time.</summary>
+    public static PlannedBreakTimeDto ToDto(Domain.Shifts.PlannedBreakWindow window, TimeZoneInfo zone) => new()
+    {
+        Name = window.Name,
+        Start = TimeZoneInfo.ConvertTime(window.Start, zone),
+        End = TimeZoneInfo.ConvertTime(window.End, zone),
+        IsPaid = window.IsPaid,
+    };
 
     public static DateTimeOffset DayStart(DateOnly date, TimeZoneInfo zone)
     {
@@ -241,6 +253,7 @@ internal sealed class ListLineLaborHandler(ILaborReadStore store, TimeProvider t
                     End = TimeZoneInfo.ConvertTime(shift.End, calendar.Zone),
                     CrewCode = shift.Crew,
                     CrewName = shift.Crew is { } crew ? crews.GetValueOrDefault(crew) : null,
+                    Breaks = [.. shift.Breaks.Select(b => LaborView.ToDto(b, calendar.Zone))],
                 };
             }
 
@@ -308,14 +321,34 @@ internal sealed class GetShiftLaborHandler(ILaborReadStore store, TimeProvider t
         var breaks = LaborView.Counting(breakRows);
         var shifts = await LaborView.ShiftsAsync(store, key.SiteId, rows, breaks, key.ProductionDate, key.ProductionDate, now, cancellationToken);
         var shift = shifts.Count > 0 ? shifts[0] : new LaborShiftDto { ProductionDate = key.ProductionDate, ShiftScheduleId = key.ShiftScheduleId, ShiftCode = key.ShiftCode };
+
+        // The breaks planned in this shift (#84), and who was on all through one that has ended without taking a break.
+        var zone = LaborView.Zone(await store.GetSiteTimeZoneAsync(key.SiteId, cancellationToken));
+        var planned = key.ShiftScheduleId is { } scheduleId && key.ShiftCode is { } code
+            && (await store.ListSchedulesAsync(key.SiteId, cancellationToken)).FirstOrDefault(s => s.Id == scheduleId) is { Schedule: { } schedule }
+            ? schedule.Expand(zone, DayStart(key.ProductionDate, zone).AddDays(-1), DayStart(key.ProductionDate, zone).AddDays(2))
+                .FirstOrDefault(o => o.ProductionDate == key.ProductionDate && string.Equals(o.Code, code, StringComparison.OrdinalIgnoreCase))?.Breaks ?? []
+            : [];
+        var names = rows.GroupBy(r => r.Session.PersonId).ToDictionary(g => g.Key, g => g.First().PersonName);
+        var missed = PlannedBreakCheck.Missed(
+            LaborView.Counting(rows).Select(r => (r.Session.PersonId, r.Session.StartedAt, r.Session.EndedAt)), breaks, planned, now);
         return new ShiftLaborDto
         {
+            PlannedBreaks = [.. planned.Select(b => LaborView.ToDto(b, zone))],
+            MissedBreaks = [.. missed.Select(m => new MissedBreakDto { PersonId = m.PersonId, PersonName = names.GetValueOrDefault(m.PersonId, ""), BreakName = m.BreakName })
+                .OrderBy(m => m.PersonName, StringComparer.Ordinal)],
             Shift = shift,
             Sessions = [.. rows.OrderBy(r => r.EquipmentCode, StringComparer.Ordinal).ThenBy(r => r.PersonName, StringComparer.Ordinal).ThenBy(r => r.Session.StartedAt)
                 .Select(r => LaborView.ToDto(r, now, breaks))],
             Breaks = [.. breakRows.Where(b => b.Break.Shift == key)
                 .OrderBy(b => b.PersonName, StringComparer.Ordinal).ThenBy(b => b.Break.StartedAt).Select(b => LaborView.ToDto(b, now))],
         };
+    }
+
+    private static DateTimeOffset DayStart(DateOnly day, TimeZoneInfo zone)
+    {
+        var local = day.ToDateTime(TimeOnly.MinValue);
+        return new DateTimeOffset(local, zone.GetUtcOffset(local));
     }
 }
 
@@ -410,4 +443,10 @@ internal sealed class GetLaborReportHandler(ILaborReadStore store, TimeProvider 
             Shifts = await LaborView.ShiftsAsync(store, query.SiteId, rows, breaks, from, to, now, cancellationToken),
         };
     }
+}
+
+internal sealed class ListLineJobsHandler(ILaborReadStore store) : IQueryHandler<ListLineJobsQuery, IReadOnlyList<LineJobDto>>
+{
+    public Task<IReadOnlyList<LineJobDto>> HandleAsync(ListLineJobsQuery query, CancellationToken cancellationToken) =>
+        store.ListLineJobsAsync(query.EquipmentId, cancellationToken);
 }

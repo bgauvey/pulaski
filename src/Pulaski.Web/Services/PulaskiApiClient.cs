@@ -753,6 +753,14 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<IReadOnlyList<InventoryLocationDto>> ListInventoryLocationsAsync(Guid? siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<InventoryLocationDto>>(Query("api/inventory/locations", ("siteId", siteId)), ct);
 
+    /// <summary>The other sites a person also works at (#84).</summary>
+    public Task<VersionResponse> SetPersonSitesAsync(Guid personId, SetPersonSitesRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/people/{personId}/sites", request, ct);
+
+    /// <summary>A line's jobs, for choosing what a labor session is for (#84).</summary>
+    public Task<IReadOnlyList<LineJobDto>> ListLineJobsAsync(Guid equipmentId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<LineJobDto>>($"api/labor/lines/{equipmentId}/jobs", ct);
+
     public Task<IReadOnlyList<DeclarableJobDto>> ListDeclarableJobsAsync(Guid? siteId, string? search = null, Guid? materialId = null, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<DeclarableJobDto>>(Query("api/inventory/jobs", ("siteId", siteId), ("search", search), ("materialId", materialId)), ct);
 
@@ -1423,6 +1431,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<TerminalStatusDto> GetTerminalStatusAsync(string secret, CancellationToken ct = default) =>
         TerminalSendAsync<TerminalStatusDto>(secret, HttpMethod.Get, "api/terminal", null, ct);
+
+    /// <summary>The badged person's status again, by their ticket (#84).</summary>
+    public Task<TerminalStatusDto> GetTerminalPersonAsync(string secret, string ticket, CancellationToken ct = default) =>
+        TerminalSendAsync<TerminalStatusDto>(secret, HttpMethod.Post, "api/terminal/person", new TerminalActionRequest { Ticket = ticket }, ct);
 
     public Task<BadgeIdentityResponse> IdentifyBadgeAsync(string secret, IdentifyBadgeRequest request, CancellationToken ct = default) =>
         TerminalSendAsync<BadgeIdentityResponse>(secret, HttpMethod.Post, "api/terminal/identify", request, ct);

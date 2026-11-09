@@ -8,12 +8,17 @@ using Pulaski.Domain.Labor;
 namespace Pulaski.Application.Labor;
 
 /// <summary>A qualification as the commands see it (D-048).</summary>
-public sealed record QualificationRecord(Guid Id, Guid SiteId, string Code, string Name, string? Description, int? ValidityMonths, bool IsActive);
+public sealed record QualificationRecord(Guid Id, Guid SiteId, string Code, string Name, string? Description, int? ValidityMonths, bool IsActive, int? NoticeDays = null);
 
 /// <summary>A grant of a qualification to a person (D-048).</summary>
 public sealed record GrantRecord(
     Guid Id, Guid PersonId, Guid QualificationId, DateOnly ValidFrom, DateOnly? ExpiresOn, string? Note, string GrantedBy,
     DateTimeOffset? RevokedAt, string? RevokedBy, string? RevokeReason);
+
+/// <summary>A grant about to expire, for its notice (#84).</summary>
+public sealed record ExpiryNotice(
+    Guid GrantId, Guid PersonId, string PersonName, string? PersonEmail, Guid SiteId, string SiteCode, string QualificationCode, string QualificationName,
+    DateOnly ExpiresOn);
 
 /// <summary>Write side for qualifications (D-048): runs inside the current <see cref="IUnitOfWork"/>.</summary>
 public interface IQualificationRepository
@@ -21,6 +26,17 @@ public interface IQualificationRepository
     Task<Versioned<QualificationRecord>?> GetQualificationForUpdateAsync(Guid id, CancellationToken cancellationToken);
 
     Task<bool> CodeExistsAsync(Guid siteId, string code, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Grants whose expiry notice is due now (#84): unrevoked, not noticed yet, expiring within their qualification's notice days (30 by
+    /// default) on the site's day and not yet expired, and not followed by a grant that lasts longer. Locked, skipping any another sender holds.
+    /// </summary>
+    Task<IReadOnlyList<ExpiryNotice>> ListDueExpiryNoticesForUpdateAsync(DateTimeOffset now, CancellationToken cancellationToken);
+
+    /// <summary>The e-mail addresses of active users who maintain people at the site (#84); administrators only when no one else does.</summary>
+    Task<IReadOnlyList<string>> ListPeopleManagerEmailsAsync(Guid siteId, DateTimeOffset now, CancellationToken cancellationToken);
+
+    Task MarkExpiryNoticedAsync(IReadOnlyCollection<Guid> grantIds, DateTimeOffset at, CancellationToken cancellationToken);
 
     /// <summary>The site's qualification with this code, read <c>FOR SHARE</c>; null when none (#71).</summary>
     Task<QualificationRecord?> FindQualificationByCodeAsync(Guid siteId, string code, CancellationToken cancellationToken);
@@ -42,10 +58,10 @@ public interface IQualificationRepository
 }
 
 /// <summary>A new qualification at a site (D-048). Its code is fixed once created.</summary>
-public sealed record CreateQualificationCommand(Guid SiteId, string Code, string Name, string? Description, int? ValidityMonths) : ICommand<CreatedResponse>;
+public sealed record CreateQualificationCommand(Guid SiteId, string Code, string Name, string? Description, int? ValidityMonths, int? NoticeDays = null) : ICommand<CreatedResponse>;
 
 /// <summary>Changes a qualification; switched off, it can't be granted or required any more, and existing grants stay.</summary>
-public sealed record UpdateQualificationCommand(Guid Id, long ExpectedVersion, string Name, string? Description, int? ValidityMonths, bool IsActive)
+public sealed record UpdateQualificationCommand(Guid Id, long ExpectedVersion, string Name, string? Description, int? ValidityMonths, bool IsActive, int? NoticeDays = null)
     : ICommand<VersionResponse>;
 
 /// <summary>Grants a qualification (D-048): from <paramref name="ValidFrom"/> (today) to <paramref name="ExpiresOn"/> (its usual validity). A renewal is a new grant.</summary>
@@ -62,6 +78,9 @@ public sealed record SetEquipmentQualificationCommand(Guid EquipmentId, Guid Qua
 
 internal static class QualificationWriter
 {
+    public static void ValidateNotice(int? noticeDays) =>
+        new Validator().Require(noticeDays is null or (>= 1 and <= 365), "NoticeDays", "1 to 365 days, or none for 30.").ThrowIfInvalid();
+
     public static (string Name, string? Description) Validate(string name, string? description, int? validityMonths)
     {
         var trimmed = name.Trim();
@@ -115,7 +134,8 @@ internal sealed class CreateQualificationHandler(
             throw new ConflictException($"The site already has a qualification {code}.");
         }
 
-        var created = new QualificationRecord(ids.NewId(), command.SiteId, code, name, description, command.ValidityMonths, IsActive: true);
+        QualificationWriter.ValidateNotice(command.NoticeDays);
+        var created = new QualificationRecord(ids.NewId(), command.SiteId, code, name, description, command.ValidityMonths, IsActive: true, command.NoticeDays);
         var envelope = events.Create(EventTypes.QualificationCreated, "qualification", created.Id, new { After = created });
         var version = await qualifications.InsertQualificationAsync(created, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
@@ -133,7 +153,15 @@ internal sealed class UpdateQualificationHandler(IUnitOfWork unitOfWork, IQualif
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var current = await QualificationWriter.AtVersionAsync(
             qualifications.GetQualificationForUpdateAsync(command.Id, cancellationToken), command.ExpectedVersion, "Qualification");
-        var updated = current.Value with { Name = name, Description = description, ValidityMonths = command.ValidityMonths, IsActive = command.IsActive };
+        QualificationWriter.ValidateNotice(command.NoticeDays);
+        var updated = current.Value with
+        {
+            Name = name,
+            Description = description,
+            ValidityMonths = command.ValidityMonths,
+            IsActive = command.IsActive,
+            NoticeDays = command.NoticeDays,
+        };
         if (updated == current.Value)
         {
             return new VersionResponse(current.Version);
@@ -157,7 +185,7 @@ internal sealed class GrantQualificationHandler(
         var person = (await labor.GetPersonForUpdateAsync(command.PersonId, cancellationToken))?.Value ?? throw new NotFoundException($"Person {command.PersonId} not found.");
         var qualification = (await qualifications.GetQualificationForUpdateAsync(command.QualificationId, cancellationToken))?.Value
             ?? throw new NotFoundException($"Qualification {command.QualificationId} not found.");
-        if (qualification.SiteId != person.SiteId)
+        if (!await LaborWriter.WorksAtAsync(labor, person, qualification.SiteId, cancellationToken))
         {
             throw new DomainRuleException($"{qualification.Code} belongs to another site than {person.DisplayName}.");
         }
@@ -269,5 +297,71 @@ internal sealed class SetEquipmentQualificationHandler(
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new VersionResponse(version);
+    }
+}
+
+/// <summary>
+/// E-mails qualification expiry notices (#84, D-095), called by the API's scheduler: once per grant, its qualification's notice days (30 by
+/// default) before it expires, to the person (when their Pulaski user has an address) and in one digest per site to whoever maintains its people.
+/// Nothing happens without a mail server; a grant renewed by a longer one is never noticed.
+/// </summary>
+public sealed class QualificationExpiryNotices(
+    IUnitOfWork unitOfWork, IQualificationRepository qualifications, Security.IMailOutbox mail, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)
+{
+    /// <returns>How many grants were noticed.</returns>
+    public async Task<int> SendDueAsync(CancellationToken cancellationToken)
+    {
+        if (!mail.CanSend)
+        {
+            return 0;
+        }
+
+        var now = timeProvider.GetUtcNow();
+        var messages = new List<(string To, string Subject, string Body)>();
+        IReadOnlyList<ExpiryNotice> due;
+        await using (var transaction = await unitOfWork.BeginAsync(cancellationToken))
+        {
+            due = await qualifications.ListDueExpiryNoticesForUpdateAsync(now, cancellationToken);
+            if (due.Count == 0)
+            {
+                return 0;
+            }
+
+            foreach (var notice in due.Where(n => n.PersonEmail is { Length: > 0 }))
+            {
+                messages.Add((notice.PersonEmail!, $"Your {notice.QualificationName} qualification expires on {notice.ExpiresOn:yyyy-MM-dd}",
+                    $"Hello {notice.PersonName},\n\nYour {notice.QualificationCode} {notice.QualificationName} qualification at {notice.SiteCode} expires on " +
+                    $"{notice.ExpiresOn:yyyy-MM-dd}. Ask your supervisor about renewing it in time."));
+            }
+
+            foreach (var site in due.GroupBy(n => n.SiteId))
+            {
+                var lines = string.Join("\n", site.OrderBy(n => n.ExpiresOn).ThenBy(n => n.PersonName, StringComparer.Ordinal)
+                    .Select(n => $"- {n.PersonName}: {n.QualificationCode} {n.QualificationName}, expires {n.ExpiresOn:yyyy-MM-dd}"));
+                foreach (var manager in await qualifications.ListPeopleManagerEmailsAsync(site.Key, now, cancellationToken))
+                {
+                    messages.Add((manager, $"Qualifications expiring soon at {site.First().SiteCode}",
+                        $"These qualifications at {site.First().SiteCode} expire soon:\n\n{lines}\n\nRenew them on Configure → People → Qualifications."));
+                }
+            }
+
+            await qualifications.MarkExpiryNoticedAsync([.. due.Select(n => n.GrantId)], now, cancellationToken);
+            foreach (var notice in due)
+            {
+                await eventLog.AppendAsync(
+                    events.Create(EventTypes.QualificationExpiryNoticed, "person", notice.PersonId, new { notice.GrantId, notice.QualificationCode, notice.ExpiresOn }),
+                    cancellationToken);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        // Sent only once the grants are marked, so a failed save never sends twice.
+        foreach (var (to, subject, body) in messages)
+        {
+            mail.Enqueue(to, subject, body);
+        }
+
+        return due.Count;
     }
 }

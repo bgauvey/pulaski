@@ -255,3 +255,22 @@ public static class LaborRules
 
     private static DateTimeOffset Min(DateTimeOffset a, DateTimeOffset b) => a < b ? a : b;
 }
+
+/// <summary>
+/// Planned breaks a person didn't take (#84, D-095): a break planned in their shift that has ended, through which they were on a line all along,
+/// with no break of theirs overlapping it. Only a flag for Shift review: nothing is recorded.
+/// </summary>
+public static class PlannedBreakCheck
+{
+    public static IReadOnlyList<(Guid PersonId, string BreakName)> Missed(
+        IEnumerable<(Guid PersonId, DateTimeOffset Start, DateTimeOffset? End)> sessions, IEnumerable<BreakSpan> breaks,
+        IReadOnlyList<Shifts.PlannedBreakWindow> planned, DateTimeOffset now)
+    {
+        var taken = breaks.ToLookup(b => b.PersonId);
+        return [.. sessions.GroupBy(s => s.PersonId).SelectMany(person => planned
+            .Where(p => p.End <= now)
+            .Where(p => person.Any(s => s.Start <= p.Start && (s.End ?? now) >= p.End))
+            .Where(p => !taken[person.Key].Any(b => b.Start < p.End && (b.End ?? now) > p.Start))
+            .Select(p => (person.Key, p.Name)))];
+    }
+}

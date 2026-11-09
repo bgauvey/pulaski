@@ -166,6 +166,33 @@ internal sealed class LaborRepository(DbSession session) : ILaborRepository
 
     public Task<bool> IsSiteAsync(Guid siteId, CancellationToken cancellationToken) => session.ExecuteScalarAsync<bool>(IsSite, new { Id = siteId }, cancellationToken);
 
+    public Task<Guid?> FindSetupJobAsync(Guid equipmentId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<Guid?>(
+            """
+            SELECT j.id FROM core.job j
+            WHERE j.equipment_id = @Id AND j.status IN ('running','paused','firmed','dispatched','planned')
+            ORDER BY j.status = 'running' DESC, EXISTS (SELECT 1 FROM core.job_run r WHERE r.job_id = j.id AND r.ended_at IS NULL) DESC, j.sequence_rank, j.id
+            LIMIT 1
+            """,
+            new { Id = equipmentId }, cancellationToken);
+
+    public Task<bool> IsExtraSiteAsync(Guid personId, Guid siteId, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(
+            "SELECT EXISTS (SELECT 1 FROM core.person_site WHERE person_id = @PersonId AND site_id = @SiteId AND is_active FOR SHARE)",
+            new { PersonId = personId, SiteId = siteId }, cancellationToken);
+
+    public async Task<IReadOnlyList<Guid>> ListExtraSitesForUpdateAsync(Guid personId, CancellationToken cancellationToken) =>
+        [.. await session.QueryAsync<Guid>(
+            "SELECT site_id FROM core.person_site WHERE person_id = @PersonId AND is_active ORDER BY site_id FOR UPDATE", new { PersonId = personId }, cancellationToken)];
+
+    public Task SetExtraSiteAsync(Guid personId, Guid siteId, bool isActive, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(
+            """
+            INSERT INTO core.person_site (person_id, site_id, is_active, created_at, updated_at) VALUES (@PersonId, @SiteId, @IsActive, @At, @At)
+            ON CONFLICT (person_id, site_id) DO UPDATE SET is_active = EXCLUDED.is_active, updated_at = EXCLUDED.updated_at
+            """,
+            new { PersonId = personId, SiteId = siteId, IsActive = isActive, At = at }, cancellationToken);
+
     public async Task<Versioned<BreakRecord>?> GetBreakForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<LaborSql.BreakDbRow>(GetBreak, new { Id = id }, cancellationToken) is { } r ? new(r.ToRecord(), r.Version) : null;
 

@@ -25,8 +25,10 @@ internal sealed class PasswordResetSettings(IOptions<SecurityOptions> security, 
 }
 
 /// <summary>E-mails waiting to go (D-093): queued in memory and sent by <see cref="MailSenderService"/>, so a request never waits on the server.</summary>
-internal sealed class MailOutbox : IMailOutbox
+internal sealed class MailOutbox(IOptions<EmailOptions> email) : IMailOutbox
 {
+    public bool CanSend => email.Value.IsUsable;
+
     private readonly Channel<OutgoingMail> _channel = Channel.CreateBounded<OutgoingMail>(new BoundedChannelOptions(1000) { FullMode = BoundedChannelFullMode.DropOldest });
 
     public ChannelReader<OutgoingMail> Reader => _channel.Reader;

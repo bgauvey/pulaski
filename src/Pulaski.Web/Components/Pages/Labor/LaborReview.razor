@@ -61,6 +61,21 @@ else if (_shift is { } detail)
         }
     </div>
 
+    @if (detail.PlannedBreaks.Count > 0)
+    {
+        <p class="small text-muted mb-1">
+            Planned: @string.Join(", ", detail.PlannedBreaks.Select(b => $"{b.Name} {b.Start:HH:mm}–{b.End:HH:mm}{(b.IsPaid ? " (paid)" : "")}"))
+        </p>
+    }
+    @if (detail.MissedBreaks.Count > 0)
+    {
+        @* A flag only (#84): Pulaski records no break by itself; add one on the person's row if they took it. *@
+        <div class="alert alert-warning small py-2" role="status">
+            No break recorded during a planned one: @string.Join("; ", detail.MissedBreaks.Select(m => $"{m.PersonName} ({m.BreakName})")).
+            Add the break if they took it.
+        </div>
+    }
+
     <div class="table-panel">
         <table class="table table-sm align-middle">
             <thead>
@@ -73,7 +88,42 @@ else if (_shift is { } detail)
                     <tr @key="row.Id" class="@(faded ? "text-muted text-decoration-line-through" : "")">
                         <td><span class="fw-semibold">@row.PersonName</span> <span class="small text-muted">@row.EmployeeNumber</span></td>
                         <td>@row.EquipmentCode</td>
-                        <td class="small">@Display.Label(row.LaborType)@(row.JobNumber is { } j ? $" · {j}" : "")@(row.ReasonName is { } r ? $" · {r}" : "")</td>
+                        @if (_edit?.Id == row.Id && !_edit.IsVoid)
+                        {
+                            <td class="small">
+                                @* What the time was for (#84): changing it on an approved shift is a correction, a new session. *@
+                                <select class="form-select form-select-sm mb-1" aria-label="Kind of time" @bind="_edit.LaborType">
+                                    <option value="direct">Direct</option>
+                                    <option value="setup">Setup</option>
+                                    <option value="indirect">Indirect</option>
+                                    <option value="training">Training</option>
+                                </select>
+                                @if (_edit.LaborType == "indirect")
+                                {
+                                    <select class="form-select form-select-sm" aria-label="Reason" @bind="_edit.ReasonId">
+                                        <option value="@Guid.Empty">Reason…</option>
+                                        @foreach (var r in _reasons)
+                                        {
+                                            <option value="@r.Id">@r.Name</option>
+                                        }
+                                    </select>
+                                }
+                                else
+                                {
+                                    <select class="form-select form-select-sm" aria-label="Job" @bind="_edit.JobId">
+                                        <option value="@Guid.Empty">@(_edit.LaborType == "setup" ? "Job…" : "No job")</option>
+                                        @foreach (var job in _jobs)
+                                        {
+                                            <option value="@job.Id">@job.JobNumber@(job.MaterialCode is { } m ? $" · {m}" : "") · @Display.Label(job.Status)</option>
+                                        }
+                                    </select>
+                                }
+                            </td>
+                        }
+                        else
+                        {
+                            <td class="small">@Display.Label(row.LaborType)@(row.JobNumber is { } j ? $" · {j}" : "")@(row.ReasonName is { } r ? $" · {r}" : "")</td>
+                        }
                         @if (_edit?.Id == row.Id)
                         {
                             <td><input type="datetime-local" class="form-control form-control-sm" aria-label="From" @bind="_edit.From" /></td>
@@ -95,7 +145,7 @@ else if (_shift is { } detail)
                                 {
                                     <input class="form-control form-control-sm d-inline-block" style="width: 12rem" maxlength="500" placeholder="Why (required)" aria-label="Why" @bind="_edit.Note" />
                                 }
-                                <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || (_edit.IsCorrection && string.IsNullOrWhiteSpace(_edit.Note)))" @onclick="() => SaveAsync(row)">Save</button>
+                                <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@EditProblem(_edit)" OnClick="() => SaveAsync(row)">Save</ActionButton>
                                 <button type="button" class="btn btn-sm btn-link" @onclick="() => _edit = null">Cancel</button>
                             }
                             else if (!row.IsApproved && CanRecord && !faded)
@@ -138,6 +188,8 @@ else if (_shift is { } detail)
     private IReadOnlyList<LaborShiftDto>? _shifts;
     private ShiftLaborDto? _shift;
     private RowEdit? _edit;
+    private IReadOnlyList<LineJobDto> _jobs = [];
+    private IReadOnlyList<ReasonCodeDto> _reasons = [];
     private string? _approveNote;
     private ApiException? _error;
     private string? _message;
@@ -221,14 +273,37 @@ else if (_shift is { } detail)
         _shifts = await Api.ListLaborShiftsAsync(SiteId, _day);
     }
 
-    private void StartEdit(LaborSessionDto row, bool correction) => _edit = new RowEdit
+    private async Task StartEdit(LaborSessionDto row, bool correction)
     {
-        Id = row.Id,
-        IsCorrection = correction,
-        From = Display.ToSite(row.StartedAt, TimeZone).DateTime,
-        To = row.EndedAt is { } e ? Display.ToSite(e, TimeZone).DateTime : null,
-        Share = row.AllocationPct,
-    };
+        _edit = new RowEdit
+        {
+            Id = row.Id,
+            IsCorrection = correction,
+            LaborType = row.LaborType,
+            JobId = row.JobId ?? Guid.Empty,
+            ReasonId = row.ReasonCodeId ?? Guid.Empty,
+            From = Display.ToSite(row.StartedAt, TimeZone).DateTime,
+            To = row.EndedAt is { } ended ? Display.ToSite(ended, TimeZone).DateTime : null,
+            Share = row.AllocationPct,
+        };
+        try
+        {
+            _jobs = await Api.ListLineJobsAsync(row.EquipmentId);
+            _reasons = _reasons.Count > 0 ? _reasons : await Api.ListReasonCodesAsync("indirect_labor", SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    // Setup is for a job and indirect time needs a reason; a correction says why.
+    private static string? EditProblem(RowEdit edit) =>
+        edit.IsCorrection && string.IsNullOrWhiteSpace(edit.Note) ? "Say why: the shift is approved already."
+        : edit.IsVoid ? null
+        : edit.LaborType == "setup" && edit.JobId == Guid.Empty ? "Setup time is for a job: choose it."
+        : edit.LaborType == "indirect" && edit.ReasonId == Guid.Empty ? "Indirect time needs a reason: choose it."
+        : null;
 
     private void StartVoid(LaborSessionDto row) => _edit = new RowEdit
     {
@@ -251,9 +326,9 @@ else if (_shift is { } detail)
             {
                 Void = edit.IsVoid,
                 EquipmentId = row.EquipmentId,
-                JobId = row.JobId,
-                LaborType = row.LaborType,
-                ReasonCodeId = row.ReasonCodeId,
+                JobId = edit.IsVoid ? row.JobId : edit.Job,
+                LaborType = edit.IsVoid ? row.LaborType : edit.LaborType,
+                ReasonCodeId = edit.IsVoid ? row.ReasonCodeId : edit.Reason,
                 StartedAt = from,
                 EndedAt = to ?? from,
                 AllocationPct = edit.Share,
@@ -267,9 +342,9 @@ else if (_shift is { } detail)
             {
                 Version = row.Version,
                 EquipmentId = row.EquipmentId,
-                JobId = row.JobId,
-                LaborType = row.LaborType,
-                ReasonCodeId = row.ReasonCodeId,
+                JobId = edit.Job,
+                LaborType = edit.LaborType,
+                ReasonCodeId = edit.Reason,
                 StartedAt = from,
                 EndedAt = to,
                 AllocationPct = edit.Share,
@@ -330,5 +405,16 @@ else if (_shift is { } detail)
         public decimal Share { get; set; } = 100;
 
         public string? Note { get; set; }
+
+        public string LaborType { get; set; } = "direct";
+
+        public Guid JobId { get; set; }
+
+        public Guid ReasonId { get; set; }
+
+        // Indirect time has a reason and no job; the others no reason.
+        public Guid? Job => LaborType == "indirect" || JobId == Guid.Empty ? null : JobId;
+
+        public Guid? Reason => LaborType == "indirect" && ReasonId != Guid.Empty ? ReasonId : null;
     }
 }
