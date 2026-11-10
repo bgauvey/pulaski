@@ -1240,6 +1240,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<(byte[] Content, string ContentType, string FileName)> GetPickingListPdfAsync(Guid siteId, Guid? jobId = null, Guid? lineId = null, CancellationToken ct = default) =>
         GetFileAsync(Query("api/inventory/picking-list.pdf", ("siteId", siteId), ("jobId", jobId), ("lineId", lineId)), ct);
 
+    /// <summary>Corrects a report's figures (#80): reversed and reported again in one transaction.</summary>
+    public Task<CorrectProductionResponse> CorrectProductionReportAsync(Guid jobId, Guid reportId, CorrectProductionRequest request, CancellationToken ct = default) =>
+        SendAsync<CorrectProductionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/production/{reportId}/correct", request, ct);
+
     public Task<ReverseProductionResponse> ReverseProductionReportAsync(Guid jobId, Guid reportId, ReverseProductionRequest request, CancellationToken ct = default) =>
         SendAsync<ReverseProductionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/production/{reportId}/reverse", request, ct);
 

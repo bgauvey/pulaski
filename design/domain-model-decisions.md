@@ -1391,7 +1391,7 @@ The job page lists the report as reversed (correction rows aren't listed). Repor
 
 **Also fixed.** Production by shift (D-044) now leaves out machine counts, as D-050 intended.
 
-**Not done.** Editing a report in place. Earlier moves, holds and shipments, corrections, packing, balance merges and chain undo came with D-077.
+**Not done.** Correcting a report's figures came with D-096. Earlier moves, holds and shipments, corrections, packing, balance merges and chain undo came with D-077.
 
 ## Lot allocations and recommendations (D-064, proposed)
 
@@ -2508,6 +2508,23 @@ longer grant, locked `SKIP LOCKED`; an e-mail to the person (their user's addres
 
 **Not done:** production or downtime reporting and user sign-in at terminals; planned breaks recorded automatically; notices for grants
 that already expired unnoticed; a terminal or person across sites beyond listing.
+
+## Correcting a production report (D-096, proposed)
+
+Issue #80. A wrong report could only be reversed whole and entered again, two actions with a window between them.
+
+**Reverse and re-report, atomically** (the user's choice). `CorrectProductionReportCommand` (`POST /api/jobs/{id}/production/{reportId}/correct`,
+`production.correct`) runs in one transaction: `ReverseProductionReportHandler.ReverseAsync` (the reversal's transaction-scoped core, D-063) takes
+the report back whole, then `ProductionReporter.ReportAsync` reports the new figures into the same run, at the report's own time (back-dated when
+that is more than a minute ago, so the 31-day limit applies), in its unit, to where its lots were (or the given location when it made none). Every
+report rule applies again: the rate cap, whole batches, partial batch, backflush, automated consumption put back and taken again. If anything
+fails, nothing changes. The good output goes into new lots; the old ones are cancelled. One `job.production_corrected` event names the old and the
+new report, the figures before and after, the lots taken back and made, and the reason.
+
+**What may change** (the user's choice): good, scrap, the scrap reason and batch weights (and a partial batch). Not the run or the time;
+a correction with the same figures is refused. On the job page, **Correct…** beside **Reverse…**.
+
+**Not done:** keeping the old lot numbers; correcting a report's time or moving it to another run or job.
 
 ## Application architecture
 

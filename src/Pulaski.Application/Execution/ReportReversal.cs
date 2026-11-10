@@ -27,14 +27,21 @@ internal sealed class ReverseProductionReportHandler(
 {
     public async Task<ReverseProductionResponse> HandleAsync(ReverseProductionReportCommand command, CancellationToken cancellationToken)
     {
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var response = await ReverseAsync(command, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return response;
+    }
+
+    /// <summary>Reverses inside the caller's transaction, so a correction can report the new figures in the same one (#80).</summary>
+    internal async Task<ReverseProductionResponse> ReverseAsync(ReverseProductionReportCommand command, CancellationToken cancellationToken)
+    {
         var comment = InventoryRules.Text(command.Comment);
         new Validator()
             .Require(command.ReasonCodeId != Guid.Empty, nameof(command.ReasonCodeId), "Choose a reason.")
             .Require(comment is not null, nameof(command.Comment), "Say why it is reversed.")
             .RequireComment(command.Comment)
             .ThrowIfInvalid();
-
-        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
 
         // The job, then its run, then the lots, as a report locks them (D-027); the report is read again under the job's lock.
         var found = await execution.GetReportAsync(command.ReportId, cancellationToken);
@@ -146,7 +153,6 @@ internal sealed class ReverseProductionReportHandler(
         var runAfter = run.Remove(report.Good, report.Scrap);
         await execution.UpdateRunAsync(runAfter, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
 
         return new ReverseProductionResponse { RunId = run.Id, RunGoodQty = runAfter.GoodQty, RunScrapQty = runAfter.ScrapQty, Lots = lots };
     }

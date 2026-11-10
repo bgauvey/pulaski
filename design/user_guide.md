@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-08 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-09 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -832,6 +832,22 @@ A report entered on the wrong job, or with the wrong quantity, is reversed whole
 - **Partial batches.** A partial batch the report made no longer counts, so the run can report another. A rejected partial batch was written off: reverse that first.
 - **Until the job is closed**, as with reporting. Needs *production.correct* (Supervisor and Auditor to start with).
 - Reports entered before this version can't be reversed whole; they show no **Reverse…** button.
+
+### Correct a production report
+
+A report with the wrong good or scrap quantity, or the wrong scrap reason, is corrected in one step.
+
+1. Open the job's page and find the report under **Production reports**.
+2. Click **Correct…** on its row. The form shows its figures: change **Good** (for a material made in batches, type each good batch's weight, separated by commas), **Scrap** and its **Scrap reason**.
+3. Choose an adjustment **Reason**, write a **Comment** saying why, and click **Correct report**.
+4. The old report is marked *reversed* and a new one with the right figures takes its place, in the same run and at the same time. The page says how many lots gave their output back and how many new lots were made.
+
+**In detail**
+
+- **It is a reversal and a new report in one.** Everything either would check is checked, and if any of it fails nothing changes: the old report's lots must still hold what it gave them, and the new figures must fit the run (its rate cap, whole batches, the partial-batch rules). Automated consumption from the line's feed points is put back and taken again for the new figures.
+- **New lots.** The good output goes into new lots with new numbers, where the old lots were; print their labels again. The old lots are *cancelled*.
+- **What can't change:** the run and the time it counts at. To move output to another job or run, reverse it and report it there. A report older than 31 days can't be corrected, as it can't be back-dated.
+- **History** shows both reports, and one *production corrected* event names them both with the figures before and after. Needs *production.correct*.
 
 ### Production by shift
 
@@ -2585,7 +2601,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Materials import** from CSV or B2MML files, from an OData, REST, SOAP or PostgreSQL connection on demand or on a schedule, or one item at a time through the API. Connections can't sign in with OAuth, and there are no adapters for label printing. Capabilities import from CSV only. Pulaski exports materials and classes as B2MML, but not lots; B2MML sublots, assemblies and other languages aren't read.
 - **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
-- **Production is reported by hand.** Machine counts are recorded but aren't production reports. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
+- **Production is reported by hand.** Machine counts are recorded but aren't production reports. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
 - **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Only a number attribute standing for a quality characteristic is checked against specification limits. Balances' attribute values aren't in the values file.

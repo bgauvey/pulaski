@@ -246,7 +246,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   consumption (`Lot.Restore`), split/merge/transfer (both lots, `GetCounterpartAsync`, `Lot.TakeBack`), genealogy superseded.
   `LotEventSql.NotReversed` hides reversed declarations from job totals/lots/genealogy. Reports have `report_id` (processed row id, on
   counts and produced lot rows); `ReverseProductionReportCommand` (`production.correct`) offsets counts with `correction` rows, `JobRun.Remove`,
-  takes back its lots (out of a commingled balance first), partial batch → `reversed`.
+  takes back its lots (out of a commingled balance first), partial batch → `reversed`. Correcting a report (D-096): `CorrectProductionReportCommand` = `ReverseAsync` + `ProductionReporter.ReportAsync` in one
+  transaction, same run and time, new lots; event `job.production_corrected`.
 - Lifting reversal limits (D-077, proposed): any standing movement reverses when what it changed hasn't changed since (`ListStandingAfterAsync`, effective
   order): latest move / latest status change, quantity via `EnsureFitsAsync`; packing (`Lot.ReversePacking`), corrections (`ts.lot_event.details`,
   `Lot.RevertCorrection`), balance merges too. A reversal is any row with `reverses_event_id`. `ReverseChainCommand` (`/lots/{id}/reverse-chain?dryRun=`)

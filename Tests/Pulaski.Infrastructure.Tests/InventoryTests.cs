@@ -695,6 +695,36 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_report_is_corrected_in_one_go_its_lot_taken_back_and_the_right_figures_reported_at_its_time()
+    {
+        var plant = await CreatePlantAsync();
+        var count = await ReasonAsync("inventory_adjustment", "COUNT");
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 200m, 0m, plant.Metre, null, plant.Staging, Comment: "First reel"));
+
+        // The same figures: nothing to correct.
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CorrectProductionReportCommand(plant.Job, report.ReportId, 200m, 0m, null, count, "Typo")));
+
+        var corrected = await db.SendAsync(new CorrectProductionReportCommand(plant.Job, report.ReportId, 180m, 0m, null, count, "Counted 20 m twice"));
+        Assert.Equal((report.ReportId, 180m), (corrected.CorrectsReportId, corrected.RunGoodQty));
+        Assert.Equal(LotStatus.Cancelled, Assert.Single(corrected.TakenBack).Status);
+        var made = Assert.Single(corrected.Lots);
+        Assert.Equal(180m, made.Quantity);
+        Assert.NotEqual(report.Lot!.LotId, made.LotId);
+
+        // The old report stays, reversed; the new one stands, in the same run.
+        var job = await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(plant.Job));
+        Assert.Equal(180m, job.Runs.Sum(r => r.GoodQty));
+        Assert.True(job.Reports.Single(r => r.ReportId == report.ReportId).IsReversed);
+        Assert.False(job.Reports.Single(r => r.ReportId == corrected.ReportId).IsReversed);
+        Assert.Equal(180m, (await QueryAsync<GetJobMaterialsQuery, JobMaterialsDto>(new GetJobMaterialsQuery(plant.Job))).ProducedQty);
+
+        await using var admin = await db.AdminDataSource.OpenConnectionAsync();
+        Assert.Equal(1, await admin.ExecuteScalarAsync<int>(
+            "SELECT count(*)::int FROM evt.event WHERE type = 'pulaski.job.production_corrected.v1' AND subject = @Job", new { Job = plant.Job }));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CorrectProductionReportCommand(plant.Job, report.ReportId, 150m, 0m, null, count, "Again")));
+    }
+
+    [Fact]
     public async Task Merges_transfers_and_output_that_joined_a_silo_are_put_back_as_they_were()
     {
         var plant = await CreatePlantAsync();

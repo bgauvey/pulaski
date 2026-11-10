@@ -307,6 +307,37 @@ public sealed record ReverseProductionResponse
     public IReadOnlyList<LotTransactionResponse> Lots { get; init; } = [];
 }
 
+/// <summary>A report's corrected figures (#80): reversed and reported again in one go. Run and time stay the report's.</summary>
+public sealed record CorrectProductionRequest
+{
+    public decimal GoodQty { get; init; }
+    public decimal ScrapQty { get; init; }
+    public Guid? ScrapReasonCodeId { get; init; }
+    public IReadOnlyList<decimal> GoodBatches { get; init; } = [];
+    public IReadOnlyList<decimal> ScrapBatches { get; init; } = [];
+    public decimal? PartialQty { get; init; }
+
+    /// <summary>Where good output goes, when the report made none before.</summary>
+    public Guid? LocationId { get; init; }
+
+    /// <summary>Why it is corrected: an adjustment reason and a comment, as a reversal.</summary>
+    public Guid ReasonCodeId { get; init; }
+    public string Comment { get; init; } = "";
+}
+
+/// <summary>A corrected report (#80): the new report, the one it replaces, the run now, the lots taken back and the lots made.</summary>
+public sealed record CorrectProductionResponse
+{
+    public Guid ReportId { get; init; }
+    public Guid CorrectsReportId { get; init; }
+    public required Guid RunId { get; init; }
+    public decimal RunGoodQty { get; init; }
+    public decimal RunScrapQty { get; init; }
+    public IReadOnlyList<LotTransactionResponse> TakenBack { get; init; } = [];
+    public IReadOnlyList<LotTransactionResponse> Lots { get; init; } = [];
+    public IReadOnlyList<InventoryWarningDto> Warnings { get; init; } = [];
+}
+
 public sealed record ReportProductionResponse
 {
     /// <summary>The report (D-063), to reverse it by.</summary>

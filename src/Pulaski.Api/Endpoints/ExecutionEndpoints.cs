@@ -63,6 +63,20 @@ internal static class ExecutionEndpoints
             TypedResults.Ok(await handler.HandleAsync(new ReverseProductionReportCommand(id, reportId, request.ReasonCodeId, request.Comment), ct)))
         .RequirePermission(Permissions.ProductionCorrect, Site.Of(SiteOf.Job));
 
+        // A report's figures corrected (#80): reversed and reported again in one transaction.
+        jobs.MapPost("/{id:guid}/production/{reportId:guid}/correct", async Task<Ok<CorrectProductionResponse>> (
+            Guid id, Guid reportId, CorrectProductionRequest request, ICommandHandler<CorrectProductionReportCommand, CorrectProductionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new CorrectProductionReportCommand(id, reportId, request.GoodQty, request.ScrapQty, request.ScrapReasonCodeId, request.ReasonCodeId, request.Comment)
+                {
+                    GoodBatches = request.GoodBatches,
+                    ScrapBatches = request.ScrapBatches,
+                    PartialQty = request.PartialQty,
+                    LocationId = request.LocationId,
+                },
+                ct)))
+        .RequirePermission(Permissions.ProductionCorrect, Site.Of(SiteOf.Job));
+
         // Partial batches waiting for approval (D-036).
         var partials = routes.MapGroup("/partial-batches").WithTags("Execution");
 
