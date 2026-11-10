@@ -1,0 +1,155 @@
+@inject PulaskiApiClient Api
+
+@* How the site keeps planning rates from run history current (#70, D-098): stops out by default, a scheduled recalculation that proposes
+   rates for review, and opting in to small changes without review. *@
+<section class="inv-facts mb-3" id="planning-rates" aria-labelledby="rates-heading">
+    <h2 class="h6" id="rates-heading">Planning rates from run history</h2>
+    <p class="small text-muted">
+        Planning rates can be worked out from what lines really made. Proposals wait on <ScreenLink Href="rate-proposals" Permission="@PermissionCodes.MaterialsView">Planning rates</ScreenLink> for a planner;
+        a modified rate always stays in force.
+    </p>
+    <ProblemAlert Error="_error" />
+
+    @if (_settings is null)
+    {
+        <p class="small text-muted mb-0">Loading…</p>
+    }
+    else
+    {
+        <form @onsubmit="SaveAsync" @onsubmit:preventDefault>
+            <div class="form-check mb-1">
+                <input id="rates-stops" type="checkbox" class="form-check-input" checked="@_form.TakeOutStops" disabled="@(!CanManage)"
+                       @onchange="e => _form = _form with { TakeOutStops = e.Value is true }" />
+                <label class="form-check-label" for="rates-stops">Take out stops</label>
+                <div class="small text-muted">
+                    Divide good output by running time: down time, planned stops and time out of production inside each run come off its hours
+                    (micro-stops stay). Reviews open with it ticked, and the scheduled recalculation uses it. Lines that don't record machine state keep run time.
+                </div>
+            </div>
+            <div class="form-check mb-2">
+                <input id="rates-scheduled" type="checkbox" class="form-check-input" checked="@_form.IsScheduled" disabled="@(!CanManage)"
+                       @onchange="e => _form = _form with { IsScheduled = e.Value is true, AutoAccept = e.Value is true && _form.AutoAccept }" />
+                <label class="form-check-label" for="rates-scheduled">Recalculate on a schedule</label>
+                <div class="small text-muted">
+                    Works out every line's rates and proposes those that changed.
+                    @(_settings.RefreshedAt is { } at ? $"Last recalculated {Display.SiteTime(at, TimeZone)}." : "")
+                </div>
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-sm-3">
+                    <label class="form-label small" for="rates-every">Every, days</label>
+                    <input id="rates-every" type="number" min="1" max="90" class="form-control form-control-sm" value="@_form.EveryDays" disabled="@(!CanManage || !_form.IsScheduled)"
+                           @onchange="e => _form = _form with { EveryDays = Int(e, _form.EveryDays) }" />
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label small" for="rates-window">Runs ended in the last, days</label>
+                    <input id="rates-window" type="number" min="7" max="365" class="form-control form-control-sm" value="@_form.WindowDays" disabled="@(!CanManage || !_form.IsScheduled)"
+                           @onchange="e => _form = _form with { WindowDays = Int(e, _form.WindowDays) }" />
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label small" for="rates-threshold">Propose changes over, %</label>
+                    <input id="rates-threshold" type="number" min="0" max="100" step="0.5" class="form-control form-control-sm" value="@_form.ThresholdPct" disabled="@(!CanManage || !_form.IsScheduled)"
+                           @onchange="e => _form = _form with { ThresholdPct = Dec(e, _form.ThresholdPct) }" />
+                </div>
+            </div>
+            <div class="form-check mb-1">
+                <input id="rates-auto" type="checkbox" class="form-check-input" checked="@_form.AutoAccept" disabled="@(!CanManage || !_form.IsScheduled)"
+                       @onchange="e => _form = _form with { AutoAccept = e.Value is true }" />
+                <label class="form-check-label" for="rates-auto">Accept small changes without review</label>
+                <div class="small text-muted">
+                    A proposal for a rate already from run history is accepted at once when it is within the limit below. The first rate from run
+                    history, and larger changes, always wait for a planner.
+                </div>
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-sm-3">
+                    <label class="form-label small" for="rates-limit">Up to, %</label>
+                    <input id="rates-limit" type="number" min="0.5" max="100" step="0.5" class="form-control form-control-sm" value="@_form.AutoAcceptLimitPct"
+                           disabled="@(!CanManage || !_form.AutoAccept)" @onchange="e => _form = _form with { AutoAcceptLimitPct = Dec(e, _form.AutoAcceptLimitPct) }" />
+                </div>
+            </div>
+            @if (CanManage)
+            {
+                <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save planning rate settings</button>
+            }
+        </form>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Guid SiteId { get; set; }
+
+    [Parameter] public bool CanManage { get; set; }
+
+    [Parameter] public string? TimeZone { get; set; }
+
+    /// <summary>Says what was saved, in the page's message.</summary>
+    [Parameter] public EventCallback<string> Saved { get; set; }
+
+    private RateRefreshSettingsDto? _settings;
+    private SetRateRefreshSettingsRequest _form = new();
+    private Guid? _loadedFor;
+    private bool _saving;
+    private ApiException? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == SiteId)
+        {
+            return;
+        }
+
+        _loadedFor = SiteId;
+        _settings = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _settings = await Api.GetRateRefreshSettingsAsync(SiteId);
+            _form = new SetRateRefreshSettingsRequest
+            {
+                Version = _settings.Version,
+                TakeOutStops = _settings.TakeOutStops,
+                IsScheduled = _settings.IsScheduled,
+                EveryDays = _settings.EveryDays,
+                WindowDays = _settings.WindowDays,
+                ThresholdPct = _settings.ThresholdPct,
+                AutoAccept = _settings.AutoAccept,
+                AutoAcceptLimitPct = _settings.AutoAcceptLimitPct,
+            };
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private static int Int(ChangeEventArgs e, int current) =>
+        int.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : current;
+
+    private static decimal Dec(ChangeEventArgs e, decimal current) =>
+        decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : current;
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await Api.SetRateRefreshSettingsAsync(SiteId, _form);
+            await LoadAsync();
+            await Saved.InvokeAsync("Saved the planning rate settings.");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

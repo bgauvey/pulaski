@@ -2556,6 +2556,38 @@ was already skipped by stream sequence (D-050). Reconciliation: the machine's ru
 **Not done:** reporting counts without an operator; batch materials (reported by batch weight); a units-per-count column in the capabilities CSV;
 offering again the counts of a reversed report that wasn't the run's latest.
 
+## Stops out of run-history rates, scheduled recalculation (D-098, proposed)
+
+Issue #70. Rates from run history (D-045) divided good output by run time as recorded, so stops inside a run lowered the rate, and they were
+worked out only when a planner asked.
+
+**Stops out: down and planned** (the user's choice). With stops taken out, each run's hours lose the time `EquipmentUses` (D-052, shared with the
+OEE report) classifies as anything but `TimeUse.Run` inside the run: down (uncoded stops and no signal included), planned stops and unit modes
+that aren't production. Micro-stops are run time (D-050), so they stay in as lost speed. A line deriving its state takes its machines'. Pure:
+`RunHistoryRate.StoppedHours`, `RunSample.StoppedHours`, `Calculate(…, takeOutStops)`; a run with under 30 minutes of running, or without known stops,
+is left out. A line that doesn't track state can't take stops out: the review says so and uses run time.
+
+**Per review, site default** (the user's choice). The review has *Take out stops*, opening on `core.rate_refresh_settings.take_out_stops`;
+accepting records the basis on the run standard: `run_history` or the new `run_history_net` (migration 0063 widens the check), and in the
+`…recalculated.v1` event with the stopped hours. `AdoptHistoryRateCommand.TakeOutStops` works it out the same way again under the lock.
+
+**Stored proposals, a review list** (the user's choice). A site can switch on the scheduled recalculation (`is_scheduled`, `every_days`,
+`window_days`, `threshold_pct`). `RateRefreshService` (API hosted service, `RunStandards:Refresh:*`) runs `RateRefreshRunner` for due sites
+(`RateRefresh.IsDue`, `core.rate_refresh`): each run standard of the site's active lines is worked out with the site's basis; a rate that moves the
+calculated rate by more than the threshold, or changes its basis (`RateRefresh.IsWorthProposing`), becomes a `core.run_standard_proposal` (one
+pending per standard; a newer one supersedes it), event `run_standard.proposed`. Configure → Planning rates lists them, and the material's line
+row shows *proposed*. Accepting (`AcceptRateProposalCommand`, `rate.modify`) works the history out again over the proposal's days and basis and
+refuses (409) a different rate, as D-045 does; rejecting keeps the rate. `RunHistory.AdoptAsync` is shared by every acceptance and decides the
+standard's pending proposal (accepted, else superseded).
+
+**Opt-in auto-accept within a limit** (the user's choice). With `auto_accept` (needs `is_scheduled`), a proposal is accepted at once as *system*
+(`auto_accepted`) only when the standard is already from run history and the change is within `auto_accept_limit_pct`
+(`RateRefresh.WhyReviewed`); the first history rate and bigger changes wait, with the reason stored. A modified rate stays in force throughout:
+only the calculated rate changes. D-045's "no worker" is replaced by this one.
+
+**Not done:** limiting the recalculation to some lines or materials or a time of day; re-working an auto-accepted proposal at accept time (it is
+worked out once, then accepted under the lock).
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

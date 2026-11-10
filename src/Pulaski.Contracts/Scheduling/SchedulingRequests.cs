@@ -102,6 +102,35 @@ public sealed record AdoptHistoryRateRequest
     public long Version { get; init; }
     public int Days { get; init; } = 90;
     public decimal RatePerHour { get; init; }
+
+    /// <summary>The rate was reviewed with stops taken out (#70); it is worked out the same way again.</summary>
+    public bool TakeOutStops { get; init; }
+}
+
+/// <summary>Accepts the run standard's pending proposal (#70): worked out again, as reviewed, under the lock.</summary>
+public sealed record AcceptRateProposalRequest
+{
+    /// <summary>The run standard's version.</summary>
+    public long Version { get; init; }
+    public Guid ProposalId { get; init; }
+}
+
+public sealed record RejectRateProposalRequest
+{
+    public Guid ProposalId { get; init; }
+    public string? Note { get; init; }
+}
+
+public sealed record SetRateRefreshSettingsRequest
+{
+    public long Version { get; init; }
+    public bool TakeOutStops { get; init; }
+    public bool IsScheduled { get; init; }
+    public int EveryDays { get; init; } = 7;
+    public int WindowDays { get; init; } = 90;
+    public decimal ThresholdPct { get; init; } = 5m;
+    public bool AutoAccept { get; init; }
+    public decimal AutoAcceptLimitPct { get; init; } = 10m;
 }
 
 /// <summary>Takes the calculated planning rate back to the capability's ideal rate, which it then follows (D-045).</summary>

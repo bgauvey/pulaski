@@ -420,6 +420,77 @@ public sealed class SchedulingTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Stops_come_out_of_history_rates_and_the_scheduled_recalculation_proposes_them_for_review()
+    {
+        var (site, line) = await CreateLineAsync();
+        var (white, _) = await CreateMaterialsAsync();
+        var wo = Guid.CreateVersion7();
+        var job = Guid.CreateVersion7();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            // Six 2-hour runs making 180–205 m, each stopped for 15 minutes from 90 minutes in.
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO core.run_standard (equipment_id, material_id, uom_id, calculated_rate_per_hour, calculation_basis, calculated_at)
+                VALUES (@line, @white, @uom, 120, 'ideal_rate', now());
+                INSERT INTO core.equipment_capability (equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, effective_from)
+                VALUES (@line, @white, 120, @uom, now() - interval '1 year');
+                INSERT INTO core.work_order (id, site_id, order_number, material_id, planned_qty, uom_id)
+                VALUES (@wo, @site, @woNumber, @white, 2000, @uom);
+                INSERT INTO core.job (id, site_id, work_order_id, job_number, job_type, equipment_id, material_id, planned_qty, uom_id, sequence_rank, status)
+                VALUES (@job, @site, @wo, @jobNumber, 'production', @line, @white, 2000, @uom, 1, 'paused');
+                INSERT INTO core.job_run (job_id, equipment_id, run_no, started_at, ended_at, status, good_qty, uom_id)
+                SELECT @job, @line, n, date_trunc('minute', now()) - make_interval(days => n, hours => 2), date_trunc('minute', now()) - make_interval(days => n), 'ended', 175 + 5 * n, @uom
+                FROM generate_series(1, 6) AS n;
+                INSERT INTO ts.equipment_state_change (occurred_at, equipment_id, packml_state, unit_mode, source)
+                SELECT r.started_at + s.at, @line, s.state, 1, 'packtags'
+                FROM core.job_run r
+                CROSS JOIN (VALUES (interval '0', 6), (interval '90 minutes', 2), (interval '105 minutes', 6)) AS s(at, state)
+                WHERE r.job_id = @job;
+                """,
+                new { site, line, white, wo, job, uom = db.UomId, woNumber = "WO-" + Guid.NewGuid().ToString("N")[..8], jobNumber = "J-" + Guid.NewGuid().ToString("N")[..8] });
+        }
+
+        var standard = Assert.Single(await ListRunStandardsAsync(line));
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            var reviewer = scope.ServiceProvider.GetRequiredService<IQueryHandler<GetRunHistoryRateQuery, RunHistoryRateDto>>();
+            var gross = await reviewer.HandleAsync(new GetRunHistoryRateQuery(standard.Id, 90), CancellationToken.None);
+            var net = await reviewer.HandleAsync(new GetRunHistoryRateQuery(standard.Id, 90, TakeOutStops: true), CancellationToken.None);
+            Assert.False(gross.StopsTakenOut);
+            Assert.Equal(96.25m, gross.SuggestedRatePerHour);
+            Assert.True(net.StopsTakenOut);
+            Assert.Equal(10.5m, net.UsedHours);
+            Assert.Equal(1.5m, net.UsedStoppedHours);
+            Assert.Equal(110m, net.SuggestedRatePerHour);
+            Assert.Equal(CalculationBasis.RunHistoryNet, net.SuggestedBasis);
+        }
+
+        // The site takes stops out and recalculates weekly; nothing is accepted without review.
+        var settings = await QueryAsync<GetRateRefreshSettingsQuery, RateRefreshSettingsDto>(new GetRateRefreshSettingsQuery(site));
+        Assert.False(settings.IsScheduled);
+        await db.SendAsync(new SetRateRefreshSettingsCommand(site, settings.Version, true, true, 7, 90, 5m, false, 10m));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new SetRateRefreshSettingsCommand(site, settings.Version, false, true, 7, 90, 5m, false, 10m)));
+
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            var saved = await scope.ServiceProvider.GetRequiredService<IRateRefreshReadStore>().GetSettingsAsync(site, CancellationToken.None);
+            Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<RateRefreshRunner>().RefreshSiteAsync(saved, CancellationToken.None));
+        }
+
+        var proposal = Assert.Single(await QueryAsync<ListRateProposalsQuery, IReadOnlyList<RateProposalDto>>(new ListRateProposalsQuery(site)));
+        Assert.Equal((110m, CalculationBasis.RunHistoryNet, ProposalStatus.Pending), (proposal.ProposedRatePerHour, proposal.CalculationBasis, proposal.Status));
+        Assert.Equal(1.5m, proposal.StoppedHours);
+        Assert.Equal(CalculationBasis.IdealRate, proposal.CurrentBasis);
+        Assert.NotNull((await QueryAsync<GetRateRefreshSettingsQuery, RateRefreshSettingsDto>(new GetRateRefreshSettingsQuery(site))).RefreshedAt);
+
+        await db.SendAsync(new AcceptRateProposalCommand(standard.Id, proposal.RunStandardVersion, proposal.Id));
+        var row = Assert.Single(await ListRunStandardsAsync(line));
+        Assert.Equal((110m, CalculationBasis.RunHistoryNet), (row.CalculatedRatePerHour, row.CalculationBasis));
+        Assert.Equal(ProposalStatus.Accepted, Assert.Single(await QueryAsync<ListRateProposalsQuery, IReadOnlyList<RateProposalDto>>(new ListRateProposalsQuery(site))).Status);
+    }
+
+    [Fact]
     public async Task Policy_starts_as_the_default_and_switches_the_line_to_scheduler_mode()
     {
         var (site, line) = await CreateLineAsync();
@@ -602,6 +673,13 @@ public sealed class SchedulingTests(DatabaseFixture db)
         await using var scope = db.Services.CreateAsyncScope();
         var handler = scope.ServiceProvider.GetRequiredService<IQueryHandler<GetLineTimelineQuery, LineTimelineDto>>();
         return await handler.HandleAsync(new GetLineTimelineQuery(line), CancellationToken.None);
+    }
+
+    private async Task<TResult> QueryAsync<TQuery, TResult>(TQuery query)
+        where TQuery : IQuery<TResult>
+    {
+        await using var scope = db.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IQueryHandler<TQuery, TResult>>().HandleAsync(query, CancellationToken.None);
     }
 
     private async Task<(Guid Site, Guid Line)> CreateLineAsync()

@@ -121,14 +121,45 @@ internal static class SchedulingEndpoints
 
         // A planning rate from run history (D-045): reviewed first, then accepted; or back to the ideal rate.
         group.MapGet("/run-standards/{id:guid}/history-rate", async Task<Ok<RunHistoryRateDto>> (
-            Guid id, int? days, IQueryHandler<GetRunHistoryRateQuery, RunHistoryRateDto> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetRunHistoryRateQuery(id, days ?? Domain.Scheduling.RunHistoryRate.DefaultDays), ct)))
+            Guid id, int? days, bool? takeOutStops, IQueryHandler<GetRunHistoryRateQuery, RunHistoryRateDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetRunHistoryRateQuery(id, days ?? Domain.Scheduling.RunHistoryRate.DefaultDays, takeOutStops), ct)))
         .RequireAny(Site.Of(SiteOf.RunStandard), Permissions.MaterialsView, Permissions.ScheduleView);
 
         group.MapPost("/run-standards/{id:guid}/history-rate", async Task<Ok<VersionResponse>> (
             Guid id, AdoptHistoryRateRequest request, ICommandHandler<AdoptHistoryRateCommand, VersionResponse> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new AdoptHistoryRateCommand(id, request.Version, request.Days, request.RatePerHour), ct)))
+            TypedResults.Ok(await handler.HandleAsync(new AdoptHistoryRateCommand(id, request.Version, request.Days, request.RatePerHour)
+            {
+                TakeOutStops = request.TakeOutStops,
+            }, ct)))
         .RequirePermission(Permissions.RateModify, Site.Of(SiteOf.RunStandard));
+
+        // Proposals of the scheduled recalculation (#70, D-098): one pending per run standard, accepted (worked out again) or rejected.
+        group.MapPost("/run-standards/{id:guid}/proposal/accept", async Task<Ok<VersionResponse>> (
+            Guid id, AcceptRateProposalRequest request, ICommandHandler<AcceptRateProposalCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new AcceptRateProposalCommand(id, request.Version, request.ProposalId), ct)))
+        .RequirePermission(Permissions.RateModify, Site.Of(SiteOf.RunStandard));
+
+        group.MapPost("/run-standards/{id:guid}/proposal/reject", async Task<Ok<VersionResponse>> (
+            Guid id, RejectRateProposalRequest request, ICommandHandler<RejectRateProposalCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new RejectRateProposalCommand(id, request.ProposalId, request.Note), ct)))
+        .RequirePermission(Permissions.RateModify, Site.Of(SiteOf.RunStandard));
+
+        group.MapGet("/sites/{siteId:guid}/rate-proposals", async Task<Ok<IReadOnlyList<RateProposalDto>>> (
+            Guid siteId, IQueryHandler<ListRateProposalsQuery, IReadOnlyList<RateProposalDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListRateProposalsQuery(siteId), ct)))
+        .RequireAny(Site.Route(), Permissions.MaterialsView, Permissions.ScheduleView);
+
+        group.MapGet("/sites/{siteId:guid}/rate-refresh", async Task<Ok<RateRefreshSettingsDto>> (
+            Guid siteId, IQueryHandler<GetRateRefreshSettingsQuery, RateRefreshSettingsDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetRateRefreshSettingsQuery(siteId), ct)))
+        .RequireAny(Site.Route(), Permissions.SiteSettingsView, Permissions.MaterialsView, Permissions.ScheduleView);
+
+        group.MapPut("/sites/{siteId:guid}/rate-refresh", async Task<Ok<VersionResponse>> (
+            Guid siteId, SetRateRefreshSettingsRequest request, ICommandHandler<SetRateRefreshSettingsCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetRateRefreshSettingsCommand(
+                siteId, request.Version, request.TakeOutStops, request.IsScheduled, request.EveryDays, request.WindowDays, request.ThresholdPct, request.AutoAccept,
+                request.AutoAcceptLimitPct), ct)))
+        .RequirePermission(Permissions.SiteSettings, Site.Route());
 
         group.MapPost("/run-standards/{id:guid}/ideal-rate", async Task<Ok<VersionResponse>> (
             Guid id, UseIdealRateRequest request, ICommandHandler<UseIdealRateCommand, VersionResponse> handler, CancellationToken ct) =>

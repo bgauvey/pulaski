@@ -106,6 +106,98 @@ public sealed record RunHistoryRateDto
     public int MinRuns { get; init; }
     public decimal MinHours { get; init; }
     public IReadOnlyList<RunHistorySampleDto> Runs { get; init; } = [];
+
+    /// <summary>Stops inside the runs were taken out of their hours (#70): the rate is good ÷ running time.</summary>
+    public bool StopsTakenOut { get; init; }
+
+    /// <summary>Why stops couldn't be taken out though asked (the line records no machine state); null otherwise.</summary>
+    public string? StopsNote { get; init; }
+
+    /// <summary>The site's default for taking stops out, which the review opens on.</summary>
+    public bool SiteTakesOutStops { get; init; }
+
+    /// <summary>The used runs' stopped hours: taken out of <see cref="UsedHours"/> when <see cref="StopsTakenOut"/>.</summary>
+    public decimal UsedStoppedHours { get; init; }
+
+    /// <summary>The basis accepting it records: <c>run_history</c> or <c>run_history_net</c>.</summary>
+    public string SuggestedBasis { get; init; } = "run_history";
+
+    /// <summary>The scheduled recalculation's proposal waiting for review, if any (#70).</summary>
+    public RateProposalDto? Proposal { get; init; }
+}
+
+/// <summary>
+/// A planning rate the scheduled recalculation proposed (#70, D-098), with what it was worked out from and the run standard as it is now. Pending
+/// until a planner accepts or rejects it, the site accepts it without review, or a newer one replaces it.
+/// </summary>
+public sealed record RateProposalDto
+{
+    public Guid Id { get; init; }
+    public Guid RunStandardId { get; init; }
+
+    /// <summary>The run standard's version, for accepting it.</summary>
+    public long RunStandardVersion { get; init; }
+    public Guid LineId { get; init; }
+    public string LineCode { get; init; } = "";
+    public Guid MaterialId { get; init; }
+    public string MaterialCode { get; init; } = "";
+    public string MaterialName { get; init; } = "";
+    public string UomCode { get; init; } = "";
+    public decimal ProposedRatePerHour { get; init; }
+
+    /// <summary><c>run_history</c> or <c>run_history_net</c> (stops taken out).</summary>
+    public string CalculationBasis { get; init; } = "";
+    public int WindowDays { get; init; }
+    public DateTimeOffset WindowFrom { get; init; }
+    public DateTimeOffset WindowTo { get; init; }
+    public int UsedRuns { get; init; }
+    public decimal UsedHours { get; init; }
+    public decimal UsedGoodQty { get; init; }
+    public decimal StoppedHours { get; init; }
+
+    /// <summary>The calculated rate when it was proposed.</summary>
+    public decimal CalculatedRatePerHour { get; init; }
+
+    /// <summary>The run standard now: its calculated rate and basis, and a modified rate, which stays in force.</summary>
+    public decimal CurrentCalculatedRatePerHour { get; init; }
+    public string CurrentBasis { get; init; } = "";
+    public decimal? ModifiedRatePerHour { get; init; }
+
+    /// <summary>Why it waits for review rather than being accepted by the site's opt-in.</summary>
+    public string? ReviewReason { get; init; }
+
+    /// <summary><c>pending</c>, <c>accepted</c>, <c>auto_accepted</c>, <c>rejected</c> or <c>superseded</c>.</summary>
+    public string Status { get; init; } = "pending";
+    public DateTimeOffset ProposedAt { get; init; }
+    public DateTimeOffset? DecidedAt { get; init; }
+    public string? DecidedBy { get; init; }
+    public string? DecisionNote { get; init; }
+}
+
+/// <summary>How a site keeps its planning rates from run history current (#70, D-098).</summary>
+public sealed record RateRefreshSettingsDto
+{
+    public Guid SiteId { get; init; }
+
+    /// <summary>Reviews open with stops taken out, and the scheduled recalculation takes them out.</summary>
+    public bool TakeOutStops { get; init; }
+
+    /// <summary>A recalculation every <see cref="EveryDays"/> proposes rates for review.</summary>
+    public bool IsScheduled { get; init; }
+    public int EveryDays { get; init; } = 7;
+
+    /// <summary>Runs that ended in this many days.</summary>
+    public int WindowDays { get; init; } = 90;
+
+    /// <summary>Only changes of more than this, in percent of the calculated rate, are proposed.</summary>
+    public decimal ThresholdPct { get; init; } = 5m;
+
+    /// <summary>The site opts in to accepting, without review, changes within <see cref="AutoAcceptLimitPct"/> to rates already from run history.</summary>
+    public bool AutoAccept { get; init; }
+    public decimal AutoAcceptLimitPct { get; init; } = 10m;
+
+    public DateTimeOffset? RefreshedAt { get; init; }
+    public long Version { get; init; }
 }
 
 /// <summary>One run looked at: its good output in the planning rate's unit, its rate, and why it was left out, if it was.</summary>
@@ -120,4 +212,7 @@ public sealed record RunHistorySampleDto
     public decimal? GoodQty { get; init; }
     public decimal? RatePerHour { get; init; }
     public string? Excluded { get; init; }
+
+    /// <summary>Hours it was stopped (#70); null when its stops aren't known.</summary>
+    public decimal? StoppedHours { get; init; }
 }

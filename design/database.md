@@ -1071,7 +1071,7 @@ The rate the projection uses: runtime = remaining quantity ÷ effective rate. Hi
 | `material_id` | uuid → material | no | The material. |
 | `uom_id` | uuid → uom | no | The rate is this unit per hour. Follows the capability's rate unit while the basis is `ideal_rate` and no modified rate is set. |
 | `calculated_rate_per_hour` | numeric(18,6) | no | Written only by Pulaski: from the capability's ideal rate, recalculated when that changes while the basis is `ideal_rate` (D-034); or the rate from run history a planner reviewed and accepted (D-045). Positive. |
-| `calculation_basis` | text | no | `ideal_rate` or `run_history`. A `run_history` rate doesn't follow the ideal rate until it is put back to `ideal_rate`. |
+| `calculation_basis` | text | no | `ideal_rate`, `run_history` or `run_history_net` (from run history with the stops inside runs taken out, #70, D-098). A rate from run history doesn't follow the ideal rate until it is put back to `ideal_rate`. |
 | `calculated_at` | timestamptz | no | When it was last calculated. |
 | `modified_rate_per_hour` | numeric(18,6) | yes | Set by a person. While set it is the gold standard; recalculation never overwrites it. |
 | `modified_at` | timestamptz | yes | When modified. Set together with the rate. |
@@ -1080,6 +1080,53 @@ The rate the projection uses: runtime = remaining quantity ÷ effective rate. Hi
 | `rate_source` | text | no | Generated: `modified` when a modified rate is set, otherwise `calculated`. |
 | `effective_rate_per_hour` | numeric(18,6) | no | Generated: the modified rate if set, otherwise the calculated one. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.rate_refresh_settings — how a site keeps planning rates from run history current (D-098) · *In use*
+
+One row per site, made on its first save; without one the defaults apply. Saved on Configure → Site settings (`site_settings.manage`).
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key; the site. |
+| `take_out_stops` | boolean | no | Reviews open with stops taken out, and the scheduled recalculation takes them out. Default false. |
+| `is_scheduled` | boolean | no | The scheduled recalculation proposes rates. Default false. |
+| `every_days` | smallint | no | How often, 1 to 90 days. Default 7. |
+| `window_days` | smallint | no | Runs that ended in this many days, 7 to 365. Default 90. |
+| `threshold_pct` | numeric(5,2) | no | Only changes of more than this, in percent of the calculated rate (or a change of basis), are proposed. 0 to 100; default 5. |
+| `auto_accept` | boolean | no | Proposals within `auto_accept_limit_pct` for rates already from run history are accepted without review. Needs `is_scheduled` (`rate_refresh_auto_ck`). Default false. |
+| `auto_accept_limit_pct` | numeric(5,2) | no | The largest change accepted without review, more than 0 and at most 100. Default 10. |
+| `updated_at` | timestamptz | no | See conventions. |
+
+### core.rate_refresh — when a site's planning rates were last recalculated (D-098) · *In use*
+
+Its own row, so recalculating never changes the settings' version.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key; the site. |
+| `refreshed_at` | timestamptz | no | When the last scheduled recalculation started; the site is due again `every_days` after it. |
+
+### core.run_standard_proposal — planning rates proposed by the scheduled recalculation (D-098) · *In use*
+
+What the recalculation worked out, kept until it is decided. At most one `pending` per run standard (`run_standard_proposal_pending_uq`); a newer proposal makes the older one `superseded`. Accepting works the rate out again and writes the run standard (`…recalculated.v1`); the row keeps what was proposed.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `run_standard_id` | uuid → run_standard | no | The planning rate it is for. |
+| `proposed_rate_per_hour` | numeric(18,6) | no | The rate the run history gave. Positive. |
+| `uom_id` | uuid → uom | no | The run standard's unit when proposed. |
+| `calculation_basis` | text | no | `run_history` or `run_history_net`. |
+| `window_days`, `window_from`, `window_to` | smallint, timestamptz | no | The runs that ended in this window were looked at. |
+| `used_runs`, `used_hours`, `used_good_qty` | integer, numeric | no | What the rate was worked out from; hours are running hours for `run_history_net`. |
+| `stopped_hours` | numeric(12,2) | no | The used runs' stopped hours (taken out for `run_history_net`). |
+| `calculated_rate_per_hour`, `effective_rate_per_hour` | numeric(18,6) | no | The run standard's rates when proposed. |
+| `review_reason` | text | yes | Why it waits for review rather than being accepted by the site's opt-in. |
+| `status` | text | no | `pending`, `accepted`, `auto_accepted`, `rejected` or `superseded`. |
+| `proposed_at` | timestamptz | no | When proposed. Indexed. |
+| `decided_at`, `decided_by` | timestamptz, text | yes | When and by whom it was decided (`system` for one accepted without review or replaced by the recalculation); set exactly when not pending (`run_standard_proposal_decided_ck`). |
+| `decision_note` | text | yes | Why it was rejected, at most 1000 characters. |
+| `updated_at` | timestamptz | no | See conventions. |
 
 ### core.changeover_rule — the changeover matrix (D-015) · *In use*
 

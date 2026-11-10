@@ -1,0 +1,212 @@
+@page "/rate-proposals"
+@attribute [RequiresView(PermissionCodes.MaterialsView, PermissionCodes.ScheduleView)]
+@using Pulaski.Web.Services.Scheduling
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+
+@* Planning rates the scheduled recalculation proposed (#70, D-098): each waits for a planner to accept (worked out again first) or reject it,
+   unless the site accepts small changes without review. A modified rate always stays in force. *@
+<PageTitle>Planning rates · Pulaski</PageTitle>
+
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Planning rates</h1>
+        <p class="text-muted mb-0">Rates from run history the scheduled recalculation proposes. Accepting makes one the calculated planning rate.</p>
+    </div>
+    <div class="inv-head-tools">
+        @if (Sites.Sites.Count > 1)
+        {
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+        <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_busy" @onclick="LoadAsync">Refresh</button>
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.RateModify" What="accept or reject proposals" SiteId="Sites.SiteId" />
+
+@if (_message is { } message)
+{
+    <div class="alert alert-success d-flex align-items-center gap-2" role="status">
+        <span>@message</span>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">Dismiss</button>
+    </div>
+}
+
+@if (Sites.SiteId is null)
+{
+    <p class="text-muted">There is no site yet.</p>
+}
+else if (_proposals is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+else if (_proposals.Count == 0)
+{
+    <p class="text-muted">
+        No proposals. The scheduled recalculation is set up under
+        <ScreenLink Href="site-settings" Permission="@PermissionCodes.SiteSettingsView">Site settings</ScreenLink>; a rate can also be worked out
+        any time from a material's line, under Rate.
+    </p>
+}
+else
+{
+    <div class="table-panel">
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th>Line</th><th>Material</th><th class="inv-num">Proposed</th><th class="inv-num">Calculated now</th><th>Worked out from</th><th>Status</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _proposals)
+                {
+                    <tr @key="p.Id" class="@(p.Status == "pending" ? "" : "text-muted")">
+                        <td class="fw-semibold">@p.LineCode</td>
+                        <td>
+                            <ScreenLink Href="@($"materials/{p.MaterialId}")" Permission="@PermissionCodes.MaterialsView">@p.MaterialCode</ScreenLink>
+                            <span class="small text-muted">@p.MaterialName</span>
+                        </td>
+                        <td class="inv-num">
+                            @RateProposalView.Qty(p.ProposedRatePerHour) @p.UomCode/h
+                            <div class="small text-muted">@RateProposalView.Change(p.ProposedRatePerHour, p.CalculatedRatePerHour) @RateProposalView.Qty(p.CalculatedRatePerHour) then</div>
+                        </td>
+                        <td class="inv-num">
+                            @RateProposalView.Qty(p.CurrentCalculatedRatePerHour)
+                            <div class="small text-muted">@RateProposalView.Basis(p.CurrentBasis)</div>
+                            @if (p.ModifiedRatePerHour is { } modified)
+                            {
+                                <div class="small">modified @RateProposalView.Qty(modified) in force</div>
+                            }
+                        </td>
+                        <td class="small">
+                            @RateProposalView.Basis(p.CalculationBasis): @RateProposalView.Sample(p)
+                            <div class="text-muted">Proposed @Display.SiteTime(p.ProposedAt, SiteZone)</div>
+                        </td>
+                        <td class="small">
+                            @RateProposalView.Status(p.Status)
+                            @if (p.Status == "pending" && p.ReviewReason is { } why)
+                            {
+                                <div class="text-muted">@why</div>
+                            }
+                            @if (p.DecidedAt is { } decided)
+                            {
+                                <div class="text-muted">@Display.SiteTime(decided, SiteZone)@(p.DecidedBy is { } by ? $" · {by}" : "")@(p.DecisionNote is { } note ? $": {note}" : "")</div>
+                            }
+                        </td>
+                        <td class="text-end text-nowrap">
+                            @if (p.Status == "pending" && CanDecide)
+                            {
+                                @if (_rejecting == p.Id)
+                                {
+                                    <input class="form-control form-control-sm d-inline-block w-auto" maxlength="1000" placeholder="Why (optional)" aria-label="Why it is rejected" @bind="_note" />
+                                    <button type="button" class="btn btn-sm btn-outline-danger" disabled="@_busy" @onclick="() => RejectAsync(p)">Reject</button>
+                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _rejecting = null">Cancel</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => AcceptAsync(p)">Accept</button>
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => (_rejecting, _note) = (p.Id, null)">Reject…</button>
+                                }
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="small text-muted">
+        Accepting works the rate out again over the same days and basis; if runs ended since and it changed, Pulaski says so and nothing changes until it is
+        proposed again or reviewed on the material. Decided proposals stay listed for 30 days.
+    </p>
+}
+
+@code {
+    private IReadOnlyList<RateProposalDto>? _proposals;
+    private Guid? _rejecting;
+    private string? _note;
+    private bool _busy;
+    private string? _message;
+    private ApiException? _error;
+
+    private bool CanDecide => User.Can(PermissionCodes.RateModify, Sites.SiteId);
+
+    private string? SiteZone => Sites.Site?.TimeZone;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        (_proposals, _message, _rejecting) = (null, null, null);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            return;
+        }
+
+        try
+        {
+            _proposals = await Api.ListRateProposalsAsync(site);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private Task AcceptAsync(RateProposalDto p) => RunAsync(async () =>
+    {
+        await Api.AcceptRateProposalAsync(p.RunStandardId, new AcceptRateProposalRequest { Version = p.RunStandardVersion, ProposalId = p.Id });
+        _message = $"The calculated planning rate for {p.MaterialCode} on {p.LineCode} is now {RateProposalView.Qty(p.ProposedRatePerHour)} {p.UomCode}/h, {RateProposalView.Basis(p.CalculationBasis)}."
+            + (p.ModifiedRatePerHour is not null ? " Its modified rate stays in force." : "");
+    });
+
+    private Task RejectAsync(RateProposalDto p) => RunAsync(async () =>
+    {
+        await Api.RejectRateProposalAsync(p.RunStandardId, new RejectRateProposalRequest { ProposalId = p.Id, Note = string.IsNullOrWhiteSpace(_note) ? null : _note });
+        _rejecting = null;
+        _message = $"Rejected the proposal for {p.MaterialCode} on {p.LineCode}; its rate stays as it is.";
+    });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+            await LoadAsync();
+        }
+    }
+}

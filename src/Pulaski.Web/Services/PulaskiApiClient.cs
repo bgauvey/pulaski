@@ -1312,8 +1312,24 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     // Planning rates from run history (D-045)
 
-    public Task<RunHistoryRateDto> GetRunHistoryRateAsync(Guid runStandardId, int days, CancellationToken ct = default) =>
-        GetAsync<RunHistoryRateDto>($"api/scheduling/run-standards/{runStandardId}/history-rate?days={days}", ct);
+    public Task<RunHistoryRateDto> GetRunHistoryRateAsync(Guid runStandardId, int days, bool? takeOutStops = null, CancellationToken ct = default) =>
+        GetAsync<RunHistoryRateDto>(
+            $"api/scheduling/run-standards/{runStandardId}/history-rate?days={days}{(takeOutStops is { } stops ? $"&takeOutStops={(stops ? "true" : "false")}" : "")}", ct);
+
+    public Task<VersionResponse> AcceptRateProposalAsync(Guid runStandardId, AcceptRateProposalRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/scheduling/run-standards/{runStandardId}/proposal/accept", request, ct);
+
+    public Task<VersionResponse> RejectRateProposalAsync(Guid runStandardId, RejectRateProposalRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/scheduling/run-standards/{runStandardId}/proposal/reject", request, ct);
+
+    public Task<IReadOnlyList<RateProposalDto>> ListRateProposalsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<RateProposalDto>>($"api/scheduling/sites/{siteId}/rate-proposals", ct);
+
+    public Task<RateRefreshSettingsDto> GetRateRefreshSettingsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<RateRefreshSettingsDto>($"api/scheduling/sites/{siteId}/rate-refresh", ct);
+
+    public Task<VersionResponse> SetRateRefreshSettingsAsync(Guid siteId, SetRateRefreshSettingsRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/scheduling/sites/{siteId}/rate-refresh", request, ct);
 
     public Task<VersionResponse> AdoptHistoryRateAsync(Guid runStandardId, AdoptHistoryRateRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Post, $"api/scheduling/run-standards/{runStandardId}/history-rate", request, ct);

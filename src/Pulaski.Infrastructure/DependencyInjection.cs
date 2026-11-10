@@ -73,6 +73,7 @@ public static class DependencyInjection
         services.AddSingleton<ICalendarExceptionReadStore, CalendarExceptionQueries>();
         services.AddSingleton<IProductionReportReadStore, ProductionReportQueries>();
         services.AddSingleton<IRunHistoryReadStore, RunHistoryQueries>();
+        services.AddSingleton<IRateRefreshReadStore, RateRefreshQueries>();
         services.AddSingleton<IQualificationReadStore, QualificationQueries>();
         services.AddSingleton<ITerminalReadStore, TerminalQueries>();
         services.AddSingleton<ILaborReadStore, LaborQueries>();
@@ -93,6 +94,7 @@ public static class DependencyInjection
         services.AddScoped<IWorkOrderRepository, WorkOrderRepository>();
         services.AddScoped<IMaterialRepository, MaterialRepository>();
         services.AddScoped<ISchedulingRepository, SchedulingRepository>();
+        services.AddScoped<IRateRefreshRepository, RateRefreshRepository>();
         services.AddScoped<IProcessRepository, ProcessRepository>();
         services.AddScoped<IBomRepository, BomRepository>();
         services.AddScoped<Application.Quality.IQualityRepository, Quality.QualityRepository>();

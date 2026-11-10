@@ -123,7 +123,7 @@
             <h3 class="h6">Planning rate for @Material.Code on @rate.Capability.EquipmentCode</h3>
             <p class="small mb-2">
                 Calculated: @Qty(rate.Capability.CalculatedRatePerHour) @rate.Capability.RunStandardUomCode/h
-                (@(rate.Capability.CalculationBasis == "run_history" ? "from run history" : "from the ideal rate")).
+                (@Pulaski.Web.Services.Scheduling.RateProposalView.Basis(rate.Capability.CalculationBasis)).
                 A modified rate replaces it for planning until you clear it.
             </p>
             <div class="row g-2">
@@ -186,6 +186,10 @@
                                 {
                                     @($"{Qty(r)} {c.RunStandardUomCode}/h ")
                                     <span class="small text-muted" title="@(c.ModifiedRatePerHour is null ? "" : $"Set by {c.ModifiedBy}{(c.ModifiedNote is { } n ? ": " + n : "")}; calculated {Qty(c.CalculatedRatePerHour)}")">@c.RateSource</span>
+                                    @if (c.ProposedRatePerHour is { } proposed)
+                                    {
+                                        <div class="small"><span class="chip">proposed @Qty(proposed)</span></div>
+                                    }
                                 }
                                 else
                                 {

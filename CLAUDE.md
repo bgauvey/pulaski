@@ -151,7 +151,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   production day (`ShiftProduction.Total`), worked out on read; outside shifts, the site-local day. Rows reconcile to the runs.
 - Rates from run history (D-045, proposed): `RunHistoryRate.Calculate` (good ÷ run hours, short/empty/unconvertible and
   Tukey-fence outliers left out, at least 5 runs and 8 h) is reviewed, then accepted (re-checked under the lock, 409 if changed)
-  as the calculated rate; a modified rate stays in force. No worker.
+  as the calculated rate; a modified rate stays in force. D-098: optionally with stops out (`run_history_net`; `RunSample.StoppedHours` from
+  `EquipmentUses`, everything but `TimeUse.Run`; lines not tracking state keep run time). `core.rate_refresh_settings` per site (default basis,
+  schedule, threshold, opt-in auto-accept within a limit for history-based rates, `RateRefresh.WhyReviewed`); `RateRefreshService` (API) →
+  `RateRefreshRunner` stores `core.run_standard_proposal` (one pending); accept re-works it (`RunHistory.AdoptAsync`), reject keeps the rate.
 - Links in the projection (D-046, proposed): `LinePlanLoader` loads a line with the lines its jobs follow; every projection goes
   through `TimelineMapping.Project` → `LinkedProjection` (repeat until settled). Jobs wait for after-start/after-end plus lag;
   firmed jobs keep their time (`link_not_met`), circular waits warn `link_cycle`. Nothing is reordered.

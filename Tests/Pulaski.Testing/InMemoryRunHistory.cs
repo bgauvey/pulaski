@@ -11,6 +11,9 @@ public sealed class InMemoryRunHistory(InMemoryScheduling scheduling) : IRunHist
     /// <summary>The capability's ideal rate by line and material, when it has one.</summary>
     public Dictionary<(Guid Line, Guid Material), (decimal Rate, Guid UomId)> IdealRates { get; } = [];
 
+    /// <summary>The site every run standard's line is at.</summary>
+    public Guid SiteId { get; set; } = Guid.CreateVersion7();
+
     public Task<RunHistoryStandard?> GetStandardAsync(Guid runStandardId, DateTimeOffset at, CancellationToken cancellationToken)
     {
         if (scheduling.FindRunStandard(runStandardId) is not { } found)
@@ -20,7 +23,7 @@ public sealed class InMemoryRunHistory(InMemoryScheduling scheduling) : IRunHist
 
         var s = found.Value;
         var ideal = IdealRates.TryGetValue((s.EquipmentId, s.MaterialId), out var i) ? i : ((decimal, Guid)?)null;
-        return Task.FromResult<RunHistoryStandard?>(new RunHistoryStandard(s, found.Version, "EXT-01", "PRF-1", "m", ideal?.Item1, ideal?.Item2));
+        return Task.FromResult<RunHistoryStandard?>(new RunHistoryStandard(s, found.Version, "EXT-01", "PRF-1", "m", ideal?.Item1, ideal?.Item2, SiteId));
     }
 
     public Task<IReadOnlyList<RunHistoryRow>> ListRunsAsync(

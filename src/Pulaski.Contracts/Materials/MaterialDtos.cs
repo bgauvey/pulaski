@@ -69,6 +69,9 @@ public sealed record MaterialCapabilityDto
     public decimal? EffectiveRatePerHour { get; init; }
     public string? RateSource { get; init; }
     public string? RunStandardUomCode { get; init; }
+
+    /// <summary>The scheduled recalculation's proposal waiting for review (#70); null when there is none.</summary>
+    public decimal? ProposedRatePerHour { get; init; }
 }
 
 /// <summary>A new capability: the material can run on the line over a period (D-020, D-034).</summary>

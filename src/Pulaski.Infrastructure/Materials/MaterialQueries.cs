@@ -24,7 +24,8 @@ internal sealed class MaterialQueries(NpgsqlDataSource dataSource) : IMaterialRe
                c.xmin::text::bigint AS version,
                rs.id AS run_standard_id, rs.xmin::text::bigint AS run_standard_version, rs.calculated_rate_per_hour, rs.calculation_basis,
                rs.modified_rate_per_hour, rs.modified_by, rs.modified_at, rs.modified_note,
-               rs.effective_rate_per_hour, rs.rate_source, ru.code AS run_standard_uom_code
+               rs.effective_rate_per_hour, rs.rate_source, ru.code AS run_standard_uom_code,
+               (SELECT p.proposed_rate_per_hour FROM core.run_standard_proposal p WHERE p.run_standard_id = rs.id AND p.status = 'pending') AS proposed_rate_per_hour
         FROM core.equipment_capability c
         JOIN core.equipment e ON e.id = c.equipment_id
         LEFT JOIN core.equipment site ON site.id = e.site_id

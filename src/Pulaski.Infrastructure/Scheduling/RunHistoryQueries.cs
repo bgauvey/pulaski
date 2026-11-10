@@ -11,7 +11,7 @@ internal sealed class RunHistoryQueries(NpgsqlDataSource dataSource) : IRunHisto
     private const string Standard = """
         SELECT rs.id, rs.equipment_id, rs.material_id, rs.uom_id, rs.calculated_rate_per_hour, rs.calculation_basis, rs.calculated_at,
                rs.modified_rate_per_hour, rs.modified_at, rs.modified_by, rs.modified_note, rs.xmin::text::bigint AS version,
-               e.code AS line_code, m.code AS material_code, u.code AS uom_code,
+               e.code AS line_code, e.site_id, m.code AS material_code, u.code AS uom_code,
                c.ideal_rate_per_hour, c.rate_uom_id AS ideal_uom_id
         FROM core.run_standard rs
         JOIN core.equipment e ON e.id = rs.equipment_id
@@ -44,7 +44,7 @@ internal sealed class RunHistoryQueries(NpgsqlDataSource dataSource) : IRunHisto
             : new RunHistoryStandard(
                 new RunStandard(r.Id, r.EquipmentId, r.MaterialId, r.UomId, r.CalculatedRatePerHour, r.CalculationBasis, r.CalculatedAt,
                     r.ModifiedRatePerHour, r.ModifiedAt, r.ModifiedBy, r.ModifiedNote),
-                r.Version, r.LineCode, r.MaterialCode, r.UomCode, r.IdealRatePerHour, r.IdealUomId);
+                r.Version, r.LineCode, r.MaterialCode, r.UomCode, r.IdealRatePerHour, r.IdealUomId, r.SiteId);
     }
 
     public async Task<IReadOnlyList<RunHistoryRow>> ListRunsAsync(
@@ -71,6 +71,7 @@ internal sealed class RunHistoryQueries(NpgsqlDataSource dataSource) : IRunHisto
         public string? ModifiedNote { get; init; }
         public long Version { get; init; }
         public string LineCode { get; init; } = "";
+        public Guid SiteId { get; init; }
         public string MaterialCode { get; init; } = "";
         public string UomCode { get; init; } = "";
         public decimal? IdealRatePerHour { get; init; }
