@@ -6,6 +6,7 @@ using Pulaski.Application.Errors;
 using Pulaski.Application.Execution;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.MachineData;
+using Pulaski.Application.Materials;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Inventory;
@@ -722,6 +723,87 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal(1, await admin.ExecuteScalarAsync<int>(
             "SELECT count(*)::int FROM evt.event WHERE type = 'pulaski.job.production_corrected.v1' AND subject = @Job", new { Job = plant.Job }));
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CorrectProductionReportCommand(plant.Job, report.ReportId, 150m, 0m, null, count, "Again")));
+    }
+
+    [Fact]
+    public async Task Machine_counts_prefill_a_report_once_in_the_materials_unit_and_reconcile_with_the_run()
+    {
+        var plant = await CreatePlantAsync();
+        var scrapReason = await ReasonAsync("scrap", "QUALITY");
+        var count = await ReasonAsync("inventory_adjustment", "COUNT");
+        CreatedResponse saw = await db.SendAsync(new CreateEquipmentCommand(
+            plant.Line, "SAW-" + _suffix, "Saw", null, "work_unit", "machine", true, false, false, null));
+
+        // Nothing on the line counts yet.
+        var none = await QueryAsync<GetMachineCountsQuery, MachineCountsDto>(new GetMachineCountsQuery(plant.Job, null));
+        Assert.Equal("Nothing on the line has a processed counter.", none.Unavailable);
+
+        // Counted at the saw; each cut is 2.4 m of the profile on this line.
+        await using var admin = await db.AdminDataSource.OpenConnectionAsync();
+        var lineVersion = await admin.ExecuteScalarAsync<long>("SELECT xmin::text::bigint FROM core.equipment WHERE id = @Id", new { Id = plant.Line });
+        await db.SendAsync(new SetEquipmentMachineDataCommand(plant.Line, lineVersion, null, "own_tags", null, 300)
+        {
+            ProductionCounterEquipmentId = saw.Id,
+        });
+        var notBelow = new SetEquipmentMachineDataCommand(
+            plant.Line, await admin.ExecuteScalarAsync<long>("SELECT xmin::text::bigint FROM core.equipment WHERE id = @Id", new { Id = plant.Line }), null, "own_tags", null, 300)
+        {
+            ProductionCounterEquipmentId = plant.Staging,
+        };
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(notBelow));
+        var noCapability = await QueryAsync<GetMachineCountsQuery, MachineCountsDto>(new GetMachineCountsQuery(plant.Job, null));
+        Assert.StartsWith("The line had no capability", noCapability.Unavailable, StringComparison.Ordinal);
+        await db.SendAsync(new AddCapabilityCommand(plant.Profile, plant.Line, 1000m, plant.Metre, null, null, false, DateTimeOffset.UtcNow.AddDays(-2), null, UnitsPerCount: 2.4m));
+
+        // The edge's counts at the saw (D-050): 100 cuts with 5 bad two hours ago, 50 more an hour ago.
+        var now = DateTimeOffset.UtcNow;
+        const string MachineRow = """
+            INSERT INTO ts.production_count (occurred_at, equipment_id, count_kind, delta_qty, source) VALUES (@At, @Saw, @Kind, @Qty, 'machine')
+            """;
+        await admin.ExecuteAsync(MachineRow, new[]
+        {
+            new { At = now.AddHours(-2), Saw = saw.Id, Kind = "processed", Qty = 100m },
+            new { At = now.AddHours(-2), Saw = saw.Id, Kind = "defective", Qty = 5m },
+            new { At = now.AddHours(-1), Saw = saw.Id, Kind = "processed", Qty = 50m },
+        });
+
+        var counts = await QueryAsync<GetMachineCountsQuery, MachineCountsDto>(new GetMachineCountsQuery(plant.Job, null));
+        Assert.Null(counts.Unavailable);
+        Assert.Equal("SAW-" + _suffix, counts.CounterCode);
+        Assert.Equal(348m, counts.GoodQty);
+        Assert.Equal(12m, counts.ScrapQty);
+        Assert.Equal(plant.Metre, counts.UomId);
+        Assert.Null(counts.Since);
+
+        // Reported from the machine, once: the same counts again are refused.
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, counts.RunId, counts.GoodQty, counts.ScrapQty, counts.UomId, scrapReason, plant.Staging)
+        {
+            MachineThrough = counts.Through,
+        });
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(
+            new ReportProductionCommand(plant.Job, counts.RunId, counts.GoodQty, counts.ScrapQty, counts.UomId, scrapReason, plant.Staging)
+            {
+                MachineThrough = counts.Through,
+            }));
+
+        // Ten more cuts: only they are offered, and the run reconciles.
+        await admin.ExecuteAsync(MachineRow, new { At = now.AddMinutes(-30), Saw = saw.Id, Kind = "processed", Qty = 10m });
+        var next = await QueryAsync<GetMachineCountsQuery, MachineCountsDto>(new GetMachineCountsQuery(plant.Job, null));
+        Assert.Equal(24m, next.GoodQty);
+        Assert.Equal(0m, next.ScrapQty);
+        Assert.Equal(counts.Through, next.Since);
+        Assert.Equal(372m, next.RunMachineGoodQty);
+        Assert.Equal(348m, next.RunReportedGoodQty);
+
+        // A correction keeps the coverage of the report it replaces; the job shows it came from the machine.
+        var corrected = await db.SendAsync(new CorrectProductionReportCommand(plant.Job, report.ReportId, 340m, 12m, scrapReason, count, "Short cuts"));
+        Assert.Equal(24m, (await QueryAsync<GetMachineCountsQuery, MachineCountsDto>(new GetMachineCountsQuery(plant.Job, null))).GoodQty);
+        var job = await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(plant.Job));
+        Assert.Equal(counts.Through, job.Reports.Single(r => r.ReportId == corrected.ReportId).MachineThrough);
+
+        // Reversing it offers its counts again.
+        await db.SendAsync(new ReverseProductionReportCommand(plant.Job, corrected.ReportId, count, "Wrong job"));
+        Assert.Equal(372m, (await QueryAsync<GetMachineCountsQuery, MachineCountsDto>(new GetMachineCountsQuery(plant.Job, null))).GoodQty);
     }
 
     [Fact]
@@ -1475,6 +1557,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         var plant = new Plant
         {
             Site = site.Id,
+            Line = line.Id,
             Stores = stores.Id,
             StoresCode = "RM-" + _suffix,
             Staging = staging.Id,
@@ -1539,6 +1622,7 @@ public sealed class InventoryTests(DatabaseFixture db)
     private sealed record Plant
     {
         public required Guid Site { get; init; }
+        public required Guid Line { get; init; }
         public required Guid Stores { get; init; }
         public required string StoresCode { get; init; }
         public required Guid Staging { get; init; }

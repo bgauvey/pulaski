@@ -61,6 +61,9 @@ public sealed record SetEquipmentMachineDataRequest
 
     /// <summary>Stops shorter than this are micro-stops: 0 to 3600 seconds.</summary>
     public int MicroStopThresholdSeconds { get; init; } = 300;
+
+    /// <summary>Where a line's output is counted (#27): itself or a machine below it; null = found from its counter tags.</summary>
+    public Guid? ProductionCounterEquipmentId { get; init; }
 }
 
 /// <summary>One machine's own reason for a stop code of its profile.</summary>

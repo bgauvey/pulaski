@@ -70,6 +70,11 @@
                     <label class="form-label" for="cap-crew">Crew size</label>
                     <input id="cap-crew" type="number" class="form-control" min="0" step="0.5" placeholder="None" @bind="form.CrewSize" />
                 </div>
+                <div class="col-sm-3">
+                    <label class="form-label" for="cap-per-count">@Material.BaseUomCode per machine count</label>
+                    <input id="cap-per-count" type="number" class="form-control" min="0" step="any" placeholder="1" @bind="form.UnitsPerCount" aria-describedby="cap-per-count-help" />
+                    <div id="cap-per-count-help" class="form-text">What one count of the line's counter makes, e.g. 2.4 for 2.4 m a cut.</div>
+                </div>
                 @if (Material.BatchSize is { } materialBatch)
                 {
                     <div class="col-sm-3">
@@ -169,7 +174,13 @@
                                     <span class="chip chip-muted ms-1">@(c.EffectiveFrom > Clock.GetUtcNow() ? "Not started" : "Ended")</span>
                                 }
                             </td>
-                            <td class="inv-num">@Qty(c.IdealRatePerHour) @c.RateUomCode/h</td>
+                            <td class="inv-num">
+                                @Qty(c.IdealRatePerHour) @c.RateUomCode/h
+                                @if (c.UnitsPerCount is { } perCount)
+                                {
+                                    <div class="small text-muted">@Qty(perCount) @Material.BaseUomCode a count</div>
+                                }
+                            </td>
                             <td class="inv-num">
                                 @if (c.EffectiveRatePerHour is { } r)
                                 {

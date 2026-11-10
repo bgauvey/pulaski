@@ -252,6 +252,19 @@ public sealed class InMemoryExecution : IExecutionRepository, IExecutionReadStor
     public Task<IReadOnlyList<PartialBatchDto>> ListPendingPartialBatchesAsync(Guid siteId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<PartialBatchDto>>([]);
 
+    public Task<MachineCountsDto?> GetMachineCountsAsync(Guid jobId, Guid? runId, DateTimeOffset now, CancellationToken cancellationToken) =>
+        Task.FromResult<MachineCountsDto?>(null);
+
+    public Task<DateTimeOffset?> GetMachineCoverageAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var standing = _counts.Where(c => c.RunId == runId && c.Source == "operator" && c.MachineThrough is not null
+                && !_counts.Any(x => x.ReportId == c.ReportId && x.Source == "correction"));
+            return Task.FromResult(standing.Max(c => c.MachineThrough));
+        }
+    }
+
     public Task<IReadOnlyList<LineBoardRowDto>> GetLineBoardAsync(Guid siteId, DateTimeOffset now, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<LineBoardRowDto>>([]);
 

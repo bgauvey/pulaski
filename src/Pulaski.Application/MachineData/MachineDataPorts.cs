@@ -16,7 +16,11 @@ public sealed record UtilizationReasonRecord(Guid Id, string Code, string Utiliz
 
 /// <summary>The machine data on equipment (D-050).</summary>
 public sealed record EquipmentMachineDataRecord(
-    Guid EquipmentId, Guid? SiteId, string Code, bool TracksState, Guid? MachineProfileId, string StateDerivation, Guid? ConstraintEquipmentId, TimeSpan MicroStopThreshold);
+    Guid EquipmentId, Guid? SiteId, string Code, bool TracksState, Guid? MachineProfileId, string StateDerivation, Guid? ConstraintEquipmentId, TimeSpan MicroStopThreshold)
+{
+    /// <summary>Where its output is counted (#27); null = found from its counter tags.</summary>
+    public Guid? ProductionCounterEquipmentId { get; init; }
+}
 
 /// <summary>Equipment as the constraint machine of another: where it sits and whether it tracks state.</summary>
 public sealed record ConstraintCandidate(Guid EquipmentId, string Code, bool TracksState, bool IsBelow);

@@ -3,6 +3,14 @@ namespace Pulaski.Infrastructure.Execution;
 /// <summary>SQL shared by the execution repository and read store (D-035).</summary>
 internal static class ExecutionSql
 {
+    // How far a run's reports from the machine reach (#27): the latest machine_through of those not reversed.
+    public const string MachineCoverage = """
+        SELECT max(c.machine_through) AS through
+        FROM ts.production_count c
+        WHERE c.run_id = @RunId AND c.source = 'operator' AND c.machine_through IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM ts.production_count x WHERE x.report_id = c.report_id AND x.source = 'correction')
+        """;
+
     public const string RunColumns = """
         id, job_id, equipment_id, run_no, started_at, ended_at, status, end_reason_code_id, good_qty, scrap_qty, uom_id
         """;

@@ -70,9 +70,10 @@ public static class EquipmentProperties
     public const string MicroStopKey = "microStop";
     public const string StateDerivationKey = "stateDerivation";
     public const string ConstraintKey = "constraintMachine";
+    public const string ProductionCounterKey = "productionCounter";
 
     /// <summary>The rows saved through the equipment's machine data (D-050), apart from the rest of it.</summary>
-    public static IReadOnlySet<string> MachineDataKeys { get; } = new HashSet<string>([MachineProfileKey, MicroStopKey, StateDerivationKey, ConstraintKey]);
+    public static IReadOnlySet<string> MachineDataKeys { get; } = new HashSet<string>([MachineProfileKey, MicroStopKey, StateDerivationKey, ConstraintKey, ProductionCounterKey]);
     private const string Inherit = "inherit";
     private const string AroundTheClock = "around_the_clock";
     private const string SchedulePrefix = "schedule:";
@@ -146,6 +147,11 @@ public static class EquipmentProperties
         if (e.TracksState)
         {
             items.AddRange(MachineDataItems(e, tree, profiles ?? []));
+        }
+
+        if (e.CanRunJob)
+        {
+            items.Add(ProductionCounterItem(e, tree));
         }
 
         if (!canEdit)
@@ -233,19 +239,36 @@ public static class EquipmentProperties
         }
     }
 
-    /// <summary>Equipment below <paramref name="e"/> that tracks state, in tree order.</summary>
-    public static IReadOnlyList<EquipmentDto> ConstraintCandidates(EquipmentDto e, EquipmentTree tree)
+    /// <summary>
+    /// Where a line's output is counted for production reports from the machine (#27, D-097): the line itself or a machine below it. Left
+    /// blank, the line's own processed counter is used, else the only machine below with one.
+    /// </summary>
+    private static PropertyItem ProductionCounterItem(EquipmentDto e, EquipmentTree tree) => new()
+    {
+        Key = ProductionCounterKey,
+        Name = "Production counted at",
+        Category = MachineData,
+        Description = "Whose processed and defective counters a production report from the machine takes, usually the last machine of the line. "
+            + "Found by itself when the line has its own counter or only one machine below it has one.",
+        Value = e.ProductionCounterEquipmentId?.ToString() ?? "",
+        Editor = PropertyEditor.Choice,
+        Choices =
+        [
+            new("", "Found from the counter tags"),
+            new(e.Id.ToString(), $"{e.Code} itself"),
+            .. Below(e, tree).Select(c => new PropertyChoice(c.Id.ToString(), $"{c.Code} · {c.Name}")),
+        ],
+    };
+
+    /// <summary>Everything below <paramref name="e"/>, in tree order.</summary>
+    public static IReadOnlyList<EquipmentDto> Below(EquipmentDto e, EquipmentTree tree)
     {
         var found = new List<EquipmentDto>();
         void Walk(Guid id)
         {
             foreach (var child in tree.ChildrenOf(id))
             {
-                if (child.TracksState)
-                {
-                    found.Add(child);
-                }
-
+                found.Add(child);
                 Walk(child.Id);
             }
         }
@@ -253,6 +276,9 @@ public static class EquipmentProperties
         Walk(e.Id);
         return found;
     }
+
+    /// <summary>Equipment below <paramref name="e"/> that tracks state, in tree order.</summary>
+    public static IReadOnlyList<EquipmentDto> ConstraintCandidates(EquipmentDto e, EquipmentTree tree) => [.. Below(e, tree).Where(c => c.TracksState)];
 
     /// <summary>
     /// The machine data request for an edit of one of the <see cref="MachineDataKeys"/> rows, or null if the value can't be read.
@@ -267,6 +293,7 @@ public static class EquipmentProperties
             StateDerivation = e.StateDerivation,
             ConstraintEquipmentId = e.ConstraintEquipmentId,
             MicroStopThresholdSeconds = e.MicroStopThresholdSeconds,
+            ProductionCounterEquipmentId = e.ProductionCounterEquipmentId,
         };
 
         switch (change.Key)
@@ -284,6 +311,8 @@ public static class EquipmentProperties
                     StateDerivation = derivation,
                     ConstraintEquipmentId = derivation == "constraint_machine" ? e.ConstraintEquipmentId ?? (ConstraintCandidates(e, tree) is [var first, ..] ? first.Id : null) : null,
                 };
+            case ProductionCounterKey:
+                return request with { ProductionCounterEquipmentId = Guid.TryParse(change.Value, out var counter) ? counter : null };
             case ConstraintKey:
                 return Guid.TryParse(change.Value, out var machine) ? request with { ConstraintEquipmentId = machine } : null;
             default:

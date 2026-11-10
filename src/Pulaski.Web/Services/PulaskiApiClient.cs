@@ -1203,6 +1203,9 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ExecutionResponse> ReopenJobAsync(Guid jobId, long version, CancellationToken ct = default) =>
         SendAsync<ExecutionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/reopen", new JobVersionRequest { Version = version }, ct);
 
+    public Task<MachineCountsDto> GetMachineCountsAsync(Guid jobId, Guid? runId, CancellationToken ct = default) =>
+        GetAsync<MachineCountsDto>($"api/jobs/{jobId}/machine-counts{(runId is { } id ? $"?runId={id}" : "")}", ct);
+
     public Task<ReportProductionResponse> ReportProductionAsync(Guid jobId, ReportProductionRequest request, CancellationToken ct = default) =>
         SendAsync<ReportProductionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/production", request, ct);
 

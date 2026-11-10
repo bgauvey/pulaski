@@ -84,6 +84,8 @@ internal sealed class CorrectProductionReportHandler(
                 GoodBatches = command.GoodBatches,
                 ScrapBatches = command.ScrapBatches,
                 PartialQty = command.PartialQty,
+                MachineThrough = report.MachineThrough,
+                KeepsMachineCoverage = true,
             },
             onStop: false, now, cancellationToken);
 

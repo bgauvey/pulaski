@@ -231,6 +231,10 @@
                                     {
                                         <span class="chip ms-1" title="Entered after the run ended; counted at the run's end">late</span>
                                     }
+                                    @if (r.MachineThrough is { } through)
+                                    {
+                                        <span class="chip ms-1" title="From the machine: its counts up to @Display.SiteTime(through, job.SiteTimeZone)">machine</span>
+                                    }
                                     @if (r.IsReversed)
                                     {
                                         <span class="chip chip-muted ms-1" title="Reversed: its counts are offset and its lots taken back">reversed</span>

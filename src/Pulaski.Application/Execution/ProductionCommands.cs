@@ -45,6 +45,15 @@ public sealed record ReportProductionCommand(
 
     /// <summary>The lots the job used that every lot this report makes was made from (#81); empty: they pair by time.</summary>
     public IReadOnlyList<Guid> MadeFromLotIds { get; init; } = [];
+
+    /// <summary>
+    /// A report from the machine (#27, D-097): its figures were taken from the run's machine counts up to here. It must reach past every other
+    /// standing report from the machine in the run, so the same counts are never reported twice.
+    /// </summary>
+    public DateTimeOffset? MachineThrough { get; init; }
+
+    /// <summary>A correction (D-096) keeps the coverage of the report it replaces, which was reversed in the same transaction.</summary>
+    internal bool KeepsMachineCoverage { get; init; }
 }
 
 /// <summary>The run a report or a consumption belongs to, and the rules every report shares (D-035).</summary>
@@ -236,6 +245,11 @@ internal sealed class ProductionReporter(
             warnings.Add(rateWarning!);
         }
 
+        if (command.MachineThrough is { } machineThrough && !command.KeepsMachineCoverage)
+        {
+            MachineCounts.EnsureCovers(machineThrough, await execution.GetMachineCoverageAsync(run.Id, cancellationToken), run.StartedAt, run.EndedAt ?? now);
+        }
+
         var after = run.Add(good, scrap);
         // A back-dated report counts when it says, so production by shift and OEE see it then (D-057).
         var occurredAt = backdated ?? RunReporting.OccurredAt(run, now);
@@ -255,6 +269,7 @@ internal sealed class ProductionReporter(
                 Late = !run.IsOpen,
                 OccurredAt = occurredAt,
                 EffectiveAt = backdated,
+                command.MachineThrough,
                 Comment = comment,
             });
         // The processed row's id names the report (D-063): its counts and the lot movements it makes carry it, so it can be reversed whole.
@@ -264,6 +279,7 @@ internal sealed class ProductionReporter(
             new ProductionCountRow(reportId, occurredAt, run.EquipmentId, run.Id, job.Id, CountKind.Processed, good + scrap, jobUom, null, envelope.ActorId, comment, now)
             {
                 ReportId = reportId,
+                MachineThrough = command.MachineThrough,
             },
             cancellationToken);
         if (scrap > 0)
@@ -272,6 +288,7 @@ internal sealed class ProductionReporter(
                 new ProductionCountRow(ids.NewId(), occurredAt, run.EquipmentId, run.Id, job.Id, CountKind.Defective, scrap, jobUom, command.ScrapReasonCodeId, envelope.ActorId, comment, now)
                 {
                     ReportId = reportId,
+                    MachineThrough = command.MachineThrough,
                 },
                 cancellationToken);
         }

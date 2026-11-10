@@ -241,6 +241,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `sort_key`, `group_ids`; pickers, stops and the journal show the path. History refers to reason ids, so moves never change it. Reports roll up
   by group level on read (`ReasonRollup`, OEE rows' `ReasonGroups`); `ConvertReasonCodeCommand` (`PUT /reason-codes/{id}/group`) makes an unused
   reason (`core.reason_code_uses`) a group or an empty group a reason (#86).
+- Machine counts in reports (D-097, proposed): **From the machine** prefills a report the operator confirms (`GetMachineCountsQuery`,
+  `GET /jobs/{id}/machine-counts`): counts at the line's counter (`equipment.production_counter_equipment_id`, else its own or the only processed tag
+  below) by time over the run, since its coverage, × `equipment_capability.units_per_count` (null = 1; `MachineCounts.Output`). Report rows store
+  `machine_through`; `ReportProductionCommand.MachineThrough` must pass the run's coverage (`ExecutionSql.MachineCoverage`, standing reports;
+  `MachineCounts.EnsureCovers`); a correction keeps it. Batch materials excluded.
 - Reversing declarations (D-063, proposed): never edit; compensating `reversed` rows (reason + comment required) at the original's
   effective time. `ReverseMovementCommand` dispatches: latest single-lot (D-030), earlier quantity-only if `EnsureFitsAsync` allows,
   consumption (`Lot.Restore`), split/merge/transfer (both lots, `GetCounterpartAsync`, `Lot.TakeBack`), genealogy superseded.

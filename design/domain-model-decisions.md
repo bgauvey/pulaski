@@ -2526,6 +2526,36 @@ a correction with the same figures is refused. On the job page, **Correct…** b
 
 **Not done:** keeping the old lot numbers; correcting a report's time or moving it to another run or job.
 
+## Machine counts in production reporting (D-097, proposed)
+
+Issue #27. The edge has recorded machine counts since D-050 (`ts.production_count`, source `machine`), but they never became output: reports
+were typed in, and OEE and production by shift read only reports.
+
+**Prefill, the operator confirms** (the user's choice). Nothing reports counts by itself. `GetMachineCountsQuery` (`GET /api/jobs/{id}/machine-counts
+?runId=`, Floor view) gives, for the run named (else the open one, else the latest), what its line's counter counted since the run's last standing
+report from the machine and over the whole run, next to what was reported into it. The report form's **From the machine** fills good and scrap in
+the material's base unit; the operator checks them and reports as usual, through every report rule. Counts are summed by time over the run
+(`occurred_at` from the run's start to its end or now) at the counter, not by `run_id`, because the edge's rows carry a run only for equipment that
+has one open itself, and runs are on the line.
+
+**Where it is counted: chosen per line** (the user's choice). `core.equipment.production_counter_equipment_id`: the line itself or equipment below it
+(checked through the closure), saved with the machine data (`SetEquipmentMachineDataCommand.ProductionCounterEquipmentId`). Null: the line's own
+active `processed_count` tag, else the only equipment below with one; several and none chosen, or none at all, offers nothing and says why.
+
+**Units per count: per material on the line** (the user's choice). `core.equipment_capability.units_per_count` (null = 1): base units of the material
+one count makes, after the tag's `scale_factor`. The capability in force when the run started is used, as for the ideal rate; without one nothing is
+offered. `MachineCounts.Output`: good = (processed − defective) × units, scrap = defective × units; the defective count is the scrapped part of the
+processed one.
+
+**Traceable and never twice.** A report from the machine stores `machine_through` (the latest count it took) on its `ts.production_count` rows and in
+its event. `ProductionReporter` refuses one whose `MachineThrough` doesn't pass the run's coverage (the latest `machine_through` of its reports not
+reversed, `ExecutionSql.MachineCoverage`) or lies outside the run (`MachineCounts.EnsureCovers`); the run is locked, so two at once serialize. A
+correction (D-096) keeps the old report's coverage (`KeepsMachineCoverage`); reversing the latest one offers its counts again. Duplicate ingestion
+was already skipped by stream sequence (D-050). Reconciliation: the machine's run total beside the run's reported good and scrap.
+
+**Not done:** reporting counts without an operator; batch materials (reported by batch weight); a units-per-count column in the capabilities CSV;
+offering again the counts of a reversed report that wasn't the run's latest.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

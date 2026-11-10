@@ -19,6 +19,11 @@ public interface IExecutionReadStore
 
     /// <summary>The site's partial batches waiting for approval (D-036), oldest first.</summary>
     Task<IReadOnlyList<PartialBatchDto>> ListPendingPartialBatchesAsync(Guid siteId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// What the machine counted in the job's run (#27): the run named, else its open run, else its latest. Null when the job doesn't exist.
+    /// </summary>
+    Task<MachineCountsDto?> GetMachineCountsAsync(Guid jobId, Guid? runId, DateTimeOffset now, CancellationToken cancellationToken);
 }
 
 /// <summary>Write side: runs inside the current <see cref="IUnitOfWork"/>. The line and job are locked first by the scheduling repository (D-017).</summary>
@@ -55,6 +60,9 @@ public interface IExecutionRepository
 
     /// <summary>A report's count rows by its id (D-063); null when there is no such report, or it predates report ids.</summary>
     Task<ProductionReportRecord?> GetReportAsync(Guid reportId, CancellationToken cancellationToken);
+
+    /// <summary>How far the run's standing reports from the machine reach (#27); null when none did.</summary>
+    Task<DateTimeOffset?> GetMachineCoverageAsync(Guid runId, CancellationToken cancellationToken);
 
     /// <summary>The partial batch in a lot, locked; null when it isn't one.</summary>
     Task<PartialBatch?> GetPartialBatchOfLotForUpdateAsync(Guid lotId, CancellationToken cancellationToken);
@@ -126,11 +134,17 @@ public sealed record ProductionCountRow(
 
     /// <summary><c>operator</c>, or <c>correction</c> for a row that offsets another.</summary>
     public string Source { get; init; } = "operator";
+
+    /// <summary>A report from the machine (#27): the run's machine counts up to here are in it.</summary>
+    public DateTimeOffset? MachineThrough { get; init; }
 }
 
 /// <summary>A production report's count rows (D-063), with whether it has been reversed.</summary>
 public sealed record ProductionReportRecord(Guid ReportId, Guid JobId, Guid RunId, IReadOnlyList<ProductionCountRow> Rows, bool IsReversed)
 {
+    /// <summary>A report from the machine (#27): how far into the run's machine counts it reaches.</summary>
+    public DateTimeOffset? MachineThrough => Rows.Max(r => r.MachineThrough);
+
     public decimal Good => Rows.Where(r => r.CountKind == CountKind.Processed).Sum(r => r.DeltaQty) - Scrap;
 
     public decimal Scrap => Rows.Where(r => r.CountKind == CountKind.Defective).Sum(r => r.DeltaQty);

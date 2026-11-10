@@ -192,6 +192,54 @@ public sealed record ProductionReportDto
 
     /// <summary>True once it has been reversed.</summary>
     public bool IsReversed { get; init; }
+
+    /// <summary>A report from the machine (#27): the run's machine counts up to this time are in it.</summary>
+    public DateTimeOffset? MachineThrough { get; init; }
+}
+
+/// <summary>
+/// What a run's machine counter counted (#27, D-097): since its last report from the machine, to prefill a report, and over the whole run, to
+/// reconcile with what was reported. Machine figures are in the material's base unit, reported ones in the job's.
+/// </summary>
+public sealed record MachineCountsDto
+{
+    public Guid? RunId { get; init; }
+    public int? RunNo { get; init; }
+
+    /// <summary>Where the line's output is counted; null when it can't be told.</summary>
+    public Guid? CounterEquipmentId { get; init; }
+    public string? CounterCode { get; init; }
+
+    /// <summary>Why nothing can be taken from the machine; null when it can.</summary>
+    public string? Unavailable { get; init; }
+
+    /// <summary>The counts already reported reach this far; null when none of the run's reports came from the machine.</summary>
+    public DateTimeOffset? Since { get; init; }
+
+    /// <summary>The latest count since; send it as <see cref="ReportProductionRequest.MachineThrough"/>. Null when nothing was counted since.</summary>
+    public DateTimeOffset? Through { get; init; }
+
+    /// <summary>Counts since, as counted (after the tags' scale).</summary>
+    public decimal ProcessedCount { get; init; }
+    public decimal DefectiveCount { get; init; }
+
+    /// <summary>Base units per count on this line for the material; 1 unless its capability says.</summary>
+    public decimal UnitsPerCount { get; init; } = 1m;
+
+    /// <summary>Good and scrap since, in the base unit: the prefill.</summary>
+    public decimal GoodQty { get; init; }
+    public decimal ScrapQty { get; init; }
+    public Guid? UomId { get; init; }
+    public string? UomCode { get; init; }
+
+    /// <summary>The whole run as the machine counted it, in the base unit.</summary>
+    public decimal RunMachineGoodQty { get; init; }
+    public decimal RunMachineScrapQty { get; init; }
+
+    /// <summary>The whole run as reported, in the job's unit.</summary>
+    public decimal RunReportedGoodQty { get; init; }
+    public decimal RunReportedScrapQty { get; init; }
+    public string? ReportedUomCode { get; init; }
 }
 
 public sealed record StartJobRequest
@@ -281,6 +329,12 @@ public sealed record ReportProductionRequest
 
     /// <summary>Optional (#81): the lots the job used that what this report makes was made from; left empty, they are paired by time.</summary>
     public IReadOnlyList<Guid> MadeFromLotIds { get; init; } = [];
+
+    /// <summary>
+    /// A report from the machine (#27): the <see cref="MachineCountsDto.Through"/> its figures were taken to. Refused when another report of the
+    /// run already covers that far, so taking the same counts twice doesn't count them twice.
+    /// </summary>
+    public DateTimeOffset? MachineThrough { get; init; }
 }
 
 /// <summary>What a start, pause, completion or reopening did, with notes such as downstream jobs now ready.</summary>

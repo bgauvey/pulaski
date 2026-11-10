@@ -10,11 +10,12 @@ public sealed record CapabilityChange(
     DateTimeOffset EffectiveFrom,
     DateTimeOffset? EffectiveTo,
     decimal? BatchSize = null,
-    decimal? BatchTolerancePct = null);
+    decimal? BatchTolerancePct = null,
+    decimal? UnitsPerCount = null);
 
 /// <summary>
 /// A line's permission to run a material over a period, with its ideal rate (D-020) and, for a material made in batches, the line's
-/// own batch size and tolerance when they differ from the material's (D-065, #85). Capabilities are never deleted: one that no longer applies is ended,
+/// own batch size and tolerance when they differ from the material's (D-065, #85), and how much of the material one machine count is (#27, D-097). Capabilities are never deleted: one that no longer applies is ended,
 /// so history still says what could run where.
 /// </summary>
 public sealed record Capability(
@@ -29,7 +30,8 @@ public sealed record Capability(
     DateTimeOffset EffectiveFrom,
     DateTimeOffset? EffectiveTo,
     decimal? BatchSize = null,
-    decimal? BatchTolerancePct = null)
+    decimal? BatchTolerancePct = null,
+    decimal? UnitsPerCount = null)
 {
     /// <summary>Longest standard changeover accepted: a week.</summary>
     public static readonly TimeSpan MaxChangeover = TimeSpan.FromDays(7);
@@ -43,7 +45,7 @@ public sealed record Capability(
         Ensure(change);
         return new Capability(
             id, equipmentId, materialId, change.IdealRatePerHour, change.RateUomId, change.StandardChangeover, change.StandardCrewSize,
-            change.IsPreferred, change.EffectiveFrom, change.EffectiveTo, change.BatchSize, change.BatchTolerancePct);
+            change.IsPreferred, change.EffectiveFrom, change.EffectiveTo, change.BatchSize, change.BatchTolerancePct, change.UnitsPerCount);
     }
 
     /// <exception cref="DomainRuleException">A value is out of range, or the period ends before it starts.</exception>
@@ -61,6 +63,7 @@ public sealed record Capability(
             EffectiveTo = change.EffectiveTo,
             BatchSize = change.BatchSize,
             BatchTolerancePct = change.BatchTolerancePct,
+            UnitsPerCount = change.UnitsPerCount,
         };
     }
 
@@ -112,6 +115,11 @@ public sealed record Capability(
         if (change.BatchTolerancePct is < 0 or > 50)
         {
             throw new DomainRuleException("The line's batch tolerance must be between 0 and 50 percent, or blank for the material's.");
+        }
+
+        if (change.UnitsPerCount is <= 0)
+        {
+            throw new DomainRuleException("Units per count must be greater than zero, or blank for one.");
         }
 
         if (change.EffectiveTo is { } to && to <= change.EffectiveFrom)

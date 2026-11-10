@@ -94,6 +94,7 @@ CREATE TABLE core.equipment (
     state_derivation        text NOT NULL DEFAULT 'own_tags' CHECK (state_derivation IN ('own_tags','series','parallel','constraint_machine')),
     constraint_equipment_id uuid REFERENCES core.equipment(id),
     micro_stop_threshold    interval NOT NULL DEFAULT interval '5 minutes',
+    production_counter_equipment_id uuid REFERENCES core.equipment(id), -- where a line's output is counted (#27): itself or a machine below; null = found
     time_zone               text,                                   -- IANA zone, required on sites
     is_active               boolean NOT NULL DEFAULT true,
     created_at              timestamptz NOT NULL DEFAULT now(),
@@ -554,6 +555,7 @@ CREATE TABLE core.equipment_capability (
     is_preferred            boolean NOT NULL DEFAULT false,
     batch_size              core.qty CHECK (batch_size > 0),    -- this line's batch size in the material's base unit (D-065); null: the material's
     batch_tolerance_pct     numeric(5,2) CHECK (batch_tolerance_pct >= 0 AND batch_tolerance_pct <= 50),  -- this line's batch tolerance (#85); null: the material's
+    units_per_count         numeric(18,6) CONSTRAINT capability_units_per_count_ck CHECK (units_per_count > 0), -- base units per machine count (#27); null: 1
     effective_from          timestamptz NOT NULL,
     effective_to            timestamptz,
     CONSTRAINT capability_no_overlap EXCLUDE USING gist (
@@ -2001,6 +2003,7 @@ CREATE TABLE ts.production_count (
     corrects_id             uuid,                               -- for corrections: the row being offset
     job_id                  uuid,                               -- the run's job (D-035); no FK into history from here either
     report_id               uuid,                               -- the report (D-063): its processed row's id, on its rows and their corrections
+    machine_through         timestamptz,                        -- a report from the machine (#27): the run's machine counts up to here are in it
     recorded_at             timestamptz NOT NULL DEFAULT now(), -- when it was entered; occurred_at is inside the run it belongs to
     actor_id                text,                               -- issuer|subject, as on evt.event
     comment                 text CHECK (length(comment) <= 1000),
@@ -2519,7 +2522,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0058_identity_providers'),
     ('0059_every_site_roles'),
     ('0060_password_reset'),
-    ('0061_labor_gaps');
+    ('0061_labor_gaps'),
+    ('0062_machine_counts');
 
 -- =====================================================================
 -- 17. SEED DATA
