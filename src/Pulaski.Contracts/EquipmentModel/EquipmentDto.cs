@@ -45,6 +45,9 @@ public sealed record EquipmentDto
     /// <summary>Stops shorter than this many seconds are micro-stops (D-050).</summary>
     public int MicroStopThresholdSeconds { get; init; } = 300;
 
+    /// <summary>Where its output is counted for production reports (#27): itself or a machine below; null = found from its counter tags.</summary>
+    public Guid? ProductionCounterEquipmentId { get; init; }
+
     /// <summary>Distance from the enterprise root (0 = enterprise).</summary>
     public int Depth { get; init; }
 

@@ -58,15 +58,16 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
 
     private const string InsertCount = """
         INSERT INTO ts.production_count (id, occurred_at, equipment_id, run_id, job_id, count_kind, delta_qty, uom_id,
-                                         scrap_reason_code_id, source, actor_id, comment, recorded_at, report_id, corrects_id)
+                                         scrap_reason_code_id, source, actor_id, comment, recorded_at, report_id, corrects_id,
+                                         machine_through)
         VALUES (@Id, @OccurredAt, @EquipmentId, @RunId, @JobId, @CountKind, @DeltaQty, @UomId,
-                @ScrapReasonCodeId, @Source, @ActorId, @Comment, @RecordedAt, @ReportId, @CorrectsId)
+                @ScrapReasonCodeId, @Source, @ActorId, @Comment, @RecordedAt, @ReportId, @CorrectsId, @MachineThrough)
         """;
 
     // A report's own rows (D-063), and whether a correction already offsets them.
     private const string ReportRows = """
         SELECT c.id, c.occurred_at, c.equipment_id, c.run_id, c.job_id, c.count_kind, c.delta_qty, c.uom_id, c.scrap_reason_code_id,
-               c.actor_id, c.comment, c.recorded_at,
+               c.actor_id, c.comment, c.recorded_at, c.machine_through,
                EXISTS (SELECT 1 FROM ts.production_count x WHERE x.report_id = @ReportId AND x.source = 'correction') AS is_reversed
         FROM ts.production_count c
         WHERE c.report_id = @ReportId AND c.source = 'operator'
@@ -170,8 +171,12 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
             r.Id, r.OccurredAt, r.EquipmentId, r.RunId, r.JobId, r.CountKind, r.DeltaQty, r.UomId, r.ScrapReasonCodeId, r.ActorId ?? "", r.Comment, r.RecordedAt)
         {
             ReportId = reportId,
+            MachineThrough = r.MachineThrough,
         })], rows[0].IsReversed);
     }
+
+    public async Task<DateTimeOffset?> GetMachineCoverageAsync(Guid runId, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<CoverageRow>(ExecutionSql.MachineCoverage, new { RunId = runId }, cancellationToken))?.Through;
 
     public async Task<PartialBatch?> GetPartialBatchOfLotForUpdateAsync(Guid lotId, CancellationToken cancellationToken) =>
         (await session.QuerySingleOrDefaultAsync<PartialRow>(PartialOfLotForUpdate, new { LotId = lotId }, cancellationToken))?.ToDomain();
@@ -387,6 +392,11 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
         public Guid UomId { get; init; }
     }
 
+    private sealed class CoverageRow
+    {
+        public DateTimeOffset? Through { get; init; }
+    }
+
     private sealed class ReportRow
     {
         public Guid Id { get; init; }
@@ -401,6 +411,7 @@ internal sealed class ExecutionRepository(DbSession session, IIdGenerator ids) :
         public string? ActorId { get; init; }
         public string? Comment { get; init; }
         public DateTimeOffset RecordedAt { get; init; }
+        public DateTimeOffset? MachineThrough { get; init; }
         public bool IsReversed { get; init; }
     }
 }

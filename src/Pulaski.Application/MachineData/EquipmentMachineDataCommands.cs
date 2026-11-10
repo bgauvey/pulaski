@@ -9,7 +9,11 @@ namespace Pulaski.Application.MachineData;
 /// <summary>An equipment's machine data (D-050): its profile, where its state comes from, and its micro-stop threshold.</summary>
 public sealed record SetEquipmentMachineDataCommand(
     Guid EquipmentId, long ExpectedVersion, Guid? MachineProfileId, string StateDerivation, Guid? ConstraintEquipmentId, int MicroStopThresholdSeconds)
-    : ICommand<VersionResponse>;
+    : ICommand<VersionResponse>
+{
+    /// <summary>Where a line's output is counted (#27, D-097): itself or a machine below it; null = found from its counter tags.</summary>
+    public Guid? ProductionCounterEquipmentId { get; init; }
+}
 
 /// <summary>One machine's own reason for a stop code of its profile; inactive removes it.</summary>
 public sealed record SetStopReasonOverrideCommand(Guid EquipmentId, long ExpectedVersion, int RawValue, Guid? ReasonCodeId, bool IsActive)
@@ -51,6 +55,7 @@ internal sealed class SetEquipmentMachineDataHandler(IUnitOfWork unitOfWork, IMa
             StateDerivation = command.StateDerivation,
             ConstraintEquipmentId = command.ConstraintEquipmentId,
             MicroStopThreshold = threshold,
+            ProductionCounterEquipmentId = command.ProductionCounterEquipmentId,
         };
         if (updated == current)
         {
@@ -77,6 +82,15 @@ internal sealed class SetEquipmentMachineDataHandler(IUnitOfWork unitOfWork, IMa
             if (candidate is not { IsBelow: true, TracksState: true })
             {
                 throw new DomainRuleException($"The constraint machine is equipment below {current.Code} that tracks state.");
+            }
+        }
+
+        if (updated.ProductionCounterEquipmentId is { } counterId && counterId != current.ProductionCounterEquipmentId && counterId != current.EquipmentId)
+        {
+            var candidate = await machines.GetConstraintCandidateAsync(current.EquipmentId, counterId, cancellationToken);
+            if (candidate is not { IsBelow: true })
+            {
+                throw new DomainRuleException($"Production is counted at {current.Code} itself or at equipment below it.");
             }
         }
 

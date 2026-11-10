@@ -9,7 +9,7 @@ using Pulaski.Domain.Units;
 namespace Pulaski.Infrastructure.Execution;
 
 /// <summary>Read side for execution (D-035): the floor board and a job's runs and reports.</summary>
-internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadStore units) : IExecutionReadStore
+internal sealed partial class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadStore units) : IExecutionReadStore
 {
     private const int NextPerLine = 6;
 
@@ -92,7 +92,8 @@ internal sealed class ExecutionQueries(NpgsqlDataSource dataSource, IUnitReadSto
                  - coalesce(sum(c.delta_qty) FILTER (WHERE c.count_kind = 'defective'), 0) AS good_qty,
                coalesce(sum(c.delta_qty) FILTER (WHERE c.count_kind = 'defective'), 0) AS scrap_qty,
                max(rc.name) AS scrap_reason, max(c.actor_id) AS actor_id, max(c.comment) AS comment,
-               bool_or(r.ended_at IS NOT NULL AND c.occurred_at = r.ended_at AND c.recorded_at > r.ended_at) AS is_late
+               bool_or(r.ended_at IS NOT NULL AND c.occurred_at = r.ended_at AND c.recorded_at > r.ended_at) AS is_late,
+               max(c.machine_through) AS machine_through
         FROM ts.production_count c
         JOIN core.job_run r ON r.id = c.run_id
         LEFT JOIN core.reason_code rc ON rc.id = c.scrap_reason_code_id

@@ -20,6 +20,12 @@ internal static class ExecutionEndpoints
             TypedResults.Ok(await handler.HandleAsync(new GetJobExecutionQuery(id), ct)))
         .RequireAny(Site.Of(SiteOf.Job), Permissions.FloorView, Permissions.InventoryView);
 
+        // What the run's machine counter counted (#27): since its last report from the machine, and over the run.
+        jobs.MapGet("/{id:guid}/machine-counts", async Task<Ok<MachineCountsDto>> (
+            Guid id, Guid? runId, IQueryHandler<GetMachineCountsQuery, MachineCountsDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetMachineCountsQuery(id, runId), ct)))
+        .RequireAny(Site.Of(SiteOf.Job), Permissions.FloorView);
+
         jobs.MapPost("/{id:guid}/start", async Task<Ok<ExecutionResponse>> (
             Guid id, StartJobRequest request, ICommandHandler<StartJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new StartJobCommand(id, request.Version, request.LineId, request.SkipChangeover), ct)))
@@ -53,6 +59,7 @@ internal static class ExecutionEndpoints
                     ScrapBatches = request.ScrapBatches,
                     PartialQty = request.PartialQty,
                     MadeFromLotIds = request.MadeFromLotIds,
+                    MachineThrough = request.MachineThrough,
                 },
                 ct)))
         .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.Job));
@@ -61,6 +68,20 @@ internal static class ExecutionEndpoints
         jobs.MapPost("/{id:guid}/production/{reportId:guid}/reverse", async Task<Ok<ReverseProductionResponse>> (
             Guid id, Guid reportId, ReverseProductionRequest request, ICommandHandler<ReverseProductionReportCommand, ReverseProductionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ReverseProductionReportCommand(id, reportId, request.ReasonCodeId, request.Comment), ct)))
+        .RequirePermission(Permissions.ProductionCorrect, Site.Of(SiteOf.Job));
+
+        // A report's figures corrected (#80): reversed and reported again in one transaction.
+        jobs.MapPost("/{id:guid}/production/{reportId:guid}/correct", async Task<Ok<CorrectProductionResponse>> (
+            Guid id, Guid reportId, CorrectProductionRequest request, ICommandHandler<CorrectProductionReportCommand, CorrectProductionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new CorrectProductionReportCommand(id, reportId, request.GoodQty, request.ScrapQty, request.ScrapReasonCodeId, request.ReasonCodeId, request.Comment)
+                {
+                    GoodBatches = request.GoodBatches,
+                    ScrapBatches = request.ScrapBatches,
+                    PartialQty = request.PartialQty,
+                    LocationId = request.LocationId,
+                },
+                ct)))
         .RequirePermission(Permissions.ProductionCorrect, Site.Of(SiteOf.Job));
 
         // Partial batches waiting for approval (D-036).

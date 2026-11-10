@@ -82,4 +82,13 @@ public class FloorViewTests
         Assert.False(FloorView.CanStart(job, busy));
         Assert.False(FloorView.CanStart(job with { IsReady = false }, free));
     }
+
+    [Fact]
+    public void Batch_weights_are_read_whole_or_not_at_all()
+    {
+        Assert.Equal([1000m, 998.5m], FloorView.ParseQuantities("1000, 998.5")!);
+        Assert.Empty(FloorView.ParseQuantities("  ")!);
+        Assert.Null(FloorView.ParseQuantities("1000, 99o"));
+        Assert.Null(FloorView.ParseQuantities("1000, -5"));
+    }
 }

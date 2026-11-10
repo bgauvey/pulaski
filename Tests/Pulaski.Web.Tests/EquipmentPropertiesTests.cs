@@ -98,6 +98,23 @@ public class EquipmentPropertiesTests
     }
 
     [Fact]
+    public void A_line_that_runs_jobs_chooses_where_its_production_is_counted()
+    {
+        var line = Line with { CanRunJob = true, ProductionCounterEquipmentId = null };
+        var saw = new EquipmentDto { Id = Guid.CreateVersion7(), ParentId = line.Id, Code = "EXT-01-SAW", Name = "Saw", Level = "work_unit", EquipmentRole = "machine", IsActive = true };
+        var tree = new EquipmentTree([line, saw]);
+
+        var row = Assert.Single(EquipmentProperties.ForExisting(line, tree), i => i.Key == EquipmentProperties.ProductionCounterKey);
+        Assert.Equal(["", line.Id.ToString(), saw.Id.ToString()], row.Choices!.Select(c => c.Value));
+        Assert.DoesNotContain(EquipmentProperties.ForExisting(Line, new EquipmentTree([Line])), i => i.Key == EquipmentProperties.ProductionCounterKey);
+
+        var request = EquipmentProperties.MachineDataChange(line, new PropertyChange(EquipmentProperties.ProductionCounterKey, saw.Id.ToString()), tree)!;
+        Assert.Equal(saw.Id, request.ProductionCounterEquipmentId);
+        Assert.Equal(line.StateDerivation, request.StateDerivation);
+        Assert.Null(EquipmentProperties.MachineDataChange(line, new PropertyChange(EquipmentProperties.ProductionCounterKey, ""), tree)!.ProductionCounterEquipmentId);
+    }
+
+    [Fact]
     public void Children_take_levels_below_their_parent()
     {
         var site = Line with { Level = "site", EquipmentRole = "site" };

@@ -10,7 +10,7 @@
     <div class="row g-2">
         <div class="col-12">
             <label class="form-label" for="rep-run-@Job.JobId">Run</label>
-            <select id="rep-run-@Job.JobId" class="form-select" @bind="_runId">
+            <select id="rep-run-@Job.JobId" class="form-select" @bind="_runId" @bind:after="ClearMachine">
                 @foreach (var r in Job.Runs.Reverse())
                 {
                     <option value="@r.Id">
@@ -84,12 +84,44 @@
         }
         else
         {
+            @* From the machine (#27): the counts since the run's last report from the machine fill in good and scrap, which the operator checks. *@
+            <div class="col-12">
+                @if (_machine is null)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(SelectedRun is null || _loadingMachine)" @onclick="LoadMachineAsync">From the machine</button>
+                }
+                else
+                {
+                    <div class="small" role="status">
+                        <div>@MachineCountView.Since(_machine, Job.SiteTimeZone)</div>
+                        @if (MachineCountView.Run(_machine) is { } runLine)
+                        {
+                            <div class="text-muted">@runLine</div>
+                        }
+                    </div>
+                    <div class="d-flex gap-2 mt-1">
+                        @if (MachineCountView.CanUse(_machine) && _machineThrough is null)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="UseMachine">Use these figures</button>
+                        }
+                        @if (_machineThrough is not null)
+                        {
+                            <span class="chip chip-muted">From the machine</span>
+                            <button type="button" class="btn btn-sm btn-link" @onclick="ClearMachine">Enter by hand instead</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-sm btn-link" disabled="@_loadingMachine" @onclick="LoadMachineAsync">Count again</button>
+                        }
+                    </div>
+                }
+            </div>
             <div class="col-6">
-                <label class="form-label" for="rep-good-@Job.JobId">Good, @Job.UomCode</label>
+                <label class="form-label" for="rep-good-@Job.JobId">Good, @UnitCode</label>
                 <input id="rep-good-@Job.JobId" type="number" min="0" step="any" class="form-control" @bind="_good" @bind:event="oninput" />
             </div>
             <div class="col-6">
-                <label class="form-label" for="rep-scrap-@Job.JobId">Scrap, @Job.UomCode</label>
+                <label class="form-label" for="rep-scrap-@Job.JobId">Scrap, @UnitCode</label>
                 <input id="rep-scrap-@Job.JobId" type="number" min="0" step="any" class="form-control" @bind="_scrap" @bind:event="oninput" />
             </div>
         }
@@ -181,6 +213,15 @@
     private readonly List<decimal?> _scrapBatches = [];
     private decimal? _partial;
 
+    // From the machine (#27): the counts read, and once used, how far they reach and their unit (the material's base unit).
+    private MachineCountsDto? _machine;
+    private bool _loadingMachine;
+    private DateTimeOffset? _machineThrough;
+    private Guid? _uomId;
+    private string? _uomCode;
+
+    private string? UnitCode => _uomCode ?? Job.UomCode;
+
     private JobRunDto? SelectedRun => Job.Runs.FirstOrDefault(r => r.Id == _runId);
 
     // A material made in batches is reported batch by batch, in its base unit (D-036).
@@ -225,6 +266,45 @@
         }
     }
 
+    private async Task LoadMachineAsync()
+    {
+        _loadingMachine = true;
+        _error = null;
+        try
+        {
+            _machine = await Api.GetMachineCountsAsync(Job.JobId, _runId == Guid.Empty ? null : _runId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _loadingMachine = false;
+        }
+    }
+
+    private void UseMachine()
+    {
+        if (_machine is not { } counts || !MachineCountView.CanUse(counts))
+        {
+            return;
+        }
+
+        (_good, _scrap) = (counts.GoodQty, counts.ScrapQty);
+        (_uomId, _uomCode, _machineThrough) = (counts.UomId, counts.UomCode, counts.Through);
+    }
+
+    private void ClearMachine()
+    {
+        if (_machineThrough is not null)
+        {
+            (_good, _scrap) = (null, null);
+        }
+
+        (_machine, _machineThrough, _uomId, _uomCode) = (null, null, null, null);
+    }
+
     private async Task SubmitAsync()
     {
         if (!CanSubmit)
@@ -239,6 +319,8 @@
             var result = await Api.ReportProductionAsync(Job.JobId, new ReportProductionRequest
             {
                 RunId = _runId,
+                UomId = IsBatch ? null : _uomId,
+                MachineThrough = IsBatch ? null : _machineThrough,
                 GoodQty = IsBatch ? 0 : _good ?? 0,
                 ScrapQty = IsBatch ? 0 : _scrap ?? 0,
                 GoodBatches = IsBatch ? [.. _goodBatches.Select(b => b!.Value)] : [],

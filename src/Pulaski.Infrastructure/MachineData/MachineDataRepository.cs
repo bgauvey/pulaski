@@ -71,7 +71,7 @@ internal sealed class MachineDataRepository(DbSession session) : IMachineDataRep
 
     private const string GetEquipment = """
         SELECT id AS equipment_id, CASE WHEN level = 'site' THEN id ELSE site_id END AS site_id, code, tracks_state, machine_profile_id,
-               state_derivation, constraint_equipment_id, micro_stop_threshold, xmin::text::bigint AS version
+               state_derivation, constraint_equipment_id, micro_stop_threshold, production_counter_equipment_id, xmin::text::bigint AS version
         FROM core.equipment WHERE id = @Id
         FOR UPDATE
         """;
@@ -85,7 +85,7 @@ internal sealed class MachineDataRepository(DbSession session) : IMachineDataRep
     private const string SetMachineData = """
         UPDATE core.equipment
         SET machine_profile_id = @MachineProfileId, state_derivation = @StateDerivation, constraint_equipment_id = @ConstraintEquipmentId,
-            micro_stop_threshold = @MicroStopThreshold, updated_at = @At
+            micro_stop_threshold = @MicroStopThreshold, production_counter_equipment_id = @ProductionCounterEquipmentId, updated_at = @At
         WHERE id = @EquipmentId
         RETURNING xmin::text::bigint
         """;
@@ -143,7 +143,10 @@ internal sealed class MachineDataRepository(DbSession session) : IMachineDataRep
 
     public async Task<Versioned<EquipmentMachineDataRecord>?> GetEquipmentForUpdateAsync(Guid equipmentId, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<EquipmentRow>(GetEquipment, new { Id = equipmentId }, cancellationToken) is { } r
-            ? new(new EquipmentMachineDataRecord(r.EquipmentId, r.SiteId, r.Code, r.TracksState, r.MachineProfileId, r.StateDerivation, r.ConstraintEquipmentId, r.MicroStopThreshold), r.Version)
+            ? new(new EquipmentMachineDataRecord(r.EquipmentId, r.SiteId, r.Code, r.TracksState, r.MachineProfileId, r.StateDerivation, r.ConstraintEquipmentId, r.MicroStopThreshold)
+            {
+                ProductionCounterEquipmentId = r.ProductionCounterEquipmentId,
+            }, r.Version)
             : null;
 
     public async Task<ConstraintCandidate?> GetConstraintCandidateAsync(Guid lineId, Guid candidateId, CancellationToken cancellationToken) =>
@@ -154,7 +157,7 @@ internal sealed class MachineDataRepository(DbSession session) : IMachineDataRep
     public async Task<long> UpdateEquipmentMachineDataAsync(EquipmentMachineDataRecord e, DateTimeOffset at, CancellationToken cancellationToken)
     {
         var version = await session.ExecuteScalarAsync<long>(SetMachineData,
-            new { e.EquipmentId, e.MachineProfileId, e.StateDerivation, e.ConstraintEquipmentId, e.MicroStopThreshold, At = at }, cancellationToken);
+            new { e.EquipmentId, e.MachineProfileId, e.StateDerivation, e.ConstraintEquipmentId, e.MicroStopThreshold, e.ProductionCounterEquipmentId, At = at }, cancellationToken);
         await OeeRollupMarks.SiteOfEquipmentChangedAsync(session, e.EquipmentId, cancellationToken);
         return version;
     }
@@ -226,6 +229,7 @@ internal sealed class MachineDataRepository(DbSession session) : IMachineDataRep
         public string StateDerivation { get; init; } = "";
         public Guid? ConstraintEquipmentId { get; init; }
         public TimeSpan MicroStopThreshold { get; init; }
+        public Guid? ProductionCounterEquipmentId { get; init; }
         public long Version { get; init; }
     }
 }

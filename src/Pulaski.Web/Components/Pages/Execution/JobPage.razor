@@ -231,6 +231,10 @@
                                     {
                                         <span class="chip ms-1" title="Entered after the run ended; counted at the run's end">late</span>
                                     }
+                                    @if (r.MachineThrough is { } through)
+                                    {
+                                        <span class="chip ms-1" title="From the machine: its counts up to @Display.SiteTime(through, job.SiteTimeZone)">machine</span>
+                                    }
                                     @if (r.IsReversed)
                                     {
                                         <span class="chip chip-muted ms-1" title="Reversed: its counts are offset and its lots taken back">reversed</span>
@@ -245,6 +249,7 @@
                                 <td class="text-end">
                                     @if (r.ReportId is { } reportId && !r.IsReversed && May(PermissionCodes.ProductionCorrect))
                                     {
+                                        <button type="button" class="btn btn-sm btn-link p-0 me-2" disabled="@_busy" @onclick="() => StartReverseAsync(reportId, r)">Correct…</button>
                                         <button type="button" class="btn btn-sm btn-link p-0" disabled="@_busy" @onclick="() => StartReverseAsync(reportId)">Reverse…</button>
                                     }
                                 </td>
@@ -254,6 +259,29 @@
                                 <tr>
                                     <td colspan="8">
                                         <form class="inv-toolbar mb-0" @onsubmit="ReverseAsync" @onsubmit:preventDefault>
+                                            @if (_correcting)
+                                            {
+                                                @* The right figures (#80): the report is reversed and these reported in its place, in one go. *@
+                                                @if (job.BatchSize is not null)
+                                                {
+                                                    <input class="form-control" style="width: 14rem" placeholder="Good batches, each weight" aria-label="Good batch weights, comma-separated" @bind="_fixBatches" />
+                                                }
+                                                else
+                                                {
+                                                    <input type="number" step="any" min="0" class="form-control" style="width: 8rem" aria-label="Good" placeholder="Good" @bind="_fixGood" />
+                                                }
+                                                <input type="number" step="any" min="0" class="form-control" style="width: 8rem" aria-label="Scrap" placeholder="Scrap" @bind="_fixScrap" />
+                                                @if (_fixScrap > 0)
+                                                {
+                                                    <select class="form-select w-auto" aria-label="Scrap reason" @bind="_fixScrapReason">
+                                                        <option value="@Guid.Empty">Scrap reason…</option>
+                                                        @foreach (var reason in _scrapReasons)
+                                                        {
+                                                            <option value="@reason.Id">@Display.ReasonLabel(reason)</option>
+                                                        }
+                                                    </select>
+                                                }
+                                            }
                                             <select class="form-select w-auto" aria-label="Reason" @bind="_reverseReason">
                                                 <option value="@Guid.Empty">Reason…</option>
                                                 @foreach (var reason in _adjustReasons)
@@ -263,10 +291,14 @@
                                             </select>
                                             <input class="form-control inv-grow" maxlength="1000" placeholder="Why, e.g. reported on the wrong job (required)" aria-label="Comment"
                                                    @bind="_reverseComment" @bind:event="oninput" />
-                                            <button type="submit" class="btn btn-sm btn-danger" disabled="@(_busy || _reverseReason == Guid.Empty || string.IsNullOrWhiteSpace(_reverseComment))">Reverse report</button>
+                                            <ActionButton Type="submit" Class="@(_correcting ? "btn btn-sm btn-primary" : "btn btn-sm btn-danger")" Busy="_busy"
+                                                          Reason="@(_reverseReason == Guid.Empty ? "Choose why first." : string.IsNullOrWhiteSpace(_reverseComment) ? "Say why first." : null)">
+                                                @(_correcting ? "Correct report" : "Reverse report")
+                                            </ActionButton>
                                             <button type="button" class="btn btn-sm btn-link" @onclick="() => _reversing = null">Cancel</button>
                                         </form>
                                         <div class="form-text">
+                                            @(_correcting ? "The report is reversed and the figures above reported in its place, at its time, in one go: its lots give their quantity back and new lots are made. " : "")
                                             Its good and scrap come off the run, and every lot it made gives the quantity back. A lot that has been used, split or
                                             moved into a silo since must be put right first; Pulaski says which.
                                         </div>
@@ -306,6 +338,11 @@ else if (_error is null)
     private Guid? _reversing;
     private Guid _reverseReason;
     private string? _reverseComment;
+    private bool _correcting;
+    private decimal _fixGood;
+    private decimal _fixScrap;
+    private Guid _fixScrapReason;
+    private string? _fixBatches;
 
     private enum StopMode
     {
@@ -379,7 +416,7 @@ else if (_error is null)
         await LoadAsync();
     }
 
-    private async Task StartReverseAsync(Guid reportId)
+    private async Task StartReverseAsync(Guid reportId, ProductionReportDto? correct = null)
     {
         _error = null;
         try
@@ -389,7 +426,17 @@ else if (_error is null)
                 _adjustReasons = await Api.ListReasonCodesAsync("inventory_adjustment", _job!.SiteId);
             }
 
-            (_reversing, _reverseReason, _reverseComment) = (reportId, Guid.Empty, null);
+            if (correct is not null && _scrapReasons.Count == 0)
+            {
+                _scrapReasons = await Api.ListReasonCodesAsync("scrap", _job!.SiteId);
+            }
+
+            (_reversing, _reverseReason, _reverseComment, _correcting) = (reportId, Guid.Empty, null, correct is not null);
+            if (correct is not null)
+            {
+                (_fixGood, _fixScrap, _fixBatches) = (correct.GoodQty, correct.ScrapQty, null);
+                _fixScrapReason = _scrapReasons.FirstOrDefault(r => r.Name == correct.ScrapReason)?.Id ?? Guid.Empty;
+            }
         }
         catch (ApiException ex)
         {
@@ -403,6 +450,30 @@ else if (_error is null)
         _error = null;
         try
         {
+            if (_correcting)
+            {
+                if (FloorView.ParseQuantities(_fixBatches) is not { } batches)
+                {
+                    _error = new ApiException(400, "Batches", "Type each good batch's weight as a number, separated by commas, such as 1000, 998.5.", null);
+                    return;
+                }
+
+                var fixedReport = await Api.CorrectProductionReportAsync(JobId, _reversing!.Value, new CorrectProductionRequest
+                {
+                    GoodQty = _job!.BatchSize is not null ? batches.Sum() : _fixGood,
+                    ScrapQty = _fixScrap,
+                    ScrapReasonCodeId = _fixScrap > 0 && _fixScrapReason != Guid.Empty ? _fixScrapReason : null,
+                    GoodBatches = _job.BatchSize is not null ? batches : [],
+                    ReasonCodeId = _reverseReason,
+                    Comment = _reverseComment!.Trim(),
+                });
+                _notes = [$"Corrected: run now has {FloorView.Qty(fixedReport.RunGoodQty)} good and {FloorView.Qty(fixedReport.RunScrapQty)} scrap; " +
+                    $"{fixedReport.TakenBack.Count} lot(s) gave their output back and {fixedReport.Lots.Count} new lot(s) were made.", .. fixedReport.Warnings.Select(w => w.Message)];
+                _reversing = null;
+                await LoadAsync();
+                return;
+            }
+
             var result = await Api.ReverseProductionReportAsync(JobId, _reversing!.Value,
                 new ReverseProductionRequest { ReasonCodeId = _reverseReason, Comment = _reverseComment!.Trim() });
             _notes = [$"Reversed: run now has {FloorView.Qty(result.RunGoodQty)} good and {FloorView.Qty(result.RunScrapQty)} scrap; {result.Lots.Count} lot(s) took the output back."];

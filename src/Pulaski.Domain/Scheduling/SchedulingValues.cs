@@ -59,5 +59,13 @@ public static class CalculationBasis
     public const string IdealRate = "ideal_rate";
     public const string RunHistory = "run_history";
 
-    public static IReadOnlyList<string> All { get; } = [IdealRate, RunHistory];
+    /// <summary>From run history with the stops inside runs taken out (#70, D-098): the rate while running.</summary>
+    public const string RunHistoryNet = "run_history_net";
+
+    public static IReadOnlyList<string> All { get; } = [IdealRate, RunHistory, RunHistoryNet];
+
+    public static bool IsRunHistory(string basis) => basis is RunHistory or RunHistoryNet;
+
+    /// <summary>The basis of a history rate worked out with or without stops.</summary>
+    public static string ForHistory(bool stopsTakenOut) => stopsTakenOut ? RunHistoryNet : RunHistory;
 }

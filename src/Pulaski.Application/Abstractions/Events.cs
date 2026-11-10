@@ -147,6 +147,7 @@ public static class EventTypes
     public const string JobClosed = "pulaski.job.closed.v1";
     public const string ProductionReported = "pulaski.job.production_reported.v1";
     public const string ProductionReversed = "pulaski.job.production_reversed.v1";
+    public const string ProductionCorrected = "pulaski.job.production_corrected.v1";
     public const string ExecutionPolicyChanged = "pulaski.execution_policy.changed.v1";
     public const string WorkOrderDispatched = "pulaski.work_order.dispatched.v1";
     public const string WorkOrderUndispatched = "pulaski.work_order.undispatched.v1";
@@ -264,4 +265,7 @@ public static class EventTypes
     public const string CapabilityEnded = "pulaski.capability.ended.v1";
     public const string RunStandardCreated = "pulaski.run_standard.created.v1";
     public const string RunStandardRecalculated = "pulaski.run_standard.recalculated.v1";
+    public const string RunStandardProposed = "pulaski.run_standard.proposed.v1";
+    public const string RunStandardProposalRejected = "pulaski.run_standard.proposal_rejected.v1";
+    public const string RateRefreshSettingsSet = "pulaski.site.rate_refresh_settings_set.v1";
 }

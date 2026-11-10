@@ -22,6 +22,7 @@ public static class DependencyInjection
         services.AddScoped<MachineData.OeeTargetWrites>();
         services.AddScoped<Inventory.FeedCounterPoster>();
         services.AddScoped<Inventory.AllocationAutoRefresh>();
+        services.AddScoped<Scheduling.RateRefreshRunner>();
         services.AddScoped<Materials.ScheduledConnections>();
         services.AddScoped<Labor.QualificationExpiryNotices>();
 

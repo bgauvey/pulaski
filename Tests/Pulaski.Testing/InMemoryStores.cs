@@ -84,6 +84,8 @@ public sealed class InMemoryStores
 
     public InMemoryRunHistory RunHistory => _runHistory ??= new(Scheduling);
 
+    public InMemoryRateRefresh RateRefresh { get; } = new();
+
     public InMemoryLabor Labor { get; } = new();
 
     public InMemoryMachineData MachineData { get; } = new();
@@ -166,6 +168,8 @@ public sealed class InMemoryStores
         services.RemoveAll<ICalendarExceptionRepository>();
         services.RemoveAll<IProductionReportReadStore>();
         services.RemoveAll<IRunHistoryReadStore>();
+        services.RemoveAll<IRateRefreshReadStore>();
+        services.RemoveAll<IRateRefreshRepository>();
         services.RemoveAll<ILaborReadStore>();
         services.RemoveAll<ILaborRepository>();
         services.RemoveAll<IMachineDataReadStore>();
@@ -242,6 +246,8 @@ public sealed class InMemoryStores
         services.AddSingleton<ICalendarExceptionRepository>(CalendarExceptions);
         services.AddSingleton<IProductionReportReadStore>(ProductionReports);
         services.AddSingleton<IRunHistoryReadStore>(RunHistory);
+        services.AddSingleton<IRateRefreshReadStore>(RateRefresh);
+        services.AddSingleton<IRateRefreshRepository>(RateRefresh);
         services.AddSingleton<ILaborReadStore>(Labor);
         services.AddSingleton<ILaborRepository>(Labor);
         services.AddSingleton<IMachineDataReadStore>(MachineData);

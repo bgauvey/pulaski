@@ -31,6 +31,16 @@ internal sealed class GetExecutionPolicyHandler(IExecutionReadStore store) : IQu
         await store.GetPolicyAsync(query.SiteId, cancellationToken) ?? throw new NotFoundException($"Site {query.SiteId} not found.");
 }
 
+/// <summary>What the machine counted in a job's run (#27, D-097), to prefill a report and reconcile the run.</summary>
+public sealed record GetMachineCountsQuery(Guid JobId, Guid? RunId) : IQuery<MachineCountsDto>;
+
+internal sealed class GetMachineCountsHandler(IExecutionReadStore store, TimeProvider timeProvider) : IQueryHandler<GetMachineCountsQuery, MachineCountsDto>
+{
+    public async Task<MachineCountsDto> HandleAsync(GetMachineCountsQuery query, CancellationToken cancellationToken) =>
+        await store.GetMachineCountsAsync(query.JobId, query.RunId, timeProvider.GetUtcNow(), cancellationToken)
+            ?? throw new NotFoundException($"Job {query.JobId} not found.");
+}
+
 /// <summary>The site's partial batches waiting for approval (D-036).</summary>
 public sealed record ListPendingPartialBatchesQuery(Guid SiteId) : IQuery<IReadOnlyList<PartialBatchDto>>;
 

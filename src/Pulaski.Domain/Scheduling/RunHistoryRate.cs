@@ -1,4 +1,5 @@
 using System.Globalization;
+using Pulaski.Domain.MachineData;
 
 namespace Pulaski.Domain.Scheduling;
 
@@ -9,6 +10,12 @@ namespace Pulaski.Domain.Scheduling;
 public sealed record RunSample(Guid RunId, string JobNumber, int RunNo, DateTimeOffset StartedAt, DateTimeOffset EndedAt, decimal? GoodQty)
 {
     public decimal Hours => (decimal)(EndedAt - StartedAt).TotalHours;
+
+    /// <summary>Hours inside the run that the line was stopped (#70): down, planned, not in production mode or without signal. Null: not known.</summary>
+    public decimal? StoppedHours { get; init; }
+
+    /// <summary>The hours the rate divides by: run time, less its stops when they are taken out.</summary>
+    public decimal RateHours(bool takeOutStops) => takeOutStops ? Math.Max(0m, Hours - (StoppedHours ?? 0m)) : Hours;
 }
 
 /// <summary>A run as the calculation saw it: its rate, and why it was left out, if it was.</summary>
@@ -33,6 +40,14 @@ public sealed record RunHistoryResult(
     string? NotEnough)
 {
     public int UsedRuns => Runs.Count(r => r.IsUsed);
+
+    /// <summary>Stops inside the runs were taken out of their hours (#70); <see cref="UsedHours"/> is then running time.</summary>
+    public bool StopsTakenOut { get; init; }
+
+    /// <summary>Stopped hours of the used runs, taken out or not.</summary>
+    public decimal UsedStoppedHours { get; init; }
+
+    public string Basis => CalculationBasis.ForHistory(StopsTakenOut);
 }
 
 /// <summary>
@@ -59,9 +74,13 @@ public static class RunHistoryRate
     /// <summary>The fences are at least this share of the median away from it.</summary>
     public const decimal MinFenceSpread = 0.10m;
 
-    public static RunHistoryResult Calculate(IReadOnlyList<RunSample> runs, DateTimeOffset from, DateTimeOffset to)
+    /// <param name="runs">The ended runs in the window.</param>
+    /// <param name="from">The window's start.</param>
+    /// <param name="to">Its end.</param>
+    /// <param name="takeOutStops">Divide by running time (#70, D-098): each run's hours less its <see cref="RunSample.StoppedHours"/>.</param>
+    public static RunHistoryResult Calculate(IReadOnlyList<RunSample> runs, DateTimeOffset from, DateTimeOffset to, bool takeOutStops = false)
     {
-        var verdicts = runs.OrderBy(r => r.StartedAt).Select(Judge).ToList();
+        var verdicts = runs.OrderBy(r => r.StartedAt).Select(r => Judge(r, takeOutStops)).ToList();
 
         var rates = verdicts.Where(v => v.IsUsed).Select(v => v.RatePerHour!.Value).Order().ToList();
         decimal? slow = null, fast = null;
@@ -79,7 +98,7 @@ public static class RunHistoryRate
         }
 
         var used = verdicts.Where(v => v.IsUsed).ToList();
-        var hours = used.Sum(v => v.Run.Hours);
+        var hours = used.Sum(v => v.Run.RateHours(takeOutStops));
         var good = used.Sum(v => v.Run.GoodQty!.Value);
         var notEnough = used.Count < MinRuns
             ? $"Only {used.Count} usable {(used.Count == 1 ? "run" : "runs")}; a rate needs at least {MinRuns}."
@@ -89,10 +108,23 @@ public static class RunHistoryRate
 
         return new RunHistoryResult(
             from, to, verdicts, Math.Round(hours, 2), good, slow, fast,
-            notEnough is null ? Math.Round(good / hours, 2) : null, notEnough);
+            notEnough is null ? Math.Round(good / hours, 2) : null, notEnough)
+        {
+            StopsTakenOut = takeOutStops,
+            UsedStoppedHours = Math.Round(used.Sum(v => v.Run.StoppedHours ?? 0m), 2),
+        };
     }
 
-    private static RunSampleVerdict Judge(RunSample run)
+    /// <summary>
+    /// Hours of <c>[start, end)</c> the line wasn't running (#70): every stretch of its classified time (D-052) that isn't run time, which
+    /// is down (no signal and uncoded stops included), planned stops and unit modes that aren't production. Micro-stops are run time.
+    /// </summary>
+    public static decimal StoppedHours(IEnumerable<UseSpan> uses, DateTimeOffset start, DateTimeOffset end) =>
+        (decimal)uses
+            .Where(u => u.Use != TimeUse.Run && u.End > start && u.Start < end)
+            .Sum(u => ((u.End < end ? u.End : end) - (u.Start > start ? u.Start : start)).TotalHours);
+
+    private static RunSampleVerdict Judge(RunSample run, bool takeOutStops)
     {
         if (run.GoodQty is not { } good)
         {
@@ -104,7 +136,20 @@ public static class RunHistoryRate
             return new(run, null, "Shorter than 30 minutes");
         }
 
-        return good <= 0 ? new(run, null, "No good output") : new(run, Math.Round(good / run.Hours, 4), null);
+        if (good <= 0)
+        {
+            return new(run, null, "No good output");
+        }
+
+        var hours = run.RateHours(takeOutStops);
+        if (takeOutStops && run.StoppedHours is null)
+        {
+            return new(run, null, "No machine state for this run, so its stops aren't known");
+        }
+
+        return hours < (decimal)MinRunLength.TotalHours
+            ? new(run, null, takeOutStops ? "Ran under 30 minutes once its stops are taken out" : "Shorter than 30 minutes")
+            : new(run, Math.Round(good / hours, 4), null);
     }
 
     // Linear interpolation between the closest ranks, on sorted values.

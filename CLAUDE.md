@@ -151,7 +151,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   production day (`ShiftProduction.Total`), worked out on read; outside shifts, the site-local day. Rows reconcile to the runs.
 - Rates from run history (D-045, proposed): `RunHistoryRate.Calculate` (good ÷ run hours, short/empty/unconvertible and
   Tukey-fence outliers left out, at least 5 runs and 8 h) is reviewed, then accepted (re-checked under the lock, 409 if changed)
-  as the calculated rate; a modified rate stays in force. No worker.
+  as the calculated rate; a modified rate stays in force. D-098: optionally with stops out (`run_history_net`; `RunSample.StoppedHours` from
+  `EquipmentUses`, everything but `TimeUse.Run`; lines not tracking state keep run time). `core.rate_refresh_settings` per site (default basis,
+  schedule, threshold, opt-in auto-accept within a limit for history-based rates, `RateRefresh.WhyReviewed`); `RateRefreshService` (API) →
+  `RateRefreshRunner` stores `core.run_standard_proposal` (one pending); accept re-works it (`RunHistory.AdoptAsync`), reject keeps the rate.
 - Links in the projection (D-046, proposed): `LinePlanLoader` loads a line with the lines its jobs follow; every projection goes
   through `TimelineMapping.Project` → `LinkedProjection` (repeat until settled). Jobs wait for after-start/after-end plus lag;
   firmed jobs keep their time (`link_not_met`), circular waits warn `link_cycle`. Nothing is reordered.
@@ -241,12 +244,18 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `sort_key`, `group_ids`; pickers, stops and the journal show the path. History refers to reason ids, so moves never change it. Reports roll up
   by group level on read (`ReasonRollup`, OEE rows' `ReasonGroups`); `ConvertReasonCodeCommand` (`PUT /reason-codes/{id}/group`) makes an unused
   reason (`core.reason_code_uses`) a group or an empty group a reason (#86).
+- Machine counts in reports (D-097, proposed): **From the machine** prefills a report the operator confirms (`GetMachineCountsQuery`,
+  `GET /jobs/{id}/machine-counts`): counts at the line's counter (`equipment.production_counter_equipment_id`, else its own or the only processed tag
+  below) by time over the run, since its coverage, × `equipment_capability.units_per_count` (null = 1; `MachineCounts.Output`). Report rows store
+  `machine_through`; `ReportProductionCommand.MachineThrough` must pass the run's coverage (`ExecutionSql.MachineCoverage`, standing reports;
+  `MachineCounts.EnsureCovers`); a correction keeps it. Batch materials excluded.
 - Reversing declarations (D-063, proposed): never edit; compensating `reversed` rows (reason + comment required) at the original's
   effective time. `ReverseMovementCommand` dispatches: latest single-lot (D-030), earlier quantity-only if `EnsureFitsAsync` allows,
   consumption (`Lot.Restore`), split/merge/transfer (both lots, `GetCounterpartAsync`, `Lot.TakeBack`), genealogy superseded.
   `LotEventSql.NotReversed` hides reversed declarations from job totals/lots/genealogy. Reports have `report_id` (processed row id, on
   counts and produced lot rows); `ReverseProductionReportCommand` (`production.correct`) offsets counts with `correction` rows, `JobRun.Remove`,
-  takes back its lots (out of a commingled balance first), partial batch → `reversed`.
+  takes back its lots (out of a commingled balance first), partial batch → `reversed`. Correcting a report (D-096): `CorrectProductionReportCommand` = `ReverseAsync` + `ProductionReporter.ReportAsync` in one
+  transaction, same run and time, new lots; event `job.production_corrected`.
 - Lifting reversal limits (D-077, proposed): any standing movement reverses when what it changed hasn't changed since (`ListStandingAfterAsync`, effective
   order): latest move / latest status change, quantity via `EnsureFitsAsync`; packing (`Lot.ReversePacking`), corrections (`ts.lot_event.details`,
   `Lot.RevertCorrection`), balance merges too. A reversal is any row with `reverses_event_id`. `ReverseChainCommand` (`/lots/{id}/reverse-chain?dryRun=`)

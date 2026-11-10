@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-08 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-09 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -219,7 +219,7 @@ The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plan
 **This shift** adds up each line's current shift so far (a line without shifts counts the site's day so far):
 
 - **OEE** and its availability, performance and quality components, from the machine and production reports. Site OEE combines the active production lines from their underlying time and ideal-output components; it does not average line percentages. When there is no rated production to calculate OEE, it shows a dash.
-- **Good output** from production reports, against what the schedule planned for the shift, with a bar. The plan shares each job's quantity over its time on the schedule and counts the part inside the shift. Lines making different units show one figure per unit; units are never added together. Machine counts aren't output: only what is reported.
+- **Good output** from production reports, against what the schedule planned for the shift, with a bar. The plan shares each job's quantity over its time on the schedule and counts the part inside the shift. Lines making different units show one figure per unit; units are never added together. Machine counts aren't output until they are reported (see [Report production from the machine](#report-production-from-the-machine)).
 - **Scrap** reported, with its share of all output in that unit.
 - **Downtime** in minutes, with the biggest reason named. It counts stops, time not running and time with no signal; micro-stops and planned stops (setup, cleaning) don't count. *No signal* and *Not coded* are named like reasons. With no line reporting its state it shows a dash and *Needs machine data*.
 
@@ -297,6 +297,8 @@ Equipment with **Tracks state** set shows a **Machine data** group:
    - *Its constraint machine*: the line's state is one machine's. A **Constraint machine** row appears; Pulaski first picks the first machine below that tracks state, and you can choose another.
 
 Each saves as soon as you change it. The profile reads the machine's data as it arrives through an [edge node](#20-edge-nodes-collecting-machine-data); the threshold decides which stops are micro-stops, and *State from* how a line shows on [Machines](#21-machines-live-status-and-stops).
+
+Equipment with **Can run jobs** set also shows **Production counted at**: whose counters a [report from the machine](#report-production-from-the-machine) takes, usually the line's last machine (the saw, the packer). Choose the line itself or any equipment below it. Left at *Found from the counter tags*, Pulaski uses the line's own processed counter, or else the only machine below it that has one. If several machines below it count, choose one here.
 
 ### Deactivate equipment
 
@@ -796,6 +798,26 @@ If the material changes on a line in automatic changeover mode, Pulaski starts a
 
 If the report is more than the run can hold, Pulaski refuses it and says how much more fits.
 
+### Report production from the machine
+
+When an [edge node](#20-edge-nodes-collecting-machine-data) collects the line's counters, a report can take its figures from them.
+
+1. Click **Report** on the line's card, or **Report production** on the job's page, and choose the **Run**.
+2. Click **From the machine**. Pulaski says what the line's counter counted since the run's last report from the machine (or since the run started), for example *EXT-01-SAW counted 348 good and 12 scrap m since the run started, to 14:40 (2.4 m a count).* Below it, the whole run as the machine counted it and as it has been reported.
+3. Click **Use these figures**. Good and scrap are filled in, in the material's base unit, and marked *From the machine*. Check them and change them if the machine miscounted.
+4. Choose the scrap reason and where the good output goes, as for any report, and click **Report**.
+
+The job's reports mark it *machine*. The next report from the machine starts after the counts this one took. **Count again** reads the counter again; **Enter by hand instead** clears the figures.
+
+**In detail**
+
+- **What is counted:** the processed count is everything the counter saw, and the defective count the scrapped part of it, so good = processed − defective. Each count is the line's **… per machine count** for the material (one when blank), after the tag's own scale. The counter is the line's [**Production counted at**](#machine-data).
+- **When nothing is offered**, Pulaski says why: nothing on the line has a processed counter; several machines count and none is chosen; the line had no capability for the material when the run started, so a count can't be turned into output; or nothing has been counted since the last report from the machine.
+- **Never counted twice.** A report from the machine records the time of the last count it took. Pulaski refuses another report from the machine in the same run that doesn't reach past it, so pressing **Report** twice, or two people taking the same counts, reports them once. Reports entered by hand don't use counts up, so don't report the same output by hand as well.
+- **Reconciling:** *Run so far* compares the machine's total for the run with everything reported into it (by hand or from the machine). They differ when something was reported by hand, figures were changed before reporting, or counts since the last report haven't been reported yet.
+- **Corrections and reversals.** A [corrected report](#correct-a-production-report) keeps the counts the old one took. Reversing the run's latest report from the machine offers its counts again.
+- **Materials made in batches** are reported by batch weight, so they don't offer machine figures.
+
 ### Pause, resume and complete
 
 - **Pause** stops the job for now. Choose why (*End of shift*, *Waiting for material*…) or leave it blank, then click **Pause**. The run ends and the line is free for another job. Click **Resume** later to open a new run.
@@ -832,6 +854,22 @@ A report entered on the wrong job, or with the wrong quantity, is reversed whole
 - **Partial batches.** A partial batch the report made no longer counts, so the run can report another. A rejected partial batch was written off: reverse that first.
 - **Until the job is closed**, as with reporting. Needs *production.correct* (Supervisor and Auditor to start with).
 - Reports entered before this version can't be reversed whole; they show no **Reverse…** button.
+
+### Correct a production report
+
+A report with the wrong good or scrap quantity, or the wrong scrap reason, is corrected in one step.
+
+1. Open the job's page and find the report under **Production reports**.
+2. Click **Correct…** on its row. The form shows its figures: change **Good** (for a material made in batches, type each good batch's weight, separated by commas), **Scrap** and its **Scrap reason**.
+3. Choose an adjustment **Reason**, write a **Comment** saying why, and click **Correct report**.
+4. The old report is marked *reversed* and a new one with the right figures takes its place, in the same run and at the same time. The page says how many lots gave their output back and how many new lots were made.
+
+**In detail**
+
+- **It is a reversal and a new report in one.** Everything either would check is checked, and if any of it fails nothing changes: the old report's lots must still hold what it gave them, and the new figures must fit the run (its rate cap, whole batches, the partial-batch rules). Automated consumption from the line's feed points is put back and taken again for the new figures.
+- **New lots.** The good output goes into new lots with new numbers, where the old lots were; print their labels again. The old lots are *cancelled*.
+- **What can't change:** the run and the time it counts at. To move output to another job or run, reverse it and report it there. A report older than 31 days can't be corrected, as it can't be back-dated.
+- **History** shows both reports, and one *production corrected* event names them both with the figures before and after. Needs *production.correct*.
 
 ### Production by shift
 
@@ -1556,6 +1594,7 @@ The **Where it can run** table lists each line that can run the material: its id
 2. Choose the **Line**. Only active lines that run jobs are offered; a department gets its lines' capabilities.
 3. Enter the **Ideal rate, per hour**, the best the line can do, and its **Rate unit**. The unit must convert to the material's base unit; for metres of profile on a line rated in kilograms, add a [conversion](#6-units-and-conversions) first.
 4. Optionally enter the **Standard changeover** in minutes (used when no changeover rule matches), the **Crew size**, and tick **Preferred line**. For a material made in batches, enter the **Batch size on this line** when the line's equipment makes a different amount at a time (a 200 kg mixer next to the 50 kg ones), and the **Batch tolerance on this line, %** when its batches may vary more or less than the material's; leave either blank for the material's.
+   **… per machine count** is how much of the material one count of the line's counter makes, in the material's base unit: *2.4* when each cut of the saw is 2.4 m of profile. Leave it blank for one. [Reports from the machine](#report-production-from-the-machine) use it; the counter tag's own scale applies first. The rate column shows it as *2.4 m a count*.
 5. **Starts** is today unless you pick another day. **Ends on** is optional: leave it empty for a capability with no end.
 6. Click **Add**. If the line has no planning rate for the material yet, the ideal rate becomes it, and a note says so.
 
@@ -1574,20 +1613,25 @@ The **Where it can run** table lists each line that can run the material: its id
 
 What the line really makes, rather than its ideal rate.
 
-1. Click **Rate** on the line's row. Under **From run history**, choose how far back to look (**Runs that ended in the last** 30 to 365 days; 90 to start with) and click **Work it out**.
-2. Pulaski shows the rate the runs give, how many runs and hours it used, and how it compares with the rate in force. Below it, every run it looked at: its job, when it ended, its hours, good output and rate, and whether it was **Used** or **Left out**, with why.
-3. If the rate looks right, click **Use … as the calculated rate**. Nothing changes until you do.
-4. To go back to the ideal rate later, click **Rate**, then **Back to the ideal rate**.
+1. Click **Rate** on the line's row. Under **From run history**, choose how far back to look (**Runs that ended in the last** 30 to 365 days; 90 to start with).
+2. Tick **Take out stops** to divide by running time rather than run time; it starts as the site's choice (see [Planning rates from run history](#planning-rates-from-run-history)). Click **Work it out**.
+3. Pulaski shows the rate the runs give, how many runs and hours it used (with stops taken out: the running hours and how many hours of stops came off), and how it compares with the rate in force. Below it, every run it looked at: its job, when it ended, its hours, its stopped hours when they are taken out, good output and rate, and whether it was **Used** or **Left out**, with why.
+4. If the rate looks right, click **Use … as the calculated rate**. Beside it Pulaski says what it is recorded as: *from run history* or *from run history, stops taken out*. Nothing changes until you click it.
+5. To go back to the ideal rate later, click **Rate**, then **Back to the ideal rate**.
+
+If the scheduled recalculation has proposed a rate, the review shows it at the top with **Accept proposal** and **Reject**. The line's row on the material shows *proposed …* until it is decided. All of a site's proposals are on [Planning rates](#review-proposed-planning-rates).
 
 **In detail**
 
 - **The rate** is the good output of the used runs ÷ their hours, so a long run counts for more than a short one. Scrap doesn't count: the planning rate is for good output.
+- **Taking out stops.** Each run's stopped time comes off its hours: down time (stops, time without a signal), planned stops and time in a unit mode that isn't production, as the [OEE report](#21-machines-live-status-and-stops) classifies the line's time. A line deriving its state from its machines (series, parallel, constraint machine) takes theirs. Micro-stops stay in: they are lost speed, which the rate should show. A run that ran less than 30 minutes once its stops come out is left out. A line that doesn't record machine state can't have its stops taken out: Pulaski says so and uses run time.
+- **The basis is recorded:** the calculated rate says *from run history* or *from run history, stops taken out*, and so does its `…recalculated.v1` event, with the stopped hours.
 - **Which runs:** ended runs of production jobs of the material on that line, ended in the chosen days. Runs under 30 minutes, runs with no good output, and runs whose unit doesn't convert to the planning rate's unit are left out.
 - **Unusual runs:** with four or more runs, a run much slower or faster than the rest (outside 1.5 times the spread of the middle half of the runs, and never closer than 10% either side of the middle run) is left out, so a breakdown or a report put into the wrong run doesn't move the rate. The limits are shown under the list.
 - **Enough history:** a rate needs at least 5 used runs and 8 hours. With less, Pulaski says how much it has and offers no rate.
 - **A modified rate stays in force.** Using a history rate changes the calculated rate only; if a modified rate is set, planning keeps using it, and the comparison shows how far it has drifted. Clear the modified rate to plan with the history rate.
 - **Checked again when you accept.** If a run ended or was reported since you looked and the rate is different, Pulaski says so and shows the new figures; review them and accept again.
-- **It doesn't update by itself.** A rate from run history stays until you work it out again or go back to the ideal rate, and a new ideal rate on the capability no longer changes it.
+- **Updating it.** A rate from run history stays until it is worked out again (by you, or a [scheduled recalculation](#planning-rates-from-run-history) you or the site accepts) or you go back to the ideal rate. A new ideal rate on the capability no longer changes it.
 - **Who:** permission to set the planning rate (Planner, to start with).
 
 - **Periods.** A capability applies from the start of its first day to the start of its end day, in the line's site time zone. One that starts today starts the moment you add it, so it can follow straight on from one you ended earlier today. Two periods for the same material on the same line can't overlap: end or change the other one first.
@@ -2155,7 +2199,7 @@ Running it needs permission to maintain people at the site. Credentials go in th
 
 ## 18. Site settings
 
-**Configure → Site settings.** What applies to a whole site: who places changeovers on the schedule, how far production reports may go, the OEE it aims for, its labels, how it allocates lots, and the holidays and shutdowns when the site doesn't work. Each part has its own **Save** button.
+**Configure → Site settings.** What applies to a whole site: who places changeovers on the schedule, how far production reports may go, the OEE it aims for, its labels, how it allocates lots, how its planning rates follow run history, and the holidays and shutdowns when the site doesn't work. Each part has its own **Save** button.
 
 ### Ideas to know first
 
@@ -2183,6 +2227,35 @@ Under **Lot allocations** on Site settings (you need permission to change site s
 - **The background refresh** does what **Refresh allocations** on the Shortages tab does, as *system*. It waits until changes have been quiet for a minute, or refreshes anyway when the last refresh is 15 minutes old and changes keep coming. Everything is off to start with.
 - **Hard reservation** has no override: whoever needs the stock releases or moves the other job's allocation first. Automated consumption at feed points takes only the free stock, and lists the rest as a shortfall.
 - Each save is recorded as `pulaski.site.allocation_settings_set.v1`.
+
+### Planning rates from run history
+
+Under **Planning rates from run history** on Site settings (you need permission to change site settings to save):
+
+1. **Take out stops:** tick it for reviews to start with stops taken out, and for the scheduled recalculation to take them out.
+2. **Recalculate on a schedule:** tick it for Pulaski to work out every line's planning rates from run history on its own, **Every** so many days (7 to start with), over the runs that ended in the last so many days (90). Below it, *Last recalculated* says when that last ran.
+3. **Propose changes over, %:** a rate is proposed only when it moves the calculated rate by more than this (5% to start with), or would change its basis.
+4. **Accept small changes without review:** tick it, and set **Up to, %** (10 to start with), for proposals within that change to rates already from run history to be accepted at once.
+5. Click **Save planning rate settings**.
+
+**In detail**
+
+- **Nothing is accepted without review unless you tick it.** Even then, a line still planning with its ideal rate has its first rate from run history reviewed, and a bigger change waits. A modified rate always stays in force; accepting changes only the calculated rate.
+- **What it does** is what **Work it out** does, as *system*, for each line's planning rates at the site: with too little history it proposes nothing. A newer proposal replaces the one waiting (*Replaced*). Proposals are on [Planning rates](#review-proposed-planning-rates).
+- **When:** the API checks every 15 minutes which sites are due (`RunStandards:Refresh:PollMinutes`; `RunStandards:Refresh:Enabled` false switches it off everywhere). Everything is off to start with.
+- Each save is recorded as `pulaski.site.rate_refresh_settings_set.v1`; proposals as `pulaski.run_standard.proposed.v1`, rejections as `…proposal_rejected.v1`, and accepting as `…recalculated.v1`.
+
+### Review proposed planning rates
+
+**Configure → Planning rates** lists the site's proposals: those waiting first, then those decided in the last 30 days.
+
+1. Each row shows the line and material, the **Proposed** rate and how far it is from the calculated rate when proposed, the **Calculated now** rate with its basis (and a modified rate in force), what it was worked out from (basis, runs, hours, stops taken out, days) and, for one waiting, why it waits for review.
+2. Click **Accept** to make it the calculated planning rate, or **Reject…**, optionally say why, and click **Reject**. The rate stays as it was.
+
+**In detail**
+
+- **Checked again when you accept.** The rate is worked out again over the same days and basis. If runs ended since and it changed, Pulaski says so and nothing changes: review it on the material, or wait for the next proposal.
+- **Who:** anyone who can see materials or the schedule sees the list; accepting and rejecting needs permission to set the planning rate (Planner, to start with).
 
 ### Labels and printers
 
@@ -2376,7 +2449,7 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 - **Sending once.** The edge numbers everything it buffers and Pulaski applies each number once, so forwarding again after a failure changes nothing. A new buffer file starts a new numbering, which Pulaski recognises.
 - **What the edge forwards:** a tag's value when it changes, when it is lost, and the last value seen when the tag is newly bound; a speed at most every 5 seconds; a process value when it moves past its deadband, and at least once a minute while it holds steady or stays within it (`Edge:ProcessValueHeartbeat`). A connection it hears from without a birth certificate is asked for one (a Sparkplug *rebirth*), as is every node its tags name when it connects, so an idle machine's state is known.
 - **Stop codes** are latched: a machine that clears its code once acknowledged keeps it in Pulaski until it runs (Execute) again.
-- **Counts** are taken across the rollover value; a counter going back without one is taken as reset to zero. Machine counts go into the run open on the equipment but don't change the job's reported quantities yet: production is still reported on the Floor.
+- **Counts** are taken across the rollover value; a counter going back without one is taken as reset to zero. Machine counts don't change the job's reported quantities by themselves: a [report from the machine](#report-production-from-the-machine) takes them, once the operator has checked them.
 - **Switching a node off** stops Pulaski taking its data and the edge collecting. Switching a tag or connection off stops it being read.
 - **Delete behavior.** Deleting a node deactivates it and all its connections and tags. Deleting a tag physically removes its binding, so it disappears from the Tags tab; this works whether the tag is active or inactive. Any quality characteristic using it as an automatic source is kept but detached. The deletion event and historical machine data are retained. Add a new binding if the signal is needed again. Reactivating a node later does not reactivate its connections or tags; switch those back on individually if needed.
 - **Without Pulaski**, the edge starts with the last configuration it kept.
@@ -2493,7 +2566,7 @@ A dash means there is nothing to measure that figure against, such as performanc
 - **Scheduled time** is what the equipment's [shift schedule](#16-shift-schedules) gives it: its shifts, counted towards the day they start on; equipment without shifts (around the clock) is scheduled the whole site-local day. Time outside its shifts isn't counted, and neither is time still to come.
 - **How each moment counts:** in a unit mode that isn't production time (Maintenance, Manual) it is *non-production*; in a stop it counts by its reason's class: **planned** reasons (setup, changeover, cleaning) are planned stops, **runtime** reasons are run time, **downtime** reasons and uncoded stops are down. A micro-stop is run time. Otherwise executing is run time and anything else is down. Before a machine has sent anything, or while its signal is lost, it is down with *no signal*. Time in a job that counts as planned downtime (planned maintenance) is a planned stop.
 - **Planned time** is scheduled time less non-production modes and planned stops. **Availability** = run time ÷ planned time.
-- **Performance** = output at the ideal rate ÷ run time in jobs. The ideal rate is the line's capability for the material when the run started. Run time with no job running isn't in it (its output can't be reported). **Quality** = good ÷ good and scrap. **OEE** = availability × performance × quality. Output comes from production reports; machine counts aren't reports and aren't used.
+- **Performance** = output at the ideal rate ÷ run time in jobs. The ideal rate is the line's capability for the material when the run started. Run time with no job running isn't in it (its output can't be reported). **Quality** = good ÷ good and scrap. **OEE** = availability × performance × quality. Output comes from production reports, including reports taken from the machine; machine counts nobody has reported aren't used.
 - **Several products** add up by their time at the ideal rate (quantity ÷ ideal rate), so different units don't matter. A run without an ideal rate (no capability, or a rate whose unit doesn't convert) is listed in a note above the tables; its output shows in the product's good and scrap but not in performance or quality.
 - **Lines:** a line set to take its state from its machines takes its time from theirs: in series, at each moment the worst (down, then planned, then non-production, then run); in parallel, the best; or its constraint machine's. Its jobs and reports are its own, so the line has full OEE; a machine below it that runs no jobs has availability only.
 - **Stops** count the stops that started in the period (a stop already going on when it began isn't counted again); micro-stops are counted separately.
@@ -2583,9 +2656,9 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 
 - **Labor:** people from HR or the ERP come from a file or a connection; schedules are in UTC, not the site's time, and a failed scheduled run waits for the next one. Qualifications are only added by an import, never revoked, and SCIM users carry none. Terminals don't take production or downtime reports and can't sign anyone in as a user. Planned breaks are never recorded on their own. A grant that expired before its notice went out (say, while e-mail was off) gets no notice. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
 - **Materials import** from CSV or B2MML files, from an OData, REST, SOAP or PostgreSQL connection on demand or on a schedule, or one item at a time through the API. Connections can't sign in with OAuth, and there are no adapters for label printing. Capabilities import from CSV only. Pulaski exports materials and classes as B2MML, but not lots; B2MML sublots, assemblies and other languages aren't read.
-- **Planning rates from run history are worked out when you ask,** not kept up to date on their own, and use run time as recorded: stops inside a run aren't taken out.
-- **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts don't replace production reports, so OEE uses only what is reported. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
-- **Production is reported by hand.** Machine counts are recorded but aren't production reports. A wrong report is reversed whole and entered again: there is no editing a report's quantities in place.
+- **Planning rates from run history:** the scheduled recalculation looks at every line of a site at once, on whole days; it can't be limited to some lines or materials, or run at a set time of day. Stops can be taken out only on lines that record machine state, and a proposal accepted without review is worked out once, not again when it is accepted.
+- **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
+- **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
 - **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Only a number attribute standing for a quality characteristic is checked against specification limits. Balances' attribute values aren't in the values file.

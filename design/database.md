@@ -108,6 +108,7 @@ One self-referencing table holds enterprise, sites, areas, work centers (lines),
 | `state_derivation` | text | no | Where its state comes from (D-050): `own_tags` (default, its own state tag), `series` (the worst state of its machines), `parallel` (the best) or `constraint_machine`. Set on the Equipment screen; nothing reads it until machine data is collected. |
 | `constraint_equipment_id` | uuid → equipment | yes | The constraint machine: set exactly when `state_derivation = 'constraint_machine'` (`equipment_derivation_ck`), and equipment below this one that tracks state. |
 | `micro_stop_threshold` | interval | no | Stops shorter than this are micro-stops (D-050): logged, not queued for coding, not availability loss. 0 to 60 minutes (`equipment_micro_stop_ck`), default 5. |
+| `production_counter_equipment_id` | uuid → equipment | yes | Where a line's output is counted for reports from the machine (#27, D-097): itself or equipment below it. Null: its own active `processed_count` tag, else the only equipment below with one. |
 | `machine_profile_id` | uuid → machine_profile | yes | The machine profile its state and stop codes are read with (D-050). Only equipment that tracks state takes one, of its own site. |
 | `time_zone` | text | yes | IANA zone, required on sites. Shift times and reports use it. |
 | `is_active` | boolean | no | False when retired. |
@@ -557,6 +558,7 @@ The list of which material can run on which equipment. A production job may only
 | `is_preferred` | boolean | no | Marks the preferred line for the material. Informational; Pulaski never picks a line (D-014). |
 | `batch_size` | qty | yes | The line's own batch size in the material's base unit (D-065); null uses the material's `batch_size`. Set only for a material made in batches; the rule stays the material's. Planning, moves, replacements and reports on the line use it. |
 | `batch_tolerance_pct` | numeric(5,2) | yes | The line's own batch tolerance, 0 to 50 percent (#85, D-075); null uses the material's `batch_tolerance_pct`. Set only for a material made in batches; counts under the near rule. Reports and partial batches on the line use it. |
+| `units_per_count` | numeric(18,6) | yes | Base units of the material one machine count makes on the line, after the tag's scale (#27, D-097); null is 1. Greater than zero (`capability_units_per_count_ck`). Reports from the machine use the capability in force when the run started. |
 | `effective_from` | timestamptz | no | When the capability starts (included). |
 | `effective_to` | timestamptz | yes | When it stops applying (not included); null means open-ended. Later than `effective_from`. Periods for the same equipment and material may not overlap (`capability_no_overlap`). |
 
@@ -1069,7 +1071,7 @@ The rate the projection uses: runtime = remaining quantity ÷ effective rate. Hi
 | `material_id` | uuid → material | no | The material. |
 | `uom_id` | uuid → uom | no | The rate is this unit per hour. Follows the capability's rate unit while the basis is `ideal_rate` and no modified rate is set. |
 | `calculated_rate_per_hour` | numeric(18,6) | no | Written only by Pulaski: from the capability's ideal rate, recalculated when that changes while the basis is `ideal_rate` (D-034); or the rate from run history a planner reviewed and accepted (D-045). Positive. |
-| `calculation_basis` | text | no | `ideal_rate` or `run_history`. A `run_history` rate doesn't follow the ideal rate until it is put back to `ideal_rate`. |
+| `calculation_basis` | text | no | `ideal_rate`, `run_history` or `run_history_net` (from run history with the stops inside runs taken out, #70, D-098). A rate from run history doesn't follow the ideal rate until it is put back to `ideal_rate`. |
 | `calculated_at` | timestamptz | no | When it was last calculated. |
 | `modified_rate_per_hour` | numeric(18,6) | yes | Set by a person. While set it is the gold standard; recalculation never overwrites it. |
 | `modified_at` | timestamptz | yes | When modified. Set together with the rate. |
@@ -1078,6 +1080,53 @@ The rate the projection uses: runtime = remaining quantity ÷ effective rate. Hi
 | `rate_source` | text | no | Generated: `modified` when a modified rate is set, otherwise `calculated`. |
 | `effective_rate_per_hour` | numeric(18,6) | no | Generated: the modified rate if set, otherwise the calculated one. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.rate_refresh_settings — how a site keeps planning rates from run history current (D-098) · *In use*
+
+One row per site, made on its first save; without one the defaults apply. Saved on Configure → Site settings (`site_settings.manage`).
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key; the site. |
+| `take_out_stops` | boolean | no | Reviews open with stops taken out, and the scheduled recalculation takes them out. Default false. |
+| `is_scheduled` | boolean | no | The scheduled recalculation proposes rates. Default false. |
+| `every_days` | smallint | no | How often, 1 to 90 days. Default 7. |
+| `window_days` | smallint | no | Runs that ended in this many days, 7 to 365. Default 90. |
+| `threshold_pct` | numeric(5,2) | no | Only changes of more than this, in percent of the calculated rate (or a change of basis), are proposed. 0 to 100; default 5. |
+| `auto_accept` | boolean | no | Proposals within `auto_accept_limit_pct` for rates already from run history are accepted without review. Needs `is_scheduled` (`rate_refresh_auto_ck`). Default false. |
+| `auto_accept_limit_pct` | numeric(5,2) | no | The largest change accepted without review, more than 0 and at most 100. Default 10. |
+| `updated_at` | timestamptz | no | See conventions. |
+
+### core.rate_refresh — when a site's planning rates were last recalculated (D-098) · *In use*
+
+Its own row, so recalculating never changes the settings' version.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key; the site. |
+| `refreshed_at` | timestamptz | no | When the last scheduled recalculation started; the site is due again `every_days` after it. |
+
+### core.run_standard_proposal — planning rates proposed by the scheduled recalculation (D-098) · *In use*
+
+What the recalculation worked out, kept until it is decided. At most one `pending` per run standard (`run_standard_proposal_pending_uq`); a newer proposal makes the older one `superseded`. Accepting works the rate out again and writes the run standard (`…recalculated.v1`); the row keeps what was proposed.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `run_standard_id` | uuid → run_standard | no | The planning rate it is for. |
+| `proposed_rate_per_hour` | numeric(18,6) | no | The rate the run history gave. Positive. |
+| `uom_id` | uuid → uom | no | The run standard's unit when proposed. |
+| `calculation_basis` | text | no | `run_history` or `run_history_net`. |
+| `window_days`, `window_from`, `window_to` | smallint, timestamptz | no | The runs that ended in this window were looked at. |
+| `used_runs`, `used_hours`, `used_good_qty` | integer, numeric | no | What the rate was worked out from; hours are running hours for `run_history_net`. |
+| `stopped_hours` | numeric(12,2) | no | The used runs' stopped hours (taken out for `run_history_net`). |
+| `calculated_rate_per_hour`, `effective_rate_per_hour` | numeric(18,6) | no | The run standard's rates when proposed. |
+| `review_reason` | text | yes | Why it waits for review rather than being accepted by the site's opt-in. |
+| `status` | text | no | `pending`, `accepted`, `auto_accepted`, `rejected` or `superseded`. |
+| `proposed_at` | timestamptz | no | When proposed. Indexed. |
+| `decided_at`, `decided_by` | timestamptz, text | yes | When and by whom it was decided (`system` for one accepted without review or replaced by the recalculation); set exactly when not pending (`run_standard_proposal_decided_ck`). |
+| `decision_note` | text | yes | Why it was rejected, at most 1000 characters. |
+| `updated_at` | timestamptz | no | See conventions. |
 
 ### core.changeover_rule — the changeover matrix (D-015) · *In use*
 
@@ -1656,9 +1705,9 @@ Raised and cleared by machine data ingest from code-valued alarm and warning tag
 | `message` | text | yes | The machine profile's message for the number (`core.machine_profile_code`, kind `alarm` or `warning`), as it was when raised. |
 | `equipment_tag_id` | uuid → equipment_tag | yes | The tag that raised it, so each of a machine's alarm words clears on its own. |
 
-### ts.production_count — count deltas · *In use (operator reports)*
+### ts.production_count — count deltas · *In use (operator reports, machine counts)*
 
-Deltas calculated at the edge, with rollover handled there; the raw counter is kept for reconciliation. Operator reports (D-035) write a `processed` row for good plus scrap and, with scrap, a `defective` row for the scrap, in the job's unit; good is processed minus defective. A report's rows carry its `report_id` (the processed row's id, D-063); reversing it adds a `correction` row per row, at the same `occurred_at` with the opposite quantity, so every total that sums the rows sees it as never made. Reports recorded before 0031 have no `report_id` and aren't reversed whole.
+Deltas calculated at the edge, with rollover handled there; the raw counter is kept for reconciliation. Operator reports (D-035) write a `processed` row for good plus scrap and, with scrap, a `defective` row for the scrap, in the job's unit; good is processed minus defective. A report's rows carry its `report_id` (the processed row's id, D-063); reversing it adds a `correction` row per row, at the same `occurred_at` with the opposite quantity, so every total that sums the rows sees it as never made. Reports recorded before 0031 have no `report_id` and aren't reversed whole. A report taken from the machine (#27, D-097) is an `operator` report whose rows carry `machine_through`; the machine rows themselves stay as they are.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1671,13 +1720,14 @@ Deltas calculated at the edge, with rollover handled there; the raw counter is k
 | `raw_counter` | bigint | yes | The counter value read. |
 | `uom_id` | uuid → uom | yes | Unit. |
 | `scrap_reason_code_id` | uuid → reason_code | yes | Why, for defective counts. |
-| `source` | text | no | `machine` (from an edge, D-050: not a production report, and changes no run's quantities yet), `operator` or `correction`. |
+| `source` | text | no | `machine` (from an edge, D-050: not a production report, and changes no run's quantities; a report from the machine takes them), `operator` or `correction`. |
 | `corrects_id` | uuid | yes | For corrections: the row being offset. |
 | `report_id` | uuid | yes | The report the row belongs to (D-063): its processed row's id, on that row, its defective row and their corrections. Indexed. |
 | `job_id` | uuid | yes | The run's job. No FK, as for `run_id`. |
 | `recorded_at` | timestamptz | no | When it was entered. Later than the run's end for a late report. |
 | `actor_id` | text | yes | Who reported it (issuer\|subject, as on `evt.event`). |
 | `comment` | text | yes | The reporter's comment, at most 1000 characters. |
+| `machine_through` | timestamptz | yes | A report from the machine (#27, D-097): the latest machine count at the run's counter it took. The next report from the machine in the run must reach past the latest one not reversed. |
 
 ### ts.process_value — high-rate telemetry · *In use (D-071)*
 

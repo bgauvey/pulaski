@@ -50,6 +50,23 @@ public static class FloorView
         CanReopen: job.Status == "completed" && job.WorkOrderStatus != "closed",
         CanReport: job.JobType == "production" && job.Status is ("running" or "paused" or "completed") && job.Runs.Count > 0);
 
+    /// <summary>Quantities typed as <c>1000, 998.5</c> (#80: batch weights); null when one isn't a positive number, so nothing is dropped unseen.</summary>
+    public static IReadOnlyList<decimal>? ParseQuantities(string? text)
+    {
+        var quantities = new List<decimal>();
+        foreach (var part in (text ?? "").Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!decimal.TryParse(part, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var q) || q <= 0)
+            {
+                return null;
+            }
+
+            quantities.Add(q);
+        }
+
+        return quantities;
+    }
+
     public static string Qty(decimal? value) =>
         value is { } v ? Math.Round(v, 3).ToString("#,0.###", CultureInfo.InvariantCulture) : "—";
 }

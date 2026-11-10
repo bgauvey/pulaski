@@ -1391,7 +1391,7 @@ The job page lists the report as reversed (correction rows aren't listed). Repor
 
 **Also fixed.** Production by shift (D-044) now leaves out machine counts, as D-050 intended.
 
-**Not done.** Editing a report in place. Earlier moves, holds and shipments, corrections, packing, balance merges and chain undo came with D-077.
+**Not done.** Correcting a report's figures came with D-096. Earlier moves, holds and shipments, corrections, packing, balance merges and chain undo came with D-077.
 
 ## Lot allocations and recommendations (D-064, proposed)
 
@@ -2508,6 +2508,85 @@ longer grant, locked `SKIP LOCKED`; an e-mail to the person (their user's addres
 
 **Not done:** production or downtime reporting and user sign-in at terminals; planned breaks recorded automatically; notices for grants
 that already expired unnoticed; a terminal or person across sites beyond listing.
+
+## Correcting a production report (D-096, proposed)
+
+Issue #80. A wrong report could only be reversed whole and entered again, two actions with a window between them.
+
+**Reverse and re-report, atomically** (the user's choice). `CorrectProductionReportCommand` (`POST /api/jobs/{id}/production/{reportId}/correct`,
+`production.correct`) runs in one transaction: `ReverseProductionReportHandler.ReverseAsync` (the reversal's transaction-scoped core, D-063) takes
+the report back whole, then `ProductionReporter.ReportAsync` reports the new figures into the same run, at the report's own time (back-dated when
+that is more than a minute ago, so the 31-day limit applies), in its unit, to where its lots were (or the given location when it made none). Every
+report rule applies again: the rate cap, whole batches, partial batch, backflush, automated consumption put back and taken again. If anything
+fails, nothing changes. The good output goes into new lots; the old ones are cancelled. One `job.production_corrected` event names the old and the
+new report, the figures before and after, the lots taken back and made, and the reason.
+
+**What may change** (the user's choice): good, scrap, the scrap reason and batch weights (and a partial batch). Not the run or the time;
+a correction with the same figures is refused. On the job page, **Correct…** beside **Reverse…**.
+
+**Not done:** keeping the old lot numbers; correcting a report's time or moving it to another run or job.
+
+## Machine counts in production reporting (D-097, proposed)
+
+Issue #27. The edge has recorded machine counts since D-050 (`ts.production_count`, source `machine`), but they never became output: reports
+were typed in, and OEE and production by shift read only reports.
+
+**Prefill, the operator confirms** (the user's choice). Nothing reports counts by itself. `GetMachineCountsQuery` (`GET /api/jobs/{id}/machine-counts
+?runId=`, Floor view) gives, for the run named (else the open one, else the latest), what its line's counter counted since the run's last standing
+report from the machine and over the whole run, next to what was reported into it. The report form's **From the machine** fills good and scrap in
+the material's base unit; the operator checks them and reports as usual, through every report rule. Counts are summed by time over the run
+(`occurred_at` from the run's start to its end or now) at the counter, not by `run_id`, because the edge's rows carry a run only for equipment that
+has one open itself, and runs are on the line.
+
+**Where it is counted: chosen per line** (the user's choice). `core.equipment.production_counter_equipment_id`: the line itself or equipment below it
+(checked through the closure), saved with the machine data (`SetEquipmentMachineDataCommand.ProductionCounterEquipmentId`). Null: the line's own
+active `processed_count` tag, else the only equipment below with one; several and none chosen, or none at all, offers nothing and says why.
+
+**Units per count: per material on the line** (the user's choice). `core.equipment_capability.units_per_count` (null = 1): base units of the material
+one count makes, after the tag's `scale_factor`. The capability in force when the run started is used, as for the ideal rate; without one nothing is
+offered. `MachineCounts.Output`: good = (processed − defective) × units, scrap = defective × units; the defective count is the scrapped part of the
+processed one.
+
+**Traceable and never twice.** A report from the machine stores `machine_through` (the latest count it took) on its `ts.production_count` rows and in
+its event. `ProductionReporter` refuses one whose `MachineThrough` doesn't pass the run's coverage (the latest `machine_through` of its reports not
+reversed, `ExecutionSql.MachineCoverage`) or lies outside the run (`MachineCounts.EnsureCovers`); the run is locked, so two at once serialize. A
+correction (D-096) keeps the old report's coverage (`KeepsMachineCoverage`); reversing the latest one offers its counts again. Duplicate ingestion
+was already skipped by stream sequence (D-050). Reconciliation: the machine's run total beside the run's reported good and scrap.
+
+**Not done:** reporting counts without an operator; batch materials (reported by batch weight); a units-per-count column in the capabilities CSV;
+offering again the counts of a reversed report that wasn't the run's latest.
+
+## Stops out of run-history rates, scheduled recalculation (D-098, proposed)
+
+Issue #70. Rates from run history (D-045) divided good output by run time as recorded, so stops inside a run lowered the rate, and they were
+worked out only when a planner asked.
+
+**Stops out: down and planned** (the user's choice). With stops taken out, each run's hours lose the time `EquipmentUses` (D-052, shared with the
+OEE report) classifies as anything but `TimeUse.Run` inside the run: down (uncoded stops and no signal included), planned stops and unit modes
+that aren't production. Micro-stops are run time (D-050), so they stay in as lost speed. A line deriving its state takes its machines'. Pure:
+`RunHistoryRate.StoppedHours`, `RunSample.StoppedHours`, `Calculate(…, takeOutStops)`; a run with under 30 minutes of running, or without known stops,
+is left out. A line that doesn't track state can't take stops out: the review says so and uses run time.
+
+**Per review, site default** (the user's choice). The review has *Take out stops*, opening on `core.rate_refresh_settings.take_out_stops`;
+accepting records the basis on the run standard: `run_history` or the new `run_history_net` (migration 0063 widens the check), and in the
+`…recalculated.v1` event with the stopped hours. `AdoptHistoryRateCommand.TakeOutStops` works it out the same way again under the lock.
+
+**Stored proposals, a review list** (the user's choice). A site can switch on the scheduled recalculation (`is_scheduled`, `every_days`,
+`window_days`, `threshold_pct`). `RateRefreshService` (API hosted service, `RunStandards:Refresh:*`) runs `RateRefreshRunner` for due sites
+(`RateRefresh.IsDue`, `core.rate_refresh`): each run standard of the site's active lines is worked out with the site's basis; a rate that moves the
+calculated rate by more than the threshold, or changes its basis (`RateRefresh.IsWorthProposing`), becomes a `core.run_standard_proposal` (one
+pending per standard; a newer one supersedes it), event `run_standard.proposed`. Configure → Planning rates lists them, and the material's line
+row shows *proposed*. Accepting (`AcceptRateProposalCommand`, `rate.modify`) works the history out again over the proposal's days and basis and
+refuses (409) a different rate, as D-045 does; rejecting keeps the rate. `RunHistory.AdoptAsync` is shared by every acceptance and decides the
+standard's pending proposal (accepted, else superseded).
+
+**Opt-in auto-accept within a limit** (the user's choice). With `auto_accept` (needs `is_scheduled`), a proposal is accepted at once as *system*
+(`auto_accepted`) only when the standard is already from run history and the change is within `auto_accept_limit_pct`
+(`RateRefresh.WhyReviewed`); the first history rate and bigger changes wait, with the reason stored. A modified rate stays in force throughout:
+only the calculated rate changes. D-045's "no worker" is replaced by this one.
+
+**Not done:** limiting the recalculation to some lines or materials or a time of day; re-working an auto-accepted proposal at accept time (it is
+worked out once, then accepted under the lock).
 
 ## Application architecture
 

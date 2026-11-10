@@ -81,7 +81,10 @@ internal static class MachineDataEndpoints
         routes.MapPut("/equipment/{id:guid}/machine-data", async Task<Ok<VersionResponse>> (
             Guid id, SetEquipmentMachineDataRequest request, ICommandHandler<SetEquipmentMachineDataCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new SetEquipmentMachineDataCommand(
-                id, request.Version, request.MachineProfileId, request.StateDerivation, request.ConstraintEquipmentId, request.MicroStopThresholdSeconds), ct)))
+                id, request.Version, request.MachineProfileId, request.StateDerivation, request.ConstraintEquipmentId, request.MicroStopThresholdSeconds)
+            {
+                ProductionCounterEquipmentId = request.ProductionCounterEquipmentId,
+            }, ct)))
         .WithTags("Machine data")
         .RequirePermission(Permissions.Equipment, Site.Of(SiteOf.Equipment));
 

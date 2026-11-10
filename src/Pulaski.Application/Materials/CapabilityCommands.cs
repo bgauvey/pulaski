@@ -21,7 +21,8 @@ public sealed record AddCapabilityCommand(
     DateTimeOffset? EffectiveFrom,
     DateTimeOffset? EffectiveTo,
     decimal? BatchSize = null,
-    decimal? BatchTolerancePct = null) : ICommand<CapabilityResponse>;
+    decimal? BatchTolerancePct = null,
+    decimal? UnitsPerCount = null) : ICommand<CapabilityResponse>;
 
 /// <summary>New values for a capability; a new ideal rate recalculates the planning rate while it is still based on it.</summary>
 public sealed record UpdateCapabilityCommand(
@@ -35,7 +36,8 @@ public sealed record UpdateCapabilityCommand(
     DateTimeOffset EffectiveFrom,
     DateTimeOffset? EffectiveTo,
     decimal? BatchSize = null,
-    decimal? BatchTolerancePct = null) : ICommand<CapabilityResponse>;
+    decimal? BatchTolerancePct = null,
+    decimal? UnitsPerCount = null) : ICommand<CapabilityResponse>;
 
 /// <summary>Stops a capability now. It is never deleted.</summary>
 public sealed record EndCapabilityCommand(Guid Id, long ExpectedVersion) : ICommand<CapabilityResponse>;
@@ -53,7 +55,7 @@ internal sealed class CapabilityWrites(
 
     public static CapabilityChange Change(
         decimal rate, Guid rateUomId, int? changeoverMinutes, decimal? crewSize, bool isPreferred, DateTimeOffset from, DateTimeOffset? to,
-        decimal? batchSize = null, decimal? batchTolerancePct = null)
+        decimal? batchSize = null, decimal? batchTolerancePct = null, decimal? unitsPerCount = null)
     {
         new Validator()
             .Require(rate > 0, "IdealRatePerHour", "Must be greater than zero.")
@@ -63,9 +65,10 @@ internal sealed class CapabilityWrites(
             .Require(to is null || to > from, "EffectiveTo", "Must be after the start.")
             .Require(batchSize is null or > 0, "BatchSize", "Greater than zero, or blank for the material's batch size.")
             .Require(batchTolerancePct is null or (>= 0 and <= 50), "BatchTolerancePct", "Between 0 and 50 percent, or blank for the material's tolerance.")
+            .Require(unitsPerCount is null or > 0, "UnitsPerCount", "Greater than zero, or blank for one.")
             .ThrowIfInvalid();
         return new CapabilityChange(
-            rate, rateUomId, changeoverMinutes is { } m ? TimeSpan.FromMinutes(m) : null, crewSize, isPreferred, from, to, batchSize, batchTolerancePct);
+            rate, rateUomId, changeoverMinutes is { } m ? TimeSpan.FromMinutes(m) : null, crewSize, isPreferred, from, to, batchSize, batchTolerancePct, unitsPerCount);
     }
 
     /// <summary>The line, locked first (D-017), so the change serializes with the scheduling commands that check eligibility.</summary>
@@ -212,7 +215,7 @@ internal sealed class AddCapabilityHandler(
         var now = timeProvider.GetUtcNow();
         var change = CapabilityWrites.Change(
             command.IdealRatePerHour, command.RateUomId, command.StandardChangeoverMinutes, command.StandardCrewSize, command.IsPreferred,
-            command.EffectiveFrom ?? now, command.EffectiveTo, command.BatchSize, command.BatchTolerancePct);
+            command.EffectiveFrom ?? now, command.EffectiveTo, command.BatchSize, command.BatchTolerancePct, command.UnitsPerCount);
         var writes = new CapabilityWrites(capabilities, materials, units, eventLog, events, ids);
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -263,7 +266,7 @@ internal sealed class UpdateCapabilityHandler(
         var now = timeProvider.GetUtcNow();
         var change = CapabilityWrites.Change(
             command.IdealRatePerHour, command.RateUomId, command.StandardChangeoverMinutes, command.StandardCrewSize, command.IsPreferred,
-            command.EffectiveFrom, command.EffectiveTo, command.BatchSize, command.BatchTolerancePct);
+            command.EffectiveFrom, command.EffectiveTo, command.BatchSize, command.BatchTolerancePct, command.UnitsPerCount);
         var writes = new CapabilityWrites(capabilities, materials, units, eventLog, events, ids);
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);

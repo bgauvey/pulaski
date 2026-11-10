@@ -143,7 +143,8 @@ internal sealed class ImportCapabilitiesHandler(
             current?.EffectiveFrom ?? from ?? now,
             until,
             row.BatchSize is { } batch ? batch.Value : current?.BatchSize,
-            row.BatchTolerancePct is { } tolerance ? tolerance.Value : current?.BatchTolerancePct);
+            row.BatchTolerancePct is { } tolerance ? tolerance.Value : current?.BatchTolerancePct,
+            current?.UnitsPerCount);
         await writes.MaterialForRateAsync(material.Id, unit.Id, current?.RateUomId, cancellationToken);
         var unitCode = await AddCapabilityHandler.UnitCodeAsync(units, unit.Id, cancellationToken);
 
