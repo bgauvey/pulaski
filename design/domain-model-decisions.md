@@ -2588,6 +2588,27 @@ only the calculated rate changes. D-045's "no worker" is replaced by this one.
 **Not done:** limiting the recalculation to some lines or materials or a time of day; re-working an auto-accepted proposal at accept time (it is
 worked out once, then accepted under the lock).
 
+## Statistical process control (D-099, proposed)
+
+Real-time SPC is v1 capability 7 (charter): control charts on inspections and process variables, with rule violations raised as alerts.
+D-085 recorded results and specifications and kept the drafted SPC columns for later. Built in pieces on `features/spc`; this entry grows
+with them.
+
+**Decided** (the user's choices):
+- **Limits per characteristic + material, optionally one line.** The same profile on two extruders often varies differently. The line's
+  own limits are used first, then the material's.
+- **Run rules chosen per characteristic** from Nelson's 1–8, defaulting to the Western Electric set (1–4).
+- **Limits from a baseline, reviewed, approved.** A period's subgroups (at least 20, a warning under 25) give limits; the reviewer may leave
+  out points and work them out again. Approving fixes them from a date (versioned, ended never deleted). Manual limits need a reason.
+  Permission `specs.manage`.
+
+**Chart statistics (piece 1).** Pure, in `Pulaski.Domain.Quality.Spc`. `ChartTypes` names the charts the drafted column allows (`xbar_r`,
+`xbar_s`, `i_mr`, `p`, `np`, `c`, `u`) and which fit a characteristic (`Problem`: individuals take one value, X-bar charts subgroups of 2–25;
+counts go on p, np, c or u). `ChartConstants` holds the published factors for n = 2–25 (A2, D3, D4, d2, A3, B3, B4, c4), tested against their
+definitions. `ControlLimits.Points` gives each subgroup's statistic and dispersion; `Compute` gives 3-sigma limits from a baseline, with sigma
+from the mean range, standard deviation or moving range within subgroups, never the overall spread. It leaves out unusable subgroups
+(and, for charts of one size, others) with why. Attribute lower limits stop at zero; p and u limits follow each sample's size (`At`).
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

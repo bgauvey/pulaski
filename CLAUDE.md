@@ -297,6 +297,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (column-level UPDATE). A number lot attribute may stand for a characteristic. `RejectLotCommand` writes off a held lot and, if made in a run,
   moves it good → scrap there (defective count at its effective time), which is how quality reaches OEE. Permissions `quality.view`,
   `quality.record`, `quality.decide`, `specs.manage`.
+- SPC (D-099, proposed, in pieces): limits per characteristic + material (+ optional line, which wins); run rules per characteristic
+  (Nelson 1–8, default 1–4); limits from a reviewed baseline (≥ 20 subgroups), approved and versioned. Pure statistics in
+  `Pulaski.Domain.Quality.Spc` (`ChartTypes`, `ChartConstants`, `ControlLimits.Points`/`Compute`/`At`).
 - Attribute values in bulk, certificate feed (D-086, proposed): `LotAttributeCsv` (lot_number, optional material_code, a column per attribute code;
   blank = unchanged, `(clear)` clears) → `ImportLotAttributeValuesCommand` (all or nothing, dry run ends uncommitted; locks lots in id order; writes
   through `LotAttributeWriter`, shared with the lot page). Export `values.csv` is the import format. Webhook feeds `erp` and `documents`
