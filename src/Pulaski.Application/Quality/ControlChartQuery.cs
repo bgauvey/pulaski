@@ -1,7 +1,6 @@
 using Pulaski.Application.Errors;
 using Pulaski.Application.Abstractions;
 using Pulaski.Contracts.Quality;
-using Pulaski.Domain.Quality.Spc;
 
 namespace Pulaski.Application.Quality;
 
@@ -34,52 +33,36 @@ internal sealed class GetControlChartHandler(IQualityReadStore store, TimeProvid
             samples = [.. samples.Skip(samples.Count - MaxPoints)];
         }
 
-        // Only limits worked out for the chart it has now count.
-        var limits = (await store.GetLimitsForMaterialAsync(query.CharacteristicId, query.MaterialId, cancellationToken))
-            .Where(l => l.ChartType == characteristic.ChartType && l.SubgroupSize == characteristic.SubgroupSize)
-            .ToList();
+        var limits = await store.GetLimitsForMaterialAsync(query.CharacteristicId, query.MaterialId, cancellationToken);
         var bySample = samples.ToDictionary(s => s.Subgroup.SampleId);
-        var points = ControlLimits.Points(characteristic.ChartType, samples.Select(s => s.Subgroup));
-        var used = new HashSet<Guid>();
-        var plotted = new List<ControlChartPointDto>();
-        foreach (var p in points)
+        var evaluated = SpcEvaluation.Evaluate(characteristic, samples, limits);
+        var used = evaluated.Where(e => e.Limit is not null).Select(e => e.Limit!.Id).ToHashSet();
+        var plotted = evaluated.Select(e =>
         {
-            var sample = bySample[p.SampleId];
-            var limit = ControlLimitPeriods.InForce(limits, sample.EquipmentId, p.At);
-            var (ucl, lcl) = limit is null ? (double.NaN, double.NaN) : ControlLimits.At(characteristic.ChartType, limit.Limits, p.Size);
-            if (limit is not null)
+            var sample = bySample[e.Point.SampleId];
+            var limit = e.Limit;
+            return new ControlChartPointDto
             {
-                used.Add(limit.Id);
-            }
-
-            plotted.Add(new ControlChartPointDto
-            {
-                SampleId = p.SampleId,
-                At = p.At,
-                Value = p.Value,
-                Dispersion = p.Dispersion,
-                Size = p.Size,
+                SampleId = e.Point.SampleId,
+                At = e.Point.At,
+                Value = e.Point.Value,
+                Dispersion = e.Point.Dispersion,
+                Size = e.Point.Size,
                 LineCode = sample.LineCode,
                 LotLabel = sample.LotLabel,
                 JobNumber = sample.JobNumber,
                 LimitId = limit?.Id,
                 Center = limit?.Limits.Center,
-                Ucl = limit is null ? null : ucl,
-                Lcl = limit is null ? null : lcl,
+                Ucl = limit is null ? null : e.Ucl,
+                Lcl = limit is null ? null : e.Lcl,
                 DispersionCenter = limit?.Limits.DispersionCenter,
                 DispersionUcl = limit?.Limits.DispersionUcl,
                 DispersionLcl = limit?.Limits.DispersionLcl,
-                IsBeyondLimits = limit is not null && (p.Value > ucl || p.Value < lcl),
-                IsDispersionBeyondLimits = limit?.Limits.DispersionUcl is { } du && p.Dispersion is { } d && (d > du || d < (limit.Limits.DispersionLcl ?? 0)),
-            });
-        }
-
-        // Run rules on the plotted statistic, each point against its own centre line and sigma.
-        var rulePoints = plotted.Select(p => p.Center is { } c && p.LimitId is not null
-            ? new RulePoint(p.Value, c, ControlLimits.Sigma(characteristic.ChartType, limits.First(l => l.Id == p.LimitId).Limits, p.Size))
-            : new RulePoint(p.Value, null, null)).ToList();
-        var broken = RunRules.Check(rulePoints, characteristic.RunRules);
-        plotted = [.. plotted.Select((p, i) => p with { Rules = broken[i] })];
+                IsBeyondLimits = e.IsBeyond,
+                IsDispersionBeyondLimits = e.IsDispersionBeyond,
+                Rules = e.Rules,
+            };
+        }).ToList();
 
         var limitDtos = (await store.ListLimitsAsync(query.CharacteristicId, now, cancellationToken)).Where(l => used.Contains(l.Id)).ToList();
         return new ControlChartDto
@@ -98,7 +81,7 @@ internal sealed class GetControlChartHandler(IQualityReadStore store, TimeProvid
             From = query.From,
             To = query.To,
             Points = plotted,
-            Unusable = samples.Count - points.Count,
+            Unusable = samples.Count - plotted.Count,
             IsTruncated = truncated,
             MaxPoints = MaxPoints,
             Limits = limitDtos,

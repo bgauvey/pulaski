@@ -2645,6 +2645,20 @@ zone runs. Trend (3) and alternation (4) look at values alone. Rules run on the 
 chart query and the baseline review return each point's `Rules`; the chart marks a point breaking rule 2–8 as a square in the warning colour,
 labelled with the rules' numbers. Characteristics → Change picks the rules.
 
+**Alerts (piece 5a).** Decided (the user's choices): **one open alert per chart** (site + characteristic + material + line), later breaks added to
+it; **closed in one step with a cause and the action**, by anyone with `quality.record` at the site; **never a lot hold** (holds stay with the
+specification's `hold_on_fail`, D-085); **events only**, no e-mail.
+- `SpcSignals.CheckAsync` runs in the result's recording transaction (`QualityRecorder`, so lot attributes too): it reads the result's chart back
+  `SpcEvaluation.LookBack` (16) results on exactly its line (`ListRuleWindowAsync`, the new result last among equals), evaluates them with
+  `SpcEvaluation.Evaluate` (shared with the chart query: points, limits in force for their line, `RunRules.Check`), and when the new result
+  completes a break against limits (the statistic's rules, plus rule 1 when its dispersion is beyond its limits) it upserts `core.spc_alert`
+  (`INSERT … ON CONFLICT` on `spc_alert_open_uq`: rules merged, breaks counted, first and last result kept), writes `ts.spc_violation`, and appends
+  `spc_alert.raised` (new) or `spc_alert.signalled` (added). The response carries `SpcRules` and `SpcAlertId`, and a note.
+- `CloseSpcAlertCommand` (`POST /api/quality/alerts/{id}/close?siteId=`) locks the alert, checks the cause is an active `spc_cause` reason
+  (its comment rule applying to the action), closes it and appends `spc_alert.closed`. `GET /api/quality/alerts?siteId=` lists open ones and
+  those closed in 30 days; `GET /api/quality/alerts/{id}?siteId=` adds the breaking results. Starter causes in `seed-reasons.sql`.
+- A back-dated result is judged by the results before it only; excluding a result never closes or changes an alert.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

@@ -952,6 +952,59 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_result_that_breaks_a_run_rule_raises_one_alert_per_chart_closed_with_a_cause()
+    {
+        var plant = await CreatePlantAsync();
+        CreatedResponse melt = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("ALR-" + _suffix, "Melt flow", null, "variable", null, 2));
+        var start = DateTimeOffset.UtcNow.AddHours(-20);
+        for (var i = 0; i < 20; i++)
+        {
+            await db.SendAsync(new Application.Quality.RecordQualityResultCommand(
+                plant.Site, melt.Id, null, plant.Job, start.AddMinutes(30 * i), [i % 2 == 0 ? 10m : 12m], null, null, "manual", null));
+        }
+
+        var review = await QueryAsync<Application.Quality.GetLimitBaselineQuery, Contracts.Quality.LimitBaselineDto>(
+            new Application.Quality.GetLimitBaselineQuery(melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow, []));
+        await db.SendAsync(new Application.Quality.ApproveControlLimitsCommand(
+            melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow, [], review.CenterLine!.Value, review.Ucl!.Value, review.Lcl!.Value, null, null));
+
+        // In control: nothing raised.
+        var fine = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [11m], null, null, "manual", null));
+        Assert.Empty(fine.SpcRules);
+        Assert.Null(fine.SpcAlertId);
+
+        // Beyond the limits: an alert is raised and the recorder is told.
+        var high = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [20m], null, null, "manual", null));
+        Assert.Contains(1, high.SpcRules);
+        Assert.Contains(high.Notes, n => n.Contains("an SPC alert was raised", StringComparison.Ordinal));
+
+        // Another break goes to the same open alert.
+        var again = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [19m], null, null, "manual", null));
+        Assert.Equal(high.SpcAlertId, again.SpcAlertId);
+        Assert.Contains(again.Notes, n => n.Contains("added to its open SPC alert", StringComparison.Ordinal));
+
+        var alerts = await QueryAsync<Application.Quality.ListSpcAlertsQuery, IReadOnlyList<Contracts.Quality.SpcAlertDto>>(new Application.Quality.ListSpcAlertsQuery(plant.Site));
+        var alert = Assert.Single(alerts);
+        Assert.Equal(("open", 2, ("ALR-" + _suffix).ToLowerInvariant(), "LINE-" + _suffix), (alert.Status, alert.Breaks, alert.CharacteristicCode.ToLowerInvariant(), alert.EquipmentCode));
+        var detail = await QueryAsync<Application.Quality.GetSpcAlertQuery, Contracts.Quality.SpcAlertDto>(new Application.Quality.GetSpcAlertQuery(plant.Site, alert.Id));
+        Assert.Equal(2, detail.Violations.Count);
+        Assert.Equal(plant.JobNumber, detail.Violations[0].JobNumber);
+
+        // Closing needs a cause and an action; afterwards the next break opens a new alert.
+        var cause = await ReasonAsync("spc_cause", "SETTING");
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new Application.Quality.CloseSpcAlertCommand(plant.Site, alert.Id, cause, " ")));
+        var closed = await db.SendAsync(new Application.Quality.CloseSpcAlertCommand(plant.Site, alert.Id, cause, "Barrel zone 3 reset to 210 °C"));
+        Assert.Equal(("closed", "Machine setting changed"), (closed.Status, closed.Cause));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new Application.Quality.CloseSpcAlertCommand(plant.Site, alert.Id, cause, "Again")));
+
+        var next = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [21m], null, null, "manual", null));
+        Assert.NotEqual(alert.Id, next.SpcAlertId);
+        await using var admin = await db.AdminDataSource.OpenConnectionAsync();
+        Assert.Equal(2, await admin.ExecuteScalarAsync<int>(
+            "SELECT count(*)::int FROM evt.event WHERE type = 'pulaski.spc_alert.raised.v1' AND subject = ANY(@Ids)", new { Ids = new[] { alert.Id, next.SpcAlertId!.Value } }));
+    }
+
+    [Fact]
     public async Task Merges_transfers_and_output_that_joined_a_silo_are_put_back_as_they_were()
     {
         var plant = await CreatePlantAsync();

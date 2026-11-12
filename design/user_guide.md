@@ -1576,7 +1576,8 @@ To change it later, click **New draft**: it starts as a copy of the released ver
    **Inspected** and how many were **Defective**.
 5. Choose the **Source** (**At the line** or **Laboratory**), check **Sampled at** and add a comment if needed.
 6. Click **Record**. Pulaski says whether the result is in specification. If it isn't and the characteristic holds the lot, it says the lot
-   was put on hold.
+   was put on hold. If the result makes its [control chart](#control-charts) signal (beyond the limits, or completing a run rule), it says so and
+   that an SPC alert was raised, or added to the one already open.
 
 From a lot's page, **Record a result** under **Quality** opens this form with the lot filled in.
 

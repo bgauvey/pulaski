@@ -19,12 +19,25 @@ public sealed class InMemoryQuality : IQualityRepository, IQualityReadStore
     private readonly Dictionary<Guid, (SpecItem Item, Guid VersionId)> _released = [];
     private readonly List<QualityResultRow> _results = [];
     private readonly List<ControlLimit> _limits = [];
+    private readonly List<SpcAlertDto> _alerts = [];
+    private readonly List<(SpcBreak Signal, Guid AlertId)> _violations = [];
     private long _next = 1;
 
     public Dictionary<Guid, string> Materials { get; } = [];
 
     /// <summary>Lines (equipment that runs jobs) by id, with their codes.</summary>
     public Dictionary<Guid, string> Lines { get; } = [];
+
+    public IReadOnlyList<SpcAlertDto> Alerts
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _alerts];
+            }
+        }
+    }
 
     public IReadOnlyList<ControlLimit> Limits
     {
@@ -401,4 +414,101 @@ public sealed class InMemoryQuality : IQualityRepository, IQualityReadStore
     public Task<(string MaterialCode, string? EquipmentCode, string? UomCode)> GetChartCodesAsync(
         Guid characteristicId, Guid materialId, Guid? equipmentId, CancellationToken cancellationToken) =>
         Task.FromResult((Materials.GetValueOrDefault(materialId) ?? "", equipmentId is { } e ? Lines.GetValueOrDefault(e) : null, (string?)null));
+
+    public Task<IReadOnlyList<ChartSample>> ListRuleWindowAsync(
+        Guid siteId, Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset at, Guid lastSampleId, int count, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<ChartSample>>([.. _results
+                .Where(r => r.SiteId == siteId && r.CharacteristicId == characteristicId && r.MaterialId == materialId && !r.IsExcluded
+                    && r.EquipmentId == equipmentId && r.OccurredAt <= at)
+                .OrderByDescending(r => r.OccurredAt).ThenByDescending(r => r.Id == lastSampleId).Take(count)
+                .OrderBy(r => r.OccurredAt).ThenBy(r => r.Id == lastSampleId)
+                .Select(r => new ChartSample(
+                    new SpcSubgroup(r.Id, r.OccurredAt, r.Measurement.Values?.Select(v => (double)v).ToList(), r.Measurement.Inspected, r.Measurement.Defects),
+                    r.EquipmentId, null, null, null))]);
+        }
+    }
+
+    public Task<IReadOnlyList<ControlLimit>> GetMaterialLimitsAsync(Guid characteristicId, Guid materialId, CancellationToken cancellationToken) =>
+        GetLimitsForMaterialAsync(characteristicId, materialId, cancellationToken);
+
+    public Task<(Guid AlertId, bool IsNew)> RaiseAlertAsync(SpcBreak signal, Guid newId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var i = _alerts.FindIndex(a => a.Status == "open" && a.SiteId == signal.SiteId && a.CharacteristicId == signal.CharacteristicId
+                && a.MaterialId == signal.MaterialId && a.EquipmentId == signal.EquipmentId);
+            if (i >= 0)
+            {
+                _alerts[i] = _alerts[i] with { Rules = [.. _alerts[i].Rules.Union(signal.Rules).Order()], Breaks = _alerts[i].Breaks + 1, LastSampleAt = signal.SampleAt };
+                return Task.FromResult((_alerts[i].Id, false));
+            }
+
+            _alerts.Add(new SpcAlertDto
+            {
+                Id = newId,
+                SiteId = signal.SiteId,
+                CharacteristicId = signal.CharacteristicId,
+                MaterialId = signal.MaterialId,
+                EquipmentId = signal.EquipmentId,
+                Rules = signal.Rules,
+                Breaks = 1,
+                FirstSampleAt = signal.SampleAt,
+                LastSampleAt = signal.SampleAt,
+                RaisedAt = at,
+            });
+            return Task.FromResult((newId, true));
+        }
+    }
+
+    public Task InsertViolationAsync(SpcBreak signal, Guid id, Guid alertId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _violations.Add((signal, alertId));
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<SpcAlertRecord?> GetAlertForUpdateAsync(Guid id, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_alerts.FirstOrDefault(a => a.Id == id) is { } a
+                ? new SpcAlertRecord(a.Id, a.SiteId, a.CharacteristicId, a.Status, a.Rules, a.Breaks)
+                : null);
+        }
+    }
+
+    public Task CloseAlertAsync(Guid id, Guid causeReasonId, string action, string by, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var i = _alerts.FindIndex(a => a.Id == id);
+            _alerts[i] = _alerts[i] with { Status = "closed", ClosedAt = at, ClosedBy = by, Action = action };
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<SpcAlertDto>> ListAlertsAsync(Guid siteId, DateTimeOffset closedSince, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<SpcAlertDto>>([.. _alerts.Where(a => a.SiteId == siteId && (a.Status == "open" || a.ClosedAt >= closedSince))]);
+        }
+    }
+
+    public Task<SpcAlertDto?> GetAlertAsync(Guid siteId, Guid id, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_alerts.FirstOrDefault(a => a.SiteId == siteId && a.Id == id) is { } a
+                ? a with { Violations = [.. _violations.Where(v => v.AlertId == id).Select(v => new SpcViolationDto { SampleId = v.Signal.SampleId, OccurredAt = v.Signal.SampleAt, Rules = v.Signal.Rules })] }
+                : null);
+        }
+    }
 }

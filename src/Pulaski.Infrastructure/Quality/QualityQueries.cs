@@ -211,7 +211,7 @@ internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityRead
         Guid siteId, Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, int limit, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        var rows = await connection.QueryAsync<ChartSampleRow>(new CommandDefinition(ChartSamples, new
+        var rows = await connection.QueryAsync<QualitySql.ChartSampleRow>(new CommandDefinition(ChartSamples, new
         {
             SiteId = siteId,
             CharacteristicId = characteristicId,
@@ -221,9 +221,7 @@ internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityRead
             To = windowEnd,
             Limit = limit,
         }, cancellationToken: cancellationToken));
-        return [.. rows.Select(r => new ChartSample(
-            new(r.SampleId, r.OccurredAt, r.MeasuredValues is { } v ? [.. v.Select(x => (double)x)] : null, r.InspectedCount, r.DefectCount),
-            r.EquipmentId, r.LineCode, r.LotLabel, r.JobNumber))];
+        return [.. rows.Select(r => r.ToSample())];
     }
 
     public async Task<IReadOnlyList<Domain.Quality.Spc.ControlLimit>> GetLimitsForMaterialAsync(Guid characteristicId, Guid materialId, CancellationToken cancellationToken)
@@ -242,24 +240,57 @@ internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityRead
         return (r.MaterialCode ?? throw new Application.Errors.NotFoundException($"Material {materialId} not found."), r.EquipmentCode, r.UomCode);
     }
 
-    private sealed class ChartSampleRow
-    {
-        public Guid SampleId { get; init; }
-        public DateTimeOffset OccurredAt { get; init; }
-        public decimal[]? MeasuredValues { get; init; }
-        public int? InspectedCount { get; init; }
-        public int? DefectCount { get; init; }
-        public Guid? EquipmentId { get; init; }
-        public string? LineCode { get; init; }
-        public string? LotLabel { get; init; }
-        public string? JobNumber { get; init; }
-    }
-
     private sealed class ChartCodesRow
     {
         public string? MaterialCode { get; init; }
         public string? EquipmentCode { get; init; }
         public string? UomCode { get; init; }
+    }
+
+    private const string AlertColumns = """
+        SELECT a.id, a.site_id, a.characteristic_id, c.code AS characteristic_code, c.name AS characteristic_name, a.material_id, m.code AS material_code,
+               a.equipment_id, e.code AS equipment_code, a.status, a.rules::int[] AS rules, a.breaks, a.first_sample_at, a.last_sample_at, a.raised_at,
+               a.closed_at, a.closed_by, r.name AS cause, a.action
+        FROM core.spc_alert a
+        JOIN core.quality_characteristic c ON c.id = a.characteristic_id
+        JOIN core.material m ON m.id = a.material_id
+        LEFT JOIN core.equipment e ON e.id = a.equipment_id
+        LEFT JOIN core.reason_code r ON r.id = a.cause_reason_code_id
+        """;
+
+    private const string ListAlerts = AlertColumns + "\nWHERE a.site_id = @SiteId AND (a.status = 'open' OR a.closed_at >= @Since)\nORDER BY (a.status = 'open') DESC, a.last_sample_at DESC";
+
+    private const string GetAlert = AlertColumns + "\nWHERE a.site_id = @SiteId AND a.id = @Id";
+
+    private const string AlertViolations = """
+        SELECT v.sample_id, v.occurred_at, v.rules::int[] AS rules, q.mean, q.inspected_count AS inspected, q.defect_count AS defects,
+               coalesce(l.lot_number, 'Balance at ' || loc.code) AS lot_label, j.job_number
+        FROM ts.spc_violation v
+        LEFT JOIN ts.quality_sample q ON q.id = v.sample_id AND q.occurred_at = v.occurred_at
+        LEFT JOIN core.lot l ON l.id = q.lot_id
+        LEFT JOIN core.equipment loc ON loc.id = l.location_equipment_id
+        LEFT JOIN core.job j ON j.id = q.job_id
+        WHERE v.alert_id = @Id
+        ORDER BY v.occurred_at, v.id
+        """;
+
+    public async Task<IReadOnlyList<SpcAlertDto>> ListAlertsAsync(Guid siteId, DateTimeOffset closedSince, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return (await connection.QueryAsync<SpcAlertDto>(new CommandDefinition(ListAlerts, new { SiteId = siteId, Since = closedSince }, cancellationToken: cancellationToken))).AsList();
+    }
+
+    public async Task<SpcAlertDto?> GetAlertAsync(Guid siteId, Guid id, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var alert = await connection.QuerySingleOrDefaultAsync<SpcAlertDto>(new CommandDefinition(GetAlert, new { SiteId = siteId, Id = id }, cancellationToken: cancellationToken));
+        if (alert is null)
+        {
+            return null;
+        }
+
+        var violations = await connection.QueryAsync<SpcViolationDto>(new CommandDefinition(AlertViolations, new { Id = id }, cancellationToken: cancellationToken));
+        return alert with { Violations = violations.AsList() };
     }
 
     private sealed class LimitListRow : QualitySql.LimitRow

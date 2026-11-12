@@ -79,6 +79,30 @@ public interface IQualityRepository
     /// <summary>Writes a period's end.</summary>
     Task EndLimitAsync(Guid id, DateTimeOffset endsAt, string? by, DateTimeOffset at, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The results a run rule looks back over (D-099): the <paramref name="count"/> latest of the characteristic's at the site for the material on
+    /// exactly this line (null: results without one) sampled at or before <paramref name="at"/>, not excluded, oldest first; ties put
+    /// <paramref name="lastSampleId"/> last.
+    /// </summary>
+    Task<IReadOnlyList<ChartSample>> ListRuleWindowAsync(
+        Guid siteId, Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset at, Guid lastSampleId, int count, CancellationToken cancellationToken);
+
+    /// <summary>Every period of limits of the characteristic for the material, any line, in the command's transaction.</summary>
+    Task<IReadOnlyList<ControlLimit>> GetMaterialLimitsAsync(Guid characteristicId, Guid materialId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Adds a break to its chart's open alert, or opens one (D-099), in one statement: one open alert per site, characteristic, material and
+    /// line. Returns the alert and whether it is new.
+    /// </summary>
+    Task<(Guid AlertId, bool IsNew)> RaiseAlertAsync(SpcBreak signal, Guid newId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    Task InsertViolationAsync(SpcBreak signal, Guid id, Guid alertId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>An alert, locked; null when there is none.</summary>
+    Task<SpcAlertRecord?> GetAlertForUpdateAsync(Guid id, CancellationToken cancellationToken);
+
+    Task CloseAlertAsync(Guid id, Guid causeReasonId, string action, string by, DateTimeOffset at, CancellationToken cancellationToken);
+
     /// <summary>A baseline's results, read in the command's transaction: see <see cref="IQualityReadStore.ListBaselineAsync"/>.</summary>
     Task<IReadOnlyList<SpcSubgroup>> ListBaselineAsync(Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken);
 }
@@ -128,6 +152,12 @@ public interface IQualityReadStore
     Task<(string MaterialCode, string? EquipmentCode, string? UomCode)> GetChartCodesAsync(
         Guid characteristicId, Guid materialId, Guid? equipmentId, CancellationToken cancellationToken);
 
+    /// <summary>The site's open alerts, and those closed since <paramref name="closedSince"/>, newest first.</summary>
+    Task<IReadOnlyList<SpcAlertDto>> ListAlertsAsync(Guid siteId, DateTimeOffset closedSince, CancellationToken cancellationToken);
+
+    /// <summary>An alert at the site with the results that broke its rules; null when there is none.</summary>
+    Task<SpcAlertDto?> GetAlertAsync(Guid siteId, Guid id, CancellationToken cancellationToken);
+
     /// <summary>The most results a baseline reads.</summary>
     const int MaxBaseline = 1000;
 }
@@ -144,6 +174,13 @@ public sealed record QualityResultFilter(
     DateTimeOffset? From = null,
     DateTimeOffset? To = null,
     int Limit = 500);
+
+/// <summary>A result that broke run rules: where it belongs (its chart) and which rules.</summary>
+public sealed record SpcBreak(
+    Guid SiteId, Guid CharacteristicId, Guid MaterialId, Guid? EquipmentId, Guid SampleId, DateTimeOffset SampleAt, IReadOnlyList<int> Rules);
+
+/// <summary>An alert as closing it needs it.</summary>
+public sealed record SpcAlertRecord(Guid Id, Guid SiteId, Guid CharacteristicId, string Status, IReadOnlyList<int> Rules, int Breaks);
 
 /// <summary>A result as a chart takes it: its subgroup, and where it was made.</summary>
 public sealed record ChartSample(SpcSubgroup Subgroup, Guid? EquipmentId, string? LineCode, string? LotLabel, string? JobNumber);

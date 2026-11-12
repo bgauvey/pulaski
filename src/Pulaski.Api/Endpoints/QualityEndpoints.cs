@@ -49,6 +49,22 @@ internal static class QualityEndpoints
             TypedResults.Ok(await handler.HandleAsync(new ListControlLimitsQuery(id), ct)))
         .RequireAny(null, Permissions.QualityView);
 
+        // SPC alerts (D-099): one open per chart, raised when a recorded result breaks a run rule; closed with a cause and the action taken.
+        quality.MapGet("/alerts", async Task<Ok<IReadOnlyList<SpcAlertDto>>> (
+            Guid siteId, IQueryHandler<ListSpcAlertsQuery, IReadOnlyList<SpcAlertDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListSpcAlertsQuery(siteId), ct)))
+        .RequireAny(Site.Query(), Permissions.QualityView);
+
+        quality.MapGet("/alerts/{id:guid}", async Task<Ok<SpcAlertDto>> (
+            Guid id, Guid siteId, IQueryHandler<GetSpcAlertQuery, SpcAlertDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetSpcAlertQuery(siteId, id), ct)))
+        .RequireAny(Site.Query(), Permissions.QualityView);
+
+        quality.MapPost("/alerts/{id:guid}/close", async Task<Ok<SpcAlertDto>> (
+            Guid id, Guid siteId, CloseSpcAlertRequest request, ICommandHandler<CloseSpcAlertCommand, SpcAlertDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CloseSpcAlertCommand(siteId, id, request.CauseReasonCodeId, request.Action), ct)))
+        .RequirePermission(Permissions.QualityRecord, Site.Query());
+
         // A control chart of results at a site (D-099), each point against the limits in force for it at its time.
         quality.MapGet("/characteristics/{id:guid}/chart", async Task<Ok<ControlChartDto>> (
             Guid id, Guid siteId, Guid materialId, Guid? equipmentId, DateTimeOffset from, DateTimeOffset to,

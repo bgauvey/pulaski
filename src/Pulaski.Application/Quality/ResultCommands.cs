@@ -83,6 +83,12 @@ internal sealed class QualityRecorder(
         await eventLog.AppendAsync(envelope, cancellationToken);
 
         var notes = new List<string>();
+        var (spcRules, alertId, isNewAlert) = await new SpcSignals(quality, eventLog, events, ids).CheckAsync(characteristic, row, cancellationToken);
+        if (spcRules.Count > 0)
+        {
+            notes.Add(SpcSignals.Note(characteristic, spcRules, isNewAlert));
+        }
+
         var held = false;
         if (inForce is { Item: var item } && conforms == false)
         {
@@ -107,6 +113,8 @@ internal sealed class QualityRecorder(
             Limits = inForce is { Item: var limits } ? QualityCheck.Limits(limits) : null,
             LotHeld = held,
             Notes = notes,
+            SpcRules = spcRules,
+            SpcAlertId = alertId,
         };
     }
 

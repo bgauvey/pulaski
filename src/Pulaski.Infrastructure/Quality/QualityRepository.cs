@@ -39,6 +39,23 @@ internal static class QualitySql
         LIMIT @Limit
         """;
 
+    internal sealed class ChartSampleRow
+    {
+        public Guid SampleId { get; init; }
+        public DateTimeOffset OccurredAt { get; init; }
+        public decimal[]? MeasuredValues { get; init; }
+        public int? InspectedCount { get; init; }
+        public int? DefectCount { get; init; }
+        public Guid? EquipmentId { get; init; }
+        public string? LineCode { get; init; }
+        public string? LotLabel { get; init; }
+        public string? JobNumber { get; init; }
+
+        public ChartSample ToSample() => new(
+            new(SampleId, OccurredAt, MeasuredValues is { } v ? [.. v.Select(x => (double)x)] : null, InspectedCount, DefectCount),
+            EquipmentId, LineCode, LotLabel, JobNumber);
+    }
+
     internal sealed class BaselineRow
     {
         public Guid SampleId { get; init; }
@@ -436,6 +453,116 @@ internal sealed class QualityRepository(DbSession session) : IQualityRepository
             To = windowEnd,
             Limit = IQualityReadStore.MaxBaseline,
         }, cancellationToken)).Select(r => r.ToSubgroup())];
+
+    // The latest results on exactly this line (or without one) up to a time, the new one last among equals.
+    private const string RuleWindow = """
+        SELECT * FROM (
+            SELECT q.id AS sample_id, q.occurred_at, q.measured_values, q.inspected_count, q.defect_count, q.equipment_id,
+                   NULL::text AS line_code, NULL::text AS lot_label, NULL::text AS job_number, (q.id = @LastId) AS is_last
+            FROM ts.quality_sample q
+            WHERE q.site_id = @SiteId AND q.characteristic_id = @CharacteristicId AND q.material_id = @MaterialId AND NOT q.is_excluded
+              AND q.equipment_id IS NOT DISTINCT FROM @EquipmentId AND q.occurred_at <= @At
+            ORDER BY q.occurred_at DESC, (q.id = @LastId) DESC, q.id DESC
+            LIMIT @Count) w
+        ORDER BY occurred_at, is_last, sample_id
+        """;
+
+    private const string MaterialLimits = $"SELECT {QualitySql.LimitColumns} FROM core.control_limit l WHERE l.characteristic_id = @CharacteristicId AND l.material_id = @MaterialId";
+
+    private const string RaiseAlert = """
+        INSERT INTO core.spc_alert AS a (id, site_id, characteristic_id, material_id, equipment_id, status, rules, breaks,
+                                         first_sample_id, first_sample_at, last_sample_id, last_sample_at, raised_at, created_at, updated_at)
+        VALUES (@Id, @SiteId, @CharacteristicId, @MaterialId, @EquipmentId, 'open', @Rules, 1,
+                @SampleId, @SampleAt, @SampleId, @SampleAt, @At, @At, @At)
+        ON CONFLICT (site_id, characteristic_id, material_id, (coalesce(equipment_id, '00000000-0000-0000-0000-000000000000'::uuid))) WHERE status = 'open'
+        DO UPDATE SET rules = ARRAY(SELECT DISTINCT r FROM unnest(a.rules || excluded.rules) r ORDER BY r),
+                      breaks = a.breaks + 1,
+                      last_sample_id = CASE WHEN excluded.last_sample_at >= a.last_sample_at THEN excluded.last_sample_id ELSE a.last_sample_id END,
+                      last_sample_at = greatest(a.last_sample_at, excluded.last_sample_at),
+                      first_sample_id = CASE WHEN excluded.first_sample_at < a.first_sample_at THEN excluded.first_sample_id ELSE a.first_sample_id END,
+                      first_sample_at = least(a.first_sample_at, excluded.first_sample_at),
+                      updated_at = excluded.updated_at
+        RETURNING a.id AS alert_id, (a.xmax = 0) AS is_new
+        """;
+
+    private const string InsertViolation = """
+        INSERT INTO ts.spc_violation (id, occurred_at, site_id, characteristic_id, material_id, equipment_id, sample_id, rules, alert_id, recorded_at)
+        VALUES (@Id, @SampleAt, @SiteId, @CharacteristicId, @MaterialId, @EquipmentId, @SampleId, @Rules, @AlertId, @At)
+        """;
+
+    private const string AlertForUpdate = """
+        SELECT id, site_id, characteristic_id, status, rules::int[] AS rules, breaks FROM core.spc_alert WHERE id = @Id FOR UPDATE
+        """;
+
+    private const string CloseAlert = """
+        UPDATE core.spc_alert
+        SET status = 'closed', closed_at = @At, closed_by = @By, cause_reason_code_id = @CauseId, action = @Action, updated_at = @At
+        WHERE id = @Id AND status = 'open'
+        """;
+
+    public async Task<IReadOnlyList<ChartSample>> ListRuleWindowAsync(
+        Guid siteId, Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset at, Guid lastSampleId, int count, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<QualitySql.ChartSampleRow>(RuleWindow, new
+        {
+            SiteId = siteId,
+            CharacteristicId = characteristicId,
+            MaterialId = materialId,
+            EquipmentId = equipmentId,
+            At = at,
+            LastId = lastSampleId,
+            Count = count,
+        }, cancellationToken)).Select(r => r.ToSample())];
+
+    public async Task<IReadOnlyList<Domain.Quality.Spc.ControlLimit>> GetMaterialLimitsAsync(Guid characteristicId, Guid materialId, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<QualitySql.LimitRow>(MaterialLimits, new { CharacteristicId = characteristicId, MaterialId = materialId }, cancellationToken))
+            .Select(r => r.ToDomain())];
+
+    public async Task<(Guid AlertId, bool IsNew)> RaiseAlertAsync(SpcBreak signal, Guid newId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var row = (await session.QuerySingleOrDefaultAsync<RaisedRow>(RaiseAlert, ViolationArgs(signal, newId, Guid.Empty, at), cancellationToken))!;
+        return (row.AlertId, row.IsNew);
+    }
+
+    public Task InsertViolationAsync(SpcBreak signal, Guid id, Guid alertId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(InsertViolation, ViolationArgs(signal, id, alertId, at), cancellationToken);
+
+    public async Task<SpcAlertRecord?> GetAlertForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<AlertRow>(AlertForUpdate, new { Id = id }, cancellationToken) is { } r
+            ? new SpcAlertRecord(r.Id, r.SiteId, r.CharacteristicId, r.Status, r.Rules, r.Breaks)
+            : null;
+
+    public Task CloseAlertAsync(Guid id, Guid causeReasonId, string action, string by, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(CloseAlert, new { Id = id, CauseId = causeReasonId, Action = action, By = by, At = at }, cancellationToken);
+
+    private static object ViolationArgs(SpcBreak s, Guid id, Guid alertId, DateTimeOffset at) => new
+    {
+        Id = id,
+        s.SiteId,
+        s.CharacteristicId,
+        s.MaterialId,
+        s.EquipmentId,
+        s.SampleId,
+        s.SampleAt,
+        Rules = s.Rules.Select(r => (short)r).ToArray(),
+        AlertId = alertId,
+        At = at,
+    };
+
+    private sealed class RaisedRow
+    {
+        public Guid AlertId { get; init; }
+        public bool IsNew { get; init; }
+    }
+
+    private sealed class AlertRow
+    {
+        public Guid Id { get; init; }
+        public Guid SiteId { get; init; }
+        public Guid CharacteristicId { get; init; }
+        public string Status { get; init; } = "";
+        public int[] Rules { get; init; } = [];
+        public int Breaks { get; init; }
+    }
 
     private static object CharacteristicArgs(Characteristic c, DateTimeOffset at) => new
     {

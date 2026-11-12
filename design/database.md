@@ -1613,24 +1613,27 @@ Seeded with Nelson's eight rules in his numbering; the Western Electric set is 1
 | `name` | text | no | Short name. |
 | `description` | text | no | What the rule detects. |
 
-### core.spc_alert — alert lifecycle · *Planned*
+### core.spc_alert — SPC alerts (D-099) · *In use*
 
-The alert's current state; the violation itself is history in `ts.spc_violation`.
+Raised when a recorded result breaks one of its characteristic's run rules on its chart: one open per site, characteristic, material and line
+(`spc_alert_open_uq`); further breaks while it is open are added to it in the same statement (`INSERT … ON CONFLICT`). Closed with a cause and the
+action taken; the next break opens a new one. Rebuilt by migration 0066 (the draft was never written to).
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `characteristic_id` | uuid → quality_characteristic | no | The characteristic. |
-| `equipment_id` | uuid → equipment | no | Where. |
-| `violation_id` | uuid | no | The `ts.spc_violation` row (no FK into history). |
-| `violation_occurred_at` | timestamptz | no | Its time, to find the partition. |
-| `status` | text | no | `open`, `acknowledged` or `closed`. |
-| `raised_at` | timestamptz | no | When raised. |
-| `acknowledged_by_user_id` | uuid → app_user | yes | Who acknowledged it. |
-| `acknowledged_at` | timestamptz | yes | When. |
-| `cause_reason_code_id` | uuid → reason_code | yes | The cause found. |
-| `action_comment` | text | yes | What was done. |
-| `closed_at` | timestamptz | yes | When closed. |
+| `site_id` | uuid → equipment | no | The site its results were recorded at. |
+| `characteristic_id`, `material_id` | uuid | no | Its chart's characteristic and material. |
+| `equipment_id` | uuid → equipment | yes | The line its results were made on; null for results without one. |
+| `status` | text | no | `open` or `closed`. |
+| `rules` | smallint[] | no | Every run rule broken while it was open. |
+| `breaks` | integer | no | Results that broke a rule while it was open. |
+| `first_sample_id`, `first_sample_at`, `last_sample_id`, `last_sample_at` | uuid, timestamptz | no | The earliest and latest breaking results (`ts.quality_sample`, no FK into history). |
+| `raised_at` | timestamptz | no | When it opened. |
+| `closed_at`, `closed_by` | timestamptz, text | yes | When and by whom it was closed. |
+| `cause_reason_code_id` | uuid → reason_code | yes | The cause, a reason of kind `spc_cause`; with `action`, set exactly when closed (`spc_alert_closed_ck`). |
+| `action` | text | yes | What was done, at most 1000 characters. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ## 12. Time-partitioned history (`ts`)
 
@@ -1837,18 +1840,20 @@ it conformed are stamped on each row. Appended only; a wrong result is excluded,
 | `exclusion_reason_id` | uuid → reason_code | yes | Why (kind `sample_exclusion`). |
 | `excluded_note`, `excluded_by`, `excluded_at` | text, text, timestamptz | yes | The comment, who and when. |
 
-### ts.spc_violation — rule violations · *Planned*
+### ts.spc_violation — results that broke run rules (D-099) · *In use*
+
+One row per recorded result that broke a run rule on its chart, with the alert it went to. Rebuilt by migration 0066.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key with `occurred_at`. |
-| `occurred_at` | timestamptz | no | When detected. Partition key. |
-| `characteristic_id` | uuid → quality_characteristic | no | The characteristic. |
-| `sample_id` | uuid | no | The `ts.quality_sample` that triggered it (no FK). |
-| `sample_occurred_at` | timestamptz | no | Its time, to find the partition. |
-| `rule_number` | smallint → spc_rule | no | The rule broken. |
-| `chart_component` | text | no | `location`, `dispersion`, `proportion` or `count`. |
-| `severity` | text | no | Severity from the characteristic's rule. |
+| `occurred_at` | timestamptz | no | When the result was sampled. Partition key. |
+| `site_id`, `characteristic_id`, `material_id` | uuid | no | Its chart. |
+| `equipment_id` | uuid → equipment | yes | Its line. |
+| `sample_id` | uuid | no | The `ts.quality_sample` row, at `occurred_at` (no FK into history). |
+| `rules` | smallint[] | no | The rules it broke: those of the plotted statistic, and rule 1 when its dispersion is beyond its limits. |
+| `alert_id` | uuid → spc_alert | no | The alert it opened or was added to. Indexed with `occurred_at`. |
+| `recorded_at` | timestamptz | no | When the break was found (the result's recording). |
 
 ### core.oee_target — OEE targets by period (D-073) · *In use*
 

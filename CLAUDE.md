@@ -303,7 +303,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`ControlLimitPeriods.Place`/`InForce`); baseline review → approve re-worked under the characteristic's lock (409 if different); chart settings
   on the characteristic, fixed while limits are open; `/api/quality/characteristics/{id}/control-limits[/baseline|/manual]`, `/control-limits/{id}/end`.
   Charts: `GetControlChartQuery` (`/characteristics/{id}/chart`, site results, each point vs the limits in force at its time for its line), web
-  `/quality/charts` with `ControlChartPlot` (SVG).
+  `/quality/charts` with `ControlChartPlot` (SVG). Alerts: `SpcSignals` (in `QualityRecorder`) → `core.spc_alert` one open per chart (upsert) +
+  `ts.spc_violation`; `CloseSpcAlertCommand` (cause `spc_cause` + action, `quality.record`); `SpcEvaluation` shared by chart and alerts.
 - Attribute values in bulk, certificate feed (D-086, proposed): `LotAttributeCsv` (lot_number, optional material_code, a column per attribute code;
   blank = unchanged, `(clear)` clears) → `ImportLotAttributeValuesCommand` (all or nothing, dry run ends uncommitted; locks lots in id order; writes
   through `LotAttributeWriter`, shared with the lot page). Export `values.csv` is the import format. Webhook feeds `erp` and `documents`

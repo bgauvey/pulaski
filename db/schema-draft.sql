@@ -1947,22 +1947,34 @@ CREATE TABLE core.spc_rule (
     description text NOT NULL
 );
 
--- Alert lifecycle is current state; the violation itself is history.
+-- An SPC alert (D-099): raised when a recorded result breaks one of its characteristic's run rules, one open per chart (site, characteristic,
+-- material, line); closed with a cause and the action taken. Each breaking result is history in ts.spc_violation.
 CREATE TABLE core.spc_alert (
     id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
     characteristic_id       uuid NOT NULL REFERENCES core.quality_characteristic(id),
-    equipment_id            uuid NOT NULL REFERENCES core.equipment(id),
-    violation_id            uuid NOT NULL,                      -- ts.spc_violation (no FK into history)
-    violation_occurred_at   timestamptz NOT NULL,
-    status                  text NOT NULL DEFAULT 'open' CHECK (status IN ('open','acknowledged','closed')),
-    raised_at               timestamptz NOT NULL DEFAULT now(),
-    acknowledged_by_user_id uuid REFERENCES sec.app_user(id),
-    acknowledged_at         timestamptz,
-    cause_reason_code_id    uuid REFERENCES core.reason_code(id),
-    action_comment          text,
-    closed_at               timestamptz
+    material_id             uuid NOT NULL REFERENCES core.material(id),
+    equipment_id            uuid REFERENCES core.equipment(id),     -- the line its results were made on; NULL: results without one
+    status                  text NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed')),
+    rules                   smallint[] NOT NULL,                    -- every rule broken while it was open
+    breaks                  integer NOT NULL DEFAULT 1 CHECK (breaks >= 1),  -- results that broke a rule while it was open
+    first_sample_id         uuid NOT NULL,                          -- ts.quality_sample (no FK into history)
+    first_sample_at         timestamptz NOT NULL,
+    last_sample_id          uuid NOT NULL,
+    last_sample_at          timestamptz NOT NULL,
+    raised_at               timestamptz NOT NULL,
+    closed_at               timestamptz,
+    closed_by               text,
+    cause_reason_code_id    uuid REFERENCES core.reason_code(id),   -- kind spc_cause
+    action                  text CHECK (length(action) <= 1000),
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    updated_at              timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT spc_alert_closed_ck CHECK ((status = 'closed') = (closed_at IS NOT NULL AND cause_reason_code_id IS NOT NULL AND action IS NOT NULL))
 );
-CREATE INDEX spc_alert_open_ix ON core.spc_alert (equipment_id) WHERE status <> 'closed';
+-- One open alert per chart: further breaks are added to it.
+CREATE UNIQUE INDEX spc_alert_open_uq ON core.spc_alert (site_id, characteristic_id, material_id, (coalesce(equipment_id, '00000000-0000-0000-0000-000000000000'::uuid)))
+    WHERE status = 'open';
+CREATE INDEX spc_alert_site_ix ON core.spc_alert (site_id, raised_at DESC);
 
 -- =====================================================================
 -- 12. TIME-PARTITIONED HISTORY (schema ts)                      [D-010]
@@ -2207,17 +2219,21 @@ CREATE TABLE ts.connection_run (
 ) PARTITION BY RANGE (started_at);
 CREATE INDEX connection_run_connection_ix ON ts.connection_run (connection_id, started_at DESC);
 
+-- Each recorded result that broke a run rule (D-099), with the rules and the alert it went to.
 CREATE TABLE ts.spc_violation (
     id                  uuid NOT NULL DEFAULT uuidv7(),
-    occurred_at         timestamptz NOT NULL,
+    occurred_at         timestamptz NOT NULL,                       -- when the breaking result was sampled
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
     characteristic_id   uuid NOT NULL REFERENCES core.quality_characteristic(id),
-    sample_id           uuid NOT NULL,
-    sample_occurred_at  timestamptz NOT NULL,
-    rule_number         smallint NOT NULL REFERENCES core.spc_rule(rule_number),
-    chart_component     text NOT NULL CHECK (chart_component IN ('location','dispersion','proportion','count')),
-    severity            text NOT NULL,
+    material_id         uuid NOT NULL REFERENCES core.material(id),
+    equipment_id        uuid REFERENCES core.equipment(id),
+    sample_id           uuid NOT NULL,                              -- ts.quality_sample, at occurred_at
+    rules               smallint[] NOT NULL,
+    alert_id            uuid NOT NULL REFERENCES core.spc_alert(id),
+    recorded_at         timestamptz NOT NULL,
     PRIMARY KEY (id, occurred_at)
 ) PARTITION BY RANGE (occurred_at);
+CREATE INDEX spc_violation_alert_ix ON ts.spc_violation (alert_id, occurred_at);
 CREATE INDEX ON ts.spc_violation (characteristic_id, occurred_at);
 
 -- =====================================================================
@@ -2588,7 +2604,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0062_machine_counts'),
     ('0063_rate_refresh'),
     ('0064_control_limits'),
-    ('0065_run_rules');
+    ('0065_run_rules'),
+    ('0066_spc_alerts');
 
 -- =====================================================================
 -- 17. SEED DATA

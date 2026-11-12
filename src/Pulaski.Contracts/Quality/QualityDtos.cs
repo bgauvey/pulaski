@@ -382,6 +382,65 @@ public sealed record QualityResultResponse
     public string? Limits { get; init; }
     public bool LotHeld { get; init; }
     public IReadOnlyList<string> Notes { get; init; } = [];
+
+    /// <summary>The run rules this result broke on its control chart (D-099); empty when none, or the chart has no limits.</summary>
+    public IReadOnlyList<int> SpcRules { get; init; } = [];
+
+    /// <summary>The SPC alert it raised or was added to.</summary>
+    public Guid? SpcAlertId { get; init; }
+}
+
+/// <summary>An SPC alert (D-099): a chart that signalled, open until someone closes it with a cause and the action taken.</summary>
+public sealed record SpcAlertDto
+{
+    public Guid Id { get; init; }
+    public Guid SiteId { get; init; }
+    public Guid CharacteristicId { get; init; }
+    public string CharacteristicCode { get; init; } = "";
+    public string CharacteristicName { get; init; } = "";
+    public Guid MaterialId { get; init; }
+    public string MaterialCode { get; init; } = "";
+    public Guid? EquipmentId { get; init; }
+    public string? EquipmentCode { get; init; }
+
+    /// <summary><c>open</c> or <c>closed</c>.</summary>
+    public string Status { get; init; } = "open";
+
+    /// <summary>Every run rule broken while it was open.</summary>
+    public IReadOnlyList<int> Rules { get; init; } = [];
+
+    /// <summary>How many results broke a rule while it was open.</summary>
+    public int Breaks { get; init; }
+    public DateTimeOffset FirstSampleAt { get; init; }
+    public DateTimeOffset LastSampleAt { get; init; }
+    public DateTimeOffset RaisedAt { get; init; }
+    public DateTimeOffset? ClosedAt { get; init; }
+    public string? ClosedBy { get; init; }
+    public string? Cause { get; init; }
+    public string? Action { get; init; }
+
+    /// <summary>The results that broke its rules, oldest first; only when one alert is read.</summary>
+    public IReadOnlyList<SpcViolationDto> Violations { get; init; } = [];
+}
+
+/// <summary>A result that broke run rules, for an alert.</summary>
+public sealed record SpcViolationDto
+{
+    public Guid SampleId { get; init; }
+    public DateTimeOffset OccurredAt { get; init; }
+    public IReadOnlyList<int> Rules { get; init; } = [];
+    public decimal? Mean { get; init; }
+    public int? Inspected { get; init; }
+    public int? Defects { get; init; }
+    public string? LotLabel { get; init; }
+    public string? JobNumber { get; init; }
+}
+
+/// <summary>Closes an alert with what caused the signal (a reason of kind <c>spc_cause</c>) and what was done.</summary>
+public sealed record CloseSpcAlertRequest
+{
+    public Guid CauseReasonCodeId { get; init; }
+    public string Action { get; init; } = "";
 }
 
 public sealed record QualityResultDto
