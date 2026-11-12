@@ -1261,6 +1261,14 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> UpdateCharacteristicAsync(Guid id, UpdateCharacteristicRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/quality/characteristics/{id}", request, ct);
 
+    public Task<ControlChartDto> GetControlChartAsync(
+        Guid characteristicId, Guid siteId, Guid materialId, Guid? equipmentId, DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default) =>
+        GetAsync<ControlChartDto>(
+            $"api/quality/characteristics/{characteristicId}/chart?siteId={siteId}&materialId={materialId}"
+            + (equipmentId is { } line ? $"&equipmentId={line}" : "")
+            + $"&from={Uri.EscapeDataString(from.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}"
+            + $"&to={Uri.EscapeDataString(to.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}", ct);
+
     public Task<IReadOnlyList<ControlLimitDto>> ListControlLimitsAsync(Guid characteristicId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<ControlLimitDto>>($"api/quality/characteristics/{characteristicId}/control-limits", ct);
 

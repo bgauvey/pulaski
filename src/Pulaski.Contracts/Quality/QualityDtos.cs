@@ -169,6 +169,62 @@ public sealed record EndControlLimitsRequest
     public string? Note { get; init; }
 }
 
+/// <summary>
+/// A control chart of a characteristic's results for a material at a site (D-099): each result's plotted value with the limits in force for it at its
+/// time (its line's own first, else the material's), oldest first.
+/// </summary>
+public sealed record ControlChartDto
+{
+    public Guid CharacteristicId { get; init; }
+    public string CharacteristicCode { get; init; } = "";
+    public string CharacteristicName { get; init; } = "";
+    public string? UomCode { get; init; }
+    public int Decimals { get; init; }
+    public string ChartType { get; init; } = "";
+    public int SubgroupSize { get; init; }
+    public Guid MaterialId { get; init; }
+    public string MaterialCode { get; init; } = "";
+    public Guid? EquipmentId { get; init; }
+    public string? EquipmentCode { get; init; }
+    public DateTimeOffset From { get; init; }
+    public DateTimeOffset To { get; init; }
+    public IReadOnlyList<ControlChartPointDto> Points { get; init; } = [];
+
+    /// <summary>Results the chart can't take (a size that doesn't fit, no values), left off.</summary>
+    public int Unusable { get; init; }
+
+    /// <summary>More results than a chart shows: only the latest <see cref="MaxPoints"/> are.</summary>
+    public bool IsTruncated { get; init; }
+    public int MaxPoints { get; init; }
+
+    /// <summary>The periods of limits the points use.</summary>
+    public IReadOnlyList<ControlLimitDto> Limits { get; init; } = [];
+}
+
+/// <summary>One plotted result, with its limits (null when none were in force) and whether it is beyond them.</summary>
+public sealed record ControlChartPointDto
+{
+    public Guid SampleId { get; init; }
+    public DateTimeOffset At { get; init; }
+    public double Value { get; init; }
+
+    /// <summary>Range, standard deviation or moving range; null on charts without one (and for the first moving range).</summary>
+    public double? Dispersion { get; init; }
+    public int Size { get; init; }
+    public string? LineCode { get; init; }
+    public string? LotLabel { get; init; }
+    public string? JobNumber { get; init; }
+    public Guid? LimitId { get; init; }
+    public double? Center { get; init; }
+    public double? Ucl { get; init; }
+    public double? Lcl { get; init; }
+    public double? DispersionCenter { get; init; }
+    public double? DispersionUcl { get; init; }
+    public double? DispersionLcl { get; init; }
+    public bool IsBeyondLimits { get; init; }
+    public bool IsDispersionBeyondLimits { get; init; }
+}
+
 /// <summary>The limits saved, and those it ended.</summary>
 public sealed record ControlLimitChangeResponse(Guid Id, IReadOnlyList<Guid> Ended);
 

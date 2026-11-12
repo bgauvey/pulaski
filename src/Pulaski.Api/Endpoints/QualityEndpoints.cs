@@ -48,6 +48,13 @@ internal static class QualityEndpoints
             TypedResults.Ok(await handler.HandleAsync(new ListControlLimitsQuery(id), ct)))
         .RequireAny(null, Permissions.QualityView);
 
+        // A control chart of results at a site (D-099), each point against the limits in force for it at its time.
+        quality.MapGet("/characteristics/{id:guid}/chart", async Task<Ok<ControlChartDto>> (
+            Guid id, Guid siteId, Guid materialId, Guid? equipmentId, DateTimeOffset from, DateTimeOffset to,
+            IQueryHandler<GetControlChartQuery, ControlChartDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetControlChartQuery(siteId, id, materialId, equipmentId, from, to), ct)))
+        .RequireAny(Site.Query(), Permissions.QualityView);
+
         quality.MapGet("/characteristics/{id:guid}/control-limits/baseline", async Task<Ok<LimitBaselineDto>> (
             Guid id, Guid materialId, Guid? equipmentId, DateTimeOffset from, DateTimeOffset to, string? leftOut,
             IQueryHandler<GetLimitBaselineQuery, LimitBaselineDto> handler, CancellationToken ct) =>

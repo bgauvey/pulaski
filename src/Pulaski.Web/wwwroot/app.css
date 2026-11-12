@@ -604,3 +604,17 @@ fieldset.view-only-scope {
 .oee-trend .hit { fill: transparent; }
 .oee-trend .pt:hover .crosshair { opacity: .5; }
 .oee-trend .pt:hover .marker { r: 6; }
+.spc-chart { width: 100%; height: auto; display: block; }
+.spc-chart .grid { stroke: var(--border); stroke-width: 1; }
+.spc-chart .axis, .spc-chart .limit-label { fill: var(--text-muted); font-size: 11px; }
+.spc-chart .series { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.spc-chart .limit { stroke: var(--text-muted); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.spc-chart .center { stroke: var(--text-muted); stroke-width: 1; }
+.spc-chart .marker { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.spc-chart .marker.beyond { fill: var(--danger); }
+.spc-chart .crosshair { stroke: var(--text-muted); stroke-width: 1; opacity: 0; }
+.spc-chart .hit { fill: transparent; }
+.spc-chart .pt:hover .crosshair { opacity: .5; }
+.spc-chart .pt:hover circle.marker { r: 6; }
+.spc-legend { display: flex; flex-wrap: wrap; gap: 1rem; font-size: .8125rem; color: var(--text-muted); }
+.spc-legend svg { vertical-align: -2px; margin-right: .25rem; }

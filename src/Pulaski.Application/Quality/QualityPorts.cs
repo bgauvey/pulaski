@@ -114,6 +114,20 @@ public interface IQualityReadStore
     /// </summary>
     Task<IReadOnlyList<SpcSubgroup>> ListBaselineAsync(Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// A chart's results: the characteristic's at the site for the material sampled in <c>[windowStart, windowEnd)</c>, not excluded, on the line when
+    /// given; the latest <paramref name="limit"/>, oldest first.
+    /// </summary>
+    Task<IReadOnlyList<ChartSample>> ListChartSamplesAsync(
+        Guid siteId, Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, int limit, CancellationToken cancellationToken);
+
+    /// <summary>Every period of limits of the characteristic for the material, any line.</summary>
+    Task<IReadOnlyList<ControlLimit>> GetLimitsForMaterialAsync(Guid characteristicId, Guid materialId, CancellationToken cancellationToken);
+
+    /// <summary>The material's code, the line's when one is given, and the characteristic's unit.</summary>
+    Task<(string MaterialCode, string? EquipmentCode, string? UomCode)> GetChartCodesAsync(
+        Guid characteristicId, Guid materialId, Guid? equipmentId, CancellationToken cancellationToken);
+
     /// <summary>The most results a baseline reads.</summary>
     const int MaxBaseline = 1000;
 }
@@ -130,6 +144,9 @@ public sealed record QualityResultFilter(
     DateTimeOffset? From = null,
     DateTimeOffset? To = null,
     int Limit = 500);
+
+/// <summary>A result as a chart takes it: its subgroup, and where it was made.</summary>
+public sealed record ChartSample(SpcSubgroup Subgroup, Guid? EquipmentId, string? LineCode, string? LotLabel, string? JobNumber);
 
 public sealed record QualityJobContext(
     Guid JobId, string JobNumber, Guid SiteId, Guid? MaterialId, Guid EquipmentId, Guid? RunId, Guid? RunEquipmentId);

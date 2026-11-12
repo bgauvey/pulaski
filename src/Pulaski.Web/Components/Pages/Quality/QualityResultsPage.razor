@@ -18,6 +18,7 @@
         </p>
     </div>
     <div class="inv-head-tools">
+        <a class="btn btn-outline-secondary btn-sm" href="quality/charts">Control charts</a>
         @if (Sites.Sites.Count > 1)
         {
             <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">

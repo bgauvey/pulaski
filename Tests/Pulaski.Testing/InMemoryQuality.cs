@@ -374,4 +374,31 @@ public sealed class InMemoryQuality : IQualityRepository, IQualityReadStore
             })]);
         }
     }
+
+    public Task<IReadOnlyList<ChartSample>> ListChartSamplesAsync(
+        Guid siteId, Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, int limit, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<ChartSample>>([.. _results
+                .Where(r => r.SiteId == siteId && r.CharacteristicId == characteristicId && r.MaterialId == materialId && !r.IsExcluded
+                    && r.OccurredAt >= windowStart && r.OccurredAt < windowEnd && (equipmentId is null || r.EquipmentId == equipmentId))
+                .OrderByDescending(r => r.OccurredAt).Take(limit).OrderBy(r => r.OccurredAt)
+                .Select(r => new ChartSample(
+                    new SpcSubgroup(r.Id, r.OccurredAt, r.Measurement.Values?.Select(v => (double)v).ToList(), r.Measurement.Inspected, r.Measurement.Defects),
+                    r.EquipmentId, r.EquipmentId is { } e ? Lines.GetValueOrDefault(e) : null, null, null))]);
+        }
+    }
+
+    public Task<IReadOnlyList<ControlLimit>> GetLimitsForMaterialAsync(Guid characteristicId, Guid materialId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<ControlLimit>>([.. _limits.Where(l => l.CharacteristicId == characteristicId && l.MaterialId == materialId)]);
+        }
+    }
+
+    public Task<(string MaterialCode, string? EquipmentCode, string? UomCode)> GetChartCodesAsync(
+        Guid characteristicId, Guid materialId, Guid? equipmentId, CancellationToken cancellationToken) =>
+        Task.FromResult((Materials.GetValueOrDefault(materialId) ?? "", equipmentId is { } e ? Lines.GetValueOrDefault(e) : null, (string?)null));
 }

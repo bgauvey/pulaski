@@ -1443,8 +1443,8 @@ Whoever runs Pulaski puts the feed's secret (and a broker's username and passwor
 
 ## 13. Quality: specifications and results
 
-**Configure → Specifications** keeps what each material must meet. **Operate → Quality** records what was measured or inspected, and checks it
-against the material's released specification. You can hold a lot whose result is out of limits, and reject it, which takes it off the good
+**Configure → Specifications** keeps what each material must meet. **Operate → Quality** records what was measured or inspected, checks it
+against the material's released specification, and charts it against control limits. You can hold a lot whose result is out of limits, and reject it, which takes it off the good
 output of the run that made it.
 
 ### Ideas to know first
@@ -1513,7 +1513,29 @@ line chosen above, the **Lower**, **Centre** and **Upper** limits (and the dispe
   keeps every period with how it was set, the results left out and who approved it.
 - **Who.** Anyone who can see quality sees the limits; working them out, approving, entering and ending them needs permission to maintain
   specifications. Each approval is recorded as `pulaski.control_limit.approved.v1`, each end as `…ended.v1`.
-- **Charts and alerts** that use the limits come in later versions (see [What Pulaski doesn't do yet](#23-what-pulaski-doesnt-do-yet)).
+- **Charts.** See [Control charts](#control-charts). Alerts when a chart signals come in a later version.
+
+### Control charts
+
+1. On **Operate → Quality**, click **Control charts** (or **Chart** on a period of control limits).
+2. Choose the **Characteristic**, the **Material**, a **Line** if you want one line's results only (else **Every line**), and the period (the last
+   30 days to start with). Click **Show**.
+3. The chart shows each result in time order: the value (or a subgroup's mean, proportion or count, as the chart takes it), with the control
+   limits in force for it as dashed lines and the centre line solid. A result beyond its limits is a red diamond. Measured characteristics have a
+   second chart below: the range, standard deviation or moving range.
+4. Hover over a point to see when it was sampled, its value against its limits, and its line, job and lot. **Show as a table** lists the same.
+
+**In detail**
+
+- **Whose results.** The characteristic's results for the material at the selected site in the period, excluded results left out; the latest 500
+  at most. For a line, only results recorded against a job on it.
+- **Which limits.** Each result is drawn against the limits in force at the time it was sampled: its line's own if it has some, else the
+  material's. Limits worked out for another chart (before the chart changed) don't count. Results from before any limits were approved, such
+  as the baseline itself, are drawn without limits, and the summary above the chart says how many.
+- **Can't go on the chart.** A result whose size doesn't fit the chart (an X-bar chart's subgroup size, say) is left off, and the summary says how
+  many.
+- **Beyond the limits** is the first signal of a process change. More rules, such as runs on one side of the centre line, and alerts come next.
+- **Who:** anyone who can see quality at the site.
 
 ### Write a specification
 
@@ -2712,7 +2734,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** has no quality figures or SPC alerts yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
-- **Quality:** control limits can be set, but there are no SPC charts or alerts yet, and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
+- **Quality:** control charts mark only results beyond the limits (no run rules yet) and raise no alerts, and charts don't update while open, and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
 - **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.
 - **Some switched-off controls give no reason yet:** a form's Save waiting on a field next to it, an Export with nothing to export, and the locked boxes on the Permissions tab (point at those with the mouse to see why).
 

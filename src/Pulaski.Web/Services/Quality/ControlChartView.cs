@@ -60,4 +60,37 @@ public static class ControlChartView
     /// <summary>"In force", "From 12 Nov", "Ended".</summary>
     public static string State(ControlLimitDto l, DateTimeOffset now) =>
         l.IsInEffect ? "In force" : l.EffectiveFrom > now ? "Starts later" : "Ended";
+
+    /// <summary>The points of one of a chart's two plots: the statistic, or (<paramref name="dispersion"/>) its range, standard deviation or moving range.</summary>
+    public static IReadOnlyList<PlotPoint> Plot(ControlChartDto chart, bool dispersion, string? timeZone) =>
+        [.. chart.Points.Select(p => dispersion
+            ? new PlotPoint(p.At, p.Dispersion, p.DispersionCenter, p.DispersionUcl, p.DispersionLcl, p.IsDispersionBeyondLimits, Tip(chart, p, true, timeZone))
+            : new PlotPoint(p.At, p.Value, p.Center, p.Ucl, p.Lcl, p.IsBeyondLimits, Tip(chart, p, false, timeZone)))];
+
+    /// <summary>What hovering a point says: when, the value against its limits, and where it came from.</summary>
+    public static string Tip(ControlChartDto chart, ControlChartPointDto p, bool dispersion, string? timeZone)
+    {
+        var value = dispersion ? p.Dispersion : p.Value;
+        var (lcl, ucl, beyond) = dispersion ? (p.DispersionLcl, p.DispersionUcl, p.IsDispersionBeyondLimits) : (p.Lcl, p.Ucl, p.IsBeyondLimits);
+        var limits = ucl is null ? "no limits in force" : $"limits {Number(lcl, chart.Decimals)} to {Number(ucl, chart.Decimals)}{(beyond ? ", beyond them" : "")}";
+        var from = string.Join(" · ", new[] { p.LineCode, p.JobNumber, p.LotLabel }.Where(x => x is not null));
+        return $"{Display.SiteTime(p.At, timeZone)}: {Number(value, chart.Decimals)} ({limits}){(from.Length > 0 ? $". {from}" : "")}";
+    }
+
+    /// <summary>"3 of 40 beyond the limits; 5 with no limits in force."</summary>
+    public static string Summary(ControlChartDto chart)
+    {
+        var beyond = chart.Points.Count(p => p.IsBeyondLimits || p.IsDispersionBeyondLimits);
+        var without = chart.Points.Count(p => p.Ucl is null);
+        var text = without == chart.Points.Count
+            ? $"{chart.Points.Count} results; no control limits in force for them."
+            : $"{chart.Points.Count} results; {beyond} beyond the limits.";
+        return text
+            + (without > 0 && without < chart.Points.Count ? $" {without} had no limits in force." : "")
+            + (chart.Unusable > 0 ? $" {chart.Unusable} can't go on this chart (their size doesn't fit it)." : "")
+            + (chart.IsTruncated ? $" Only the latest {chart.MaxPoints} are shown." : "");
+    }
 }
+
+/// <summary>One point of a plot, with the limits in force for it (null: none) and whether it is beyond them.</summary>
+public sealed record PlotPoint(DateTimeOffset At, double? Value, double? Center, double? Ucl, double? Lcl, bool IsBeyond, string Tip);

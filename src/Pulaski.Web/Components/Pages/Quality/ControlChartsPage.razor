@@ -1,0 +1,227 @@
+@page "/quality/charts"
+@attribute [RequiresView(PermissionCodes.QualityView)]
+@using Pulaski.Web.Services.Quality
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject NavigationManager Navigation
+@inject TimeProvider Clock
+
+<PageTitle>Control charts · Pulaski</PageTitle>
+
+@* Control charts (D-099): a characteristic's results for a material at the site, optionally one line, each against the control limits in force
+   for it at its time. Measured characteristics have a second plot of the range, standard deviation or moving range. *@
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Control charts</h1>
+        <p class="text-muted mb-0">
+            How a characteristic's results vary over time against their control limits. A point beyond the limits is a sign something changed;
+            limits are set on the characteristic's <a href="quality/characteristics">Control limits</a>.
+        </p>
+    </div>
+    <div class="inv-head-tools">
+        <a class="btn btn-outline-secondary btn-sm" href="quality/results">Results</a>
+        @if (Sites.Sites.Count > 1)
+        {
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+
+<form class="row g-2 align-items-end mb-3" @onsubmit="ShowAsync" @onsubmit:preventDefault>
+    <div class="col-md-3">
+        <label class="form-label small fw-semibold" for="cc-characteristic">Characteristic</label>
+        <select id="cc-characteristic" class="form-select form-select-sm" value="@(_characteristicId?.ToString() ?? "")"
+                @onchange="e => _characteristicId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null">
+            <option value="">Choose…</option>
+            @foreach (var c in _characteristics)
+            {
+                <option value="@c.Id">@c.Code · @c.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small fw-semibold" for="cc-material">Material</label>
+        <MaterialPicker Id="cc-material" Materials="_materials" @bind-Value="_materialId" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small fw-semibold" for="cc-line">Line</label>
+        <select id="cc-line" class="form-select form-select-sm" value="@(_lineId?.ToString() ?? "")"
+                @onchange="e => _lineId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null">
+            <option value="">Every line</option>
+            @foreach (var line in _lines)
+            {
+                <option value="@line.Id">@line.Code · @line.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small fw-semibold" for="cc-from">From</label>
+        <input id="cc-from" type="datetime-local" class="form-control form-control-sm" @bind="_from" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small fw-semibold" for="cc-to">To</label>
+        <input id="cc-to" type="datetime-local" class="form-control form-control-sm" @bind="_to" />
+    </div>
+    <div class="col-12">
+        <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy"
+                      Reason="@(_characteristicId is null || _materialId is null ? "Choose a characteristic and a material." : null)">Show</ActionButton>
+    </div>
+</form>
+
+@if (_chart is { } chart)
+{
+    var dispersion = ControlChartView.DispersionName(chart.ChartType);
+    <section class="inv-facts mb-3" aria-labelledby="chart-heading">
+        <h2 class="h6 mb-1" id="chart-heading">
+            @chart.CharacteristicCode · @chart.MaterialCode@(chart.EquipmentCode is { } line ? $" on {line}" : "")
+            <span class="fw-normal text-muted">· @ControlChartView.Chart(chart.ChartType, chart.SubgroupSize)@(chart.UomCode is { } u ? $", {u}" : "")</span>
+        </h2>
+        <p class="small text-muted mb-2" role="status">@ControlChartView.Summary(chart)</p>
+        <div class="spc-legend mb-2" aria-hidden="true">
+            <span><svg width="14" height="14"><circle cx="7" cy="7" r="4" fill="var(--accent)" /></svg>Result</span>
+            <span><svg width="14" height="14"><path d="M7 1 L13 7 L7 13 L1 7 Z" fill="var(--danger)" /></svg>Beyond the limits</span>
+            <span><svg width="22" height="14"><line x1="0" x2="22" y1="7" y2="7" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="5 4" /></svg>Control limits</span>
+            <span><svg width="22" height="14"><line x1="0" x2="22" y1="7" y2="7" stroke="var(--text-muted)" stroke-width="1" /></svg>Centre line</span>
+        </div>
+        <ControlChartPlot Id="spc-main" Points="ControlChartView.Plot(chart, false, Zone)" Label="@MainLabel(chart.ChartType)" Decimals="chart.Decimals" TimeZone="@Zone" />
+        @if (dispersion is not null)
+        {
+            <div class="small fw-semibold mt-2">@dispersion</div>
+            <ControlChartPlot Id="spc-dispersion" Points="ControlChartView.Plot(chart, true, Zone)" Label="@dispersion" Decimals="chart.Decimals" Height="160" TimeZone="@Zone" />
+        }
+
+        <details class="mt-2">
+            <summary class="small">Show as a table</summary>
+            <div class="table-panel mt-2" style="max-height: 24rem; overflow-y: auto;">
+                <table class="table table-sm align-middle small mb-0">
+                    <thead>
+                        <tr>
+                            <th>Sampled</th><th class="inv-num">@MainLabel(chart.ChartType)</th>@if (dispersion is not null) { <th class="inv-num">@dispersion</th> }
+                            <th class="inv-num">Size</th><th class="inv-num">Limits</th><th>Line · job · lot</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in chart.Points)
+                        {
+                            <tr @key="p.SampleId">
+                                <td>@Display.SiteTime(p.At, Zone)</td>
+                                <td class="inv-num">@ControlChartView.Number(p.Value, chart.Decimals)</td>
+                                @if (dispersion is not null)
+                                {
+                                    <td class="inv-num">@ControlChartView.Number(p.Dispersion, chart.Decimals)</td>
+                                }
+                                <td class="inv-num">@p.Size</td>
+                                <td class="inv-num">@(p.Ucl is null ? "—" : $"{ControlChartView.Number(p.Lcl, chart.Decimals)} to {ControlChartView.Number(p.Ucl, chart.Decimals)}")</td>
+                                <td>@string.Join(" · ", new[] { p.LineCode, p.JobNumber, p.LotLabel }.Where(x => x is not null))</td>
+                                <td>
+                                    @if (p.IsBeyondLimits || p.IsDispersionBeyondLimits)
+                                    {
+                                        <span class="chip chip-warn">Beyond the limits</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    </section>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "characteristic")] public Guid? CharacteristicParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "material")] public Guid? MaterialParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "line")] public Guid? LineParam { get; set; }
+
+    private IReadOnlyList<CharacteristicDto> _characteristics = [];
+    private IReadOnlyList<MaterialDto> _materials = [];
+    private IReadOnlyList<EquipmentDto> _lines = [];
+    private Guid? _characteristicId;
+    private Guid? _materialId;
+    private Guid? _lineId;
+    private DateTime? _from;
+    private DateTime? _to;
+    private ControlChartDto? _chart;
+    private bool _busy;
+    private ApiException? _error;
+
+    private string? Zone => Sites.Site?.TimeZone;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _characteristics = [.. (await Api.ListCharacteristicsAsync()).Where(c => c.IsActive)];
+            _materials = [.. (await Api.ListMaterialsAsync()).Where(m => m.IsActive)];
+            await LoadLinesAsync();
+            var now = Display.ToSite(Clock.GetUtcNow(), Zone).DateTime;
+            (_from, _to) = (now.AddDays(-30), now.AddMinutes(1));
+            (_characteristicId, _materialId, _lineId) = (CharacteristicParam, MaterialParam, LineParam);
+            if (_characteristicId is not null && _materialId is not null)
+            {
+                await ShowAsync();
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task LoadLinesAsync() =>
+        _lines = Sites.SiteId is { } site
+            ? [.. (await Api.ListEquipmentAsync(site)).Where(e => e.CanRunJob && e.IsActive).OrderBy(e => e.Code, StringComparer.OrdinalIgnoreCase)]
+            : [];
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        (_chart, _lineId) = (null, null);
+        await LoadLinesAsync();
+    }
+
+    private async Task ShowAsync()
+    {
+        if (Sites.SiteId is not { } site || _characteristicId is not { } characteristic || _materialId is not { } material
+            || Display.FromSiteLocal(_from, Zone) is not { } from || Display.FromSiteLocal(_to, Zone) is not { } to)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            _chart = await Api.GetControlChartAsync(characteristic, site, material, _lineId, from, to);
+            Navigation.NavigateTo($"quality/charts?characteristic={characteristic}&material={material}{(_lineId is { } line ? $"&line={line}" : "")}", replace: true);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string MainLabel(string chartType) => chartType switch
+    {
+        "i_mr" => "Value",
+        "xbar_r" or "xbar_s" => "Mean",
+        "p" => "Proportion defective",
+        "np" => "Number defective",
+        "c" => "Defects",
+        _ => "Defects per unit",
+    };
+}

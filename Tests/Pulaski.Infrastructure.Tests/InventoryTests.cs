@@ -882,6 +882,50 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_control_chart_plots_each_result_against_the_limits_in_force_at_its_time()
+    {
+        var plant = await CreatePlantAsync();
+        CreatedResponse melt = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("MFI-" + _suffix, "Melt flow", null, "variable", null, 2));
+
+        // Twenty individuals alternating 10 and 12 over the run: limits 5.68 to 16.32.
+        var start = DateTimeOffset.UtcNow.AddHours(-20);
+        for (var i = 0; i < 20; i++)
+        {
+            await db.SendAsync(new Application.Quality.RecordQualityResultCommand(
+                plant.Site, melt.Id, null, plant.Job, start.AddMinutes(30 * i), [i % 2 == 0 ? 10m : 12m], null, null, "manual", null));
+        }
+
+        var review = await QueryAsync<Application.Quality.GetLimitBaselineQuery, Contracts.Quality.LimitBaselineDto>(
+            new Application.Quality.GetLimitBaselineQuery(melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow, []));
+        await db.SendAsync(new Application.Quality.ApproveControlLimitsCommand(
+            melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow, [], review.CenterLine!.Value, review.Ucl!.Value, review.Lcl!.Value, null, null));
+
+        // Two more since: one well beyond the upper limit.
+        await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [20m], null, null, "manual", null));
+        await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [11m], null, null, "manual", null));
+
+        var chart = await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
+            plant.Site, melt.Id, plant.Profile, plant.Line, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)));
+        Assert.Equal(("i_mr", "PRF-" + _suffix, "LINE-" + _suffix), (chart.ChartType, chart.MaterialCode, chart.EquipmentCode));
+        Assert.Equal(22, chart.Points.Count);
+        Assert.All(chart.Points.Take(20), p => Assert.Null(p.Ucl));
+        var beyond = chart.Points[20];
+        Assert.Equal(20, beyond.Value);
+        Assert.Equal(16.32, beyond.Ucl!.Value, 1e-9);
+        Assert.True(beyond.IsBeyondLimits);
+        Assert.True(beyond.IsDispersionBeyondLimits);
+        Assert.False(chart.Points[21].IsBeyondLimits);
+        Assert.Equal("LINE-" + _suffix, beyond.LineCode);
+        Assert.Equal(plant.JobNumber, beyond.JobNumber);
+        Assert.Single(chart.Limits);
+
+        // Another site sees none of it.
+        var elsewhere = await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
+            plant.Stores, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)));
+        Assert.Empty(elsewhere.Points);
+    }
+
+    [Fact]
     public async Task Merges_transfers_and_output_that_joined_a_silo_are_put_back_as_they_were()
     {
         var plant = await CreatePlantAsync();

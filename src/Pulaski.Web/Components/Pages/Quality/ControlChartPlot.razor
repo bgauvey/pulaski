@@ -1,0 +1,184 @@
+@using System.Globalization
+@using Pulaski.Web.Services.Quality
+
+@* One plot of a control chart (D-099): the statistic in time order, evenly spaced, against the limits in force for each point as dashed steps
+   (the centre line solid), so a change of limits shows where it happened. A point beyond its limits is a diamond in the danger colour, not
+   only a different colour. Hovering a point says when, its value against its limits and where it came from; the table below holds the same. *@
+@if (Points.Count == 0)
+{
+    <p class="text-muted small mb-0">Nothing to chart.</p>
+}
+else
+{
+    <svg class="spc-chart" viewBox="0 0 @Width @Height" role="img" aria-labelledby="@($"{Id}-title {Id}-desc")">
+        <title id="@($"{Id}-title")">@Label</title>
+        <desc id="@($"{Id}-desc")">@Description</desc>
+
+        @foreach (var tick in Ticks)
+        {
+            <line class="grid" x1="@F(Left)" x2="@F(Width - Right)" y1="@F(Y(tick))" y2="@F(Y(tick))" />
+            @SvgText("axis", Left - 6, Y(tick) + 4, "end", Number(tick))
+        }
+
+        @foreach (var (x1, x2, p) in Steps)
+        {
+            <line class="limit" x1="@F(x1)" x2="@F(x2)" y1="@F(Y(p.Ucl!.Value))" y2="@F(Y(p.Ucl!.Value))" />
+            <line class="limit" x1="@F(x1)" x2="@F(x2)" y1="@F(Y(p.Lcl!.Value))" y2="@F(Y(p.Lcl!.Value))" />
+            @if (p.Center is { } c)
+            {
+                <line class="center" x1="@F(x1)" x2="@F(x2)" y1="@F(Y(c))" y2="@F(Y(c))" />
+            }
+        }
+        @if (Points.LastOrDefault(p => p.Ucl is not null) is { Ucl: { } ucl, Lcl: { } lcl } last)
+        {
+            @SvgText("limit-label", Width - Right + 4, Y(ucl) + 4, "start", $"UCL {Number(ucl)}")
+            @SvgText("limit-label", Width - Right + 4, Y(lcl) + 4, "start", $"LCL {Number(lcl)}")
+            @if (last.Center is { } center)
+            {
+                @SvgText("limit-label", Width - Right + 4, Y(center) + 4, "start", $"CL {Number(center)}")
+            }
+        }
+
+        <path class="series" d="@Path" />
+
+        @for (var i = 0; i < Points.Count; i++)
+        {
+            var p = Points[i];
+            var x = X(i);
+            <g class="pt">
+                <line class="crosshair" x1="@F(x)" x2="@F(x)" y1="@F(Top)" y2="@F(Height - Bottom)" />
+                @if (p.Value is { } v)
+                {
+                    @if (p.IsBeyond)
+                    {
+                        <path class="marker beyond" d="@Diamond(x, Y(v))" />
+                    }
+                    else
+                    {
+                        <circle class="marker" cx="@F(x)" cy="@F(Y(v))" r="4" />
+                    }
+                }
+                <rect class="hit" x="@F(x - Math.Max(Step, 8) / 2)" y="@F(Top)" width="@F(Math.Max(Step, 8))" height="@F(Height - Top - Bottom)">
+                    <title>@p.Tip</title>
+                </rect>
+            </g>
+        }
+
+        @foreach (var i in LabelIndexes)
+        {
+            @SvgText("axis", X(i), Height - 8, "middle", Display.ToSite(Points[i].At, TimeZone).ToString("d MMM HH:mm", CultureInfo.InvariantCulture))
+        }
+    </svg>
+}
+
+@code {
+    private const double Width = 760;
+    private const double Left = 56;
+    private const double Right = 84;
+    private const double Top = 12;
+    private const double Bottom = 28;
+
+    [Parameter, EditorRequired] public IReadOnlyList<PlotPoint> Points { get; set; } = [];
+
+    /// <summary>What is plotted: "Mean", "Range", "Proportion defective"…</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    [Parameter] public int Decimals { get; set; } = 3;
+
+    [Parameter] public double Height { get; set; } = 240;
+
+    [Parameter] public string? TimeZone { get; set; }
+
+    [Parameter] public string Id { get; set; } = "spc-chart";
+
+    private double Step => Points.Count > 1 ? (Width - Left - Right) / (Points.Count - 1) : Width - Left - Right;
+
+    private double X(int i) => Points.Count > 1 ? Left + i * Step : Left + (Width - Left - Right) / 2;
+
+    // The values and every limit fit, with a little room above and below.
+    private (double Min, double Max) Range
+    {
+        get
+        {
+            var all = Points.SelectMany(p => new[] { p.Value, p.Ucl, p.Lcl, p.Center }).OfType<double>().Where(double.IsFinite).ToList();
+            if (all.Count == 0)
+            {
+                return (0, 1);
+            }
+
+            var (min, max) = (all.Min(), all.Max());
+            var pad = max > min ? (max - min) * 0.08 : Math.Max(Math.Abs(max) * 0.1, 1);
+            return (min - pad, max + pad);
+        }
+    }
+
+    private double Y(double value)
+    {
+        var (min, max) = Range;
+        return Top + (max - value) / (max - min) * (Height - Top - Bottom);
+    }
+
+    private IEnumerable<double> Ticks
+    {
+        get
+        {
+            var (min, max) = Range;
+            return Enumerable.Range(0, 5).Select(i => min + (max - min) * i / 4);
+        }
+    }
+
+    private string Path
+    {
+        get
+        {
+            var parts = new List<string>();
+            var pen = false;
+            for (var i = 0; i < Points.Count; i++)
+            {
+                if (Points[i].Value is { } v)
+                {
+                    parts.Add($"{(pen ? "L" : "M")}{F(X(i))} {F(Y(v))}");
+                    pen = true;
+                }
+                else
+                {
+                    pen = false;
+                }
+            }
+
+            return string.Join(' ', parts);
+        }
+    }
+
+    // Each point's limits across its share of the width.
+    private IEnumerable<(double X1, double X2, PlotPoint Point)> Steps =>
+        Points.Select((p, i) => (p, i)).Where(t => t.p.Ucl is not null && t.p.Lcl is not null)
+            .Select(t => (Math.Max(Left, X(t.i) - Step / 2), Math.Min(Width - Right, X(t.i) + Step / 2), t.p));
+
+    private IEnumerable<int> LabelIndexes
+    {
+        get
+        {
+            var every = Math.Max(1, (int)Math.Ceiling(Points.Count / 6.0));
+            return Enumerable.Range(0, Points.Count).Where(i => i % every == 0);
+        }
+    }
+
+    private string Description
+    {
+        get
+        {
+            var beyond = Points.Count(p => p.IsBeyond);
+            return $"{Points.Count} points; {beyond} beyond the limits.";
+        }
+    }
+
+    private static string Diamond(double x, double y) => $"M{F(x)} {F(y - 6)} L{F(x + 6)} {F(y)} L{F(x)} {F(y + 6)} L{F(x - 6)} {F(y)} Z";
+
+    private string Number(double value) => ControlChartView.Number(value, Decimals);
+
+    private static MarkupString SvgText(string cssClass, double x, double y, string anchor, string content) =>
+        new($"<text class=\"{cssClass}\" x=\"{F(x)}\" y=\"{F(y)}\" text-anchor=\"{anchor}\">{System.Net.WebUtility.HtmlEncode(content)}</text>");
+
+    private static string F(double value) => value.ToString("0.#", CultureInfo.InvariantCulture);
+}

@@ -2627,6 +2627,14 @@ results left out, note, period and approver.
   (`/quality/characteristics/{id}/control-limits`) lists every period and, with `specs.manage`, works out a baseline (material, line, period),
   leaves out ticked results and works it out again, approves with a start and note, enters limits by hand, and ends them.
 
+**Charts (piece 3).** `GetControlChartQuery` (`GET /api/quality/characteristics/{id}/chart?siteId=&materialId=&equipmentId=&from=&to=`,
+`quality.view` at the site; ≤ 366 days) reads the site's results for the characteristic and material (on the line when given; not excluded; the
+latest 500), plots them with `ControlLimits.Points`, and gives each point the limits in force at its time for its line (`ControlLimitPeriods.InForce`;
+only limits for the characteristic's current chart and size), its own p/u limits (`At`), and whether it or its dispersion is beyond them. Results
+before any limits have none: limits start when approved and never rewrite history. Operate → Quality → Control charts (`/quality/charts`) draws
+it in SVG (`ControlChartPlot`): limits as dashed steps per point, beyond-limits points as diamonds in the danger colour, a dispersion plot for
+measured charts, hover text and a table view.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

@@ -181,6 +181,86 @@ internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityRead
         return [.. rows.Select(r => r.ToSubgroup())];
     }
 
+    private const string ChartSamples = """
+        SELECT * FROM (
+            SELECT q.id AS sample_id, q.occurred_at, q.measured_values, q.inspected_count, q.defect_count, q.equipment_id, e.code AS line_code,
+                   coalesce(l.lot_number, 'Balance at ' || loc.code) AS lot_label, j.job_number
+            FROM ts.quality_sample q
+            LEFT JOIN core.equipment e ON e.id = q.equipment_id
+            LEFT JOIN core.lot l ON l.id = q.lot_id
+            LEFT JOIN core.equipment loc ON loc.id = l.location_equipment_id
+            LEFT JOIN core.job j ON j.id = q.job_id
+            WHERE q.site_id = @SiteId AND q.characteristic_id = @CharacteristicId AND q.material_id = @MaterialId AND NOT q.is_excluded
+              AND q.occurred_at >= @From AND q.occurred_at < @To
+              AND (@EquipmentId::uuid IS NULL OR q.equipment_id = @EquipmentId)
+            ORDER BY q.occurred_at DESC, q.id DESC
+            LIMIT @Limit) latest
+        ORDER BY occurred_at, sample_id
+        """;
+
+    private const string MaterialLimits = $"SELECT {QualitySql.LimitColumns} FROM core.control_limit l WHERE l.characteristic_id = @CharacteristicId AND l.material_id = @MaterialId";
+
+    private const string ChartCodes = """
+        SELECT (SELECT code FROM core.material WHERE id = @MaterialId) AS material_code,
+               (SELECT code FROM core.equipment WHERE id = @EquipmentId) AS equipment_code,
+               (SELECT u.code FROM core.quality_characteristic c JOIN core.uom u ON u.id = c.uom_id WHERE c.id = @CharacteristicId) AS uom_code
+        """;
+
+    public async Task<IReadOnlyList<ChartSample>> ListChartSamplesAsync(
+        Guid siteId, Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, int limit, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<ChartSampleRow>(new CommandDefinition(ChartSamples, new
+        {
+            SiteId = siteId,
+            CharacteristicId = characteristicId,
+            MaterialId = materialId,
+            EquipmentId = equipmentId,
+            From = windowStart,
+            To = windowEnd,
+            Limit = limit,
+        }, cancellationToken: cancellationToken));
+        return [.. rows.Select(r => new ChartSample(
+            new(r.SampleId, r.OccurredAt, r.MeasuredValues is { } v ? [.. v.Select(x => (double)x)] : null, r.InspectedCount, r.DefectCount),
+            r.EquipmentId, r.LineCode, r.LotLabel, r.JobNumber))];
+    }
+
+    public async Task<IReadOnlyList<Domain.Quality.Spc.ControlLimit>> GetLimitsForMaterialAsync(Guid characteristicId, Guid materialId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. (await connection.QueryAsync<QualitySql.LimitRow>(new CommandDefinition(
+            MaterialLimits, new { CharacteristicId = characteristicId, MaterialId = materialId }, cancellationToken: cancellationToken))).Select(r => r.ToDomain())];
+    }
+
+    public async Task<(string MaterialCode, string? EquipmentCode, string? UomCode)> GetChartCodesAsync(
+        Guid characteristicId, Guid materialId, Guid? equipmentId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var r = await connection.QuerySingleAsync<ChartCodesRow>(new CommandDefinition(
+            ChartCodes, new { CharacteristicId = characteristicId, MaterialId = materialId, EquipmentId = equipmentId }, cancellationToken: cancellationToken));
+        return (r.MaterialCode ?? throw new Application.Errors.NotFoundException($"Material {materialId} not found."), r.EquipmentCode, r.UomCode);
+    }
+
+    private sealed class ChartSampleRow
+    {
+        public Guid SampleId { get; init; }
+        public DateTimeOffset OccurredAt { get; init; }
+        public decimal[]? MeasuredValues { get; init; }
+        public int? InspectedCount { get; init; }
+        public int? DefectCount { get; init; }
+        public Guid? EquipmentId { get; init; }
+        public string? LineCode { get; init; }
+        public string? LotLabel { get; init; }
+        public string? JobNumber { get; init; }
+    }
+
+    private sealed class ChartCodesRow
+    {
+        public string? MaterialCode { get; init; }
+        public string? EquipmentCode { get; init; }
+        public string? UomCode { get; init; }
+    }
+
     private sealed class LimitListRow : QualitySql.LimitRow
     {
         public string MaterialCode { get; init; } = "";

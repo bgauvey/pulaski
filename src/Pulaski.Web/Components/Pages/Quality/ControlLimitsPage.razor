@@ -77,6 +77,7 @@ else
                         <td class="small">
                             @ControlChartView.State(l, Now) · @Display.SiteTime(l.EffectiveFrom, Zone)@(l.EffectiveTo is { } to ? $" to {Display.SiteTime(to, Zone)}" : "")
                             <div class="text-muted">Approved by @l.ApprovedBy</div>
+                            <a href="@($"quality/charts?characteristic={CharacteristicId}&material={l.MaterialId}{(l.EquipmentId is { } line ? $"&line={line}" : "")}")">Chart</a>
                         </td>
                         <td class="text-end">
                             @if (CanManage && l.IsInEffect)
