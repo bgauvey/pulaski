@@ -11,7 +11,8 @@ namespace Pulaski.Infrastructure.Quality;
 internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityReadStore
 {
     private const string ListCharacteristics = $"""
-        SELECT {QualitySql.CharacteristicColumns}, u.code AS uom_code
+        SELECT {QualitySql.CharacteristicColumns}, u.code AS uom_code,
+               EXISTS (SELECT 1 FROM core.control_limit l WHERE l.characteristic_id = c.id AND (l.effective_to IS NULL OR l.effective_to > now())) AS has_limits
         FROM core.quality_characteristic c
         LEFT JOIN core.uom u ON u.id = c.uom_id
         WHERE c.site_id IS NULL
@@ -113,7 +114,78 @@ internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityRead
             Decimals = r.Decimals,
             IsActive = r.IsActive,
             Version = r.Version,
+            ChartType = r.ChartType,
+            SubgroupSize = r.SubgroupSize,
+            HasLimits = r.HasLimits,
         })];
+    }
+
+    private const string ListLimits = $"""
+        SELECT {QualitySql.LimitColumns}, m.code AS material_code, m.name AS material_name, e.code AS equipment_code
+        FROM core.control_limit l
+        JOIN core.material m ON m.id = l.material_id
+        LEFT JOIN core.equipment e ON e.id = l.equipment_id
+        WHERE l.characteristic_id = @Id
+        ORDER BY m.code, e.code NULLS FIRST, l.effective_from DESC
+        """;
+
+    public async Task<IReadOnlyList<ControlLimitDto>> ListLimitsAsync(Guid characteristicId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<LimitListRow>(new CommandDefinition(ListLimits, new { Id = characteristicId }, cancellationToken: cancellationToken));
+        return [.. rows.Select(r => new ControlLimitDto
+        {
+            Id = r.Id,
+            CharacteristicId = r.CharacteristicId,
+            MaterialId = r.MaterialId,
+            MaterialCode = r.MaterialCode,
+            MaterialName = r.MaterialName,
+            EquipmentId = r.EquipmentId,
+            EquipmentCode = r.EquipmentCode,
+            ChartType = r.ChartType,
+            SubgroupSize = r.SubgroupSize,
+            CenterLine = r.CenterLine,
+            Ucl = r.Ucl,
+            Lcl = r.Lcl,
+            DispersionCenter = r.DispersionCenter,
+            DispersionUcl = r.DispersionUcl,
+            DispersionLcl = r.DispersionLcl,
+            Method = r.Method,
+            BaselineFrom = r.BaselineFrom,
+            BaselineTo = r.BaselineTo,
+            BaselineSubgroups = r.BaselineSubgroups,
+            LeftOutSampleIds = r.LeftOutSampleIds,
+            Note = r.Note,
+            EffectiveFrom = r.EffectiveFrom,
+            EffectiveTo = r.EffectiveTo,
+            ApprovedBy = r.ApprovedBy,
+            ApprovedAt = r.ApprovedAt,
+            EndedBy = r.EndedBy,
+            IsInEffect = r.EffectiveFrom <= now && (r.EffectiveTo is null || r.EffectiveTo > now),
+        })];
+    }
+
+    public async Task<IReadOnlyList<Domain.Quality.Spc.SpcSubgroup>> ListBaselineAsync(
+        Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<QualitySql.BaselineRow>(new CommandDefinition(QualitySql.Baseline, new
+        {
+            CharacteristicId = characteristicId,
+            MaterialId = materialId,
+            EquipmentId = equipmentId,
+            From = windowStart,
+            To = windowEnd,
+            Limit = IQualityReadStore.MaxBaseline,
+        }, cancellationToken: cancellationToken));
+        return [.. rows.Select(r => r.ToSubgroup())];
+    }
+
+    private sealed class LimitListRow : QualitySql.LimitRow
+    {
+        public string MaterialCode { get; init; } = "";
+        public string MaterialName { get; init; } = "";
+        public string? EquipmentCode { get; init; }
     }
 
     public async Task<IReadOnlyList<Characteristic>> GetCharacteristicsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
@@ -240,6 +312,9 @@ internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityRead
         public int Decimals { get; init; }
         public bool IsActive { get; init; }
         public long Version { get; init; }
+        public string ChartType { get; init; } = "";
+        public int SubgroupSize { get; init; } = 1;
+        public bool HasLimits { get; init; }
     }
 
     private sealed class VersionSummaryRow

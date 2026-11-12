@@ -2,6 +2,7 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.Quality;
 using Pulaski.Contracts.Quality;
 using Pulaski.Domain.Quality;
+using Pulaski.Domain.Quality.Spc;
 
 namespace Pulaski.Testing;
 
@@ -17,9 +18,24 @@ public sealed class InMemoryQuality : IQualityRepository, IQualityReadStore
     private readonly Dictionary<Guid, (SpecVersion Value, long Version)> _versions = [];
     private readonly Dictionary<Guid, (SpecItem Item, Guid VersionId)> _released = [];
     private readonly List<QualityResultRow> _results = [];
+    private readonly List<ControlLimit> _limits = [];
     private long _next = 1;
 
     public Dictionary<Guid, string> Materials { get; } = [];
+
+    /// <summary>Lines (equipment that runs jobs) by id, with their codes.</summary>
+    public Dictionary<Guid, string> Lines { get; } = [];
+
+    public IReadOnlyList<ControlLimit> Limits
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _limits];
+            }
+        }
+    }
 
     public Dictionary<Guid, QualityJobContext> Jobs { get; } = [];
 
@@ -273,4 +289,89 @@ public sealed class InMemoryQuality : IQualityRepository, IQualityReadStore
 
     public Task<IReadOnlyList<QualityResultDto>> ListResultsAsync(QualityResultFilter filter, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<QualityResultDto>>([]);
+
+    public Task<string?> GetLineCodeAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(Lines.GetValueOrDefault(id));
+
+    public Task<IReadOnlyList<ControlLimit>> GetLimitsAsync(Guid characteristicId, Guid materialId, Guid? equipmentId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<ControlLimit>>(
+                [.. _limits.Where(l => l.CharacteristicId == characteristicId && l.MaterialId == materialId && l.EquipmentId == equipmentId).OrderBy(l => l.EffectiveFrom)]);
+        }
+    }
+
+    public Task<ControlLimit?> GetLimitAsync(Guid id, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_limits.FirstOrDefault(l => l.Id == id));
+        }
+    }
+
+    public Task<bool> HasOpenLimitsAsync(Guid characteristicId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_limits.Any(l => l.CharacteristicId == characteristicId && (l.EffectiveTo is null || l.EffectiveTo > at)));
+        }
+    }
+
+    public Task InsertLimitAsync(ControlLimit limit, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _limits.Add(limit);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task EndLimitAsync(Guid id, DateTimeOffset endsAt, string? by, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var i = _limits.FindIndex(l => l.Id == id);
+            _limits[i] = _limits[i] with { EffectiveTo = endsAt };
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<SpcSubgroup>> ListBaselineAsync(
+        Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<SpcSubgroup>>([.. _results
+                .Where(r => r.CharacteristicId == characteristicId && r.MaterialId == materialId && !r.IsExcluded && r.OccurredAt >= windowStart && r.OccurredAt < windowEnd
+                    && (equipmentId is null || r.EquipmentId == equipmentId))
+                .OrderBy(r => r.OccurredAt)
+                .Select(r => new SpcSubgroup(r.Id, r.OccurredAt, r.Measurement.Values?.Select(v => (double)v).ToList(), r.Measurement.Inspected, r.Measurement.Defects))]);
+        }
+    }
+
+    public Task<IReadOnlyList<ControlLimitDto>> ListLimitsAsync(Guid characteristicId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<ControlLimitDto>>([.. _limits.Where(l => l.CharacteristicId == characteristicId).Select(l => new ControlLimitDto
+            {
+                Id = l.Id,
+                CharacteristicId = l.CharacteristicId,
+                MaterialId = l.MaterialId,
+                EquipmentId = l.EquipmentId,
+                ChartType = l.ChartType,
+                SubgroupSize = l.SubgroupSize,
+                CenterLine = l.Limits.Center,
+                Ucl = l.Limits.Ucl,
+                Lcl = l.Limits.Lcl,
+                Method = l.Method,
+                EffectiveFrom = l.EffectiveFrom,
+                EffectiveTo = l.EffectiveTo,
+                ApprovedBy = l.ApprovedBy,
+                IsInEffect = l.IsInEffect(now),
+            })]);
+        }
+    }
 }

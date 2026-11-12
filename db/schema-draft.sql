@@ -1828,7 +1828,8 @@ CREATE UNIQUE INDEX labor_break_corrected_once ON core.labor_break (corrects_bre
 -- 11. QUALITY AND SPC (definitions and alert state)
 -- =====================================================================
 
--- What is measured or inspected (#65, D-085). Enterprise-wide (site_id NULL) for specifications; the SPC columns serve charts later.
+-- What is measured or inspected (#65, D-085). Enterprise-wide (site_id NULL) for specifications; chart_type and subgroup_size are its
+-- control chart (D-099), changed only while no limits are in force.
 CREATE TABLE core.quality_characteristic (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     site_id             uuid REFERENCES core.equipment(id),     -- NULL: every site (all a specification may name)
@@ -1897,11 +1898,15 @@ CREATE TABLE core.material_spec_item (
     CONSTRAINT material_spec_item_order_ck CHECK (lsl IS NULL OR usl IS NULL OR lsl <= usl)
 );
 
--- Control limits (statistical): computed from a baseline then frozen.
+-- Control limits (D-099): worked out from a reviewed baseline (or entered with a reason), approved, then fixed for a period. Per
+-- characteristic and material, optionally one line. A new set ends the open one; periods are ended, never changed or deleted.
 CREATE TABLE core.control_limit (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     characteristic_id   uuid NOT NULL REFERENCES core.quality_characteristic(id),
-    material_id         uuid REFERENCES core.material(id),
+    material_id         uuid NOT NULL REFERENCES core.material(id),
+    equipment_id        uuid REFERENCES core.equipment(id),     -- one line's own limits, used before the material's; NULL: every line
+    chart_type          text NOT NULL CHECK (chart_type IN ('xbar_r','xbar_s','i_mr','p','np','c','u')),
+    subgroup_size       smallint NOT NULL CHECK (subgroup_size >= 1),
     center_line         double precision NOT NULL,
     ucl                 double precision NOT NULL,
     lcl                 double precision NOT NULL,
@@ -1912,15 +1917,26 @@ CREATE TABLE core.control_limit (
     baseline_from       timestamptz,
     baseline_to         timestamptz,
     baseline_subgroups  integer,
+    left_out_sample_ids uuid[] NOT NULL DEFAULT '{}',           -- results the reviewer left out of the baseline
+    note                text CHECK (length(note) <= 1000),      -- required for manual limits
     effective_from      timestamptz NOT NULL,
     effective_to        timestamptz,
-    approved_by_user_id uuid REFERENCES sec.app_user(id),
+    approved_by         text NOT NULL,
+    approved_at         timestamptz NOT NULL,
+    ended_by            text,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT control_limit_order_ck CHECK (lcl <= center_line AND center_line <= ucl),
+    CONSTRAINT control_limit_period_ck CHECK (effective_to IS NULL OR effective_to > effective_from),
+    CONSTRAINT control_limit_baseline_ck CHECK ((method = 'computed') = (baseline_from IS NOT NULL AND baseline_to IS NOT NULL)),
+    CONSTRAINT control_limit_manual_ck CHECK (method <> 'manual' OR note IS NOT NULL),
     CONSTRAINT control_limit_no_overlap EXCLUDE USING gist (
         characteristic_id WITH =,
-        (coalesce(material_id, '00000000-0000-0000-0000-000000000000'::uuid)) WITH =,
+        material_id WITH =,
+        (coalesce(equipment_id, '00000000-0000-0000-0000-000000000000'::uuid)) WITH =,
         tstzrange(effective_from, effective_to) WITH &&)
 );
+CREATE INDEX control_limit_scope_ix ON core.control_limit (characteristic_id, material_id, effective_from);
 
 -- Nelson rules 1-8 (rules 1-4 are the Western Electric set).
 CREATE TABLE core.spc_rule (
@@ -2575,7 +2591,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0060_password_reset'),
     ('0061_labor_gaps'),
     ('0062_machine_counts'),
-    ('0063_rate_refresh');
+    ('0063_rate_refresh'),
+    ('0064_control_limits');
 
 -- =====================================================================
 -- 17. SEED DATA

@@ -22,8 +22,21 @@ public sealed record Characteristic(Guid Id, string Code, string Name, string? D
     public const int MaxName = 100;
     public const int MaxDescription = 500;
 
-    /// <summary>The chart its results would be drawn on, which the stored row needs: individuals for a variable, defectives for an attribute.</summary>
-    public string ChartType => DataKind == CharacteristicKinds.Variable ? "i_mr" : "np";
+    private readonly string? _chartType;
+
+    /// <summary>
+    /// The control chart its results are drawn on (D-099); until chosen, individuals for a variable and proportion defective for an attribute.
+    /// </summary>
+    public string ChartType
+    {
+        get => _chartType ?? DefaultChart(DataKind);
+        init => _chartType = value;
+    }
+
+    /// <summary>Values a subgroup holds on its chart: 1 for individuals, 2 to 25 for X-bar charts; for np and c charts, items inspected a sample.</summary>
+    public int SubgroupSize { get; init; } = 1;
+
+    public static string DefaultChart(string dataKind) => dataKind == CharacteristicKinds.Variable ? Spc.ChartTypes.IMr : Spc.ChartTypes.P;
 
     /// <returns>Why the code isn't acceptable, or null: 1 to 30 upper-case letters, digits, '-' or '_', starting with a letter or digit.</returns>
     public static string? CodeProblem(string code) =>

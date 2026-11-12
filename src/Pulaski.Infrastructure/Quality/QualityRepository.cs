@@ -11,7 +11,8 @@ namespace Pulaski.Infrastructure.Quality;
 internal static class QualitySql
 {
     public const string CharacteristicColumns = """
-        c.id, c.code, c.name, c.description, c.data_kind, c.uom_id, c.decimals, c.is_active, c.xmin::text::bigint AS version
+        c.id, c.code, c.name, c.description, c.data_kind, c.uom_id, c.decimals, c.is_active, c.chart_type, c.subgroup_size::int AS subgroup_size,
+        c.xmin::text::bigint AS version
         """;
 
     public const string Characteristics = $"SELECT {CharacteristicColumns} FROM core.quality_characteristic c WHERE c.id = ANY(@Ids)";
@@ -20,6 +21,68 @@ internal static class QualitySql
         v.id, v.spec_id, v.version_number AS number, v.status, v.definition::text AS definition_json, v.released_at, v.released_by, v.note,
         v.xmin::text::bigint AS version
         """;
+
+    public const string LimitColumns = """
+        l.id, l.characteristic_id, l.material_id, l.equipment_id, l.chart_type, l.subgroup_size::int AS subgroup_size, l.center_line, l.ucl, l.lcl,
+        l.dispersion_center, l.dispersion_ucl, l.dispersion_lcl, l.method, l.baseline_from, l.baseline_to, l.baseline_subgroups, l.left_out_sample_ids,
+        l.note, l.effective_from, l.effective_to, l.approved_by, l.approved_at, l.ended_by
+        """;
+
+    // Results for a baseline: the characteristic's, for the material, not excluded, on the line when one is given.
+    public const string Baseline = """
+        SELECT q.id AS sample_id, q.occurred_at, q.measured_values, q.inspected_count, q.defect_count
+        FROM ts.quality_sample q
+        WHERE q.characteristic_id = @CharacteristicId AND q.material_id = @MaterialId AND NOT q.is_excluded
+          AND q.occurred_at >= @From AND q.occurred_at < @To
+          AND (@EquipmentId::uuid IS NULL OR q.equipment_id = @EquipmentId)
+        ORDER BY q.occurred_at, q.id
+        LIMIT @Limit
+        """;
+
+    internal sealed class BaselineRow
+    {
+        public Guid SampleId { get; init; }
+        public DateTimeOffset OccurredAt { get; init; }
+        public decimal[]? MeasuredValues { get; init; }
+        public int? InspectedCount { get; init; }
+        public int? DefectCount { get; init; }
+
+        public Domain.Quality.Spc.SpcSubgroup ToSubgroup() =>
+            new(SampleId, OccurredAt, MeasuredValues is { } v ? [.. v.Select(x => (double)x)] : null, InspectedCount, DefectCount);
+    }
+
+    internal class LimitRow
+    {
+        public Guid Id { get; init; }
+        public Guid CharacteristicId { get; init; }
+        public Guid MaterialId { get; init; }
+        public Guid? EquipmentId { get; init; }
+        public string ChartType { get; init; } = "";
+        public int SubgroupSize { get; init; }
+        public double CenterLine { get; init; }
+        public double Ucl { get; init; }
+        public double Lcl { get; init; }
+        public double? DispersionCenter { get; init; }
+        public double? DispersionUcl { get; init; }
+        public double? DispersionLcl { get; init; }
+        public string Method { get; init; } = "";
+        public DateTimeOffset? BaselineFrom { get; init; }
+        public DateTimeOffset? BaselineTo { get; init; }
+        public int? BaselineSubgroups { get; init; }
+        public Guid[] LeftOutSampleIds { get; init; } = [];
+        public string? Note { get; init; }
+        public DateTimeOffset EffectiveFrom { get; init; }
+        public DateTimeOffset? EffectiveTo { get; init; }
+        public string ApprovedBy { get; init; } = "";
+        public DateTimeOffset ApprovedAt { get; init; }
+        public string? EndedBy { get; init; }
+
+        public Domain.Quality.Spc.ControlLimit ToDomain() => new(
+            Id, CharacteristicId, MaterialId, EquipmentId, ChartType, SubgroupSize,
+            new(CenterLine, Ucl, Lcl, DispersionCenter, DispersionUcl, DispersionLcl), Method,
+            BaselineFrom is { } from && BaselineTo is { } to ? new(from, to, BaselineSubgroups ?? 0, LeftOutSampleIds) : null,
+            Note, EffectiveFrom, EffectiveTo, ApprovedBy, ApprovedAt);
+    }
 
     internal sealed class CharacteristicRow
     {
@@ -31,9 +94,15 @@ internal static class QualitySql
         public Guid? UomId { get; init; }
         public int Decimals { get; init; }
         public bool IsActive { get; init; }
+        public string ChartType { get; init; } = "";
+        public int SubgroupSize { get; init; } = 1;
         public long Version { get; init; }
 
-        public Characteristic ToDomain() => new(Id, Code, Name, Description, DataKind, UomId, Decimals, IsActive);
+        public Characteristic ToDomain() => new(Id, Code, Name, Description, DataKind, UomId, Decimals, IsActive)
+        {
+            ChartType = ChartType,
+            SubgroupSize = SubgroupSize,
+        };
     }
 
     internal sealed class VersionRow
@@ -67,13 +136,14 @@ internal sealed class QualityRepository(DbSession session) : IQualityRepository
     private const string InsertCharacteristic = """
         INSERT INTO core.quality_characteristic (id, site_id, code, name, description, data_kind, chart_type, subgroup_size, uom_id, decimals, is_active,
                                                  created_at, updated_at)
-        VALUES (@Id, NULL, @Code, @Name, @Description, @DataKind, @ChartType, 1, @UomId, @Decimals, @IsActive, @At, @At)
+        VALUES (@Id, NULL, @Code, @Name, @Description, @DataKind, @ChartType, @SubgroupSize, @UomId, @Decimals, @IsActive, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     private const string UpdateCharacteristic = """
         UPDATE core.quality_characteristic
-        SET name = @Name, description = @Description, uom_id = @UomId, decimals = @Decimals, is_active = @IsActive, updated_at = @At
+        SET name = @Name, description = @Description, uom_id = @UomId, decimals = @Decimals, is_active = @IsActive, chart_type = @ChartType,
+            subgroup_size = @SubgroupSize, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -287,6 +357,84 @@ internal sealed class QualityRepository(DbSession session) : IQualityRepository
     public Task ExcludeResultAsync(Guid id, DateTimeOffset occurredAt, Guid reasonId, string? note, string by, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteAsync(Exclude, new { Id = id, OccurredAt = occurredAt, ReasonId = reasonId, Note = note, By = by, At = at }, cancellationToken);
 
+    private const string LineCode = "SELECT code FROM core.equipment WHERE id = @Id AND can_run_job";
+
+    private const string ScopeLimits = $"""
+        SELECT {QualitySql.LimitColumns} FROM core.control_limit l
+        WHERE l.characteristic_id = @CharacteristicId AND l.material_id = @MaterialId AND l.equipment_id IS NOT DISTINCT FROM @EquipmentId
+        ORDER BY l.effective_from
+        """;
+
+    private const string LimitById = $"SELECT {QualitySql.LimitColumns} FROM core.control_limit l WHERE l.id = @Id";
+
+    private const string OpenLimits = "SELECT EXISTS (SELECT 1 FROM core.control_limit WHERE characteristic_id = @Id AND (effective_to IS NULL OR effective_to > @At))";
+
+    private const string InsertLimit = """
+        INSERT INTO core.control_limit (id, characteristic_id, material_id, equipment_id, chart_type, subgroup_size, center_line, ucl, lcl,
+                                        dispersion_center, dispersion_ucl, dispersion_lcl, method, baseline_from, baseline_to, baseline_subgroups,
+                                        left_out_sample_ids, note, effective_from, effective_to, approved_by, approved_at, created_at, updated_at)
+        VALUES (@Id, @CharacteristicId, @MaterialId, @EquipmentId, @ChartType, @SubgroupSize, @Center, @Ucl, @Lcl,
+                @DispersionCenter, @DispersionUcl, @DispersionLcl, @Method, @BaselineFrom, @BaselineTo, @BaselineSubgroups,
+                @LeftOut, @Note, @EffectiveFrom, @EffectiveTo, @ApprovedBy, @ApprovedAt, @ApprovedAt, @ApprovedAt)
+        """;
+
+    private const string EndLimit = "UPDATE core.control_limit SET effective_to = @EndsAt, ended_by = @By, updated_at = @At WHERE id = @Id";
+
+    public Task<string?> GetLineCodeAsync(Guid id, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<string>(LineCode, new { Id = id }, cancellationToken);
+
+    public async Task<IReadOnlyList<Domain.Quality.Spc.ControlLimit>> GetLimitsAsync(Guid characteristicId, Guid materialId, Guid? equipmentId, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<QualitySql.LimitRow>(ScopeLimits, new { CharacteristicId = characteristicId, MaterialId = materialId, EquipmentId = equipmentId }, cancellationToken))
+            .Select(r => r.ToDomain())];
+
+    public async Task<Domain.Quality.Spc.ControlLimit?> GetLimitAsync(Guid id, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<QualitySql.LimitRow>(LimitById, new { Id = id }, cancellationToken))?.ToDomain();
+
+    public Task<bool> HasOpenLimitsAsync(Guid characteristicId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(OpenLimits, new { Id = characteristicId, At = at }, cancellationToken);
+
+    public Task InsertLimitAsync(Domain.Quality.Spc.ControlLimit l, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(InsertLimit, new
+        {
+            l.Id,
+            l.CharacteristicId,
+            l.MaterialId,
+            l.EquipmentId,
+            l.ChartType,
+            SubgroupSize = (short)l.SubgroupSize,
+            l.Limits.Center,
+            l.Limits.Ucl,
+            l.Limits.Lcl,
+            l.Limits.DispersionCenter,
+            l.Limits.DispersionUcl,
+            l.Limits.DispersionLcl,
+            l.Method,
+            BaselineFrom = l.Baseline?.From,
+            BaselineTo = l.Baseline?.To,
+            BaselineSubgroups = l.Baseline?.Subgroups,
+            LeftOut = (l.Baseline?.LeftOut ?? []).ToArray(),
+            l.Note,
+            l.EffectiveFrom,
+            l.EffectiveTo,
+            l.ApprovedBy,
+            l.ApprovedAt,
+        }, cancellationToken);
+
+    public Task EndLimitAsync(Guid id, DateTimeOffset endsAt, string? by, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(EndLimit, new { Id = id, EndsAt = endsAt, By = by, At = at }, cancellationToken);
+
+    public async Task<IReadOnlyList<Domain.Quality.Spc.SpcSubgroup>> ListBaselineAsync(
+        Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<QualitySql.BaselineRow>(QualitySql.Baseline, new
+        {
+            CharacteristicId = characteristicId,
+            MaterialId = materialId,
+            EquipmentId = equipmentId,
+            From = windowStart,
+            To = windowEnd,
+            Limit = IQualityReadStore.MaxBaseline,
+        }, cancellationToken)).Select(r => r.ToSubgroup())];
+
     private static object CharacteristicArgs(Characteristic c, DateTimeOffset at) => new
     {
         c.Id,
@@ -295,6 +443,7 @@ internal sealed class QualityRepository(DbSession session) : IQualityRepository
         c.Description,
         c.DataKind,
         c.ChartType,
+        SubgroupSize = (short)c.SubgroupSize,
         c.UomId,
         Decimals = (short)c.Decimals,
         c.IsActive,

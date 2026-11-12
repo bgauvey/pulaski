@@ -13,6 +13,15 @@ public sealed record CharacteristicDto
     public int Decimals { get; init; }
     public bool IsActive { get; init; }
     public long Version { get; init; }
+
+    /// <summary>Its control chart (D-099): <c>i_mr</c>, <c>xbar_r</c>, <c>xbar_s</c>, <c>p</c>, <c>np</c>, <c>c</c> or <c>u</c>.</summary>
+    public string ChartType { get; init; } = "i_mr";
+
+    /// <summary>Values a subgroup holds (1 for individuals, 2–25 for X-bar charts), or items inspected a sample for np and c charts.</summary>
+    public int SubgroupSize { get; init; } = 1;
+
+    /// <summary>Control limits are in force or still to come, so the chart can't change.</summary>
+    public bool HasLimits { get; init; }
 }
 
 public sealed record CreateCharacteristicRequest
@@ -34,7 +43,134 @@ public sealed record UpdateCharacteristicRequest
     public Guid? UomId { get; init; }
     public int Decimals { get; init; } = 3;
     public bool IsActive { get; init; } = true;
+
+    /// <summary>A new control chart (D-099); left out, it stays. Refused while control limits are in force.</summary>
+    public string? ChartType { get; init; }
+    public int? SubgroupSize { get; init; }
 }
+
+/// <summary>A set of control limits over a period (D-099).</summary>
+public sealed record ControlLimitDto
+{
+    public Guid Id { get; init; }
+    public Guid CharacteristicId { get; init; }
+    public Guid MaterialId { get; init; }
+    public string MaterialCode { get; init; } = "";
+    public string MaterialName { get; init; } = "";
+
+    /// <summary>The line whose own limits these are; null for every line.</summary>
+    public Guid? EquipmentId { get; init; }
+    public string? EquipmentCode { get; init; }
+    public string ChartType { get; init; } = "";
+    public int SubgroupSize { get; init; }
+    public double CenterLine { get; init; }
+    public double Ucl { get; init; }
+    public double Lcl { get; init; }
+    public double? DispersionCenter { get; init; }
+    public double? DispersionUcl { get; init; }
+    public double? DispersionLcl { get; init; }
+
+    /// <summary><c>computed</c> from a baseline, or <c>manual</c>.</summary>
+    public string Method { get; init; } = "";
+    public DateTimeOffset? BaselineFrom { get; init; }
+    public DateTimeOffset? BaselineTo { get; init; }
+    public int? BaselineSubgroups { get; init; }
+    public IReadOnlyList<Guid> LeftOutSampleIds { get; init; } = [];
+    public string? Note { get; init; }
+    public DateTimeOffset EffectiveFrom { get; init; }
+    public DateTimeOffset? EffectiveTo { get; init; }
+    public string ApprovedBy { get; init; } = "";
+    public DateTimeOffset ApprovedAt { get; init; }
+    public string? EndedBy { get; init; }
+    public bool IsInEffect { get; init; }
+}
+
+/// <summary>Limits worked out from a baseline (D-099), for review before approval; nothing is saved.</summary>
+public sealed record LimitBaselineDto
+{
+    public Guid CharacteristicId { get; init; }
+    public string ChartType { get; init; } = "";
+    public int SubgroupSize { get; init; }
+    public DateTimeOffset From { get; init; }
+    public DateTimeOffset To { get; init; }
+    public int Subgroups { get; init; }
+    public int MinSubgroups { get; init; }
+
+    /// <summary>The limits the baseline gives; all null with <see cref="NotEnough"/> saying why.</summary>
+    public double? CenterLine { get; init; }
+    public double? Ucl { get; init; }
+    public double? Lcl { get; init; }
+    public double? DispersionCenter { get; init; }
+    public double? DispersionUcl { get; init; }
+    public double? DispersionLcl { get; init; }
+    public string? NotEnough { get; init; }
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+
+    /// <summary>Every result in the window, in time order, with its plotted value and whether it was used.</summary>
+    public IReadOnlyList<BaselinePointDto> Points { get; init; } = [];
+
+    /// <summary>The limits in force now for the same characteristic, material and line, if any, to compare.</summary>
+    public ControlLimitDto? Current { get; init; }
+}
+
+/// <summary>One result of a baseline: its plotted statistic, and why it was left out, if it was.</summary>
+public sealed record BaselinePointDto
+{
+    public Guid SampleId { get; init; }
+    public DateTimeOffset At { get; init; }
+    public double? Value { get; init; }
+    public double? Dispersion { get; init; }
+    public int Size { get; init; }
+
+    /// <summary>The reviewer left it out.</summary>
+    public bool IsLeftOut { get; init; }
+
+    /// <summary>Why the chart couldn't take it (wrong size, no values), if it couldn't.</summary>
+    public string? Unusable { get; init; }
+
+    /// <summary>Beyond the limits worked out (a point to look into before approving).</summary>
+    public bool IsBeyondLimits { get; init; }
+}
+
+/// <summary>Approves the limits a reviewed baseline gives; worked out again first, and refused (409) when they differ from those reviewed.</summary>
+public sealed record ApproveControlLimitsRequest
+{
+    public Guid MaterialId { get; init; }
+    public Guid? EquipmentId { get; init; }
+    public DateTimeOffset From { get; init; }
+    public DateTimeOffset To { get; init; }
+    public IReadOnlyList<Guid> LeftOutSampleIds { get; init; } = [];
+    public double CenterLine { get; init; }
+    public double Ucl { get; init; }
+    public double Lcl { get; init; }
+
+    /// <summary>When they start; now when left out. Never in the past.</summary>
+    public DateTimeOffset? EffectiveFrom { get; init; }
+    public string? Note { get; init; }
+}
+
+/// <summary>Limits entered by hand, with why (D-099).</summary>
+public sealed record SetManualControlLimitsRequest
+{
+    public Guid MaterialId { get; init; }
+    public Guid? EquipmentId { get; init; }
+    public double CenterLine { get; init; }
+    public double Ucl { get; init; }
+    public double Lcl { get; init; }
+    public double? DispersionCenter { get; init; }
+    public double? DispersionUcl { get; init; }
+    public double? DispersionLcl { get; init; }
+    public DateTimeOffset? EffectiveFrom { get; init; }
+    public string Note { get; init; } = "";
+}
+
+public sealed record EndControlLimitsRequest
+{
+    public string? Note { get; init; }
+}
+
+/// <summary>The limits saved, and those it ended.</summary>
+public sealed record ControlLimitChangeResponse(Guid Id, IReadOnlyList<Guid> Ended);
 
 /// <summary>A material's specification in a list.</summary>
 public sealed record SpecSummaryDto

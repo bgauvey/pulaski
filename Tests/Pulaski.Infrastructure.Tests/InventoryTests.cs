@@ -807,6 +807,81 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Control_limits_come_from_a_reviewed_baseline_are_approved_and_follow_on_by_period()
+    {
+        var plant = await CreatePlantAsync();
+        CreatedResponse wall = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("SPC-" + _suffix, "Wall thickness", null, "variable", plant.Kg, 3));
+        var characteristic = (await QueryAsync<Application.Quality.ListCharacteristicsQuery, IReadOnlyList<Contracts.Quality.CharacteristicDto>>(
+            new Application.Quality.ListCharacteristicsQuery())).Single(c => c.Id == wall.Id);
+        Assert.Equal(("i_mr", 1), (characteristic.ChartType, characteristic.SubgroupSize));
+
+        // An X-bar and R chart of five values a subgroup; 24 subgroups over the run, one of them unusual.
+        var chart = await db.SendAsync(new Application.Quality.UpdateCharacteristicCommand(wall.Id, wall.Version, "Wall thickness", null, plant.Kg, 3, true)
+        {
+            ChartType = "xbar_r",
+            SubgroupSize = 5,
+        });
+        var start = DateTimeOffset.UtcNow.AddHours(-23);
+        var samples = new List<Guid>();
+        for (var i = 0; i < 24; i++)
+        {
+            decimal[] values = i == 10 ? [4.0m, 4.1m, 4.2m, 4.1m, 4.0m] : [3.0m, 3.1m, 3.2m, 3.1m, 3.0m];
+            samples.Add((await db.SendAsync(new Application.Quality.RecordQualityResultCommand(
+                plant.Site, wall.Id, null, plant.Job, start.AddMinutes(30 * i), values, null, null, "manual", null))).Id);
+        }
+
+        var end = DateTimeOffset.UtcNow;
+        var review = await QueryAsync<Application.Quality.GetLimitBaselineQuery, Contracts.Quality.LimitBaselineDto>(
+            new Application.Quality.GetLimitBaselineQuery(wall.Id, plant.Profile, null, start.AddMinutes(-1), end, []));
+        Assert.Equal((24, "xbar_r"), (review.Subgroups, review.ChartType));
+        Assert.True(review.Points.Single(p => p.SampleId == samples[10]).IsBeyondLimits);
+        Assert.Contains(review.Warnings, w => w.StartsWith("24 subgroups", StringComparison.Ordinal));
+
+        // Leaving the unusual one out tightens the limits: 3.08 ± 0.577 × 0.2.
+        var reviewed = await QueryAsync<Application.Quality.GetLimitBaselineQuery, Contracts.Quality.LimitBaselineDto>(
+            new Application.Quality.GetLimitBaselineQuery(wall.Id, plant.Profile, null, start.AddMinutes(-1), end, [samples[10]]));
+        Assert.Equal(23, reviewed.Subgroups);
+        Assert.Equal(3.08, reviewed.CenterLine!.Value, 1e-9);
+        Assert.Equal(3.08 + 0.577 * 0.2, reviewed.Ucl!.Value, 1e-9);
+
+        // Approving checks the figures again; different ones are refused.
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new Application.Quality.ApproveControlLimitsCommand(
+            wall.Id, plant.Profile, null, start.AddMinutes(-1), end, [samples[10]], review.CenterLine!.Value, review.Ucl!.Value, review.Lcl!.Value, null, null)));
+        var approved = await db.SendAsync(new Application.Quality.ApproveControlLimitsCommand(
+            wall.Id, plant.Profile, null, start.AddMinutes(-1), end, [samples[10]], reviewed.CenterLine!.Value, reviewed.Ucl!.Value, reviewed.Lcl!.Value, null, "First baseline"));
+        Assert.Empty(approved.Ended);
+
+        // The chart can't change while they are in force.
+        var resize = new Application.Quality.UpdateCharacteristicCommand(wall.Id, chart.Version, "Wall thickness", null, plant.Kg, 3, true)
+        {
+            SubgroupSize = 4,
+        };
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(resize));
+
+        // Limits for the line come before the material's; new material limits end the old ones; manual limits need a reason.
+        await db.SendAsync(new Application.Quality.SetManualControlLimitsCommand(
+            wall.Id, plant.Profile, plant.Line, 3.1, 3.3, 2.9, 0.2, 0.42, 0, null, "Line trial"));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Application.Quality.SetManualControlLimitsCommand(
+            wall.Id, plant.Profile, null, 3.1, 3.3, 2.9, 0.2, 0.42, 0, null, " ")));
+        var replaced = await db.SendAsync(new Application.Quality.SetManualControlLimitsCommand(
+            wall.Id, plant.Profile, null, 3.1, 3.4, 2.8, 0.2, 0.42, 0, DateTimeOffset.UtcNow.AddMinutes(5), "Customer limits"));
+        Assert.Equal(approved.Id, Assert.Single(replaced.Ended));
+
+        var limits = await QueryAsync<Application.Quality.ListControlLimitsQuery, IReadOnlyList<Contracts.Quality.ControlLimitDto>>(
+            new Application.Quality.ListControlLimitsQuery(wall.Id));
+        Assert.Equal(3, limits.Count);
+        var first = limits.Single(l => l.Id == approved.Id);
+        Assert.Equal(("computed", 23, 1), (first.Method, first.BaselineSubgroups, first.LeftOutSampleIds.Count));
+        Assert.True(first.IsInEffect);
+        Assert.NotNull(first.EffectiveTo);
+        Assert.Equal("LINE-" + _suffix, limits.Single(l => l.EquipmentId == plant.Line).EquipmentCode);
+
+        // Ending stops them; a period can't end twice.
+        await db.SendAsync(new Application.Quality.EndControlLimitsCommand(limits.Single(l => l.EquipmentId == plant.Line).Id, "Trial over"));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Application.Quality.EndControlLimitsCommand(limits.Single(l => l.EquipmentId == plant.Line).Id, null)));
+    }
+
+    [Fact]
     public async Task Merges_transfers_and_output_that_joined_a_silo_are_put_back_as_they_were()
     {
         var plant = await CreatePlantAsync();

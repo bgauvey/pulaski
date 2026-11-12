@@ -12,7 +12,13 @@ public sealed record CreateCharacteristicCommand(string Code, string Name, strin
 
 /// <summary>Changes a characteristic's name, description, unit, decimals and whether it is on; code and kind are fixed.</summary>
 public sealed record UpdateCharacteristicCommand(Guid Id, long ExpectedVersion, string Name, string? Description, Guid? UomId, int Decimals, bool IsActive)
-    : ICommand<VersionResponse>;
+    : ICommand<VersionResponse>
+{
+    /// <summary>A new control chart (D-099); null keeps it. Refused while control limits are in force or to come.</summary>
+    public string? ChartType { get; init; }
+
+    public int? SubgroupSize { get; init; }
+}
 
 /// <summary>A specification for the material (#65), starting with an empty draft. A material has at most one.</summary>
 public sealed record CreateSpecCommand(Guid MaterialId) : ICommand<CreatedResponse>;
@@ -88,6 +94,8 @@ internal static class SpecRules
             .Require(characteristic.Decimals is >= 0 and <= 6, nameof(characteristic.Decimals), "0 to 6.")
             .Require(characteristic.UomId is null || characteristic.DataKind == CharacteristicKinds.Variable, nameof(characteristic.UomId),
                 "Only a measured characteristic has a unit.")
+            .Require(Domain.Quality.Spc.ChartTypes.Problem(characteristic.ChartType, characteristic.DataKind, characteristic.SubgroupSize) is null,
+                nameof(characteristic.ChartType), Domain.Quality.Spc.ChartTypes.Problem(characteristic.ChartType, characteristic.DataKind, characteristic.SubgroupSize) ?? "")
             .ThrowIfInvalid();
         return characteristic;
     }
@@ -118,7 +126,7 @@ internal sealed class CreateCharacteristicHandler(IUnitOfWork unitOfWork, IQuali
     }
 }
 
-internal sealed class UpdateCharacteristicHandler(IUnitOfWork unitOfWork, IQualityRepository quality, IEventLog eventLog, IEventFactory events)
+internal sealed class UpdateCharacteristicHandler(IUnitOfWork unitOfWork, IQualityRepository quality, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)
     : ICommandHandler<UpdateCharacteristicCommand, VersionResponse>
 {
     public async Task<VersionResponse> HandleAsync(UpdateCharacteristicCommand command, CancellationToken cancellationToken)
@@ -138,7 +146,15 @@ internal sealed class UpdateCharacteristicHandler(IUnitOfWork unitOfWork, IQuali
             UomId = command.UomId,
             Decimals = command.Decimals,
             IsActive = command.IsActive,
+            ChartType = command.ChartType?.Trim() ?? current.Value.ChartType,
+            SubgroupSize = command.SubgroupSize ?? current.Value.SubgroupSize,
         });
+        if ((after.ChartType != current.Value.ChartType || after.SubgroupSize != current.Value.SubgroupSize)
+            && await quality.HasOpenLimitsAsync(after.Id, timeProvider.GetUtcNow(), cancellationToken))
+        {
+            throw new DomainRuleException($"{after.Code} has control limits in force; end them before changing its chart, since they were worked out for this one.");
+        }
+
         var envelope = events.Create(EventTypes.CharacteristicUpdated, "quality_characteristic", after.Id, new { Before = current.Value, After = after });
         var version = await quality.UpdateCharacteristicAsync(after, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);

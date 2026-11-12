@@ -2609,6 +2609,21 @@ definitions. `ControlLimits.Points` gives each subgroup's statistic and dispersi
 from the mean range, standard deviation or moving range within subgroups, never the overall spread. It leaves out unusable subgroups
 (and, for charts of one size, others) with why. Attribute lower limits stop at zero; p and u limits follow each sample's size (`At`).
 
+**Control limits (piece 2).** A characteristic's chart is now chosen: `chart_type` and `subgroup_size` (until chosen, individuals for a variable
+and p for an attribute; migration 0064 moves the fixed `np` of D-085 to `p`), set through `UpdateCharacteristicCommand` and refused while limits are
+in force or to come. `core.control_limit` is rebuilt per characteristic + material + optional line, with its chart, method, baseline window,
+results left out, note, period and approver.
+- **Review:** `GetLimitBaselineQuery` (`GET /api/quality/characteristics/{id}/control-limits/baseline`) reads the characteristic's results for
+  the material in a window (≤ 366 days; not excluded; on the line when one is given, which results against a job carry; at most 1000) and
+  returns the limits they give, warnings, and every result with its plotted value, whether it was left out or unusable, and whether it is beyond
+  the limits, beside the limits in force. Nothing is saved.
+- **Approve:** `ApproveControlLimitsCommand` locks the characteristic, works the limits out again from the same window less the same results, and
+  refuses (409) limits that differ from those reviewed (`ControlLimitPeriods.Same`). `SetManualControlLimitsCommand` takes limits with a reason.
+  Both start now or later (history keeps the limits it was charted with) and go through `ControlLimitPeriods.Place`: an open period of the same
+  scope that started earlier ends there; any other overlap is refused. `EndControlLimitsCommand` ends a period now. `ControlLimitPeriods.InForce`
+  takes the line's own limits, else the material's. Permission `specs.manage` to change, `quality.view` to see; events
+  `control_limit.approved` and `control_limit.ended`.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

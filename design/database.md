@@ -1512,9 +1512,9 @@ A break's time comes out of the worked hours of every session of the person it o
 
 ### core.quality_characteristic — what is measured or inspected (#65, D-085) · *In use*
 
-Enterprise-wide for specifications (`site_id` NULL). Code and kind are fixed once created; switched off, never deleted. The SPC columns
-(`chart_type`, `subgroup_size`, `sample_interval`, `equipment_*`) serve charts later; the app sets `chart_type` to `i_mr` for a variable and
-`np` for an attribute.
+Enterprise-wide for specifications (`site_id` NULL). Code and kind are fixed once created; switched off, never deleted. `chart_type` and
+`subgroup_size` are its control chart (D-099), `i_mr` and `p` until chosen, and change only while it has no control limits in force or to come.
+`sample_interval` and `equipment_*` serve automatic sampling later.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1526,8 +1526,8 @@ Enterprise-wide for specifications (`site_id` NULL). Code and kind are fixed onc
 | `equipment_id` | uuid → equipment | yes | Where it is measured, when that is one place. |
 | `equipment_tag_id` | uuid → equipment_tag | yes | Set when sampled automatically from process data; cleared if its tag is physically deleted. |
 | `data_kind` | text | no | `variable` (measured values) or `attribute` (inspected and defective counts); fixed once created. |
-| `chart_type` | text | no | `xbar_r`, `xbar_s`, `i_mr` (variables) or `p`, `np`, `c`, `u` (attributes). |
-| `subgroup_size` | smallint | no | Measurements per subgroup; 1 for `i_mr`. |
+| `chart_type` | text | no | `xbar_r`, `xbar_s`, `i_mr` (variables) or `p`, `np`, `c`, `u` (attributes); `ChartTypes.Problem` checks it fits. |
+| `subgroup_size` | smallint | no | Values per subgroup: 1 for `i_mr`, 2–25 for X-bar charts; for `np` and `c`, items inspected a sample. |
 | `sample_interval` | interval | yes | Cadence for automatic sampling. |
 | `uom_id` | uuid → uom | yes | Unit of a measured value. |
 | `decimals` | smallint | no | Display precision, 0 to 6. Default 3. |
@@ -1575,23 +1575,31 @@ Written once, when the version is released; results point at the item they were 
 | `hold_on_fail` | boolean | no | A failing result for a lot puts the lot on hold. Default false. |
 | `sort_order` | integer | no | Order on screens and the shop order sheet. |
 
-### core.control_limit — statistical limits · *Planned*
+### core.control_limit — control limits by period (D-099) · *In use*
 
-Calculated from a baseline and then frozen. Periods may not overlap.
+Worked out from a reviewed baseline and approved, or entered with a reason, for a characteristic and material and optionally one line (whose own
+limits come first). Fixed once approved: a new set for the same scope ends the open one where it starts, and periods may not overlap
+(`control_limit_no_overlap`); ended, never changed or deleted. Rebuilt by migration 0064 (the draft was never written to).
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `characteristic_id` | uuid → quality_characteristic | no | The characteristic. |
-| `material_id` | uuid → material | yes | The product; null for all. |
-| `center_line`, `ucl`, `lcl` | double precision | no | Location chart limits, in order lcl ≤ center ≤ ucl. |
-| `dispersion_center`, `dispersion_ucl`, `dispersion_lcl` | double precision | yes | Range, standard deviation or moving-range chart limits (R-bar, S-bar, MR-bar). |
-| `method` | text | no | `computed` or `manual`. |
-| `baseline_from`, `baseline_to` | timestamptz | yes | The data the limits were calculated from. |
-| `baseline_subgroups` | integer | yes | Number of subgroups in the baseline. |
-| `effective_from` | timestamptz | no | Start. |
-| `effective_to` | timestamptz | yes | End. |
-| `approved_by_user_id` | uuid → app_user | yes | Who approved them. |
+| `characteristic_id` | uuid → quality_characteristic | no | The characteristic. Its row is locked while its limits change. |
+| `material_id` | uuid → material | no | The material its results are for. |
+| `equipment_id` | uuid → equipment | yes | A line's own limits (equipment that runs jobs); null for every line. |
+| `chart_type`, `subgroup_size` | text, smallint | no | The characteristic's chart when approved. |
+| `center_line`, `ucl`, `lcl` | double precision | no | The plotted statistic's limits, lcl ≤ center ≤ ucl (`control_limit_order_ck`). For p and u charts, those of the baseline's average sample size; each point's follow its own. |
+| `dispersion_center`, `dispersion_ucl`, `dispersion_lcl` | double precision | yes | The range, standard deviation or moving range chart's (R-bar, S-bar, MR-bar), for charts that have one. |
+| `method` | text | no | `computed` from a baseline, or `manual` (with `note`, `control_limit_manual_ck`). |
+| `baseline_from`, `baseline_to` | timestamptz | yes | The window of results they were worked out from; set exactly for `computed` (`control_limit_baseline_ck`). |
+| `baseline_subgroups` | integer | yes | How many results were used. |
+| `left_out_sample_ids` | uuid[] | no | Results in the window the reviewer left out. |
+| `note` | text | yes | Why, at most 1000 characters; required for manual limits. |
+| `effective_from` | timestamptz | no | When they start: when approved, or later. |
+| `effective_to` | timestamptz | yes | When they stopped (not included): ended, or followed by a new set. |
+| `approved_by`, `approved_at` | text, timestamptz | no | Who approved them (issuer\|subject) and when. |
+| `ended_by` | text | yes | Who ended them. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ### core.spc_rule — Nelson rules · *Planned (seeded)*
 
