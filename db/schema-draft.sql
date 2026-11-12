@@ -1844,9 +1844,11 @@ CREATE TABLE core.quality_characteristic (
     sample_interval     interval,                               -- auto-sampling cadence
     uom_id              uuid REFERENCES core.uom(id),
     decimals            smallint NOT NULL DEFAULT 3,
+    run_rules           smallint[] NOT NULL DEFAULT '{1,2,5,6}', -- Nelson rules its chart checks (D-099); 1 always; default the Western Electric set
     is_active           boolean NOT NULL DEFAULT true,
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT characteristic_rules_ck CHECK (run_rules <@ ARRAY[1,2,3,4,5,6,7,8]::smallint[] AND 1 = ANY(run_rules)),
     CONSTRAINT characteristic_chart_ck CHECK ((chart_type IN ('p','np','c','u')) = (data_kind = 'attribute')),
     CONSTRAINT characteristic_imr_ck CHECK (chart_type <> 'i_mr' OR subgroup_size = 1)
 );
@@ -1938,18 +1940,11 @@ CREATE TABLE core.control_limit (
 );
 CREATE INDEX control_limit_scope_ix ON core.control_limit (characteristic_id, material_id, effective_from);
 
--- Nelson rules 1-8 (rules 1-4 are the Western Electric set).
+-- Nelson rules 1-8, in Nelson's numbering (the Western Electric set is 1, 2, 5 and 6); characteristics choose theirs in run_rules.
 CREATE TABLE core.spc_rule (
     rule_number smallint PRIMARY KEY CHECK (rule_number BETWEEN 1 AND 8),
     name        text NOT NULL,
     description text NOT NULL
-);
-
-CREATE TABLE core.characteristic_rule (
-    characteristic_id   uuid NOT NULL REFERENCES core.quality_characteristic(id) ON DELETE CASCADE,
-    rule_number         smallint NOT NULL REFERENCES core.spc_rule(rule_number),
-    severity            text NOT NULL DEFAULT 'warning' CHECK (severity IN ('info','warning','critical')),
-    PRIMARY KEY (characteristic_id, rule_number)
 );
 
 -- Alert lifecycle is current state; the violation itself is history.
@@ -2592,7 +2587,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0061_labor_gaps'),
     ('0062_machine_counts'),
     ('0063_rate_refresh'),
-    ('0064_control_limits');
+    ('0064_control_limits'),
+    ('0065_run_rules');
 
 -- =====================================================================
 -- 17. SEED DATA

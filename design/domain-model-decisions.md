@@ -2597,7 +2597,9 @@ with them.
 **Decided** (the user's choices):
 - **Limits per characteristic + material, optionally one line.** The same profile on two extruders often varies differently. The line's
   own limits are used first, then the material's.
-- **Run rules chosen per characteristic** from Nelson's 1–8, defaulting to the Western Electric set (1–4).
+- **Run rules chosen per characteristic** from Nelson's 1–8, defaulting to the Western Electric set. In Nelson's numbering (which the seeded
+  `core.spc_rule` uses) that set is 1, 2, 5 and 6, not 1–4 as the draft's comment said; Nelson's rule 2 is 9 in a row on one side, where Western
+  Electric used 8.
 - **Limits from a baseline, reviewed, approved.** A period's subgroups (at least 20, a warning under 25) give limits; the reviewer may leave
   out points and work them out again. Approving fixes them from a date (versioned, ended never deleted). Manual limits need a reason.
   Permission `specs.manage`.
@@ -2634,6 +2636,14 @@ only limits for the characteristic's current chart and size), its own p/u limits
 before any limits have none: limits start when approved and never rewrite history. Operate → Quality → Control charts (`/quality/charts`) draws
 it in SVG (`ControlChartPlot`): limits as dashed steps per point, beyond-limits points as diamonds in the danger colour, a dispersion plot for
 measured charts, hover text and a table view.
+
+**Run rules (piece 4).** `core.quality_characteristic.run_rules` (smallint[], default `{1,2,5,6}`, rule 1 always; `RunRules.Normalize`) replaces
+the drafted `core.characteristic_rule` (the app role can't delete rows, so a link table can't be edited; dropped by migration 0065).
+`RunRules.Check` (pure) marks each rule at the point that completes it, measuring each point against its own centre line and sigma
+(`ControlLimits.Sigma`: a third of the upper half-width, per point for p and u), so a run spans a change of limits; a point without limits breaks
+zone runs. Trend (3) and alternation (4) look at values alone. Rules run on the plotted statistic only; the dispersion plot keeps rule 1. The
+chart query and the baseline review return each point's `Rules`; the chart marks a point breaking rule 2–8 as a square in the warning colour,
+labelled with the rules' numbers. Characteristics → Change picks the rules.
 
 ## Application architecture
 

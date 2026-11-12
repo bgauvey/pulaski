@@ -61,11 +61,33 @@ public static class ControlChartView
     public static string State(ControlLimitDto l, DateTimeOffset now) =>
         l.IsInEffect ? "In force" : l.EffectiveFrom > now ? "Starts later" : "Ended";
 
+    /// <summary>Nelson's rules, in his numbering, as people say them.</summary>
+    public static IReadOnlyList<(int Number, string Name)> Rules { get; } =
+    [
+        (1, "Beyond the control limits"),
+        (2, "9 in a row on one side of the centre line"),
+        (3, "6 in a row rising or falling"),
+        (4, "14 in a row alternating up and down"),
+        (5, "2 of 3 beyond 2 sigma on one side"),
+        (6, "4 of 5 beyond 1 sigma on one side"),
+        (7, "15 in a row within 1 sigma"),
+        (8, "8 in a row beyond 1 sigma, either side"),
+    ];
+
+    public static string RuleName(int number) => Rules.FirstOrDefault(r => r.Number == number).Name ?? $"Rule {number}";
+
+    /// <summary>"Rules 2, 5" for a point's label, or empty.</summary>
+    public static string RuleList(IReadOnlyList<int> rules) =>
+        rules.Count == 0 ? "" : $"{(rules.Count == 1 ? "Rule" : "Rules")} {string.Join(", ", rules)}";
+
+    /// <summary>The run rules a point breaks other than rule 1, which the diamond already shows.</summary>
+    public static IReadOnlyList<int> RunsBroken(IReadOnlyList<int> rules) => [.. rules.Where(r => r != 1)];
+
     /// <summary>The points of one of a chart's two plots: the statistic, or (<paramref name="dispersion"/>) its range, standard deviation or moving range.</summary>
     public static IReadOnlyList<PlotPoint> Plot(ControlChartDto chart, bool dispersion, string? timeZone) =>
         [.. chart.Points.Select(p => dispersion
             ? new PlotPoint(p.At, p.Dispersion, p.DispersionCenter, p.DispersionUcl, p.DispersionLcl, p.IsDispersionBeyondLimits, Tip(chart, p, true, timeZone))
-            : new PlotPoint(p.At, p.Value, p.Center, p.Ucl, p.Lcl, p.IsBeyondLimits, Tip(chart, p, false, timeZone)))];
+            : new PlotPoint(p.At, p.Value, p.Center, p.Ucl, p.Lcl, p.IsBeyondLimits, Tip(chart, p, false, timeZone)) { Rules = RunsBroken(p.Rules) })];
 
     /// <summary>What hovering a point says: when, the value against its limits, and where it came from.</summary>
     public static string Tip(ControlChartDto chart, ControlChartPointDto p, bool dispersion, string? timeZone)
@@ -74,17 +96,20 @@ public static class ControlChartView
         var (lcl, ucl, beyond) = dispersion ? (p.DispersionLcl, p.DispersionUcl, p.IsDispersionBeyondLimits) : (p.Lcl, p.Ucl, p.IsBeyondLimits);
         var limits = ucl is null ? "no limits in force" : $"limits {Number(lcl, chart.Decimals)} to {Number(ucl, chart.Decimals)}{(beyond ? ", beyond them" : "")}";
         var from = string.Join(" · ", new[] { p.LineCode, p.JobNumber, p.LotLabel }.Where(x => x is not null));
-        return $"{Display.SiteTime(p.At, timeZone)}: {Number(value, chart.Decimals)} ({limits}){(from.Length > 0 ? $". {from}" : "")}";
+        var runs = dispersion ? [] : RunsBroken(p.Rules);
+        return $"{Display.SiteTime(p.At, timeZone)}: {Number(value, chart.Decimals)} ({limits}){(from.Length > 0 ? $". {from}" : "")}"
+            + string.Concat(runs.Select(r => $". Rule {r}: {RuleName(r)}"));
     }
 
     /// <summary>"3 of 40 beyond the limits; 5 with no limits in force."</summary>
     public static string Summary(ControlChartDto chart)
     {
         var beyond = chart.Points.Count(p => p.IsBeyondLimits || p.IsDispersionBeyondLimits);
+        var runs = chart.Points.Count(p => RunsBroken(p.Rules).Count > 0);
         var without = chart.Points.Count(p => p.Ucl is null);
         var text = without == chart.Points.Count
             ? $"{chart.Points.Count} results; no control limits in force for them."
-            : $"{chart.Points.Count} results; {beyond} beyond the limits.";
+            : $"{chart.Points.Count} results; {beyond} beyond the limits{(runs > 0 ? $", {runs} breaking a run rule" : "")}.";
         return text
             + (without > 0 && without < chart.Points.Count ? $" {without} had no limits in force." : "")
             + (chart.Unusable > 0 ? $" {chart.Unusable} can't go on this chart (their size doesn't fit it)." : "")
@@ -93,4 +118,8 @@ public static class ControlChartView
 }
 
 /// <summary>One point of a plot, with the limits in force for it (null: none) and whether it is beyond them.</summary>
-public sealed record PlotPoint(DateTimeOffset At, double? Value, double? Center, double? Ucl, double? Lcl, bool IsBeyond, string Tip);
+public sealed record PlotPoint(DateTimeOffset At, double? Value, double? Center, double? Ucl, double? Lcl, bool IsBeyond, string Tip)
+{
+    /// <summary>Run rules other than rule 1 it completes a break of; marked and labelled with their numbers.</summary>
+    public IReadOnlyList<int> Rules { get; init; } = [];
+}

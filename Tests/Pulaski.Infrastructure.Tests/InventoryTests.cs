@@ -919,6 +919,32 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal(plant.JobNumber, beyond.JobNumber);
         Assert.Single(chart.Limits);
 
+        // Nine just above the centre line (11, sigma 1.77) complete a run on one side: rule 2, marked on the ninth.
+        for (var i = 0; i < 9; i++)
+        {
+            await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [11.5m], null, null, "manual", null));
+        }
+
+        var runs = await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
+            plant.Site, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)));
+        Assert.Equal([1, 2, 5, 6], runs.RunRules);
+        Assert.Contains(1, runs.Points[20].Rules);
+        Assert.Equal([2], runs.Points[^1].Rules);
+        Assert.Empty(runs.Points[^2].Rules);
+
+        // Rules are the characteristic's choice; rule 1 always stays.
+        var current = (await QueryAsync<Application.Quality.ListCharacteristicsQuery, IReadOnlyList<Contracts.Quality.CharacteristicDto>>(
+            new Application.Quality.ListCharacteristicsQuery())).Single(c => c.Id == melt.Id);
+        var fewer = new Application.Quality.UpdateCharacteristicCommand(melt.Id, current.Version, "Melt flow", null, null, 2, true)
+        {
+            RunRules = [3],
+        };
+        await db.SendAsync(fewer);
+        Assert.Equal([1, 3], (await QueryAsync<Application.Quality.ListCharacteristicsQuery, IReadOnlyList<Contracts.Quality.CharacteristicDto>>(
+            new Application.Quality.ListCharacteristicsQuery())).Single(c => c.Id == melt.Id).RunRules);
+        Assert.Empty((await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
+            plant.Site, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)))).Points[^1].Rules);
+
         // Another site sees none of it.
         var elsewhere = await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
             plant.Stores, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)));

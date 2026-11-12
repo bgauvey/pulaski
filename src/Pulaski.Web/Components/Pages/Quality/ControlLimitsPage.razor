@@ -162,7 +162,7 @@ else
                     @if (r.Points.Count > 0)
                     {
                         <p class="small text-muted mb-1">
-                            Results beyond the limits are worth looking into: if they had a known cause (a startup, a wrong die), leave them out and work the limits out again.
+                            Results beyond the limits, or breaking a run rule, are worth looking into: if they had a known cause (a startup, a wrong die), leave them out and work the limits out again.
                         </p>
                         <div class="table-panel mb-2" style="max-height: 24rem; overflow-y: auto;">
                             <table class="table table-sm align-middle small mb-0">
@@ -195,6 +195,13 @@ else
                                                 else if (p.IsBeyondLimits)
                                                 {
                                                     <span class="chip chip-warn">Beyond the limits</span>
+                                                }
+                                                @if (!p.IsLeftOut && p.Unusable is null)
+                                                {
+                                                    @foreach (var rule in ControlChartView.RunsBroken(p.Rules))
+                                                    {
+                                                        <span class="chip chip-warn ms-1" title="@ControlChartView.RuleName(rule)">Rule @rule</span>
+                                                    }
                                                 }
                                             </td>
                                         </tr>

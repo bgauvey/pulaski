@@ -20,6 +20,9 @@ public sealed record CharacteristicDto
     /// <summary>Values a subgroup holds (1 for individuals, 2–25 for X-bar charts), or items inspected a sample for np and c charts.</summary>
     public int SubgroupSize { get; init; } = 1;
 
+    /// <summary>The Nelson rules (1–8) its chart checks; 1 is always among them.</summary>
+    public IReadOnlyList<int> RunRules { get; init; } = [1, 2, 5, 6];
+
     /// <summary>Control limits are in force or still to come, so the chart can't change.</summary>
     public bool HasLimits { get; init; }
 }
@@ -47,6 +50,9 @@ public sealed record UpdateCharacteristicRequest
     /// <summary>A new control chart (D-099); left out, it stays. Refused while control limits are in force.</summary>
     public string? ChartType { get; init; }
     public int? SubgroupSize { get; init; }
+
+    /// <summary>The Nelson rules its chart checks; rule 1 is always added. Left out, they stay.</summary>
+    public IReadOnlyList<int>? RunRules { get; init; }
 }
 
 /// <summary>A set of control limits over a period (D-099).</summary>
@@ -130,6 +136,9 @@ public sealed record BaselinePointDto
 
     /// <summary>Beyond the limits worked out (a point to look into before approving).</summary>
     public bool IsBeyondLimits { get; init; }
+
+    /// <summary>The characteristic's run rules it breaks against the limits worked out.</summary>
+    public IReadOnlyList<int> Rules { get; init; } = [];
 }
 
 /// <summary>Approves the limits a reviewed baseline gives; worked out again first, and refused (409) when they differ from those reviewed.</summary>
@@ -197,6 +206,9 @@ public sealed record ControlChartDto
     public bool IsTruncated { get; init; }
     public int MaxPoints { get; init; }
 
+    /// <summary>The Nelson rules the chart checks.</summary>
+    public IReadOnlyList<int> RunRules { get; init; } = [];
+
     /// <summary>The periods of limits the points use.</summary>
     public IReadOnlyList<ControlLimitDto> Limits { get; init; } = [];
 }
@@ -223,6 +235,9 @@ public sealed record ControlChartPointDto
     public double? DispersionLcl { get; init; }
     public bool IsBeyondLimits { get; init; }
     public bool IsDispersionBeyondLimits { get; init; }
+
+    /// <summary>The characteristic's run rules this point completes a break of (D-099), rule 1 (beyond the limits) among them.</summary>
+    public IReadOnlyList<int> Rules { get; init; } = [];
 }
 
 /// <summary>The limits saved, and those it ended.</summary>

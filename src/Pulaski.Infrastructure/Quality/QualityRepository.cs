@@ -11,7 +11,7 @@ namespace Pulaski.Infrastructure.Quality;
 internal static class QualitySql
 {
     public const string CharacteristicColumns = """
-        c.id, c.code, c.name, c.description, c.data_kind, c.uom_id, c.decimals, c.is_active, c.chart_type, c.subgroup_size::int AS subgroup_size,
+        c.id, c.code, c.name, c.description, c.data_kind, c.uom_id, c.decimals, c.is_active, c.chart_type, c.subgroup_size::int AS subgroup_size, c.run_rules::int[] AS run_rules,
         c.xmin::text::bigint AS version
         """;
 
@@ -96,12 +96,14 @@ internal static class QualitySql
         public bool IsActive { get; init; }
         public string ChartType { get; init; } = "";
         public int SubgroupSize { get; init; } = 1;
+        public int[] RunRules { get; init; } = [];
         public long Version { get; init; }
 
         public Characteristic ToDomain() => new(Id, Code, Name, Description, DataKind, UomId, Decimals, IsActive)
         {
             ChartType = ChartType,
             SubgroupSize = SubgroupSize,
+            RunRules = RunRules,
         };
     }
 
@@ -135,15 +137,15 @@ internal sealed class QualityRepository(DbSession session) : IQualityRepository
 
     private const string InsertCharacteristic = """
         INSERT INTO core.quality_characteristic (id, site_id, code, name, description, data_kind, chart_type, subgroup_size, uom_id, decimals, is_active,
-                                                 created_at, updated_at)
-        VALUES (@Id, NULL, @Code, @Name, @Description, @DataKind, @ChartType, @SubgroupSize, @UomId, @Decimals, @IsActive, @At, @At)
+                                                 run_rules, created_at, updated_at)
+        VALUES (@Id, NULL, @Code, @Name, @Description, @DataKind, @ChartType, @SubgroupSize, @UomId, @Decimals, @IsActive, @RunRules, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     private const string UpdateCharacteristic = """
         UPDATE core.quality_characteristic
         SET name = @Name, description = @Description, uom_id = @UomId, decimals = @Decimals, is_active = @IsActive, chart_type = @ChartType,
-            subgroup_size = @SubgroupSize, updated_at = @At
+            subgroup_size = @SubgroupSize, run_rules = @RunRules, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -444,6 +446,7 @@ internal sealed class QualityRepository(DbSession session) : IQualityRepository
         c.DataKind,
         c.ChartType,
         SubgroupSize = (short)c.SubgroupSize,
+        RunRules = c.RunRules.Select(r => (short)r).ToArray(),
         c.UomId,
         Decimals = (short)c.Decimals,
         c.IsActive,

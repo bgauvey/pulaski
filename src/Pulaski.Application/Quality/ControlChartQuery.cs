@@ -74,6 +74,13 @@ internal sealed class GetControlChartHandler(IQualityReadStore store, TimeProvid
             });
         }
 
+        // Run rules on the plotted statistic, each point against its own centre line and sigma.
+        var rulePoints = plotted.Select(p => p.Center is { } c && p.LimitId is not null
+            ? new RulePoint(p.Value, c, ControlLimits.Sigma(characteristic.ChartType, limits.First(l => l.Id == p.LimitId).Limits, p.Size))
+            : new RulePoint(p.Value, null, null)).ToList();
+        var broken = RunRules.Check(rulePoints, characteristic.RunRules);
+        plotted = [.. plotted.Select((p, i) => p with { Rules = broken[i] })];
+
         var limitDtos = (await store.ListLimitsAsync(query.CharacteristicId, now, cancellationToken)).Where(l => used.Contains(l.Id)).ToList();
         return new ControlChartDto
         {
@@ -95,6 +102,7 @@ internal sealed class GetControlChartHandler(IQualityReadStore store, TimeProvid
             IsTruncated = truncated,
             MaxPoints = MaxPoints,
             Limits = limitDtos,
+            RunRules = characteristic.RunRules,
         };
     }
 }

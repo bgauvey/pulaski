@@ -119,6 +119,13 @@ internal sealed class GetLimitBaselineHandler(IQualityReadStore store, TimeProvi
         var current = (await store.ListLimitsAsync(query.CharacteristicId, now, cancellationToken))
             .FirstOrDefault(l => l.IsInEffect && l.MaterialId == query.MaterialId && l.EquipmentId == query.EquipmentId);
         var limits = result.Limits;
+        var plotted = subgroups.Select(s => points.GetValueOrDefault(s.SampleId)).ToList();
+        var broken = RunRules.Check(
+            [.. plotted.Select(p => p is null || limits is null || leftOut.Contains(p.SampleId)
+                ? new RulePoint(null, null, null)
+                : new RulePoint(p.Value, limits.Center, ControlLimits.Sigma(characteristic.ChartType, limits, p.Size)))],
+            characteristic.RunRules);
+        var rulesBySample = subgroups.Select((s, i) => (s.SampleId, Rules: broken[i])).ToDictionary(t => t.SampleId, t => t.Rules);
 
         return new LimitBaselineDto
         {
@@ -153,6 +160,7 @@ internal sealed class GetLimitBaselineHandler(IQualityReadStore store, TimeProvi
                     Unusable = unusable.GetValueOrDefault(s.SampleId),
                     IsBeyondLimits = point is not null && limits is not null && (point.Value > ucl || point.Value < lcl
                         || (point.Dispersion is { } d && limits.DispersionUcl is { } du && (d > du || d < (limits.DispersionLcl ?? 0)))),
+                    Rules = rulesBySample[s.SampleId],
                 };
             })],
         };

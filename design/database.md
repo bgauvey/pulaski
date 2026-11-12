@@ -41,7 +41,7 @@ Orders & scheduling                       Execution & inventory
                                                 lot_attribute(_class, _value), lot_document(_content, _link)
       └─ job ── job_material               labor_session, labor_break, labor_approval
           └─ job_run                       quality_characteristic ─ material_spec(_version, _item), control_limit,
- scheduling_policy, run_standard,             characteristic_rule, spc_alert,
+ scheduling_policy, run_standard,             spc_rule, spc_alert,
  changeover_rule                              ts.quality_sample, ts.spc_violation
 
 People & access                            History & events
@@ -1528,6 +1528,7 @@ Enterprise-wide for specifications (`site_id` NULL). Code and kind are fixed onc
 | `data_kind` | text | no | `variable` (measured values) or `attribute` (inspected and defective counts); fixed once created. |
 | `chart_type` | text | no | `xbar_r`, `xbar_s`, `i_mr` (variables) or `p`, `np`, `c`, `u` (attributes); `ChartTypes.Problem` checks it fits. |
 | `subgroup_size` | smallint | no | Values per subgroup: 1 for `i_mr`, 2–25 for X-bar charts; for `np` and `c`, items inspected a sample. |
+| `run_rules` | smallint[] | no | The Nelson rules its chart checks (D-099), 1 always among them (`characteristic_rules_ck`); default `{1,2,5,6}`, the Western Electric set. |
 | `sample_interval` | interval | yes | Cadence for automatic sampling. |
 | `uom_id` | uuid → uom | yes | Unit of a measured value. |
 | `decimals` | smallint | no | Display precision, 0 to 6. Default 3. |
@@ -1601,21 +1602,16 @@ limits come first). Fixed once approved: a new set for the same scope ends the o
 | `ended_by` | text | yes | Who ended them. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
-### core.spc_rule — Nelson rules · *Planned (seeded)*
+### core.spc_rule — Nelson rules · *In use (reference)*
+
+Seeded with Nelson's eight rules in his numbering; the Western Electric set is 1, 2, 5 and 6. Characteristics choose theirs in `run_rules`
+(D-099); the drafted `core.characteristic_rule` link was dropped by migration 0065, never written to.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `rule_number` | smallint | no | Primary key, 1–8. Rules 1–4 are the Western Electric set. |
+| `rule_number` | smallint | no | Primary key, 1–8. |
 | `name` | text | no | Short name. |
 | `description` | text | no | What the rule detects. |
-
-### core.characteristic_rule — rules applied to a characteristic · *Planned*
-
-| Column | Type | Null | Description |
-| --- | --- | --- | --- |
-| `characteristic_id` | uuid → quality_characteristic | no | The characteristic. Part of the primary key. |
-| `rule_number` | smallint → spc_rule | no | The rule. Part of the primary key. |
-| `severity` | text | no | `info`, `warning` (default) or `critical`. |
 
 ### core.spc_alert — alert lifecycle · *Planned*
 

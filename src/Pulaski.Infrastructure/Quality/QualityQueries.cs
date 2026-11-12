@@ -116,6 +116,7 @@ internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityRead
             Version = r.Version,
             ChartType = r.ChartType,
             SubgroupSize = r.SubgroupSize,
+            RunRules = r.RunRules,
             HasLimits = r.HasLimits,
         })];
     }
@@ -394,6 +395,7 @@ internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityRead
         public long Version { get; init; }
         public string ChartType { get; init; } = "";
         public int SubgroupSize { get; init; } = 1;
+        public int[] RunRules { get; init; } = [];
         public bool HasLimits { get; init; }
     }
 

@@ -1478,6 +1478,19 @@ never change, since results and specifications depend on them.
 - inspected: **p** (proportion defective, the starting choice, for samples of any size), **np** (number defective; set **Items inspected a
   sample**), **c** (defects a sample) or **u** (defects per unit).
 
+**Run rules its chart checks** picks the patterns that signal a change, numbered as Lloyd Nelson numbered them. Rule 1 (beyond the control
+limits) is always checked; 1, 2, 5 and 6, the Western Electric set, are ticked to start with:
+1. one point beyond the control limits (3 sigma);
+2. 9 in a row on one side of the centre line;
+3. 6 in a row rising or falling;
+4. 14 in a row alternating up and down;
+5. 2 of 3 beyond 2 sigma on one side;
+6. 4 of 5 beyond 1 sigma on one side;
+7. 15 in a row within 1 sigma (hugging the centre line);
+8. 8 in a row beyond 1 sigma, on either side.
+
+More rules find smaller changes sooner, and give more false alarms. Rules can change at any time.
+
 The **Control chart** column shows each one's chart. The chart can't change while the characteristic has control limits in force: they were
 worked out for that chart, so end them first.
 
@@ -1492,7 +1505,8 @@ can have its own, which it uses before the material's.
    period (**From**, **To**) when the process ran normally. Click **Work it out**.
 3. Pulaski shows the limits the results give, the limits in force now (if any) and every result in the period: its plotted value (and range,
    standard deviation or moving range), its size, and whether it is **Beyond the limits** or **Can't be used** (and why).
-4. If a result beyond the limits had a known cause, such as a startup or a wrong setting, tick **Leave out** and click **Work out again**.
+4. Results beyond the limits, or completing a run rule (*Rule 2*…), are worth looking into. If one had a known cause, such as a startup or a wrong
+   setting, tick **Leave out** and click **Work out again**.
 5. When the limits look right, optionally set when they **Start** (now if blank) and a **Note**, and click **Approve these limits**.
 
 To enter limits by hand (agreed with a customer, or carried over from another system), use **Enter limits by hand**. It takes the material and
@@ -1521,7 +1535,8 @@ line chosen above, the **Lower**, **Centre** and **Upper** limits (and the dispe
 2. Choose the **Characteristic**, the **Material**, a **Line** if you want one line's results only (else **Every line**), and the period (the last
    30 days to start with). Click **Show**.
 3. The chart shows each result in time order: the value (or a subgroup's mean, proportion or count, as the chart takes it), with the control
-   limits in force for it as dashed lines and the centre line solid. A result beyond its limits is a red diamond. Measured characteristics have a
+   limits in force for it as dashed lines and the centre line solid. A result beyond its limits is a red diamond; one that completes another run
+   rule is an amber square labelled with the rules' numbers. The rules checked are listed above the chart. Measured characteristics have a
    second chart below: the range, standard deviation or moving range.
 4. Hover over a point to see when it was sampled, its value against its limits, and its line, job and lot. **Show as a table** lists the same.
 
@@ -1534,7 +1549,9 @@ line chosen above, the **Lower**, **Centre** and **Upper** limits (and the dispe
   as the baseline itself, are drawn without limits, and the summary above the chart says how many.
 - **Can't go on the chart.** A result whose size doesn't fit the chart (an X-bar chart's subgroup size, say) is left off, and the summary says how
   many.
-- **Beyond the limits** is the first signal of a process change. More rules, such as runs on one side of the centre line, and alerts come next.
+- **Run rules** are marked on the point that completes the pattern: the ninth of nine in a row, say. Each point is measured against its own
+  limits, so a run carries on across new limits, and a result without limits breaks it. Rising, falling and alternating look at the values alone.
+  Rules apply to the main chart; the range, standard deviation or moving range chart marks only results beyond its limits. Alerts come next.
 - **Who:** anyone who can see quality at the site.
 
 ### Write a specification
@@ -2734,7 +2751,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** has no quality figures or SPC alerts yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
-- **Quality:** control charts mark only results beyond the limits (no run rules yet) and raise no alerts, and charts don't update while open, and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
+- **Quality:** control charts raise no alerts yet and don't update while open, and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
 - **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.
 - **Some switched-off controls give no reason yet:** a form's Save waiting on a field next to it, an Export with nothing to export, and the locked boxes on the Permissions tab (point at those with the mouse to see why).
 

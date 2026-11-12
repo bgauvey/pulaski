@@ -39,6 +39,7 @@ internal static class QualityEndpoints
                 {
                     ChartType = request.ChartType,
                     SubgroupSize = request.SubgroupSize,
+                    RunRules = request.RunRules,
                 }, ct)))
         .RequirePermission(Permissions.Specs);
 

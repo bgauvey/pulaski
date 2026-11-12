@@ -50,4 +50,18 @@ public class ControlChartPlotTests
         Assert.Equal("1 results; no control limits in force for them.", ControlChartView.Summary(Chart(Point(10, null))));
         Assert.EndsWith("Only the latest 500 are shown.", ControlChartView.Summary(Chart(Point(10, 16.3)) with { IsTruncated = true, MaxPoints = 500 }), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Run_rules_other_than_one_are_marked_named_and_counted()
+    {
+        var chart = Chart(Point(10, 16.3) with { Rules = [2, 5] }, Point(20, 16.3, beyond: true) with { Rules = [1] });
+        var main = ControlChartView.Plot(chart, false, "UTC");
+        Assert.Equal([2, 5], main[0].Rules);
+        Assert.Empty(main[1].Rules);
+        Assert.EndsWith(". Rule 2: 9 in a row on one side of the centre line. Rule 5: 2 of 3 beyond 2 sigma on one side", main[0].Tip, StringComparison.Ordinal);
+        Assert.Empty(ControlChartView.Plot(chart, true, "UTC")[0].Rules);
+        Assert.Equal("2 results; 1 beyond the limits, 1 breaking a run rule.", ControlChartView.Summary(chart));
+        Assert.Equal("Rules 2, 5", ControlChartView.RuleList([2, 5]));
+        Assert.Equal("Rule 8", ControlChartView.RuleList([8]));
+    }
 }

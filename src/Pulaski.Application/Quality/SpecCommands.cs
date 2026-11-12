@@ -18,6 +18,9 @@ public sealed record UpdateCharacteristicCommand(Guid Id, long ExpectedVersion, 
     public string? ChartType { get; init; }
 
     public int? SubgroupSize { get; init; }
+
+    /// <summary>The Nelson rules its chart checks (D-099); rule 1 is always added. Null keeps them.</summary>
+    public IReadOnlyList<int>? RunRules { get; init; }
 }
 
 /// <summary>A specification for the material (#65), starting with an empty draft. A material has at most one.</summary>
@@ -148,6 +151,7 @@ internal sealed class UpdateCharacteristicHandler(IUnitOfWork unitOfWork, IQuali
             IsActive = command.IsActive,
             ChartType = command.ChartType?.Trim() ?? current.Value.ChartType,
             SubgroupSize = command.SubgroupSize ?? current.Value.SubgroupSize,
+            RunRules = command.RunRules is { } rules ? Domain.Quality.Spc.RunRules.Normalize(rules) : current.Value.RunRules,
         });
         if ((after.ChartType != current.Value.ChartType || after.SubgroupSize != current.Value.SubgroupSize)
             && await quality.HasOpenLimitsAsync(after.Id, timeProvider.GetUtcNow(), cancellationToken))

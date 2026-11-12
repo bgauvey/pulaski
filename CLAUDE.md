@@ -298,7 +298,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   moves it good → scrap there (defective count at its effective time), which is how quality reaches OEE. Permissions `quality.view`,
   `quality.record`, `quality.decide`, `specs.manage`.
 - SPC (D-099, proposed, in pieces): limits per characteristic + material (+ optional line, which wins); run rules per characteristic
-  (Nelson 1–8, default 1–4); limits from a reviewed baseline (≥ 20 subgroups), approved and versioned. Pure statistics in
+  (Nelson 1–8 in Nelson's numbering, `run_rules`, default the Western Electric 1, 2, 5, 6; `RunRules.Check`); limits from a reviewed baseline (≥ 20 subgroups), approved and versioned. Pure statistics in
   `Pulaski.Domain.Quality.Spc` (`ChartTypes`, `ChartConstants`, `ControlLimits.Points`/`Compute`/`At`). `core.control_limit` periods
   (`ControlLimitPeriods.Place`/`InForce`); baseline review → approve re-worked under the characteristic's lock (409 if different); chart settings
   on the characteristic, fixed while limits are open; `/api/quality/characteristics/{id}/control-limits[/baseline|/manual]`, `/control-limits/{id}/end`.

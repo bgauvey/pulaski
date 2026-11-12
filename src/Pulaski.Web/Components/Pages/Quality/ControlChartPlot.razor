@@ -3,7 +3,7 @@
 
 @* One plot of a control chart (D-099): the statistic in time order, evenly spaced, against the limits in force for each point as dashed steps
    (the centre line solid), so a change of limits shows where it happened. A point beyond its limits is a diamond in the danger colour, not
-   only a different colour. Hovering a point says when, its value against its limits and where it came from; the table below holds the same. *@
+   only a different colour; a point breaking another run rule is a square in the warning colour, labelled with the rules' numbers. Hovering a point says when, its value against its limits and where it came from; the table below holds the same. *@
 @if (Points.Count == 0)
 {
     <p class="text-muted small mb-0">Nothing to chart.</p>
@@ -53,6 +53,10 @@ else
                     {
                         <path class="marker beyond" d="@Diamond(x, Y(v))" />
                     }
+                    else if (p.Rules.Count > 0)
+                    {
+                        <rect class="marker rule" x="@F(x - 5)" y="@F(Y(v) - 5)" width="10" height="10" />
+                    }
                     else
                     {
                         <circle class="marker" cx="@F(x)" cy="@F(Y(v))" r="4" />
@@ -62,6 +66,14 @@ else
                     <title>@p.Tip</title>
                 </rect>
             </g>
+        }
+
+        @for (var i = 0; i < Points.Count; i++)
+        {
+            if (Points[i] is { Value: { } rv, Rules.Count: > 0 } ruled)
+            {
+                @SvgText("rule-label", X(i), Y(rv) - 10, "middle", string.Join(",", ruled.Rules))
+            }
         }
 
         @foreach (var i in LabelIndexes)
@@ -169,7 +181,8 @@ else
         get
         {
             var beyond = Points.Count(p => p.IsBeyond);
-            return $"{Points.Count} points; {beyond} beyond the limits.";
+            var runs = Points.Count(p => p.Rules.Count > 0);
+            return $"{Points.Count} points; {beyond} beyond the limits; {runs} breaking a run rule.";
         }
     }
 

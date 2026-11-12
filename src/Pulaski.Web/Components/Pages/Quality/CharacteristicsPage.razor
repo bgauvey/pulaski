@@ -126,6 +126,20 @@ else
                                @bind="_subgroupSize" disabled="@_editing.HasLimits" />
                     </div>
                 }
+                <fieldset class="col-12">
+                    <legend class="form-label small fw-semibold mb-1">Run rules its chart checks</legend>
+                    <div class="d-flex flex-wrap gap-3">
+                        @foreach (var (number, ruleName) in ControlChartView.Rules)
+                        {
+                            <div class="form-check" @key="number">
+                                <input id="@($"ch-rule-{number}")" type="checkbox" class="form-check-input" checked="@_rules.Contains(number)" disabled="@(number == 1)"
+                                       @onchange="e => { if (e.Value is true) _rules.Add(number); else _rules.Remove(number); }" />
+                                <label class="form-check-label small" for="@($"ch-rule-{number}")">@number · @ruleName</label>
+                            </div>
+                        }
+                    </div>
+                    <div class="small text-muted">Rule 1 is always checked. 1, 2, 5 and 6 are the Western Electric set; more rules find more, and more false alarms.</div>
+                </fieldset>
                 @if (_editing.HasLimits)
                 {
                     <div class="col-12 small text-muted" id="ch-chart-note">Its control limits were worked out for this chart; end them to change it.</div>
@@ -160,6 +174,8 @@ else
     private string _chartType = "i_mr";
     private int _subgroupSize = 1;
 
+    private readonly HashSet<int> _rules = [];
+
     private int MaxSize => _chartType is "xbar_r" or "xbar_s" ? 25 : 10000;
     private bool _saving;
     private string? _message;
@@ -185,6 +201,8 @@ else
         _editing = c;
         (_code, _name, _kind, _uomId, _decimals, _description, _active) = (c.Code, c.Name, c.DataKind, c.UomId, c.Decimals, c.Description, c.IsActive);
         (_chartType, _subgroupSize) = (c.ChartType, c.SubgroupSize);
+        _rules.Clear();
+        _rules.UnionWith(c.RunRules);
     }
 
     // Individuals and the per-unit charts take one; X-bar charts start at five.
@@ -236,6 +254,7 @@ else
                     IsActive = _active,
                     ChartType = _editing.HasLimits ? null : _chartType,
                     SubgroupSize = _editing.HasLimits ? null : _subgroupSize,
+                    RunRules = [.. _rules.Order()],
                 });
                 _message = $"Saved {_editing.Code}.";
             }

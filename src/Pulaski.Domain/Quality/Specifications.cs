@@ -36,6 +36,9 @@ public sealed record Characteristic(Guid Id, string Code, string Name, string? D
     /// <summary>Values a subgroup holds on its chart: 1 for individuals, 2 to 25 for X-bar charts; for np and c charts, items inspected a sample.</summary>
     public int SubgroupSize { get; init; } = 1;
 
+    /// <summary>The Nelson rules its chart checks (D-099): rule 1 always; the Western Electric set (1, 2, 5, 6) until chosen.</summary>
+    public IReadOnlyList<int> RunRules { get; init; } = Spc.RunRules.Default;
+
     public static string DefaultChart(string dataKind) => dataKind == CharacteristicKinds.Variable ? Spc.ChartTypes.IMr : Spc.ChartTypes.P;
 
     /// <returns>Why the code isn't acceptable, or null: 1 to 30 upper-case letters, digits, '-' or '_', starting with a letter or digit.</returns>
