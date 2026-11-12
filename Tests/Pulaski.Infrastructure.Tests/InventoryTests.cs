@@ -990,6 +990,8 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal(2, detail.Violations.Count);
         Assert.Equal(plant.JobNumber, detail.Violations[0].JobNumber);
 
+        Assert.Equal(1, (await QueryAsync<Application.Overview.GetOverviewQuery, Contracts.Overview.OverviewDto>(new Application.Overview.GetOverviewQuery(plant.Site))).OpenSpcAlerts);
+
         // Closing needs a cause and an action; afterwards the next break opens a new alert.
         var cause = await ReasonAsync("spc_cause", "SETTING");
         await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new Application.Quality.CloseSpcAlertCommand(plant.Site, alert.Id, cause, " ")));
@@ -997,6 +999,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal(("closed", "Machine setting changed"), (closed.Status, closed.Cause));
         await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new Application.Quality.CloseSpcAlertCommand(plant.Site, alert.Id, cause, "Again")));
 
+        Assert.Equal(0, (await QueryAsync<Application.Overview.GetOverviewQuery, Contracts.Overview.OverviewDto>(new Application.Overview.GetOverviewQuery(plant.Site))).OpenSpcAlerts);
         var next = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [21m], null, null, "manual", null));
         Assert.NotEqual(alert.Id, next.SpcAlertId);
         await using var admin = await db.AdminDataSource.OpenConnectionAsync();

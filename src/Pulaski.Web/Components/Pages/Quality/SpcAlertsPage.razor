@@ -1,0 +1,234 @@
+@page "/quality/alerts"
+@attribute [RequiresView(PermissionCodes.QualityView)]
+@using Pulaski.Web.Services.Quality
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+
+<PageTitle>SPC alerts · Pulaski</PageTitle>
+
+@* SPC alerts (D-099): a control chart that signalled, one open per chart; further breaks are added to it. Closed with what caused it and what
+   was done; the next break opens a new one. Alerts never hold a lot: that stays with the specification. *@
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">SPC alerts</h1>
+        <p class="text-muted mb-0">
+            Control charts that signalled: a result beyond its limits, or completing a run rule. Find the cause, then close the alert with it and what was done.
+        </p>
+    </div>
+    <div class="inv-head-tools">
+        <a class="btn btn-outline-secondary btn-sm" href="quality/charts">Control charts</a>
+        @if (Sites.Sites.Count > 1)
+        {
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.QualityRecord" What="close alerts" SiteId="Sites.SiteId" />
+@if (_message is { } message)
+{
+    <div class="alert alert-success small" role="status">@message</div>
+}
+
+@if (Sites.SiteId is null)
+{
+    <p class="text-muted">There is no site yet.</p>
+}
+else if (_alerts is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    <div class="table-panel mb-3">
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Chart</th><th>Rules</th><th class="inv-num">Results</th><th>Signalled</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var a in _alerts)
+                {
+                    <tr @key="a.Id" class="@(a.Status == "open" ? "" : "text-muted")">
+                        <td>
+                            <span class="fw-semibold">@a.CharacteristicCode</span> · @a.MaterialCode@(a.EquipmentCode is { } line ? $" on {line}" : "")
+                            <div class="small text-muted">@a.CharacteristicName</div>
+                        </td>
+                        <td class="small">@string.Join("; ", a.Rules.Select(r => $"{r} {ControlChartView.RuleName(r).ToLowerInvariant()}"))</td>
+                        <td class="inv-num">@a.Breaks</td>
+                        <td class="small">@Display.SiteTime(a.FirstSampleAt, Zone)@(a.LastSampleAt > a.FirstSampleAt ? $" to {Display.SiteTime(a.LastSampleAt, Zone)}" : "")</td>
+                        <td class="small">
+                            @if (a.Status == "open")
+                            {
+                                <span class="chip chip-warn">Open</span>
+                            }
+                            else
+                            {
+                                <span>Closed: @a.Cause</span>
+                                <div class="text-muted">@a.Action</div>
+                            }
+                        </td>
+                        <td class="text-end"><button type="button" class="btn btn-sm btn-link" @onclick="() => OpenAsync(a)">@(a.Status == "open" ? "Respond" : "Details")</button></td>
+                    </tr>
+                }
+                @if (_alerts.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-muted small">No alerts open, and none closed in the last 30 days.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (_selected is { } alert)
+    {
+        <section class="inv-facts mb-3" aria-labelledby="alert-heading">
+            <h2 class="h6" id="alert-heading">@alert.CharacteristicCode · @alert.MaterialCode@(alert.EquipmentCode is { } on ? $" on {on}" : "")</h2>
+            <p class="small mb-2">
+                Raised @Display.SiteTime(alert.RaisedAt, Zone).
+                <a href="@($"quality/charts?characteristic={alert.CharacteristicId}&material={alert.MaterialId}{(alert.EquipmentId is { } l ? $"&line={l}" : "")}")">See the chart</a>
+            </p>
+            <div class="table-panel mb-2">
+                <table class="table table-sm align-middle small mb-0">
+                    <thead><tr><th>Sampled</th><th>Rules broken</th><th class="inv-num">Value</th><th>Job · lot</th></tr></thead>
+                    <tbody>
+                        @foreach (var v in alert.Violations)
+                        {
+                            <tr @key="v.SampleId">
+                                <td>@Display.SiteTime(v.OccurredAt, Zone)</td>
+                                <td>@string.Join(", ", v.Rules.Select(r => $"{r} {ControlChartView.RuleName(r).ToLowerInvariant()}"))</td>
+                                <td class="inv-num">@(v.Mean is { } m ? m.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : v.Defects is { } d ? $"{d} of {v.Inspected}" : "—")</td>
+                                <td>@string.Join(" · ", new[] { v.JobNumber, v.LotLabel }.Where(x => x is not null))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (alert.Status == "open" && User.Can(PermissionCodes.QualityRecord, Sites.SiteId))
+            {
+                <form class="row g-2 align-items-end" @onsubmit="CloseAsync" @onsubmit:preventDefault>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold" for="alert-cause">Cause</label>
+                        <select id="alert-cause" class="form-select form-select-sm" @bind="_causeId">
+                            <option value="@Guid.Empty">Choose…</option>
+                            @foreach (var c in _causes)
+                            {
+                                <option value="@c.Id">@Display.ReasonLabel(c)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold" for="alert-action">What was done</label>
+                        <input id="alert-action" class="form-control form-control-sm" maxlength="1000" @bind="_action" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-2">
+                        <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy"
+                                      Reason="@(_causeId == Guid.Empty ? "Choose the cause." : string.IsNullOrWhiteSpace(_action) ? "Say what was done." : null)">Close alert</ActionButton>
+                    </div>
+                </form>
+            }
+            else if (alert.Status == "closed")
+            {
+                <p class="small mb-0">Closed @Display.SiteTime(alert.ClosedAt, Zone) by @alert.ClosedBy: @alert.Cause. @alert.Action</p>
+            }
+        </section>
+    }
+}
+
+@code {
+    private IReadOnlyList<SpcAlertDto>? _alerts;
+    private IReadOnlyList<ReasonCodeDto> _causes = [];
+    private SpcAlertDto? _selected;
+    private Guid _causeId;
+    private string? _action;
+    private bool _busy;
+    private string? _message;
+    private ApiException? _error;
+
+    private string? Zone => Sites.Site?.TimeZone;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        (_alerts, _selected, _message) = (null, null, null);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            return;
+        }
+
+        try
+        {
+            _alerts = await Api.ListSpcAlertsAsync(site);
+            _causes = await Api.ListReasonCodesAsync("spc_cause", site);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OpenAsync(SpcAlertDto alert)
+    {
+        _error = null;
+        try
+        {
+            _selected = await Api.GetSpcAlertAsync(alert.SiteId, alert.Id);
+            (_causeId, _action) = (Guid.Empty, null);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        if (_selected is not { } alert || _causeId == Guid.Empty || string.IsNullOrWhiteSpace(_action))
+        {
+            return;
+        }
+
+        _busy = true;
+        (_error, _message) = (null, null);
+        try
+        {
+            _selected = await Api.CloseSpcAlertAsync(alert.SiteId, alert.Id, new CloseSpcAlertRequest { CauseReasonCodeId = _causeId, Action = _action });
+            _message = $"Closed the alert on {alert.CharacteristicCode}. The next signal on its chart opens a new one.";
+            _alerts = await Api.ListSpcAlertsAsync(alert.SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

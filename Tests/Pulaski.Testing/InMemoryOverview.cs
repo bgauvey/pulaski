@@ -28,4 +28,9 @@ public sealed class InMemoryOverview : IOverviewReadStore
     }
 
     public Task<(int OnHold, int Quarantine)> CountHeldLotsAsync(Guid siteId, CancellationToken cancellationToken) => Task.FromResult(HeldLots);
+
+    /// <summary>What <see cref="CountOpenSpcAlertsAsync"/> answers.</summary>
+    public int OpenSpcAlerts { get; set; }
+
+    public Task<int> CountOpenSpcAlertsAsync(Guid siteId, CancellationToken cancellationToken) => Task.FromResult(OpenSpcAlerts);
 }

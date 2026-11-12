@@ -1261,6 +1261,15 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> UpdateCharacteristicAsync(Guid id, UpdateCharacteristicRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/quality/characteristics/{id}", request, ct);
 
+    public Task<IReadOnlyList<SpcAlertDto>> ListSpcAlertsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<SpcAlertDto>>($"api/quality/alerts?siteId={siteId}", ct);
+
+    public Task<SpcAlertDto> GetSpcAlertAsync(Guid siteId, Guid id, CancellationToken ct = default) =>
+        GetAsync<SpcAlertDto>($"api/quality/alerts/{id}?siteId={siteId}", ct);
+
+    public Task<SpcAlertDto> CloseSpcAlertAsync(Guid siteId, Guid id, CloseSpcAlertRequest request, CancellationToken ct = default) =>
+        SendAsync<SpcAlertDto>(HttpMethod.Post, $"api/quality/alerts/{id}/close?siteId={siteId}", request, ct);
+
     public Task<ControlChartDto> GetControlChartAsync(
         Guid characteristicId, Guid siteId, Guid materialId, Guid? equipmentId, DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default) =>
         GetAsync<ControlChartDto>(

@@ -200,14 +200,14 @@ The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plan
 
 **Operate → Overview** is the home page: a live board for the plant. In a few seconds it answers *which lines are running, which aren't and why, and what needs a person*. It refreshes itself every 30 seconds; the pill at the top right says when it was last updated (and turns grey, with a warning, if Pulaski can't reach the server for over a minute). The refresh button updates it at once. With several sites whose Overview you may see, pick one at the top.
 
-**Diagonal hatching means "no data".** A part of the board that has nothing to show yet (quality checks, which Pulaski doesn't do yet, or machine figures when no line reports its state) sits where it will be, hatched and greyed, with a plug symbol saying what will fill it, so the page won't move around when the data arrives. A dash or hatching means *not measured*; a 0 means measured and none.
+**Diagonal hatching means "no data".** A part of the board that has nothing to show yet (machine figures when no line reports its state, say) sits where it will be, hatched and greyed, with a plug symbol saying what will fill it, so the page won't move around when the data arrives. A dash or hatching means *not measured*; a 0 means measured and none.
 
 **Needs attention** (the grid at the top) counts what needs a person, most urgent first. A count above zero is marked with a coloured bar and icon; click it to go to the list behind it.
 
 | Cell | Counts | Today |
 | --- | --- | --- |
 | Uncoded stops | Stops in each line's current shift, longer than a micro-stop, with no reason yet | Live → Machines (needs a line that reports its state) |
-| Open SPC alerts | Control-chart alerts to respond to | Needs quality checks |
+| Open SPC alerts | Control charts that signalled and wait for a cause | Live → Quality → SPC alerts |
 | Orders behind | Open orders projected late or slipping past their baseline | Live → Work orders |
 | Lots on hold | Lots with stock on hold or in quarantine | Live → Inventory → Lots |
 | Schedule conflicts | Open orders with a schedule warning or an overlap | Live → Schedule |
@@ -1527,7 +1527,7 @@ line chosen above, the **Lower**, **Centre** and **Upper** limits (and the dispe
   keeps every period with how it was set, the results left out and who approved it.
 - **Who.** Anyone who can see quality sees the limits; working them out, approving, entering and ending them needs permission to maintain
   specifications. Each approval is recorded as `pulaski.control_limit.approved.v1`, each end as `…ended.v1`.
-- **Charts.** See [Control charts](#control-charts). Alerts when a chart signals come in a later version.
+- **Charts and alerts.** See [Control charts](#control-charts) and [Respond to SPC alerts](#respond-to-spc-alerts).
 
 ### Control charts
 
@@ -1551,7 +1551,8 @@ line chosen above, the **Lower**, **Centre** and **Upper** limits (and the dispe
   many.
 - **Run rules** are marked on the point that completes the pattern: the ninth of nine in a row, say. Each point is measured against its own
   limits, so a run carries on across new limits, and a result without limits breaks it. Rising, falling and alternating look at the values alone.
-  Rules apply to the main chart; the range, standard deviation or moving range chart marks only results beyond its limits. Alerts come next.
+  Rules apply to the main chart; the range, standard deviation or moving range chart marks only results beyond its limits. A newly recorded
+  result that signals raises an [SPC alert](#respond-to-spc-alerts).
 - **Who:** anyone who can see quality at the site.
 
 ### Write a specification
@@ -1577,9 +1578,37 @@ To change it later, click **New draft**: it starts as a copy of the released ver
 5. Choose the **Source** (**At the line** or **Laboratory**), check **Sampled at** and add a comment if needed.
 6. Click **Record**. Pulaski says whether the result is in specification. If it isn't and the characteristic holds the lot, it says the lot
    was put on hold. If the result makes its [control chart](#control-charts) signal (beyond the limits, or completing a run rule), it says so and
-   that an SPC alert was raised, or added to the one already open.
+   that an [SPC alert](#respond-to-spc-alerts) was raised, or added to the one already open.
 
 From a lot's page, **Record a result** under **Quality** opens this form with the lot filled in.
+
+### Respond to SPC alerts
+
+An SPC alert means a control chart signalled: a result beyond its control limits, or completing one of its characteristic's run rules. The
+Overview's **Open SPC alerts** counts those waiting at the site.
+
+1. Open **Operate → Quality** and click **SPC alerts** (or click the Overview's count).
+2. Open alerts come first: the chart (characteristic, material and line), the rules broken, how many results broke them and when.
+3. Click **Respond**. The alert lists each result that broke a rule, with its value, job and lot; **See the chart** opens its control chart.
+4. Find the cause at the line. Choose the **Cause**, say **What was done**, and click **Close alert**.
+
+**In detail**
+
+- **One alert per chart.** While a chart's alert is open, further results that break a rule are added to it (its count and rules grow), rather
+  than raising new ones. Once it is closed, the next break opens a new alert.
+- **When it is raised.** When a result is recorded (by hand, from the laboratory, or through a lot attribute), it is checked against the results
+  before it on the same line and the limits in force for it. A result recorded with an earlier sample time is judged by the results before it.
+  Nothing is raised while the chart has no control limits.
+- **Which chart.** Results on one line are a chart of their own; results for a lot alone (no line) are another. Limits are the line's own if it
+  has some, else the material's.
+- **Lots aren't held.** Out of control isn't out of specification; whether a result holds its lot is the specification's choice. Hold or reject
+  the lot yourself if the cause calls for it.
+- **Causes** are reasons of the kind *SPC cause* (Configure → Reasons). Starters: material or lot change, machine setting changed, die or
+  tooling wear, startup or changeover, measurement or gauge error, and no cause found (which needs a fuller note).
+- **Excluding** a result later doesn't change an alert it raised; close it with the cause *Measurement or gauge error* if that's what it was.
+- **Who:** anyone who can see quality sees alerts; closing one needs permission to record quality results at the site. Raising, adding to and
+  closing are events (`pulaski.spc_alert.raised.v1`, `…signalled.v1`, `…closed.v1`) that [delivery feeds](#send-movements-to-the-erp-and-certificates-to-a-document-system) can send on.
+- Closed alerts stay listed for 30 days, and on record after that.
 
 ### Leave out a wrong result
 
@@ -2750,9 +2779,9 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Sending to other systems** is by HTTPS webhook or MQTT; there is no Kafka or other message queue yet, and retention is the same for every feed. Receivers' acknowledgements are recorded on the delivery, but nothing compares what the ERP booked with what Pulaski sent; there is no adapter for a particular ERP's or document system's own API. A certificate's file goes inline in the event, up to 10 MB; there is no download link for a receiver to fetch it later. The delivery list shows at most 200 at a time, with no paging beyond that.
 - **Allocations:** the background refresh is all or nothing for a site, and any change anywhere makes it run. Preferences are per site, not per material. A picking list is printed, not confirmed: fetching the lot is still an ordinary move. Approved alternates show only in allocations and on consumption, not in an order's planned components, and only a BOM's approved alternates can be allocated.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
-- **The Overview** has no quality figures or SPC alerts yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
+- **The Overview** has no quality figures yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
-- **Quality:** control charts raise no alerts yet and don't update while open, and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
+- **Quality:** control charts and alerts don't update while open (refresh the page), alerts aren't e-mailed, and SPC runs only on recorded results, not process values; and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
 - **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.
 - **Some switched-off controls give no reason yet:** a form's Save waiting on a field next to it, an Export with nothing to export, and the locked boxes on the Permissions tab (point at those with the mouse to see why).
 

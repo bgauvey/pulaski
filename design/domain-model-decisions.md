@@ -2658,6 +2658,9 @@ specification's `hold_on_fail`, D-085); **events only**, no e-mail.
   (its comment rule applying to the action), closes it and appends `spc_alert.closed`. `GET /api/quality/alerts?siteId=` lists open ones and
   those closed in 30 days; `GET /api/quality/alerts/{id}?siteId=` adds the breaking results. Starter causes in `seed-reasons.sql`.
 - A back-dated result is judged by the results before it only; excluding a result never closes or changes an alert.
+- **Screens (5b):** Operate → Quality → SPC alerts (`/quality/alerts`) lists open alerts and those closed in 30 days, opens one with its breaking
+  results and a link to its chart, and closes it with a cause and action. The Overview's Open SPC alerts tile counts the site's open alerts
+  (`OverviewDto.OpenSpcAlerts`, `IOverviewReadStore.CountOpenSpcAlertsAsync`) and links to the list.
 
 ## Application architecture
 
