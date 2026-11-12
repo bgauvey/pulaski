@@ -305,6 +305,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   Charts: `GetControlChartQuery` (`/characteristics/{id}/chart`, site results, each point vs the limits in force at its time for its line), web
   `/quality/charts` with `ControlChartPlot` (SVG). Alerts: `SpcSignals` (in `QualityRecorder`) → `core.spc_alert` one open per chart (upsert) +
   `ts.spc_violation`; `CloseSpcAlertCommand` (cause `spc_cause` + action, `quality.record`); `SpcEvaluation` shared by chart and alerts.
+  Process values: `core.characteristic_tag` bindings → `TagSampler` (`TagSamplingService`) records `auto` results at clock-aligned intervals
+  (`AutoSampling`: consecutive minute snapshots, skip without a running job or with bad/stale readings).
 - Attribute values in bulk, certificate feed (D-086, proposed): `LotAttributeCsv` (lot_number, optional material_code, a column per attribute code;
   blank = unchanged, `(clear)` clears) → `ImportLotAttributeValuesCommand` (all or nothing, dry run ends uncommitted; locks lots in id order; writes
   through `LotAttributeWriter`, shared with the lot page). Export `values.csv` is the import format. Webhook feeds `erp` and `documents`

@@ -2662,6 +2662,22 @@ specification's `hold_on_fail`, D-085); **events only**, no e-mail.
   results and a link to its chart, and closes it with a cause and action. The Overview's Open SPC alerts tile counts the site's open alerts
   (`OverviewDto.OpenSpcAlerts`, `IOverviewReadStore.CountOpenSpcAlertsAsync`) and links to the list.
 
+**Process-value SPC (piece 6a).** Decided (the user's choices): **stored auto results** (`ts.quality_sample` source `auto`, so charts, limits,
+rules, alerts and specification checks apply unchanged); **consecutive snapshots** (at each interval end, the value held at n moments a minute
+apart, ending then; n the X-bar subgroup size, else 1); **tag bindings** (`core.characteristic_tag`, several per characteristic, one active per
+line); **skip intervals without a running job** (or with bad or stale readings).
+- `AutoSampling` (pure): clock-aligned interval ends after `sampled_through`, up to now less a 2-minute lag for late edge readings, at most 24
+  hours back (older ones skipped, not caught up); a moment's value is the last reading at or before it if good and at most 2 minutes old
+  (the edge sends at least once a minute while good).
+- `TagSampler` (`TagSamplingService` in the API, `Quality:AutoSampling:*`, every 60 s): each active binding is locked `FOR UPDATE SKIP LOCKED`,
+  so two rounds never take the same one; for each interval end it finds the run open on the binding's line (`FindRunningJobAsync`) and records
+  through `QualityRecorder` as the system, then moves `sampled_through` on, all in one transaction per binding (at most 96 ends a round).
+- Bindings: `AddTagBindingCommand` (a measured, active characteristic; an active `process_value` tag whose equipment is, or sits below, a line
+  that runs jobs; one active per characteristic and line) and `UpdateTagBindingCommand` (interval, on/off; back on starts from now),
+  `specs.manage`; `/api/quality/characteristics/{id}/tags`, `/api/quality/characteristic-tags/{id}`, `/api/quality/process-value-tags`.
+  Deleting a tag detaches and switches off its bindings (as it detached characteristics before). Migration 0067 drops the unused
+  `quality_characteristic.equipment_tag_id` and `sample_interval`.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

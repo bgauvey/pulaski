@@ -293,6 +293,43 @@ internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityRead
         return alert with { Violations = violations.AsList() };
     }
 
+    private const string Bindings = """
+        SELECT b.id, b.characteristic_id, b.equipment_tag_id, t.source_address AS tag_address, te.code AS equipment_code, b.line_id, l.code AS line_code,
+               b.site_id, s.code AS site_code, b.interval_minutes::int AS interval_minutes, b.is_active, b.sampled_through, b.xmin::text::bigint AS version
+        FROM core.characteristic_tag b
+        JOIN core.equipment l ON l.id = b.line_id
+        JOIN core.equipment s ON s.id = b.site_id
+        LEFT JOIN core.equipment_tag t ON t.id = b.equipment_tag_id
+        LEFT JOIN core.equipment te ON te.id = t.equipment_id
+        WHERE b.characteristic_id = @Id
+        ORDER BY b.is_active DESC, s.code, l.code, b.created_at DESC
+        """;
+
+    private const string ProcessValueTags = """
+        SELECT t.id, t.source_address, e.code AS equipment_code, line.code AS line_code, s.code AS site_code, u.code AS uom_code
+        FROM core.equipment_tag t
+        JOIN core.equipment e ON e.id = t.equipment_id
+        JOIN core.equipment s ON s.id = CASE WHEN e.level = 'site' THEN e.id ELSE e.site_id END
+        LEFT JOIN core.uom u ON u.id = t.uom_id
+        LEFT JOIN LATERAL (
+            SELECT a.code FROM core.equipment_closure c JOIN core.equipment a ON a.id = c.ancestor_id
+            WHERE c.descendant_id = e.id AND a.can_run_job ORDER BY c.depth LIMIT 1) line ON true
+        WHERE t.is_active AND t.tag_role = 'process_value'
+        ORDER BY s.code, e.code, t.source_address
+        """;
+
+    public async Task<IReadOnlyList<TagBindingDto>> ListBindingsAsync(Guid characteristicId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return (await connection.QueryAsync<TagBindingDto>(new CommandDefinition(Bindings, new { Id = characteristicId }, cancellationToken: cancellationToken))).AsList();
+    }
+
+    public async Task<IReadOnlyList<ProcessValueTagDto>> ListProcessValueTagsAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return (await connection.QueryAsync<ProcessValueTagDto>(new CommandDefinition(ProcessValueTags, cancellationToken: cancellationToken))).AsList();
+    }
+
     private sealed class LimitListRow : QualitySql.LimitRow
     {
         public string MaterialCode { get; init; } = "";

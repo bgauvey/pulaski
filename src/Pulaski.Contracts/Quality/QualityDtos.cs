@@ -390,6 +390,52 @@ public sealed record QualityResultResponse
     public Guid? SpcAlertId { get; init; }
 }
 
+/// <summary>A characteristic sampled automatically from a process-value tag on a line (D-099).</summary>
+public sealed record TagBindingDto
+{
+    public Guid Id { get; init; }
+    public Guid CharacteristicId { get; init; }
+
+    /// <summary>Null once its tag was deleted (it is then switched off).</summary>
+    public Guid? EquipmentTagId { get; init; }
+    public string? TagAddress { get; init; }
+    public string? EquipmentCode { get; init; }
+    public Guid LineId { get; init; }
+    public string LineCode { get; init; } = "";
+    public Guid SiteId { get; init; }
+    public string SiteCode { get; init; } = "";
+    public int IntervalMinutes { get; init; }
+    public bool IsActive { get; init; }
+
+    /// <summary>The last interval end dealt with.</summary>
+    public DateTimeOffset SampledThrough { get; init; }
+    public long Version { get; init; }
+}
+
+/// <summary>A process-value tag that can be bound.</summary>
+public sealed record ProcessValueTagDto
+{
+    public Guid Id { get; init; }
+    public string SourceAddress { get; init; } = "";
+    public string EquipmentCode { get; init; } = "";
+    public string? LineCode { get; init; }
+    public string SiteCode { get; init; } = "";
+    public string? UomCode { get; init; }
+}
+
+public sealed record AddTagBindingRequest
+{
+    public Guid EquipmentTagId { get; init; }
+    public int IntervalMinutes { get; init; } = 15;
+}
+
+public sealed record UpdateTagBindingRequest
+{
+    public long Version { get; init; }
+    public int IntervalMinutes { get; init; }
+    public bool IsActive { get; init; } = true;
+}
+
 /// <summary>An SPC alert (D-099): a chart that signalled, open until someone closes it with a cause and the action taken.</summary>
 public sealed record SpcAlertDto
 {

@@ -511,4 +511,70 @@ public sealed class InMemoryQuality : IQualityRepository, IQualityReadStore
                 : null);
         }
     }
+
+    /// <summary>Tags a binding may name.</summary>
+    public Dictionary<Guid, BindableTag> Tags { get; } = [];
+
+    public List<TagBinding> Bindings { get; } = [];
+
+    /// <summary>Process values by tag.</summary>
+    public Dictionary<Guid, List<ProcessReading>> Readings { get; } = [];
+
+    /// <summary>Runs by line: the job running in each period.</summary>
+    public List<(Guid LineId, DateTimeOffset From, DateTimeOffset? To, Guid JobId)> Runs { get; } = [];
+
+    public Task<BindableTag?> GetBindableTagAsync(Guid tagId, CancellationToken cancellationToken) => Task.FromResult(Tags.GetValueOrDefault(tagId));
+
+    public Task<bool> HasActiveBindingAsync(Guid characteristicId, Guid lineId, CancellationToken cancellationToken) =>
+        Task.FromResult(Bindings.Any(b => b.CharacteristicId == characteristicId && b.LineId == lineId && b.IsActive));
+
+    public Task<long> InsertBindingAsync(TagBinding binding, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        Bindings.Add(binding);
+        return Task.FromResult(1L);
+    }
+
+    public Task<Versioned<TagBinding>?> GetBindingForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(Bindings.FirstOrDefault(b => b.Id == id) is { } b ? new Versioned<TagBinding>(b, 1) : null);
+
+    public Task<long> UpdateBindingAsync(TagBinding binding, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        Bindings[Bindings.FindIndex(b => b.Id == binding.Id)] = binding;
+        return Task.FromResult(1L);
+    }
+
+    public Task<IReadOnlyList<Guid>> ListActiveBindingsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Guid>>([.. Bindings.Where(b => b.IsActive).Select(b => b.Id)]);
+
+    public Task<TagBinding?> LockBindingAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(Bindings.FirstOrDefault(b => b.Id == id && b.IsActive));
+
+    public Task<IReadOnlyList<ProcessReading>> ListReadingsAsync(Guid tagId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ProcessReading>>(Readings.TryGetValue(tagId, out var all) ? [.. all.Where(r => r.At <= windowEnd)] : []);
+
+    public Task<Guid?> FindRunningJobAsync(Guid lineId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        Task.FromResult(Runs.Where(r => r.LineId == lineId && r.From <= at && (r.To is null || r.To > at)).Select(r => (Guid?)r.JobId).FirstOrDefault());
+
+    public Task AdvanceBindingAsync(Guid id, DateTimeOffset sampledThrough, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var i = Bindings.FindIndex(b => b.Id == id);
+        Bindings[i] = Bindings[i] with { SampledThrough = sampledThrough };
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<TagBindingDto>> ListBindingsAsync(Guid characteristicId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<TagBindingDto>>([.. Bindings.Where(b => b.CharacteristicId == characteristicId).Select(b => new TagBindingDto
+        {
+            Id = b.Id,
+            CharacteristicId = b.CharacteristicId,
+            EquipmentTagId = b.EquipmentTagId,
+            LineId = b.LineId,
+            SiteId = b.SiteId,
+            IntervalMinutes = b.IntervalMinutes,
+            IsActive = b.IsActive,
+            SampledThrough = b.SampledThrough,
+        })]);
+
+    public Task<IReadOnlyList<ProcessValueTagDto>> ListProcessValueTagsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ProcessValueTagDto>>([]);
 }

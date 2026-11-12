@@ -216,10 +216,10 @@ public sealed class EdgeTests(DatabaseFixture db)
         {
             await setup.ExecuteAsync(
                 """
-                INSERT INTO core.quality_characteristic
-                    (id, site_id, code, name, equipment_id, equipment_tag_id, data_kind, chart_type)
-                VALUES
-                    (@Id, @SiteId, @Code, 'Line speed', @EquipmentId, @TagId, 'variable', 'i_mr')
+                INSERT INTO core.quality_characteristic (id, site_id, code, name, equipment_id, data_kind, chart_type)
+                VALUES (@Id, @SiteId, @Code, 'Line speed', @EquipmentId, 'variable', 'i_mr');
+                INSERT INTO core.characteristic_tag (characteristic_id, equipment_tag_id, line_id, site_id, interval_minutes, sampled_through)
+                VALUES (@Id, @TagId, @EquipmentId, @SiteId, 15, now());
                 """,
                 new { Id = characteristicId, SiteId = site.Id, Code = "QC-" + _s, EquipmentId = line.Id, TagId = tag.Id });
         }
@@ -228,20 +228,21 @@ public sealed class EdgeTests(DatabaseFixture db)
         await db.SendAsync(new DeleteEquipmentTagCommand(inactiveTag.Id));
 
         await using var connectionDb = await db.AdminDataSource.OpenConnectionAsync();
-        var state = await connectionDb.QuerySingleAsync<(bool Node, bool Connection, bool ActiveTag, bool InactiveTag, Guid? QualityTag)>(
+        var state = await connectionDb.QuerySingleAsync<(bool Node, bool Connection, bool ActiveTag, bool InactiveTag, Guid? QualityTag, bool Sampling)>(
             """
             SELECT n.is_active AS Node,
                    c.is_active AS Connection,
                    EXISTS (SELECT 1 FROM core.equipment_tag WHERE id = @TagId) AS ActiveTag,
                    EXISTS (SELECT 1 FROM core.equipment_tag WHERE id = @InactiveTagId) AS InactiveTag,
-                   q.equipment_tag_id AS QualityTag
+                   q.equipment_tag_id AS QualityTag,
+                   q.is_active AS Sampling
             FROM core.edge_node n
             JOIN core.edge_connection c ON c.edge_node_id = n.id AND c.id = @ConnectionId
-            JOIN core.quality_characteristic q ON q.id = @CharacteristicId
+            JOIN core.characteristic_tag q ON q.characteristic_id = @CharacteristicId
             WHERE n.id = @NodeId
             """,
             new { NodeId = node.Id, ConnectionId = connection.Id, TagId = tag.Id, InactiveTagId = inactiveTag.Id, CharacteristicId = characteristicId });
-        Assert.Equal((true, true, false, false, null), state);
+        Assert.Equal((true, true, false, false, null, false), state);
 
         var detail = await QueryAsync<GetEdgeNodeQuery, EdgeNodeDetailDto>(new GetEdgeNodeQuery(node.Id));
         Assert.Empty(detail.Tags);

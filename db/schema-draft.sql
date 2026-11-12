@@ -1837,11 +1837,9 @@ CREATE TABLE core.quality_characteristic (
     name                text NOT NULL,
     description         text,
     equipment_id        uuid REFERENCES core.equipment(id),     -- where it is measured, when that is one place
-    equipment_tag_id    uuid REFERENCES core.equipment_tag(id),  -- set when sampled automatically from process data
     data_kind           text NOT NULL CHECK (data_kind IN ('variable','attribute')),
     chart_type          text NOT NULL CHECK (chart_type IN ('xbar_r','xbar_s','i_mr','p','np','c','u')),
     subgroup_size       smallint NOT NULL DEFAULT 1 CHECK (subgroup_size >= 1),
-    sample_interval     interval,                               -- auto-sampling cadence
     uom_id              uuid REFERENCES core.uom(id),
     decimals            smallint NOT NULL DEFAULT 3,
     run_rules           smallint[] NOT NULL DEFAULT '{1,2,5,6}', -- Nelson rules its chart checks (D-099); 1 always; default the Western Electric set
@@ -1853,6 +1851,25 @@ CREATE TABLE core.quality_characteristic (
     CONSTRAINT characteristic_imr_ck CHECK (chart_type <> 'i_mr' OR subgroup_size = 1)
 );
 CREATE UNIQUE INDEX characteristic_code_uq ON core.quality_characteristic (coalesce(site_id, '00000000-0000-0000-0000-000000000000'::uuid), code);
+
+-- A characteristic sampled automatically from a process-value tag on a line (D-099): at the end of each interval, a result (source auto) of the
+-- value held at consecutive minutes, for the job running on the line. Switched off, never deleted.
+CREATE TABLE core.characteristic_tag (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    characteristic_id   uuid NOT NULL REFERENCES core.quality_characteristic(id),
+    equipment_tag_id    uuid REFERENCES core.equipment_tag(id),  -- a process_value tag; NULL once the tag is deleted (then switched off)
+    line_id             uuid NOT NULL REFERENCES core.equipment(id),  -- the tag's equipment or the nearest above it that runs jobs
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    interval_minutes    smallint NOT NULL CHECK (interval_minutes BETWEEN 1 AND 1440),
+    is_active           boolean NOT NULL DEFAULT true,
+    sampled_through     timestamptz NOT NULL,                   -- the last interval end dealt with (a result made, or skipped)
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT characteristic_tag_tag_ck CHECK (NOT is_active OR equipment_tag_id IS NOT NULL)
+);
+-- One active binding per characteristic and line, so a line has one automatic chart a characteristic.
+CREATE UNIQUE INDEX characteristic_tag_line_uq ON core.characteristic_tag (characteristic_id, line_id) WHERE is_active;
+CREATE INDEX characteristic_tag_tag_ix ON core.characteristic_tag (equipment_tag_id);
 
 -- A site's number lot attribute may stand for a characteristic: setting it records a result checked against the specification (#65).
 ALTER TABLE core.lot_attribute ADD COLUMN characteristic_id uuid REFERENCES core.quality_characteristic(id);
@@ -2605,7 +2622,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0063_rate_refresh'),
     ('0064_control_limits'),
     ('0065_run_rules'),
-    ('0066_spc_alerts');
+    ('0066_spc_alerts'),
+    ('0067_tag_sampling');
 
 -- =====================================================================
 -- 17. SEED DATA

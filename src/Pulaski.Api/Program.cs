@@ -79,6 +79,7 @@ if (builder.Configuration.GetValue("Pulaski:DatabaseMaintenance", true))
     builder.Services.AddHostedService<OeeRollupService>();
     builder.Services.AddHostedService<AllocationRefreshService>();
     builder.Services.AddHostedService<RateRefreshService>();
+    builder.Services.AddHostedService<TagSamplingService>();
     builder.Services.AddHostedService<ConnectionScheduleService>();
     builder.Services.AddHostedService<QualificationNoticeService>();
 }

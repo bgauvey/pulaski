@@ -1008,6 +1008,64 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_process_value_tag_is_sampled_into_results_for_the_running_job()
+    {
+        var plant = await CreatePlantAsync();
+        CreatedResponse node = await db.SendAsync(new CreateEdgeNodeCommand(plant.Site, "PV-" + _suffix, "Gateway", null));
+        CreatedResponse connection = await db.SendAsync(new CreateEdgeConnectionCommand(node.Id, "PB-" + _suffix, "Broker", EdgeProtocols.SparkplugB,
+            new Dictionary<string, string> { ["host"] = "localhost" }));
+        CreatedResponse tag = await db.SendAsync(new CreateEquipmentTagCommand(
+            plant.Line, TagRoles.ProcessValue, connection.Id, $"Plant1/Area/PV-{_suffix}:Barrel/Zone3", 1, 0, null));
+        CreatedResponse melt = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("PVT-" + _suffix, "Melt temperature", null, "variable", null, 1));
+        CreatedResponse holes = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("PVA-" + _suffix, "Holes", null, "attribute", null, 0));
+
+        // Only a measured characteristic, once per line.
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Application.Quality.AddTagBindingCommand(holes.Id, tag.Id, 15)));
+        var bound = await db.SendAsync(new Application.Quality.AddTagBindingCommand(melt.Id, tag.Id, 15));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new Application.Quality.AddTagBindingCommand(melt.Id, tag.Id, 30)));
+        var binding = Assert.Single(await QueryAsync<Application.Quality.ListTagBindingsQuery, IReadOnlyList<Contracts.Quality.TagBindingDto>>(
+            new Application.Quality.ListTagBindingsQuery(melt.Id)));
+        Assert.Equal(("LINE-" + _suffix, 15, true), (binding.LineCode, binding.IntervalMinutes, binding.IsActive));
+
+        // Two hours of readings, one a minute, as if bound then; the line's job has run all along.
+        var now = DateTimeOffset.UtcNow;
+        var start = now.AddHours(-2);
+        await using (var admin = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await admin.ExecuteAsync("UPDATE core.characteristic_tag SET sampled_through = @Start WHERE id = @Id", new { Start = start, Id = bound.Id });
+            await admin.ExecuteAsync(
+                "INSERT INTO ts.process_value (equipment_tag_id, occurred_at, value_num, quality) SELECT @Tag, @Start + make_interval(mins => m), 210 + (m % 3), 192 FROM generate_series(0, 120) AS m",
+                new { Tag = tag.Id, Start = start });
+        }
+
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            var made = await scope.ServiceProvider.GetRequiredService<Application.Quality.TagSampler>().RunDueAsync(CancellationToken.None);
+            var expected = Domain.Quality.Spc.AutoSampling.Ticks(start, now, 15, 96).Count;
+            Assert.Equal(expected, made);
+        }
+
+        var results = await QueryAsync<Application.Quality.ListQualityResultsQuery, IReadOnlyList<Contracts.Quality.QualityResultDto>>(
+            new Application.Quality.ListQualityResultsQuery(new Application.Quality.QualityResultFilter(null, plant.Site, CharacteristicId: melt.Id)));
+        Assert.NotEmpty(results);
+        Assert.All(results, r => Assert.Equal(("auto", plant.JobNumber), (r.Source, r.JobNumber)));
+        Assert.All(results, r => Assert.Equal(0, r.OccurredAt.Minute % 15));
+
+        // Nothing is due until the next interval ends.
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<Application.Quality.TagSampler>().RunDueAsync(CancellationToken.None));
+        }
+
+        var after = Assert.Single(await QueryAsync<Application.Quality.ListTagBindingsQuery, IReadOnlyList<Contracts.Quality.TagBindingDto>>(
+            new Application.Quality.ListTagBindingsQuery(melt.Id)));
+        Assert.True(after.SampledThrough > start);
+        await db.SendAsync(new Application.Quality.UpdateTagBindingCommand(after.Id, after.Version, 30, false));
+        Assert.False(Assert.Single(await QueryAsync<Application.Quality.ListTagBindingsQuery, IReadOnlyList<Contracts.Quality.TagBindingDto>>(
+            new Application.Quality.ListTagBindingsQuery(melt.Id))).IsActive);
+    }
+
+    [Fact]
     public async Task Merges_transfers_and_output_that_joined_a_silo_are_put_back_as_they_were()
     {
         var plant = await CreatePlantAsync();

@@ -49,6 +49,27 @@ internal static class QualityEndpoints
             TypedResults.Ok(await handler.HandleAsync(new ListControlLimitsQuery(id), ct)))
         .RequireAny(null, Permissions.QualityView);
 
+        // Characteristics sampled automatically from process-value tags (D-099).
+        quality.MapGet("/characteristics/{id:guid}/tags", async Task<Ok<IReadOnlyList<TagBindingDto>>> (
+            Guid id, IQueryHandler<ListTagBindingsQuery, IReadOnlyList<TagBindingDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListTagBindingsQuery(id), ct)))
+        .RequireAny(null, Permissions.QualityView);
+
+        quality.MapGet("/process-value-tags", async Task<Ok<IReadOnlyList<ProcessValueTagDto>>> (
+            IQueryHandler<ListProcessValueTagsQuery, IReadOnlyList<ProcessValueTagDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListProcessValueTagsQuery(), ct)))
+        .RequireAny(null, Permissions.QualityView);
+
+        quality.MapPost("/characteristics/{id:guid}/tags", async Task<Ok<CreatedResponse>> (
+            Guid id, AddTagBindingRequest request, ICommandHandler<AddTagBindingCommand, CreatedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new AddTagBindingCommand(id, request.EquipmentTagId, request.IntervalMinutes), ct)))
+        .RequirePermission(Permissions.Specs);
+
+        quality.MapPut("/characteristic-tags/{id:guid}", async Task<Ok<VersionResponse>> (
+            Guid id, UpdateTagBindingRequest request, ICommandHandler<UpdateTagBindingCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new UpdateTagBindingCommand(id, request.Version, request.IntervalMinutes, request.IsActive), ct)))
+        .RequirePermission(Permissions.Specs);
+
         // SPC alerts (D-099): one open per chart, raised when a recorded result breaks a run rule; closed with a cause and the action taken.
         quality.MapGet("/alerts", async Task<Ok<IReadOnlyList<SpcAlertDto>>> (
             Guid siteId, IQueryHandler<ListSpcAlertsQuery, IReadOnlyList<SpcAlertDto>> handler, CancellationToken ct) =>

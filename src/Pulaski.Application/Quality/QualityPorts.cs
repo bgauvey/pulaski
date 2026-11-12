@@ -103,6 +103,32 @@ public interface IQualityRepository
 
     Task CloseAlertAsync(Guid id, Guid causeReasonId, string action, string by, DateTimeOffset at, CancellationToken cancellationToken);
 
+    /// <summary>A tag as a binding needs it: its role, site, and the line it sits on (its equipment or the nearest above that runs jobs).</summary>
+    Task<BindableTag?> GetBindableTagAsync(Guid tagId, CancellationToken cancellationToken);
+
+    /// <summary>Whether the characteristic already has an active binding on the line.</summary>
+    Task<bool> HasActiveBindingAsync(Guid characteristicId, Guid lineId, CancellationToken cancellationToken);
+
+    Task<long> InsertBindingAsync(TagBinding binding, DateTimeOffset at, CancellationToken cancellationToken);
+
+    Task<Versioned<TagBinding>?> GetBindingForUpdateAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<long> UpdateBindingAsync(TagBinding binding, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>The active bindings' ids, in id order.</summary>
+    Task<IReadOnlyList<Guid>> ListActiveBindingsAsync(CancellationToken cancellationToken);
+
+    /// <summary>An active binding, locked; null when another round has it locked, or it was switched off.</summary>
+    Task<TagBinding?> LockBindingAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>A tag's readings in <c>[windowStart, windowEnd]</c>, and the last one before.</summary>
+    Task<IReadOnlyList<ProcessReading>> ListReadingsAsync(Guid tagId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken);
+
+    /// <summary>The job of the run open on the line at <paramref name="at"/>; null when none was.</summary>
+    Task<Guid?> FindRunningJobAsync(Guid lineId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    Task AdvanceBindingAsync(Guid id, DateTimeOffset sampledThrough, DateTimeOffset at, CancellationToken cancellationToken);
+
     /// <summary>A baseline's results, read in the command's transaction: see <see cref="IQualityReadStore.ListBaselineAsync"/>.</summary>
     Task<IReadOnlyList<SpcSubgroup>> ListBaselineAsync(Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken);
 }
@@ -158,6 +184,12 @@ public interface IQualityReadStore
     /// <summary>An alert at the site with the results that broke its rules; null when there is none.</summary>
     Task<SpcAlertDto?> GetAlertAsync(Guid siteId, Guid id, CancellationToken cancellationToken);
 
+    /// <summary>The characteristic's tag bindings, active first.</summary>
+    Task<IReadOnlyList<TagBindingDto>> ListBindingsAsync(Guid characteristicId, CancellationToken cancellationToken);
+
+    /// <summary>Active process-value tags, with their equipment, line and site, to bind.</summary>
+    Task<IReadOnlyList<ProcessValueTagDto>> ListProcessValueTagsAsync(CancellationToken cancellationToken);
+
     /// <summary>The most results a baseline reads.</summary>
     const int MaxBaseline = 1000;
 }
@@ -174,6 +206,13 @@ public sealed record QualityResultFilter(
     DateTimeOffset? From = null,
     DateTimeOffset? To = null,
     int Limit = 500);
+
+/// <summary>A process-value tag as a binding sees it; <see cref="LineId"/> null when nothing at or above its equipment runs jobs.</summary>
+public sealed record BindableTag(Guid TagId, string Role, bool IsActive, Guid SiteId, Guid? LineId, string? LineCode);
+
+/// <summary>A characteristic sampled from a tag on a line (D-099), as <c>core.characteristic_tag</c> holds it.</summary>
+public sealed record TagBinding(
+    Guid Id, Guid CharacteristicId, Guid? EquipmentTagId, Guid LineId, Guid SiteId, int IntervalMinutes, bool IsActive, DateTimeOffset SampledThrough);
 
 /// <summary>A result that broke run rules: where it belongs (its chart) and which rules.</summary>
 public sealed record SpcBreak(

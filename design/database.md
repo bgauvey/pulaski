@@ -1514,7 +1514,8 @@ A break's time comes out of the worked hours of every session of the person it o
 
 Enterprise-wide for specifications (`site_id` NULL). Code and kind are fixed once created; switched off, never deleted. `chart_type` and
 `subgroup_size` are its control chart (D-099), `i_mr` and `p` until chosen, and change only while it has no control limits in force or to come.
-`sample_interval` and `equipment_*` serve automatic sampling later.
+Automatic sampling from process values is in `core.characteristic_tag` (migration 0067 dropped the unused `equipment_tag_id` and
+`sample_interval`); `equipment_id` is still unused.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1524,12 +1525,10 @@ Enterprise-wide for specifications (`site_id` NULL). Code and kind are fixed onc
 | `name` | text | no | Display name. |
 | `description` | text | yes | Up to 500 characters. |
 | `equipment_id` | uuid → equipment | yes | Where it is measured, when that is one place. |
-| `equipment_tag_id` | uuid → equipment_tag | yes | Set when sampled automatically from process data; cleared if its tag is physically deleted. |
 | `data_kind` | text | no | `variable` (measured values) or `attribute` (inspected and defective counts); fixed once created. |
 | `chart_type` | text | no | `xbar_r`, `xbar_s`, `i_mr` (variables) or `p`, `np`, `c`, `u` (attributes); `ChartTypes.Problem` checks it fits. |
 | `subgroup_size` | smallint | no | Values per subgroup: 1 for `i_mr`, 2–25 for X-bar charts; for `np` and `c`, items inspected a sample. |
 | `run_rules` | smallint[] | no | The Nelson rules its chart checks (D-099), 1 always among them (`characteristic_rules_ck`); default `{1,2,5,6}`, the Western Electric set. |
-| `sample_interval` | interval | yes | Cadence for automatic sampling. |
 | `uom_id` | uuid → uom | yes | Unit of a measured value. |
 | `decimals` | smallint | no | Display precision, 0 to 6. Default 3. |
 | `is_active` | boolean | no | False when switched off: it can't be added to specifications or recorded. |
@@ -1575,6 +1574,24 @@ Written once, when the version is released; results point at the item they were 
 | `max_defects` | integer | yes | An attribute's most defective items allowed in a sample; required for an attribute, never for a variable. |
 | `hold_on_fail` | boolean | no | A failing result for a lot puts the lot on hold. Default false. |
 | `sort_order` | integer | no | Order on screens and the shop order sheet. |
+
+### core.characteristic_tag — characteristics sampled from process values (D-099) · *In use*
+
+A measured characteristic sampled automatically from a process-value tag on a line: at the end of each interval (aligned to the clock), a result
+of source `auto` of the value held at consecutive minutes, for the job running on the line. One active per characteristic and line
+(`characteristic_tag_line_uq`); switched off, never deleted. Deleting the tag detaches and switches it off.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `characteristic_id` | uuid → quality_characteristic | no | A measured characteristic. |
+| `equipment_tag_id` | uuid → equipment_tag | yes | A `process_value` tag; null once the tag is deleted, when it is also switched off (`characteristic_tag_tag_ck`). Indexed. |
+| `line_id` | uuid → equipment | no | The tag's equipment or the nearest above it that runs jobs: results take its running job. |
+| `site_id` | uuid → equipment | no | The line's site, where results are recorded. |
+| `interval_minutes` | smallint | no | 1 to 1440. |
+| `is_active` | boolean | no | Sampling. Switched back on, it starts from then. |
+| `sampled_through` | timestamptz | no | The last interval end dealt with (a result made or skipped); results start after it. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ### core.control_limit — control limits by period (D-099) · *In use*
 

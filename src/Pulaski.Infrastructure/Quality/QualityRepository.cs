@@ -564,6 +564,135 @@ internal sealed class QualityRepository(DbSession session) : IQualityRepository
         public int Breaks { get; init; }
     }
 
+    // The tag's line: its equipment or the nearest above it that runs jobs.
+    private const string BindableTag = """
+        SELECT t.id AS tag_id, t.tag_role AS role, t.is_active, CASE WHEN e.level = 'site' THEN e.id ELSE e.site_id END AS site_id,
+               line.id AS line_id, line.code AS line_code
+        FROM core.equipment_tag t
+        JOIN core.equipment e ON e.id = t.equipment_id
+        LEFT JOIN LATERAL (
+            SELECT a.id, a.code FROM core.equipment_closure c JOIN core.equipment a ON a.id = c.ancestor_id
+            WHERE c.descendant_id = e.id AND a.can_run_job ORDER BY c.depth LIMIT 1) line ON true
+        WHERE t.id = @Id
+        """;
+
+    private const string ActiveBindingOnLine = "SELECT EXISTS (SELECT 1 FROM core.characteristic_tag WHERE characteristic_id = @CharacteristicId AND line_id = @LineId AND is_active)";
+
+    private const string BindingColumns = "id, characteristic_id, equipment_tag_id, line_id, site_id, interval_minutes::int AS interval_minutes, is_active, sampled_through";
+
+    private const string InsertBinding = """
+        INSERT INTO core.characteristic_tag (id, characteristic_id, equipment_tag_id, line_id, site_id, interval_minutes, is_active, sampled_through, created_at, updated_at)
+        VALUES (@Id, @CharacteristicId, @EquipmentTagId, @LineId, @SiteId, @IntervalMinutes, @IsActive, @SampledThrough, @At, @At)
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string BindingForUpdate = $"SELECT {BindingColumns}, xmin::text::bigint AS version FROM core.characteristic_tag WHERE id = @Id FOR UPDATE";
+
+    private const string UpdateBinding = """
+        UPDATE core.characteristic_tag SET interval_minutes = @IntervalMinutes, is_active = @IsActive, sampled_through = @SampledThrough, updated_at = @At
+        WHERE id = @Id
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string ActiveBindings = "SELECT id FROM core.characteristic_tag WHERE is_active ORDER BY id";
+
+    private const string LockBinding = $"SELECT {BindingColumns}, xmin::text::bigint AS version FROM core.characteristic_tag WHERE id = @Id AND is_active FOR UPDATE SKIP LOCKED";
+
+    private const string Readings = """
+        (SELECT occurred_at AS at, value_num AS value, quality >= 192 AS is_good FROM ts.process_value
+         WHERE equipment_tag_id = @TagId AND occurred_at < @From AND value_num IS NOT NULL ORDER BY occurred_at DESC LIMIT 1)
+        UNION ALL
+        (SELECT occurred_at, value_num, quality >= 192 FROM ts.process_value
+         WHERE equipment_tag_id = @TagId AND occurred_at >= @From AND occurred_at <= @To AND value_num IS NOT NULL)
+        """;
+
+    private const string RunningJob = """
+        SELECT job_id FROM core.job_run
+        WHERE equipment_id = @LineId AND started_at <= @At AND (ended_at IS NULL OR ended_at > @At)
+        ORDER BY started_at DESC LIMIT 1
+        """;
+
+    private const string AdvanceBinding = "UPDATE core.characteristic_tag SET sampled_through = @Through, updated_at = @At WHERE id = @Id";
+
+    public async Task<BindableTag?> GetBindableTagAsync(Guid tagId, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<BindableRow>(BindableTag, new { Id = tagId }, cancellationToken) is { } r
+            ? new BindableTag(r.TagId, r.Role, r.IsActive, r.SiteId, r.LineId, r.LineCode)
+            : null;
+
+    public Task<bool> HasActiveBindingAsync(Guid characteristicId, Guid lineId, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(ActiveBindingOnLine, new { CharacteristicId = characteristicId, LineId = lineId }, cancellationToken);
+
+    public Task<long> InsertBindingAsync(TagBinding b, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(InsertBinding, BindingArgs(b, at), cancellationToken);
+
+    public async Task<Versioned<TagBinding>?> GetBindingForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<BindingRow>(BindingForUpdate, new { Id = id }, cancellationToken) is { } r ? new(r.ToBinding(), r.Version) : null;
+
+    public Task<long> UpdateBindingAsync(TagBinding b, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(UpdateBinding, BindingArgs(b, at), cancellationToken);
+
+    public Task<IReadOnlyList<Guid>> ListActiveBindingsAsync(CancellationToken cancellationToken) =>
+        session.QueryAsync<Guid>(ActiveBindings, null, cancellationToken);
+
+    public async Task<TagBinding?> LockBindingAsync(Guid id, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<BindingRow>(LockBinding, new { Id = id }, cancellationToken))?.ToBinding();
+
+    public async Task<IReadOnlyList<Domain.Quality.Spc.ProcessReading>> ListReadingsAsync(
+        Guid tagId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<ReadingRow>(Readings, new { TagId = tagId, From = windowStart, To = windowEnd }, cancellationToken))
+            .Select(r => new Domain.Quality.Spc.ProcessReading(r.At, r.Value, r.IsGood))];
+
+    public async Task<Guid?> FindRunningJobAsync(Guid lineId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        (await session.QueryAsync<Guid>(RunningJob, new { LineId = lineId, At = at }, cancellationToken)) is [var job, ..] ? job : null;
+
+    public Task AdvanceBindingAsync(Guid id, DateTimeOffset sampledThrough, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(AdvanceBinding, new { Id = id, Through = sampledThrough, At = at }, cancellationToken);
+
+    private static object BindingArgs(TagBinding b, DateTimeOffset at) => new
+    {
+        b.Id,
+        b.CharacteristicId,
+        b.EquipmentTagId,
+        b.LineId,
+        b.SiteId,
+        IntervalMinutes = (short)b.IntervalMinutes,
+        b.IsActive,
+        b.SampledThrough,
+        At = at,
+    };
+
+    private sealed class BindableRow
+    {
+        public Guid TagId { get; init; }
+        public string Role { get; init; } = "";
+        public bool IsActive { get; init; }
+        public Guid SiteId { get; init; }
+        public Guid? LineId { get; init; }
+        public string? LineCode { get; init; }
+    }
+
+    private sealed class BindingRow
+    {
+        public Guid Id { get; init; }
+        public Guid CharacteristicId { get; init; }
+        public Guid? EquipmentTagId { get; init; }
+        public Guid LineId { get; init; }
+        public Guid SiteId { get; init; }
+        public int IntervalMinutes { get; init; }
+        public bool IsActive { get; init; }
+        public DateTimeOffset SampledThrough { get; init; }
+        public long Version { get; init; }
+
+        public TagBinding ToBinding() => new(Id, CharacteristicId, EquipmentTagId, LineId, SiteId, IntervalMinutes, IsActive, SampledThrough);
+    }
+
+    private sealed class ReadingRow
+    {
+        public DateTimeOffset At { get; init; }
+        public double Value { get; init; }
+        public bool IsGood { get; init; }
+    }
+
     private static object CharacteristicArgs(Characteristic c, DateTimeOffset at) => new
     {
         c.Id,

@@ -99,9 +99,9 @@ internal sealed class EdgeRepository(DbSession session) : IEdgeRepository
         """;
 
     private const string DetachTagQualitySources = """
-        UPDATE core.quality_characteristic SET equipment_tag_id = NULL
+        UPDATE core.characteristic_tag SET equipment_tag_id = NULL, is_active = false, updated_at = now()
         WHERE equipment_tag_id = @TagId
-        RETURNING id
+        RETURNING characteristic_id
         """;
 
     private const string DeleteTag = "DELETE FROM core.equipment_tag WHERE id = @TagId";
