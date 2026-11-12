@@ -2,6 +2,7 @@
 @attribute [RequiresView(PermissionCodes.QualityView)]
 @inject PulaskiApiClient Api
 @inject CurrentUser User
+@using Pulaski.Web.Services.Quality
 
 <PageTitle>Characteristics · Pulaski</PageTitle>
 
@@ -33,7 +34,7 @@ else
 {
     <div class="table-panel mb-3">
         <table class="table table-sm align-middle mb-0">
-            <thead><tr><th>Code</th><th>Name</th><th>Kind</th><th>Unit</th><th class="text-end">Decimals</th><th></th></tr></thead>
+            <thead><tr><th>Code</th><th>Name</th><th>Kind</th><th>Unit</th><th class="text-end">Decimals</th><th>Control chart</th><th></th></tr></thead>
             <tbody>
                 @foreach (var c in _characteristics)
                 {
@@ -43,6 +44,10 @@ else
                         <td>@(c.DataKind == "attribute" ? "Inspected (defects)" : "Measured")</td>
                         <td>@(c.UomCode ?? "—")</td>
                         <td class="text-end">@c.Decimals</td>
+                        <td class="small">
+                            @ControlChartView.Chart(c.ChartType, c.SubgroupSize)
+                            <div><a href="quality/characteristics/@c.Id/control-limits">Control limits</a>@(c.HasLimits ? " · in force" : "")</div>
+                        </td>
                         <td class="text-end text-nowrap">
                             @if (!c.IsActive)
                             {
@@ -57,7 +62,7 @@ else
                 }
                 @if (_characteristics.Count == 0)
                 {
-                    <tr><td colspan="6" class="text-muted small">No characteristics yet.</td></tr>
+                    <tr><td colspan="7" class="text-muted small">No characteristics yet.</td></tr>
                 }
             </tbody>
         </table>
@@ -103,6 +108,28 @@ else
             </div>
             @if (_editing is not null)
             {
+                <div class="col-6 col-md-3">
+                    <label class="form-label small fw-semibold" for="ch-chart">Control chart</label>
+                    <select id="ch-chart" class="form-select form-select-sm" value="@_chartType" disabled="@_editing.HasLimits" aria-describedby="ch-chart-note"
+                            @onchange="e => ChooseChart(e.Value?.ToString())">
+                        @foreach (var (chart, chartName) in ControlChartView.ChartsFor(_kind))
+                        {
+                            <option value="@chart">@chartName</option>
+                        }
+                    </select>
+                </div>
+                @if (ControlChartView.SizeLabel(_chartType) is { } sizeLabel)
+                {
+                    <div class="col-6 col-md-2">
+                        <label class="form-label small fw-semibold" for="ch-size">@sizeLabel</label>
+                        <input id="ch-size" type="number" min="1" max="@MaxSize" class="form-control form-control-sm"
+                               @bind="_subgroupSize" disabled="@_editing.HasLimits" />
+                    </div>
+                }
+                @if (_editing.HasLimits)
+                {
+                    <div class="col-12 small text-muted" id="ch-chart-note">Its control limits were worked out for this chart; end them to change it.</div>
+                }
                 <div class="col-6 col-md-2 form-check ms-2">
                     <input id="ch-active" type="checkbox" class="form-check-input" @bind="_active" />
                     <label class="form-check-label small" for="ch-active">On</label>
@@ -130,6 +157,10 @@ else
     private int _decimals = 3;
     private string? _description;
     private bool _active = true;
+    private string _chartType = "i_mr";
+    private int _subgroupSize = 1;
+
+    private int MaxSize => _chartType is "xbar_r" or "xbar_s" ? 25 : 10000;
     private bool _saving;
     private string? _message;
     private ApiException? _error;
@@ -153,6 +184,19 @@ else
     {
         _editing = c;
         (_code, _name, _kind, _uomId, _decimals, _description, _active) = (c.Code, c.Name, c.DataKind, c.UomId, c.Decimals, c.Description, c.IsActive);
+        (_chartType, _subgroupSize) = (c.ChartType, c.SubgroupSize);
+    }
+
+    // Individuals and the per-unit charts take one; X-bar charts start at five.
+    private void ChooseChart(string? chart)
+    {
+        _chartType = chart ?? _chartType;
+        _subgroupSize = _chartType switch
+        {
+            "xbar_r" or "xbar_s" => _subgroupSize is >= 2 and <= 25 ? _subgroupSize : 5,
+            "np" or "c" => Math.Max(1, _subgroupSize),
+            _ => 1,
+        };
     }
 
     private void Clear()
@@ -190,6 +234,8 @@ else
                     UomId = _kind == "attribute" ? null : _uomId,
                     Decimals = _decimals,
                     IsActive = _active,
+                    ChartType = _editing.HasLimits ? null : _chartType,
+                    SubgroupSize = _editing.HasLimits ? null : _subgroupSize,
                 });
                 _message = $"Saved {_editing.Code}.";
             }

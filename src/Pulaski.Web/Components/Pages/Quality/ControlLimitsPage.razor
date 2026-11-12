@@ -1,0 +1,442 @@
+@page "/quality/characteristics/{CharacteristicId:guid}/control-limits"
+@attribute [RequiresView(PermissionCodes.QualityView)]
+@using Pulaski.Web.Services.Quality
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+@inject SiteSelection Sites
+@inject TimeProvider Clock
+
+<PageTitle>Control limits · Pulaski</PageTitle>
+
+@* A characteristic's control limits (D-099): worked out from a reviewed baseline of results and approved, or entered with a reason; per
+   material, optionally for one line, whose own come first. Approved limits are fixed: new ones follow on, and a period is ended, never changed. *@
+<p class="small mb-2"><a href="quality/characteristics">Characteristics</a></p>
+<div class="mb-3">
+    <h1 class="mb-1">Control limits@(_characteristic is { } head ? $" · {head.Code}" : "")</h1>
+    @if (_characteristic is { } c)
+    {
+        <p class="text-muted mb-0">
+            @c.Name, on the @ControlChartView.Chart(c.ChartType, c.SubgroupSize).
+            Limits say how much the process varies when nothing unusual happens; they come from the results themselves, not from the specification.
+        </p>
+    }
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Specs" What="work out, approve or end control limits" />
+@if (_message is { } message)
+{
+    <div class="alert alert-success small" role="status">@message</div>
+}
+
+@if (_characteristic is not { } characteristic || _limits is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    var decimals = characteristic.Decimals;
+    var dispersion = ControlChartView.DispersionName(characteristic.ChartType);
+    <div class="table-panel mb-3">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Material</th><th>Line</th><th class="inv-num">Lower</th><th class="inv-num">Centre</th><th class="inv-num">Upper</th>
+                    <th class="inv-num">Dispersion</th><th>How</th><th>Period</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var l in _limits)
+                {
+                    <tr @key="l.Id" class="@(l.IsInEffect ? "" : "text-muted")">
+                        <td><span class="fw-semibold">@l.MaterialCode</span> <span class="small text-muted">@l.MaterialName</span></td>
+                        <td>@(l.EquipmentCode ?? "Every line")</td>
+                        <td class="inv-num">@ControlChartView.Number(l.Lcl, decimals)</td>
+                        <td class="inv-num">@ControlChartView.Number(l.CenterLine, decimals)</td>
+                        <td class="inv-num">@ControlChartView.Number(l.Ucl, decimals)</td>
+                        <td class="inv-num small">
+                            @if (l.DispersionCenter is { } dc)
+                            {
+                                @($"{ControlChartView.Number(dc, decimals)} (to {ControlChartView.Number(l.DispersionUcl, decimals)})")
+                            }
+                            else
+                            {
+                                <span>—</span>
+                            }
+                        </td>
+                        <td class="small">
+                            @ControlChartView.How(l)
+                            @if (l.Note is { } note)
+                            {
+                                <div class="text-muted">@note</div>
+                            }
+                        </td>
+                        <td class="small">
+                            @ControlChartView.State(l, Now) · @Display.SiteTime(l.EffectiveFrom, Zone)@(l.EffectiveTo is { } to ? $" to {Display.SiteTime(to, Zone)}" : "")
+                            <div class="text-muted">Approved by @l.ApprovedBy</div>
+                        </td>
+                        <td class="text-end">
+                            @if (CanManage && l.IsInEffect)
+                            {
+                                <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => EndAsync(l)">End</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (_limits.Count == 0)
+                {
+                    <tr><td colspan="9" class="text-muted small">No control limits yet. Work them out from a period of results below.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (CanManage)
+    {
+        <section class="inv-facts mb-3" aria-labelledby="baseline-heading">
+            <h2 class="h6" id="baseline-heading">Work out limits from results</h2>
+            <p class="small text-muted">
+                Choose the material, a line if it should have its own, and a period when the process ran normally. At least @_minSubgroups results are
+                needed; 25 or more give better limits.
+            </p>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold" for="cl-material">Material</label>
+                    <MaterialPicker Id="cl-material" Materials="_materials" Value="_materialId" ValueChanged="v => { _materialId = v; _review = null; }" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold" for="cl-line">Line</label>
+                    <select id="cl-line" class="form-select form-select-sm" value="@(_lineId?.ToString() ?? "")"
+                            @onchange="e => { _lineId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null; _review = null; }">
+                        <option value="">Every line</option>
+                        @foreach (var line in _lines)
+                        {
+                            <option value="@line.Id">@line.Code · @line.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold" for="cl-from">From</label>
+                    <input id="cl-from" type="datetime-local" class="form-control form-control-sm" @bind="_from" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold" for="cl-to">To</label>
+                    <input id="cl-to" type="datetime-local" class="form-control form-control-sm" @bind="_to" />
+                </div>
+                <div class="col-md-2">
+                    <ActionButton Class="btn btn-sm btn-outline-secondary" Busy="_busy" Reason="@(_materialId is null ? "Choose a material first." : null)"
+                                  OnClick="() => ReviewAsync(clear: true)">Work it out</ActionButton>
+                </div>
+            </div>
+
+            @if (_review is { } r)
+            {
+                <div class="mt-3">
+                    @if (r.NotEnough is { } notEnough)
+                    {
+                        <p class="small text-warning-strong mb-2">No limits: @notEnough</p>
+                    }
+                    else
+                    {
+                        <p class="mb-1">
+                            From @r.Subgroups results: centre <span class="fw-semibold">@ControlChartView.Number(r.CenterLine, decimals)</span>,
+                            limits @ControlChartView.Number(r.Lcl, decimals) to @ControlChartView.Number(r.Ucl, decimals)@(dispersion is not null ? $"; {dispersion.ToLowerInvariant()} centre {ControlChartView.Number(r.DispersionCenter, decimals)}, up to {ControlChartView.Number(r.DispersionUcl, decimals)}" : "").
+                        </p>
+                        @if (r.Current is { } current)
+                        {
+                            <p class="small text-muted mb-1">
+                                In force now: centre @ControlChartView.Number(current.CenterLine, decimals), limits @ControlChartView.Number(current.Lcl, decimals) to
+                                @ControlChartView.Number(current.Ucl, decimals). Approving ends them where the new ones start.
+                            </p>
+                        }
+                    }
+                    @foreach (var warning in r.Warnings)
+                    {
+                        <p class="small text-warning-strong mb-1">@warning</p>
+                    }
+
+                    @if (r.Points.Count > 0)
+                    {
+                        <p class="small text-muted mb-1">
+                            Results beyond the limits are worth looking into: if they had a known cause (a startup, a wrong die), leave them out and work the limits out again.
+                        </p>
+                        <div class="table-panel mb-2" style="max-height: 24rem; overflow-y: auto;">
+                            <table class="table table-sm align-middle small mb-0">
+                                <thead><tr><th>Leave out</th><th>Sampled</th><th class="inv-num">Value</th>@if (dispersion is not null) { <th class="inv-num">@dispersion</th> }<th class="inv-num">Size</th><th></th></tr></thead>
+                                <tbody>
+                                    @foreach (var p in r.Points)
+                                    {
+                                        <tr @key="p.SampleId" class="@(p.IsLeftOut || p.Unusable is not null ? "text-muted" : "")">
+                                            <td>
+                                                <input type="checkbox" class="form-check-input" aria-label="Leave out the result of @Display.SiteTime(p.At, Zone)"
+                                                       checked="@_leftOut.Contains(p.SampleId)" disabled="@(p.Unusable is not null)"
+                                                       @onchange="e => Toggle(p.SampleId, e.Value is true)" />
+                                            </td>
+                                            <td>@Display.SiteTime(p.At, Zone)</td>
+                                            <td class="inv-num">@ControlChartView.Number(p.Value, decimals)</td>
+                                            @if (dispersion is not null)
+                                            {
+                                                <td class="inv-num">@ControlChartView.Number(p.Dispersion, decimals)</td>
+                                            }
+                                            <td class="inv-num">@p.Size</td>
+                                            <td>
+                                                @if (p.Unusable is { } why)
+                                                {
+                                                    <span>Can't be used: @why</span>
+                                                }
+                                                else if (p.IsLeftOut)
+                                                {
+                                                    <span>Left out</span>
+                                                }
+                                                else if (p.IsBeyondLimits)
+                                                {
+                                                    <span class="chip chip-warn">Beyond the limits</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+
+                    <div class="d-flex flex-wrap gap-2 align-items-end">
+                        @if (LeftOutChanged)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => ReviewAsync(clear: false)">Work out again</button>
+                        }
+                        @if (r.CenterLine is not null && !LeftOutChanged)
+                        {
+                            <div>
+                                <label class="form-label small fw-semibold" for="cl-start">Start</label>
+                                <input id="cl-start" type="datetime-local" class="form-control form-control-sm" @bind="_start" placeholder="Now" />
+                            </div>
+                            <div class="flex-grow-1">
+                                <label class="form-label small fw-semibold" for="cl-note">Note <span class="text-muted">(optional)</span></label>
+                                <input id="cl-note" class="form-control form-control-sm" maxlength="1000" @bind="_note" />
+                            </div>
+                            <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="ApproveAsync">Approve these limits</button>
+                        }
+                    </div>
+                </div>
+            }
+        </section>
+
+        <section class="inv-facts mb-3" aria-labelledby="manual-heading">
+            <h2 class="h6" id="manual-heading">Enter limits by hand</h2>
+            <p class="small text-muted">For limits agreed with a customer or carried over from another system. Uses the material and line chosen above; say why.</p>
+            <div class="row g-2 align-items-end">
+                <div class="col-4 col-md-2">
+                    <label class="form-label small fw-semibold" for="ml-lcl">Lower</label>
+                    <input id="ml-lcl" type="number" step="any" class="form-control form-control-sm" @bind="_manual.Lcl" />
+                </div>
+                <div class="col-4 col-md-2">
+                    <label class="form-label small fw-semibold" for="ml-cl">Centre</label>
+                    <input id="ml-cl" type="number" step="any" class="form-control form-control-sm" @bind="_manual.CenterLine" />
+                </div>
+                <div class="col-4 col-md-2">
+                    <label class="form-label small fw-semibold" for="ml-ucl">Upper</label>
+                    <input id="ml-ucl" type="number" step="any" class="form-control form-control-sm" @bind="_manual.Ucl" />
+                </div>
+                @if (dispersion is not null)
+                {
+                    <div class="col-4 col-md-2">
+                        <label class="form-label small fw-semibold" for="ml-dc">@dispersion centre</label>
+                        <input id="ml-dc" type="number" step="any" min="0" class="form-control form-control-sm" @bind="_manual.DispersionCenter" />
+                    </div>
+                    <div class="col-4 col-md-2">
+                        <label class="form-label small fw-semibold" for="ml-du">@dispersion upper</label>
+                        <input id="ml-du" type="number" step="any" min="0" class="form-control form-control-sm" @bind="_manual.DispersionUcl" />
+                    </div>
+                }
+                <div class="col-12 col-md-6">
+                    <label class="form-label small fw-semibold" for="ml-note">Why</label>
+                    <input id="ml-note" class="form-control form-control-sm" maxlength="1000" @bind="_manual.Note" />
+                </div>
+                <div class="col-12">
+                    <ActionButton Class="btn btn-sm btn-outline-primary" Busy="_busy"
+                                  Reason="@ManualReason"
+                                  OnClick="SaveManualAsync">Save these limits</ActionButton>
+                </div>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public Guid CharacteristicId { get; set; }
+
+    private CharacteristicDto? _characteristic;
+    private IReadOnlyList<ControlLimitDto>? _limits;
+    private IReadOnlyList<MaterialDto> _materials = [];
+    private IReadOnlyList<EquipmentDto> _lines = [];
+    private Guid? _materialId;
+    private Guid? _lineId;
+    private DateTime? _from;
+    private DateTime? _to;
+    private DateTime? _start;
+    private string? _note;
+    private LimitBaselineDto? _review;
+    private readonly HashSet<Guid> _leftOut = [];
+    private HashSet<Guid> _reviewedLeftOut = [];
+    private ManualForm _manual = new();
+    private int _minSubgroups = 20;
+    private bool _busy;
+    private string? _message;
+    private ApiException? _error;
+
+    private bool CanManage => User.Can(PermissionCodes.Specs);
+
+    private string? Zone => Sites.Site?.TimeZone;
+
+    private DateTimeOffset Now => Clock.GetUtcNow();
+
+    private bool LeftOutChanged => !_leftOut.SetEquals(_reviewedLeftOut);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _characteristic = (await Api.ListCharacteristicsAsync()).FirstOrDefault(c => c.Id == CharacteristicId);
+            if (_characteristic is null)
+            {
+                return;
+            }
+
+            _materials = [.. (await Api.ListMaterialsAsync()).Where(m => m.IsActive)];
+            _lines = [.. (await Api.ListEquipmentAsync()).Where(e => e.CanRunJob && e.IsActive).OrderBy(e => e.Code, StringComparer.OrdinalIgnoreCase)];
+            var now = Display.ToSite(Now, Zone).DateTime;
+            (_from, _to) = (now.AddDays(-30), now);
+            await LoadLimitsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task LoadLimitsAsync() => _limits = await Api.ListControlLimitsAsync(CharacteristicId);
+
+    private void Toggle(Guid sampleId, bool leaveOut)
+    {
+        if (leaveOut)
+        {
+            _leftOut.Add(sampleId);
+        }
+        else
+        {
+            _leftOut.Remove(sampleId);
+        }
+    }
+
+    private Task ReviewAsync(bool clear) => RunAsync(async () =>
+    {
+        if (_materialId is not { } material || Display.FromSiteLocal(_from, Zone) is not { } from || Display.FromSiteLocal(_to, Zone) is not { } to)
+        {
+            return;
+        }
+
+        if (clear)
+        {
+            _leftOut.Clear();
+        }
+
+        _review = await Api.GetLimitBaselineAsync(CharacteristicId, material, _lineId, from, to, _leftOut);
+        _minSubgroups = _review.MinSubgroups;
+        _reviewedLeftOut = [.. _leftOut];
+    });
+
+    private Task ApproveAsync() => RunAsync(async () =>
+    {
+        var r = _review!;
+        await Api.ApproveControlLimitsAsync(CharacteristicId, new ApproveControlLimitsRequest
+        {
+            MaterialId = _materialId!.Value,
+            EquipmentId = _lineId,
+            From = r.From,
+            To = r.To,
+            LeftOutSampleIds = [.. _leftOut],
+            CenterLine = r.CenterLine!.Value,
+            Ucl = r.Ucl!.Value,
+            Lcl = r.Lcl!.Value,
+            EffectiveFrom = Display.FromSiteLocal(_start, Zone),
+            Note = string.IsNullOrWhiteSpace(_note) ? null : _note,
+        });
+        _message = $"Approved the limits for {MaterialCode}{(_lineId is null ? "" : $" on {LineCode}")}.";
+        (_review, _note, _start) = (null, null, null);
+        await LoadLimitsAsync();
+    });
+
+    private Task SaveManualAsync() => RunAsync(async () =>
+    {
+        await Api.SetManualControlLimitsAsync(CharacteristicId, new SetManualControlLimitsRequest
+        {
+            MaterialId = _materialId!.Value,
+            EquipmentId = _lineId,
+            CenterLine = _manual.CenterLine ?? 0,
+            Ucl = _manual.Ucl ?? 0,
+            Lcl = _manual.Lcl ?? 0,
+            DispersionCenter = _manual.DispersionCenter,
+            DispersionUcl = _manual.DispersionUcl,
+            DispersionLcl = _manual.DispersionCenter is null ? null : 0,
+            Note = _manual.Note ?? "",
+        });
+        _message = $"Saved the limits for {MaterialCode}{(_lineId is null ? "" : $" on {LineCode}")}.";
+        _manual = new();
+        await LoadLimitsAsync();
+    });
+
+    private Task EndAsync(ControlLimitDto l) => RunAsync(async () =>
+    {
+        await Api.EndControlLimitsAsync(l.Id, new EndControlLimitsRequest());
+        _message = $"Ended the limits for {l.MaterialCode}{(l.EquipmentCode is { } line ? $" on {line}" : "")}; its chart has none until new ones are approved.";
+        await LoadLimitsAsync();
+    });
+
+    private string MaterialCode => _materials.FirstOrDefault(m => m.Id == _materialId)?.Code ?? "the material";
+
+    private string LineCode => _lines.FirstOrDefault(e => e.Id == _lineId)?.Code ?? "the line";
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        (_error, _message) = (null, null);
+        try
+        {
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            // The results changed since review: show them as they are now, keeping what was left out.
+            if (ex.IsConflict && _review is { } stale && _materialId is { } material)
+            {
+                _review = await Api.GetLimitBaselineAsync(CharacteristicId, material, _lineId, stale.From, stale.To, _leftOut);
+                _reviewedLeftOut = [.. _leftOut];
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private string? ManualReason =>
+        _materialId is null ? "Choose a material above first."
+        : _manual.CenterLine is null || _manual.Ucl is null || _manual.Lcl is null ? "Enter the lower, centre and upper limits."
+        : string.IsNullOrWhiteSpace(_manual.Note) ? "Say why they are entered by hand." : null;
+
+    private sealed class ManualForm
+    {
+        public double? CenterLine { get; set; }
+        public double? Ucl { get; set; }
+        public double? Lcl { get; set; }
+        public double? DispersionCenter { get; set; }
+        public double? DispersionUcl { get; set; }
+        public string? Note { get; set; }
+    }
+}

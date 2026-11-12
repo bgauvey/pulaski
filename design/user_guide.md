@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-09 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-11 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -1472,6 +1472,49 @@ output of the run that made it.
 To change one, click **Change**: the name, description, unit and decimals can change, and **On** switches it off or on. The code and kind
 never change, since results and specifications depend on them.
 
+**Its control chart.** When you change a characteristic you can also choose the chart its results go on, for statistical process control (SPC):
+- measured: **Individuals and moving range** (one value a sample, the starting choice), **X-bar and R** or **X-bar and S** (several values a
+  sample: set **Values a subgroup**, 2 to 25; X-bar and S suits larger subgroups);
+- inspected: **p** (proportion defective, the starting choice, for samples of any size), **np** (number defective; set **Items inspected a
+  sample**), **c** (defects a sample) or **u** (defects per unit).
+
+The **Control chart** column shows each one's chart. The chart can't change while the characteristic has control limits in force: they were
+worked out for that chart, so end them first.
+
+### Set control limits
+
+Control limits say how much a process varies when nothing unusual is going on. They come from the results themselves, not from the specification:
+a process can be in specification and still out of control, or the other way round. Limits are kept per characteristic and material, and a line
+can have its own, which it uses before the material's.
+
+1. On **Characteristics**, click **Control limits** under the characteristic's chart.
+2. Under **Work out limits from results**, choose the **Material**, a **Line** if it should have its own limits (else **Every line**), and the
+   period (**From**, **To**) when the process ran normally. Click **Work it out**.
+3. Pulaski shows the limits the results give, the limits in force now (if any) and every result in the period: its plotted value (and range,
+   standard deviation or moving range), its size, and whether it is **Beyond the limits** or **Can't be used** (and why).
+4. If a result beyond the limits had a known cause, such as a startup or a wrong setting, tick **Leave out** and click **Work out again**.
+5. When the limits look right, optionally set when they **Start** (now if blank) and a **Note**, and click **Approve these limits**.
+
+To enter limits by hand (agreed with a customer, or carried over from another system), use **Enter limits by hand**. It takes the material and
+line chosen above, the **Lower**, **Centre** and **Upper** limits (and the dispersion chart's centre and upper limit for measured charts), and
+**Why**. To stop using limits, click **End** on their row.
+
+**In detail**
+
+- **How they are worked out.** Shewhart 3-sigma limits, with sigma estimated within subgroups (from the mean range, standard deviation or moving
+  range), as the charts are meant to be. Limits need at least 20 usable results; under 25, Pulaski warns that they are rough. A result whose size
+  doesn't fit the chart (for X-bar, np and c charts) is left out with why. Excluded results never count. Count charts' lower limits stop at
+  zero, and p and u limits follow each sample's size.
+- **Which results.** The characteristic's results for the material in the period, at most 1,000. For one line: results recorded against a job
+  on that line (a result for a lot alone has no line, so it counts only towards limits for every line).
+- **Fixed once approved.** Approving works the limits out again from the same results. If results were recorded or excluded since you looked
+  and the limits changed, Pulaski says so and shows them again. Limits start now or later, never in the past. New limits for the same material
+  and line end the ones in force where they start, and any other overlap is refused. Limits are ended, never changed or deleted, and the list
+  keeps every period with how it was set, the results left out and who approved it.
+- **Who.** Anyone who can see quality sees the limits; working them out, approving, entering and ending them needs permission to maintain
+  specifications. Each approval is recorded as `pulaski.control_limit.approved.v1`, each end as `…ended.v1`.
+- **Charts and alerts** that use the limits come in later versions (see [What Pulaski doesn't do yet](#23-what-pulaski-doesnt-do-yet)).
+
 ### Write a specification
 
 1. On **Configure → Specifications**, click **New specification**, choose the **Material** and click **Create and edit**.
@@ -2669,7 +2712,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** has no quality figures or SPC alerts yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
-- **Quality:** there are no SPC charts, control limits or alerts yet, and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
+- **Quality:** control limits can be set, but there are no SPC charts or alerts yet, and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
 - **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.
 - **Some switched-off controls give no reason yet:** a form's Save waiting on a field next to it, an Export with nothing to export, and the locked boxes on the Permissions tab (point at those with the mouse to see why).
 

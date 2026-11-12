@@ -1261,6 +1261,27 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> UpdateCharacteristicAsync(Guid id, UpdateCharacteristicRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/quality/characteristics/{id}", request, ct);
 
+    public Task<IReadOnlyList<ControlLimitDto>> ListControlLimitsAsync(Guid characteristicId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ControlLimitDto>>($"api/quality/characteristics/{characteristicId}/control-limits", ct);
+
+    public Task<LimitBaselineDto> GetLimitBaselineAsync(
+        Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset from, DateTimeOffset to, IReadOnlyCollection<Guid> leftOut, CancellationToken ct = default) =>
+        GetAsync<LimitBaselineDto>(
+            $"api/quality/characteristics/{characteristicId}/control-limits/baseline?materialId={materialId}"
+            + (equipmentId is { } line ? $"&equipmentId={line}" : "")
+            + $"&from={Uri.EscapeDataString(from.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}"
+            + $"&to={Uri.EscapeDataString(to.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}"
+            + (leftOut.Count > 0 ? $"&leftOut={string.Join(',', leftOut)}" : ""), ct);
+
+    public Task<ControlLimitChangeResponse> ApproveControlLimitsAsync(Guid characteristicId, ApproveControlLimitsRequest request, CancellationToken ct = default) =>
+        SendAsync<ControlLimitChangeResponse>(HttpMethod.Post, $"api/quality/characteristics/{characteristicId}/control-limits", request, ct);
+
+    public Task<ControlLimitChangeResponse> SetManualControlLimitsAsync(Guid characteristicId, SetManualControlLimitsRequest request, CancellationToken ct = default) =>
+        SendAsync<ControlLimitChangeResponse>(HttpMethod.Post, $"api/quality/characteristics/{characteristicId}/control-limits/manual", request, ct);
+
+    public Task<ControlLimitChangeResponse> EndControlLimitsAsync(Guid limitId, EndControlLimitsRequest request, CancellationToken ct = default) =>
+        SendAsync<ControlLimitChangeResponse>(HttpMethod.Post, $"api/quality/control-limits/{limitId}/end", request, ct);
+
     public Task<IReadOnlyList<SpecSummaryDto>> ListSpecsAsync(CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<SpecSummaryDto>>("api/quality/specs", ct);
 

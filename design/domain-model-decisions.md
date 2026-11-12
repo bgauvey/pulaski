@@ -2623,6 +2623,9 @@ results left out, note, period and approver.
   scope that started earlier ends there; any other overlap is refused. `EndControlLimitsCommand` ends a period now. `ControlLimitPeriods.InForce`
   takes the line's own limits, else the material's. Permission `specs.manage` to change, `quality.view` to see; events
   `control_limit.approved` and `control_limit.ended`.
+- **Screens (piece 2b):** Characteristics shows each one's chart and lets **Change** pick it (fixed while limits are in force). Control limits
+  (`/quality/characteristics/{id}/control-limits`) lists every period and, with `specs.manage`, works out a baseline (material, line, period),
+  leaves out ticked results and works it out again, approves with a start and note, enters limits by hand, and ends them.
 
 ## Application architecture
 
