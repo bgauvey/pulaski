@@ -41,7 +41,7 @@ Orders & scheduling                       Execution & inventory
                                                 lot_attribute(_class, _value), lot_document(_content, _link)
       └─ job ── job_material               labor_session, labor_break, labor_approval
           └─ job_run                       quality_characteristic ─ material_spec(_version, _item), control_limit,
- scheduling_policy, run_standard,             characteristic_rule, spc_alert,
+ scheduling_policy, run_standard,             spc_rule, spc_alert,
  changeover_rule                              ts.quality_sample, ts.spc_violation
 
 People & access                            History & events
@@ -1512,9 +1512,10 @@ A break's time comes out of the worked hours of every session of the person it o
 
 ### core.quality_characteristic — what is measured or inspected (#65, D-085) · *In use*
 
-Enterprise-wide for specifications (`site_id` NULL). Code and kind are fixed once created; switched off, never deleted. The SPC columns
-(`chart_type`, `subgroup_size`, `sample_interval`, `equipment_*`) serve charts later; the app sets `chart_type` to `i_mr` for a variable and
-`np` for an attribute.
+Enterprise-wide for specifications (`site_id` NULL). Code and kind are fixed once created; switched off, never deleted. `chart_type` and
+`subgroup_size` are its control chart (D-099), `i_mr` and `p` until chosen, and change only while it has no control limits in force or to come.
+Automatic sampling from process values is in `core.characteristic_tag` (migration 0067 dropped the unused `equipment_tag_id` and
+`sample_interval`); `equipment_id` is still unused.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1524,11 +1525,10 @@ Enterprise-wide for specifications (`site_id` NULL). Code and kind are fixed onc
 | `name` | text | no | Display name. |
 | `description` | text | yes | Up to 500 characters. |
 | `equipment_id` | uuid → equipment | yes | Where it is measured, when that is one place. |
-| `equipment_tag_id` | uuid → equipment_tag | yes | Set when sampled automatically from process data; cleared if its tag is physically deleted. |
 | `data_kind` | text | no | `variable` (measured values) or `attribute` (inspected and defective counts); fixed once created. |
-| `chart_type` | text | no | `xbar_r`, `xbar_s`, `i_mr` (variables) or `p`, `np`, `c`, `u` (attributes). |
-| `subgroup_size` | smallint | no | Measurements per subgroup; 1 for `i_mr`. |
-| `sample_interval` | interval | yes | Cadence for automatic sampling. |
+| `chart_type` | text | no | `xbar_r`, `xbar_s`, `i_mr` (variables) or `p`, `np`, `c`, `u` (attributes); `ChartTypes.Problem` checks it fits. |
+| `subgroup_size` | smallint | no | Values per subgroup: 1 for `i_mr`, 2–25 for X-bar charts; for `np` and `c`, items inspected a sample. |
+| `run_rules` | smallint[] | no | The Nelson rules its chart checks (D-099), 1 always among them (`characteristic_rules_ck`); default `{1,2,5,6}`, the Western Electric set. |
 | `uom_id` | uuid → uom | yes | Unit of a measured value. |
 | `decimals` | smallint | no | Display precision, 0 to 6. Default 3. |
 | `is_active` | boolean | no | False when switched off: it can't be added to specifications or recorded. |
@@ -1575,58 +1575,82 @@ Written once, when the version is released; results point at the item they were 
 | `hold_on_fail` | boolean | no | A failing result for a lot puts the lot on hold. Default false. |
 | `sort_order` | integer | no | Order on screens and the shop order sheet. |
 
-### core.control_limit — statistical limits · *Planned*
+### core.characteristic_tag — characteristics sampled from process values (D-099) · *In use*
 
-Calculated from a baseline and then frozen. Periods may not overlap.
+A measured characteristic sampled automatically from a process-value tag on a line: at the end of each interval (aligned to the clock), a result
+of source `auto` of the value held at consecutive minutes, for the job running on the line. One active per characteristic and line
+(`characteristic_tag_line_uq`); switched off, never deleted. Deleting the tag detaches and switches it off.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `characteristic_id` | uuid → quality_characteristic | no | The characteristic. |
-| `material_id` | uuid → material | yes | The product; null for all. |
-| `center_line`, `ucl`, `lcl` | double precision | no | Location chart limits, in order lcl ≤ center ≤ ucl. |
-| `dispersion_center`, `dispersion_ucl`, `dispersion_lcl` | double precision | yes | Range, standard deviation or moving-range chart limits (R-bar, S-bar, MR-bar). |
-| `method` | text | no | `computed` or `manual`. |
-| `baseline_from`, `baseline_to` | timestamptz | yes | The data the limits were calculated from. |
-| `baseline_subgroups` | integer | yes | Number of subgroups in the baseline. |
-| `effective_from` | timestamptz | no | Start. |
-| `effective_to` | timestamptz | yes | End. |
-| `approved_by_user_id` | uuid → app_user | yes | Who approved them. |
+| `characteristic_id` | uuid → quality_characteristic | no | A measured characteristic. |
+| `equipment_tag_id` | uuid → equipment_tag | yes | A `process_value` tag; null once the tag is deleted, when it is also switched off (`characteristic_tag_tag_ck`). Indexed. |
+| `line_id` | uuid → equipment | no | The tag's equipment or the nearest above it that runs jobs: results take its running job. |
+| `site_id` | uuid → equipment | no | The line's site, where results are recorded. |
+| `interval_minutes` | smallint | no | 1 to 1440. |
+| `is_active` | boolean | no | Sampling. Switched back on, it starts from then. |
+| `sampled_through` | timestamptz | no | The last interval end dealt with (a result made or skipped); results start after it. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
-### core.spc_rule — Nelson rules · *Planned (seeded)*
+### core.control_limit — control limits by period (D-099) · *In use*
+
+Worked out from a reviewed baseline and approved, or entered with a reason, for a characteristic and material and optionally one line (whose own
+limits come first). Fixed once approved: a new set for the same scope ends the open one where it starts, and periods may not overlap
+(`control_limit_no_overlap`); ended, never changed or deleted. Rebuilt by migration 0064 (the draft was never written to).
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
-| `rule_number` | smallint | no | Primary key, 1–8. Rules 1–4 are the Western Electric set. |
+| `id` | uuid | no | Primary key. |
+| `characteristic_id` | uuid → quality_characteristic | no | The characteristic. Its row is locked while its limits change. |
+| `material_id` | uuid → material | no | The material its results are for. |
+| `equipment_id` | uuid → equipment | yes | A line's own limits (equipment that runs jobs); null for every line. |
+| `chart_type`, `subgroup_size` | text, smallint | no | The characteristic's chart when approved. |
+| `center_line`, `ucl`, `lcl` | double precision | no | The plotted statistic's limits, lcl ≤ center ≤ ucl (`control_limit_order_ck`). For p and u charts, those of the baseline's average sample size; each point's follow its own. |
+| `dispersion_center`, `dispersion_ucl`, `dispersion_lcl` | double precision | yes | The range, standard deviation or moving range chart's (R-bar, S-bar, MR-bar), for charts that have one. |
+| `method` | text | no | `computed` from a baseline, or `manual` (with `note`, `control_limit_manual_ck`). |
+| `baseline_from`, `baseline_to` | timestamptz | yes | The window of results they were worked out from; set exactly for `computed` (`control_limit_baseline_ck`). |
+| `baseline_subgroups` | integer | yes | How many results were used. |
+| `left_out_sample_ids` | uuid[] | no | Results in the window the reviewer left out. |
+| `note` | text | yes | Why, at most 1000 characters; required for manual limits. |
+| `effective_from` | timestamptz | no | When they start: when approved, or later. |
+| `effective_to` | timestamptz | yes | When they stopped (not included): ended, or followed by a new set. |
+| `approved_by`, `approved_at` | text, timestamptz | no | Who approved them (issuer\|subject) and when. |
+| `ended_by` | text | yes | Who ended them. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.spc_rule — Nelson rules · *In use (reference)*
+
+Seeded with Nelson's eight rules in his numbering; the Western Electric set is 1, 2, 5 and 6. Characteristics choose theirs in `run_rules`
+(D-099); the drafted `core.characteristic_rule` link was dropped by migration 0065, never written to.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `rule_number` | smallint | no | Primary key, 1–8. |
 | `name` | text | no | Short name. |
 | `description` | text | no | What the rule detects. |
 
-### core.characteristic_rule — rules applied to a characteristic · *Planned*
+### core.spc_alert — SPC alerts (D-099) · *In use*
 
-| Column | Type | Null | Description |
-| --- | --- | --- | --- |
-| `characteristic_id` | uuid → quality_characteristic | no | The characteristic. Part of the primary key. |
-| `rule_number` | smallint → spc_rule | no | The rule. Part of the primary key. |
-| `severity` | text | no | `info`, `warning` (default) or `critical`. |
-
-### core.spc_alert — alert lifecycle · *Planned*
-
-The alert's current state; the violation itself is history in `ts.spc_violation`.
+Raised when a recorded result breaks one of its characteristic's run rules on its chart: one open per site, characteristic, material and line
+(`spc_alert_open_uq`); further breaks while it is open are added to it in the same statement (`INSERT … ON CONFLICT`). Closed with a cause and the
+action taken; the next break opens a new one. Rebuilt by migration 0066 (the draft was never written to).
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key. |
-| `characteristic_id` | uuid → quality_characteristic | no | The characteristic. |
-| `equipment_id` | uuid → equipment | no | Where. |
-| `violation_id` | uuid | no | The `ts.spc_violation` row (no FK into history). |
-| `violation_occurred_at` | timestamptz | no | Its time, to find the partition. |
-| `status` | text | no | `open`, `acknowledged` or `closed`. |
-| `raised_at` | timestamptz | no | When raised. |
-| `acknowledged_by_user_id` | uuid → app_user | yes | Who acknowledged it. |
-| `acknowledged_at` | timestamptz | yes | When. |
-| `cause_reason_code_id` | uuid → reason_code | yes | The cause found. |
-| `action_comment` | text | yes | What was done. |
-| `closed_at` | timestamptz | yes | When closed. |
+| `site_id` | uuid → equipment | no | The site its results were recorded at. |
+| `characteristic_id`, `material_id` | uuid | no | Its chart's characteristic and material. |
+| `equipment_id` | uuid → equipment | yes | The line its results were made on; null for results without one. |
+| `status` | text | no | `open` or `closed`. |
+| `rules` | smallint[] | no | Every run rule broken while it was open. |
+| `breaks` | integer | no | Results that broke a rule while it was open. |
+| `first_sample_id`, `first_sample_at`, `last_sample_id`, `last_sample_at` | uuid, timestamptz | no | The earliest and latest breaking results (`ts.quality_sample`, no FK into history). |
+| `raised_at` | timestamptz | no | When it opened. |
+| `closed_at`, `closed_by` | timestamptz, text | yes | When and by whom it was closed. |
+| `cause_reason_code_id` | uuid → reason_code | yes | The cause, a reason of kind `spc_cause`; with `action`, set exactly when closed (`spc_alert_closed_ck`). |
+| `action` | text | yes | What was done, at most 1000 characters. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ## 12. Time-partitioned history (`ts`)
 
@@ -1833,18 +1857,20 @@ it conformed are stamped on each row. Appended only; a wrong result is excluded,
 | `exclusion_reason_id` | uuid → reason_code | yes | Why (kind `sample_exclusion`). |
 | `excluded_note`, `excluded_by`, `excluded_at` | text, text, timestamptz | yes | The comment, who and when. |
 
-### ts.spc_violation — rule violations · *Planned*
+### ts.spc_violation — results that broke run rules (D-099) · *In use*
+
+One row per recorded result that broke a run rule on its chart, with the alert it went to. Rebuilt by migration 0066.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `id` | uuid | no | Primary key with `occurred_at`. |
-| `occurred_at` | timestamptz | no | When detected. Partition key. |
-| `characteristic_id` | uuid → quality_characteristic | no | The characteristic. |
-| `sample_id` | uuid | no | The `ts.quality_sample` that triggered it (no FK). |
-| `sample_occurred_at` | timestamptz | no | Its time, to find the partition. |
-| `rule_number` | smallint → spc_rule | no | The rule broken. |
-| `chart_component` | text | no | `location`, `dispersion`, `proportion` or `count`. |
-| `severity` | text | no | Severity from the characteristic's rule. |
+| `occurred_at` | timestamptz | no | When the result was sampled. Partition key. |
+| `site_id`, `characteristic_id`, `material_id` | uuid | no | Its chart. |
+| `equipment_id` | uuid → equipment | yes | Its line. |
+| `sample_id` | uuid | no | The `ts.quality_sample` row, at `occurred_at` (no FK into history). |
+| `rules` | smallint[] | no | The rules it broke: those of the plotted statistic, and rule 1 when its dispersion is beyond its limits. |
+| `alert_id` | uuid → spc_alert | no | The alert it opened or was added to. Indexed with `occurred_at`. |
+| `recorded_at` | timestamptz | no | When the break was found (the result's recording). |
 
 ### core.oee_target — OEE targets by period (D-073) · *In use*
 

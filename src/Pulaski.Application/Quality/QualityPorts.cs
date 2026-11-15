@@ -1,6 +1,7 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Contracts.Quality;
 using Pulaski.Domain.Quality;
+using Pulaski.Domain.Quality.Spc;
 
 namespace Pulaski.Application.Quality;
 
@@ -61,6 +62,75 @@ public interface IQualityRepository
     Task<QualityResultRow?> GetResultForUpdateAsync(Guid id, DateTimeOffset occurredAt, CancellationToken cancellationToken);
 
     Task ExcludeResultAsync(Guid id, DateTimeOffset occurredAt, Guid reasonId, string? note, string by, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>The line's code when <paramref name="id"/> is equipment that runs jobs; null otherwise.</summary>
+    Task<string?> GetLineCodeAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Every period of limits for the characteristic, material and line (null: every line). Lock the characteristic first.</summary>
+    Task<IReadOnlyList<ControlLimit>> GetLimitsAsync(Guid characteristicId, Guid materialId, Guid? equipmentId, CancellationToken cancellationToken);
+
+    Task<ControlLimit?> GetLimitAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Whether the characteristic has limits in force at <paramref name="at"/> or starting later.</summary>
+    Task<bool> HasOpenLimitsAsync(Guid characteristicId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    Task InsertLimitAsync(ControlLimit limit, CancellationToken cancellationToken);
+
+    /// <summary>Writes a period's end.</summary>
+    Task EndLimitAsync(Guid id, DateTimeOffset endsAt, string? by, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The results a run rule looks back over (D-099): the <paramref name="count"/> latest of the characteristic's at the site for the material on
+    /// exactly this line (null: results without one) sampled at or before <paramref name="at"/>, not excluded, oldest first; ties put
+    /// <paramref name="lastSampleId"/> last.
+    /// </summary>
+    Task<IReadOnlyList<ChartSample>> ListRuleWindowAsync(
+        Guid siteId, Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset at, Guid lastSampleId, int count, CancellationToken cancellationToken);
+
+    /// <summary>Every period of limits of the characteristic for the material, any line, in the command's transaction.</summary>
+    Task<IReadOnlyList<ControlLimit>> GetMaterialLimitsAsync(Guid characteristicId, Guid materialId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Adds a break to its chart's open alert, or opens one (D-099), in one statement: one open alert per site, characteristic, material and
+    /// line. Returns the alert and whether it is new.
+    /// </summary>
+    Task<(Guid AlertId, bool IsNew)> RaiseAlertAsync(SpcBreak signal, Guid newId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    Task InsertViolationAsync(SpcBreak signal, Guid id, Guid alertId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>An alert, locked; null when there is none.</summary>
+    Task<SpcAlertRecord?> GetAlertForUpdateAsync(Guid id, CancellationToken cancellationToken);
+
+    Task CloseAlertAsync(Guid id, Guid causeReasonId, string action, string by, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>A tag as a binding needs it: its role, site, and the line it sits on (its equipment or the nearest above that runs jobs).</summary>
+    Task<BindableTag?> GetBindableTagAsync(Guid tagId, CancellationToken cancellationToken);
+
+    /// <summary>Whether the characteristic already has an active binding on the line.</summary>
+    Task<bool> HasActiveBindingAsync(Guid characteristicId, Guid lineId, CancellationToken cancellationToken);
+
+    Task<long> InsertBindingAsync(TagBinding binding, DateTimeOffset at, CancellationToken cancellationToken);
+
+    Task<Versioned<TagBinding>?> GetBindingForUpdateAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<long> UpdateBindingAsync(TagBinding binding, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>The active bindings' ids, in id order.</summary>
+    Task<IReadOnlyList<Guid>> ListActiveBindingsAsync(CancellationToken cancellationToken);
+
+    /// <summary>An active binding, locked; null when another round has it locked, or it was switched off.</summary>
+    Task<TagBinding?> LockBindingAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>A tag's readings in <c>[windowStart, windowEnd]</c>, and the last one before.</summary>
+    Task<IReadOnlyList<ProcessReading>> ListReadingsAsync(Guid tagId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken);
+
+    /// <summary>The job of the run open on the line at <paramref name="at"/>; null when none was.</summary>
+    Task<Guid?> FindRunningJobAsync(Guid lineId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    Task AdvanceBindingAsync(Guid id, DateTimeOffset sampledThrough, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>A baseline's results, read in the command's transaction: see <see cref="IQualityReadStore.ListBaselineAsync"/>.</summary>
+    Task<IReadOnlyList<SpcSubgroup>> ListBaselineAsync(Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken);
 }
 
 /// <summary>Read side for quality (#65): DTOs straight from SQL, no locks.</summary>
@@ -84,6 +154,44 @@ public interface IQualityReadStore
 
     /// <summary>Results, newest first, at most <see cref="QualityResultFilter.Limit"/>.</summary>
     Task<IReadOnlyList<QualityResultDto>> ListResultsAsync(QualityResultFilter filter, CancellationToken cancellationToken);
+
+    /// <summary>Every period of the characteristic's control limits, newest first within each material and line.</summary>
+    Task<IReadOnlyList<ControlLimitDto>> ListLimitsAsync(Guid characteristicId, DateTimeOffset now, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The results that could make a baseline: the characteristic's results for the material sampled in <c>[windowStart, windowEnd)</c>, not excluded, on the
+    /// line when one is given (results against a job carry its run's line), in time order, at most <see cref="MaxBaseline"/>.
+    /// </summary>
+    Task<IReadOnlyList<SpcSubgroup>> ListBaselineAsync(Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// A chart's results: the characteristic's at the site for the material sampled in <c>[windowStart, windowEnd)</c>, not excluded, on the line when
+    /// given; the latest <paramref name="limit"/>, oldest first.
+    /// </summary>
+    Task<IReadOnlyList<ChartSample>> ListChartSamplesAsync(
+        Guid siteId, Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, int limit, CancellationToken cancellationToken);
+
+    /// <summary>Every period of limits of the characteristic for the material, any line.</summary>
+    Task<IReadOnlyList<ControlLimit>> GetLimitsForMaterialAsync(Guid characteristicId, Guid materialId, CancellationToken cancellationToken);
+
+    /// <summary>The material's code, the line's when one is given, and the characteristic's unit.</summary>
+    Task<(string MaterialCode, string? EquipmentCode, string? UomCode)> GetChartCodesAsync(
+        Guid characteristicId, Guid materialId, Guid? equipmentId, CancellationToken cancellationToken);
+
+    /// <summary>The site's open alerts, and those closed since <paramref name="closedSince"/>, newest first.</summary>
+    Task<IReadOnlyList<SpcAlertDto>> ListAlertsAsync(Guid siteId, DateTimeOffset closedSince, CancellationToken cancellationToken);
+
+    /// <summary>An alert at the site with the results that broke its rules; null when there is none.</summary>
+    Task<SpcAlertDto?> GetAlertAsync(Guid siteId, Guid id, CancellationToken cancellationToken);
+
+    /// <summary>The characteristic's tag bindings, active first.</summary>
+    Task<IReadOnlyList<TagBindingDto>> ListBindingsAsync(Guid characteristicId, CancellationToken cancellationToken);
+
+    /// <summary>Active process-value tags, with their equipment, line and site, to bind.</summary>
+    Task<IReadOnlyList<ProcessValueTagDto>> ListProcessValueTagsAsync(CancellationToken cancellationToken);
+
+    /// <summary>The most results a baseline reads.</summary>
+    const int MaxBaseline = 1000;
 }
 
 /// <summary>Which results to list: at the sites (null = all), narrowed by what is given.</summary>
@@ -98,6 +206,23 @@ public sealed record QualityResultFilter(
     DateTimeOffset? From = null,
     DateTimeOffset? To = null,
     int Limit = 500);
+
+/// <summary>A process-value tag as a binding sees it; <see cref="LineId"/> null when nothing at or above its equipment runs jobs.</summary>
+public sealed record BindableTag(Guid TagId, string Role, bool IsActive, Guid SiteId, Guid? LineId, string? LineCode);
+
+/// <summary>A characteristic sampled from a tag on a line (D-099), as <c>core.characteristic_tag</c> holds it.</summary>
+public sealed record TagBinding(
+    Guid Id, Guid CharacteristicId, Guid? EquipmentTagId, Guid LineId, Guid SiteId, int IntervalMinutes, bool IsActive, DateTimeOffset SampledThrough);
+
+/// <summary>A result that broke run rules: where it belongs (its chart) and which rules.</summary>
+public sealed record SpcBreak(
+    Guid SiteId, Guid CharacteristicId, Guid MaterialId, Guid? EquipmentId, Guid SampleId, DateTimeOffset SampleAt, IReadOnlyList<int> Rules);
+
+/// <summary>An alert as closing it needs it.</summary>
+public sealed record SpcAlertRecord(Guid Id, Guid SiteId, Guid CharacteristicId, string Status, IReadOnlyList<int> Rules, int Breaks);
+
+/// <summary>A result as a chart takes it: its subgroup, and where it was made.</summary>
+public sealed record ChartSample(SpcSubgroup Subgroup, Guid? EquipmentId, string? LineCode, string? LotLabel, string? JobNumber);
 
 public sealed record QualityJobContext(
     Guid JobId, string JobNumber, Guid SiteId, Guid? MaterialId, Guid EquipmentId, Guid? RunId, Guid? RunEquipmentId);

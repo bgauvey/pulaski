@@ -807,6 +807,285 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Control_limits_come_from_a_reviewed_baseline_are_approved_and_follow_on_by_period()
+    {
+        var plant = await CreatePlantAsync();
+        CreatedResponse wall = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("SPC-" + _suffix, "Wall thickness", null, "variable", plant.Kg, 3));
+        var characteristic = (await QueryAsync<Application.Quality.ListCharacteristicsQuery, IReadOnlyList<Contracts.Quality.CharacteristicDto>>(
+            new Application.Quality.ListCharacteristicsQuery())).Single(c => c.Id == wall.Id);
+        Assert.Equal(("i_mr", 1), (characteristic.ChartType, characteristic.SubgroupSize));
+
+        // An X-bar and R chart of five values a subgroup; 24 subgroups over the run, one of them unusual.
+        var chart = await db.SendAsync(new Application.Quality.UpdateCharacteristicCommand(wall.Id, wall.Version, "Wall thickness", null, plant.Kg, 3, true)
+        {
+            ChartType = "xbar_r",
+            SubgroupSize = 5,
+        });
+        var start = DateTimeOffset.UtcNow.AddHours(-23);
+        var samples = new List<Guid>();
+        for (var i = 0; i < 24; i++)
+        {
+            decimal[] values = i == 10 ? [4.0m, 4.1m, 4.2m, 4.1m, 4.0m] : [3.0m, 3.1m, 3.2m, 3.1m, 3.0m];
+            samples.Add((await db.SendAsync(new Application.Quality.RecordQualityResultCommand(
+                plant.Site, wall.Id, null, plant.Job, start.AddMinutes(30 * i), values, null, null, "manual", null))).Id);
+        }
+
+        var end = DateTimeOffset.UtcNow;
+        var review = await QueryAsync<Application.Quality.GetLimitBaselineQuery, Contracts.Quality.LimitBaselineDto>(
+            new Application.Quality.GetLimitBaselineQuery(wall.Id, plant.Profile, null, start.AddMinutes(-1), end, []));
+        Assert.Equal((24, "xbar_r"), (review.Subgroups, review.ChartType));
+        Assert.True(review.Points.Single(p => p.SampleId == samples[10]).IsBeyondLimits);
+        Assert.Contains(review.Warnings, w => w.StartsWith("24 subgroups", StringComparison.Ordinal));
+
+        // Leaving the unusual one out tightens the limits: 3.08 ± 0.577 × 0.2.
+        var reviewed = await QueryAsync<Application.Quality.GetLimitBaselineQuery, Contracts.Quality.LimitBaselineDto>(
+            new Application.Quality.GetLimitBaselineQuery(wall.Id, plant.Profile, null, start.AddMinutes(-1), end, [samples[10]]));
+        Assert.Equal(23, reviewed.Subgroups);
+        Assert.Equal(3.08, reviewed.CenterLine!.Value, 1e-9);
+        Assert.Equal(3.08 + 0.577 * 0.2, reviewed.Ucl!.Value, 1e-9);
+
+        // Approving checks the figures again; different ones are refused.
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new Application.Quality.ApproveControlLimitsCommand(
+            wall.Id, plant.Profile, null, start.AddMinutes(-1), end, [samples[10]], review.CenterLine!.Value, review.Ucl!.Value, review.Lcl!.Value, null, null)));
+        var approved = await db.SendAsync(new Application.Quality.ApproveControlLimitsCommand(
+            wall.Id, plant.Profile, null, start.AddMinutes(-1), end, [samples[10]], reviewed.CenterLine!.Value, reviewed.Ucl!.Value, reviewed.Lcl!.Value, null, "First baseline"));
+        Assert.Empty(approved.Ended);
+
+        // The chart can't change while they are in force.
+        var resize = new Application.Quality.UpdateCharacteristicCommand(wall.Id, chart.Version, "Wall thickness", null, plant.Kg, 3, true)
+        {
+            SubgroupSize = 4,
+        };
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(resize));
+
+        // Limits for the line come before the material's; new material limits end the old ones; manual limits need a reason.
+        await db.SendAsync(new Application.Quality.SetManualControlLimitsCommand(
+            wall.Id, plant.Profile, plant.Line, 3.1, 3.3, 2.9, 0.2, 0.42, 0, null, "Line trial"));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Application.Quality.SetManualControlLimitsCommand(
+            wall.Id, plant.Profile, null, 3.1, 3.3, 2.9, 0.2, 0.42, 0, null, " ")));
+        var replaced = await db.SendAsync(new Application.Quality.SetManualControlLimitsCommand(
+            wall.Id, plant.Profile, null, 3.1, 3.4, 2.8, 0.2, 0.42, 0, DateTimeOffset.UtcNow.AddMinutes(5), "Customer limits"));
+        Assert.Equal(approved.Id, Assert.Single(replaced.Ended));
+
+        var limits = await QueryAsync<Application.Quality.ListControlLimitsQuery, IReadOnlyList<Contracts.Quality.ControlLimitDto>>(
+            new Application.Quality.ListControlLimitsQuery(wall.Id));
+        Assert.Equal(3, limits.Count);
+        var first = limits.Single(l => l.Id == approved.Id);
+        Assert.Equal(("computed", 23, 1), (first.Method, first.BaselineSubgroups, first.LeftOutSampleIds.Count));
+        Assert.True(first.IsInEffect);
+        Assert.NotNull(first.EffectiveTo);
+        Assert.Equal("LINE-" + _suffix, limits.Single(l => l.EquipmentId == plant.Line).EquipmentCode);
+
+        // Ending stops them; a period can't end twice.
+        await db.SendAsync(new Application.Quality.EndControlLimitsCommand(limits.Single(l => l.EquipmentId == plant.Line).Id, "Trial over"));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Application.Quality.EndControlLimitsCommand(limits.Single(l => l.EquipmentId == plant.Line).Id, null)));
+    }
+
+    [Fact]
+    public async Task A_control_chart_plots_each_result_against_the_limits_in_force_at_its_time()
+    {
+        var plant = await CreatePlantAsync();
+        CreatedResponse melt = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("MFI-" + _suffix, "Melt flow", null, "variable", null, 2));
+
+        // Twenty individuals alternating 10 and 12 over the run: limits 5.68 to 16.32.
+        var start = DateTimeOffset.UtcNow.AddHours(-20);
+        for (var i = 0; i < 20; i++)
+        {
+            await db.SendAsync(new Application.Quality.RecordQualityResultCommand(
+                plant.Site, melt.Id, null, plant.Job, start.AddMinutes(30 * i), [i % 2 == 0 ? 10m : 12m], null, null, "manual", null));
+        }
+
+        var review = await QueryAsync<Application.Quality.GetLimitBaselineQuery, Contracts.Quality.LimitBaselineDto>(
+            new Application.Quality.GetLimitBaselineQuery(melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow, []));
+        await db.SendAsync(new Application.Quality.ApproveControlLimitsCommand(
+            melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow, [], review.CenterLine!.Value, review.Ucl!.Value, review.Lcl!.Value, null, null));
+
+        // Two more since: one well beyond the upper limit.
+        await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [20m], null, null, "manual", null));
+        await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [11m], null, null, "manual", null));
+
+        var chart = await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
+            plant.Site, melt.Id, plant.Profile, plant.Line, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)));
+        Assert.Equal(("i_mr", "PRF-" + _suffix, "LINE-" + _suffix), (chart.ChartType, chart.MaterialCode, chart.EquipmentCode));
+        Assert.Equal(22, chart.Points.Count);
+        Assert.All(chart.Points.Take(20), p => Assert.Null(p.Ucl));
+        var beyond = chart.Points[20];
+        Assert.Equal(20, beyond.Value);
+        Assert.Equal(16.32, beyond.Ucl!.Value, 1e-9);
+        Assert.True(beyond.IsBeyondLimits);
+        Assert.True(beyond.IsDispersionBeyondLimits);
+        Assert.False(chart.Points[21].IsBeyondLimits);
+        Assert.Equal("LINE-" + _suffix, beyond.LineCode);
+        Assert.Equal(plant.JobNumber, beyond.JobNumber);
+        Assert.Single(chart.Limits);
+
+        // Nine just above the centre line (11, sigma 1.77) complete a run on one side: rule 2, marked on the ninth.
+        for (var i = 0; i < 9; i++)
+        {
+            await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [11.5m], null, null, "manual", null));
+        }
+
+        var runs = await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
+            plant.Site, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)));
+        Assert.Equal([1, 2, 5, 6], runs.RunRules);
+        Assert.Contains(1, runs.Points[20].Rules);
+        Assert.Equal([2], runs.Points[^1].Rules);
+        Assert.Empty(runs.Points[^2].Rules);
+
+        // Rules are the characteristic's choice; rule 1 always stays.
+        var current = (await QueryAsync<Application.Quality.ListCharacteristicsQuery, IReadOnlyList<Contracts.Quality.CharacteristicDto>>(
+            new Application.Quality.ListCharacteristicsQuery())).Single(c => c.Id == melt.Id);
+        var fewer = new Application.Quality.UpdateCharacteristicCommand(melt.Id, current.Version, "Melt flow", null, null, 2, true)
+        {
+            RunRules = [3],
+        };
+        await db.SendAsync(fewer);
+        Assert.Equal([1, 3], (await QueryAsync<Application.Quality.ListCharacteristicsQuery, IReadOnlyList<Contracts.Quality.CharacteristicDto>>(
+            new Application.Quality.ListCharacteristicsQuery())).Single(c => c.Id == melt.Id).RunRules);
+        Assert.Empty((await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
+            plant.Site, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)))).Points[^1].Rules);
+
+        // Capability against the released specification (LSL 5, USL 17); the chart signals, so it is marked unstable.
+        await using (var spec = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await spec.ExecuteAsync(
+                """
+                INSERT INTO core.material_spec (id, material_id) VALUES (@Spec, @Material);
+                INSERT INTO core.material_spec_version (id, spec_id, version_number, status, released_at) VALUES (@Version, @Spec, 1, 'released', now());
+                INSERT INTO core.material_spec_item (spec_version_id, characteristic_id, lsl, usl) VALUES (@Version, @Characteristic, 5, 17);
+                """,
+                new { Spec = Guid.CreateVersion7(), Version = Guid.CreateVersion7(), Material = plant.Profile, Characteristic = melt.Id });
+        }
+
+        var capable = (await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
+            plant.Site, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)))).Capability;
+        Assert.Equal((1, 5m, 17m), (capable.SpecVersion, capable.Lsl!.Value, capable.Usl!.Value));
+        Assert.NotNull(capable.Cp);
+        Assert.NotNull(capable.Ppk);
+        Assert.NotNull(capable.Band);
+        Assert.True(capable.IsUnstable);
+
+        // Another site sees none of it.
+        var elsewhere = await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
+            plant.Stores, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)));
+        Assert.Empty(elsewhere.Points);
+    }
+
+    [Fact]
+    public async Task A_result_that_breaks_a_run_rule_raises_one_alert_per_chart_closed_with_a_cause()
+    {
+        var plant = await CreatePlantAsync();
+        CreatedResponse melt = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("ALR-" + _suffix, "Melt flow", null, "variable", null, 2));
+        var start = DateTimeOffset.UtcNow.AddHours(-20);
+        for (var i = 0; i < 20; i++)
+        {
+            await db.SendAsync(new Application.Quality.RecordQualityResultCommand(
+                plant.Site, melt.Id, null, plant.Job, start.AddMinutes(30 * i), [i % 2 == 0 ? 10m : 12m], null, null, "manual", null));
+        }
+
+        var review = await QueryAsync<Application.Quality.GetLimitBaselineQuery, Contracts.Quality.LimitBaselineDto>(
+            new Application.Quality.GetLimitBaselineQuery(melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow, []));
+        await db.SendAsync(new Application.Quality.ApproveControlLimitsCommand(
+            melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow, [], review.CenterLine!.Value, review.Ucl!.Value, review.Lcl!.Value, null, null));
+
+        // In control: nothing raised.
+        var fine = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [11m], null, null, "manual", null));
+        Assert.Empty(fine.SpcRules);
+        Assert.Null(fine.SpcAlertId);
+
+        // Beyond the limits: an alert is raised and the recorder is told.
+        var high = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [20m], null, null, "manual", null));
+        Assert.Contains(1, high.SpcRules);
+        Assert.Contains(high.Notes, n => n.Contains("an SPC alert was raised", StringComparison.Ordinal));
+
+        // Another break goes to the same open alert.
+        var again = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [19m], null, null, "manual", null));
+        Assert.Equal(high.SpcAlertId, again.SpcAlertId);
+        Assert.Contains(again.Notes, n => n.Contains("added to its open SPC alert", StringComparison.Ordinal));
+
+        var alerts = await QueryAsync<Application.Quality.ListSpcAlertsQuery, IReadOnlyList<Contracts.Quality.SpcAlertDto>>(new Application.Quality.ListSpcAlertsQuery(plant.Site));
+        var alert = Assert.Single(alerts);
+        Assert.Equal(("open", 2, ("ALR-" + _suffix).ToLowerInvariant(), "LINE-" + _suffix), (alert.Status, alert.Breaks, alert.CharacteristicCode.ToLowerInvariant(), alert.EquipmentCode));
+        var detail = await QueryAsync<Application.Quality.GetSpcAlertQuery, Contracts.Quality.SpcAlertDto>(new Application.Quality.GetSpcAlertQuery(plant.Site, alert.Id));
+        Assert.Equal(2, detail.Violations.Count);
+        Assert.Equal(plant.JobNumber, detail.Violations[0].JobNumber);
+
+        Assert.Equal(1, (await QueryAsync<Application.Overview.GetOverviewQuery, Contracts.Overview.OverviewDto>(new Application.Overview.GetOverviewQuery(plant.Site))).OpenSpcAlerts);
+
+        // Closing needs a cause and an action; afterwards the next break opens a new alert.
+        var cause = await ReasonAsync("spc_cause", "SETTING");
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new Application.Quality.CloseSpcAlertCommand(plant.Site, alert.Id, cause, " ")));
+        var closed = await db.SendAsync(new Application.Quality.CloseSpcAlertCommand(plant.Site, alert.Id, cause, "Barrel zone 3 reset to 210 °C"));
+        Assert.Equal(("closed", "Machine setting changed"), (closed.Status, closed.Cause));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new Application.Quality.CloseSpcAlertCommand(plant.Site, alert.Id, cause, "Again")));
+
+        Assert.Equal(0, (await QueryAsync<Application.Overview.GetOverviewQuery, Contracts.Overview.OverviewDto>(new Application.Overview.GetOverviewQuery(plant.Site))).OpenSpcAlerts);
+        var next = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [21m], null, null, "manual", null));
+        Assert.NotEqual(alert.Id, next.SpcAlertId);
+        await using var admin = await db.AdminDataSource.OpenConnectionAsync();
+        Assert.Equal(2, await admin.ExecuteScalarAsync<int>(
+            "SELECT count(*)::int FROM evt.event WHERE type = 'pulaski.spc_alert.raised.v1' AND subject = ANY(@Ids)", new { Ids = new[] { alert.Id, next.SpcAlertId!.Value } }));
+    }
+
+    [Fact]
+    public async Task A_process_value_tag_is_sampled_into_results_for_the_running_job()
+    {
+        var plant = await CreatePlantAsync();
+        CreatedResponse node = await db.SendAsync(new CreateEdgeNodeCommand(plant.Site, "PV-" + _suffix, "Gateway", null));
+        CreatedResponse connection = await db.SendAsync(new CreateEdgeConnectionCommand(node.Id, "PB-" + _suffix, "Broker", EdgeProtocols.SparkplugB,
+            new Dictionary<string, string> { ["host"] = "localhost" }));
+        CreatedResponse tag = await db.SendAsync(new CreateEquipmentTagCommand(
+            plant.Line, TagRoles.ProcessValue, connection.Id, $"Plant1/Area/PV-{_suffix}:Barrel/Zone3", 1, 0, null));
+        CreatedResponse melt = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("PVT-" + _suffix, "Melt temperature", null, "variable", null, 1));
+        CreatedResponse holes = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("PVA-" + _suffix, "Holes", null, "attribute", null, 0));
+
+        // Only a measured characteristic, once per line.
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Application.Quality.AddTagBindingCommand(holes.Id, tag.Id, 15)));
+        var bound = await db.SendAsync(new Application.Quality.AddTagBindingCommand(melt.Id, tag.Id, 15));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new Application.Quality.AddTagBindingCommand(melt.Id, tag.Id, 30)));
+        var binding = Assert.Single(await QueryAsync<Application.Quality.ListTagBindingsQuery, IReadOnlyList<Contracts.Quality.TagBindingDto>>(
+            new Application.Quality.ListTagBindingsQuery(melt.Id)));
+        Assert.Equal(("LINE-" + _suffix, 15, true), (binding.LineCode, binding.IntervalMinutes, binding.IsActive));
+
+        // Two hours of readings, one a minute, as if bound then; the line's job has run all along.
+        var now = DateTimeOffset.UtcNow;
+        var start = now.AddHours(-2);
+        await using (var admin = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await admin.ExecuteAsync("UPDATE core.characteristic_tag SET sampled_through = @Start WHERE id = @Id", new { Start = start, Id = bound.Id });
+            await admin.ExecuteAsync(
+                "INSERT INTO ts.process_value (equipment_tag_id, occurred_at, value_num, quality) SELECT @Tag, @Start + make_interval(mins => m), 210 + (m % 3), 192 FROM generate_series(0, 120) AS m",
+                new { Tag = tag.Id, Start = start });
+        }
+
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            var made = await scope.ServiceProvider.GetRequiredService<Application.Quality.TagSampler>().RunDueAsync(CancellationToken.None);
+            var expected = Domain.Quality.Spc.AutoSampling.Ticks(start, now, 15, 96).Count;
+            Assert.Equal(expected, made);
+        }
+
+        var results = await QueryAsync<Application.Quality.ListQualityResultsQuery, IReadOnlyList<Contracts.Quality.QualityResultDto>>(
+            new Application.Quality.ListQualityResultsQuery(new Application.Quality.QualityResultFilter(null, plant.Site, CharacteristicId: melt.Id)));
+        Assert.NotEmpty(results);
+        Assert.All(results, r => Assert.Equal(("auto", plant.JobNumber), (r.Source, r.JobNumber)));
+        Assert.All(results, r => Assert.Equal(0, r.OccurredAt.Minute % 15));
+
+        // Nothing is due until the next interval ends.
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<Application.Quality.TagSampler>().RunDueAsync(CancellationToken.None));
+        }
+
+        var after = Assert.Single(await QueryAsync<Application.Quality.ListTagBindingsQuery, IReadOnlyList<Contracts.Quality.TagBindingDto>>(
+            new Application.Quality.ListTagBindingsQuery(melt.Id)));
+        Assert.True(after.SampledThrough > start);
+        await db.SendAsync(new Application.Quality.UpdateTagBindingCommand(after.Id, after.Version, 30, false));
+        Assert.False(Assert.Single(await QueryAsync<Application.Quality.ListTagBindingsQuery, IReadOnlyList<Contracts.Quality.TagBindingDto>>(
+            new Application.Quality.ListTagBindingsQuery(melt.Id))).IsActive);
+    }
+
+    [Fact]
     public async Task Merges_transfers_and_output_that_joined_a_silo_are_put_back_as_they_were()
     {
         var plant = await CreatePlantAsync();

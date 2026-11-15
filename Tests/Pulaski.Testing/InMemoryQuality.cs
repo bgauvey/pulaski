@@ -2,6 +2,7 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.Quality;
 using Pulaski.Contracts.Quality;
 using Pulaski.Domain.Quality;
+using Pulaski.Domain.Quality.Spc;
 
 namespace Pulaski.Testing;
 
@@ -17,9 +18,37 @@ public sealed class InMemoryQuality : IQualityRepository, IQualityReadStore
     private readonly Dictionary<Guid, (SpecVersion Value, long Version)> _versions = [];
     private readonly Dictionary<Guid, (SpecItem Item, Guid VersionId)> _released = [];
     private readonly List<QualityResultRow> _results = [];
+    private readonly List<ControlLimit> _limits = [];
+    private readonly List<SpcAlertDto> _alerts = [];
+    private readonly List<(SpcBreak Signal, Guid AlertId)> _violations = [];
     private long _next = 1;
 
     public Dictionary<Guid, string> Materials { get; } = [];
+
+    /// <summary>Lines (equipment that runs jobs) by id, with their codes.</summary>
+    public Dictionary<Guid, string> Lines { get; } = [];
+
+    public IReadOnlyList<SpcAlertDto> Alerts
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _alerts];
+            }
+        }
+    }
+
+    public IReadOnlyList<ControlLimit> Limits
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _limits];
+            }
+        }
+    }
 
     public Dictionary<Guid, QualityJobContext> Jobs { get; } = [];
 
@@ -273,4 +302,279 @@ public sealed class InMemoryQuality : IQualityRepository, IQualityReadStore
 
     public Task<IReadOnlyList<QualityResultDto>> ListResultsAsync(QualityResultFilter filter, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<QualityResultDto>>([]);
+
+    public Task<string?> GetLineCodeAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(Lines.GetValueOrDefault(id));
+
+    public Task<IReadOnlyList<ControlLimit>> GetLimitsAsync(Guid characteristicId, Guid materialId, Guid? equipmentId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<ControlLimit>>(
+                [.. _limits.Where(l => l.CharacteristicId == characteristicId && l.MaterialId == materialId && l.EquipmentId == equipmentId).OrderBy(l => l.EffectiveFrom)]);
+        }
+    }
+
+    public Task<ControlLimit?> GetLimitAsync(Guid id, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_limits.FirstOrDefault(l => l.Id == id));
+        }
+    }
+
+    public Task<bool> HasOpenLimitsAsync(Guid characteristicId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_limits.Any(l => l.CharacteristicId == characteristicId && (l.EffectiveTo is null || l.EffectiveTo > at)));
+        }
+    }
+
+    public Task InsertLimitAsync(ControlLimit limit, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _limits.Add(limit);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task EndLimitAsync(Guid id, DateTimeOffset endsAt, string? by, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var i = _limits.FindIndex(l => l.Id == id);
+            _limits[i] = _limits[i] with { EffectiveTo = endsAt };
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<SpcSubgroup>> ListBaselineAsync(
+        Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<SpcSubgroup>>([.. _results
+                .Where(r => r.CharacteristicId == characteristicId && r.MaterialId == materialId && !r.IsExcluded && r.OccurredAt >= windowStart && r.OccurredAt < windowEnd
+                    && (equipmentId is null || r.EquipmentId == equipmentId))
+                .OrderBy(r => r.OccurredAt)
+                .Select(r => new SpcSubgroup(r.Id, r.OccurredAt, r.Measurement.Values?.Select(v => (double)v).ToList(), r.Measurement.Inspected, r.Measurement.Defects))]);
+        }
+    }
+
+    public Task<IReadOnlyList<ControlLimitDto>> ListLimitsAsync(Guid characteristicId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<ControlLimitDto>>([.. _limits.Where(l => l.CharacteristicId == characteristicId).Select(l => new ControlLimitDto
+            {
+                Id = l.Id,
+                CharacteristicId = l.CharacteristicId,
+                MaterialId = l.MaterialId,
+                EquipmentId = l.EquipmentId,
+                ChartType = l.ChartType,
+                SubgroupSize = l.SubgroupSize,
+                CenterLine = l.Limits.Center,
+                Ucl = l.Limits.Ucl,
+                Lcl = l.Limits.Lcl,
+                Method = l.Method,
+                EffectiveFrom = l.EffectiveFrom,
+                EffectiveTo = l.EffectiveTo,
+                ApprovedBy = l.ApprovedBy,
+                IsInEffect = l.IsInEffect(now),
+            })]);
+        }
+    }
+
+    public Task<IReadOnlyList<ChartSample>> ListChartSamplesAsync(
+        Guid siteId, Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, int limit, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<ChartSample>>([.. _results
+                .Where(r => r.SiteId == siteId && r.CharacteristicId == characteristicId && r.MaterialId == materialId && !r.IsExcluded
+                    && r.OccurredAt >= windowStart && r.OccurredAt < windowEnd && (equipmentId is null || r.EquipmentId == equipmentId))
+                .OrderByDescending(r => r.OccurredAt).Take(limit).OrderBy(r => r.OccurredAt)
+                .Select(r => new ChartSample(
+                    new SpcSubgroup(r.Id, r.OccurredAt, r.Measurement.Values?.Select(v => (double)v).ToList(), r.Measurement.Inspected, r.Measurement.Defects),
+                    r.EquipmentId, r.EquipmentId is { } e ? Lines.GetValueOrDefault(e) : null, null, null))]);
+        }
+    }
+
+    public Task<IReadOnlyList<ControlLimit>> GetLimitsForMaterialAsync(Guid characteristicId, Guid materialId, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<ControlLimit>>([.. _limits.Where(l => l.CharacteristicId == characteristicId && l.MaterialId == materialId)]);
+        }
+    }
+
+    public Task<(string MaterialCode, string? EquipmentCode, string? UomCode)> GetChartCodesAsync(
+        Guid characteristicId, Guid materialId, Guid? equipmentId, CancellationToken cancellationToken) =>
+        Task.FromResult((Materials.GetValueOrDefault(materialId) ?? "", equipmentId is { } e ? Lines.GetValueOrDefault(e) : null, (string?)null));
+
+    public Task<IReadOnlyList<ChartSample>> ListRuleWindowAsync(
+        Guid siteId, Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset at, Guid lastSampleId, int count, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<ChartSample>>([.. _results
+                .Where(r => r.SiteId == siteId && r.CharacteristicId == characteristicId && r.MaterialId == materialId && !r.IsExcluded
+                    && r.EquipmentId == equipmentId && r.OccurredAt <= at)
+                .OrderByDescending(r => r.OccurredAt).ThenByDescending(r => r.Id == lastSampleId).Take(count)
+                .OrderBy(r => r.OccurredAt).ThenBy(r => r.Id == lastSampleId)
+                .Select(r => new ChartSample(
+                    new SpcSubgroup(r.Id, r.OccurredAt, r.Measurement.Values?.Select(v => (double)v).ToList(), r.Measurement.Inspected, r.Measurement.Defects),
+                    r.EquipmentId, null, null, null))]);
+        }
+    }
+
+    public Task<IReadOnlyList<ControlLimit>> GetMaterialLimitsAsync(Guid characteristicId, Guid materialId, CancellationToken cancellationToken) =>
+        GetLimitsForMaterialAsync(characteristicId, materialId, cancellationToken);
+
+    public Task<(Guid AlertId, bool IsNew)> RaiseAlertAsync(SpcBreak signal, Guid newId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var i = _alerts.FindIndex(a => a.Status == "open" && a.SiteId == signal.SiteId && a.CharacteristicId == signal.CharacteristicId
+                && a.MaterialId == signal.MaterialId && a.EquipmentId == signal.EquipmentId);
+            if (i >= 0)
+            {
+                _alerts[i] = _alerts[i] with { Rules = [.. _alerts[i].Rules.Union(signal.Rules).Order()], Breaks = _alerts[i].Breaks + 1, LastSampleAt = signal.SampleAt };
+                return Task.FromResult((_alerts[i].Id, false));
+            }
+
+            _alerts.Add(new SpcAlertDto
+            {
+                Id = newId,
+                SiteId = signal.SiteId,
+                CharacteristicId = signal.CharacteristicId,
+                MaterialId = signal.MaterialId,
+                EquipmentId = signal.EquipmentId,
+                Rules = signal.Rules,
+                Breaks = 1,
+                FirstSampleAt = signal.SampleAt,
+                LastSampleAt = signal.SampleAt,
+                RaisedAt = at,
+            });
+            return Task.FromResult((newId, true));
+        }
+    }
+
+    public Task InsertViolationAsync(SpcBreak signal, Guid id, Guid alertId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _violations.Add((signal, alertId));
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<SpcAlertRecord?> GetAlertForUpdateAsync(Guid id, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_alerts.FirstOrDefault(a => a.Id == id) is { } a
+                ? new SpcAlertRecord(a.Id, a.SiteId, a.CharacteristicId, a.Status, a.Rules, a.Breaks)
+                : null);
+        }
+    }
+
+    public Task CloseAlertAsync(Guid id, Guid causeReasonId, string action, string by, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            var i = _alerts.FindIndex(a => a.Id == id);
+            _alerts[i] = _alerts[i] with { Status = "closed", ClosedAt = at, ClosedBy = by, Action = action };
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<SpcAlertDto>> ListAlertsAsync(Guid siteId, DateTimeOffset closedSince, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<SpcAlertDto>>([.. _alerts.Where(a => a.SiteId == siteId && (a.Status == "open" || a.ClosedAt >= closedSince))]);
+        }
+    }
+
+    public Task<SpcAlertDto?> GetAlertAsync(Guid siteId, Guid id, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_alerts.FirstOrDefault(a => a.SiteId == siteId && a.Id == id) is { } a
+                ? a with { Violations = [.. _violations.Where(v => v.AlertId == id).Select(v => new SpcViolationDto { SampleId = v.Signal.SampleId, OccurredAt = v.Signal.SampleAt, Rules = v.Signal.Rules })] }
+                : null);
+        }
+    }
+
+    /// <summary>Tags a binding may name.</summary>
+    public Dictionary<Guid, BindableTag> Tags { get; } = [];
+
+    public List<TagBinding> Bindings { get; } = [];
+
+    /// <summary>Process values by tag.</summary>
+    public Dictionary<Guid, List<ProcessReading>> Readings { get; } = [];
+
+    /// <summary>Runs by line: the job running in each period.</summary>
+    public List<(Guid LineId, DateTimeOffset From, DateTimeOffset? To, Guid JobId)> Runs { get; } = [];
+
+    public Task<BindableTag?> GetBindableTagAsync(Guid tagId, CancellationToken cancellationToken) => Task.FromResult(Tags.GetValueOrDefault(tagId));
+
+    public Task<bool> HasActiveBindingAsync(Guid characteristicId, Guid lineId, CancellationToken cancellationToken) =>
+        Task.FromResult(Bindings.Any(b => b.CharacteristicId == characteristicId && b.LineId == lineId && b.IsActive));
+
+    public Task<long> InsertBindingAsync(TagBinding binding, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        Bindings.Add(binding);
+        return Task.FromResult(1L);
+    }
+
+    public Task<Versioned<TagBinding>?> GetBindingForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(Bindings.FirstOrDefault(b => b.Id == id) is { } b ? new Versioned<TagBinding>(b, 1) : null);
+
+    public Task<long> UpdateBindingAsync(TagBinding binding, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        Bindings[Bindings.FindIndex(b => b.Id == binding.Id)] = binding;
+        return Task.FromResult(1L);
+    }
+
+    public Task<IReadOnlyList<Guid>> ListActiveBindingsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Guid>>([.. Bindings.Where(b => b.IsActive).Select(b => b.Id)]);
+
+    public Task<TagBinding?> LockBindingAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(Bindings.FirstOrDefault(b => b.Id == id && b.IsActive));
+
+    public Task<IReadOnlyList<ProcessReading>> ListReadingsAsync(Guid tagId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ProcessReading>>(Readings.TryGetValue(tagId, out var all) ? [.. all.Where(r => r.At <= windowEnd)] : []);
+
+    public Task<Guid?> FindRunningJobAsync(Guid lineId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        Task.FromResult(Runs.Where(r => r.LineId == lineId && r.From <= at && (r.To is null || r.To > at)).Select(r => (Guid?)r.JobId).FirstOrDefault());
+
+    public Task AdvanceBindingAsync(Guid id, DateTimeOffset sampledThrough, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var i = Bindings.FindIndex(b => b.Id == id);
+        Bindings[i] = Bindings[i] with { SampledThrough = sampledThrough };
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<TagBindingDto>> ListBindingsAsync(Guid characteristicId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<TagBindingDto>>([.. Bindings.Where(b => b.CharacteristicId == characteristicId).Select(b => new TagBindingDto
+        {
+            Id = b.Id,
+            CharacteristicId = b.CharacteristicId,
+            EquipmentTagId = b.EquipmentTagId,
+            LineId = b.LineId,
+            SiteId = b.SiteId,
+            IntervalMinutes = b.IntervalMinutes,
+            IsActive = b.IsActive,
+            SampledThrough = b.SampledThrough,
+        })]);
+
+    public Task<IReadOnlyList<ProcessValueTagDto>> ListProcessValueTagsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ProcessValueTagDto>>([]);
 }

@@ -35,7 +35,85 @@ internal static class QualityEndpoints
         quality.MapPut("/characteristics/{id:guid}", async Task<Ok<VersionResponse>> (
             Guid id, UpdateCharacteristicRequest request, ICommandHandler<UpdateCharacteristicCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new UpdateCharacteristicCommand(id, request.Version, request.Name, request.Description, request.UomId, request.Decimals, request.IsActive), ct)))
+                new UpdateCharacteristicCommand(id, request.Version, request.Name, request.Description, request.UomId, request.Decimals, request.IsActive)
+                {
+                    ChartType = request.ChartType,
+                    SubgroupSize = request.SubgroupSize,
+                    RunRules = request.RunRules,
+                }, ct)))
+        .RequirePermission(Permissions.Specs);
+
+        // Control limits (D-099): worked out from a reviewed baseline and approved, or entered by hand; periods are ended, never changed.
+        quality.MapGet("/characteristics/{id:guid}/control-limits", async Task<Ok<IReadOnlyList<ControlLimitDto>>> (
+            Guid id, IQueryHandler<ListControlLimitsQuery, IReadOnlyList<ControlLimitDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListControlLimitsQuery(id), ct)))
+        .RequireAny(null, Permissions.QualityView);
+
+        // Characteristics sampled automatically from process-value tags (D-099).
+        quality.MapGet("/characteristics/{id:guid}/tags", async Task<Ok<IReadOnlyList<TagBindingDto>>> (
+            Guid id, IQueryHandler<ListTagBindingsQuery, IReadOnlyList<TagBindingDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListTagBindingsQuery(id), ct)))
+        .RequireAny(null, Permissions.QualityView);
+
+        quality.MapGet("/process-value-tags", async Task<Ok<IReadOnlyList<ProcessValueTagDto>>> (
+            IQueryHandler<ListProcessValueTagsQuery, IReadOnlyList<ProcessValueTagDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListProcessValueTagsQuery(), ct)))
+        .RequireAny(null, Permissions.QualityView);
+
+        quality.MapPost("/characteristics/{id:guid}/tags", async Task<Ok<CreatedResponse>> (
+            Guid id, AddTagBindingRequest request, ICommandHandler<AddTagBindingCommand, CreatedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new AddTagBindingCommand(id, request.EquipmentTagId, request.IntervalMinutes), ct)))
+        .RequirePermission(Permissions.Specs);
+
+        quality.MapPut("/characteristic-tags/{id:guid}", async Task<Ok<VersionResponse>> (
+            Guid id, UpdateTagBindingRequest request, ICommandHandler<UpdateTagBindingCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new UpdateTagBindingCommand(id, request.Version, request.IntervalMinutes, request.IsActive), ct)))
+        .RequirePermission(Permissions.Specs);
+
+        // SPC alerts (D-099): one open per chart, raised when a recorded result breaks a run rule; closed with a cause and the action taken.
+        quality.MapGet("/alerts", async Task<Ok<IReadOnlyList<SpcAlertDto>>> (
+            Guid siteId, IQueryHandler<ListSpcAlertsQuery, IReadOnlyList<SpcAlertDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListSpcAlertsQuery(siteId), ct)))
+        .RequireAny(Site.Query(), Permissions.QualityView);
+
+        quality.MapGet("/alerts/{id:guid}", async Task<Ok<SpcAlertDto>> (
+            Guid id, Guid siteId, IQueryHandler<GetSpcAlertQuery, SpcAlertDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetSpcAlertQuery(siteId, id), ct)))
+        .RequireAny(Site.Query(), Permissions.QualityView);
+
+        quality.MapPost("/alerts/{id:guid}/close", async Task<Ok<SpcAlertDto>> (
+            Guid id, Guid siteId, CloseSpcAlertRequest request, ICommandHandler<CloseSpcAlertCommand, SpcAlertDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CloseSpcAlertCommand(siteId, id, request.CauseReasonCodeId, request.Action), ct)))
+        .RequirePermission(Permissions.QualityRecord, Site.Query());
+
+        // A control chart of results at a site (D-099), each point against the limits in force for it at its time.
+        quality.MapGet("/characteristics/{id:guid}/chart", async Task<Ok<ControlChartDto>> (
+            Guid id, Guid siteId, Guid materialId, Guid? equipmentId, DateTimeOffset from, DateTimeOffset to,
+            IQueryHandler<GetControlChartQuery, ControlChartDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetControlChartQuery(siteId, id, materialId, equipmentId, from, to), ct)))
+        .RequireAny(Site.Query(), Permissions.QualityView);
+
+        quality.MapGet("/characteristics/{id:guid}/control-limits/baseline", async Task<Ok<LimitBaselineDto>> (
+            Guid id, Guid materialId, Guid? equipmentId, DateTimeOffset from, DateTimeOffset to, string? leftOut,
+            IQueryHandler<GetLimitBaselineQuery, LimitBaselineDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetLimitBaselineQuery(id, materialId, equipmentId, from, to, SampleIds(leftOut)), ct)))
+        .RequireAny(null, Permissions.QualityView);
+
+        quality.MapPost("/characteristics/{id:guid}/control-limits", async Task<Ok<ControlLimitChangeResponse>> (
+            Guid id, ApproveControlLimitsRequest r, ICommandHandler<ApproveControlLimitsCommand, ControlLimitChangeResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ApproveControlLimitsCommand(
+                id, r.MaterialId, r.EquipmentId, r.From, r.To, r.LeftOutSampleIds, r.CenterLine, r.Ucl, r.Lcl, r.EffectiveFrom, r.Note), ct)))
+        .RequirePermission(Permissions.Specs);
+
+        quality.MapPost("/characteristics/{id:guid}/control-limits/manual", async Task<Ok<ControlLimitChangeResponse>> (
+            Guid id, SetManualControlLimitsRequest r, ICommandHandler<SetManualControlLimitsCommand, ControlLimitChangeResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SetManualControlLimitsCommand(
+                id, r.MaterialId, r.EquipmentId, r.CenterLine, r.Ucl, r.Lcl, r.DispersionCenter, r.DispersionUcl, r.DispersionLcl, r.EffectiveFrom, r.Note), ct)))
+        .RequirePermission(Permissions.Specs);
+
+        quality.MapPost("/control-limits/{id:guid}/end", async Task<Ok<ControlLimitChangeResponse>> (
+            Guid id, EndControlLimitsRequest r, ICommandHandler<EndControlLimitsCommand, ControlLimitChangeResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new EndControlLimitsCommand(id, r.Note), ct)))
         .RequirePermission(Permissions.Specs);
 
         quality.MapGet("/specs", async Task<Ok<IReadOnlyList<SpecSummaryDto>>> (
@@ -127,4 +205,9 @@ internal static class QualityEndpoints
 
         return routes;
     }
+
+    // Comma-separated result ids left out of a baseline.
+    private static IReadOnlyList<Guid> SampleIds(string? text) =>
+        [.. (text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(t => Guid.TryParse(t, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty)];
+
 }

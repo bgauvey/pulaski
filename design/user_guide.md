@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-09 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-14 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -200,14 +200,14 @@ The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plan
 
 **Operate → Overview** is the home page: a live board for the plant. In a few seconds it answers *which lines are running, which aren't and why, and what needs a person*. It refreshes itself every 30 seconds; the pill at the top right says when it was last updated (and turns grey, with a warning, if Pulaski can't reach the server for over a minute). The refresh button updates it at once. With several sites whose Overview you may see, pick one at the top.
 
-**Diagonal hatching means "no data".** A part of the board that has nothing to show yet (quality checks, which Pulaski doesn't do yet, or machine figures when no line reports its state) sits where it will be, hatched and greyed, with a plug symbol saying what will fill it, so the page won't move around when the data arrives. A dash or hatching means *not measured*; a 0 means measured and none.
+**Diagonal hatching means "no data".** A part of the board that has nothing to show yet (machine figures when no line reports its state, say) sits where it will be, hatched and greyed, with a plug symbol saying what will fill it, so the page won't move around when the data arrives. A dash or hatching means *not measured*; a 0 means measured and none.
 
 **Needs attention** (the grid at the top) counts what needs a person, most urgent first. A count above zero is marked with a coloured bar and icon; click it to go to the list behind it.
 
 | Cell | Counts | Today |
 | --- | --- | --- |
 | Uncoded stops | Stops in each line's current shift, longer than a micro-stop, with no reason yet | Live → Machines (needs a line that reports its state) |
-| Open SPC alerts | Control-chart alerts to respond to | Needs quality checks |
+| Open SPC alerts | Control charts that signalled and wait for a cause | Live → Quality → SPC alerts |
 | Orders behind | Open orders projected late or slipping past their baseline | Live → Work orders |
 | Lots on hold | Lots with stock on hold or in quarantine | Live → Inventory → Lots |
 | Schedule conflicts | Open orders with a schedule warning or an overlap | Live → Schedule |
@@ -1443,8 +1443,8 @@ Whoever runs Pulaski puts the feed's secret (and a broker's username and passwor
 
 ## 13. Quality: specifications and results
 
-**Configure → Specifications** keeps what each material must meet. **Operate → Quality** records what was measured or inspected, and checks it
-against the material's released specification. You can hold a lot whose result is out of limits, and reject it, which takes it off the good
+**Configure → Specifications** keeps what each material must meet. **Operate → Quality** records what was measured or inspected, checks it
+against the material's released specification, and charts it against control limits. You can hold a lot whose result is out of limits, and reject it, which takes it off the good
 output of the run that made it.
 
 ### Ideas to know first
@@ -1472,6 +1472,135 @@ output of the run that made it.
 To change one, click **Change**: the name, description, unit and decimals can change, and **On** switches it off or on. The code and kind
 never change, since results and specifications depend on them.
 
+**Its control chart.** When you change a characteristic you can also choose the chart its results go on, for statistical process control (SPC):
+- measured: **Individuals and moving range** (one value a sample, the starting choice), **X-bar and R** or **X-bar and S** (several values a
+  sample: set **Values a subgroup**, 2 to 25; X-bar and S suits larger subgroups);
+- inspected: **p** (proportion defective, the starting choice, for samples of any size), **np** (number defective; set **Items inspected a
+  sample**), **c** (defects a sample) or **u** (defects per unit).
+
+**Run rules its chart checks** picks the patterns that signal a change, numbered as Lloyd Nelson numbered them. Rule 1 (beyond the control
+limits) is always checked; 1, 2, 5 and 6, the Western Electric set, are ticked to start with:
+1. one point beyond the control limits (3 sigma);
+2. 9 in a row on one side of the centre line;
+3. 6 in a row rising or falling;
+4. 14 in a row alternating up and down;
+5. 2 of 3 beyond 2 sigma on one side;
+6. 4 of 5 beyond 1 sigma on one side;
+7. 15 in a row within 1 sigma (hugging the centre line);
+8. 8 in a row beyond 1 sigma, on either side.
+
+More rules find smaller changes sooner, and give more false alarms. Rules can change at any time.
+
+The **Control chart** column shows each one's chart. The chart can't change while the characteristic has control limits in force: they were
+worked out for that chart, so end them first.
+
+### Set control limits
+
+Control limits say how much a process varies when nothing unusual is going on. They come from the results themselves, not from the specification:
+a process can be in specification and still out of control, or the other way round. Limits are kept per characteristic and material, and a line
+can have its own, which it uses before the material's.
+
+1. On **Characteristics**, click **Control limits** under the characteristic's chart.
+2. Under **Work out limits from results**, choose the **Material**, a **Line** if it should have its own limits (else **Every line**), and the
+   period (**From**, **To**) when the process ran normally. Click **Work it out**.
+3. Pulaski shows the limits the results give, the limits in force now (if any) and every result in the period: its plotted value (and range,
+   standard deviation or moving range), its size, and whether it is **Beyond the limits** or **Can't be used** (and why).
+4. Results beyond the limits, or completing a run rule (*Rule 2*…), are worth looking into. If one had a known cause, such as a startup or a wrong
+   setting, tick **Leave out** and click **Work out again**.
+5. When the limits look right, optionally set when they **Start** (now if blank) and a **Note**, and click **Approve these limits**.
+
+To enter limits by hand (agreed with a customer, or carried over from another system), use **Enter limits by hand**. It takes the material and
+line chosen above, the **Lower**, **Centre** and **Upper** limits (and the dispersion chart's centre and upper limit for measured charts), and
+**Why**. To stop using limits, click **End** on their row.
+
+**In detail**
+
+- **How they are worked out.** Shewhart 3-sigma limits, with sigma estimated within subgroups (from the mean range, standard deviation or moving
+  range), as the charts are meant to be. Limits need at least 20 usable results; under 25, Pulaski warns that they are rough. A result whose size
+  doesn't fit the chart (for X-bar, np and c charts) is left out with why. Excluded results never count. Count charts' lower limits stop at
+  zero, and p and u limits follow each sample's size.
+- **Which results.** The characteristic's results for the material in the period, at most 1,000. For one line: results recorded against a job
+  on that line (a result for a lot alone has no line, so it counts only towards limits for every line).
+- **Fixed once approved.** Approving works the limits out again from the same results. If results were recorded or excluded since you looked
+  and the limits changed, Pulaski says so and shows them again. Limits start now or later, never in the past. New limits for the same material
+  and line end the ones in force where they start, and any other overlap is refused. Limits are ended, never changed or deleted, and the list
+  keeps every period with how it was set, the results left out and who approved it.
+- **Who.** Anyone who can see quality sees the limits; working them out, approving, entering and ending them needs permission to maintain
+  specifications. Each approval is recorded as `pulaski.control_limit.approved.v1`, each end as `…ended.v1`.
+- **Charts and alerts.** See [Control charts](#control-charts) and [Respond to SPC alerts](#respond-to-spc-alerts).
+
+### Sample from process values
+
+A measured characteristic that a machine already reports, such as a melt temperature or a line speed, can have its results made by Pulaski
+from the [process values](#process-values) its tag sends, instead of by hand.
+
+1. On **Characteristics**, click **Control limits** under the characteristic.
+2. Under **Sampled from process values**, choose the **Process-value tag** (listed by site, line, machine and address) and how often (**Every,
+   minutes**; 15 to start with). Click **Sample from it**.
+3. From then on, at the end of each interval, Pulaski records a result for the job running on the tag's line. It shows on Quality results as
+   *From process values*, recorded by *Automatic*, and goes on the control chart like any other.
+
+**Change** sets another interval; **Switch off** stops it, and **Switch on** starts again from then.
+
+**In detail**
+
+- **What a result holds.** The value at the end of the interval, or for an X-bar chart, the values at that many consecutive minutes ending
+  then (a subgroup of 5 is the last 5 minutes). A value is the last reading at or before each minute; the edge sends one at least every minute
+  while the signal is good.
+- **When.** Intervals end on the clock (every 15 minutes means :00, :15, :30, :45 UTC). Pulaski waits two minutes after each for late readings,
+  then records it, normally within a minute after that.
+- **Skipped intervals.** No result is made when no job is running on the line (changeovers, idle time), or when a reading in the subgroup is bad
+  or more than two minutes old. If Pulaski was stopped, it makes up to the last 24 hours when it starts again; older intervals are skipped.
+- **One line, one tag.** A characteristic is sampled from one tag on each line, and the tag must be on a line that runs jobs (or a machine below
+  one). Only measured characteristics can be sampled. Deleting the tag on Edge nodes switches its sampling off.
+- **Everything else is as usual.** The result is checked against the material's specification, goes on its chart, and can raise an
+  [SPC alert](#respond-to-spc-alerts). A wrong one is left out like any other. It doesn't hold a lot: it belongs to the job, not to a lot.
+- **Who:** setting up sampling needs permission to maintain specifications. The background work runs as *system*
+  (`Quality:AutoSampling:Enabled`, `Quality:AutoSampling:PollSeconds`, 60).
+
+### Control charts
+
+1. On **Operate → Quality**, click **Control charts** (or **Chart** on a period of control limits).
+2. Choose the **Characteristic**, the **Material**, a **Line** if you want one line's results only (else **Every line**), and the period (the last
+   30 days to start with). Click **Show**.
+3. The chart shows each result in time order: the value (or a subgroup's mean, proportion or count, as the chart takes it), with the control
+   limits in force for it as dashed lines and the centre line solid. A result beyond its limits is a red diamond; one that completes another run
+   rule is an amber square labelled with the rules' numbers. The rules checked are listed above the chart. Measured characteristics have a
+   second chart below: the range, standard deviation or moving range.
+4. Hover over a point to see when it was sampled, its value against its limits, and its line, job and lot. **Show as a table** lists the same.
+5. Under the chart, **Capability** says how well the results fit the material's specification.
+6. The chart refreshes itself every 30 seconds while open; the pill at the top right says when it was last updated, and the refresh button
+   updates it at once.
+
+**In detail**
+
+- **Whose results.** The characteristic's results for the material at the selected site in the period, excluded results left out; the latest 500
+  at most. For a line, only results recorded against a job on it.
+- **Which limits.** Each result is drawn against the limits in force at the time it was sampled: its line's own if it has some, else the
+  material's. Limits worked out for another chart (before the chart changed) don't count. Results from before any limits were approved, such
+  as the baseline itself, are drawn without limits, and the summary above the chart says how many.
+- **Can't go on the chart.** A result whose size doesn't fit the chart (an X-bar chart's subgroup size, say) is left off, and the summary says how
+  many.
+- **Run rules** are marked on the point that completes the pattern: the ninth of nine in a row, say. Each point is measured against its own
+  limits, so a run carries on across new limits, and a result without limits breaks it. Rising, falling and alternating look at the values alone.
+  Rules apply to the main chart; the range, standard deviation or moving range chart marks only results beyond its limits. A newly recorded
+  result that signals raises an [SPC alert](#respond-to-spc-alerts).
+- **Capability** is worked out from the results the chart shows (the period and line you chose), against the material's released
+  specification now:
+  - **Cp · Cpk (within)** use the spread within subgroups (the mean range, standard deviation or moving range, as the chart estimates sigma):
+    what the process could do. **Pp · Ppk (overall)** use the standard deviation of every value: what it did, drifts included.
+  - Cp and Pp compare the specification's width with six sigma, so they need both limits; Cpk and Ppk also count how far the mean is from the
+    nearer limit, so a one-sided specification has them only.
+  - **Capable** at 1.33 or more, **marginal** from 1.00, **not capable** below, judged by Cpk (and by Ppk for the overall pair).
+  - At least 20 subgroups are needed. If the chart signals (beyond the limits, or a run rule), Pulaski says the process isn't stable, since
+    capability describes an unstable process poorly.
+  - Inspected characteristics have no indices: Capability gives their rate (defective, or defects a unit for c and u charts) as a percentage
+    and in parts per million, beside the most defects the specification allows a sample.
+- **Live.** Each refresh redraws the chart you clicked **Show** for, not filters you've changed since. If its period reached the present, new
+  results appear as they're recorded (its **To** moves on with the time); a period ending earlier stays as it is. If Pulaski can't reach the
+  server, the chart stays as it was and the pill turns grey: *Stale since* the last update.
+- **Who:** anyone who can see quality at the site.
+
 ### Write a specification
 
 1. On **Configure → Specifications**, click **New specification**, choose the **Material** and click **Create and edit**.
@@ -1494,9 +1623,41 @@ To change it later, click **New draft**: it starts as a copy of the released ver
    **Inspected** and how many were **Defective**.
 5. Choose the **Source** (**At the line** or **Laboratory**), check **Sampled at** and add a comment if needed.
 6. Click **Record**. Pulaski says whether the result is in specification. If it isn't and the characteristic holds the lot, it says the lot
-   was put on hold.
+   was put on hold. If the result makes its [control chart](#control-charts) signal (beyond the limits, or completing a run rule), it says so and
+   that an [SPC alert](#respond-to-spc-alerts) was raised, or added to the one already open.
 
 From a lot's page, **Record a result** under **Quality** opens this form with the lot filled in.
+
+### Respond to SPC alerts
+
+An SPC alert means a control chart signalled: a result beyond its control limits, or completing one of its characteristic's run rules. The
+Overview's **Open SPC alerts** counts those waiting at the site.
+
+1. Open **Operate → Quality** and click **SPC alerts** (or click the Overview's count).
+2. Open alerts come first: the chart (characteristic, material and line), the rules broken, how many results broke them and when.
+3. Click **Respond**. The alert lists each result that broke a rule, with its value, job and lot; **See the chart** opens its control chart.
+4. Find the cause at the line. Choose the **Cause**, say **What was done**, and click **Close alert**.
+
+The list refreshes itself every 30 seconds, like the Overview, so new alerts and breaks appear while it's open; the alert you opened follows
+too, keeping the cause and action you're typing. The pill at the top right says when it was last updated.
+
+**In detail**
+
+- **One alert per chart.** While a chart's alert is open, further results that break a rule are added to it (its count and rules grow), rather
+  than raising new ones. Once it is closed, the next break opens a new alert.
+- **When it is raised.** When a result is recorded (by hand, from the laboratory, or through a lot attribute), it is checked against the results
+  before it on the same line and the limits in force for it. A result recorded with an earlier sample time is judged by the results before it.
+  Nothing is raised while the chart has no control limits.
+- **Which chart.** Results on one line are a chart of their own; results for a lot alone (no line) are another. Limits are the line's own if it
+  has some, else the material's.
+- **Lots aren't held.** Out of control isn't out of specification; whether a result holds its lot is the specification's choice. Hold or reject
+  the lot yourself if the cause calls for it.
+- **Causes** are reasons of the kind *SPC cause* (Configure → Reasons). Starters: material or lot change, machine setting changed, die or
+  tooling wear, startup or changeover, measurement or gauge error, and no cause found (which needs a fuller note).
+- **Excluding** a result later doesn't change an alert it raised; close it with the cause *Measurement or gauge error* if that's what it was.
+- **Who:** anyone who can see quality sees alerts; closing one needs permission to record quality results at the site. Raising, adding to and
+  closing are events (`pulaski.spc_alert.raised.v1`, `…signalled.v1`, `…closed.v1`) that [delivery feeds](#send-movements-to-the-erp-and-certificates-to-a-document-system) can send on.
+- Closed alerts stay listed for 30 days, and on record after that.
 
 ### Leave out a wrong result
 
@@ -2451,7 +2612,7 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 - **Stop codes** are latched: a machine that clears its code once acknowledged keeps it in Pulaski until it runs (Execute) again.
 - **Counts** are taken across the rollover value; a counter going back without one is taken as reset to zero. Machine counts don't change the job's reported quantities by themselves: a [report from the machine](#report-production-from-the-machine) takes them, once the operator has checked them.
 - **Switching a node off** stops Pulaski taking its data and the edge collecting. Switching a tag or connection off stops it being read.
-- **Delete behavior.** Deleting a node deactivates it and all its connections and tags. Deleting a tag physically removes its binding, so it disappears from the Tags tab; this works whether the tag is active or inactive. Any quality characteristic using it as an automatic source is kept but detached. The deletion event and historical machine data are retained. Add a new binding if the signal is needed again. Reactivating a node later does not reactivate its connections or tags; switch those back on individually if needed.
+- **Delete behavior.** Deleting a node deactivates it and all its connections and tags. Deleting a tag physically removes its binding, so it disappears from the Tags tab; this works whether the tag is active or inactive. A quality characteristic [sampled from it](#sample-from-process-values) is kept, and its sampling from that tag switched off. The deletion event and historical machine data are retained. Add a new binding if the signal is needed again. Reactivating a node later does not reactivate its connections or tags; switch those back on individually if needed.
 - **Without Pulaski**, the edge starts with the last configuration it kept.
 - **OPC UA in detail.** One subscription carries the bound nodes; a reading takes the time the server stamped it with. A status that isn't good is recorded as a lost signal. If the server stops answering, the edge records every bound node as lost and reconnects, waiting a second and then longer each time, up to a minute. The edge keeps its own certificate and the servers it trusts in a `pki` folder beside it (`Edge:PkiPath`). A server it refuses leaves its certificate in `pki/rejected/certs`: check it and move it to `pki/trusted/certs`, or put its thumbprint on the connection. The server must trust the edge's certificate (`pki/own/certs`) too.
 - **EtherNet/IP in detail.** The edge reads each bound tag every poll interval and records the time it read it (the PLC sends no time). A tag it can't read is recorded as lost once and tried again on every poll. Only single values are read, not whole arrays or structures.
@@ -2657,7 +2818,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Labor:** people from HR or the ERP come from a file or a connection; schedules are in UTC, not the site's time, and a failed scheduled run waits for the next one. Qualifications are only added by an import, never revoked, and SCIM users carry none. Terminals don't take production or downtime reports and can't sign anyone in as a user. Planned breaks are never recorded on their own. A grant that expired before its notice went out (say, while e-mail was off) gets no notice. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
 - **Materials import** from CSV or B2MML files, from an OData, REST, SOAP or PostgreSQL connection on demand or on a schedule, or one item at a time through the API. Connections can't sign in with OAuth, and there are no adapters for label printing. Capabilities import from CSV only. Pulaski exports materials and classes as B2MML, but not lots; B2MML sublots, assemblies and other languages aren't read.
 - **Planning rates from run history:** the scheduled recalculation looks at every line of a site at once, on whole days; it can't be limited to some lines or materials, or run at a set time of day. Stops can be taken out only on lines that record machine state, and a proposal accepted without review is worked out once, not again when it is accepted.
-- **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
+- **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts of their own on screen (a characteristic sampled from one has a [control chart](#control-charts)).
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
@@ -2667,9 +2828,9 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Sending to other systems** is by HTTPS webhook or MQTT; there is no Kafka or other message queue yet, and retention is the same for every feed. Receivers' acknowledgements are recorded on the delivery, but nothing compares what the ERP booked with what Pulaski sent; there is no adapter for a particular ERP's or document system's own API. A certificate's file goes inline in the event, up to 10 MB; there is no download link for a receiver to fetch it later. The delivery list shows at most 200 at a time, with no paging beyond that.
 - **Allocations:** the background refresh is all or nothing for a site, and any change anywhere makes it run. Preferences are per site, not per material. A picking list is printed, not confirmed: fetching the lot is still an ordinary move. Approved alternates show only in allocations and on consumption, not in an order's planned components, and only a BOM's approved alternates can be allocated.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
-- **The Overview** has no quality figures or SPC alerts yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
+- **The Overview** has no quality figures yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
-- **Quality:** there are no SPC charts, control limits or alerts yet, and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
+- **Quality:** alerts aren't e-mailed, and there are no sampling plans or reminders of samples due. Process values make results only at fixed intervals from one tag per line, never for an inspected characteristic or a lot. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
 - **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.
 - **Some switched-off controls give no reason yet:** a form's Save waiting on a field next to it, an Export with nothing to export, and the locked boxes on the Permissions tab (point at those with the mouse to see why).
 

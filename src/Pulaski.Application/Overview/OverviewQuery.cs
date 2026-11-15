@@ -17,6 +17,9 @@ public interface IOverviewReadStore
 
     /// <summary>Lots at the site with stock that are on hold, and in quarantine.</summary>
     Task<(int OnHold, int Quarantine)> CountHeldLotsAsync(Guid siteId, CancellationToken cancellationToken);
+
+    /// <summary>The site's open SPC alerts (D-099).</summary>
+    Task<int> CountOpenSpcAlertsAsync(Guid siteId, CancellationToken cancellationToken);
 }
 
 /// <summary>The Overview's live figures for a site (D-070).</summary>
@@ -65,6 +68,7 @@ internal sealed class GetOverviewHandler(
             WindowIsShift = window.IsShift,
             LotsOnHold = onHold,
             LotsInQuarantine = quarantine,
+            OpenSpcAlerts = await store.CountOpenSpcAlertsAsync(query.SiteId, cancellationToken),
             Lines = [.. lines.Select(line =>
             {
                 var scope = scopes[line.Id];

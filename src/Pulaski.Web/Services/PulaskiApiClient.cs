@@ -1261,6 +1261,56 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> UpdateCharacteristicAsync(Guid id, UpdateCharacteristicRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/quality/characteristics/{id}", request, ct);
 
+    public Task<IReadOnlyList<TagBindingDto>> ListTagBindingsAsync(Guid characteristicId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<TagBindingDto>>($"api/quality/characteristics/{characteristicId}/tags", ct);
+
+    public Task<IReadOnlyList<ProcessValueTagDto>> ListProcessValueTagsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ProcessValueTagDto>>("api/quality/process-value-tags", ct);
+
+    public Task<CreatedResponse> AddTagBindingAsync(Guid characteristicId, AddTagBindingRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/quality/characteristics/{characteristicId}/tags", request, ct);
+
+    public Task<VersionResponse> UpdateTagBindingAsync(Guid id, UpdateTagBindingRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/quality/characteristic-tags/{id}", request, ct);
+
+    public Task<IReadOnlyList<SpcAlertDto>> ListSpcAlertsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<SpcAlertDto>>($"api/quality/alerts?siteId={siteId}", ct);
+
+    public Task<SpcAlertDto> GetSpcAlertAsync(Guid siteId, Guid id, CancellationToken ct = default) =>
+        GetAsync<SpcAlertDto>($"api/quality/alerts/{id}?siteId={siteId}", ct);
+
+    public Task<SpcAlertDto> CloseSpcAlertAsync(Guid siteId, Guid id, CloseSpcAlertRequest request, CancellationToken ct = default) =>
+        SendAsync<SpcAlertDto>(HttpMethod.Post, $"api/quality/alerts/{id}/close?siteId={siteId}", request, ct);
+
+    public Task<ControlChartDto> GetControlChartAsync(
+        Guid characteristicId, Guid siteId, Guid materialId, Guid? equipmentId, DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default) =>
+        GetAsync<ControlChartDto>(
+            $"api/quality/characteristics/{characteristicId}/chart?siteId={siteId}&materialId={materialId}"
+            + (equipmentId is { } line ? $"&equipmentId={line}" : "")
+            + $"&from={Uri.EscapeDataString(from.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}"
+            + $"&to={Uri.EscapeDataString(to.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}", ct);
+
+    public Task<IReadOnlyList<ControlLimitDto>> ListControlLimitsAsync(Guid characteristicId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ControlLimitDto>>($"api/quality/characteristics/{characteristicId}/control-limits", ct);
+
+    public Task<LimitBaselineDto> GetLimitBaselineAsync(
+        Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset from, DateTimeOffset to, IReadOnlyCollection<Guid> leftOut, CancellationToken ct = default) =>
+        GetAsync<LimitBaselineDto>(
+            $"api/quality/characteristics/{characteristicId}/control-limits/baseline?materialId={materialId}"
+            + (equipmentId is { } line ? $"&equipmentId={line}" : "")
+            + $"&from={Uri.EscapeDataString(from.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}"
+            + $"&to={Uri.EscapeDataString(to.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}"
+            + (leftOut.Count > 0 ? $"&leftOut={string.Join(',', leftOut)}" : ""), ct);
+
+    public Task<ControlLimitChangeResponse> ApproveControlLimitsAsync(Guid characteristicId, ApproveControlLimitsRequest request, CancellationToken ct = default) =>
+        SendAsync<ControlLimitChangeResponse>(HttpMethod.Post, $"api/quality/characteristics/{characteristicId}/control-limits", request, ct);
+
+    public Task<ControlLimitChangeResponse> SetManualControlLimitsAsync(Guid characteristicId, SetManualControlLimitsRequest request, CancellationToken ct = default) =>
+        SendAsync<ControlLimitChangeResponse>(HttpMethod.Post, $"api/quality/characteristics/{characteristicId}/control-limits/manual", request, ct);
+
+    public Task<ControlLimitChangeResponse> EndControlLimitsAsync(Guid limitId, EndControlLimitsRequest request, CancellationToken ct = default) =>
+        SendAsync<ControlLimitChangeResponse>(HttpMethod.Post, $"api/quality/control-limits/{limitId}/end", request, ct);
+
     public Task<IReadOnlyList<SpecSummaryDto>> ListSpecsAsync(CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<SpecSummaryDto>>("api/quality/specs", ct);
 

@@ -2588,6 +2588,112 @@ only the calculated rate changes. D-045's "no worker" is replaced by this one.
 **Not done:** limiting the recalculation to some lines or materials or a time of day; re-working an auto-accepted proposal at accept time (it is
 worked out once, then accepted under the lock).
 
+## Statistical process control (D-099, proposed)
+
+Real-time SPC is v1 capability 7 (charter): control charts on inspections and process variables, with rule violations raised as alerts.
+D-085 recorded results and specifications and kept the drafted SPC columns for later. Built in pieces on `features/spc`; this entry grows
+with them.
+
+**Decided** (the user's choices):
+- **Limits per characteristic + material, optionally one line.** The same profile on two extruders often varies differently. The line's
+  own limits are used first, then the material's.
+- **Run rules chosen per characteristic** from Nelson's 1–8, defaulting to the Western Electric set. In Nelson's numbering (which the seeded
+  `core.spc_rule` uses) that set is 1, 2, 5 and 6, not 1–4 as the draft's comment said; Nelson's rule 2 is 9 in a row on one side, where Western
+  Electric used 8.
+- **Limits from a baseline, reviewed, approved.** A period's subgroups (at least 20, a warning under 25) give limits; the reviewer may leave
+  out points and work them out again. Approving fixes them from a date (versioned, ended never deleted). Manual limits need a reason.
+  Permission `specs.manage`.
+
+**Chart statistics (piece 1).** Pure, in `Pulaski.Domain.Quality.Spc`. `ChartTypes` names the charts the drafted column allows (`xbar_r`,
+`xbar_s`, `i_mr`, `p`, `np`, `c`, `u`) and which fit a characteristic (`Problem`: individuals take one value, X-bar charts subgroups of 2–25;
+counts go on p, np, c or u). `ChartConstants` holds the published factors for n = 2–25 (A2, D3, D4, d2, A3, B3, B4, c4), tested against their
+definitions. `ControlLimits.Points` gives each subgroup's statistic and dispersion; `Compute` gives 3-sigma limits from a baseline, with sigma
+from the mean range, standard deviation or moving range within subgroups, never the overall spread. It leaves out unusable subgroups
+(and, for charts of one size, others) with why. Attribute lower limits stop at zero; p and u limits follow each sample's size (`At`).
+
+**Control limits (piece 2).** A characteristic's chart is now chosen: `chart_type` and `subgroup_size` (until chosen, individuals for a variable
+and p for an attribute; migration 0064 moves the fixed `np` of D-085 to `p`), set through `UpdateCharacteristicCommand` and refused while limits are
+in force or to come. `core.control_limit` is rebuilt per characteristic + material + optional line, with its chart, method, baseline window,
+results left out, note, period and approver.
+- **Review:** `GetLimitBaselineQuery` (`GET /api/quality/characteristics/{id}/control-limits/baseline`) reads the characteristic's results for
+  the material in a window (≤ 366 days; not excluded; on the line when one is given, which results against a job carry; at most 1000) and
+  returns the limits they give, warnings, and every result with its plotted value, whether it was left out or unusable, and whether it is beyond
+  the limits, beside the limits in force. Nothing is saved.
+- **Approve:** `ApproveControlLimitsCommand` locks the characteristic, works the limits out again from the same window less the same results, and
+  refuses (409) limits that differ from those reviewed (`ControlLimitPeriods.Same`). `SetManualControlLimitsCommand` takes limits with a reason.
+  Both start now or later (history keeps the limits it was charted with) and go through `ControlLimitPeriods.Place`: an open period of the same
+  scope that started earlier ends there; any other overlap is refused. `EndControlLimitsCommand` ends a period now. `ControlLimitPeriods.InForce`
+  takes the line's own limits, else the material's. Permission `specs.manage` to change, `quality.view` to see; events
+  `control_limit.approved` and `control_limit.ended`.
+- **Screens (piece 2b):** Characteristics shows each one's chart and lets **Change** pick it (fixed while limits are in force). Control limits
+  (`/quality/characteristics/{id}/control-limits`) lists every period and, with `specs.manage`, works out a baseline (material, line, period),
+  leaves out ticked results and works it out again, approves with a start and note, enters limits by hand, and ends them.
+
+**Charts (piece 3).** `GetControlChartQuery` (`GET /api/quality/characteristics/{id}/chart?siteId=&materialId=&equipmentId=&from=&to=`,
+`quality.view` at the site; ≤ 366 days) reads the site's results for the characteristic and material (on the line when given; not excluded; the
+latest 500), plots them with `ControlLimits.Points`, and gives each point the limits in force at its time for its line (`ControlLimitPeriods.InForce`;
+only limits for the characteristic's current chart and size), its own p/u limits (`At`), and whether it or its dispersion is beyond them. Results
+before any limits have none: limits start when approved and never rewrite history. Operate → Quality → Control charts (`/quality/charts`) draws
+it in SVG (`ControlChartPlot`): limits as dashed steps per point, beyond-limits points as diamonds in the danger colour, a dispersion plot for
+measured charts, hover text and a table view.
+
+**Run rules (piece 4).** `core.quality_characteristic.run_rules` (smallint[], default `{1,2,5,6}`, rule 1 always; `RunRules.Normalize`) replaces
+the drafted `core.characteristic_rule` (the app role can't delete rows, so a link table can't be edited; dropped by migration 0065).
+`RunRules.Check` (pure) marks each rule at the point that completes it, measuring each point against its own centre line and sigma
+(`ControlLimits.Sigma`: a third of the upper half-width, per point for p and u), so a run spans a change of limits; a point without limits breaks
+zone runs. Trend (3) and alternation (4) look at values alone. Rules run on the plotted statistic only; the dispersion plot keeps rule 1. The
+chart query and the baseline review return each point's `Rules`; the chart marks a point breaking rule 2–8 as a square in the warning colour,
+labelled with the rules' numbers. Characteristics → Change picks the rules.
+
+**Alerts (piece 5a).** Decided (the user's choices): **one open alert per chart** (site + characteristic + material + line), later breaks added to
+it; **closed in one step with a cause and the action**, by anyone with `quality.record` at the site; **never a lot hold** (holds stay with the
+specification's `hold_on_fail`, D-085); **events only**, no e-mail.
+- `SpcSignals.CheckAsync` runs in the result's recording transaction (`QualityRecorder`, so lot attributes too): it reads the result's chart back
+  `SpcEvaluation.LookBack` (16) results on exactly its line (`ListRuleWindowAsync`, the new result last among equals), evaluates them with
+  `SpcEvaluation.Evaluate` (shared with the chart query: points, limits in force for their line, `RunRules.Check`), and when the new result
+  completes a break against limits (the statistic's rules, plus rule 1 when its dispersion is beyond its limits) it upserts `core.spc_alert`
+  (`INSERT … ON CONFLICT` on `spc_alert_open_uq`: rules merged, breaks counted, first and last result kept), writes `ts.spc_violation`, and appends
+  `spc_alert.raised` (new) or `spc_alert.signalled` (added). The response carries `SpcRules` and `SpcAlertId`, and a note.
+- `CloseSpcAlertCommand` (`POST /api/quality/alerts/{id}/close?siteId=`) locks the alert, checks the cause is an active `spc_cause` reason
+  (its comment rule applying to the action), closes it and appends `spc_alert.closed`. `GET /api/quality/alerts?siteId=` lists open ones and
+  those closed in 30 days; `GET /api/quality/alerts/{id}?siteId=` adds the breaking results. Starter causes in `seed-reasons.sql`.
+- A back-dated result is judged by the results before it only; excluding a result never closes or changes an alert.
+- **Screens (5b):** Operate → Quality → SPC alerts (`/quality/alerts`) lists open alerts and those closed in 30 days, opens one with its breaking
+  results and a link to its chart, and closes it with a cause and action. The Overview's Open SPC alerts tile counts the site's open alerts
+  (`OverviewDto.OpenSpcAlerts`, `IOverviewReadStore.CountOpenSpcAlertsAsync`) and links to the list.
+
+**Process-value SPC (piece 6a).** Decided (the user's choices): **stored auto results** (`ts.quality_sample` source `auto`, so charts, limits,
+rules, alerts and specification checks apply unchanged); **consecutive snapshots** (at each interval end, the value held at n moments a minute
+apart, ending then; n the X-bar subgroup size, else 1); **tag bindings** (`core.characteristic_tag`, several per characteristic, one active per
+line); **skip intervals without a running job** (or with bad or stale readings).
+- `AutoSampling` (pure): clock-aligned interval ends after `sampled_through`, up to now less a 2-minute lag for late edge readings, at most 24
+  hours back (older ones skipped, not caught up); a moment's value is the last reading at or before it if good and at most 2 minutes old
+  (the edge sends at least once a minute while good).
+- `TagSampler` (`TagSamplingService` in the API, `Quality:AutoSampling:*`, every 60 s): each active binding is locked `FOR UPDATE SKIP LOCKED`,
+  so two rounds never take the same one; for each interval end it finds the run open on the binding's line (`FindRunningJobAsync`) and records
+  through `QualityRecorder` as the system, then moves `sampled_through` on, all in one transaction per binding (at most 96 ends a round).
+- Bindings: `AddTagBindingCommand` (a measured, active characteristic; an active `process_value` tag whose equipment is, or sits below, a line
+  that runs jobs; one active per characteristic and line) and `UpdateTagBindingCommand` (interval, on/off; back on starts from now),
+  `specs.manage`; `/api/quality/characteristics/{id}/tags`, `/api/quality/characteristic-tags/{id}`, `/api/quality/process-value-tags`.
+  Deleting a tag detaches and switches off its bindings (as it detached characteristics before). Migration 0067 drops the unused
+  `quality_characteristic.equipment_tag_id` and `sample_interval`.
+- **Screens (6b):** the characteristic's Control limits page has a Sampled from process values section (measured characteristics): its bindings
+  (site, line, tag, interval, sampled up to) with Change, Switch off and Switch on, and a form to add one from the active process-value tags.
+  Results show their source by name (*From process values*, recorded by *Automatic*).
+
+**Capability (piece 7).** Decided (the user's choices): **from the chart's results** (period and line shown; at least 20 subgroups), against the
+material's released specification now; **fixed bands** (Cpk/Ppk ≥ 1.33 capable, ≥ 1.00 marginal, else not capable; `CapabilityBands`);
+**defective rate for inspected characteristics**. `ProcessCapability.Measured` (pure): Cp/Cpk from the within-subgroup sigma (MR-bar ÷ d2(2),
+R-bar ÷ d2(n), S-bar ÷ c4(n)), Pp/Ppk from the overall sample standard deviation of every value; Cp and Pp need both limits, Cpk and Ppk take the
+nearer. `ProcessCapability.Counted`: defects ÷ inspected, and ppm. The chart query returns it as `ControlChartDto.Capability`, with
+`IsUnstable` when any point breaks a rule or its dispersion is beyond its limits; the chart page shows it with banded, labelled chips.
+
+**Live refresh (piece 8).** The control chart and SPC alert screens reload every 30 seconds, as the Overview does (D-070), through the shared
+`LiveStatus` component (timer, "Live, updated" pill, stale after a minute without a successful load, refresh button; text from `LiveRefresh`).
+The chart reloads what was shown, not the form's edits; a window that reached the present when loaded keeps up with it
+(`ControlChartView.RefreshedTo`: to = now + 1 minute), an earlier one stays fixed. The alerts list reloads with the open alert's detail, leaving a
+cause and action being typed. A failed reload keeps what was shown. Polling, not push: no new API.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

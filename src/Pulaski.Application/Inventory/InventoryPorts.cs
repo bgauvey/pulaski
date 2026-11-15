@@ -550,6 +550,7 @@ public static class ReasonKinds
     public const string RunEnd = "run_end";
     public const string Utilization = "utilization";
     public const string SampleExclusion = "sample_exclusion";
+    public const string SpcCause = "spc_cause";
 }
 
 /// <summary>A lot as Stock on a date works its past out from (#77): what it is now, with its movements counting after the time.</summary>

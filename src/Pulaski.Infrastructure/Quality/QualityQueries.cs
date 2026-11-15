@@ -11,7 +11,8 @@ namespace Pulaski.Infrastructure.Quality;
 internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityReadStore
 {
     private const string ListCharacteristics = $"""
-        SELECT {QualitySql.CharacteristicColumns}, u.code AS uom_code
+        SELECT {QualitySql.CharacteristicColumns}, u.code AS uom_code,
+               EXISTS (SELECT 1 FROM core.control_limit l WHERE l.characteristic_id = c.id AND (l.effective_to IS NULL OR l.effective_to > now())) AS has_limits
         FROM core.quality_characteristic c
         LEFT JOIN core.uom u ON u.id = c.uom_id
         WHERE c.site_id IS NULL
@@ -113,7 +114,227 @@ internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityRead
             Decimals = r.Decimals,
             IsActive = r.IsActive,
             Version = r.Version,
+            ChartType = r.ChartType,
+            SubgroupSize = r.SubgroupSize,
+            RunRules = r.RunRules,
+            HasLimits = r.HasLimits,
         })];
+    }
+
+    private const string ListLimits = $"""
+        SELECT {QualitySql.LimitColumns}, m.code AS material_code, m.name AS material_name, e.code AS equipment_code
+        FROM core.control_limit l
+        JOIN core.material m ON m.id = l.material_id
+        LEFT JOIN core.equipment e ON e.id = l.equipment_id
+        WHERE l.characteristic_id = @Id
+        ORDER BY m.code, e.code NULLS FIRST, l.effective_from DESC
+        """;
+
+    public async Task<IReadOnlyList<ControlLimitDto>> ListLimitsAsync(Guid characteristicId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<LimitListRow>(new CommandDefinition(ListLimits, new { Id = characteristicId }, cancellationToken: cancellationToken));
+        return [.. rows.Select(r => new ControlLimitDto
+        {
+            Id = r.Id,
+            CharacteristicId = r.CharacteristicId,
+            MaterialId = r.MaterialId,
+            MaterialCode = r.MaterialCode,
+            MaterialName = r.MaterialName,
+            EquipmentId = r.EquipmentId,
+            EquipmentCode = r.EquipmentCode,
+            ChartType = r.ChartType,
+            SubgroupSize = r.SubgroupSize,
+            CenterLine = r.CenterLine,
+            Ucl = r.Ucl,
+            Lcl = r.Lcl,
+            DispersionCenter = r.DispersionCenter,
+            DispersionUcl = r.DispersionUcl,
+            DispersionLcl = r.DispersionLcl,
+            Method = r.Method,
+            BaselineFrom = r.BaselineFrom,
+            BaselineTo = r.BaselineTo,
+            BaselineSubgroups = r.BaselineSubgroups,
+            LeftOutSampleIds = r.LeftOutSampleIds,
+            Note = r.Note,
+            EffectiveFrom = r.EffectiveFrom,
+            EffectiveTo = r.EffectiveTo,
+            ApprovedBy = r.ApprovedBy,
+            ApprovedAt = r.ApprovedAt,
+            EndedBy = r.EndedBy,
+            IsInEffect = r.EffectiveFrom <= now && (r.EffectiveTo is null || r.EffectiveTo > now),
+        })];
+    }
+
+    public async Task<IReadOnlyList<Domain.Quality.Spc.SpcSubgroup>> ListBaselineAsync(
+        Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<QualitySql.BaselineRow>(new CommandDefinition(QualitySql.Baseline, new
+        {
+            CharacteristicId = characteristicId,
+            MaterialId = materialId,
+            EquipmentId = equipmentId,
+            From = windowStart,
+            To = windowEnd,
+            Limit = IQualityReadStore.MaxBaseline,
+        }, cancellationToken: cancellationToken));
+        return [.. rows.Select(r => r.ToSubgroup())];
+    }
+
+    private const string ChartSamples = """
+        SELECT * FROM (
+            SELECT q.id AS sample_id, q.occurred_at, q.measured_values, q.inspected_count, q.defect_count, q.equipment_id, e.code AS line_code,
+                   coalesce(l.lot_number, 'Balance at ' || loc.code) AS lot_label, j.job_number
+            FROM ts.quality_sample q
+            LEFT JOIN core.equipment e ON e.id = q.equipment_id
+            LEFT JOIN core.lot l ON l.id = q.lot_id
+            LEFT JOIN core.equipment loc ON loc.id = l.location_equipment_id
+            LEFT JOIN core.job j ON j.id = q.job_id
+            WHERE q.site_id = @SiteId AND q.characteristic_id = @CharacteristicId AND q.material_id = @MaterialId AND NOT q.is_excluded
+              AND q.occurred_at >= @From AND q.occurred_at < @To
+              AND (@EquipmentId::uuid IS NULL OR q.equipment_id = @EquipmentId)
+            ORDER BY q.occurred_at DESC, q.id DESC
+            LIMIT @Limit) latest
+        ORDER BY occurred_at, sample_id
+        """;
+
+    private const string MaterialLimits = $"SELECT {QualitySql.LimitColumns} FROM core.control_limit l WHERE l.characteristic_id = @CharacteristicId AND l.material_id = @MaterialId";
+
+    private const string ChartCodes = """
+        SELECT (SELECT code FROM core.material WHERE id = @MaterialId) AS material_code,
+               (SELECT code FROM core.equipment WHERE id = @EquipmentId) AS equipment_code,
+               (SELECT u.code FROM core.quality_characteristic c JOIN core.uom u ON u.id = c.uom_id WHERE c.id = @CharacteristicId) AS uom_code
+        """;
+
+    public async Task<IReadOnlyList<ChartSample>> ListChartSamplesAsync(
+        Guid siteId, Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, int limit, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<QualitySql.ChartSampleRow>(new CommandDefinition(ChartSamples, new
+        {
+            SiteId = siteId,
+            CharacteristicId = characteristicId,
+            MaterialId = materialId,
+            EquipmentId = equipmentId,
+            From = windowStart,
+            To = windowEnd,
+            Limit = limit,
+        }, cancellationToken: cancellationToken));
+        return [.. rows.Select(r => r.ToSample())];
+    }
+
+    public async Task<IReadOnlyList<Domain.Quality.Spc.ControlLimit>> GetLimitsForMaterialAsync(Guid characteristicId, Guid materialId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. (await connection.QueryAsync<QualitySql.LimitRow>(new CommandDefinition(
+            MaterialLimits, new { CharacteristicId = characteristicId, MaterialId = materialId }, cancellationToken: cancellationToken))).Select(r => r.ToDomain())];
+    }
+
+    public async Task<(string MaterialCode, string? EquipmentCode, string? UomCode)> GetChartCodesAsync(
+        Guid characteristicId, Guid materialId, Guid? equipmentId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var r = await connection.QuerySingleAsync<ChartCodesRow>(new CommandDefinition(
+            ChartCodes, new { CharacteristicId = characteristicId, MaterialId = materialId, EquipmentId = equipmentId }, cancellationToken: cancellationToken));
+        return (r.MaterialCode ?? throw new Application.Errors.NotFoundException($"Material {materialId} not found."), r.EquipmentCode, r.UomCode);
+    }
+
+    private sealed class ChartCodesRow
+    {
+        public string? MaterialCode { get; init; }
+        public string? EquipmentCode { get; init; }
+        public string? UomCode { get; init; }
+    }
+
+    private const string AlertColumns = """
+        SELECT a.id, a.site_id, a.characteristic_id, c.code AS characteristic_code, c.name AS characteristic_name, a.material_id, m.code AS material_code,
+               a.equipment_id, e.code AS equipment_code, a.status, a.rules::int[] AS rules, a.breaks, a.first_sample_at, a.last_sample_at, a.raised_at,
+               a.closed_at, a.closed_by, r.name AS cause, a.action
+        FROM core.spc_alert a
+        JOIN core.quality_characteristic c ON c.id = a.characteristic_id
+        JOIN core.material m ON m.id = a.material_id
+        LEFT JOIN core.equipment e ON e.id = a.equipment_id
+        LEFT JOIN core.reason_code r ON r.id = a.cause_reason_code_id
+        """;
+
+    private const string ListAlerts = AlertColumns + "\nWHERE a.site_id = @SiteId AND (a.status = 'open' OR a.closed_at >= @Since)\nORDER BY (a.status = 'open') DESC, a.last_sample_at DESC";
+
+    private const string GetAlert = AlertColumns + "\nWHERE a.site_id = @SiteId AND a.id = @Id";
+
+    private const string AlertViolations = """
+        SELECT v.sample_id, v.occurred_at, v.rules::int[] AS rules, q.mean, q.inspected_count AS inspected, q.defect_count AS defects,
+               coalesce(l.lot_number, 'Balance at ' || loc.code) AS lot_label, j.job_number
+        FROM ts.spc_violation v
+        LEFT JOIN ts.quality_sample q ON q.id = v.sample_id AND q.occurred_at = v.occurred_at
+        LEFT JOIN core.lot l ON l.id = q.lot_id
+        LEFT JOIN core.equipment loc ON loc.id = l.location_equipment_id
+        LEFT JOIN core.job j ON j.id = q.job_id
+        WHERE v.alert_id = @Id
+        ORDER BY v.occurred_at, v.id
+        """;
+
+    public async Task<IReadOnlyList<SpcAlertDto>> ListAlertsAsync(Guid siteId, DateTimeOffset closedSince, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return (await connection.QueryAsync<SpcAlertDto>(new CommandDefinition(ListAlerts, new { SiteId = siteId, Since = closedSince }, cancellationToken: cancellationToken))).AsList();
+    }
+
+    public async Task<SpcAlertDto?> GetAlertAsync(Guid siteId, Guid id, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var alert = await connection.QuerySingleOrDefaultAsync<SpcAlertDto>(new CommandDefinition(GetAlert, new { SiteId = siteId, Id = id }, cancellationToken: cancellationToken));
+        if (alert is null)
+        {
+            return null;
+        }
+
+        var violations = await connection.QueryAsync<SpcViolationDto>(new CommandDefinition(AlertViolations, new { Id = id }, cancellationToken: cancellationToken));
+        return alert with { Violations = violations.AsList() };
+    }
+
+    private const string Bindings = """
+        SELECT b.id, b.characteristic_id, b.equipment_tag_id, t.source_address AS tag_address, te.code AS equipment_code, b.line_id, l.code AS line_code,
+               b.site_id, s.code AS site_code, b.interval_minutes::int AS interval_minutes, b.is_active, b.sampled_through, b.xmin::text::bigint AS version
+        FROM core.characteristic_tag b
+        JOIN core.equipment l ON l.id = b.line_id
+        JOIN core.equipment s ON s.id = b.site_id
+        LEFT JOIN core.equipment_tag t ON t.id = b.equipment_tag_id
+        LEFT JOIN core.equipment te ON te.id = t.equipment_id
+        WHERE b.characteristic_id = @Id
+        ORDER BY b.is_active DESC, s.code, l.code, b.created_at DESC
+        """;
+
+    private const string ProcessValueTags = """
+        SELECT t.id, t.source_address, e.code AS equipment_code, line.code AS line_code, s.code AS site_code, u.code AS uom_code
+        FROM core.equipment_tag t
+        JOIN core.equipment e ON e.id = t.equipment_id
+        JOIN core.equipment s ON s.id = CASE WHEN e.level = 'site' THEN e.id ELSE e.site_id END
+        LEFT JOIN core.uom u ON u.id = t.uom_id
+        LEFT JOIN LATERAL (
+            SELECT a.code FROM core.equipment_closure c JOIN core.equipment a ON a.id = c.ancestor_id
+            WHERE c.descendant_id = e.id AND a.can_run_job ORDER BY c.depth LIMIT 1) line ON true
+        WHERE t.is_active AND t.tag_role = 'process_value'
+        ORDER BY s.code, e.code, t.source_address
+        """;
+
+    public async Task<IReadOnlyList<TagBindingDto>> ListBindingsAsync(Guid characteristicId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return (await connection.QueryAsync<TagBindingDto>(new CommandDefinition(Bindings, new { Id = characteristicId }, cancellationToken: cancellationToken))).AsList();
+    }
+
+    public async Task<IReadOnlyList<ProcessValueTagDto>> ListProcessValueTagsAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return (await connection.QueryAsync<ProcessValueTagDto>(new CommandDefinition(ProcessValueTags, cancellationToken: cancellationToken))).AsList();
+    }
+
+    private sealed class LimitListRow : QualitySql.LimitRow
+    {
+        public string MaterialCode { get; init; } = "";
+        public string MaterialName { get; init; } = "";
+        public string? EquipmentCode { get; init; }
     }
 
     public async Task<IReadOnlyList<Characteristic>> GetCharacteristicsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
@@ -240,6 +461,10 @@ internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityRead
         public int Decimals { get; init; }
         public bool IsActive { get; init; }
         public long Version { get; init; }
+        public string ChartType { get; init; } = "";
+        public int SubgroupSize { get; init; } = 1;
+        public int[] RunRules { get; init; } = [];
+        public bool HasLimits { get; init; }
     }
 
     private sealed class VersionSummaryRow

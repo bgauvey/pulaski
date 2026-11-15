@@ -11,7 +11,8 @@ namespace Pulaski.Infrastructure.Quality;
 internal static class QualitySql
 {
     public const string CharacteristicColumns = """
-        c.id, c.code, c.name, c.description, c.data_kind, c.uom_id, c.decimals, c.is_active, c.xmin::text::bigint AS version
+        c.id, c.code, c.name, c.description, c.data_kind, c.uom_id, c.decimals, c.is_active, c.chart_type, c.subgroup_size::int AS subgroup_size, c.run_rules::int[] AS run_rules,
+        c.xmin::text::bigint AS version
         """;
 
     public const string Characteristics = $"SELECT {CharacteristicColumns} FROM core.quality_characteristic c WHERE c.id = ANY(@Ids)";
@@ -20,6 +21,85 @@ internal static class QualitySql
         v.id, v.spec_id, v.version_number AS number, v.status, v.definition::text AS definition_json, v.released_at, v.released_by, v.note,
         v.xmin::text::bigint AS version
         """;
+
+    public const string LimitColumns = """
+        l.id, l.characteristic_id, l.material_id, l.equipment_id, l.chart_type, l.subgroup_size::int AS subgroup_size, l.center_line, l.ucl, l.lcl,
+        l.dispersion_center, l.dispersion_ucl, l.dispersion_lcl, l.method, l.baseline_from, l.baseline_to, l.baseline_subgroups, l.left_out_sample_ids,
+        l.note, l.effective_from, l.effective_to, l.approved_by, l.approved_at, l.ended_by
+        """;
+
+    // Results for a baseline: the characteristic's, for the material, not excluded, on the line when one is given.
+    public const string Baseline = """
+        SELECT q.id AS sample_id, q.occurred_at, q.measured_values, q.inspected_count, q.defect_count
+        FROM ts.quality_sample q
+        WHERE q.characteristic_id = @CharacteristicId AND q.material_id = @MaterialId AND NOT q.is_excluded
+          AND q.occurred_at >= @From AND q.occurred_at < @To
+          AND (@EquipmentId::uuid IS NULL OR q.equipment_id = @EquipmentId)
+        ORDER BY q.occurred_at, q.id
+        LIMIT @Limit
+        """;
+
+    internal sealed class ChartSampleRow
+    {
+        public Guid SampleId { get; init; }
+        public DateTimeOffset OccurredAt { get; init; }
+        public decimal[]? MeasuredValues { get; init; }
+        public int? InspectedCount { get; init; }
+        public int? DefectCount { get; init; }
+        public Guid? EquipmentId { get; init; }
+        public string? LineCode { get; init; }
+        public string? LotLabel { get; init; }
+        public string? JobNumber { get; init; }
+
+        public ChartSample ToSample() => new(
+            new(SampleId, OccurredAt, MeasuredValues is { } v ? [.. v.Select(x => (double)x)] : null, InspectedCount, DefectCount),
+            EquipmentId, LineCode, LotLabel, JobNumber);
+    }
+
+    internal sealed class BaselineRow
+    {
+        public Guid SampleId { get; init; }
+        public DateTimeOffset OccurredAt { get; init; }
+        public decimal[]? MeasuredValues { get; init; }
+        public int? InspectedCount { get; init; }
+        public int? DefectCount { get; init; }
+
+        public Domain.Quality.Spc.SpcSubgroup ToSubgroup() =>
+            new(SampleId, OccurredAt, MeasuredValues is { } v ? [.. v.Select(x => (double)x)] : null, InspectedCount, DefectCount);
+    }
+
+    internal class LimitRow
+    {
+        public Guid Id { get; init; }
+        public Guid CharacteristicId { get; init; }
+        public Guid MaterialId { get; init; }
+        public Guid? EquipmentId { get; init; }
+        public string ChartType { get; init; } = "";
+        public int SubgroupSize { get; init; }
+        public double CenterLine { get; init; }
+        public double Ucl { get; init; }
+        public double Lcl { get; init; }
+        public double? DispersionCenter { get; init; }
+        public double? DispersionUcl { get; init; }
+        public double? DispersionLcl { get; init; }
+        public string Method { get; init; } = "";
+        public DateTimeOffset? BaselineFrom { get; init; }
+        public DateTimeOffset? BaselineTo { get; init; }
+        public int? BaselineSubgroups { get; init; }
+        public Guid[] LeftOutSampleIds { get; init; } = [];
+        public string? Note { get; init; }
+        public DateTimeOffset EffectiveFrom { get; init; }
+        public DateTimeOffset? EffectiveTo { get; init; }
+        public string ApprovedBy { get; init; } = "";
+        public DateTimeOffset ApprovedAt { get; init; }
+        public string? EndedBy { get; init; }
+
+        public Domain.Quality.Spc.ControlLimit ToDomain() => new(
+            Id, CharacteristicId, MaterialId, EquipmentId, ChartType, SubgroupSize,
+            new(CenterLine, Ucl, Lcl, DispersionCenter, DispersionUcl, DispersionLcl), Method,
+            BaselineFrom is { } from && BaselineTo is { } to ? new(from, to, BaselineSubgroups ?? 0, LeftOutSampleIds) : null,
+            Note, EffectiveFrom, EffectiveTo, ApprovedBy, ApprovedAt);
+    }
 
     internal sealed class CharacteristicRow
     {
@@ -31,9 +111,17 @@ internal static class QualitySql
         public Guid? UomId { get; init; }
         public int Decimals { get; init; }
         public bool IsActive { get; init; }
+        public string ChartType { get; init; } = "";
+        public int SubgroupSize { get; init; } = 1;
+        public int[] RunRules { get; init; } = [];
         public long Version { get; init; }
 
-        public Characteristic ToDomain() => new(Id, Code, Name, Description, DataKind, UomId, Decimals, IsActive);
+        public Characteristic ToDomain() => new(Id, Code, Name, Description, DataKind, UomId, Decimals, IsActive)
+        {
+            ChartType = ChartType,
+            SubgroupSize = SubgroupSize,
+            RunRules = RunRules,
+        };
     }
 
     internal sealed class VersionRow
@@ -66,14 +154,15 @@ internal sealed class QualityRepository(DbSession session) : IQualityRepository
 
     private const string InsertCharacteristic = """
         INSERT INTO core.quality_characteristic (id, site_id, code, name, description, data_kind, chart_type, subgroup_size, uom_id, decimals, is_active,
-                                                 created_at, updated_at)
-        VALUES (@Id, NULL, @Code, @Name, @Description, @DataKind, @ChartType, 1, @UomId, @Decimals, @IsActive, @At, @At)
+                                                 run_rules, created_at, updated_at)
+        VALUES (@Id, NULL, @Code, @Name, @Description, @DataKind, @ChartType, @SubgroupSize, @UomId, @Decimals, @IsActive, @RunRules, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     private const string UpdateCharacteristic = """
         UPDATE core.quality_characteristic
-        SET name = @Name, description = @Description, uom_id = @UomId, decimals = @Decimals, is_active = @IsActive, updated_at = @At
+        SET name = @Name, description = @Description, uom_id = @UomId, decimals = @Decimals, is_active = @IsActive, chart_type = @ChartType,
+            subgroup_size = @SubgroupSize, run_rules = @RunRules, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -287,6 +376,323 @@ internal sealed class QualityRepository(DbSession session) : IQualityRepository
     public Task ExcludeResultAsync(Guid id, DateTimeOffset occurredAt, Guid reasonId, string? note, string by, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteAsync(Exclude, new { Id = id, OccurredAt = occurredAt, ReasonId = reasonId, Note = note, By = by, At = at }, cancellationToken);
 
+    private const string LineCode = "SELECT code FROM core.equipment WHERE id = @Id AND can_run_job";
+
+    private const string ScopeLimits = $"""
+        SELECT {QualitySql.LimitColumns} FROM core.control_limit l
+        WHERE l.characteristic_id = @CharacteristicId AND l.material_id = @MaterialId AND l.equipment_id IS NOT DISTINCT FROM @EquipmentId
+        ORDER BY l.effective_from
+        """;
+
+    private const string LimitById = $"SELECT {QualitySql.LimitColumns} FROM core.control_limit l WHERE l.id = @Id";
+
+    private const string OpenLimits = "SELECT EXISTS (SELECT 1 FROM core.control_limit WHERE characteristic_id = @Id AND (effective_to IS NULL OR effective_to > @At))";
+
+    private const string InsertLimit = """
+        INSERT INTO core.control_limit (id, characteristic_id, material_id, equipment_id, chart_type, subgroup_size, center_line, ucl, lcl,
+                                        dispersion_center, dispersion_ucl, dispersion_lcl, method, baseline_from, baseline_to, baseline_subgroups,
+                                        left_out_sample_ids, note, effective_from, effective_to, approved_by, approved_at, created_at, updated_at)
+        VALUES (@Id, @CharacteristicId, @MaterialId, @EquipmentId, @ChartType, @SubgroupSize, @Center, @Ucl, @Lcl,
+                @DispersionCenter, @DispersionUcl, @DispersionLcl, @Method, @BaselineFrom, @BaselineTo, @BaselineSubgroups,
+                @LeftOut, @Note, @EffectiveFrom, @EffectiveTo, @ApprovedBy, @ApprovedAt, @ApprovedAt, @ApprovedAt)
+        """;
+
+    private const string EndLimit = "UPDATE core.control_limit SET effective_to = @EndsAt, ended_by = @By, updated_at = @At WHERE id = @Id";
+
+    public Task<string?> GetLineCodeAsync(Guid id, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<string>(LineCode, new { Id = id }, cancellationToken);
+
+    public async Task<IReadOnlyList<Domain.Quality.Spc.ControlLimit>> GetLimitsAsync(Guid characteristicId, Guid materialId, Guid? equipmentId, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<QualitySql.LimitRow>(ScopeLimits, new { CharacteristicId = characteristicId, MaterialId = materialId, EquipmentId = equipmentId }, cancellationToken))
+            .Select(r => r.ToDomain())];
+
+    public async Task<Domain.Quality.Spc.ControlLimit?> GetLimitAsync(Guid id, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<QualitySql.LimitRow>(LimitById, new { Id = id }, cancellationToken))?.ToDomain();
+
+    public Task<bool> HasOpenLimitsAsync(Guid characteristicId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(OpenLimits, new { Id = characteristicId, At = at }, cancellationToken);
+
+    public Task InsertLimitAsync(Domain.Quality.Spc.ControlLimit l, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(InsertLimit, new
+        {
+            l.Id,
+            l.CharacteristicId,
+            l.MaterialId,
+            l.EquipmentId,
+            l.ChartType,
+            SubgroupSize = (short)l.SubgroupSize,
+            l.Limits.Center,
+            l.Limits.Ucl,
+            l.Limits.Lcl,
+            l.Limits.DispersionCenter,
+            l.Limits.DispersionUcl,
+            l.Limits.DispersionLcl,
+            l.Method,
+            BaselineFrom = l.Baseline?.From,
+            BaselineTo = l.Baseline?.To,
+            BaselineSubgroups = l.Baseline?.Subgroups,
+            LeftOut = (l.Baseline?.LeftOut ?? []).ToArray(),
+            l.Note,
+            l.EffectiveFrom,
+            l.EffectiveTo,
+            l.ApprovedBy,
+            l.ApprovedAt,
+        }, cancellationToken);
+
+    public Task EndLimitAsync(Guid id, DateTimeOffset endsAt, string? by, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(EndLimit, new { Id = id, EndsAt = endsAt, By = by, At = at }, cancellationToken);
+
+    public async Task<IReadOnlyList<Domain.Quality.Spc.SpcSubgroup>> ListBaselineAsync(
+        Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<QualitySql.BaselineRow>(QualitySql.Baseline, new
+        {
+            CharacteristicId = characteristicId,
+            MaterialId = materialId,
+            EquipmentId = equipmentId,
+            From = windowStart,
+            To = windowEnd,
+            Limit = IQualityReadStore.MaxBaseline,
+        }, cancellationToken)).Select(r => r.ToSubgroup())];
+
+    // The latest results on exactly this line (or without one) up to a time, the new one last among equals.
+    private const string RuleWindow = """
+        SELECT * FROM (
+            SELECT q.id AS sample_id, q.occurred_at, q.measured_values, q.inspected_count, q.defect_count, q.equipment_id,
+                   NULL::text AS line_code, NULL::text AS lot_label, NULL::text AS job_number, (q.id = @LastId) AS is_last
+            FROM ts.quality_sample q
+            WHERE q.site_id = @SiteId AND q.characteristic_id = @CharacteristicId AND q.material_id = @MaterialId AND NOT q.is_excluded
+              AND q.equipment_id IS NOT DISTINCT FROM @EquipmentId AND q.occurred_at <= @At
+            ORDER BY q.occurred_at DESC, (q.id = @LastId) DESC, q.id DESC
+            LIMIT @Count) w
+        ORDER BY occurred_at, is_last, sample_id
+        """;
+
+    private const string MaterialLimits = $"SELECT {QualitySql.LimitColumns} FROM core.control_limit l WHERE l.characteristic_id = @CharacteristicId AND l.material_id = @MaterialId";
+
+    private const string RaiseAlert = """
+        INSERT INTO core.spc_alert AS a (id, site_id, characteristic_id, material_id, equipment_id, status, rules, breaks,
+                                         first_sample_id, first_sample_at, last_sample_id, last_sample_at, raised_at, created_at, updated_at)
+        VALUES (@Id, @SiteId, @CharacteristicId, @MaterialId, @EquipmentId, 'open', @Rules, 1,
+                @SampleId, @SampleAt, @SampleId, @SampleAt, @At, @At, @At)
+        ON CONFLICT (site_id, characteristic_id, material_id, (coalesce(equipment_id, '00000000-0000-0000-0000-000000000000'::uuid))) WHERE status = 'open'
+        DO UPDATE SET rules = ARRAY(SELECT DISTINCT r FROM unnest(a.rules || excluded.rules) r ORDER BY r),
+                      breaks = a.breaks + 1,
+                      last_sample_id = CASE WHEN excluded.last_sample_at >= a.last_sample_at THEN excluded.last_sample_id ELSE a.last_sample_id END,
+                      last_sample_at = greatest(a.last_sample_at, excluded.last_sample_at),
+                      first_sample_id = CASE WHEN excluded.first_sample_at < a.first_sample_at THEN excluded.first_sample_id ELSE a.first_sample_id END,
+                      first_sample_at = least(a.first_sample_at, excluded.first_sample_at),
+                      updated_at = excluded.updated_at
+        RETURNING a.id AS alert_id, (a.xmax = 0) AS is_new
+        """;
+
+    private const string InsertViolation = """
+        INSERT INTO ts.spc_violation (id, occurred_at, site_id, characteristic_id, material_id, equipment_id, sample_id, rules, alert_id, recorded_at)
+        VALUES (@Id, @SampleAt, @SiteId, @CharacteristicId, @MaterialId, @EquipmentId, @SampleId, @Rules, @AlertId, @At)
+        """;
+
+    private const string AlertForUpdate = """
+        SELECT id, site_id, characteristic_id, status, rules::int[] AS rules, breaks FROM core.spc_alert WHERE id = @Id FOR UPDATE
+        """;
+
+    private const string CloseAlert = """
+        UPDATE core.spc_alert
+        SET status = 'closed', closed_at = @At, closed_by = @By, cause_reason_code_id = @CauseId, action = @Action, updated_at = @At
+        WHERE id = @Id AND status = 'open'
+        """;
+
+    public async Task<IReadOnlyList<ChartSample>> ListRuleWindowAsync(
+        Guid siteId, Guid characteristicId, Guid materialId, Guid? equipmentId, DateTimeOffset at, Guid lastSampleId, int count, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<QualitySql.ChartSampleRow>(RuleWindow, new
+        {
+            SiteId = siteId,
+            CharacteristicId = characteristicId,
+            MaterialId = materialId,
+            EquipmentId = equipmentId,
+            At = at,
+            LastId = lastSampleId,
+            Count = count,
+        }, cancellationToken)).Select(r => r.ToSample())];
+
+    public async Task<IReadOnlyList<Domain.Quality.Spc.ControlLimit>> GetMaterialLimitsAsync(Guid characteristicId, Guid materialId, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<QualitySql.LimitRow>(MaterialLimits, new { CharacteristicId = characteristicId, MaterialId = materialId }, cancellationToken))
+            .Select(r => r.ToDomain())];
+
+    public async Task<(Guid AlertId, bool IsNew)> RaiseAlertAsync(SpcBreak signal, Guid newId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var row = (await session.QuerySingleOrDefaultAsync<RaisedRow>(RaiseAlert, ViolationArgs(signal, newId, Guid.Empty, at), cancellationToken))!;
+        return (row.AlertId, row.IsNew);
+    }
+
+    public Task InsertViolationAsync(SpcBreak signal, Guid id, Guid alertId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(InsertViolation, ViolationArgs(signal, id, alertId, at), cancellationToken);
+
+    public async Task<SpcAlertRecord?> GetAlertForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<AlertRow>(AlertForUpdate, new { Id = id }, cancellationToken) is { } r
+            ? new SpcAlertRecord(r.Id, r.SiteId, r.CharacteristicId, r.Status, r.Rules, r.Breaks)
+            : null;
+
+    public Task CloseAlertAsync(Guid id, Guid causeReasonId, string action, string by, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(CloseAlert, new { Id = id, CauseId = causeReasonId, Action = action, By = by, At = at }, cancellationToken);
+
+    private static object ViolationArgs(SpcBreak s, Guid id, Guid alertId, DateTimeOffset at) => new
+    {
+        Id = id,
+        s.SiteId,
+        s.CharacteristicId,
+        s.MaterialId,
+        s.EquipmentId,
+        s.SampleId,
+        s.SampleAt,
+        Rules = s.Rules.Select(r => (short)r).ToArray(),
+        AlertId = alertId,
+        At = at,
+    };
+
+    private sealed class RaisedRow
+    {
+        public Guid AlertId { get; init; }
+        public bool IsNew { get; init; }
+    }
+
+    private sealed class AlertRow
+    {
+        public Guid Id { get; init; }
+        public Guid SiteId { get; init; }
+        public Guid CharacteristicId { get; init; }
+        public string Status { get; init; } = "";
+        public int[] Rules { get; init; } = [];
+        public int Breaks { get; init; }
+    }
+
+    // The tag's line: its equipment or the nearest above it that runs jobs.
+    private const string BindableTag = """
+        SELECT t.id AS tag_id, t.tag_role AS role, t.is_active, CASE WHEN e.level = 'site' THEN e.id ELSE e.site_id END AS site_id,
+               line.id AS line_id, line.code AS line_code
+        FROM core.equipment_tag t
+        JOIN core.equipment e ON e.id = t.equipment_id
+        LEFT JOIN LATERAL (
+            SELECT a.id, a.code FROM core.equipment_closure c JOIN core.equipment a ON a.id = c.ancestor_id
+            WHERE c.descendant_id = e.id AND a.can_run_job ORDER BY c.depth LIMIT 1) line ON true
+        WHERE t.id = @Id
+        """;
+
+    private const string ActiveBindingOnLine = "SELECT EXISTS (SELECT 1 FROM core.characteristic_tag WHERE characteristic_id = @CharacteristicId AND line_id = @LineId AND is_active)";
+
+    private const string BindingColumns = "id, characteristic_id, equipment_tag_id, line_id, site_id, interval_minutes::int AS interval_minutes, is_active, sampled_through";
+
+    private const string InsertBinding = """
+        INSERT INTO core.characteristic_tag (id, characteristic_id, equipment_tag_id, line_id, site_id, interval_minutes, is_active, sampled_through, created_at, updated_at)
+        VALUES (@Id, @CharacteristicId, @EquipmentTagId, @LineId, @SiteId, @IntervalMinutes, @IsActive, @SampledThrough, @At, @At)
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string BindingForUpdate = $"SELECT {BindingColumns}, xmin::text::bigint AS version FROM core.characteristic_tag WHERE id = @Id FOR UPDATE";
+
+    private const string UpdateBinding = """
+        UPDATE core.characteristic_tag SET interval_minutes = @IntervalMinutes, is_active = @IsActive, sampled_through = @SampledThrough, updated_at = @At
+        WHERE id = @Id
+        RETURNING xmin::text::bigint
+        """;
+
+    private const string ActiveBindings = "SELECT id FROM core.characteristic_tag WHERE is_active ORDER BY id";
+
+    private const string LockBinding = $"SELECT {BindingColumns}, xmin::text::bigint AS version FROM core.characteristic_tag WHERE id = @Id AND is_active FOR UPDATE SKIP LOCKED";
+
+    private const string Readings = """
+        (SELECT occurred_at AS at, value_num AS value, quality >= 192 AS is_good FROM ts.process_value
+         WHERE equipment_tag_id = @TagId AND occurred_at < @From AND value_num IS NOT NULL ORDER BY occurred_at DESC LIMIT 1)
+        UNION ALL
+        (SELECT occurred_at, value_num, quality >= 192 FROM ts.process_value
+         WHERE equipment_tag_id = @TagId AND occurred_at >= @From AND occurred_at <= @To AND value_num IS NOT NULL)
+        """;
+
+    private const string RunningJob = """
+        SELECT job_id FROM core.job_run
+        WHERE equipment_id = @LineId AND started_at <= @At AND (ended_at IS NULL OR ended_at > @At)
+        ORDER BY started_at DESC LIMIT 1
+        """;
+
+    private const string AdvanceBinding = "UPDATE core.characteristic_tag SET sampled_through = @Through, updated_at = @At WHERE id = @Id";
+
+    public async Task<BindableTag?> GetBindableTagAsync(Guid tagId, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<BindableRow>(BindableTag, new { Id = tagId }, cancellationToken) is { } r
+            ? new BindableTag(r.TagId, r.Role, r.IsActive, r.SiteId, r.LineId, r.LineCode)
+            : null;
+
+    public Task<bool> HasActiveBindingAsync(Guid characteristicId, Guid lineId, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<bool>(ActiveBindingOnLine, new { CharacteristicId = characteristicId, LineId = lineId }, cancellationToken);
+
+    public Task<long> InsertBindingAsync(TagBinding b, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(InsertBinding, BindingArgs(b, at), cancellationToken);
+
+    public async Task<Versioned<TagBinding>?> GetBindingForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        await session.QuerySingleOrDefaultAsync<BindingRow>(BindingForUpdate, new { Id = id }, cancellationToken) is { } r ? new(r.ToBinding(), r.Version) : null;
+
+    public Task<long> UpdateBindingAsync(TagBinding b, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteScalarAsync<long>(UpdateBinding, BindingArgs(b, at), cancellationToken);
+
+    public Task<IReadOnlyList<Guid>> ListActiveBindingsAsync(CancellationToken cancellationToken) =>
+        session.QueryAsync<Guid>(ActiveBindings, null, cancellationToken);
+
+    public async Task<TagBinding?> LockBindingAsync(Guid id, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<BindingRow>(LockBinding, new { Id = id }, cancellationToken))?.ToBinding();
+
+    public async Task<IReadOnlyList<Domain.Quality.Spc.ProcessReading>> ListReadingsAsync(
+        Guid tagId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken) =>
+        [.. (await session.QueryAsync<ReadingRow>(Readings, new { TagId = tagId, From = windowStart, To = windowEnd }, cancellationToken))
+            .Select(r => new Domain.Quality.Spc.ProcessReading(r.At, r.Value, r.IsGood))];
+
+    public async Task<Guid?> FindRunningJobAsync(Guid lineId, DateTimeOffset at, CancellationToken cancellationToken) =>
+        (await session.QueryAsync<Guid>(RunningJob, new { LineId = lineId, At = at }, cancellationToken)) is [var job, ..] ? job : null;
+
+    public Task AdvanceBindingAsync(Guid id, DateTimeOffset sampledThrough, DateTimeOffset at, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(AdvanceBinding, new { Id = id, Through = sampledThrough, At = at }, cancellationToken);
+
+    private static object BindingArgs(TagBinding b, DateTimeOffset at) => new
+    {
+        b.Id,
+        b.CharacteristicId,
+        b.EquipmentTagId,
+        b.LineId,
+        b.SiteId,
+        IntervalMinutes = (short)b.IntervalMinutes,
+        b.IsActive,
+        b.SampledThrough,
+        At = at,
+    };
+
+    private sealed class BindableRow
+    {
+        public Guid TagId { get; init; }
+        public string Role { get; init; } = "";
+        public bool IsActive { get; init; }
+        public Guid SiteId { get; init; }
+        public Guid? LineId { get; init; }
+        public string? LineCode { get; init; }
+    }
+
+    private sealed class BindingRow
+    {
+        public Guid Id { get; init; }
+        public Guid CharacteristicId { get; init; }
+        public Guid? EquipmentTagId { get; init; }
+        public Guid LineId { get; init; }
+        public Guid SiteId { get; init; }
+        public int IntervalMinutes { get; init; }
+        public bool IsActive { get; init; }
+        public DateTimeOffset SampledThrough { get; init; }
+        public long Version { get; init; }
+
+        public TagBinding ToBinding() => new(Id, CharacteristicId, EquipmentTagId, LineId, SiteId, IntervalMinutes, IsActive, SampledThrough);
+    }
+
+    private sealed class ReadingRow
+    {
+        public DateTimeOffset At { get; init; }
+        public double Value { get; init; }
+        public bool IsGood { get; init; }
+    }
+
     private static object CharacteristicArgs(Characteristic c, DateTimeOffset at) => new
     {
         c.Id,
@@ -295,6 +701,8 @@ internal sealed class QualityRepository(DbSession session) : IQualityRepository
         c.Description,
         c.DataKind,
         c.ChartType,
+        SubgroupSize = (short)c.SubgroupSize,
+        RunRules = c.RunRules.Select(r => (short)r).ToArray(),
         c.UomId,
         Decimals = (short)c.Decimals,
         c.IsActive,

@@ -33,5 +33,12 @@ internal sealed class OverviewQueries(NpgsqlDataSource dataSource) : IOverviewRe
         return (row.OnHold, row.Quarantine);
     }
 
+    public async Task<int> CountOpenSpcAlertsAsync(Guid siteId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT count(*)::int FROM core.spc_alert WHERE site_id = @SiteId AND status = 'open'", new { SiteId = siteId }, cancellationToken: cancellationToken));
+    }
+
     private sealed record HeldRow(int OnHold, int Quarantine);
 }

@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<Inventory.FeedCounterPoster>();
         services.AddScoped<Inventory.AllocationAutoRefresh>();
         services.AddScoped<Scheduling.RateRefreshRunner>();
+        services.AddScoped<Quality.TagSampler>();
         services.AddScoped<Materials.ScheduledConnections>();
         services.AddScoped<Labor.QualificationExpiryNotices>();
 

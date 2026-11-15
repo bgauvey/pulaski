@@ -21,6 +21,9 @@ public sealed record OverviewDto
     /// <summary>Lots at the site with stock, on hold and in quarantine.</summary>
     public int LotsOnHold { get; init; }
     public int LotsInQuarantine { get; init; }
+
+    /// <summary>SPC alerts at the site waiting for someone to respond (D-099).</summary>
+    public int OpenSpcAlerts { get; init; }
 }
 
 /// <summary>A line on the Overview: its live state and what it has done in its shift so far.</summary>

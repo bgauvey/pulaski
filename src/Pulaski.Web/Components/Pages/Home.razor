@@ -3,7 +3,7 @@
 @* The plant overview (design/admin-dashboard-brief.md). In five seconds it answers: which lines
    are running, which are not and why, and what needs a person. Live state, each line's shift so far
    and held lots come from GET /overview (D-070); OEE from the machine report; labor to approve from
-   the shift review. SPC alerts remain a placeholder until quality checks exist. *@
+   the shift review. *@
 @implements IDisposable
 @using System.Globalization
 @using Pulaski.Contracts.MachineData
@@ -483,8 +483,10 @@
                 yield return new("stop", "Uncoded stops", uncoded, uncoded == 0 ? "All coded" : "Give them a reason", "danger", machines, uncodedHelp);
             }
 
-            yield return new("spc", "Open SPC alerts", 0, "Needs quality checks", "danger", null,
-                "Control-chart rule violations waiting for someone to respond.", IsPlaceholder: true);
+            var alerts = _overview?.OpenSpcAlerts ?? 0;
+            yield return new("spc", "Open SPC alerts", alerts, alerts == 0 ? "None" : "Find the cause", "danger",
+                User.Can(PermissionCodes.QualityView, _siteId) ? "quality/alerts" : null,
+                "Control charts that signalled (beyond their limits, or a run rule) and wait for someone to record the cause and what was done.");
             yield return new("clock", "Orders behind", behind, behind == 0 ? "All on time" : "Late or slipping", "danger", "work-orders",
                 "Open orders projected to finish after their due date, or to start more than 15 minutes after their published baseline.");
             var (onHold, quarantine) = (_overview?.LotsOnHold ?? 0, _overview?.LotsInQuarantine ?? 0);

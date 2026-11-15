@@ -43,7 +43,14 @@ INSERT INTO core.reason_code (site_id, reason_kind, code, name, requires_comment
     (NULL, 'run_end', 'OTHER',     'Other',                  true,  90),
     -- Why a quality result is left out (#65).
     (NULL, 'sample_exclusion', 'ENTRY-ERROR',        'Entered in error',          true, 10),
-    (NULL, 'sample_exclusion', 'NOT-REPRESENTATIVE', 'Sample not representative', true, 20)
+    (NULL, 'sample_exclusion', 'NOT-REPRESENTATIVE', 'Sample not representative', true, 20),
+    -- What caused a control chart to signal (D-099), given when its alert is closed.
+    (NULL, 'spc_cause', 'MATERIAL',    'Material or lot change',      false, 10),
+    (NULL, 'spc_cause', 'SETTING',     'Machine setting changed',     false, 20),
+    (NULL, 'spc_cause', 'TOOLING',     'Die or tooling wear',         false, 30),
+    (NULL, 'spc_cause', 'STARTUP',     'Startup or changeover',       false, 40),
+    (NULL, 'spc_cause', 'MEASUREMENT', 'Measurement or gauge error',  false, 50),
+    (NULL, 'spc_cause', 'NONE-FOUND',  'No cause found',              true,  90)
 ON CONFLICT (site_id, reason_kind, code) DO NOTHING;
 
 -- Utilization reasons (D-050): what a machine's time counts as. Runtime is run time; downtime is availability

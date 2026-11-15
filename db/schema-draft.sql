@@ -1828,7 +1828,8 @@ CREATE UNIQUE INDEX labor_break_corrected_once ON core.labor_break (corrects_bre
 -- 11. QUALITY AND SPC (definitions and alert state)
 -- =====================================================================
 
--- What is measured or inspected (#65, D-085). Enterprise-wide (site_id NULL) for specifications; the SPC columns serve charts later.
+-- What is measured or inspected (#65, D-085). Enterprise-wide (site_id NULL) for specifications; chart_type and subgroup_size are its
+-- control chart (D-099), changed only while no limits are in force.
 CREATE TABLE core.quality_characteristic (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     site_id             uuid REFERENCES core.equipment(id),     -- NULL: every site (all a specification may name)
@@ -1836,20 +1837,39 @@ CREATE TABLE core.quality_characteristic (
     name                text NOT NULL,
     description         text,
     equipment_id        uuid REFERENCES core.equipment(id),     -- where it is measured, when that is one place
-    equipment_tag_id    uuid REFERENCES core.equipment_tag(id),  -- set when sampled automatically from process data
     data_kind           text NOT NULL CHECK (data_kind IN ('variable','attribute')),
     chart_type          text NOT NULL CHECK (chart_type IN ('xbar_r','xbar_s','i_mr','p','np','c','u')),
     subgroup_size       smallint NOT NULL DEFAULT 1 CHECK (subgroup_size >= 1),
-    sample_interval     interval,                               -- auto-sampling cadence
     uom_id              uuid REFERENCES core.uom(id),
     decimals            smallint NOT NULL DEFAULT 3,
+    run_rules           smallint[] NOT NULL DEFAULT '{1,2,5,6}', -- Nelson rules its chart checks (D-099); 1 always; default the Western Electric set
     is_active           boolean NOT NULL DEFAULT true,
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT characteristic_rules_ck CHECK (run_rules <@ ARRAY[1,2,3,4,5,6,7,8]::smallint[] AND 1 = ANY(run_rules)),
     CONSTRAINT characteristic_chart_ck CHECK ((chart_type IN ('p','np','c','u')) = (data_kind = 'attribute')),
     CONSTRAINT characteristic_imr_ck CHECK (chart_type <> 'i_mr' OR subgroup_size = 1)
 );
 CREATE UNIQUE INDEX characteristic_code_uq ON core.quality_characteristic (coalesce(site_id, '00000000-0000-0000-0000-000000000000'::uuid), code);
+
+-- A characteristic sampled automatically from a process-value tag on a line (D-099): at the end of each interval, a result (source auto) of the
+-- value held at consecutive minutes, for the job running on the line. Switched off, never deleted.
+CREATE TABLE core.characteristic_tag (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    characteristic_id   uuid NOT NULL REFERENCES core.quality_characteristic(id),
+    equipment_tag_id    uuid REFERENCES core.equipment_tag(id),  -- a process_value tag; NULL once the tag is deleted (then switched off)
+    line_id             uuid NOT NULL REFERENCES core.equipment(id),  -- the tag's equipment or the nearest above it that runs jobs
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    interval_minutes    smallint NOT NULL CHECK (interval_minutes BETWEEN 1 AND 1440),
+    is_active           boolean NOT NULL DEFAULT true,
+    sampled_through     timestamptz NOT NULL,                   -- the last interval end dealt with (a result made, or skipped)
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT characteristic_tag_tag_ck CHECK (NOT is_active OR equipment_tag_id IS NOT NULL)
+);
+-- One active binding per characteristic and line, so a line has one automatic chart a characteristic.
+CREATE UNIQUE INDEX characteristic_tag_line_uq ON core.characteristic_tag (characteristic_id, line_id) WHERE is_active;
+CREATE INDEX characteristic_tag_tag_ix ON core.characteristic_tag (equipment_tag_id);
 
 -- A site's number lot attribute may stand for a characteristic: setting it records a result checked against the specification (#65).
 ALTER TABLE core.lot_attribute ADD COLUMN characteristic_id uuid REFERENCES core.quality_characteristic(id);
@@ -1897,11 +1917,15 @@ CREATE TABLE core.material_spec_item (
     CONSTRAINT material_spec_item_order_ck CHECK (lsl IS NULL OR usl IS NULL OR lsl <= usl)
 );
 
--- Control limits (statistical): computed from a baseline then frozen.
+-- Control limits (D-099): worked out from a reviewed baseline (or entered with a reason), approved, then fixed for a period. Per
+-- characteristic and material, optionally one line. A new set ends the open one; periods are ended, never changed or deleted.
 CREATE TABLE core.control_limit (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
     characteristic_id   uuid NOT NULL REFERENCES core.quality_characteristic(id),
-    material_id         uuid REFERENCES core.material(id),
+    material_id         uuid NOT NULL REFERENCES core.material(id),
+    equipment_id        uuid REFERENCES core.equipment(id),     -- one line's own limits, used before the material's; NULL: every line
+    chart_type          text NOT NULL CHECK (chart_type IN ('xbar_r','xbar_s','i_mr','p','np','c','u')),
+    subgroup_size       smallint NOT NULL CHECK (subgroup_size >= 1),
     center_line         double precision NOT NULL,
     ucl                 double precision NOT NULL,
     lcl                 double precision NOT NULL,
@@ -1912,46 +1936,62 @@ CREATE TABLE core.control_limit (
     baseline_from       timestamptz,
     baseline_to         timestamptz,
     baseline_subgroups  integer,
+    left_out_sample_ids uuid[] NOT NULL DEFAULT '{}',           -- results the reviewer left out of the baseline
+    note                text CHECK (length(note) <= 1000),      -- required for manual limits
     effective_from      timestamptz NOT NULL,
     effective_to        timestamptz,
-    approved_by_user_id uuid REFERENCES sec.app_user(id),
+    approved_by         text NOT NULL,
+    approved_at         timestamptz NOT NULL,
+    ended_by            text,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT control_limit_order_ck CHECK (lcl <= center_line AND center_line <= ucl),
+    CONSTRAINT control_limit_period_ck CHECK (effective_to IS NULL OR effective_to > effective_from),
+    CONSTRAINT control_limit_baseline_ck CHECK ((method = 'computed') = (baseline_from IS NOT NULL AND baseline_to IS NOT NULL)),
+    CONSTRAINT control_limit_manual_ck CHECK (method <> 'manual' OR note IS NOT NULL),
     CONSTRAINT control_limit_no_overlap EXCLUDE USING gist (
         characteristic_id WITH =,
-        (coalesce(material_id, '00000000-0000-0000-0000-000000000000'::uuid)) WITH =,
+        material_id WITH =,
+        (coalesce(equipment_id, '00000000-0000-0000-0000-000000000000'::uuid)) WITH =,
         tstzrange(effective_from, effective_to) WITH &&)
 );
+CREATE INDEX control_limit_scope_ix ON core.control_limit (characteristic_id, material_id, effective_from);
 
--- Nelson rules 1-8 (rules 1-4 are the Western Electric set).
+-- Nelson rules 1-8, in Nelson's numbering (the Western Electric set is 1, 2, 5 and 6); characteristics choose theirs in run_rules.
 CREATE TABLE core.spc_rule (
     rule_number smallint PRIMARY KEY CHECK (rule_number BETWEEN 1 AND 8),
     name        text NOT NULL,
     description text NOT NULL
 );
 
-CREATE TABLE core.characteristic_rule (
-    characteristic_id   uuid NOT NULL REFERENCES core.quality_characteristic(id) ON DELETE CASCADE,
-    rule_number         smallint NOT NULL REFERENCES core.spc_rule(rule_number),
-    severity            text NOT NULL DEFAULT 'warning' CHECK (severity IN ('info','warning','critical')),
-    PRIMARY KEY (characteristic_id, rule_number)
-);
-
--- Alert lifecycle is current state; the violation itself is history.
+-- An SPC alert (D-099): raised when a recorded result breaks one of its characteristic's run rules, one open per chart (site, characteristic,
+-- material, line); closed with a cause and the action taken. Each breaking result is history in ts.spc_violation.
 CREATE TABLE core.spc_alert (
     id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
     characteristic_id       uuid NOT NULL REFERENCES core.quality_characteristic(id),
-    equipment_id            uuid NOT NULL REFERENCES core.equipment(id),
-    violation_id            uuid NOT NULL,                      -- ts.spc_violation (no FK into history)
-    violation_occurred_at   timestamptz NOT NULL,
-    status                  text NOT NULL DEFAULT 'open' CHECK (status IN ('open','acknowledged','closed')),
-    raised_at               timestamptz NOT NULL DEFAULT now(),
-    acknowledged_by_user_id uuid REFERENCES sec.app_user(id),
-    acknowledged_at         timestamptz,
-    cause_reason_code_id    uuid REFERENCES core.reason_code(id),
-    action_comment          text,
-    closed_at               timestamptz
+    material_id             uuid NOT NULL REFERENCES core.material(id),
+    equipment_id            uuid REFERENCES core.equipment(id),     -- the line its results were made on; NULL: results without one
+    status                  text NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed')),
+    rules                   smallint[] NOT NULL,                    -- every rule broken while it was open
+    breaks                  integer NOT NULL DEFAULT 1 CHECK (breaks >= 1),  -- results that broke a rule while it was open
+    first_sample_id         uuid NOT NULL,                          -- ts.quality_sample (no FK into history)
+    first_sample_at         timestamptz NOT NULL,
+    last_sample_id          uuid NOT NULL,
+    last_sample_at          timestamptz NOT NULL,
+    raised_at               timestamptz NOT NULL,
+    closed_at               timestamptz,
+    closed_by               text,
+    cause_reason_code_id    uuid REFERENCES core.reason_code(id),   -- kind spc_cause
+    action                  text CHECK (length(action) <= 1000),
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    updated_at              timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT spc_alert_closed_ck CHECK ((status = 'closed') = (closed_at IS NOT NULL AND cause_reason_code_id IS NOT NULL AND action IS NOT NULL))
 );
-CREATE INDEX spc_alert_open_ix ON core.spc_alert (equipment_id) WHERE status <> 'closed';
+-- One open alert per chart: further breaks are added to it.
+CREATE UNIQUE INDEX spc_alert_open_uq ON core.spc_alert (site_id, characteristic_id, material_id, (coalesce(equipment_id, '00000000-0000-0000-0000-000000000000'::uuid)))
+    WHERE status = 'open';
+CREATE INDEX spc_alert_site_ix ON core.spc_alert (site_id, raised_at DESC);
 
 -- =====================================================================
 -- 12. TIME-PARTITIONED HISTORY (schema ts)                      [D-010]
@@ -2196,17 +2236,21 @@ CREATE TABLE ts.connection_run (
 ) PARTITION BY RANGE (started_at);
 CREATE INDEX connection_run_connection_ix ON ts.connection_run (connection_id, started_at DESC);
 
+-- Each recorded result that broke a run rule (D-099), with the rules and the alert it went to.
 CREATE TABLE ts.spc_violation (
     id                  uuid NOT NULL DEFAULT uuidv7(),
-    occurred_at         timestamptz NOT NULL,
+    occurred_at         timestamptz NOT NULL,                       -- when the breaking result was sampled
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
     characteristic_id   uuid NOT NULL REFERENCES core.quality_characteristic(id),
-    sample_id           uuid NOT NULL,
-    sample_occurred_at  timestamptz NOT NULL,
-    rule_number         smallint NOT NULL REFERENCES core.spc_rule(rule_number),
-    chart_component     text NOT NULL CHECK (chart_component IN ('location','dispersion','proportion','count')),
-    severity            text NOT NULL,
+    material_id         uuid NOT NULL REFERENCES core.material(id),
+    equipment_id        uuid REFERENCES core.equipment(id),
+    sample_id           uuid NOT NULL,                              -- ts.quality_sample, at occurred_at
+    rules               smallint[] NOT NULL,
+    alert_id            uuid NOT NULL REFERENCES core.spc_alert(id),
+    recorded_at         timestamptz NOT NULL,
     PRIMARY KEY (id, occurred_at)
 ) PARTITION BY RANGE (occurred_at);
+CREATE INDEX spc_violation_alert_ix ON ts.spc_violation (alert_id, occurred_at);
 CREATE INDEX ON ts.spc_violation (characteristic_id, occurred_at);
 
 -- =====================================================================
@@ -2575,7 +2619,11 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0060_password_reset'),
     ('0061_labor_gaps'),
     ('0062_machine_counts'),
-    ('0063_rate_refresh');
+    ('0063_rate_refresh'),
+    ('0064_control_limits'),
+    ('0065_run_rules'),
+    ('0066_spc_alerts'),
+    ('0067_tag_sampling');
 
 -- =====================================================================
 -- 17. SEED DATA

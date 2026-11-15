@@ -205,6 +205,13 @@ public static class EventTypes
     public const string SpecDraftStarted = "pulaski.material_spec.draft_started.v1";
     public const string QualityResultRecorded = "pulaski.quality_result.recorded.v1";
     public const string QualityResultExcluded = "pulaski.quality_result.excluded.v1";
+    public const string ControlLimitsApproved = "pulaski.control_limit.approved.v1";
+    public const string ControlLimitsEnded = "pulaski.control_limit.ended.v1";
+    public const string SpcAlertRaised = "pulaski.spc_alert.raised.v1";
+    public const string SpcAlertSignalled = "pulaski.spc_alert.signalled.v1";
+    public const string SpcAlertClosed = "pulaski.spc_alert.closed.v1";
+    public const string CharacteristicTagBound = "pulaski.quality_characteristic.tag_bound.v1";
+    public const string CharacteristicTagChanged = "pulaski.quality_characteristic.tag_changed.v1";
     public const string LabelPrinterSaved = "pulaski.label_printer.saved.v1";
     public const string SupplierFormatSaved = "pulaski.supplier_barcode_format.saved.v1";
     public const string FeedShortfallRecorded = "pulaski.feed_shortfall.recorded.v1";
