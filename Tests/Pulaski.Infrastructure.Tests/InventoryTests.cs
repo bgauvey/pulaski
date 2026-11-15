@@ -945,6 +945,26 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Empty((await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
             plant.Site, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)))).Points[^1].Rules);
 
+        // Capability against the released specification (LSL 5, USL 17); the chart signals, so it is marked unstable.
+        await using (var spec = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await spec.ExecuteAsync(
+                """
+                INSERT INTO core.material_spec (id, material_id) VALUES (@Spec, @Material);
+                INSERT INTO core.material_spec_version (id, spec_id, version_number, status, released_at) VALUES (@Version, @Spec, 1, 'released', now());
+                INSERT INTO core.material_spec_item (spec_version_id, characteristic_id, lsl, usl) VALUES (@Version, @Characteristic, 5, 17);
+                """,
+                new { Spec = Guid.CreateVersion7(), Version = Guid.CreateVersion7(), Material = plant.Profile, Characteristic = melt.Id });
+        }
+
+        var capable = (await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
+            plant.Site, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)))).Capability;
+        Assert.Equal((1, 5m, 17m), (capable.SpecVersion, capable.Lsl!.Value, capable.Usl!.Value));
+        Assert.NotNull(capable.Cp);
+        Assert.NotNull(capable.Ppk);
+        Assert.NotNull(capable.Band);
+        Assert.True(capable.IsUnstable);
+
         // Another site sees none of it.
         var elsewhere = await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
             plant.Stores, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)));

@@ -1,6 +1,8 @@
 using Pulaski.Application.Errors;
 using Pulaski.Application.Abstractions;
 using Pulaski.Contracts.Quality;
+using Pulaski.Domain.Quality;
+using Pulaski.Domain.Quality.Spc;
 
 namespace Pulaski.Application.Quality;
 
@@ -64,6 +66,7 @@ internal sealed class GetControlChartHandler(IQualityReadStore store, TimeProvid
             };
         }).ToList();
 
+        var capability = await CapabilityAsync(characteristic, samples, plotted, query.MaterialId, cancellationToken);
         var limitDtos = (await store.ListLimitsAsync(query.CharacteristicId, now, cancellationToken)).Where(l => used.Contains(l.Id)).ToList();
         return new ControlChartDto
         {
@@ -86,6 +89,55 @@ internal sealed class GetControlChartHandler(IQualityReadStore store, TimeProvid
             MaxPoints = MaxPoints,
             Limits = limitDtos,
             RunRules = characteristic.RunRules,
+            Capability = capability,
+        };
+    }
+
+    // Against the material's released specification now, over the charted results that the chart can take.
+    private async Task<CapabilityDto> CapabilityAsync(
+        Characteristic characteristic, IReadOnlyList<ChartSample> samples, IReadOnlyList<ControlChartPointDto> plotted, Guid materialId, CancellationToken cancellationToken)
+    {
+        var spec = await store.GetReleasedSpecAsync(materialId, cancellationToken);
+        var item = spec?.Items.FirstOrDefault(i => i.CharacteristicId == characteristic.Id);
+        var unstable = plotted.Any(p => p.Rules.Count > 0 || p.IsDispersionBeyondLimits);
+        var usable = plotted.Select(p => p.SampleId).ToHashSet();
+        var subgroups = samples.Select(s => s.Subgroup).Where(s => usable.Contains(s.SampleId)).ToList();
+        var common = new CapabilityDto
+        {
+            SpecVersion = spec?.VersionNumber,
+            Lsl = item?.Lsl,
+            Target = item?.Target,
+            Usl = item?.Usl,
+            MaxDefects = item?.MaxDefects,
+            IsUnstable = unstable,
+            Subgroups = subgroups.Count,
+        };
+
+        if (ChartTypes.IsAttribute(characteristic.ChartType))
+        {
+            var rate = ProcessCapability.Counted(subgroups);
+            return common with { DefectRate = rate.Rate, Ppm = rate.Ppm, Inspected = rate.Inspected, Defects = rate.Defects, NotEnough = rate.Rate is null ? "No samples to rate." : null };
+        }
+
+        if (item is null)
+        {
+            return common with { NotEnough = spec is null ? "The material has no released specification." : $"The material's specification doesn't name {characteristic.Code}." };
+        }
+
+        var result = ProcessCapability.Measured(characteristic.ChartType, subgroups, characteristic.SubgroupSize, (double?)item.Lsl, (double?)item.Usl);
+        return common with
+        {
+            Subgroups = result.Subgroups,
+            Mean = result.Mean,
+            SigmaWithin = result.SigmaWithin,
+            SigmaOverall = result.SigmaOverall,
+            Cp = result.Cp,
+            Cpk = result.Cpk,
+            Pp = result.Pp,
+            Ppk = result.Ppk,
+            Band = result.Band,
+            PerformanceBand = result.PerformanceBand,
+            NotEnough = result.NotEnough,
         };
     }
 }

@@ -209,8 +209,49 @@ public sealed record ControlChartDto
     /// <summary>The Nelson rules the chart checks.</summary>
     public IReadOnlyList<int> RunRules { get; init; } = [];
 
+    /// <summary>How capable the charted results are against the material's released specification (D-099).</summary>
+    public CapabilityDto Capability { get; init; } = new();
+
     /// <summary>The periods of limits the points use.</summary>
     public IReadOnlyList<ControlLimitDto> Limits { get; init; } = [];
+}
+
+/// <summary>
+/// A chart's capability (D-099): for a measured characteristic Cp/Cpk (within-subgroup sigma) and Pp/Ppk (overall), judged by Cpk and Ppk
+/// (capable ≥ 1.33, marginal ≥ 1.00, else not capable); for an inspected one its defective rate. Figures are null with <see cref="NotEnough"/>.
+/// </summary>
+public sealed record CapabilityDto
+{
+    /// <summary>The released specification version it is measured against; null without one.</summary>
+    public int? SpecVersion { get; init; }
+    public decimal? Lsl { get; init; }
+    public decimal? Target { get; init; }
+    public decimal? Usl { get; init; }
+    public int? MaxDefects { get; init; }
+    public int Subgroups { get; init; }
+    public double? Mean { get; init; }
+    public double? SigmaWithin { get; init; }
+    public double? SigmaOverall { get; init; }
+    public double? Cp { get; init; }
+    public double? Cpk { get; init; }
+    public double? Pp { get; init; }
+    public double? Ppk { get; init; }
+
+    /// <summary><c>capable</c>, <c>marginal</c> or <c>not_capable</c>, by Cpk; and by Ppk.</summary>
+    public string? Band { get; init; }
+    public string? PerformanceBand { get; init; }
+
+    /// <summary>Inspected characteristics: defectives (p, np) or defects (c, u) a unit inspected, and in parts per million.</summary>
+    public double? DefectRate { get; init; }
+    public double? Ppm { get; init; }
+    public int Inspected { get; init; }
+    public int Defects { get; init; }
+
+    /// <summary>Why there are no figures.</summary>
+    public string? NotEnough { get; init; }
+
+    /// <summary>The charted results break the rules: the process isn't stable, so capability says little.</summary>
+    public bool IsUnstable { get; init; }
 }
 
 /// <summary>One plotted result, with its limits (null when none were in force) and whether it is beyond them.</summary>

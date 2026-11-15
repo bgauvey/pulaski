@@ -99,6 +99,51 @@
             <ControlChartPlot Id="spc-dispersion" Points="ControlChartView.Plot(chart, true, Zone)" Label="@dispersion" Decimals="chart.Decimals" Height="160" TimeZone="@Zone" />
         }
 
+        @{ var cap = chart.Capability; }
+        <div class="border-top mt-3 pt-2" aria-labelledby="capability-heading">
+            <h3 class="h6 mb-1" id="capability-heading">Capability</h3>
+            @if (cap.IsUnstable)
+            {
+                <p class="small text-warning-strong mb-1">
+                    The chart signals (beyond the limits or a run rule), so the process isn't stable: capability describes it poorly until the cause is dealt with.
+                </p>
+            }
+            @if (dispersion is null)
+            {
+                <p class="small mb-0">@ControlChartView.Rate(cap, chart.ChartType)</p>
+            }
+            else if (cap.NotEnough is { } why)
+            {
+                <p class="small text-muted mb-0">@why</p>
+            }
+            else
+            {
+                <p class="small text-muted mb-1">
+                    Against @ControlChartView.Specification(cap, chart.UomCode). @cap.Subgroups subgroups; mean @ControlChartView.Number(cap.Mean, chart.Decimals),
+                    sigma @ControlChartView.Number(cap.SigmaWithin, chart.Decimals) within subgroups and @ControlChartView.Number(cap.SigmaOverall, chart.Decimals) overall.
+                </p>
+                <div class="d-flex flex-wrap gap-4 small">
+                    <div>
+                        <div class="text-muted">Cp · Cpk (within)</div>
+                        <span class="fw-semibold">@ControlChartView.Index(cap.Cp) · @ControlChartView.Index(cap.Cpk)</span>
+                        @if (ControlChartView.BandName(cap.Band) is { } band)
+                        {
+                            <span class="@ControlChartView.BandChip(cap.Band) ms-1">@band</span>
+                        }
+                    </div>
+                    <div>
+                        <div class="text-muted">Pp · Ppk (overall)</div>
+                        <span class="fw-semibold">@ControlChartView.Index(cap.Pp) · @ControlChartView.Index(cap.Ppk)</span>
+                        @if (ControlChartView.BandName(cap.PerformanceBand) is { } performance)
+                        {
+                            <span class="@ControlChartView.BandChip(cap.PerformanceBand) ms-1">@performance</span>
+                        }
+                    </div>
+                </div>
+                <p class="small text-muted mt-1 mb-0">Capable at 1.33 or more, marginal from 1.00. Cp and Pp need both limits.</p>
+            }
+        </div>
+
         <details class="mt-2">
             <summary class="small">Show as a table</summary>
             <div class="table-panel mt-2" style="max-height: 24rem; overflow-y: auto;">

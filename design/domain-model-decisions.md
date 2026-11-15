@@ -2681,6 +2681,13 @@ line); **skip intervals without a running job** (or with bad or stale readings).
   (site, line, tag, interval, sampled up to) with Change, Switch off and Switch on, and a form to add one from the active process-value tags.
   Results show their source by name (*From process values*, recorded by *Automatic*).
 
+**Capability (piece 7).** Decided (the user's choices): **from the chart's results** (period and line shown; at least 20 subgroups), against the
+material's released specification now; **fixed bands** (Cpk/Ppk ≥ 1.33 capable, ≥ 1.00 marginal, else not capable; `CapabilityBands`);
+**defective rate for inspected characteristics**. `ProcessCapability.Measured` (pure): Cp/Cpk from the within-subgroup sigma (MR-bar ÷ d2(2),
+R-bar ÷ d2(n), S-bar ÷ c4(n)), Pp/Ppk from the overall sample standard deviation of every value; Cp and Pp need both limits, Cpk and Ppk take the
+nearer. `ProcessCapability.Counted`: defects ÷ inspected, and ppm. The chart query returns it as `ControlChartDto.Capability`, with
+`IsUnstable` when any point breaks a rule or its dispersion is beyond its limits; the chart page shows it with banded, labelled chips.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

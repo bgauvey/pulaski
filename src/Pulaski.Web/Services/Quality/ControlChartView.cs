@@ -61,6 +61,62 @@ public static class ControlChartView
     public static string State(ControlLimitDto l, DateTimeOffset now) =>
         l.IsInEffect ? "In force" : l.EffectiveFrom > now ? "Starts later" : "Ended";
 
+    /// <summary>A capability index to two decimals, or a dash.</summary>
+    public static string Index(double? value) => value is { } v && double.IsFinite(v) ? v.ToString("0.00", CultureInfo.InvariantCulture) : "—";
+
+    /// <summary>The band in words, for a label next to its colour.</summary>
+    public static string? BandName(string? band) => band switch
+    {
+        "capable" => "Capable",
+        "marginal" => "Marginal",
+        "not_capable" => "Not capable",
+        _ => null,
+    };
+
+    public static string BandChip(string? band) => band switch
+    {
+        "capable" => "chip chip-ok",
+        "marginal" => "chip chip-warn",
+        "not_capable" => "chip chip-danger",
+        _ => "chip",
+    };
+
+    /// <summary>"LSL 3.2 · target 3.3 · USL 3.4, version 2" or what is missing.</summary>
+    public static string Specification(CapabilityDto c, string? uom)
+    {
+        var parts = new List<string>();
+        if (c.Lsl is { } l)
+        {
+            parts.Add($"LSL {l.ToString("0.######", CultureInfo.InvariantCulture)}");
+        }
+
+        if (c.Target is { } t)
+        {
+            parts.Add($"target {t.ToString("0.######", CultureInfo.InvariantCulture)}");
+        }
+
+        if (c.Usl is { } u)
+        {
+            parts.Add($"USL {u.ToString("0.######", CultureInfo.InvariantCulture)}");
+        }
+
+        return parts.Count == 0 ? "" : $"{string.Join(" · ", parts)}{(uom is null ? "" : $" {uom}")}{(c.SpecVersion is { } v ? $", specification version {v}" : "")}";
+    }
+
+    /// <summary>"3.00% defective (30,000 ppm): 6 of 200 inspected."</summary>
+    public static string Rate(CapabilityDto c, string chartType)
+    {
+        if (c.DefectRate is not { } rate)
+        {
+            return c.NotEnough ?? "";
+        }
+
+        var what = chartType is "c" or "u" ? "defects a unit" : "defective";
+        return $"{(rate * 100).ToString("0.00", CultureInfo.InvariantCulture)}% {what} ({c.Ppm!.Value.ToString("#,0", CultureInfo.InvariantCulture)} ppm): "
+            + $"{c.Defects} {(chartType is "c" or "u" ? "defects" : "defective")} in {c.Inspected} inspected"
+            + (c.MaxDefects is { } max ? $". The specification allows at most {max} a sample." : ".");
+    }
+
     /// <summary>Where a result came from, as people say it.</summary>
     public static string Source(string source) => source switch
     {

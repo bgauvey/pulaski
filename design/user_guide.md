@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-12 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-14 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -1568,6 +1568,7 @@ from the [process values](#process-values) its tag sends, instead of by hand.
    rule is an amber square labelled with the rules' numbers. The rules checked are listed above the chart. Measured characteristics have a
    second chart below: the range, standard deviation or moving range.
 4. Hover over a point to see when it was sampled, its value against its limits, and its line, job and lot. **Show as a table** lists the same.
+5. Under the chart, **Capability** says how well the results fit the material's specification.
 
 **In detail**
 
@@ -1582,6 +1583,17 @@ from the [process values](#process-values) its tag sends, instead of by hand.
   limits, so a run carries on across new limits, and a result without limits breaks it. Rising, falling and alternating look at the values alone.
   Rules apply to the main chart; the range, standard deviation or moving range chart marks only results beyond its limits. A newly recorded
   result that signals raises an [SPC alert](#respond-to-spc-alerts).
+- **Capability** is worked out from the results the chart shows (the period and line you chose), against the material's released
+  specification now:
+  - **Cp · Cpk (within)** use the spread within subgroups (the mean range, standard deviation or moving range, as the chart estimates sigma):
+    what the process could do. **Pp · Ppk (overall)** use the standard deviation of every value: what it did, drifts included.
+  - Cp and Pp compare the specification's width with six sigma, so they need both limits; Cpk and Ppk also count how far the mean is from the
+    nearer limit, so a one-sided specification has them only.
+  - **Capable** at 1.33 or more, **marginal** from 1.00, **not capable** below, judged by Cpk (and by Ppk for the overall pair).
+  - At least 20 subgroups are needed. If the chart signals (beyond the limits, or a run rule), Pulaski says the process isn't stable, since
+    capability describes an unstable process poorly.
+  - Inspected characteristics have no indices: Capability gives their rate (defective, or defects a unit for c and u charts) as a percentage
+    and in parts per million, beside the most defects the specification allows a sample.
 - **Who:** anyone who can see quality at the site.
 
 ### Write a specification

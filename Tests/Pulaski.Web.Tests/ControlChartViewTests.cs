@@ -42,4 +42,17 @@ public class ControlChartViewTests
         Assert.Equal("Every 2 h", ControlChartView.Interval(120));
         Assert.Equal("Every 1 h 30 min", ControlChartView.Interval(90));
     }
+
+    [Fact]
+    public void Capability_reads_with_its_band_specification_and_rate()
+    {
+        Assert.Equal("1.27", ControlChartView.Index(1.2749));
+        Assert.Equal("—", ControlChartView.Index(null));
+        Assert.Equal("Not capable", ControlChartView.BandName("not_capable"));
+        Assert.Equal("chip chip-ok", ControlChartView.BandChip("capable"));
+        Assert.Equal("LSL 3.2 · target 3.3 · USL 3.4 mm, specification version 2",
+            ControlChartView.Specification(new CapabilityDto { Lsl = 3.2m, Target = 3.3m, Usl = 3.4m, SpecVersion = 2 }, "mm"));
+        Assert.Equal("3.00% defective (30,000 ppm): 6 defective in 200 inspected. The specification allows at most 1 a sample.",
+            ControlChartView.Rate(new CapabilityDto { DefectRate = 0.03, Ppm = 30_000, Defects = 6, Inspected = 200, MaxDefects = 1 }, "p"));
+    }
 }
