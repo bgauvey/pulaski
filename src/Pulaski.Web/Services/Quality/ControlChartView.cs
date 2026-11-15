@@ -61,6 +61,24 @@ public static class ControlChartView
     public static string State(ControlLimitDto l, DateTimeOffset now) =>
         l.IsInEffect ? "In force" : l.EffectiveFrom > now ? "Starts later" : "Ended";
 
+    /// <summary>Where a result came from, as people say it.</summary>
+    public static string Source(string source) => source switch
+    {
+        "manual" => "At the line",
+        "lab" => "Laboratory",
+        "auto" => "From process values",
+        "lot_attribute" => "Lot attribute",
+        _ => source,
+    };
+
+    /// <summary>"Every 15 min", "Every 2 h", "Every 1 h 30 min".</summary>
+    public static string Interval(int minutes) => minutes switch
+    {
+        < 60 => $"Every {minutes} min",
+        _ when minutes % 60 == 0 => $"Every {minutes / 60} h",
+        _ => $"Every {minutes / 60} h {minutes % 60} min",
+    };
+
     /// <summary>Nelson's rules, in his numbering, as people say them.</summary>
     public static IReadOnlyList<(int Number, string Name)> Rules { get; } =
     [

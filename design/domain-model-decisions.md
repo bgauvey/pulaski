@@ -2677,6 +2677,9 @@ line); **skip intervals without a running job** (or with bad or stale readings).
   `specs.manage`; `/api/quality/characteristics/{id}/tags`, `/api/quality/characteristic-tags/{id}`, `/api/quality/process-value-tags`.
   Deleting a tag detaches and switches off its bindings (as it detached characteristics before). Migration 0067 drops the unused
   `quality_characteristic.equipment_tag_id` and `sample_interval`.
+- **Screens (6b):** the characteristic's Control limits page has a Sampled from process values section (measured characteristics): its bindings
+  (site, line, tag, interval, sampled up to) with Change, Switch off and Switch on, and a form to add one from the active process-value tags.
+  Results show their source by name (*From process values*, recorded by *Automatic*).
 
 ## Application architecture
 

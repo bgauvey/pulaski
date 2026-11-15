@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-11 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-12 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -1529,6 +1529,35 @@ line chosen above, the **Lower**, **Centre** and **Upper** limits (and the dispe
   specifications. Each approval is recorded as `pulaski.control_limit.approved.v1`, each end as `…ended.v1`.
 - **Charts and alerts.** See [Control charts](#control-charts) and [Respond to SPC alerts](#respond-to-spc-alerts).
 
+### Sample from process values
+
+A measured characteristic that a machine already reports, such as a melt temperature or a line speed, can have its results made by Pulaski
+from the [process values](#process-values) its tag sends, instead of by hand.
+
+1. On **Characteristics**, click **Control limits** under the characteristic.
+2. Under **Sampled from process values**, choose the **Process-value tag** (listed by site, line, machine and address) and how often (**Every,
+   minutes**; 15 to start with). Click **Sample from it**.
+3. From then on, at the end of each interval, Pulaski records a result for the job running on the tag's line. It shows on Quality results as
+   *From process values*, recorded by *Automatic*, and goes on the control chart like any other.
+
+**Change** sets another interval; **Switch off** stops it, and **Switch on** starts again from then.
+
+**In detail**
+
+- **What a result holds.** The value at the end of the interval, or for an X-bar chart, the values at that many consecutive minutes ending
+  then (a subgroup of 5 is the last 5 minutes). A value is the last reading at or before each minute; the edge sends one at least every minute
+  while the signal is good.
+- **When.** Intervals end on the clock (every 15 minutes means :00, :15, :30, :45 UTC). Pulaski waits two minutes after each for late readings,
+  then records it, normally within a minute after that.
+- **Skipped intervals.** No result is made when no job is running on the line (changeovers, idle time), or when a reading in the subgroup is bad
+  or more than two minutes old. If Pulaski was stopped, it makes up to the last 24 hours when it starts again; older intervals are skipped.
+- **One line, one tag.** A characteristic is sampled from one tag on each line, and the tag must be on a line that runs jobs (or a machine below
+  one). Only measured characteristics can be sampled. Deleting the tag on Edge nodes switches its sampling off.
+- **Everything else is as usual.** The result is checked against the material's specification, goes on its chart, and can raise an
+  [SPC alert](#respond-to-spc-alerts). A wrong one is left out like any other. It doesn't hold a lot: it belongs to the job, not to a lot.
+- **Who:** setting up sampling needs permission to maintain specifications. The background work runs as *system*
+  (`Quality:AutoSampling:Enabled`, `Quality:AutoSampling:PollSeconds`, 60).
+
 ### Control charts
 
 1. On **Operate → Quality**, click **Control charts** (or **Chart** on a period of control limits).
@@ -2563,7 +2592,7 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 - **Stop codes** are latched: a machine that clears its code once acknowledged keeps it in Pulaski until it runs (Execute) again.
 - **Counts** are taken across the rollover value; a counter going back without one is taken as reset to zero. Machine counts don't change the job's reported quantities by themselves: a [report from the machine](#report-production-from-the-machine) takes them, once the operator has checked them.
 - **Switching a node off** stops Pulaski taking its data and the edge collecting. Switching a tag or connection off stops it being read.
-- **Delete behavior.** Deleting a node deactivates it and all its connections and tags. Deleting a tag physically removes its binding, so it disappears from the Tags tab; this works whether the tag is active or inactive. Any quality characteristic using it as an automatic source is kept but detached. The deletion event and historical machine data are retained. Add a new binding if the signal is needed again. Reactivating a node later does not reactivate its connections or tags; switch those back on individually if needed.
+- **Delete behavior.** Deleting a node deactivates it and all its connections and tags. Deleting a tag physically removes its binding, so it disappears from the Tags tab; this works whether the tag is active or inactive. A quality characteristic [sampled from it](#sample-from-process-values) is kept, and its sampling from that tag switched off. The deletion event and historical machine data are retained. Add a new binding if the signal is needed again. Reactivating a node later does not reactivate its connections or tags; switch those back on individually if needed.
 - **Without Pulaski**, the edge starts with the last configuration it kept.
 - **OPC UA in detail.** One subscription carries the bound nodes; a reading takes the time the server stamped it with. A status that isn't good is recorded as a lost signal. If the server stops answering, the edge records every bound node as lost and reconnects, waiting a second and then longer each time, up to a minute. The edge keeps its own certificate and the servers it trusts in a `pki` folder beside it (`Edge:PkiPath`). A server it refuses leaves its certificate in `pki/rejected/certs`: check it and move it to `pki/trusted/certs`, or put its thumbprint on the connection. The server must trust the edge's certificate (`pki/own/certs`) too.
 - **EtherNet/IP in detail.** The edge reads each bound tag every poll interval and records the time it read it (the PLC sends no time). A tag it can't read is recorded as lost once and tried again on every poll. Only single values are read, not whole arrays or structures.
@@ -2781,7 +2810,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** has no quality figures yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
-- **Quality:** control charts and alerts don't update while open (refresh the page), alerts aren't e-mailed, and SPC runs only on recorded results, not process values; and no sampling plans or reminders of samples due. Results come only from people (or a lot attribute), not from process values. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
+- **Quality:** control charts and alerts don't update while open (refresh the page), alerts aren't e-mailed, and there are no sampling plans or reminders of samples due. Process values make results only at fixed intervals from one tag per line, never for an inspected characteristic or a lot. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
 - **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.
 - **Some switched-off controls give no reason yet:** a form's Save waiting on a field next to it, an Export with nothing to export, and the locked boxes on the Permissions tab (point at those with the mouse to see why).
 

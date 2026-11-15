@@ -95,6 +95,13 @@ else
         </table>
     </div>
 
+    @if (characteristic.DataKind == "variable")
+    {
+        <TagBindingsSection CharacteristicId="characteristic.Id" Code="@characteristic.Code"
+                            SubgroupSize="@(characteristic.ChartType is "xbar_r" or "xbar_s" ? characteristic.SubgroupSize : 1)"
+                            CanManage="CanManage" TimeZone="@Zone" Saved="m => _message = m" />
+    }
+
     @if (CanManage)
     {
         <section class="inv-facts mb-3" aria-labelledby="baseline-heading">

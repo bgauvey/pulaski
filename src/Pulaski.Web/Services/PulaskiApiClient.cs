@@ -1261,6 +1261,18 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> UpdateCharacteristicAsync(Guid id, UpdateCharacteristicRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/quality/characteristics/{id}", request, ct);
 
+    public Task<IReadOnlyList<TagBindingDto>> ListTagBindingsAsync(Guid characteristicId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<TagBindingDto>>($"api/quality/characteristics/{characteristicId}/tags", ct);
+
+    public Task<IReadOnlyList<ProcessValueTagDto>> ListProcessValueTagsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ProcessValueTagDto>>("api/quality/process-value-tags", ct);
+
+    public Task<CreatedResponse> AddTagBindingAsync(Guid characteristicId, AddTagBindingRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/quality/characteristics/{characteristicId}/tags", request, ct);
+
+    public Task<VersionResponse> UpdateTagBindingAsync(Guid id, UpdateTagBindingRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/quality/characteristic-tags/{id}", request, ct);
+
     public Task<IReadOnlyList<SpcAlertDto>> ListSpcAlertsAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<SpcAlertDto>>($"api/quality/alerts?siteId={siteId}", ct);
 

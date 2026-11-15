@@ -32,4 +32,14 @@ public class ControlChartViewTests
         Assert.Equal("In force", ControlChartView.State(computed, DateTimeOffset.UtcNow));
         Assert.Equal("Starts later", ControlChartView.State(computed with { IsInEffect = false, EffectiveFrom = DateTimeOffset.UtcNow.AddDays(1) }, DateTimeOffset.UtcNow));
     }
+
+    [Fact]
+    public void Sources_and_intervals_read_as_people_say_them()
+    {
+        Assert.Equal("From process values", ControlChartView.Source("auto"));
+        Assert.Equal("Laboratory", ControlChartView.Source("lab"));
+        Assert.Equal("Every 15 min", ControlChartView.Interval(15));
+        Assert.Equal("Every 2 h", ControlChartView.Interval(120));
+        Assert.Equal("Every 1 h 30 min", ControlChartView.Interval(90));
+    }
 }
