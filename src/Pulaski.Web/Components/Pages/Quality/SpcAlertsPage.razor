@@ -4,6 +4,7 @@
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 @inject CurrentUser User
+@inject TimeProvider Clock
 
 <PageTitle>SPC alerts · Pulaski</PageTitle>
 
@@ -17,6 +18,10 @@
         </p>
     </div>
     <div class="inv-head-tools">
+        @if (_alerts is not null)
+        {
+            <LiveStatus OnRefresh="RefreshAsync" LoadedAt="_loadedAt" TimeZone="@Zone" />
+        }
         <a class="btn btn-outline-secondary btn-sm" href="quality/charts">Control charts</a>
         @if (Sites.Sites.Count > 1)
         {
@@ -146,6 +151,7 @@ else
     private IReadOnlyList<SpcAlertDto>? _alerts;
     private IReadOnlyList<ReasonCodeDto> _causes = [];
     private SpcAlertDto? _selected;
+    private DateTimeOffset? _loadedAt;
     private Guid _causeId;
     private string? _action;
     private bool _busy;
@@ -171,7 +177,7 @@ else
     private async Task OnSiteChangedAsync(ChangeEventArgs e)
     {
         Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
-        (_alerts, _selected, _message) = (null, null, null);
+        (_alerts, _selected, _message, _loadedAt) = (null, null, null, null);
         await LoadAsync();
     }
 
@@ -184,12 +190,47 @@ else
 
         try
         {
+            var loadedAt = Clock.GetUtcNow();
             _alerts = await Api.ListSpcAlertsAsync(site);
             _causes = await Api.ListReasonCodesAsync("spc_cause", site);
+            _loadedAt = loadedAt;
         }
         catch (ApiException ex)
         {
             _error = ex;
+        }
+    }
+
+    // New alerts and breaks appear without reloading the page; the alert open below follows too, keeping a cause and action being typed.
+    // A failed reload keeps the list; the live pill turns stale.
+    private async Task RefreshAsync()
+    {
+        if (Sites.SiteId is not { } site || _busy)
+        {
+            return;
+        }
+
+        var selected = _selected;
+        try
+        {
+            var loadedAt = Clock.GetUtcNow();
+            var alerts = await Api.ListSpcAlertsAsync(site);
+            var detail = selected is null ? null : await Api.GetSpcAlertAsync(selected.SiteId, selected.Id);
+            if (Sites.SiteId != site || _busy)
+            {
+                return;
+            }
+
+            _alerts = alerts;
+            if (ReferenceEquals(_selected, selected))
+            {
+                _selected = detail;
+            }
+
+            _loadedAt = loadedAt;
+        }
+        catch (ApiException)
+        {
         }
     }
 

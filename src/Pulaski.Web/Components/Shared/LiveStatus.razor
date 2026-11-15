@@ -1,0 +1,52 @@
+@implements IDisposable
+@inject TimeProvider Clock
+
+@* A screen that refreshes itself (D-099, as the Overview, D-070): asks the page to reload every 30 seconds and says how fresh it is.
+   The page keeps what it showed when a reload fails; the pill then turns stale. *@
+<span class="live-pill @(LiveRefresh.IsStale(LoadedAt, Clock.GetUtcNow()) ? "is-stale" : "")" role="status">
+    <span class="live-dot" aria-hidden="true"></span>
+    @LiveRefresh.Status(LoadedAt, Clock.GetUtcNow(), TimeZone)
+</span>
+<button type="button" class="btn btn-outline-secondary btn-square" aria-label="Refresh now" title="Refresh now" disabled="@_refreshing" @onclick="RefreshAsync">
+    <Icon Name="refresh" Size="18" />
+</button>
+
+@code {
+    /// <summary>Reloads the page's data; sets <see cref="LoadedAt"/> when it succeeds.</summary>
+    [Parameter, EditorRequired]
+    public EventCallback OnRefresh { get; set; }
+
+    /// <summary>When the page last loaded its data.</summary>
+    [Parameter]
+    public DateTimeOffset? LoadedAt { get; set; }
+
+    [Parameter]
+    public string? TimeZone { get; set; }
+
+    private Timer? _timer;
+    private bool _refreshing;
+
+    protected override void OnInitialized() =>
+        _timer = new Timer(_ => InvokeAsync(RefreshAsync), null, LiveRefresh.Every, LiveRefresh.Every);
+
+    private async Task RefreshAsync()
+    {
+        if (_refreshing)
+        {
+            return;
+        }
+
+        _refreshing = true;
+        try
+        {
+            await OnRefresh.InvokeAsync();
+        }
+        finally
+        {
+            _refreshing = false;
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

@@ -19,6 +19,10 @@
         </p>
     </div>
     <div class="inv-head-tools">
+        @if (_chart is not null)
+        {
+            <LiveStatus OnRefresh="RefreshAsync" LoadedAt="_loadedAt" TimeZone="@Zone" />
+        }
         <a class="btn btn-outline-secondary btn-sm" href="quality/results">Results</a>
         @if (Sites.Sites.Count > 1)
         {
@@ -202,6 +206,8 @@
     private DateTime? _from;
     private DateTime? _to;
     private ControlChartDto? _chart;
+    private Shown? _shown;
+    private DateTimeOffset? _loadedAt;
     private bool _busy;
     private ApiException? _error;
 
@@ -237,7 +243,7 @@
     private async Task OnSiteChangedAsync(ChangeEventArgs e)
     {
         Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
-        (_chart, _lineId) = (null, null);
+        (_chart, _shown, _loadedAt, _lineId) = (null, null, null, null);
         await LoadLinesAsync();
     }
 
@@ -253,7 +259,10 @@
         _error = null;
         try
         {
+            var shown = new Shown(site, characteristic, material, _lineId, from, to, _to);
+            var loadedAt = Clock.GetUtcNow();
             _chart = await Api.GetControlChartAsync(characteristic, site, material, _lineId, from, to);
+            (_shown, _loadedAt) = (shown, loadedAt);
             Navigation.NavigateTo($"quality/charts?characteristic={characteristic}&material={material}{(_lineId is { } line ? $"&line={line}" : "")}", replace: true);
         }
         catch (ApiException ex)
@@ -265,6 +274,41 @@
             _busy = false;
         }
     }
+
+    // Reloads the chart on show, not the form's values being changed. A window reaching the present keeps up with it, and so does the To
+    // field while it is as it was shown. A failed reload keeps the chart; the live pill turns stale.
+    private async Task RefreshAsync()
+    {
+        if (_shown is not { } shown || _busy || _loadedAt is not { } loadedAt)
+        {
+            return;
+        }
+
+        var now = Clock.GetUtcNow();
+        var to = ControlChartView.RefreshedTo(shown.To, loadedAt, now);
+        try
+        {
+            var chart = await Api.GetControlChartAsync(shown.CharacteristicId, shown.SiteId, shown.MaterialId, shown.LineId, shown.From, to);
+            if (!ReferenceEquals(_shown, shown))
+            {
+                return;
+            }
+
+            var formTo = shown.FormTo;
+            if (to != shown.To && _to == shown.FormTo)
+            {
+                _to = formTo = Display.ToSite(to, Zone).DateTime;
+            }
+
+            (_chart, _shown, _loadedAt) = (chart, shown with { To = to, FormTo = formTo }, now);
+        }
+        catch (ApiException)
+        {
+        }
+    }
+
+    private sealed record Shown(
+        Guid SiteId, Guid CharacteristicId, Guid MaterialId, Guid? LineId, DateTimeOffset From, DateTimeOffset To, DateTime? FormTo);
 
     private static string MainLabel(string chartType) => chartType switch
     {

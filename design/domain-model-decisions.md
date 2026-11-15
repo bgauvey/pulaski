@@ -2688,6 +2688,12 @@ R-bar ÷ d2(n), S-bar ÷ c4(n)), Pp/Ppk from the overall sample standard deviati
 nearer. `ProcessCapability.Counted`: defects ÷ inspected, and ppm. The chart query returns it as `ControlChartDto.Capability`, with
 `IsUnstable` when any point breaks a rule or its dispersion is beyond its limits; the chart page shows it with banded, labelled chips.
 
+**Live refresh (piece 8).** The control chart and SPC alert screens reload every 30 seconds, as the Overview does (D-070), through the shared
+`LiveStatus` component (timer, "Live, updated" pill, stale after a minute without a successful load, refresh button; text from `LiveRefresh`).
+The chart reloads what was shown, not the form's edits; a window that reached the present when loaded keeps up with it
+(`ControlChartView.RefreshedTo`: to = now + 1 minute), an earlier one stays fixed. The alerts list reloads with the open alert's detail, leaving a
+cause and action being typed. A failed reload keeps what was shown. Polling, not push: no new API.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

@@ -1569,6 +1569,8 @@ from the [process values](#process-values) its tag sends, instead of by hand.
    second chart below: the range, standard deviation or moving range.
 4. Hover over a point to see when it was sampled, its value against its limits, and its line, job and lot. **Show as a table** lists the same.
 5. Under the chart, **Capability** says how well the results fit the material's specification.
+6. The chart refreshes itself every 30 seconds while open; the pill at the top right says when it was last updated, and the refresh button
+   updates it at once.
 
 **In detail**
 
@@ -1594,6 +1596,9 @@ from the [process values](#process-values) its tag sends, instead of by hand.
     capability describes an unstable process poorly.
   - Inspected characteristics have no indices: Capability gives their rate (defective, or defects a unit for c and u charts) as a percentage
     and in parts per million, beside the most defects the specification allows a sample.
+- **Live.** Each refresh redraws the chart you clicked **Show** for, not filters you've changed since. If its period reached the present, new
+  results appear as they're recorded (its **To** moves on with the time); a period ending earlier stays as it is. If Pulaski can't reach the
+  server, the chart stays as it was and the pill turns grey: *Stale since* the last update.
 - **Who:** anyone who can see quality at the site.
 
 ### Write a specification
@@ -1632,6 +1637,9 @@ Overview's **Open SPC alerts** counts those waiting at the site.
 2. Open alerts come first: the chart (characteristic, material and line), the rules broken, how many results broke them and when.
 3. Click **Respond**. The alert lists each result that broke a rule, with its value, job and lot; **See the chart** opens its control chart.
 4. Find the cause at the line. Choose the **Cause**, say **What was done**, and click **Close alert**.
+
+The list refreshes itself every 30 seconds, like the Overview, so new alerts and breaks appear while it's open; the alert you opened follows
+too, keeping the cause and action you're typing. The pill at the top right says when it was last updated.
 
 **In detail**
 
@@ -2810,7 +2818,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Labor:** people from HR or the ERP come from a file or a connection; schedules are in UTC, not the site's time, and a failed scheduled run waits for the next one. Qualifications are only added by an import, never revoked, and SCIM users carry none. Terminals don't take production or downtime reports and can't sign anyone in as a user. Planned breaks are never recorded on their own. A grant that expired before its notice went out (say, while e-mail was off) gets no notice. At a terminal people record only direct time, their own clock-off and breaks: setup, indirect and training time, and production reports, are recorded on the signed-in screens. A terminal can't be used to sign in as a user. Breaks aren't planned on shift schedules (a fixed lunch is recorded like any other break), and a missing qualification only warns: it never stops someone being put on a line. Pulaski sends no notice before a grant expires; use *Expiring in 30 days*. A person works only at their own site. On **Shift review** only a session's times and share can be changed, not its job or kind (end it and add a new one instead). The Overview's *Labor to approve* looks back only 14 days: an older shift left unapproved isn't counted (open its day on **Shift review**).
 - **Materials import** from CSV or B2MML files, from an OData, REST, SOAP or PostgreSQL connection on demand or on a schedule, or one item at a time through the API. Connections can't sign in with OAuth, and there are no adapters for label printing. Capabilities import from CSV only. Pulaski exports materials and classes as B2MML, but not lots; B2MML sublots, assemblies and other languages aren't read.
 - **Planning rates from run history:** the scheduled recalculation looks at every line of a site at once, on whole days; it can't be limited to some lines or materials, or run at a set time of day. Stops can be taken out only on lines that record machine state, and a proposal accepted without review is worked out once, not again when it is accepted.
-- **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts on screen and no control charts yet.
+- **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts of their own on screen (a characteristic sampled from one has a [control chart](#control-charts)).
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
@@ -2822,7 +2830,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** has no quality figures yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
-- **Quality:** control charts and alerts don't update while open (refresh the page), alerts aren't e-mailed, and there are no sampling plans or reminders of samples due. Process values make results only at fixed intervals from one tag per line, never for an inspected characteristic or a lot. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
+- **Quality:** alerts aren't e-mailed, and there are no sampling plans or reminders of samples due. Process values make results only at fixed intervals from one tag per line, never for an inspected characteristic or a lot. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
 - **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.
 - **Some switched-off controls give no reason yet:** a form's Save waiting on a field next to it, an Export with nothing to export, and the locked boxes on the Permissions tab (point at those with the mouse to see why).
 

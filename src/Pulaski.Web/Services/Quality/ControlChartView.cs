@@ -11,6 +11,13 @@ public static class ControlChartView
         ? [("p", "p: proportion defective"), ("np", "np: number defective"), ("c", "c: defects a sample"), ("u", "u: defects per unit")]
         : [("i_mr", "Individuals and moving range"), ("xbar_r", "X-bar and R"), ("xbar_s", "X-bar and S")];
 
+    /// <summary>
+    /// Where a refreshed chart's window ends: one that reached the present when it was loaded keeps up with it (a minute ahead, as it
+    /// opens), so new results appear; one ending earlier stays where it was.
+    /// </summary>
+    public static DateTimeOffset RefreshedTo(DateTimeOffset shownTo, DateTimeOffset loadedAt, DateTimeOffset now) =>
+        shownTo >= loadedAt ? now.AddMinutes(1) : shownTo;
+
     public static string ChartName(string chartType) => chartType switch
     {
         "i_mr" => "Individuals and moving range",

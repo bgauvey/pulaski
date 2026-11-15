@@ -55,4 +55,15 @@ public class ControlChartViewTests
         Assert.Equal("3.00% defective (30,000 ppm): 6 defective in 200 inspected. The specification allows at most 1 a sample.",
             ControlChartView.Rate(new CapabilityDto { DefectRate = 0.03, Ppm = 30_000, Defects = 6, Inspected = 200, MaxDefects = 1 }, "p"));
     }
+
+    [Fact]
+    public void A_refreshed_chart_keeps_up_with_the_present_only_when_its_window_reached_it()
+    {
+        var loadedAt = new DateTimeOffset(2026, 11, 14, 14, 0, 0, TimeSpan.Zero);
+        var now = loadedAt.AddSeconds(30);
+
+        Assert.Equal(now.AddMinutes(1), ControlChartView.RefreshedTo(loadedAt.AddMinutes(1), loadedAt, now));
+        Assert.Equal(now.AddMinutes(1), ControlChartView.RefreshedTo(loadedAt, loadedAt, now));
+        Assert.Equal(loadedAt.AddHours(-2), ControlChartView.RefreshedTo(loadedAt.AddHours(-2), loadedAt, now));
+    }
 }
