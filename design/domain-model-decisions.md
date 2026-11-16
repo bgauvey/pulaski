@@ -2716,6 +2716,9 @@ The charter's next steps include a CI pipeline; nothing built or tested a change
   so a time worked out in memory (a dispatched job's projected start, returned to the caller) differed by its last digit from the same time
   read back. The application's `TimeProvider` is now `MicrosecondClock` (registered in `AddApplication`, so tests can still give their own),
   and the database tests start from `TestTime.Now`. Times sent by an edge node are stored as PostgreSQL rounds them.
+- **LF in every checkout.** The Windows job then failed on formatting (IDE0055): git on Windows checks text out as CRLF, but `.editorconfig`
+  says LF and the build enforces it. `.gitattributes` keeps LF for every text file whatever the platform's setting (CRLF only for `.cmd`,
+  `.bat` and `.ps1`, as `.editorconfig` says), and marks the binaries.
 - Not yet: container images (the next piece), the demo end to end, or a check against the simulators' MQTT broker.
 
 ## Application architecture
