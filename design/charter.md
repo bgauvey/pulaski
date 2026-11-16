@@ -149,6 +149,6 @@ One decision remains open; the license, storage and UI framework are settled.
 **Next steps**
 
 - [ ] Draft the core domain model (in progress — see `domain-model-decisions.md`)
-- [ ] Create the repository, solution layout and CI pipeline under the Pulaski codename
+- [x] Create the repository, solution layout and CI pipeline under the Pulaski codename
 - [ ] Build the line simulator for the first slice
 - [ ] Approach two or three candidate design partners

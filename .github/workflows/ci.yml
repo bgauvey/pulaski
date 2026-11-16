@@ -1,0 +1,123 @@
+# Builds and tests Pulaski on every push to main and every pull request.
+#
+# - build-and-test (Linux): the whole solution in Release (warnings are errors, code style enforced), then every test project. The
+#   database tests run against a stock PostgreSQL 18 service, as a superuser that can create the throwaway database and login they use
+#   (Tests/Pulaski.Infrastructure.Tests/DatabaseFixture.cs). The OPC UA server tests run against Microsoft's OPC PLC simulator, started
+#   with the same settings as deploy/simulator/compose.yaml.
+# - edge-windows: the edge node also ships as a Windows service, so it is built and its tests run on Windows too.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
+
+jobs:
+  build-and-test:
+    name: Build and test (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      PULASKI_TEST_ADMIN_CONNECTION: Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=postgres
+      PULASKI_OPCUA_TEST_ENDPOINT: opc.tcp://localhost:50000
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', 'nuget.config', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # Service containers can't be given arguments, so the simulator is started here, as in deploy/simulator/compose.yaml.
+      - name: Start the OPC UA simulator
+        run: |
+          docker run -d --name opc-plc -p 50000:50000 mcr.microsoft.com/iotedge/opc-plc:2.15.12 \
+            --pn=50000 --autoaccept --unsecuretransport --sph --fn=5 --fr=1 --ft=uint --sn=5 --sr=10 --st=double
+          for i in $(seq 1 60); do
+            if (exec 3<>/dev/tcp/localhost/50000) 2>/dev/null; then echo "OPC UA simulator is listening"; exit 0; fi
+            sleep 1
+          done
+          echo "::error::The OPC UA simulator didn't start"
+          docker logs opc-plc
+          exit 1
+
+      - name: Restore
+        run: dotnet restore src/Pulaski.slnx
+
+      - name: Build
+        run: dotnet build src/Pulaski.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test src/Pulaski.slnx -c Release --no-build --logger trx --results-directory TestResults
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-linux
+          path: TestResults
+          if-no-files-found: ignore
+
+  edge-windows:
+    name: Edge node (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', 'nuget.config', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Build and test the edge node
+        run: dotnet test Tests/Pulaski.Edge.Tests -c Release --logger trx --results-directory TestResults
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-windows
+          path: TestResults
+          if-no-files-found: ignore

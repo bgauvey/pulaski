@@ -2694,6 +2694,22 @@ The chart reloads what was shown, not the form's edits; a window that reached th
 (`ControlChartView.RefreshedTo`: to = now + 1 minute), an earlier one stays fixed. The alerts list reloads with the open alert's detail, leaving a
 cause and action being typed. A failed reload keeps what was shown. Polling, not push: no new API.
 
+## Continuous integration (D-100, proposed)
+
+The charter's next steps include a CI pipeline; nothing built or tested a change before it reached `main`. GitHub Actions
+(`.github/workflows/ci.yml`) runs on every push to `main`, every pull request and on demand:
+
+- **Linux, the whole solution.** Restore, build in Release (warnings are errors and code style is enforced, as locally), then every test
+  project. The database tests run against a stock `postgres:18` service as its superuser (they create a throwaway database and a member of
+  `pulaski_app`, as locally), through `PULASKI_TEST_ADMIN_CONNECTION`; the migration tests compare the migrated catalog with a fresh load, so a
+  missing or inconsistent migration fails the build. The OPC UA server tests run against Microsoft's OPC PLC simulator, started with the
+  settings in `deploy/simulator/compose.yaml` (`PULASKI_OPCUA_TEST_ENDPOINT`). Runners are in UTC, which the suite passes in.
+- **Windows, the edge node.** The edge also ships as a Windows service (D-050), so its project is built and its tests run on Windows.
+- Test results (`.trx`) are kept as an artifact when a run fails. NuGet packages are cached by the central package versions and project files.
+  Runs of the same branch cancel the one before. The workflow reads the repository only (`contents: read`).
+- **No DCO check** (the user's choice): commits aren't checked for a `Signed-off-by` line.
+- Not yet: container images (the next piece), the demo end to end, or a check against the simulators' MQTT broker.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
