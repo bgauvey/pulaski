@@ -2736,6 +2736,14 @@ never as the owner. The API image adds `libgssapi-krb5-2` (Npgsql looks for it w
 in `/data`. CI builds all four (`images` job). Every setting is the apps' own configuration as environment variables
 (`deploy/images/README.md`).
 
+**Demo compose (piece 2b).** `compose.yaml` at the repository root, so the charter's `docker compose up` (`--build` the first time) is the
+whole install: `db` (`postgres:18`, volume `db-data`), `db-init` (`PULASKI_SEED=demo`; the API waits for it to complete), `api` (port 5080),
+`web` (port 5090), and the simulators by `include` of `deploy/simulator/compose.yaml`. The administrator is `admin` with the temporary password
+`Pulaski-demo-1`. Every password, key and port has a demo default overridable from the environment or `.env` (`PULASKI_DB_PASSWORD`,
+`PULASKI_APP_PASSWORD`, `PULASKI_SIGNING_KEY`, `PULASKI_ADMIN_PASSWORD`, `PULASKI_*_PORT`). Data Protection keys live in volumes (`api-keys`,
+`web-keys`; the images create the folders owned by `app`), so sign-ins survive a new container. CI's `demo` job runs `docker compose up
+--build` and checks the database init, an API sign-in and the UI. The edge isn't started yet (piece 2c).
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

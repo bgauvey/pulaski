@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-14 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-16 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -47,15 +47,33 @@ Today you can use Pulaski to:
 - create **work orders**, which Pulaski turns into **jobs** on your lines;
 - plan and sequence those jobs on a live **schedule**, and see when each one is expected to run;
 - publish the plan to the floor and freeze it;
-- keep **inventory**: receive material lots into stores, write stock up or off, move and hold lots, record what each job used and made, and trace any lot back to what it was made from or forward to what was made from it.
+- keep **inventory**: receive material lots into stores, write stock up or off, move and hold lots, record what each job used and made, and trace any lot back to what it was made from or forward to what was made from it;
+- run jobs on the floor and report what they made, take machine states, counts and stops from the machines, and see **OEE** by line, shift and product;
+- record labor, quality results against specifications, and watch processes on **control charts** that raise alerts.
 
-Recording what actually happens on the machines (running jobs, counts, downtime) is still being built; see [What Pulaski doesn't do yet](#23-what-pulaski-doesnt-do-yet).
+For what is missing, see [What Pulaski doesn't do yet](#23-what-pulaski-doesnt-do-yet).
 
 ### Opening Pulaski
 
 Open Pulaski in a web browser at the address your administrator gives you (on a developer's machine it is `http://localhost:5090`). Pulaski works best in a current version of Chrome, Edge, Firefox or Safari, on a desktop or a tablet in landscape.
 
 Pulaski asks you to **sign in** with the user name and password your administrator gave you; the first time, you choose your own password. Your **roles** decide which screens you see and what you can change on them. See [Users, roles and signing in](#15-users-roles-and-signing-in).
+
+### Try the demo
+
+To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows or a Mac) and a copy of Pulaski's source.
+
+1. In the folder with the source, run `docker compose up --build`. The first time it builds Pulaski and downloads what it needs, which takes a few minutes.
+2. When it has started, open `http://localhost:5090`.
+3. Sign in as **admin** with the password **Pulaski-demo-1**, then choose a new password.
+4. The demo plant is ready: site PLT1 with extrusion lines EXT-01 and EXT-02 and packing line PACK1, stores, 200 materials and their units. Start at [Setting up: what to do first](#3-setting-up-what-to-do-first), step 6.
+5. To stop it, press Ctrl+C (or run `docker compose down`). It keeps your data for the next start; `docker compose down -v` deletes it.
+
+**In detail**
+
+- **What runs.** PostgreSQL, Pulaski's API (`http://localhost:5080`) and screens, and the machine simulators: an MQTT broker with three simulated PackML machines and an OPC UA server (see [Edge nodes](#20-edge-nodes-collecting-machine-data), *The demo simulators*). The edge node that reads them isn't started yet: set one up as described there.
+- **Ports.** If something on your computer already uses port 5090, 5080, 1883 or 50000, set `PULASKI_WEB_PORT`, `PULASKI_API_PORT`, `PULASKI_MQTT_PORT` or `PULASKI_OPCUA_PORT` before starting it.
+- **Passwords and keys** in the demo are for trying Pulaski only. Don't use it as an installation for real work.
 
 ### The screen
 
@@ -2618,7 +2636,7 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 - **EtherNet/IP in detail.** The edge reads each bound tag every poll interval and records the time it read it (the PLC sends no time). A tag it can't read is recorded as lost once and tried again on every poll. Only single values are read, not whole arrays or structures.
 - **Alarm messages** come from the machine profile's **Alarms** and **Warnings** lists, by number, as they were when the alarm was raised. An alarm stays active while the signal is lost: it clears only when the machine says so.
 - **Process values are kept 90 days** (`Retention:ProcessValueDays` in the API's settings), dropped a month at a time once a whole month is older. Only numbers are kept.
-- **The demo simulators.** `docker compose -f deploy/simulator/compose.yaml up -d` starts an OPC UA server on `opc.tcp://localhost:50000` (Microsoft's OPC PLC; add an OPC UA connection with **Trust any server**, or **Security** none, and bind such as `ns=3;s=StepUp`), a local-only MQTT broker and three PackML simulators: group `Plant1`, nodes `Extruder`, `Saw` and `Packer`, and devices `EXT-01-EXT`, `EXT-01-SAW` and `PACK1`. The Spruiktec simulators publish standard PackML state numbers; `deploy/simulator/packml-simulator-profile.csv` is an example profile with the matching state values. The broker is anonymous and has no TLS: keep it on your development machine.
+- **The demo simulators.** The [demo](#try-the-demo) starts them; on their own, `docker compose -f deploy/simulator/compose.yaml up -d` starts an OPC UA server on `opc.tcp://localhost:50000` (Microsoft's OPC PLC; add an OPC UA connection with **Trust any server**, or **Security** none, and bind such as `ns=3;s=StepUp`), a local-only MQTT broker and three PackML simulators: group `Plant1`, nodes `Extruder`, `Saw` and `Packer`, and devices `EXT-01-EXT`, `EXT-01-SAW` and `PACK1`. The Spruiktec simulators publish standard PackML state numbers; `deploy/simulator/packml-simulator-profile.csv` is an example profile with the matching state values. The broker is anonymous and has no TLS: keep it on your development machine.
 - **Connect the edge.** Add a Sparkplug B connection on the edge node with broker host `localhost`, port `1883` (or the value of `PULASKI_MQTT_PORT` if 1883 is occupied), and group id `Plant1`. If Pulaski Edge runs in the same Docker Compose network as the broker, use host `broker` and port `1883` instead. Bind the three simulator addresses from the Seen tab, for example `Plant1/Extruder/EXT-01-EXT:Status/StateCurrent`, `Plant1/Saw/EXT-01-SAW:Status/StateCurrent` and `Plant1/Packer/PACK1:Status/StateCurrent`. Useful companion metrics include `Status/UnitModeCurrent`, `Status/CurMachSpeed`, and the `Admin/Prod*Count/0/AccCount` counters.
 - **Start a simulated machine.** After a fresh start, wait for its initial `Clearing` transition to finish at `Stopped`. Then Reset takes 1–10 seconds to reach `Idle`; the simulator command tool's `--delay-seconds 12` allows for that before it sends Start. For example, run `dotnet run --project tools/Pulaski.SparkplugCommand -- --host localhost --port 1883 --delay-seconds 12 spBv1.0/Plant1/DCMD/Extruder/EXT-01-EXT Command/Reset=true Command/Start=true`. Change `Extruder/EXT-01-EXT` to `Saw/EXT-01-SAW` or `Packer/PACK1` for the other devices; use the configured broker port if it is not 1883. Start takes another 1–10 seconds to reach `Execute`.
 
@@ -2830,6 +2848,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** has no quality figures yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
 - **Notes** can only be written when the order is created.
+- **The demo** doesn't start an edge node: machine data from its simulators reaches Pulaski only once you set one up and run it.
 - **Quality:** alerts aren't e-mailed, and there are no sampling plans or reminders of samples due. Process values make results only at fixed intervals from one tag per line, never for an inspected characteristic or a lot. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
 - **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.
 - **Some switched-off controls give no reason yet:** a form's Save waiting on a field next to it, an Export with nothing to export, and the locked boxes on the Permissions tab (point at those with the mouse to see why).
