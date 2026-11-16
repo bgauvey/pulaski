@@ -1,0 +1,15 @@
+# Line endings as .editorconfig says: LF everywhere, whatever the platform's git setting, so a Windows checkout (core.autocrlf)
+# builds; code style, line endings included, is enforced in the build (IDE0055). Windows scripts are CRLF.
+* text=auto eol=lf
+
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+*.pdf binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
