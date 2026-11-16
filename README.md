@@ -63,7 +63,20 @@ Operator UI · ERP · BI and analytics
 
 ## Getting started
 
-There is nothing to install yet. The first milestone is a single-command demo: a simulated extrusion line running end to end, from machine signals to OEE, SPC, and genealogy.
+Try the demo with Docker (Docker Desktop on Windows or a Mac):
+
+```sh
+git clone https://github.com/bgauvey/pulaski.git
+cd pulaski
+docker compose up --build
+```
+
+Then open http://localhost:5090 and sign in as `admin` with the password `Pulaski-demo-1` (you'll choose a new one). The demo plant has
+two extrusion lines and a packing line, stores and 200 materials; machine simulators (Sparkplug B and OPC UA) run beside it. Stop it with
+Ctrl+C or `docker compose down` (add `-v` to delete its data). The passwords and keys in `compose.yaml` are for the demo only.
+
+The first milestone is a single-command demo of a simulated extrusion line running end to end, from machine signals to OEE, SPC, and
+genealogy; connecting the edge node to the simulators automatically is next.
 
 Watch or star the repository to follow progress.
 

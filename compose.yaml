@@ -1,0 +1,84 @@
+# Pulaski demo (D-101): one simulated plant, end to end.
+#
+#   docker compose up --build        then open http://localhost:5090 and sign in as admin / Pulaski-demo-1 (you'll choose a new password)
+#   docker compose down              stops it; add -v to delete the demo database too
+#
+# It builds the images from this clone (deploy/images), starts PostgreSQL 18, creates the database with the demo site, lines and
+# materials (pulaski-db), then the API and the UI. The machine simulators (deploy/simulator/compose.yaml: an MQTT broker, three PackML
+# simulators publishing Sparkplug B, an OPC UA server) start beside them.
+#
+# Every password and key below is for this demo only. Each can be overridden from the environment or a .env file beside this one, as can
+# the ports, if something on this machine already uses them.
+name: pulaski
+
+include:
+  - deploy/simulator/compose.yaml
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_PASSWORD: ${PULASKI_DB_PASSWORD:-pulaski-demo-owner}
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # Creates or upgrades the database, then exits; the API waits for it.
+  db-init:
+    build:
+      context: .
+      dockerfile: deploy/images/db/Dockerfile
+    image: pulaski-db:demo
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: postgres
+      PGPASSWORD: ${PULASKI_DB_PASSWORD:-pulaski-demo-owner}
+      PULASKI_APP_PASSWORD: ${PULASKI_APP_PASSWORD:-pulaski-demo-api}
+      PULASKI_SEED: demo
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: deploy/images/api/Dockerfile
+    image: pulaski-api:demo
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__Pulaski: Host=db;Database=pulaski;Username=pulaski_api;Password=${PULASKI_APP_PASSWORD:-pulaski-demo-api}
+      Security__SigningKey: ${PULASKI_SIGNING_KEY:-pulaski-demo-signing-key-not-for-production-use}
+      Security__BootstrapAdmin__Username: admin
+      Security__BootstrapAdmin__Password: ${PULASKI_ADMIN_PASSWORD:-Pulaski-demo-1}
+    ports:
+      - "${PULASKI_API_PORT:-5080}:8080"
+    volumes:
+      - api-keys:/home/app/.aspnet/DataProtection-Keys
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/images/web/Dockerfile
+    image: pulaski-web:demo
+    depends_on:
+      - api
+    environment:
+      PulaskiApi__BaseUrl: http://api:8080/
+    ports:
+      - "${PULASKI_WEB_PORT:-5090}:8080"
+    volumes:
+      - web-keys:/home/app/.aspnet/DataProtection-Keys
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  api-keys:
+  web-keys:
