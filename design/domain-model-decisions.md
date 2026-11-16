@@ -2721,6 +2721,21 @@ The charter's next steps include a CI pipeline; nothing built or tested a change
   `.bat` and `.ps1`, as `.editorconfig` says), and marks the binaries.
 - Not yet: container images (the next piece), the demo end to end, or a check against the simulators' MQTT broker.
 
+## Container images and the demo (D-101, proposed, in pieces)
+
+The charter's first slice ends in `docker compose up` to a working demo in 15 minutes. Decided (the user's choices): **images built from
+the clone** (nothing published yet; publishing can come with a release), the **first administrator keeps its temporary password** (changed
+at the first sign-in, as in a real install), and the **edge node set up by a one-shot container through the API** (piece 2c).
+
+**Images (piece 2a).** `deploy/images/{db,api,web,edge}/Dockerfile`, built from the repository root (`.dockerignore` keeps tests, docs and
+build output out). The .NET images publish with the SDK `global.json` pins and run on the matching runtime (`aspnet`/`runtime` 10.0.15) as
+the non-root `app` user, on port 8080. `pulaski-db` is `postgres:18` with `db/` and `init.sh`: a one-shot setup that creates the database,
+loads the schema (new) or runs `migrate.sh` (existing), the demo seeds only when `PULASKI_SEED=demo` on a new database, the starter units and
+reasons every time, and creates or updates the API's login as a member of `pulaski_app`, so the API runs with the production grants (D-012),
+never as the owner. The API image adds `libgssapi-krb5-2` (Npgsql looks for it when connecting). The edge keeps its buffer and certificates
+in `/data`. CI builds all four (`images` job). Every setting is the apps' own configuration as environment variables
+(`deploy/images/README.md`).
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

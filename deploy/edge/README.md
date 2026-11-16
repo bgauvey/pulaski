@@ -57,3 +57,6 @@ must trust the edge's certificate too (`pki/own/certs`), the same way on its sid
 
 `dotnet run --project src/Pulaski.Edge`, or run the published program directly. Ctrl+C (or `docker stop`) stops it the same way
 a service manager does.
+
+The container image is built from the repository root with `docker build -f deploy/images/edge/Dockerfile -t pulaski-edge .`
+(see [`../images/README.md`](../images/README.md)). It keeps the buffer and certificates in `/data`; mount a volume there.

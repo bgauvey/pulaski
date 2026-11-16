@@ -5,8 +5,9 @@
 #   (Tests/Pulaski.Infrastructure.Tests/DatabaseFixture.cs). The OPC UA server tests run against Microsoft's OPC PLC simulator, started
 #   with the same settings as deploy/simulator/compose.yaml.
 # - edge-windows: the edge node also ships as a Windows service, so it is built and its tests run on Windows too.
+# - images: the container images in deploy/images build (D-101). They aren't published.
 #
-# Both install the SDK global.json pins, so CI builds with the same compiler and analyzers as a developer's machine; a newer SDK
+# The .NET jobs install the SDK global.json pins, so CI builds with the same compiler and analyzers as a developer's machine; a newer SDK
 # (with new analyzer rules, which fail the build as warnings are errors) arrives only when global.json is bumped.
 name: CI
 
@@ -124,3 +125,18 @@ jobs:
           name: test-results-windows
           path: TestResults
           if-no-files-found: ignore
+
+  images:
+    name: Image (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [api, web, edge, db]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build the image
+        run: docker build -f deploy/images/${{ matrix.image }}/Dockerfile -t pulaski-${{ matrix.image }}:ci .
