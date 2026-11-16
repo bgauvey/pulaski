@@ -2,6 +2,8 @@
 
 **An open-source Manufacturing Execution System (MES) for process and semi-continuous manufacturing lines.**
 
+[![CI](https://github.com/bgauvey/pulaski/actions/workflows/ci.yml/badge.svg)](https://github.com/bgauvey/pulaski/actions/workflows/ci.yml)
+
 > **Status: pre-alpha.** Pulaski is in early design and development. Nothing here is production-ready yet, and APIs will change.
 >
 > *Pulaski is a working codename. The final product name will be announced before the first public release.*

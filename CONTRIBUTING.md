@@ -29,11 +29,17 @@ If you are unsure whether you can contribute something, ask in an issue before s
 
 ## Development setup
 
-Setup instructions will be added once the first code lands. Expect to need:
+You need the .NET 10 SDK, PostgreSQL 18 (local, or the `postgres:18` container), Docker for the machine simulators, and Git.
 
-- The current .NET LTS SDK
-- Docker (for PostgreSQL, an MQTT broker, and the line simulator)
-- Git
+- Build: `dotnet build src/Pulaski.slnx`
+- Test: `dotnet test src/Pulaski.slnx`. The database tests create and drop a throwaway database on the local server; point them at another
+  with `PULASKI_TEST_ADMIN_CONNECTION` (a user that can create databases and roles), for example
+  `Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=postgres`. The OPC UA server tests run only when
+  `PULASKI_OPCUA_TEST_ENDPOINT` names a server, such as the simulator in `deploy/simulator/compose.yaml` (`opc.tcp://localhost:50000`).
+- Loading a database and running the API and UI locally are described in `CLAUDE.md` under *Local dev*.
+
+Every pull request runs the same build and tests on GitHub Actions (`.github/workflows/ci.yml`): the whole solution on Linux against
+PostgreSQL 18 and the OPC UA simulator, and the edge node on Windows. A pull request should pass before it is merged.
 
 ## Making changes
 
@@ -42,7 +48,7 @@ Setup instructions will be added once the first code lands. Expect to need:
 2. Keep each pull request focused on one change.
 3. Add or update tests for any behavior you change.
 4. Update documentation when behavior or configuration changes.
-5. Make sure the build and all tests pass locally.
+5. Make sure the build and all tests pass locally; CI runs them again on the pull request.
 
 ### Coding guidelines
 

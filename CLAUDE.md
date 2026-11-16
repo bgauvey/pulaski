@@ -426,7 +426,8 @@ Treat these as working assumptions; confirm with Bill before building anything t
   `Tests/Pulaski.Testing`); `.editorconfig`,
   `Directory.Build.props`, `Directory.Packages.props` (central package versions) and
   `nuget.config` sit at the repo root.
-- Build and test: `dotnet build src/Pulaski.slnx`, `dotnet test src/Pulaski.slnx`.
+- Build and test: `dotnet build src/Pulaski.slnx`, `dotnet test src/Pulaski.slnx`. CI (D-100, `.github/workflows/ci.yml`) runs the same in
+  Release on every push to main and pull request: Linux against a `postgres:18` service and the OPC PLC simulator, the edge node on Windows.
   `Pulaski.Infrastructure.Tests` creates and drops a throwaway database and a login role that is
   a member of `pulaski_app`, and drives the real handlers through it; override the server
   with `PULASKI_TEST_ADMIN_CONNECTION`.
