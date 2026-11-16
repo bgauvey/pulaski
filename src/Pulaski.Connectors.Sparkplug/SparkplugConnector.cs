@@ -39,7 +39,7 @@ public sealed record SparkplugOptions(string Host, int Port, bool Tls, string Cl
 /// samples, asks nodes for a rebirth when needed, and with a host id publishes its STATE so edge nodes know it is listening.
 /// It reconnects by itself; while the broker is away every address it heard is reported lost.
 /// </summary>
-public sealed class SparkplugConnector(SparkplugOptions options, TimeProvider time, ILogger<SparkplugConnector> log) : IConnector
+public sealed partial class SparkplugConnector(SparkplugOptions options, TimeProvider time, ILogger<SparkplugConnector> log) : IConnector
 {
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromSeconds(30);
 
@@ -102,7 +102,7 @@ public sealed class SparkplugConnector(SparkplugOptions options, TimeProvider ti
 
                 var filter = $"{SparkplugTopic.Namespace}/{options.GroupId ?? "+"}/#";
                 await client.SubscribeAsync(new MqttClientSubscribeOptionsBuilder().WithTopicFilter(filter, MqttQualityOfServiceLevel.AtLeastOnce).Build(), cancellationToken);
-                log.LogInformation("Sparkplug B: connected to {Host}:{Port}, listening on {Filter}", options.Host, options.Port, filter);
+                LogConnected(log, options.Host, options.Port, filter);
                 HashSet<(string, string)> watched;
                 lock (_lock)
                 {
@@ -206,7 +206,7 @@ public sealed class SparkplugConnector(SparkplugOptions options, TimeProvider ti
         {
             try
             {
-                log.LogInformation("Sparkplug B: asking {Group}/{Node} for its birth", group, node);
+                LogAskingForBirth(log, group, node);
                 await client.PublishAsync(new MqttApplicationMessageBuilder()
                     .WithTopic(SparkplugTopic.NodeCommand(group, node))
                     .WithPayload(_host.RebirthCommand())
@@ -215,7 +215,7 @@ public sealed class SparkplugConnector(SparkplugOptions options, TimeProvider ti
             catch (Exception ex) when (ex is MQTTnet.Exceptions.MqttCommunicationException or InvalidOperationException)
             {
                 // Not connected after all: asked again on the next connection.
-                log.LogDebug("Sparkplug B: couldn't ask {Group}/{Node} for its birth: {Message}", group, node, ex.Message);
+                LogBirthRequestFailed(log, group, node, ex.Message);
             }
         }
     }
@@ -242,4 +242,13 @@ public sealed class SparkplugConnector(SparkplugOptions options, TimeProvider ti
 
         _gate.Dispose();
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sparkplug B: connected to {Host}:{Port}, listening on {Filter}")]
+    private static partial void LogConnected(ILogger logger, string host, int port, string filter);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sparkplug B: asking {Group}/{Node} for its birth")]
+    private static partial void LogAskingForBirth(ILogger logger, string group, string node);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Sparkplug B: couldn't ask {Group}/{Node} for its birth: {Message}")]
+    private static partial void LogBirthRequestFailed(ILogger logger, string group, string node, string message);
 }

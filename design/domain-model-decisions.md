@@ -2708,6 +2708,14 @@ The charter's next steps include a CI pipeline; nothing built or tested a change
 - Test results (`.trx`) are kept as an artifact when a run fails. NuGet packages are cached by the central package versions and project files.
   Runs of the same branch cancel the one before. The workflow reads the repository only (`contents: read`).
 - **No DCO check** (the user's choice): commits aren't checked for a `Signed-off-by` line.
+- **The SDK is pinned** (the user's choice, after the first run failed): `global.json` names SDK 10.0.404 (`rollForward: latestPatch`) and both
+  jobs install it (`global-json-file`). The runner had taken the newest 10.0 SDK, whose analyzers (CA1873, log arguments evaluated when the
+  level is off) failed a build that passed on an older local SDK. New rules now arrive only when the pin is bumped, locally and in CI alike.
+  The flagged calls became source-generated `[LoggerMessage]` methods, as the rest of the code logs.
+- **Times to the microsecond.** The first Linux run also showed that the Linux clock gives 100 ns ticks while PostgreSQL keeps microseconds,
+  so a time worked out in memory (a dispatched job's projected start, returned to the caller) differed by its last digit from the same time
+  read back. The application's `TimeProvider` is now `MicrosecondClock` (registered in `AddApplication`, so tests can still give their own),
+  and the database tests start from `TestTime.Now`. Times sent by an edge node are stored as PostgreSQL rounds them.
 - Not yet: container images (the next piece), the demo end to end, or a check against the simulators' MQTT broker.
 
 ## Application architecture

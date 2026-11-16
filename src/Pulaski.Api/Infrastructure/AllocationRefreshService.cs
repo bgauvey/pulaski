@@ -9,7 +9,7 @@ namespace Pulaski.Api.Infrastructure;
 /// <c>Allocations:Refresh:AtMostSeconds</c> (900). <c>Allocations:Refresh:Enabled</c> (true) switches the service off for every site;
 /// <c>Allocations:Refresh:PollSeconds</c> (30) paces it. Failures are logged and retried on the next round.
 /// </summary>
-internal sealed class AllocationRefreshService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<AllocationRefreshService> logger) : BackgroundService
+internal sealed partial class AllocationRefreshService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<AllocationRefreshService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -30,7 +30,7 @@ internal sealed class AllocationRefreshService(IServiceScopeFactory scopes, ICon
                 var refreshed = await scope.ServiceProvider.GetRequiredService<AllocationAutoRefresh>().RefreshDueAsync(quiet, atMost, stoppingToken);
                 if (refreshed > 0)
                 {
-                    logger.LogInformation("Refreshed allocations at {Count} sites.", refreshed);
+                    LogRefreshed(logger, refreshed);
                 }
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
@@ -40,4 +40,7 @@ internal sealed class AllocationRefreshService(IServiceScopeFactory scopes, ICon
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Refreshed allocations at {Count} sites.")]
+    private static partial void LogRefreshed(ILogger logger, int count);
 }

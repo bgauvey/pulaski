@@ -42,7 +42,7 @@ public sealed class DeliveryTests(DatabaseFixture db)
 
         await relay.CaptureAsync(sink, ["pulaski.lot."], fromNow: true, 1000, CancellationToken.None);
         await relay.CaptureAsync(sink, ["pulaski.lot."], fromNow: true, 1000, CancellationToken.None); // again: nothing twice
-        var mine = (await relay.DueAsync(sink, DateTimeOffset.UtcNow.AddMinutes(1), 1000, CancellationToken.None))
+        var mine = (await relay.DueAsync(sink, TestTime.Now.AddMinutes(1), 1000, CancellationToken.None))
             .Where(e => e.Subject == a.LotId || e.Subject == b.LotId).ToList();
 
         // A's later write-up waits behind its receipt; B's receipt is independent.
@@ -50,7 +50,7 @@ public sealed class DeliveryTests(DatabaseFixture db)
         Assert.All(mine, e => Assert.StartsWith("pulaski.lot.", e.Type, StringComparison.Ordinal));
 
         // A's receipt fails for good; B's is delivered. A's write-up stays held.
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         await relay.RecordAsync(mine[0].DeliveryId, DeliveryPolicy.AfterAttempt(1, 400, "bad item", now), 400, now, CancellationToken.None);
         await relay.RecordAsync(mine[1].DeliveryId, DeliveryPolicy.AfterAttempt(1, 202, null, now), 202, now, CancellationToken.None);
         Assert.DoesNotContain(await relay.DueAsync(sink, now.AddMinutes(1), 1000, CancellationToken.None), e => e.Subject == a.LotId);
@@ -60,7 +60,7 @@ public sealed class DeliveryTests(DatabaseFixture db)
 
         // Someone fixes it in the ERP and skips it: A's write-up is due now.
         await db.SendAsync(new SkipDeliveryCommand(mine[0].DeliveryId, "Booked by hand in the ERP"));
-        var released = Assert.Single(await relay.DueAsync(sink, DateTimeOffset.UtcNow.AddMinutes(1), 1000, CancellationToken.None), e => e.Subject == a.LotId);
+        var released = Assert.Single(await relay.DueAsync(sink, TestTime.Now.AddMinutes(1), 1000, CancellationToken.None), e => e.Subject == a.LotId);
         Assert.Equal("pulaski.lot.written_up.v1", released.Type);
         Assert.Contains("\"entered\"", released.Data, StringComparison.Ordinal);
 
@@ -81,10 +81,10 @@ public sealed class DeliveryTests(DatabaseFixture db)
         var (material, location, _) = await PlantAsync();
         var lot = await db.SendAsync(new ReceiveLotCommand(material, location, "DK-" + _suffix, 10m, db.UomId));
         await relay.CaptureAsync(sink, ["pulaski.lot."], fromNow: true, 1000, CancellationToken.None);
-        var due = Assert.Single(await relay.DueAsync(sink, DateTimeOffset.UtcNow.AddMinutes(1), 1000, CancellationToken.None), e => e.Subject == lot.LotId);
+        var due = Assert.Single(await relay.DueAsync(sink, TestTime.Now.AddMinutes(1), 1000, CancellationToken.None), e => e.Subject == lot.LotId);
 
         // Accepted in the answer: delivered, with the receiver's reference.
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         await relay.RecordAsync(due.DeliveryId, DeliveryPolicy.AfterAttempt(1, 200, null, now), 200, now, CancellationToken.None,
             new Acknowledgement(AcknowledgementStatuses.Accepted, "GR-1001", null));
         DeliveryDto Mine(IReadOnlyList<DeliveryDto> all) => all.Single(d => d.Id == due.DeliveryId);
@@ -148,11 +148,11 @@ public sealed class DeliveryTests(DatabaseFixture db)
             await QueryAsync<ListDeliveriesQuery, IReadOnlyList<DeliveryDto>>(new ListDeliveriesQuery(Feed: code) { Search = search, Type = type, From = from });
         Assert.Equal(2, (await Search("ds-" + _suffix)).Count);
         Assert.Equal("pulaski.lot.written_up.v1", Assert.Single(await Search(lot.LotId.ToString(), "written")).EventType);
-        Assert.Empty(await Search("DS-" + _suffix, from: DateTimeOffset.UtcNow.AddMinutes(5)));
+        Assert.Empty(await Search("DS-" + _suffix, from: TestTime.Now.AddMinutes(5)));
 
         // Retention: only delivered rows older than the age go; a failed one stays however old.
         var rows = await Search("DS-" + _suffix);
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         await relay.RecordAsync(rows[0].Id, DeliveryPolicy.AfterAttempt(1, 200, null, now), 200, now, CancellationToken.None);
         await relay.RecordAsync(rows[1].Id, DeliveryPolicy.AfterAttempt(1, 400, "bad", now), 400, now, CancellationToken.None);
         await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
@@ -181,7 +181,7 @@ public sealed class DeliveryTests(DatabaseFixture db)
     // Leaves earlier tests' events delivered so the counts here are this test's.
     private static async Task DrainAsync(DeliveryRelay relay, string sink)
     {
-        var now = DateTimeOffset.UtcNow.AddYears(1);
+        var now = TestTime.Now.AddYears(1);
         IReadOnlyList<OutboundEvent> due;
         while ((due = await relay.DueAsync(sink, now, 1000, CancellationToken.None)).Count > 0)
         {

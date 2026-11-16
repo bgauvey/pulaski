@@ -9,7 +9,7 @@ namespace Pulaski.Edge;
 /// kept in the buffer while Pulaski can't be reached. Refreshes the configuration regularly: a connection whose settings changed
 /// is restarted, a new tag is read from then on. Also reports the addresses its connections have seen.
 /// </summary>
-public sealed class ConnectorHost(
+public sealed partial class ConnectorHost(
     PulaskiClient api, EdgeBuffer buffer, TagBinder binder, IEnumerable<IConnectorFactory> factories, IOptions<EdgeOptions> options,
     ILoggerFactory loggers, TimeProvider time, ILogger<ConnectorHost> log) : BackgroundService
 {
@@ -123,7 +123,7 @@ public sealed class ConnectorHost(
             var sink = new Sink(connection.Id, binder);
             var task = Task.Run(() => connector.RunAsync(sink, stop.Token));
             _running[connection.Id] = new Running(Fingerprint(connection), connector, stop, task);
-            log.LogInformation("Started connection {Code} ({Protocol})", connection.Code, connection.Protocol);
+            LogStarted(log, connection.Code, connection.Protocol);
         }
 
         foreach (var (id, running) in _running)
@@ -160,8 +160,7 @@ public sealed class ConnectorHost(
         {
             // Kept to try again; a failure that goes on is a warning, so a catalog that stays out of date shows in the log.
             _seenFailures++;
-            log.Log(_seenFailures is 1 or 3 || _seenFailures % 10 == 0 ? LogLevel.Warning : LogLevel.Debug,
-                "Couldn't report the addresses seen ({Failures} times in a row); trying again: {Message}", _seenFailures, ex.Message);
+            LogSeenFailed(log, _seenFailures is 1 or 3 || _seenFailures % 10 == 0 ? LogLevel.Warning : LogLevel.Debug, _seenFailures, ex.Message);
         }
     }
 
@@ -188,6 +187,12 @@ public sealed class ConnectorHost(
             throw;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Started connection {Code} ({Protocol})")]
+    private static partial void LogStarted(ILogger logger, string code, string protocol);
+
+    [LoggerMessage(Message = "Couldn't report the addresses seen ({Failures} times in a row); trying again: {Message}")]
+    private static partial void LogSeenFailed(ILogger logger, LogLevel level, int failures, string message);
 
     private static string Fingerprint(EdgeConnectionDto connection) =>
         connection.Protocol + "|" + string.Join("|", connection.Settings.OrderBy(s => s.Key, StringComparer.Ordinal).Select(s => $"{s.Key}={s.Value}"));

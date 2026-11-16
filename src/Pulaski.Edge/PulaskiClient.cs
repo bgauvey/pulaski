@@ -8,7 +8,7 @@ using Pulaski.Contracts.Security;
 namespace Pulaski.Edge;
 
 /// <summary>The edge's calls to the Pulaski API (D-050), signed in as its service user; signs in again when the token runs out.</summary>
-public sealed class PulaskiClient(HttpClient http, IOptions<EdgeOptions> options, TimeProvider time, ILogger<PulaskiClient> log) : IDisposable
+public sealed partial class PulaskiClient(HttpClient http, IOptions<EdgeOptions> options, TimeProvider time, ILogger<PulaskiClient> log) : IDisposable
 {
     public static string AgentVersion { get; } = typeof(PulaskiClient).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
@@ -85,7 +85,7 @@ public sealed class PulaskiClient(HttpClient http, IOptions<EdgeOptions> options
             }
 
             (_token, _expires) = (signedIn.Token, signedIn.ExpiresAt);
-            log.LogInformation("Signed in to Pulaski as {User}", Options.Username);
+            LogSignedIn(log, Options.Username);
             return _token;
         }
         finally
@@ -93,6 +93,9 @@ public sealed class PulaskiClient(HttpClient http, IOptions<EdgeOptions> options
             _signIn.Release();
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Signed in to Pulaski as {User}")]
+    private static partial void LogSignedIn(ILogger logger, string user);
 }
 
 /// <summary>The API refused a call, or couldn't be reached.</summary>

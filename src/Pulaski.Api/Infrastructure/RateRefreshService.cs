@@ -8,7 +8,7 @@ namespace Pulaski.Api.Infrastructure;
 /// due (every <c>every_days</c> of their settings). <c>RunStandards:Refresh:Enabled</c> (true) switches it off for every site;
 /// <c>RunStandards:Refresh:PollMinutes</c> (15) paces it. Failures are logged and retried on the next round.
 /// </summary>
-internal sealed class RateRefreshService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<RateRefreshService> logger) : BackgroundService
+internal sealed partial class RateRefreshService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<RateRefreshService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -27,7 +27,7 @@ internal sealed class RateRefreshService(IServiceScopeFactory scopes, IConfigura
                 var sites = await scope.ServiceProvider.GetRequiredService<RateRefreshRunner>().RefreshDueAsync(stoppingToken);
                 if (sites > 0)
                 {
-                    logger.LogInformation("Recalculated planning rates at {Count} sites.", sites);
+                    LogRecalculated(logger, sites);
                 }
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
@@ -37,4 +37,7 @@ internal sealed class RateRefreshService(IServiceScopeFactory scopes, IConfigura
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Recalculated planning rates at {Count} sites.")]
+    private static partial void LogRecalculated(ILogger logger, int count);
 }

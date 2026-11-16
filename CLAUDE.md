@@ -24,7 +24,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 
 ## Stack
 
-- C# on the current .NET LTS; ASP.NET Core for APIs; a worker service for the edge node.
+- C# on the current .NET LTS; ASP.NET Core for APIs; a worker service for the edge node. The SDK is pinned in `global.json` (D-100);
+  bump it deliberately, since a newer SDK's analyzers can fail the build (warnings are errors).
 - Nullable reference types on; treat warnings seriously.
 - PostgreSQL 18 only. Native range partitioning, BRIN indexes and worker-maintained rollups.
   No TimescaleDB, no SQL Server.
@@ -385,6 +386,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 
 - IDs are native `uuid` holding UUIDv7, generated in the app with `Guid.CreateVersion7()` behind
   `IIdGenerator` (injectable clock). `uuidv7()` is only a DB default backstop (D-006).
+- Times are kept to the microsecond, as PostgreSQL stores them: the app's `TimeProvider` is `MicrosecondClock` (Linux clocks give 100 ns
+  ticks); database tests start from `TestTime.Now`, never `DateTimeOffset.UtcNow`.
 - Never sort GUIDs in memory (.NET `Guid` ordering ≠ RFC byte order); sort in SQL. Never parse
   time out of an ID; use `occurred_at` / `created_at`.
 - Schemas: `core` = master data and current state; `ts` = time-partitioned history and rollups;
@@ -427,7 +430,8 @@ Treat these as working assumptions; confirm with Bill before building anything t
   `Directory.Build.props`, `Directory.Packages.props` (central package versions) and
   `nuget.config` sit at the repo root.
 - Build and test: `dotnet build src/Pulaski.slnx`, `dotnet test src/Pulaski.slnx`. CI (D-100, `.github/workflows/ci.yml`) runs the same in
-  Release on every push to main and pull request: Linux against a `postgres:18` service and the OPC PLC simulator, the edge node on Windows.
+  Release on every push to main and pull request: Linux against a `postgres:18` service and the OPC PLC simulator, the edge node on Windows,
+  both with the SDK `global.json` pins.
   `Pulaski.Infrastructure.Tests` creates and drops a throwaway database and a login role that is
   a member of `pulaski_app`, and drives the real handlers through it; override the server
   with `PULASKI_TEST_ADMIN_CONNECTION`.

@@ -271,7 +271,7 @@ public sealed class ProcessTests(DatabaseFixture db)
         Assert.Equal(("no_capability", 30), (problem.Code, problem.OperationNumber));
 
         var refused = await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CreateWorkOrderCommand(
-            processId, "WO-X", db.MaterialId, 10, db.UomId, DateTimeOffset.UtcNow, null, 0, null)));
+            processId, "WO-X", db.MaterialId, 10, db.UomId, TestTime.Now, null, 0, null)));
         Assert.Equal(problem.Message, refused.Message);
         Assert.StartsWith("Operation 30 (Pack): PACK1-", refused.Message, StringComparison.Ordinal);
     }
@@ -322,7 +322,7 @@ public sealed class ProcessTests(DatabaseFixture db)
         Assert.Equal(1, Assert.Single(await QueryAsync<ListBomsQuery, IReadOnlyList<BomSummaryDto>>(new ListBomsQuery(db.MaterialId)), b => b.Id == bom.Id).ReleasedVersion);
 
         var order = await db.SendAsync(new CreateWorkOrderCommand(
-            processId, "WO-" + Guid.NewGuid().ToString("N")[..8], db.MaterialId, 2000m, db.UomId, DateTimeOffset.UtcNow, null, 0, null));
+            processId, "WO-" + Guid.NewGuid().ToString("N")[..8], db.MaterialId, 2000m, db.UomId, TestTime.Now, null, 0, null));
 
         var reads = db.Services.GetRequiredService<IWorkOrderReadStore>();
         Assert.Equal(1, (await reads.GetAsync(order.Id, CancellationToken.None))!.BomVersionNumber);
@@ -364,7 +364,7 @@ public sealed class ProcessTests(DatabaseFixture db)
         await db.SendAsync(new ReleaseBomVersionCommand(bom.Id, bomDraft.Id, savedBom.Version, null));
 
         var order = await db.SendAsync(new CreateWorkOrderCommand(
-            processId, "WO-" + Guid.NewGuid().ToString("N")[..8], db.MaterialId, 2000m, db.UomId, DateTimeOffset.UtcNow, null, 0, null));
+            processId, "WO-" + Guid.NewGuid().ToString("N")[..8], db.MaterialId, 2000m, db.UomId, TestTime.Now, null, 0, null));
 
         // Extrude and Pack each make the 2000 m: on lines is 2000, not the 4000 the jobs add up to.
         var progress = await QueryAsync<ListWorkOrderProgressQuery, IReadOnlyList<WorkOrderProgressDto>>(new ListWorkOrderProgressQuery(plant.Site));
@@ -403,7 +403,7 @@ public sealed class ProcessTests(DatabaseFixture db)
         var check = await QueryAsync<CheckProcessForOrderQuery, ProcessOrderCheckDto>(new CheckProcessForOrderQuery(processId, db.MaterialId));
         Assert.Contains(check.Problems, p => p.Code == "bom_operation");
         var refused = await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CreateWorkOrderCommand(
-            processId, "WO-" + Guid.NewGuid().ToString("N")[..8], db.MaterialId, 10m, db.UomId, DateTimeOffset.UtcNow, null, 0, null)));
+            processId, "WO-" + Guid.NewGuid().ToString("N")[..8], db.MaterialId, 10m, db.UomId, TestTime.Now, null, 0, null)));
         Assert.Contains("names operation 30", refused.Message, StringComparison.Ordinal);
     }
 
@@ -428,7 +428,7 @@ public sealed class ProcessTests(DatabaseFixture db)
 
         var siteCode = await connection.ExecuteScalarAsync<string>("SELECT code FROM core.equipment WHERE id = @Id", new { Id = plant.Site });
         var uomCode = await connection.ExecuteScalarAsync<string>("SELECT code FROM core.uom WHERE id = @Id", new { Id = db.UomId });
-        var start = DateTimeOffset.UtcNow.AddDays(2);
+        var start = TestTime.Now.AddDays(2);
         ErpWorkOrderRequest Order(string key, decimal qty, string? version = null, bool cancelled = false) => new()
         {
             ExternalSystem = "SAP-" + suffix,

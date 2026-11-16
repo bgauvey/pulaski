@@ -31,7 +31,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         var hold = await ReasonAsync("hold", "QA-HOLD");
 
         // Receive two resin lots, one entered in grams.
-        var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-A-" + _suffix, 100m, plant.Kg, "SUP-77", DateTimeOffset.UtcNow.AddDays(30)));
+        var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-A-" + _suffix, 100m, plant.Kg, "SUP-77", TestTime.Now.AddDays(30)));
         var b = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-B-" + _suffix, 80_000m, plant.Gram));
         Assert.Equal(80m, b.Quantity);
         await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-A-" + _suffix, 1m, plant.Kg)));
@@ -165,7 +165,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal("live", Assert.Single(Assert.Single(live.Materials).Lines).TimeSource);
 
         // An expected receipt due now counts beside stock and covers the shortfall, without being stock.
-        await db.SendAsync(new CreateExpectedReceiptCommand(plant.Site, plant.Resin, 500m, plant.Kg, DateTimeOffset.UtcNow.AddMinutes(-5), "PO-" + _suffix, null, null));
+        await db.SendAsync(new CreateExpectedReceiptCommand(plant.Site, plant.Resin, 500m, plant.Kg, TestTime.Now.AddMinutes(-5), "PO-" + _suffix, null, null));
         var covered = Assert.Single((await QueryAsync<GetShortagesQuery, ShortageReportDto>(new GetShortagesQuery(plant.Site))).Materials);
         Assert.Equal((800m, 500m, 0m), (covered.Available, covered.Incoming, covered.Shortfall));
         Assert.Equal((800m, 450m), (covered.Lines[0].FromStock, covered.Lines[0].FromIncoming));
@@ -192,7 +192,7 @@ public sealed class InventoryTests(DatabaseFixture db)
     {
         var plant = await CreatePlantAsync();
         var count = await ReasonAsync("inventory_adjustment", "COUNT");
-        var lot = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-M-" + _suffix, 100m, plant.Kg, "SUP-1", DateTimeOffset.UtcNow.AddDays(60)));
+        var lot = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-M-" + _suffix, 100m, plant.Kg, "SUP-1", TestTime.Now.AddDays(60)));
 
         var part = await db.SendAsync(new SplitLotCommand(lot.LotId, lot.Version, 30m, plant.Kg));
         Assert.Equal(($"R-M-{_suffix}-1", 30m), (part.LotNumber, part.Quantity));
@@ -244,9 +244,9 @@ public sealed class InventoryTests(DatabaseFixture db)
         var listed = await QueryAsync<ListStockCountsQuery, IReadOnlyList<StockCountSummaryDto>>(new ListStockCountsQuery(plant.Site));
         Assert.Equal(("posted", 2), (Assert.Single(listed).Status, listed[0].CountedLines));
 
-        var onDate = await QueryAsync<StockOnDateQuery, IReadOnlyList<StockOnDateDto>>(new StockOnDateQuery(plant.Site, DateTimeOffset.UtcNow));
+        var onDate = await QueryAsync<StockOnDateQuery, IReadOnlyList<StockOnDateDto>>(new StockOnDateQuery(plant.Site, TestTime.Now));
         Assert.Equal((145m, 2), (Assert.Single(onDate, r => r.MaterialId == plant.Resin).Quantity, onDate[0].LotCount));
-        var before = await QueryAsync<StockOnDateQuery, IReadOnlyList<StockOnDateDto>>(new StockOnDateQuery(plant.Site, DateTimeOffset.UtcNow.AddDays(-1)));
+        var before = await QueryAsync<StockOnDateQuery, IReadOnlyList<StockOnDateDto>>(new StockOnDateQuery(plant.Site, TestTime.Now.AddDays(-1)));
         Assert.Empty(before);
 
         var aging = await QueryAsync<AgingQuery, IReadOnlyList<AgingRowDto>>(new AgingQuery(plant.Site));
@@ -341,7 +341,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         await db.SendAsync(new SetShelfLifeCommand(plant.Resin, stock.Material.MaterialVersion, 120));
         var lot = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-E-" + _suffix, 10m, plant.Kg));
         var expires = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId))).Lot.ExpiresAt!.Value;
-        Assert.InRange(expires, DateTimeOffset.UtcNow.AddDays(119), DateTimeOffset.UtcNow.AddDays(121));
+        Assert.InRange(expires, TestTime.Now.AddDays(119), TestTime.Now.AddDays(121));
         Assert.Equal(120, (await QueryAsync<GetMaterialStockQuery, MaterialStockDetailDto>(new GetMaterialStockQuery(plant.Resin, plant.Site))).Material.ShelfLifeDays);
 
         // The silo takes resin, then refuses the caps until it is empty.
@@ -405,7 +405,7 @@ public sealed class InventoryTests(DatabaseFixture db)
     public async Task Back_dated_movements_change_the_past_the_same_whatever_order_they_were_entered_in()
     {
         var plant = await CreatePlantAsync();
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         var count = await ReasonAsync("inventory_adjustment", "COUNT");
         DateTimeOffset Ago(double hours) => now.AddHours(-hours);
 
@@ -418,7 +418,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         async Task<decimal> ResinAt(DateTimeOffset at) =>
             (await QueryAsync<StockOnDateQuery, IReadOnlyList<StockOnDateDto>>(new StockOnDateQuery(plant.Site, at)))
                 .SingleOrDefault(r => r.MaterialId == plant.Resin)?.Quantity ?? 0m;
-        Assert.Equal((0m, 50m, 30m, 20m), (await ResinAt(Ago(11)), await ResinAt(Ago(6)), await ResinAt(Ago(3)), await ResinAt(DateTimeOffset.UtcNow)));
+        Assert.Equal((0m, 50m, 30m, 20m), (await ResinAt(Ago(11)), await ResinAt(Ago(6)), await ResinAt(Ago(3)), await ResinAt(TestTime.Now)));
 
         // Aging runs from when it was received, not when it was entered.
         var aging = Assert.Single(await QueryAsync<AgingQuery, IReadOnlyList<AgingRowDto>>(new AgingQuery(plant.Site)), r => r.MaterialId == plant.Resin);
@@ -442,7 +442,7 @@ public sealed class InventoryTests(DatabaseFixture db)
     {
         var plant = await CreatePlantAsync();
         var hold = await ReasonAsync("hold", "QA-HOLD");
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         DateTimeOffset Ago(double hours) => now.AddHours(-hours);
         async Task<long> V(Guid lot) => await VersionAsync(lot);
 
@@ -753,10 +753,10 @@ public sealed class InventoryTests(DatabaseFixture db)
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(notBelow));
         var noCapability = await QueryAsync<GetMachineCountsQuery, MachineCountsDto>(new GetMachineCountsQuery(plant.Job, null));
         Assert.StartsWith("The line had no capability", noCapability.Unavailable, StringComparison.Ordinal);
-        await db.SendAsync(new AddCapabilityCommand(plant.Profile, plant.Line, 1000m, plant.Metre, null, null, false, DateTimeOffset.UtcNow.AddDays(-2), null, UnitsPerCount: 2.4m));
+        await db.SendAsync(new AddCapabilityCommand(plant.Profile, plant.Line, 1000m, plant.Metre, null, null, false, TestTime.Now.AddDays(-2), null, UnitsPerCount: 2.4m));
 
         // The edge's counts at the saw (D-050): 100 cuts with 5 bad two hours ago, 50 more an hour ago.
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         const string MachineRow = """
             INSERT INTO ts.production_count (occurred_at, equipment_id, count_kind, delta_qty, source) VALUES (@At, @Saw, @Kind, @Qty, 'machine')
             """;
@@ -821,7 +821,7 @@ public sealed class InventoryTests(DatabaseFixture db)
             ChartType = "xbar_r",
             SubgroupSize = 5,
         });
-        var start = DateTimeOffset.UtcNow.AddHours(-23);
+        var start = TestTime.Now.AddHours(-23);
         var samples = new List<Guid>();
         for (var i = 0; i < 24; i++)
         {
@@ -830,7 +830,7 @@ public sealed class InventoryTests(DatabaseFixture db)
                 plant.Site, wall.Id, null, plant.Job, start.AddMinutes(30 * i), values, null, null, "manual", null))).Id);
         }
 
-        var end = DateTimeOffset.UtcNow;
+        var end = TestTime.Now;
         var review = await QueryAsync<Application.Quality.GetLimitBaselineQuery, Contracts.Quality.LimitBaselineDto>(
             new Application.Quality.GetLimitBaselineQuery(wall.Id, plant.Profile, null, start.AddMinutes(-1), end, []));
         Assert.Equal((24, "xbar_r"), (review.Subgroups, review.ChartType));
@@ -864,7 +864,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Application.Quality.SetManualControlLimitsCommand(
             wall.Id, plant.Profile, null, 3.1, 3.3, 2.9, 0.2, 0.42, 0, null, " ")));
         var replaced = await db.SendAsync(new Application.Quality.SetManualControlLimitsCommand(
-            wall.Id, plant.Profile, null, 3.1, 3.4, 2.8, 0.2, 0.42, 0, DateTimeOffset.UtcNow.AddMinutes(5), "Customer limits"));
+            wall.Id, plant.Profile, null, 3.1, 3.4, 2.8, 0.2, 0.42, 0, TestTime.Now.AddMinutes(5), "Customer limits"));
         Assert.Equal(approved.Id, Assert.Single(replaced.Ended));
 
         var limits = await QueryAsync<Application.Quality.ListControlLimitsQuery, IReadOnlyList<Contracts.Quality.ControlLimitDto>>(
@@ -888,7 +888,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         CreatedResponse melt = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("MFI-" + _suffix, "Melt flow", null, "variable", null, 2));
 
         // Twenty individuals alternating 10 and 12 over the run: limits 5.68 to 16.32.
-        var start = DateTimeOffset.UtcNow.AddHours(-20);
+        var start = TestTime.Now.AddHours(-20);
         for (var i = 0; i < 20; i++)
         {
             await db.SendAsync(new Application.Quality.RecordQualityResultCommand(
@@ -896,16 +896,16 @@ public sealed class InventoryTests(DatabaseFixture db)
         }
 
         var review = await QueryAsync<Application.Quality.GetLimitBaselineQuery, Contracts.Quality.LimitBaselineDto>(
-            new Application.Quality.GetLimitBaselineQuery(melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow, []));
+            new Application.Quality.GetLimitBaselineQuery(melt.Id, plant.Profile, null, start.AddMinutes(-1), TestTime.Now, []));
         await db.SendAsync(new Application.Quality.ApproveControlLimitsCommand(
-            melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow, [], review.CenterLine!.Value, review.Ucl!.Value, review.Lcl!.Value, null, null));
+            melt.Id, plant.Profile, null, start.AddMinutes(-1), TestTime.Now, [], review.CenterLine!.Value, review.Ucl!.Value, review.Lcl!.Value, null, null));
 
         // Two more since: one well beyond the upper limit.
         await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [20m], null, null, "manual", null));
         await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [11m], null, null, "manual", null));
 
         var chart = await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
-            plant.Site, melt.Id, plant.Profile, plant.Line, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)));
+            plant.Site, melt.Id, plant.Profile, plant.Line, start.AddMinutes(-1), TestTime.Now.AddMinutes(1)));
         Assert.Equal(("i_mr", "PRF-" + _suffix, "LINE-" + _suffix), (chart.ChartType, chart.MaterialCode, chart.EquipmentCode));
         Assert.Equal(22, chart.Points.Count);
         Assert.All(chart.Points.Take(20), p => Assert.Null(p.Ucl));
@@ -926,7 +926,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         }
 
         var runs = await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
-            plant.Site, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)));
+            plant.Site, melt.Id, plant.Profile, null, start.AddMinutes(-1), TestTime.Now.AddMinutes(1)));
         Assert.Equal([1, 2, 5, 6], runs.RunRules);
         Assert.Contains(1, runs.Points[20].Rules);
         Assert.Equal([2], runs.Points[^1].Rules);
@@ -943,7 +943,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal([1, 3], (await QueryAsync<Application.Quality.ListCharacteristicsQuery, IReadOnlyList<Contracts.Quality.CharacteristicDto>>(
             new Application.Quality.ListCharacteristicsQuery())).Single(c => c.Id == melt.Id).RunRules);
         Assert.Empty((await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
-            plant.Site, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)))).Points[^1].Rules);
+            plant.Site, melt.Id, plant.Profile, null, start.AddMinutes(-1), TestTime.Now.AddMinutes(1)))).Points[^1].Rules);
 
         // Capability against the released specification (LSL 5, USL 17); the chart signals, so it is marked unstable.
         await using (var spec = await db.AdminDataSource.OpenConnectionAsync())
@@ -958,7 +958,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         }
 
         var capable = (await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
-            plant.Site, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)))).Capability;
+            plant.Site, melt.Id, plant.Profile, null, start.AddMinutes(-1), TestTime.Now.AddMinutes(1)))).Capability;
         Assert.Equal((1, 5m, 17m), (capable.SpecVersion, capable.Lsl!.Value, capable.Usl!.Value));
         Assert.NotNull(capable.Cp);
         Assert.NotNull(capable.Ppk);
@@ -967,7 +967,7 @@ public sealed class InventoryTests(DatabaseFixture db)
 
         // Another site sees none of it.
         var elsewhere = await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
-            plant.Stores, melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)));
+            plant.Stores, melt.Id, plant.Profile, null, start.AddMinutes(-1), TestTime.Now.AddMinutes(1)));
         Assert.Empty(elsewhere.Points);
     }
 
@@ -976,7 +976,7 @@ public sealed class InventoryTests(DatabaseFixture db)
     {
         var plant = await CreatePlantAsync();
         CreatedResponse melt = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("ALR-" + _suffix, "Melt flow", null, "variable", null, 2));
-        var start = DateTimeOffset.UtcNow.AddHours(-20);
+        var start = TestTime.Now.AddHours(-20);
         for (var i = 0; i < 20; i++)
         {
             await db.SendAsync(new Application.Quality.RecordQualityResultCommand(
@@ -984,9 +984,9 @@ public sealed class InventoryTests(DatabaseFixture db)
         }
 
         var review = await QueryAsync<Application.Quality.GetLimitBaselineQuery, Contracts.Quality.LimitBaselineDto>(
-            new Application.Quality.GetLimitBaselineQuery(melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow, []));
+            new Application.Quality.GetLimitBaselineQuery(melt.Id, plant.Profile, null, start.AddMinutes(-1), TestTime.Now, []));
         await db.SendAsync(new Application.Quality.ApproveControlLimitsCommand(
-            melt.Id, plant.Profile, null, start.AddMinutes(-1), DateTimeOffset.UtcNow, [], review.CenterLine!.Value, review.Ucl!.Value, review.Lcl!.Value, null, null));
+            melt.Id, plant.Profile, null, start.AddMinutes(-1), TestTime.Now, [], review.CenterLine!.Value, review.Ucl!.Value, review.Lcl!.Value, null, null));
 
         // In control: nothing raised.
         var fine = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [11m], null, null, "manual", null));
@@ -1048,7 +1048,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal(("LINE-" + _suffix, 15, true), (binding.LineCode, binding.IntervalMinutes, binding.IsActive));
 
         // Two hours of readings, one a minute, as if bound then; the line's job has run all along.
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         var start = now.AddHours(-2);
         await using (var admin = await db.AdminDataSource.OpenConnectionAsync())
         {
@@ -1256,7 +1256,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         CreatedResponse counter = await db.SendAsync(new CreateEquipmentTagCommand(hopper.Id, TagRoles.ConsumedCount, connection.Id, $"Plant1/Ext/HOP-{_suffix}:Used", 1, 0, null));
         await admin.ExecuteAsync("UPDATE core.equipment_tag SET uom_id = @kg WHERE id = @id", new { kg = plant.Kg, id = counter.Id });
         var stream = Guid.CreateVersion7();
-        var t0 = DateTimeOffset.UtcNow;
+        var t0 = TestTime.Now;
         EdgeSignalDto S(long seq, int seconds, decimal value) => new() { Sequence = seq, TagId = counter.Id, OccurredAt = t0.AddSeconds(seconds), Value = value };
         var batch = new IngestEdgeSignalsCommand(node.Id, stream, "1.0.0", [S(1, 0, 1000), S(2, 1, 1012)]);
         await db.SendAsync(batch);
@@ -1465,7 +1465,7 @@ public sealed class InventoryTests(DatabaseFixture db)
             Assert.Single((await QueryAsync<GetShortagesQuery, ShortageReportDto>(new GetShortagesQuery(plant.Site))).Materials);
 
         // 1000 kg expected now, in grams, against a job needing 1450 kg.
-        CreatedResponse po = await db.SendAsync(new CreateExpectedReceiptCommand(plant.Site, plant.Resin, 1_000_000m, plant.Gram, DateTimeOffset.UtcNow.AddMinutes(-5), "PO-P-" + _suffix, null, null));
+        CreatedResponse po = await db.SendAsync(new CreateExpectedReceiptCommand(plant.Site, plant.Resin, 1_000_000m, plant.Gram, TestTime.Now.AddMinutes(-5), "PO-P-" + _suffix, null, null));
 
         // 400 kg arrives against it: counted in its own unit, it stays open for the other 600 kg, which is all the shortage check counts as coming.
         var first = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-P1-" + _suffix, 400m, plant.Kg, ExpectedReceiptId: po.Id));
@@ -1481,7 +1481,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal((0m, 1050m), ((await ResinAsync()).Incoming, (await ResinAsync()).Shortfall));
 
         // Receipts that add up to the whole close it on their own.
-        CreatedResponse po2 = await db.SendAsync(new CreateExpectedReceiptCommand(plant.Site, plant.Resin, 300m, plant.Kg, DateTimeOffset.UtcNow.AddDays(1), "PO-Q-" + _suffix, null, null));
+        CreatedResponse po2 = await db.SendAsync(new CreateExpectedReceiptCommand(plant.Site, plant.Resin, 300m, plant.Kg, TestTime.Now.AddDays(1), "PO-Q-" + _suffix, null, null));
         await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-Q1-" + _suffix, 100m, plant.Kg, ExpectedReceiptId: po2.Id));
         await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-Q2-" + _suffix, 200m, plant.Kg, ExpectedReceiptId: po2.Id));
         Assert.Equal(("received", 2), ((await ExpectedAsync(po2.Id)).Status, (await ExpectedAsync(po2.Id)).ReceivedLotCount));
@@ -1500,7 +1500,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         var plant = await CreatePlantAsync();
         var count = await ReasonAsync("inventory_adjustment", "COUNT");
         var hold = await ReasonAsync("hold", "QA-HOLD");
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         var old = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "AL-OLD-" + _suffix, 1000m, plant.Kg));
         var soon = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "AL-SOON-" + _suffix, 300m, plant.Kg, ExpiresAt: now.AddDays(10)));
         var held = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "AL-HELD-" + _suffix, 500m, plant.Kg));
@@ -1561,7 +1561,7 @@ public sealed class InventoryTests(DatabaseFixture db)
                 new { alternate, s = _suffix, kg = plant.Kg, job = plant.Job, id = Guid.CreateVersion7() });
         }
 
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         var whole = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "ALT-WHOLE-" + _suffix, 1000m, plant.Kg, ExpiresAt: now.AddDays(30)));
         var part = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "ALT-PART-" + _suffix, 200m, plant.Kg, ExpiresAt: now.AddDays(30)));
         var second = await db.SendAsync(new ReceiveLotCommand(alternate, plant.Stores, "ALT-2ND-" + _suffix, 1000m, plant.Kg));
@@ -1761,7 +1761,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         CreatedResponse coa = await db.SendAsync(new AttachLotDocumentCommand(a.LotId, "coa", "CoA", "C-1", "Acme", null, null, "coa.pdf", pdf));
         await db.SendAsync(new WithdrawLotDocumentCommand(coa.Id, coa.Version, "Superseded by C-2"));
         Assert.Equal(2, (await relay.CaptureAsync(Sink, ["pulaski.lot_document."], fromNow: true, 1000, CancellationToken.None)).Captured);
-        var due = (await relay.DueAsync(Sink, DateTimeOffset.UtcNow.AddMinutes(1), 1000, CancellationToken.None)).Where(e => e.Subject == coa.Id).ToList();
+        var due = (await relay.DueAsync(Sink, TestTime.Now.AddMinutes(1), 1000, CancellationToken.None)).Where(e => e.Subject == coa.Id).ToList();
         // The withdrawal waits behind the attachment until that is delivered: a certificate's events arrive in order.
         Assert.Equal(["pulaski.lot_document.attached.v1"], due.Select(e => e.Type));
         var file = await relay.GetDocumentFileAsync(coa.Id, CancellationToken.None);

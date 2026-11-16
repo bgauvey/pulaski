@@ -47,7 +47,7 @@ public interface ICipTagReader : IAsyncDisposable
 /// A tag that can't be read is published once as Bad and retried each poll; one that comes back is published again. An address is
 /// announced (discovered) the first time it reads, with its type, so it shows on the edge node's Seen tab.
 /// </summary>
-public sealed class EthernetIpConnector(EthernetIpOptions options, ICipTagReader reader, TimeProvider time, ILogger<EthernetIpConnector> log) : IConnector
+public sealed partial class EthernetIpConnector(EthernetIpOptions options, ICipTagReader reader, TimeProvider time, ILogger<EthernetIpConnector> log) : IConnector
 {
     private readonly Lock _lock = new();
     private IReadOnlySet<string> _watched = new HashSet<string>();
@@ -64,7 +64,7 @@ public sealed class EthernetIpConnector(EthernetIpOptions options, ICipTagReader
 
     public async Task RunAsync(ISampleSink sink, CancellationToken cancellationToken)
     {
-        log.LogInformation("Reading {Gateway} ({Plc}) every {Interval} ms for {Code}", options.Gateway, options.Plc, options.PollInterval.TotalMilliseconds, options.ConnectionCode);
+        LogReading(log, options.Gateway, options.Plc, options.PollInterval.TotalMilliseconds, options.ConnectionCode);
         using var timer = new PeriodicTimer(options.PollInterval, time);
         do
         {
@@ -102,7 +102,7 @@ public sealed class EthernetIpConnector(EthernetIpOptions options, ICipTagReader
                 var at = time.GetUtcNow();
                 if (_failing.Remove(address))
                 {
-                    log.LogInformation("{Code}: {Address} reads again", options.ConnectionCode, address);
+                    LogReadsAgain(log, options.ConnectionCode, address);
                 }
 
                 if (_announced.Add(address))
@@ -131,4 +131,10 @@ public sealed class EthernetIpConnector(EthernetIpOptions options, ICipTagReader
     }
 
     public ValueTask DisposeAsync() => reader.DisposeAsync();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "{Code}: {Address} reads again")]
+    private static partial void LogReadsAgain(ILogger logger, string code, string address);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Reading {Gateway} ({Plc}) every {Interval} ms for {Code}")]
+    private static partial void LogReading(ILogger logger, string gateway, string plc, double interval, string code);
 }

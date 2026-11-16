@@ -46,7 +46,7 @@ public sealed class OeeReportTests(DatabaseFixture db)
         CreatedResponse connection = await db.SendAsync(new CreateEdgeConnectionCommand(node.Id, "B", "Broker", EdgeProtocols.SparkplugB, new Dictionary<string, string> { ["host"] = "b" }));
         CreatedResponse state = await db.SendAsync(new CreateEquipmentTagCommand(filler.Id, TagRoles.State, connection.Id, "P/N/OF:State", 1, 0, null));
 
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         var t0 = now.AddMinutes(-40);
         EdgeSignalDto S(long seq, int minutes, decimal value) => new() { Sequence = seq, TagId = state.Id, OccurredAt = t0.AddMinutes(minutes), Value = value };
         await db.SendAsync(new IngestEdgeSignalsCommand(node.Id, Guid.CreateVersion7(), null,

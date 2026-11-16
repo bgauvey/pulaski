@@ -244,7 +244,7 @@ public sealed class SchedulingTests(DatabaseFixture db)
             db.SendAsync(new SequenceJobCommand(job, version, otherLine, null)));
         Assert.Contains("another site", otherSite.Message, StringComparison.Ordinal);
 
-        await db.SendAsync(new PinJobCommand(job, version, true, DateTimeOffset.UtcNow.AddDays(1)));
+        await db.SendAsync(new PinJobCommand(job, version, true, TestTime.Now.AddDays(1)));
         version = await JobVersionAsync(line, job);
         var locked = await Assert.ThrowsAsync<DomainRuleException>(() =>
             db.SendAsync(new SequenceJobCommand(job, version, line, null)));
@@ -252,7 +252,7 @@ public sealed class SchedulingTests(DatabaseFixture db)
 
         var segment = Assert.Single((await QueryAsync(line)).Segments);
         Assert.True(segment.IsLocked);
-        Assert.True(segment.Start > DateTimeOffset.UtcNow.AddHours(23));
+        Assert.True(segment.Start > TestTime.Now.AddHours(23));
     }
 
     [Fact]
@@ -553,7 +553,7 @@ public sealed class SchedulingTests(DatabaseFixture db)
             VALUES ('{line}', '{white}', '{db.UomId}', 1000, 'ideal_rate', now())
             """);
         var wo = await CreateWorkOrderAsync(site, white);
-        var start = DateTimeOffset.UtcNow.AddDays(1);
+        var start = TestTime.Now.AddDays(1);
         var end = start.AddDays(2);
 
         var job = (await db.SendAsync(new CreateJobCommand(

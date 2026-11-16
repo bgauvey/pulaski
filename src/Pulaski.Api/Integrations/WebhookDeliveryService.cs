@@ -246,7 +246,7 @@ public sealed class WebhookDeliveryService(
 /// Clears delivered rows older than <c>Retention:DeliveredDays</c> (90 by default, at least 7) once an hour (#74), through
 /// <c>evt.purge_delivered</c>. Failed, pending and skipped rows stay, and the event log is never touched. Failures are retried next time.
 /// </summary>
-internal sealed class DeliveryRetentionService(DeliveryRelay relay, IConfiguration configuration, ILogger<DeliveryRetentionService> logger) : BackgroundService
+internal sealed partial class DeliveryRetentionService(DeliveryRelay relay, IConfiguration configuration, ILogger<DeliveryRetentionService> logger) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(1);
 
@@ -261,7 +261,7 @@ internal sealed class DeliveryRetentionService(DeliveryRelay relay, IConfigurati
                 var deleted = await relay.PurgeDeliveredAsync(keepDays, stoppingToken);
                 if (deleted > 0)
                 {
-                    logger.LogInformation("Cleared {Count} deliveries delivered more than {Days} days ago.", deleted, keepDays);
+                    LogCleared(logger, deleted, keepDays);
                 }
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
@@ -271,4 +271,7 @@ internal sealed class DeliveryRetentionService(DeliveryRelay relay, IConfigurati
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cleared {Count} deliveries delivered more than {Days} days ago.")]
+    private static partial void LogCleared(ILogger logger, int count, int days);
 }
