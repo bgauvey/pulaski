@@ -1,0 +1,17 @@
+# Only what the images build from: sources, build settings and the database scripts.
+**/bin/
+**/obj/
+**/TestResults/
+**/*.user
+.git/
+.github/
+.vs/
+.vscode/
+.idea/
+docs/
+design/
+Tests/
+tools/
+**/appsettings.*.local.json
+**/pulaski-edge.db*
+**/pki/

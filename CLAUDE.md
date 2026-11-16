@@ -56,7 +56,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   OPC Foundation stack 2.0 behind `IOpcUaSession`; `Pulaski.Connectors.EthernetIp`: libplctag behind `ICipTagReader`). `src/Pulaski.Edge`
   is the worker: `EdgeHost` (console, container, Windows service, systemd), `TagBinder` (samples → signals on change; deadband and
   heartbeat for process values), `EdgeBuffer` (SQLite store-and-forward), `ConnectorHost`, `Forwarder`.
-- Containers for the demo and Linux sites; Windows service option.
+- Containers for the demo and Linux sites; Windows service option. Images in `deploy/images/{db,api,web,edge}` (D-101), built from the
+  repository root; `pulaski-db` creates or upgrades the database and the API's `pulaski_app` login, run before the API.
 
 ## Domain conventions
 
