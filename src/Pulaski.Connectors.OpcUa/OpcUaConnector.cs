@@ -78,7 +78,7 @@ public interface IOpcUaSession : IAsyncDisposable
 /// connect announces the variables it finds, for binding. When the session is lost, every watched address is published as Bad and
 /// the connector reconnects, waiting longer each time up to a minute.
 /// </summary>
-public sealed class OpcUaConnector(OpcUaOptions options, Func<IOpcUaSession> newSession, TimeProvider time, ILogger<OpcUaConnector> log) : IConnector
+public sealed partial class OpcUaConnector(OpcUaOptions options, Func<IOpcUaSession> newSession, TimeProvider time, ILogger<OpcUaConnector> log) : IConnector
 {
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(1);
 
@@ -109,7 +109,7 @@ public sealed class OpcUaConnector(OpcUaOptions options, Func<IOpcUaSession> new
                     await session.ConnectAsync(cancellationToken);
                     connected = true;
                     backoff = TimeSpan.FromSeconds(1);
-                    log.LogInformation("Connected to {Endpoint} for {Code}", options.Endpoint, options.ConnectionCode);
+                    LogConnected(log, options.Endpoint, options.ConnectionCode);
                     await RunSessionAsync(session, sink, cancellationToken);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -206,4 +206,7 @@ public sealed class OpcUaConnector(OpcUaOptions options, Func<IOpcUaSession> new
         value.Good ? SampleQuality.Good : SampleQuality.Bad);
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Connected to {Endpoint} for {Code}")]
+    private static partial void LogConnected(ILogger logger, Uri endpoint, string code);
 }

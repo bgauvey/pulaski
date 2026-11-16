@@ -8,7 +8,7 @@ namespace Pulaski.Api.Infrastructure;
 /// <c>Quality:AutoSampling:Enabled</c> (true) switches it off; <c>Quality:AutoSampling:PollSeconds</c> (60) paces it. Failures are logged and
 /// retried on the next round.
 /// </summary>
-internal sealed class TagSamplingService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<TagSamplingService> logger) : BackgroundService
+internal sealed partial class TagSamplingService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<TagSamplingService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -27,7 +27,7 @@ internal sealed class TagSamplingService(IServiceScopeFactory scopes, IConfigura
                 var made = await scope.ServiceProvider.GetRequiredService<TagSampler>().RunDueAsync(stoppingToken);
                 if (made > 0)
                 {
-                    logger.LogInformation("Made {Count} results from process values.", made);
+                    LogMade(logger, made);
                 }
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
@@ -37,4 +37,7 @@ internal sealed class TagSamplingService(IServiceScopeFactory scopes, IConfigura
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Made {Count} results from process values.")]
+    private static partial void LogMade(ILogger logger, int count);
 }

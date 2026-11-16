@@ -7,7 +7,7 @@ namespace Pulaski.Api.Infrastructure;
 /// Runs material and people connections when their schedule is due (#71), checking every <c>Connections:Schedule:PollSeconds</c> (60).
 /// <c>Connections:Schedule:Enabled</c> = false stops it, for an instance that shouldn't pull. Runs act as <c>system</c>.
 /// </summary>
-internal sealed class ConnectionScheduleService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<ConnectionScheduleService> logger) : BackgroundService
+internal sealed partial class ConnectionScheduleService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<ConnectionScheduleService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -26,7 +26,7 @@ internal sealed class ConnectionScheduleService(IServiceScopeFactory scopes, ICo
                 var ran = await scope.ServiceProvider.GetRequiredService<ScheduledConnections>().RunDueAsync(stoppingToken);
                 if (ran > 0)
                 {
-                    logger.LogInformation("Ran {Count} scheduled connections.", ran);
+                    LogRan(logger, ran);
                 }
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
@@ -36,4 +36,7 @@ internal sealed class ConnectionScheduleService(IServiceScopeFactory scopes, ICo
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Ran {Count} scheduled connections.")]
+    private static partial void LogRan(ILogger logger, int count);
 }

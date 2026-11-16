@@ -60,7 +60,7 @@ public sealed class StopTests(DatabaseFixture db)
         CreatedResponse fillStop = await db.SendAsync(new CreateEquipmentTagCommand(filler.Id, TagRoles.StopReason, connection.Id, "P/N/F:Stop", 1, 0, null));
         CreatedResponse capState = await db.SendAsync(new CreateEquipmentTagCommand(capper.Id, TagRoles.State, connection.Id, "P/N/C:State", 1, 0, null));
 
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         var t0 = now.AddMinutes(-40);
         EdgeSignalDto S(long seq, Guid tag, int minutes, decimal value) => new() { Sequence = seq, TagId = tag, OccurredAt = t0.AddMinutes(minutes), Value = value };
         await db.SendAsync(new IngestEdgeSignalsCommand(node.Id, Guid.CreateVersion7(), null,
@@ -113,7 +113,7 @@ public sealed class StopTests(DatabaseFixture db)
         CreatedResponse connection = await db.SendAsync(new CreateEdgeConnectionCommand(node.Id, "B", "Broker", EdgeProtocols.SparkplugB, new Dictionary<string, string> { ["host"] = "b" }));
         CreatedResponse state = await db.SendAsync(new CreateEquipmentTagCommand(filler.Id, TagRoles.State, connection.Id, "P/N/AF:State", 1, 0, null));
 
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         var t0 = now.AddMinutes(-40);
         EdgeSignalDto S(long seq, int minutes, decimal value) => new() { Sequence = seq, TagId = state.Id, OccurredAt = t0.AddMinutes(minutes), Value = value };
         await db.SendAsync(new IngestEdgeSignalsCommand(node.Id, Guid.CreateVersion7(), null,
@@ -181,7 +181,7 @@ public sealed class StopTests(DatabaseFixture db)
         CreatedResponse connection = await db.SendAsync(new CreateEdgeConnectionCommand(node.Id, "B", "Broker", EdgeProtocols.SparkplugB, new Dictionary<string, string> { ["host"] = "b" }));
         CreatedResponse state = await db.SendAsync(new CreateEquipmentTagCommand(filler.Id, TagRoles.State, connection.Id, "P/N/RF:State", 1, 0, null));
 
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         var t0 = now.AddMinutes(-90);
         var stream = Guid.CreateVersion7();
         EdgeSignalDto S(long seq, int minutes, decimal value) => new() { Sequence = seq, TagId = state.Id, OccurredAt = t0.AddMinutes(minutes), Value = value };
@@ -241,7 +241,7 @@ public sealed class StopTests(DatabaseFixture db)
         CreatedResponse spare = await db.SendAsync(new CreateReasonCodeCommand(site.Id, "utilization", "GSPR-" + _s, "Spare", false, 20, UtilizationClasses.Downtime));
         CreatedResponse empty = await db.SendAsync(new CreateReasonCodeCommand(site.Id, "utilization", "GEMP-" + _s, "Electrical", false, 30, IsGroup: true));
 
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         await db.SendAsync(new EnterStopCommand(filler.Id, now.AddMinutes(-30), now.AddMinutes(-20), jam.Id, "Jammed"));
 
         // The stops list and the OEE report name the group a reason is filed under.
@@ -278,7 +278,7 @@ public sealed class StopTests(DatabaseFixture db)
         CreatedResponse filler = await db.SendAsync(new CreateEquipmentCommand(site.Id, "PF-" + _s, "Filler", null, "work_unit", "machine", true, false, false, null));
 
         // 1,203 closed stops, three to each start time; one of each three replaced by a split (D-069), so it shows only when asked for.
-        var t0 = DateTimeOffset.UtcNow.AddMinutes(-50);
+        var t0 = TestTime.Now.AddMinutes(-50);
         await using (var admin = await db.AdminDataSource.OpenConnectionAsync())
         {
             await admin.ExecuteAsync(
@@ -299,7 +299,7 @@ public sealed class StopTests(DatabaseFixture db)
             do
             {
                 var page = await QueryAsync<ListStopsQuery, StopPageDto>(new ListStopsQuery(
-                    new StopFilter(site.Id, filler.Id, t0.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1), false, true, superseded), after, 250));
+                    new StopFilter(site.Id, filler.Id, t0.AddMinutes(-1), TestTime.Now.AddMinutes(1), false, true, superseded), after, 250));
                 all.AddRange(page.Stops);
                 after = page.Next;
                 pages++;
@@ -322,9 +322,9 @@ public sealed class StopTests(DatabaseFixture db)
         Assert.True(everything.GroupBy(s => s.StartedAt).All(g => g.SkipWhile(s => s.SupersededAt is null).All(s => s.SupersededAt is not null)));
 
         // The default page is 500; a cursor that isn't one is refused.
-        var first = await QueryAsync<ListStopsQuery, StopPageDto>(new ListStopsQuery(new StopFilter(site.Id, filler.Id, t0.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1), false, true)));
+        var first = await QueryAsync<ListStopsQuery, StopPageDto>(new ListStopsQuery(new StopFilter(site.Id, filler.Id, t0.AddMinutes(-1), TestTime.Now.AddMinutes(1), false, true)));
         Assert.Equal((500, true), (first.Stops.Count, first.Next is not null));
         await Assert.ThrowsAsync<ValidationException>(() => QueryAsync<ListStopsQuery, StopPageDto>(new ListStopsQuery(
-            new StopFilter(site.Id, filler.Id, t0, DateTimeOffset.UtcNow, false, true), "not-a-cursor")));
+            new StopFilter(site.Id, filler.Id, t0, TestTime.Now, false, true), "not-a-cursor")));
     }
 }

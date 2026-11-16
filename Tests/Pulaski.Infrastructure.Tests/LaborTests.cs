@@ -70,7 +70,7 @@ public sealed class LaborTests(DatabaseFixture db)
         Assert.Equal(("D", "RED", 2, 1, false), (shift.ShiftCode, shift.CrewCode, shift.Sessions, shift.OpenSessions, shift.IsApproved));
 
         // Yesterday's ended shift waits for approval; today's hasn't ended, so it doesn't.
-        await db.SendAsync(new CheckInCommand(line.Id, [bob.Id], DateTimeOffset.UtcNow.AddMinutes(-1)));
+        await db.SendAsync(new CheckInCommand(line.Id, [bob.Id], TestTime.Now.AddMinutes(-1)));
         var pending = await QueryAsync<ListPendingLaborApprovalsQuery, PendingLaborApprovalsDto>(new ListPendingLaborApprovalsQuery(site.Id));
         Assert.Equal((today.AddDays(-ListPendingLaborApprovalsQuery.Days), today.AddDays(-1), 2), (pending.From, Assert.Single(pending.Shifts).ProductionDate, pending.Shifts[0].Sessions));
 
@@ -112,7 +112,7 @@ public sealed class LaborTests(DatabaseFixture db)
         var requirements = await QueryAsync<GetEquipmentQualificationsQuery, EquipmentQualificationsDto>(new GetEquipmentQualificationsQuery(line.Id));
         Assert.Equal(("FORK", $"QA-{_s}"), (Assert.Single(requirements.Inherited).Code, requirements.Inherited[0].FromEquipmentCode));
 
-        var started = DateTimeOffset.UtcNow.AddHours(-3);
+        var started = TestTime.Now.AddHours(-3);
         var checkIn = await db.SendAsync(new CheckInCommand(line.Id, [ann.Id, bob.Id], started));
         Assert.Contains(checkIn.Notes, n => n == $"Bob isn't qualified for QL-{_s}: FORK Forklift (not held).");
 
@@ -210,7 +210,7 @@ public sealed class LaborTests(DatabaseFixture db)
         Assert.Empty(await QueryAsync<ListLineJobsQuery, IReadOnlyList<LineJobDto>>(new ListLineJobsQuery(line.Id)));
 
         // Setup at a terminal needs a job on the line.
-        var terminal = new TerminalRecord(Guid.CreateVersion7(), other.Id, "GT", "Terminal", line.Id, line.Id, TerminalAuthModes.Badge, true, DateTimeOffset.UtcNow);
+        var terminal = new TerminalRecord(Guid.CreateVersion7(), other.Id, "GT", "Terminal", line.Id, line.Id, TerminalAuthModes.Badge, true, TestTime.Now);
         await db.SendAsync(new ClockOffCommand(on.Id, on.Version, null, OwnOnly: false));
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new TerminalClockOnCommand(terminal, ann.Id, line.Id, LaborTypes.Setup)));
 

@@ -8,7 +8,7 @@ namespace Pulaski.Api.Infrastructure;
 /// are left. <c>Rollups:Oee:Enabled</c> (true) switches it off, <c>Rollups:Oee:PollSeconds</c> (60) and <c>Rollups:Oee:DaysPerRound</c> (31)
 /// pace it. Failures are logged and retried on the next round; until then long reports work the days out from the history.
 /// </summary>
-internal sealed class OeeRollupService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<OeeRollupService> logger) : BackgroundService
+internal sealed partial class OeeRollupService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<OeeRollupService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -31,7 +31,7 @@ internal sealed class OeeRollupService(IServiceScopeFactory scopes, IConfigurati
                     rolled = await scope.ServiceProvider.GetRequiredService<OeeRollups>().RollAsync(batch, stoppingToken);
                     if (rolled > 0)
                     {
-                        logger.LogInformation("Rolled up OEE for {Count} production days.", rolled);
+                        LogRolled(logger, rolled);
                     }
                 }
                 while (rolled == batch && !stoppingToken.IsCancellationRequested);
@@ -43,4 +43,7 @@ internal sealed class OeeRollupService(IServiceScopeFactory scopes, IConfigurati
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Rolled up OEE for {Count} production days.")]
+    private static partial void LogRolled(ILogger logger, int count);
 }

@@ -29,7 +29,7 @@ If you are unsure whether you can contribute something, ask in an issue before s
 
 ## Development setup
 
-You need the .NET 10 SDK, PostgreSQL 18 (local, or the `postgres:18` container), Docker for the machine simulators, and Git.
+You need the .NET SDK that `global.json` names (10.0.404, or a later 10.0.4xx patch), PostgreSQL 18 (local, or the `postgres:18` container), Docker for the machine simulators, and Git.
 
 - Build: `dotnet build src/Pulaski.slnx`
 - Test: `dotnet test src/Pulaski.slnx`. The database tests create and drop a throwaway database on the local server; point them at another

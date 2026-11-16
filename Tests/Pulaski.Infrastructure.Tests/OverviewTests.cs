@@ -38,7 +38,7 @@ public sealed class OverviewTests(DatabaseFixture db)
         CreatedResponse manual = await db.SendAsync(new CreateEquipmentCommand(site.Id, "VL2-" + _s, "Manual line", null, "work_center", "production_line", false, true, false, null));
 
         // An 8-hour shift that started two hours ago (on the hour), every day; the site follows it.
-        var now = DateTimeOffset.UtcNow;
+        var now = TestTime.Now;
         var shiftStart = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, 0, 0, TimeSpan.Zero).AddHours(-2);
         CreatedResponse schedule = await db.SendAsync(new CreateShiftScheduleCommand(site.Id, "V8", "Eights", null, 1, DateOnly.FromDateTime(shiftStart.UtcDateTime).AddDays(-10),
             [new ShiftDto { Code = "A", Name = "Early", Start = shiftStart.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture), Minutes = 480, Days = [0] }]));

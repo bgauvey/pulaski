@@ -7,7 +7,7 @@ namespace Pulaski.Edge;
 /// Forwards the buffer to Pulaski in order (D-050), a batch at a time, and drops a batch once Pulaski has applied it. While
 /// Pulaski can't be reached the buffer just grows; sending a batch again is harmless, since Pulaski skips what it applied.
 /// </summary>
-public sealed class Forwarder(PulaskiClient api, EdgeBuffer buffer, IOptions<EdgeOptions> options, TimeProvider time, ILogger<Forwarder> log) : BackgroundService
+public sealed partial class Forwarder(PulaskiClient api, EdgeBuffer buffer, IOptions<EdgeOptions> options, TimeProvider time, ILogger<Forwarder> log) : BackgroundService
 {
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromSeconds(30);
 
@@ -38,7 +38,7 @@ public sealed class Forwarder(PulaskiClient api, EdgeBuffer buffer, IOptions<Edg
                     buffer.Remove(Math.Max(result.LastSequence, batch[^1].Sequence));
                     if (failing)
                     {
-                        log.LogInformation("Pulaski is back; forwarding the buffer ({Count} waiting)", buffer.Count);
+                        LogBack(log, buffer.Count);
                     }
 
                     (failing, backoff) = (false, TimeSpan.FromSeconds(1));
@@ -60,4 +60,7 @@ public sealed class Forwarder(PulaskiClient api, EdgeBuffer buffer, IOptions<Edg
         {
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Pulaski is back; forwarding the buffer ({Count} waiting)")]
+    private static partial void LogBack(ILogger logger, long count);
 }

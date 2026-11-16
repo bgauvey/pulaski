@@ -56,7 +56,7 @@ public sealed class SecurityTests(DatabaseFixture db)
 
         await using var scope = db.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<ISecurityReadStore>();
-        var access = await store.GetAccessAsync(Issuers.Local, "op." + _s, DateTimeOffset.UtcNow, CancellationToken.None);
+        var access = await store.GetAccessAsync(Issuers.Local, "op." + _s, TestTime.Now, CancellationToken.None);
         Assert.NotNull(access);
         Assert.True(access.MustChangePassword);
         Assert.True(access.Can(Permissions.JobExecute, site));
@@ -87,7 +87,7 @@ public sealed class SecurityTests(DatabaseFixture db)
         Assert.Equal(listed.Id, signedIn.UserId);
 
         await using var scope = db.Services.CreateAsyncScope();
-        var access = await scope.ServiceProvider.GetRequiredService<ISecurityReadStore>().GetAccessAsync(issuer, "sub-" + _s, DateTimeOffset.UtcNow, CancellationToken.None);
+        var access = await scope.ServiceProvider.GetRequiredService<ISecurityReadStore>().GetAccessAsync(issuer, "sub-" + _s, TestTime.Now, CancellationToken.None);
         Assert.Equal(($"{issuer}|sub-{_s}", true), (access!.ActorId, access.Can(Permissions.JobExecute, site)));
 
         // A local account can be a machine's; a provider's can't.
@@ -110,7 +110,7 @@ public sealed class SecurityTests(DatabaseFixture db)
         Assert.Equal((true, 1, 1), (role.AllowsEverySite, role.Holders, role.EverywhereHolders));
 
         await using var scope = db.Services.CreateAsyncScope();
-        var access = await scope.ServiceProvider.GetRequiredService<ISecurityReadStore>().GetAccessAsync(Issuers.Local, "reg." + _s, DateTimeOffset.UtcNow, CancellationToken.None);
+        var access = await scope.ServiceProvider.GetRequiredService<ISecurityReadStore>().GetAccessAsync(Issuers.Local, "reg." + _s, TestTime.Now, CancellationToken.None);
         Assert.True(access!.Can(Permissions.LotHold, Guid.CreateVersion7()));
         var lookup = scope.ServiceProvider.GetRequiredService<ISiteLookup>();
         Assert.Null(await lookup.SiteOfAsync(SiteOf.RoleAssignment, grant.Id, CancellationToken.None));
@@ -193,7 +193,7 @@ public sealed class SecurityTests(DatabaseFixture db)
 
         await using var scope = db.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<ISecurityReadStore>();
-        async Task<UserAccess> AccessAsync() => (await store.GetAccessAsync(Issuers.Local, "lead." + _s, DateTimeOffset.UtcNow, CancellationToken.None))!;
+        async Task<UserAccess> AccessAsync() => (await store.GetAccessAsync(Issuers.Local, "lead." + _s, TestTime.Now, CancellationToken.None))!;
         Assert.True((await AccessAsync()).Can(Permissions.LotHold, site));
         Assert.Equal("Lead " + _s, Assert.Single((await AccessAsync()).Grants).RoleName);
 

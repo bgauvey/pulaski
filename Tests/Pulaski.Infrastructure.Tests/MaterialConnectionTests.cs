@@ -127,6 +127,6 @@ public sealed class MaterialConnectionTests(DatabaseFixture db)
         var runs = await QueryAsync<ListConnectionRunsQuery, IReadOnlyList<ConnectionRunDto>>(new ListConnectionRunsQuery(saved.Id, ConnectionTargets.People));
         Assert.Equal([("schedule", "applied"), ("schedule", "applied")], runs.Select(r => (r.Trigger, r.Outcome)));
         Assert.Equal((0, 1), (runs[0].Created, runs[0].Updated));
-        Assert.True(await admin.ExecuteScalarAsync<DateTimeOffset>("SELECT next_run_at FROM core.material_connection WHERE id = @Id", new { saved.Id }) > DateTimeOffset.UtcNow);
+        Assert.True(await admin.ExecuteScalarAsync<DateTimeOffset>("SELECT next_run_at FROM core.material_connection WHERE id = @Id", new { saved.Id }) > TestTime.Now);
     }
 }

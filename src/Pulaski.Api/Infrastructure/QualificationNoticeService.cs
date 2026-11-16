@@ -7,7 +7,7 @@ namespace Pulaski.Api.Infrastructure;
 /// Sends qualification expiry notices (#84) every <c>Labor:ExpiryNotices:PollMinutes</c> (60); <c>Labor:ExpiryNotices:Enabled</c> = false stops it.
 /// Without a mail server nothing is sent or marked.
 /// </summary>
-internal sealed class QualificationNoticeService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<QualificationNoticeService> logger) : BackgroundService
+internal sealed partial class QualificationNoticeService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<QualificationNoticeService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -26,7 +26,7 @@ internal sealed class QualificationNoticeService(IServiceScopeFactory scopes, IC
                 var sent = await scope.ServiceProvider.GetRequiredService<QualificationExpiryNotices>().SendDueAsync(stoppingToken);
                 if (sent > 0)
                 {
-                    logger.LogInformation("Sent expiry notices for {Count} qualification grants.", sent);
+                    LogSent(logger, sent);
                 }
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
@@ -36,4 +36,7 @@ internal sealed class QualificationNoticeService(IServiceScopeFactory scopes, IC
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sent expiry notices for {Count} qualification grants.")]
+    private static partial void LogSent(ILogger logger, int count);
 }

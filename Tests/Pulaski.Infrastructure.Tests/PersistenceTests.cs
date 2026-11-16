@@ -115,7 +115,7 @@ public sealed class PersistenceTests(DatabaseFixture db)
             var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             var repository = scope.ServiceProvider.GetRequiredService<IEquipmentRepository>();
             await using var transaction = await unitOfWork.BeginAsync(CancellationToken.None);
-            await repository.InsertAsync(area, DateTimeOffset.UtcNow, CancellationToken.None);
+            await repository.InsertAsync(area, TestTime.Now, CancellationToken.None);
         }
 
         Assert.Null(await db.Services.GetRequiredService<IEquipmentReadStore>().GetAsync(area.Id, CancellationToken.None));

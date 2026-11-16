@@ -11,7 +11,8 @@ public static class DependencyInjection
     /// <summary>Registers every command and query handler in this assembly, plus id and event services and the material and people source adapters (D-053, D-054).</summary>
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        services.TryAddSingleton(TimeProvider.System);
+        // To whole microseconds, so times worked out in memory equal the same times read back from PostgreSQL.
+        services.TryAddSingleton<TimeProvider>(MicrosecondClock.Instance);
         services.AddSingleton<IIdGenerator, UuidV7Generator>();
         services.AddScoped<IEventFactory, EventFactory>();
         services.AddSingleton<IMaterialSourceAdapter, CsvMaterialSource>();

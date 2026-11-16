@@ -39,7 +39,7 @@ internal sealed class SchemaVersionCheck(DatabaseMaintenance database, ILogger<S
 /// partitions the seed made run out. Each round also drops process values older than
 /// <c>Retention:ProcessValueDays</c> (90 by default, #26). Failures are logged and retried on the next round.
 /// </summary>
-internal sealed class PartitionMaintenance(DatabaseMaintenance database, IConfiguration configuration, ILogger<PartitionMaintenance> logger)
+internal sealed partial class PartitionMaintenance(DatabaseMaintenance database, IConfiguration configuration, ILogger<PartitionMaintenance> logger)
     : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(12);
@@ -56,13 +56,13 @@ internal sealed class PartitionMaintenance(DatabaseMaintenance database, IConfig
                 var created = await database.EnsurePartitionsAsync(months, stoppingToken);
                 if (created > 0)
                 {
-                    logger.LogInformation("Created {Count} history partitions to keep {Months} months ready.", created, months);
+                    LogCreated(logger, created, months);
                 }
 
                 var dropped = await database.DropOldProcessValuesAsync(keepDays, stoppingToken);
                 if (dropped > 0)
                 {
-                    logger.LogInformation("Dropped {Count} months of process values older than {Days} days.", dropped, keepDays);
+                    LogDropped(logger, dropped, keepDays);
                 }
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
@@ -72,4 +72,10 @@ internal sealed class PartitionMaintenance(DatabaseMaintenance database, IConfig
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Created {Count} history partitions to keep {Months} months ready.")]
+    private static partial void LogCreated(ILogger logger, int count, int months);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Dropped {Count} months of process values older than {Days} days.")]
+    private static partial void LogDropped(ILogger logger, int count, int days);
 }

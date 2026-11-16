@@ -174,7 +174,7 @@ public sealed class ExecutionTests(DatabaseFixture db)
             "SELECT count(*)::int FROM ts.lot_event WHERE job_id = @Id AND run_id = @Run AND event_kind = 'produced'", new { Id = plant.Extrude, Run = started.RunId }));
 
         // By shift (D-044): with no shifts the line's reports fall on the site's day, and add up to the job's runs.
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Chicago")).DateTime);
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(TestTime.Now, TimeZoneInfo.FindSystemTimeZoneById("America/Chicago")).DateTime);
         var byShift = await QueryAsync<GetProductionByShiftQuery, ProductionByShiftDto>(new GetProductionByShiftQuery(plant.Site, today.AddDays(-1), today.AddDays(1)));
         var rows = byShift.Rows.Where(r => r.JobId == plant.Extrude).ToList();
         Assert.Equal((104m, 5m, 2), (rows.Sum(r => r.GoodQty), rows.Sum(r => r.ScrapQty), rows.Sum(r => r.Reports)));
@@ -282,10 +282,10 @@ public sealed class ExecutionTests(DatabaseFixture db)
 
         // Not made in batches yet: a line can't have a batch size of its own.
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(
-            new AddCapabilityCommand(material.Id, big.Id, 400m, db.UomId, null, null, false, DateTimeOffset.UtcNow.AddDays(-1), null, BatchSize: 200m)));
+            new AddCapabilityCommand(material.Id, big.Id, 400m, db.UomId, null, null, false, TestTime.Now.AddDays(-1), null, BatchSize: 200m)));
         var materialVersion = await ScalarAsync<long>("SELECT xmin::text::bigint FROM core.material WHERE id = @Id", new { Id = material.Id });
         await db.SendAsync(new SetBatchingCommand(material.Id, materialVersion, 50m, 2m, null));
-        var from = DateTimeOffset.UtcNow.AddDays(-1);
+        var from = TestTime.Now.AddDays(-1);
         var capability = await db.SendAsync(
             new AddCapabilityCommand(material.Id, big.Id, 400m, db.UomId, null, null, false, from, null, BatchSize: 200m));
         Assert.Contains(capability.Notes, n => n.Contains("batches of 200", StringComparison.Ordinal));
