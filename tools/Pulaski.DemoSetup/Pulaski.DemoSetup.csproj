@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The demo's one-shot setup (D-101): connects an edge node to the simulators through the API, then starts the simulated machines. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Pulaski.Contracts\Pulaski.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Pulaski.Connectors.Sparkplug\Pulaski.Connectors.Sparkplug.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MQTTnet" />
+  </ItemGroup>
+
+  <!-- The simulators' machine profile: how their state numbers map to PackML, and their stop reasons. One copy, beside the simulators. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\deploy\simulator\packml-simulator-profile.csv" LogicalName="packml-simulator-profile.csv" />
+  </ItemGroup>
+
+</Project>

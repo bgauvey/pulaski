@@ -6,7 +6,8 @@
 #   with the same settings as deploy/simulator/compose.yaml.
 # - edge-windows: the edge node also ships as a Windows service, so it is built and its tests run on Windows too.
 # - images: the container images in deploy/images build (D-101). They aren't published.
-# - demo: docker compose up --build from a clean runner reaches a working sign-in, as the quickstart promises.
+# - demo: docker compose up --build from a clean runner reaches a working sign-in and the simulated machines reach Pulaski, as the
+#   quickstart promises.
 #
 # The .NET jobs install the SDK global.json pins, so CI builds with the same compiler and analyzers as a developer's machine; a newer SDK
 # (with new analyzer rules, which fail the build as warnings are errors) arrives only when global.json is bumped.
@@ -134,7 +135,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [api, web, edge, db]
+        image: [api, web, edge, db, demo-setup]
 
     steps:
       - uses: actions/checkout@v5
@@ -153,17 +154,32 @@ jobs:
       - name: Start the demo
         run: docker compose up --build -d
 
-      - name: Wait for the API and the UI
+      # The setup uses the administrator's password for a moment, so the sign-in is checked once it has finished.
+      - name: Wait for the setup, the API and the UI
         run: |
-          for i in $(seq 1 90); do
-            if curl -fs -o /dev/null http://localhost:5090/account/login; then break; fi
+          for i in $(seq 1 120); do
+            if [ "$(docker compose ps -a --format '{{.State}}' demo-setup)" = exited ]; then break; fi
             sleep 2
           done
           test "$(docker compose ps -a --format '{{.ExitCode}}' db-init)" = 0
+          test "$(docker compose ps -a --format '{{.ExitCode}}' demo-setup)" = 0
           curl -fsS -X POST http://localhost:5080/api/auth/sign-in -H 'content-type: application/json' \
             -d '{"username":"admin","password":"Pulaski-demo-1"}' -o /dev/null
           curl -fsS -o /dev/null http://localhost:5090/account/login
-          echo "The demo is up: the database was set up, the administrator can sign in and the UI answers."
+          echo "The demo is up: the database and the edge were set up, the administrator can sign in and the UI answers."
+
+      # Machine data end to end: simulators -> broker -> edge -> API, each machine's state mapped through the simulators' profile.
+      - name: Check the machines reach Pulaski
+        run: |
+          query="SELECT count(*) FROM core.equipment_live_state s JOIN core.equipment e ON e.id = s.equipment_id
+                 WHERE e.code IN ('EXT-01-EXT', 'EXT-01-SAW', 'PACK1') AND s.packml_state = 6"
+          for i in $(seq 1 30); do
+            running="$(docker compose exec -T db psql -U postgres -d pulaski -tAc "$query")"
+            if [ "$running" = 3 ]; then echo "All three simulated machines are in Execute in Pulaski."; exit 0; fi
+            sleep 2
+          done
+          echo "::error::Only $running of the three simulated machines reached Execute in Pulaski."
+          exit 1
 
       - name: Show the logs
         if: failure()
