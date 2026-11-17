@@ -1,8 +1,4 @@
-# Only what the images build from: sources, build settings and the database scripts.
-**/bin/
-**/obj/
-**/TestResults/
-**/*.user
+# Only what the images build from: sources, build settings, the database scripts and the demo setup tool.
 .git/
 .github/
 .vs/
@@ -11,7 +7,14 @@
 docs/
 design/
 Tests/
-tools/
+tools/*
+!tools/Pulaski.DemoSetup/
+
+# Build output and local files, wherever they are (after the exception above, so they stay out of it too).
+**/bin/
+**/obj/
+**/TestResults/
+**/*.user
 **/appsettings.*.local.json
 **/pulaski-edge.db*
 **/pki/

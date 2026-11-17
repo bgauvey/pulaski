@@ -5,7 +5,8 @@
 #
 # It builds the images from this clone (deploy/images), starts PostgreSQL 18, creates the database with the demo site, lines and
 # materials (pulaski-db), then the API and the UI. The machine simulators (deploy/simulator/compose.yaml: an MQTT broker, three PackML
-# simulators publishing Sparkplug B, an OPC UA server) start beside them.
+# simulators publishing Sparkplug B, an OPC UA server) start beside them; demo-setup connects an edge node to them and starts the
+# simulated machines, and the edge forwards their states to Pulaski.
 #
 # Every password and key below is for this demo only. Each can be overridden from the environment or a .env file beside this one, as can
 # the ports, if something on this machine already uses them.
@@ -78,7 +79,52 @@ services:
       - web-keys:/home/app/.aspnet/DataProtection-Keys
     restart: unless-stopped
 
+  # Connects an edge node to the simulators through the API and starts the simulated machines, then exits (tools/Pulaski.DemoSetup).
+  # It uses the administrator's temporary password for a moment and gives it back, so the first sign-in still chooses a new one.
+  demo-setup:
+    build:
+      context: .
+      dockerfile: deploy/images/demo-setup/Dockerfile
+    image: pulaski-demo-setup:demo
+    depends_on:
+      - api
+      - broker
+    environment:
+      PULASKI_API_URL: http://api:8080/
+      PULASKI_ADMIN_PASSWORD: ${PULASKI_ADMIN_PASSWORD:-Pulaski-demo-1}
+      PULASKI_MQTT_HOST: broker
+      PULASKI_MQTT_PORT: "1883"
+    volumes:
+      - edge-config:/shared
+    restart: "no"
+
+  # The edge node, signed in with what demo-setup writes; it starts as soon as that is there, so it sees the machines start. Its buffer
+  # survives a new container (edge-data).
+  edge:
+    build:
+      context: .
+      dockerfile: deploy/images/edge/Dockerfile
+    image: pulaski-edge:demo
+    depends_on:
+      - demo-setup
+    entrypoint:
+      - sh
+      - -c
+      - |
+        for i in $$(seq 1 150); do [ -f /shared/edge.env ] && break; sleep 2; done
+        if [ ! -f /shared/edge.env ]; then
+          echo "The demo setup didn't set up an edge node (see its log), so there is nothing to run."
+          exit 0
+        fi
+        . /shared/edge.env && exec dotnet Pulaski.Edge.dll
+    volumes:
+      - edge-config:/shared:ro
+      - edge-data:/data
+    restart: on-failure
+
 volumes:
   db-data:
   api-keys:
   web-keys:
+  edge-config:
+  edge-data:

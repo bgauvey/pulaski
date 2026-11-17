@@ -2744,6 +2744,20 @@ whole install: `db` (`postgres:18`, volume `db-data`), `db-init` (`PULASKI_SEED=
 `web-keys`; the images create the folders owned by `app`), so sign-ins survive a new container. CI's `demo` job runs `docker compose up
 --build` and checks the database init, an API sign-in and the UI. The edge isn't started yet (piece 2c).
 
+**Edge setup (piece 2c).** Decided (the user's choice): **a round trip as the administrator**, no API change. `tools/Pulaski.DemoSetup`
+(image `pulaski-demo-setup`, compose service `demo-setup`) signs in as `admin` with the temporary password, changes it to a random one (the
+only thing a temporary password allows), signs in again, does the setup, and in a `finally` resets admin to the temporary password
+(`POST /users/{id}/password`), so the first sign-in still chooses one and a failure can't leave an unknown password. The setup, all through
+the API and so all events: edge node `DEMO-EDGE`, Sparkplug B connection `SIMULATORS` (`broker:1883`, group `Plant1`), machine profile
+`PACKML-SIM` imported from `deploy/simulator/packml-simulator-profile.csv` (embedded) and set on EXT-01-EXT, EXT-01-SAW and PACK1 (the
+simulators number states their own way: Idle 1, Clearing 4), their `state` tags, and user `demo-edge` (Edge node role at PLT1) whose temporary
+password it replaces, as signing in once would. What exists from an interrupted run is kept. It writes the edge's sign-in to the
+`edge-config` volume (`edge.env`); the edge container waits for it (up to 5 minutes), sources it and runs, so it is listening before the
+setup resets and starts each machine over Sparkplug B (`MachineStarter`: Reset when Stopped, Start when Idle, by the profile's numbers,
+following `Status/StateCurrent`). With `edge.env` there, a later start only starts the machines; if admin no longer has the temporary
+password, the setup changes nothing. CI's `demo` job also checks that all three machines are in Execute in Pulaski. Only states are bound:
+counts, speed and unit mode, and the OPC UA simulator, are left to the user.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

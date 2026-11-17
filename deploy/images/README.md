@@ -1,15 +1,16 @@
 # Container images
 
-Four images, each built from the repository root (D-101). Nothing is published yet: build them from a clone.
+Five images, each built from the repository root (D-101). Nothing is published yet: build them from a clone.
 
 ```sh
 docker build -f deploy/images/db/Dockerfile   -t pulaski-db .
 docker build -f deploy/images/api/Dockerfile  -t pulaski-api .
 docker build -f deploy/images/web/Dockerfile  -t pulaski-web .
 docker build -f deploy/images/edge/Dockerfile -t pulaski-edge .
+docker build -f deploy/images/demo-setup/Dockerfile -t pulaski-demo-setup .
 ```
 
-They build with the SDK `global.json` pins and run on the matching .NET runtime, as the image's non-root `app` user. CI builds all four
+They build with the SDK `global.json` pins and run on the matching .NET runtime, as the image's non-root `app` user. CI builds all five
 on every pull request.
 
 ## `pulaski-db`: create or upgrade the database
@@ -49,3 +50,19 @@ The UI, on port 8080 (HTTP; put TLS in front of it). It needs `PulaskiApi__BaseU
 The edge node (`deploy/edge/README.md`). Its buffer and OPC UA certificates are in `/data`: mount a volume there, so what wasn't forwarded
 survives a new container. Settings: `Edge__ApiUrl`, `Edge__EdgeNodeId`, `Edge__Username`, `Edge__Password` (from the edge node's **Setup**
 tab), and any connection secrets.
+
+## `pulaski-demo-setup`: the demo only
+
+`tools/Pulaski.DemoSetup`, run once by the root `compose.yaml`. Through the API it adds the edge node `DEMO-EDGE`, a Sparkplug B connection
+to the simulators' broker, the machine profile `PACKML-SIM` (from `deploy/simulator/packml-simulator-profile.csv`, built into it) on the
+three simulated machines, their state tags and the edge's user `demo-edge`. It writes the edge's sign-in to `/shared/edge.env` (a volume the
+edge container reads), then resets and starts the simulated machines. The administrator's password is temporary, so it sets one of its own
+for a moment and gives the temporary one back; if the administrator no longer has it, someone has signed in and it changes nothing.
+
+| Variable | Meaning |
+| --- | --- |
+| `PULASKI_ADMIN_PASSWORD` | The demo administrator's temporary password (required). `PULASKI_ADMIN_USERNAME`, default `admin`. |
+| `PULASKI_API_URL`, `PULASKI_EDGE_API_URL` | The API as the setup and as the edge reach it (default `http://api:8080/`). |
+| `PULASKI_SITE` | The demo site's code, default `PLT1`. |
+| `PULASKI_MQTT_HOST`, `PULASKI_MQTT_PORT` | The simulators' broker, default `broker:1883`. |
+| `PULASKI_EDGE_FILE` | Where the edge's sign-in goes, default `/shared/edge.env`. |
