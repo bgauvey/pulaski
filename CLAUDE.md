@@ -439,7 +439,8 @@ Treat these as working assumptions; confirm with Bill before building anything t
 - First sign-in on an empty database: the API creates `admin` with the temporary password in
   `src/Pulaski.Api/appsettings.Development.json` (`Security:BootstrapAdmin`); change it at the first sign-in.
 - Demo (D-101): `docker compose up --build` at the root (Postgres, db-init with the demo seed, API on 5080, UI on 5090, the simulators,
-  `demo-setup` = `tools/Pulaski.DemoSetup`, which connects edge node DEMO-EDGE to them through the API and starts the machines, and the edge);
+  `demo-setup` = `tools/Pulaski.DemoSetup`, which connects edge node DEMO-EDGE to them through the API and starts the machines, and the edge;
+  `tools/Pulaski.ProcessSimulator` publishes EXT-01-EXT's melt temperature and profile width, with a shift every 30 min);
   sign in as `admin` / `Pulaski-demo-1` once the setup has finished. `docker compose down -v` drops its data.
 - Run: `dotnet run --project src/Pulaski.Api` (http://localhost:5080, OpenAPI at
   `/openapi/v1.json`) and `dotnet run --project src/Pulaski.Web` (http://localhost:5090).

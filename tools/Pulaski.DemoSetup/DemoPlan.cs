@@ -31,10 +31,28 @@ public static class DemoPlan
         new("Packer", "PACK1"),
     ];
 
-    /// <summary>The metrics bound on every machine, by role (the PackML simulator's names).</summary>
-    public static IReadOnlyList<(string Role, string Metric)> Metrics { get; } =
+    /// <summary>The process-value simulator's Sparkplug node (tools/Pulaski.ProcessSimulator), publishing for the extruder.</summary>
+    public const string ProcessNode = "ExtruderProcess";
+
+    /// <summary>
+    /// What is bound, by equipment and role: every machine's state, unit mode and speed; the saw's and packer's counts (the saw cuts
+    /// EXT-01's output, so its line has one counter); and the extruder's process values from the process simulator.
+    /// </summary>
+    public static IReadOnlyList<Tag> Tags { get; } =
     [
-        ("state", "Status/StateCurrent"),
+        .. Machines.SelectMany(m => new[]
+        {
+            new Tag(m.Device, "state", m.Address("Status/StateCurrent")),
+            new Tag(m.Device, "unit_mode", m.Address("Status/UnitModeCurrent")),
+            new Tag(m.Device, "machine_speed", m.Address("Status/CurMachSpeed")),
+        }),
+        .. Machines.Where(m => m.Device != "EXT-01-EXT").SelectMany(m => new[]
+        {
+            new Tag(m.Device, "processed_count", m.Address("Admin/ProdProcessedCount/0/AccCount")),
+            new Tag(m.Device, "defective_count", m.Address("Admin/ProdDefectiveCount/0/AccCount")),
+        }),
+        new Tag("EXT-01-EXT", "process_value", $"{GroupId}/{ProcessNode}/EXT-01-EXT:Process/MeltTemperature"),
+        new Tag("EXT-01-EXT", "process_value", $"{GroupId}/{ProcessNode}/EXT-01-EXT:Process/ProfileWidth"),
     ];
 
     /// <summary>A strong random password that meets Pulaski's rules (at least 10 characters, two kinds).</summary>
@@ -58,6 +76,9 @@ public static class DemoPlan
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }
+
+    /// <summary>One tag to bind: the equipment, its role and the Sparkplug address.</summary>
+    public sealed record Tag(string EquipmentCode, string Role, string Address);
 
     public sealed record Machine(string Node, string Device)
     {

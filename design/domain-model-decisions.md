@@ -2758,6 +2758,16 @@ following `Status/StateCurrent`). With `edge.env` there, a later start only star
 password, the setup changes nothing. CI's `demo` job also checks that all three machines are in Execute in Pulaski. Only states are bound:
 counts, speed and unit mode, and the OPC UA simulator, are left to the user.
 
+**Process values (step 3a).** Decided (the user's choices): **our own Sparkplug B process simulator**, the **demo goes all the way to a
+live SPC chart** (step 3b), and the **process shifts now and then**. `tools/Pulaski.ProcessSimulator` (image `pulaski-process-simulator`,
+service `extruder-process` in `deploy/simulator/compose.yaml`): pure `ProcessModel` (target + normal noise, rounded; `ProcessShift`: the last
+10 minutes of every 30, the melt temperature 1.5 sigma high) and `SparkplugNode` (NDEATH as the MQTT will with `bdSeq`, NBIRTH/DBIRTH with
+sequence 0/1, DDATA counting on mod 256, births again on `Node Control/Rebirth`), tested against Pulaski's own `SparkplugHost`
+(`Tests/Pulaski.Tools.Tests`). Node `ExtruderProcess`, device `EXT-01-EXT`: `Process/MeltTemperature` 215 °C ± 1.2, `Process/ProfileWidth`
+42.00 mm ± 0.04, every 2 s. The demo setup now binds `DemoPlan.Tags`: state, unit mode and speed on all three machines, processed and
+defective counts on the saw and packer only (EXT-01 gets one counter), and the two process values on the extruder. CI's `demo` job also
+checks both process values are recorded. A demo set up before keeps its tags (the setup skips once `edge.env` exists): start afresh.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
