@@ -56,7 +56,9 @@ tab), and any connection secrets.
 
 `tools/Pulaski.DemoSetup`, run once by the root `compose.yaml`. Through the API it adds the edge node `DEMO-EDGE`, a Sparkplug B connection
 to the simulators' broker, the machine profile `PACKML-SIM` (from `deploy/simulator/packml-simulator-profile.csv`, built into it) on the
-three simulated machines, their tags (state, unit mode, speed; counts at the saw and packer; the extruder's process values) and the edge's user `demo-edge`. It writes the edge's sign-in to `/shared/edge.env` (a volume the
+three simulated machines, their tags (state, unit mode, speed; counts at the saw and packer; the extruder's process values) and the edge's user `demo-edge`; and,
+for live control charts, characteristics `MELT-TEMP` and `PROFILE-WIDTH` with a specification, manual limits and tag bindings, process
+`DEMO-EXTRUDE` and work order `DEMO-0001`, dispatched with its job started on EXT-01. A failure ends it with exit code 1. It writes the edge's sign-in to `/shared/edge.env` (a volume the
 edge container reads), then resets and starts the simulated machines. The administrator's password is temporary, so it sets one of its own
 for a moment and gives the temporary one back; if the administrator no longer has it, someone has signed in and it changes nothing.
 

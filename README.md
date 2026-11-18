@@ -73,7 +73,9 @@ docker compose up --build
 
 Give it a minute to connect an edge node to its simulated machines and start them, then open http://localhost:5090 and sign in as
 `admin` with the password `Pulaski-demo-1` (you'll choose a new one). The demo plant has two extrusion lines and a packing line, stores
-and 200 materials; three simulated PackML machines publish over Sparkplug B, and **Operate → Machines** shows them running. Stop it with
+and 200 materials; three simulated PackML machines publish over Sparkplug B, and **Operate → Machines** shows them running. A work order
+runs on the extrusion line, and the extruder's melt temperature and profile width fill in live control charts (**Operate → Quality**,
+then **Control charts**), with an SPC alert when the simulated process shifts. Stop it with
 Ctrl+C or `docker compose down` (add `-v` to delete its data). The passwords and keys in `compose.yaml` are for the demo only.
 
 The first milestone is a single-command demo of a simulated extrusion line running end to end, from machine signals to OEE, SPC, and
