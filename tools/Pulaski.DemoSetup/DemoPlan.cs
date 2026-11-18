@@ -77,6 +77,38 @@ public static class DemoPlan
         return reader.ReadToEnd();
     }
 
+    /// <summary>What the demo makes on the extrusion line, and the order it runs.</summary>
+    public const string MaterialCode = "PRF-4410-WH";
+    public const string LineCode = "EXT-01";
+    public const string ProcessCode = "DEMO-EXTRUDE";
+    public const string OrderNumber = "DEMO-0001";
+    public const decimal OrderQuantity = 50_000;
+
+    /// <summary>
+    /// The extruder's two process values, charted (D-099): individuals and moving range, sampled every minute, against limits from the
+    /// process simulator's design (tools/Pulaski.ProcessSimulator) and a specification wide enough for melt temperature to be capable and the
+    /// profile's width marginal.
+    /// </summary>
+    public static IReadOnlyList<Characteristic> Characteristics { get; } =
+    [
+        new("MELT-TEMP", "Melt temperature (°C)", null, 1, $"{GroupId}/{ProcessNode}/EXT-01-EXT:Process/MeltTemperature", 215.0, 1.2, 209m, 221m),
+        new("PROFILE-WIDTH", "Profile width", "mm", 2, $"{GroupId}/{ProcessNode}/EXT-01-EXT:Process/ProfileWidth", 42.00, 0.04, 41.85m, 42.15m),
+    ];
+
+    /// <summary>One charted process value: its characteristic, the tag it is sampled from, the simulator's design and the specification.</summary>
+    public sealed record Characteristic(string Code, string Name, string? UomCode, int Decimals, string TagAddress, double Target, double Sigma, decimal Lsl, decimal Usl)
+    {
+        /// <summary>Individuals and moving-range limits from the design: centre at the target, ±3 sigma, the moving range's expected d2 × sigma.</summary>
+        public IndividualsLimits Limits()
+        {
+            var movingRange = Pulaski.Domain.Quality.Spc.ChartConstants.RangeBias(2) * Sigma;
+            var spread = Pulaski.Domain.Quality.Spc.ChartConstants.E2 * movingRange;
+            return new(Target, Target + spread, Target - spread, movingRange, Pulaski.Domain.Quality.Spc.ChartConstants.MovingRangeD4 * movingRange);
+        }
+    }
+
+    public sealed record IndividualsLimits(double Center, double Ucl, double Lcl, double MovingRange, double MovingRangeUcl);
+
     /// <summary>One tag to bind: the equipment, its role and the Sparkplug address.</summary>
     public sealed record Tag(string EquipmentCode, string Role, string Address);
 

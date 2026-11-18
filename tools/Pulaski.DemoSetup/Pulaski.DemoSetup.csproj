@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Pulaski.Contracts\Pulaski.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Pulaski.Domain\Pulaski.Domain.csproj" />
     <ProjectReference Include="..\..\src\Pulaski.Connectors.Sparkplug\Pulaski.Connectors.Sparkplug.csproj" />
   </ItemGroup>
 

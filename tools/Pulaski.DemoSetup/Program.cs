@@ -30,69 +30,84 @@ var mqttHost = Setting("PULASKI_MQTT_HOST", "broker");
 var mqttPort = int.Parse(Setting("PULASKI_MQTT_PORT", "1883"), System.Globalization.CultureInfo.InvariantCulture);
 var edgeFile = Setting("PULASKI_EDGE_FILE", "/shared/edge.env");
 
-if (File.Exists(edgeFile))
-{
-    Console.WriteLine($"The edge is set up already ({edgeFile}); starting the simulated machines.");
-    await StartMachinesAsync(ct);
-    return 0;
-}
-
-using var api = new PulaskiApi(new HttpClient { BaseAddress = apiUrl });
-Console.WriteLine($"Waiting for the API at {apiUrl}");
-await api.WaitUntilUpAsync(TimeSpan.FromMinutes(3), ct);
-
-if (await api.SignInAsync(adminUsername, adminPassword, ct) is not { } admin)
-{
-    Console.WriteLine($"{adminUsername} no longer has the demo's temporary password, so someone has signed in already: the setup leaves the "
-        + "plant as it is. Set up an edge node as the user guide describes (Edge nodes).");
-    return 0;
-}
-
-var temporary = admin.User.MustChangePassword;
-var working = temporary ? DemoPlan.NewPassword() : adminPassword;
-string edgePassword;
-Guid edgeNodeId;
+// Any failure ends the setup with a message and exit code 1 (the edge then has no sign-in to start with); the administrator's password is
+// given back before that, in its own finally.
 try
 {
-    if (temporary)
+    return await SetUpAsync(ct);
+}
+catch (Exception ex) when (ex is ApiCallException or InvalidOperationException or HttpRequestException or OperationCanceledException or IOException)
+{
+    await Console.Error.WriteLineAsync($"The demo setup failed: {ex.Message}");
+    return 1;
+}
+
+async Task<int> SetUpAsync(CancellationToken ct)
+{
+    if (File.Exists(edgeFile))
     {
-        await api.ChangePasswordAsync(adminPassword, working, ct);
-        _ = await api.SignInAsync(adminUsername, working, ct) ?? throw new InvalidOperationException("The administrator's new password wasn't accepted.");
+        Console.WriteLine($"The edge is set up already ({edgeFile}); starting the simulated machines.");
+        await StartMachinesAsync(ct);
+        return 0;
     }
 
-    (edgeNodeId, edgePassword) = await SetUpEdgeAsync(api, ct);
-}
-finally
-{
-    if (temporary)
+    using var api = new PulaskiApi(new HttpClient { BaseAddress = apiUrl });
+    Console.WriteLine($"Waiting for the API at {apiUrl}");
+    await api.WaitUntilUpAsync(TimeSpan.FromMinutes(3), ct);
+
+    if (await api.SignInAsync(adminUsername, adminPassword, ct) is not { } admin)
     {
-        // Back to the demo's temporary password, whatever happened above, so the first sign-in still works as documented.
-        await api.ResetPasswordAsync(admin.User.Id, adminPassword, CancellationToken.None);
-        Console.WriteLine($"{adminUsername}'s temporary password is back; the first sign-in chooses a new one.");
+        Console.WriteLine($"{adminUsername} no longer has the demo's temporary password, so someone has signed in already: the setup leaves the "
+            + "plant as it is. Set up an edge node as the user guide describes (Edge nodes).");
+        return 0;
     }
-}
 
-// The edge's own temporary password becomes a real one, as signing in once on the Setup tab's advice would.
-var edgeTemporary = await api.SignInAsync(DemoPlan.EdgeUsername, edgePassword, ct)
-    ?? throw new InvalidOperationException($"{DemoPlan.EdgeUsername} couldn't sign in with its temporary password.");
-var edgeFinal = DemoPlan.NewPassword();
-if (edgeTemporary.User.MustChangePassword)
-{
-    await api.ChangePasswordAsync(edgePassword, edgeFinal, ct);
-}
-else
-{
-    edgeFinal = edgePassword;
-}
+    var temporary = admin.User.MustChangePassword;
+    var working = temporary ? DemoPlan.NewPassword() : adminPassword;
+    string edgePassword;
+    Guid edgeNodeId;
+    try
+    {
+        if (temporary)
+        {
+            await api.ChangePasswordAsync(adminPassword, working, ct);
+            _ = await api.SignInAsync(adminUsername, working, ct) ?? throw new InvalidOperationException("The administrator's new password wasn't accepted.");
+        }
 
-Directory.CreateDirectory(Path.GetDirectoryName(edgeFile)!);
-await File.WriteAllTextAsync(edgeFile + ".tmp", DemoPlan.EdgeEnvironment(edgeApiUrl, edgeNodeId, DemoPlan.EdgeUsername, edgeFinal), ct);
-File.Move(edgeFile + ".tmp", edgeFile, overwrite: true);
-Console.WriteLine($"Wrote the edge's sign-in to {edgeFile}.");
+        (edgeNodeId, edgePassword) = await SetUpEdgeAsync(api, ct);
+    }
+    finally
+    {
+        if (temporary)
+        {
+            // Back to the demo's temporary password, whatever happened above, so the first sign-in still works as documented.
+            await api.ResetPasswordAsync(admin.User.Id, adminPassword, CancellationToken.None);
+            Console.WriteLine($"{adminUsername}'s temporary password is back; the first sign-in chooses a new one.");
+        }
+    }
 
-await StartMachinesAsync(ct);
-Console.WriteLine("The demo is set up: the edge collects the simulated machines' data.");
-return 0;
+    // The edge's own temporary password becomes a real one, as signing in once on the Setup tab's advice would.
+    var edgeTemporary = await api.SignInAsync(DemoPlan.EdgeUsername, edgePassword, ct)
+        ?? throw new InvalidOperationException($"{DemoPlan.EdgeUsername} couldn't sign in with its temporary password.");
+    var edgeFinal = DemoPlan.NewPassword();
+    if (edgeTemporary.User.MustChangePassword)
+    {
+        await api.ChangePasswordAsync(edgePassword, edgeFinal, ct);
+    }
+    else
+    {
+        edgeFinal = edgePassword;
+    }
+
+    Directory.CreateDirectory(Path.GetDirectoryName(edgeFile)!);
+    await File.WriteAllTextAsync(edgeFile + ".tmp", DemoPlan.EdgeEnvironment(edgeApiUrl, edgeNodeId, DemoPlan.EdgeUsername, edgeFinal), ct);
+    File.Move(edgeFile + ".tmp", edgeFile, overwrite: true);
+    Console.WriteLine($"Wrote the edge's sign-in to {edgeFile}.");
+
+    await StartMachinesAsync(ct);
+    Console.WriteLine("The demo is set up: the edge collects the simulated machines' data.");
+    return 0;
+}
 
 // The edge starts once its sign-in is written; give it a moment to connect, so it records the machines starting.
 async Task StartMachinesAsync(CancellationToken ct)
@@ -183,6 +198,9 @@ async Task<(Guid EdgeNodeId, string EdgePassword)> SetUpEdgeAsync(PulaskiApi api
         await api.CreateTagAsync(new CreateEquipmentTagRequest { EquipmentId = unit.Id, Role = tag.Role, ConnectionId = connectionId, Address = tag.Address }, ct);
         Console.WriteLine($"Bound {tag.Address} to {tag.EquipmentCode} as {tag.Role}.");
     }
+
+    // A live control chart: the process values as characteristics with limits, and a job running on the line so they are sampled.
+    await new SpcSetup(api).RunAsync(site, equipment, nodeId, ct);
 
     var password = DemoPlan.NewPassword();
     if ((await api.ListUsersAsync(ct)).FirstOrDefault(u => u.Username == DemoPlan.EdgeUsername) is { } user)

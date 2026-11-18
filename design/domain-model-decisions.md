@@ -2768,6 +2768,17 @@ sequence 0/1, DDATA counting on mod 256, births again on `Node Control/Rebirth`)
 defective counts on the saw and packer only (EXT-01 gets one counter), and the two process values on the extruder. CI's `demo` job also
 checks both process values are recorded. A demo set up before keeps its tags (the setup skips once `edge.env` exists): start afresh.
 
+**A live control chart (step 3b).** `SpcSetup` in the demo setup, as the administrator during the round trip, through the API: characteristics
+`MELT-TEMP` (no unit: units have no temperature dimension) and `PROFILE-WIDTH` (mm), I-MR with the default rules; a released specification for
+PRF-4410-WH (209–221 °C, Cpk 1.67; 41.85–42.15 mm, Cpk 1.25, so the capability panel shows both bands); manual control limits from the
+simulator's design (`DemoPlan.Characteristic.Limits`: centre = target, ±E2 × d2(2) × sigma = ±3 sigma, MR-bar = d2 × sigma, MR UCL = D4 × MR-bar,
+from `ChartConstants`), material-wide; tag bindings every minute. Auto results need a running job on the line, so it also releases process
+`DEMO-EXTRUDE` (operation 10 on EXT-01 for PRF-4410-WH) and creates, dispatches and starts work order `DEMO-0001` (50,000 m). Results go through
+`QualityRecorder`, so they are checked against the specification and raise SPC alerts like any result: a run with a 12-minute shift cycle
+raised one on rule 1 within two minutes of the shift. Spec items need their own ids (an empty one twice reads as one item twice). The setup
+now ends a failure with a message and exit 1 (an unhandled exception left the process spinning in the container); admin's password is still
+given back first. CI's `demo` job also waits for automatic results on both characteristics against the job and the specification.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

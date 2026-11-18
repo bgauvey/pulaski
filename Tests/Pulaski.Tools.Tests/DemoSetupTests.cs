@@ -35,4 +35,37 @@ public class DemoSetupTests
         Assert.Contains(password, char.IsDigit);
         Assert.NotEqual(password, DemoPlan.NewPassword());
     }
+
+    [Fact]
+    public void The_charts_limits_are_three_sigma_of_the_simulators_design()
+    {
+        var melt = DemoPlan.Characteristics.Single(c => c.Code == "MELT-TEMP").Limits();
+
+        Assert.Equal(215.0, melt.Center);
+        Assert.Equal(218.6, melt.Ucl, 2);
+        Assert.Equal(211.4, melt.Lcl, 2);
+        Assert.Equal(1.128 * 1.2, melt.MovingRange, 3);
+        Assert.Equal(3.267 * 1.128 * 1.2, melt.MovingRangeUcl, 3);
+    }
+
+    [Fact]
+    public void The_setup_charts_what_the_simulator_publishes_with_its_design()
+    {
+        foreach (var variable in Pulaski.ProcessSimulator.ProcessModel.Extruder)
+        {
+            var plan = DemoPlan.Characteristics.Single(c => c.TagAddress.EndsWith(":" + variable.Metric, StringComparison.Ordinal));
+            Assert.Equal((variable.Target, variable.Sigma, variable.Decimals), (plan.Target, plan.Sigma, plan.Decimals));
+            Assert.Contains(DemoPlan.Tags, t => t.Address == plan.TagAddress && t.Role == "process_value");
+        }
+    }
+
+    [Fact]
+    public void Melt_temperature_is_capable_and_the_profile_width_marginal()
+    {
+        static double Cpk(DemoPlan.Characteristic c) => Math.Min((double)c.Usl - c.Target, c.Target - (double)c.Lsl) / (3 * c.Sigma);
+
+        Assert.True(Cpk(DemoPlan.Characteristics.Single(c => c.Code == "MELT-TEMP")) >= 1.33);
+        var width = Cpk(DemoPlan.Characteristics.Single(c => c.Code == "PROFILE-WIDTH"));
+        Assert.InRange(width, 1.00, 1.33);
+    }
 }

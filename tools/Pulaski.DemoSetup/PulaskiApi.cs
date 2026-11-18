@@ -88,20 +88,20 @@ public sealed class PulaskiApi(HttpClient http) : IDisposable
     public async Task<Guid> CreateUserAsync(CreateUserRequest request, CancellationToken ct) =>
         (await SendAsync<CreatedResponse>(HttpMethod.Post, "api/users", request, ct)).Id;
 
-    private async Task<T> GetAsync<T>(string path, CancellationToken ct)
+    public async Task<T> GetAsync<T>(string path, CancellationToken ct)
     {
         using var response = await http.GetAsync(path, ct);
         return await ReadAsync<T>(response, ct);
     }
 
-    private async Task SendAsync(HttpMethod method, string path, object body, CancellationToken ct)
+    public async Task SendAsync(HttpMethod method, string path, object body, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(method, path) { Content = JsonContent.Create(body) };
         using var response = await http.SendAsync(request, ct);
         await EnsureAsync(response, ct);
     }
 
-    private async Task<T> SendAsync<T>(HttpMethod method, string path, object body, CancellationToken ct)
+    public async Task<T> SendAsync<T>(HttpMethod method, string path, object body, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(method, path) { Content = JsonContent.Create(body) };
         using var response = await http.SendAsync(request, ct);

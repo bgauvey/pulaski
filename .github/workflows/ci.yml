@@ -194,6 +194,20 @@ jobs:
           echo "::error::Only $recorded of the two process values reached Pulaski."
           exit 1
 
+      # The control charts fill in: each characteristic sampled from its tag every minute while the demo's job runs on EXT-01, checked
+      # against the specification. The first results come about 3 minutes after the setup (the interval, then a 2-minute lag).
+      - name: Check the control charts fill in
+        run: |
+          query="SELECT count(DISTINCT s.characteristic_id) FROM ts.quality_sample s
+                 WHERE s.source = 'auto' AND s.job_id IS NOT NULL AND s.spec_item_id IS NOT NULL"
+          for i in $(seq 1 60); do
+            charted="$(docker compose exec -T db psql -U postgres -d pulaski -tAc "$query")"
+            if [ "$charted" = 2 ]; then echo "Both characteristics have results from their process values."; exit 0; fi
+            sleep 6
+          done
+          echo "::error::Only $charted of the two characteristics have automatic results."
+          exit 1
+
       - name: Show the logs
         if: failure()
         run: docker compose logs --no-color
