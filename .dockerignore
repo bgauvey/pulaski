@@ -9,6 +9,7 @@ design/
 Tests/
 tools/*
 !tools/Pulaski.DemoSetup/
+!tools/Pulaski.ProcessSimulator/
 
 # Build output and local files, wherever they are (after the exception above, so they stay out of it too).
 **/bin/

@@ -170,18 +170,18 @@ async Task<(Guid EdgeNodeId, string EdgePassword)> SetUpEdgeAsync(PulaskiApi api
             }, ct);
             Console.WriteLine($"{machine.Device} uses profile {DemoPlan.ProfileCode}.");
         }
+    }
 
-        foreach (var (role, metric) in DemoPlan.Metrics)
+    foreach (var tag in DemoPlan.Tags)
+    {
+        if (detail.Tags.Any(t => t.Address == tag.Address && t.Role == tag.Role))
         {
-            var address = machine.Address(metric);
-            if (detail.Tags.Any(t => t.Address == address && t.Role == role))
-            {
-                continue;
-            }
-
-            await api.CreateTagAsync(new CreateEquipmentTagRequest { EquipmentId = unit.Id, Role = role, ConnectionId = connectionId, Address = address }, ct);
-            Console.WriteLine($"Bound {address} to {machine.Device} as {role}.");
+            continue;
         }
+
+        var unit = equipment.Single(e => e.SiteId == site.Id && e.Code == tag.EquipmentCode);
+        await api.CreateTagAsync(new CreateEquipmentTagRequest { EquipmentId = unit.Id, Role = tag.Role, ConnectionId = connectionId, Address = tag.Address }, ct);
+        Console.WriteLine($"Bound {tag.Address} to {tag.EquipmentCode} as {tag.Role}.");
     }
 
     var password = DemoPlan.NewPassword();

@@ -9,7 +9,11 @@
 #
 # The simulators publish to group "Plant1" on the broker at localhost:${PULASKI_MQTT_PORT:-1883}. Bind their
 # Sparkplug B addresses to EXT-01-EXT, EXT-01-SAW and PACK1 in Pulaski. The image is amd64; Docker Desktop
-# emulates it on arm64 hosts.
+# emulates it on arm64 hosts. They number PackML states their own way: packml-simulator-profile.csv maps them.
+#
+# extruder-process (tools/Pulaski.ProcessSimulator, built from this clone) is node "ExtruderProcess" for device EXT-01-EXT: melt
+# temperature (Process/MeltTemperature, °C) and the profile's width (Process/ProfileWidth, mm), with a melt-temperature shift now and
+# then (PULASKI_SIM_SHIFT_EVERY_MINUTES, default 30; 0 = never) for control charts to catch.
 name: pulaski-simulator
 
 services:
@@ -67,6 +71,19 @@ services:
       SPARKPLUG_GROUP_ID: Plant1
       SPARKPLUG_EDGE_NODE: Packer
       TICK: "1000"
+
+  extruder-process:
+    build:
+      context: ../..
+      dockerfile: deploy/images/process-simulator/Dockerfile
+    image: pulaski-process-simulator:demo
+    depends_on:
+      - broker
+    environment:
+      PULASKI_MQTT_HOST: broker
+      PULASKI_MQTT_PORT: "1883"
+      PULASKI_SIM_SHIFT_EVERY_MINUTES: ${PULASKI_SIM_SHIFT_EVERY_MINUTES:-30}
+    restart: unless-stopped
 
   opcua:
     image: mcr.microsoft.com/iotedge/opc-plc:2.15.12

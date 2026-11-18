@@ -5,10 +5,12 @@
     <Project Path="../Tests/Pulaski.Edge.Tests/Pulaski.Edge.Tests.csproj" />
     <Project Path="../Tests/Pulaski.Infrastructure.Tests/Pulaski.Infrastructure.Tests.csproj" />
     <Project Path="../Tests/Pulaski.Testing/Pulaski.Testing.csproj" />
+    <Project Path="../Tests/Pulaski.Tools.Tests/Pulaski.Tools.Tests.csproj" />
     <Project Path="../Tests/Pulaski.Web.Tests/Pulaski.Web.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="../tools/Pulaski.DemoSetup/Pulaski.DemoSetup.csproj" />
+    <Project Path="../tools/Pulaski.ProcessSimulator/Pulaski.ProcessSimulator.csproj" />
     <Project Path="../tools/Pulaski.SparkplugCommand/Pulaski.SparkplugCommand.csproj" />
   </Folder>
   <Project Path="Pulaski.Api/Pulaski.Api.csproj" />

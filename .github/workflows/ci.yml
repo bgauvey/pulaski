@@ -135,7 +135,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [api, web, edge, db, demo-setup]
+        image: [api, web, edge, db, demo-setup, process-simulator]
 
     steps:
       - uses: actions/checkout@v5
@@ -179,6 +179,19 @@ jobs:
             sleep 2
           done
           echo "::error::Only $running of the three simulated machines reached Execute in Pulaski."
+          exit 1
+
+      # The process simulator's melt temperature and profile width, recorded as process values of EXT-01-EXT.
+      - name: Check the process values reach Pulaski
+        run: |
+          query="SELECT count(DISTINCT v.equipment_tag_id) FROM ts.process_value v JOIN core.equipment_tag t ON t.id = v.equipment_tag_id
+                 WHERE t.source_address LIKE 'Plant1/ExtruderProcess/EXT-01-EXT:Process/%'"
+          for i in $(seq 1 30); do
+            recorded="$(docker compose exec -T db psql -U postgres -d pulaski -tAc "$query")"
+            if [ "$recorded" = 2 ]; then echo "Both process values are recorded in Pulaski."; exit 0; fi
+            sleep 2
+          done
+          echo "::error::Only $recorded of the two process values reached Pulaski."
           exit 1
 
       - name: Show the logs
