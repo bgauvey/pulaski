@@ -1463,7 +1463,7 @@ The ERP's own quantity is kept in `erp_qty`/`erp_uom_id` with `batch_adjustment`
 
 Locks are lines, then the order, then its jobs (D-017). Events: `…erp_changed.v1`, `…erp_change_pending.v1`, `…erp_change_accepted.v1`, `…erp_change_rejected.v1`, `…quantity_set.v1`, `pulaski.job.replanned.v1`, `pulaski.erp_batch_rule.set.v1`.
 
-**Not done.** Manufacturing orders, a file/B2MML import, re-planning after a job has started or after jobs were changed by hand, and changing the order's unit.
+**Not done.** Manufacturing orders, re-planning after a job has started or after jobs were changed by hand, and changing the order's unit.
 
 ## Replacement jobs for a partial batch (D-067, proposed)
 
@@ -2778,6 +2778,25 @@ from `ChartConstants`), material-wide; tag bindings every minute. Auto results n
 raised one on rule 1 within two minutes of the shift. Spec items need their own ids (an empty one twice reads as one item twice). The setup
 now ends a failure with a message and exit 1 (an unhandled exception left the process spinning in the container); admin's password is still
 given back first. CI's `demo` job also waits for automatic results on both characteristics against the job and the specification.
+
+## B2MML for the ERP: work orders in, production performance out (D-102, proposed, in pieces)
+
+The charter's v1 ERP integration names B2MML-aligned payloads for work orders and production performance; Pulaski took work orders as JSON
+only (D-066) and sent CloudEvents JSON (D-061). Decided (the user's choices): **production performance through the delivery feeds as a format,
+plus a job endpoint**; each document is **the job's totals, re-sent** as a `SyncProductionPerformance` after every change (Sync replaces, so
+corrections need nothing special); work orders come in by **an endpoint and a file on the Work orders screen**.
+
+**Work orders in (piece 4a).** `WorkOrderB2mml.Parse` (pure, Application/WorkOrders) reads every `ProductionRequest` by local name in any
+namespace, whatever wraps it, into `ErpWorkOrderRequest`s for the unchanged ERP import (`ImportB2mmlWorkOrdersCommand` → `ImportWorkOrdersCommand`):
+`ID` = order number and external key; site from `HierarchyScope/EquipmentID` (request, else schedule, else the import's `siteCode`); produced
+material from `SegmentRequirement/MaterialProducedRequirement` (before V0600) or a `MaterialRequirement` with `MaterialUse` `Produced`, one per
+order; `StartTime`/`EndTime` else the segment's `EarliestStartTime`/`LatestEndTime` (no offset = UTC); `ProductProductionRuleID` else
+`ProductSegmentID`/`ProcessSegmentID` as the process code; `RequestState` Cancelled/Canceled/Aborted cancels; `Description` the note; no
+external version (every import compares). A request it can't read, or an `ID` repeated in the file, is refused in place with why; file problems
+(not XML, DTDs prohibited, no requests, over 500) come back as `FileProblems`. `ImportWorkOrdersCommand.DryRun` (also `?dryRun=` on the JSON
+import) runs each order's transaction and doesn't commit, so it answers as the import would and saves nothing (no id for an order it would
+create). `POST /api/work-orders/import/b2mml?externalSystem=&siteCode=&dryRun=` (XML body, 5 MB), `GET …/b2mml/template`; Work orders → **Import
+from the ERP** (`WorkOrderB2mmlImport`, `ErpOrderImportView`): checks on every change, imports what the check accepted.
 
 ## Application architecture
 

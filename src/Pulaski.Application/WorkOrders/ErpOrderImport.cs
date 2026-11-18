@@ -22,7 +22,20 @@ namespace Pulaski.Application.WorkOrders;
 /// </summary>
 /// <param name="Orders">The orders, as sent.</param>
 /// <param name="Sites">Sites where the caller may manage work orders; null for every site.</param>
-public sealed record ImportWorkOrdersCommand(IReadOnlyList<ErpWorkOrderRequest> Orders, IReadOnlySet<Guid>? Sites) : ICommand<ImportWorkOrdersResponse>;
+/// <param name="DryRun">Works out each order as it would be imported, then saves nothing (D-102).</param>
+public sealed record ImportWorkOrdersCommand(IReadOnlyList<ErpWorkOrderRequest> Orders, IReadOnlySet<Guid>? Sites, bool DryRun = false) : ICommand<ImportWorkOrdersResponse>;
+
+/// <summary>
+/// Work orders from a B2MML production schedule (D-102): <see cref="WorkOrderB2mml"/> reads its production requests, the ERP order import
+/// does the rest. A request that can't be read is refused with why; the others are imported as if sent as JSON.
+/// </summary>
+/// <param name="Text">The B2MML document.</param>
+/// <param name="ExternalSystem">The ERP the orders belong to.</param>
+/// <param name="SiteCode">The site for requests whose schedule names none.</param>
+/// <param name="Sites">Sites where the caller may manage work orders; null for every site.</param>
+/// <param name="DryRun">Works out each order and saves nothing.</param>
+public sealed record ImportB2mmlWorkOrdersCommand(string Text, string ExternalSystem, string? SiteCode, IReadOnlySet<Guid>? Sites, bool DryRun)
+    : ICommand<ImportWorkOrdersResponse>;
 
 /// <summary>Applies the ERP's pending change to a dispatched order (D-066).</summary>
 public sealed record AcceptErpChangeCommand(Guid WorkOrderId, long ExpectedVersion) : ICommand<VersionResponse>;
@@ -278,10 +291,16 @@ internal sealed class ImportWorkOrdersHandler(
             // Each order on its own: one refused doesn't stop the rest.
             try
             {
+                // A dry run does everything, then leaves the transaction uncommitted, so it gives the same answers and saves nothing.
                 await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
                 var result = await ImportAsync(order, command.Sites, cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                results.Add(result);
+                if (!command.DryRun)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                }
+
+                // An order a dry run would create isn't there, so it has no id to give.
+                results.Add(command.DryRun && result.Action == ErpOrderAction.Created ? result with { WorkOrderId = null } : result);
             }
             catch (Exception ex) when (ex is DomainRuleException or ValidationException or ConflictException or NotFoundException or ForbiddenException)
             {
@@ -289,7 +308,7 @@ internal sealed class ImportWorkOrdersHandler(
             }
         }
 
-        return new ImportWorkOrdersResponse { Results = results };
+        return new ImportWorkOrdersResponse { Results = results, DryRun = command.DryRun };
     }
 
     private async Task<ErpOrderResultDto> ImportAsync(ErpWorkOrderRequest row, IReadOnlySet<Guid>? sites, CancellationToken cancellationToken)
@@ -585,5 +604,37 @@ internal static class ErpDecisions
         {
             throw new DomainRuleException($"{order.Value.OrderNumber} has no change from the ERP waiting.");
         }
+    }
+}
+
+internal sealed class ImportB2mmlWorkOrdersHandler(ICommandHandler<ImportWorkOrdersCommand, ImportWorkOrdersResponse> import)
+    : ICommandHandler<ImportB2mmlWorkOrdersCommand, ImportWorkOrdersResponse>
+{
+    public async Task<ImportWorkOrdersResponse> HandleAsync(ImportB2mmlWorkOrdersCommand command, CancellationToken cancellationToken)
+    {
+        new Validator().RequireText(command.ExternalSystem.Trim(), "ExternalSystem", 100).ThrowIfInvalid();
+        var source = WorkOrderB2mml.Parse(command.Text, command.ExternalSystem.Trim(), command.SiteCode);
+        if (source.Problems.Count > 0)
+        {
+            return new ImportWorkOrdersResponse { DryRun = command.DryRun, FileProblems = source.Problems };
+        }
+
+        var orders = source.Rows.Where(r => r.Order is not null).Select(r => r.Order!).ToList();
+        var imported = orders.Count == 0
+            ? []
+            : (await import.HandleAsync(new ImportWorkOrdersCommand(orders, command.Sites, command.DryRun), cancellationToken)).Results;
+
+        // In the file's order: the import answers for the orders in the order given, and a request that couldn't be read is refused where it was.
+        var next = 0;
+        var results = source.Rows.Select(r => r.Order is not null
+            ? imported[next++]
+            : new ErpOrderResultDto
+            {
+                ExternalKey = r.RequestId.Length > 0 ? r.RequestId : $"line {r.Line}",
+                OrderNumber = r.RequestId,
+                Action = ErpOrderAction.Refused,
+                Messages = r.Problems,
+            }).ToList();
+        return new ImportWorkOrdersResponse { DryRun = command.DryRun, Results = results };
     }
 }

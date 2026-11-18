@@ -43,6 +43,12 @@ public sealed record ErpOrderResultDto
 public sealed record ImportWorkOrdersResponse
 {
     public IReadOnlyList<ErpOrderResultDto> Results { get; init; } = [];
+
+    /// <summary>Nothing was saved: each result says what importing would do (D-102).</summary>
+    public bool DryRun { get; init; }
+
+    /// <summary>What was wrong with a file as a whole (not XML, no orders, too many); no order was read (D-102).</summary>
+    public IReadOnlyList<string> FileProblems { get; init; } = [];
 }
 
 /// <summary>A change from the ERP to a dispatched order, waiting for a planner (D-066).</summary>

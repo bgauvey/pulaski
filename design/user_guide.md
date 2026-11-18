@@ -661,6 +661,16 @@ Your ERP can send work orders to Pulaski (whoever runs the integration sets this
 3. **The ERP changes an order.** While it is still planned, the change applies at once and its jobs are re-planned. Once dispatched, the row shows *ERP change*: open it to see what would change, then click **Accept** (the change applies and its jobs are re-planned) or type a reason and click **Reject** (the order stays as it is).
 4. **The ERP cancels an order.** While planned, it is cancelled with its jobs; after that the cancellation waits for you like any change.
 
+**From a B2MML file.** When the ERP exports its orders as an ISA-95 production schedule in B2MML XML:
+
+1. On **Operate → Work orders**, click **Import from the ERP**.
+2. Type the **External system** the orders come from, such as `SAP-PRD`: Pulaski keeps each order under it, so the same file again doesn't make new ones.
+3. If the file doesn't name its site, choose the **Site** for its orders.
+4. Pick the **File**. Pulaski checks it at once and lists each order with what importing would do (create, update, cancel, unchanged, wait for a planner) or why it is refused. Nothing is saved yet.
+5. Click **Import**. Each order is imported on its own: a refused one is left out with its reason, and the others go in.
+
+**Download a template** in the same box gives a file to start from.
+
 **In detail**
 
 - **Sending once is enough.** Orders are matched on the ERP's system and key, so sending one again never makes a second; the same version again changes nothing. An order number already used by an order made in Pulaski is refused.
@@ -668,7 +678,8 @@ Your ERP can send work orders to Pulaski (whoever runs the integration sets this
 - **What the ERP owns:** product, quantity, start, due date and priority. Pulaski owns the schedule, dispatch and status. The ERP can't change an order's product; cancel it and send a new one.
 - **Re-planning** changes each job's quantity in place, shared between the lines as when it was made (whole batches of each line's size), scales its components, and moves its hold-until by as much as the start moved. It is refused once a job has started, or when the order's jobs were changed by hand on the schedule; change them there instead.
 - **Every step is recorded:** imported, changed, change pending, accepted (with the ERP's values) and rejected (with your reason).
-- **For the integration:** `POST /api/work-orders/import` with a list of orders (`externalSystem`, `externalKey`, `externalVersion`, `siteCode`, `orderNumber`, `materialCode`, `quantity`, `uomCode`, `plannedStart`, `dueAt`, `priority`, `processCode`, `notes`, `cancelled`). Each comes back `created`, `updated`, `unchanged`, `pending`, `cancelled` or `refused` with why, and each is saved on its own. The caller needs *work_order.manage* at the order's site.
+- **What a B2MML file gives.** Each `ProductionRequest` is one order, wherever it is in the file (a `ProductionSchedule`, or one wrapped in `SyncProductionSchedule` or another verb). Its `ID` is the order number and the ERP's key; its `Description` the order's note; its `Priority` the priority. The material is what one of its `SegmentRequirement`s produces: a `MaterialProducedRequirement`, or a `MaterialRequirement` whose `MaterialUse` is `Produced`, with its `MaterialDefinitionID` and `Quantity` (`QuantityString` and `UnitOfMeasure`). One material per order. It runs from its `StartTime` (else the segment's `EarliestStartTime`) to its `EndTime` (else `LatestEndTime`); a time without an offset is UTC. The site is its `HierarchyScope`'s `EquipmentID`, else its schedule's, else the one you chose. `ProductProductionRuleID` (else a segment's `ProductSegmentID` or `ProcessSegmentID`) names the process by its code. `RequestState` `Cancelled` cancels the order. A B2MML request has no version, so every import compares the order with what Pulaski has, and the same order again changes nothing. An `ID` twice in one file is imported once.
+- **For the integration:** `POST /api/work-orders/import` with a list of orders (`externalSystem`, `externalKey`, `externalVersion`, `siteCode`, `orderNumber`, `materialCode`, `quantity`, `uomCode`, `plannedStart`, `dueAt`, `priority`, `processCode`, `notes`, `cancelled`). Each comes back `created`, `updated`, `unchanged`, `pending`, `cancelled` or `refused` with why, and each is saved on its own. `?dryRun=true` gives the same answers and saves nothing. A B2MML file goes to `POST /api/work-orders/import/b2mml?externalSystem=…&siteCode=…&dryRun=…` as the request body (at most 5 MB, 500 orders); `GET /api/work-orders/import/b2mml/template` is the template. The caller needs *work_order.manage* at the order's site.
 
 ### Print a shop order
 

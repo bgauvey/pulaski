@@ -13,12 +13,23 @@
 <div class="wo-head">
     <h1 class="mb-0">Work orders</h1>
     <div class="wo-head-tools">
-        @* New work orders are created by planners, from the Schedule page. *@
+        @* New work orders are created by planners, from the Schedule page; the ERP's come by import (D-066, D-102). *@
+        @if (ImportSites.Count > 0)
+        {
+            <button type="button" class="btn btn-sm btn-outline-secondary" aria-expanded="@(_importOpen ? "true" : "false")" aria-controls="wo-import"
+                    @onclick="() => _importOpen = !_importOpen">Import from the ERP</button>
+        }
         <EquipmentPicker Equipment="_equipment" Value="EquipmentId" ValueChanged="OnEquipmentChanged" />
     </div>
 </div>
 
 <ProblemAlert Error="_error" />
+@if (_importOpen && ImportSites.Count > 0)
+{
+    <div id="wo-import">
+        <WorkOrderB2mmlImport Sites="ImportSites" OnImported="LoadAsync" />
+    </div>
+}
 
 @* The tiles count everything in the selection; picking one filters the list below to it. *@
 <div class="wo-tiles" role="group" aria-label="Filter by">
@@ -452,6 +463,11 @@
     private readonly HashSet<Guid> _expanded = [];
     private readonly Dictionary<Guid, IReadOnlyList<PlannedComponentDto>> _components = [];
     private bool _actionsOpen;
+    private bool _importOpen;
+
+    // Sites where the user may manage work orders: the import refuses orders anywhere else.
+    private IReadOnlyList<EquipmentDto> ImportSites =>
+        [.. _equipment.Where(e => e.Level == "site" && e.IsActive && User.Can(PermissionCodes.WorkOrderManage, e.Id)).OrderBy(e => e.Code, StringComparer.Ordinal)];
     private string? _pendingBulk;
     private bool _busy;
     private Guid? _busyId;
