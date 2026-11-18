@@ -330,6 +330,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   material's, `Batching.OnLine`; a line tolerance too since D-075, `batch_tolerance_pct`, `ILineBatchSizes.GetTolerancesAsync`). `ILineBatchSizes` (in-transaction) feeds order creation (`Batching.ShareBySize`: whole
   batches of each line's size adding up exactly, else refused with the nearest quantities), job create/move/assign/start-on-line checks
   (`BatchPlanning`), replacements, and reports/partial batches (`ProductionReporter`). Department jobs use the material's size.
+- B2MML for the ERP (D-102, proposed, in pieces): `WorkOrderB2mml` reads a production schedule's `ProductionRequest`s into `ErpWorkOrderRequest`s
+  for the ERP import (`ImportB2mmlWorkOrdersCommand`, `POST /work-orders/import/b2mml?externalSystem=&siteCode=&dryRun=`; Work orders → Import
+  from the ERP); `ImportWorkOrdersCommand.DryRun` runs each order uncommitted. Production performance out comes next (job totals, Sync, re-sent).
 - ERP work orders (D-066, proposed): `POST /work-orders/import` (`ImportWorkOrdersCommand`, one transaction per order, idempotent on external
   system + key, same version = unchanged) makes orders via `CreateWorkOrderHandler.MakeAsync` (process named, else material default, else the
   only released one). `ErpBatchRule` (material `erp_batch_rule` > site `scheduling_policy.erp_batch_rule` > reject; round_up/down; hold →

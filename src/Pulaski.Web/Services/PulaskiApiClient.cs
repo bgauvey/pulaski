@@ -1439,6 +1439,19 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     /// <summary>Imports lot attribute values (#78); <paramref name="dryRun"/> checks without saving.</summary>
     /// <summary>B2MML material lots at a site (#72): new lots received, known ones' properties set as attributes.</summary>
+    /// <summary>A B2MML production schedule's requests as ERP work orders (D-102); a dry run says what would happen and saves nothing.</summary>
+    public async Task<ImportWorkOrdersResponse> ImportB2mmlWorkOrdersAsync(string xml, string externalSystem, string? siteCode, bool dryRun, CancellationToken ct = default)
+    {
+        var site = string.IsNullOrWhiteSpace(siteCode) ? "" : $"&siteCode={Uri.EscapeDataString(siteCode)}";
+        var request = new HttpRequestMessage(HttpMethod.Post,
+            $"api/work-orders/import/b2mml?externalSystem={Uri.EscapeDataString(externalSystem)}{site}&dryRun={(dryRun ? "true" : "false")}")
+        {
+            Content = new StringContent(xml, System.Text.Encoding.UTF8, "application/xml"),
+        };
+        using var response = await SendCoreAsync(request, ct);
+        return await ReadAsync<ImportWorkOrdersResponse>(response, ct);
+    }
+
     public async Task<ImportMaterialsResponse> ImportB2mmlLotsAsync(Guid siteId, string xml, bool dryRun, CancellationToken ct = default)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"api/lots/import/b2mml?siteId={siteId}&dryRun={(dryRun ? "true" : "false")}")

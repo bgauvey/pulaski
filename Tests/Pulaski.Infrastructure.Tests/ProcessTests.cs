@@ -498,6 +498,64 @@ public sealed class ProcessTests(DatabaseFixture db)
         Assert.Equal("cancelled", (await reads.GetAsync(b.WorkOrderId.Value, CancellationToken.None))!.Status);
     }
 
+    [Fact]
+    public async Task A_b2mml_production_schedule_imports_as_erp_orders_with_a_dry_run_first()
+    {
+        var plant = await CreatePlantAsync();
+        await ReleasedExtrudeAndPackAsync(plant);
+        var suffix = Guid.NewGuid().ToString("N")[..6];
+        await db.SendAsync(new Application.Materials.CreateMaterialCommand("B2M-" + suffix, "Blend", null, "intermediate", null, db.UomId, true, null));
+        await using var connection = await db.AdminDataSource.OpenConnectionAsync();
+        var materialId = await connection.ExecuteScalarAsync<Guid>("SELECT id FROM core.material WHERE code = @Code", new { Code = "B2M-" + suffix });
+        foreach (var line in new[] { plant.Ext1, plant.Ext2, plant.Pack })
+        {
+            await db.ExecuteAsync(
+                $"""
+                INSERT INTO core.equipment_capability (equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, effective_from)
+                VALUES ('{line}', '{materialId}', 1000, '{db.UomId}', now() - interval '1 day')
+                """);
+        }
+
+        var siteCode = await connection.ExecuteScalarAsync<string>("SELECT code FROM core.equipment WHERE id = @Id", new { Id = plant.Site });
+        var uomCode = await connection.ExecuteScalarAsync<string>("SELECT code FROM core.uom WHERE id = @Id", new { Id = db.UomId });
+        var start = TestTime.Now.AddDays(2).ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+        string Schedule(string state) => $"""
+            <ProductionSchedule xmlns="http://www.mesa.org/xml/B2MML">
+              <HierarchyScope><EquipmentID>{siteCode}</EquipmentID></HierarchyScope>
+              <ProductionRequest>
+                <ID>PO-{suffix}</ID>
+                <StartTime>{start}</StartTime>
+                <RequestState>{state}</RequestState>
+                <SegmentRequirement><MaterialProducedRequirement><MaterialDefinitionID>B2M-{suffix}</MaterialDefinitionID>
+                  <Quantity><QuantityString>1000</QuantityString><UnitOfMeasure>{uomCode}</UnitOfMeasure></Quantity></MaterialProducedRequirement></SegmentRequirement>
+              </ProductionRequest>
+              <ProductionRequest><ID>NOPE-{suffix}</ID></ProductionRequest>
+            </ProductionSchedule>
+            """;
+        async Task<ImportWorkOrdersResponse> ImportAsync(string state, bool dryRun) =>
+            await db.SendAsync(new ImportB2mmlWorkOrdersCommand(Schedule(state), "ERP-" + suffix, null, null, dryRun));
+        async Task<int> OrdersAsync() =>
+            await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM core.work_order WHERE external_system = @System", new { System = "ERP-" + suffix });
+
+        // A dry run says what would happen and saves nothing; the unreadable request is refused where it is, without stopping the other.
+        var dry = await ImportAsync("Released", dryRun: true);
+        Assert.True(dry.DryRun);
+        Assert.Equal([ErpOrderAction.Created, ErpOrderAction.Refused], dry.Results.Select(r => r.Action));
+        Assert.Null(dry.Results[0].WorkOrderId);
+        Assert.Contains(dry.Results[1].Messages, m => m.StartsWith("No produced material", StringComparison.Ordinal));
+        Assert.Equal(0, await OrdersAsync());
+
+        var made = (await ImportAsync("Released", dryRun: false)).Results[0];
+        Assert.Equal((ErpOrderAction.Created, "PO-" + suffix), (made.Action, made.OrderNumber));
+        Assert.Equal(1, await OrdersAsync());
+        Assert.Equal(ErpOrderAction.Unchanged, (await ImportAsync("Released", dryRun: false)).Results[0].Action);
+        Assert.Equal(ErpOrderAction.Cancelled, (await ImportAsync("Cancelled", dryRun: false)).Results[0].Action);
+
+        var empty = await db.SendAsync(new ImportB2mmlWorkOrdersCommand("<nothing/>", "ERP-" + suffix, null, null, DryRun: false));
+        Assert.Empty(empty.Results);
+        Assert.StartsWith("The file has no ProductionRequest", Assert.Single(empty.FileProblems), StringComparison.Ordinal);
+    }
+
     /// <summary>Extrude and Pack, making every material, released as version 1.</summary>
     private async Task<Guid> ReleasedExtrudeAndPackAsync(Plant plant)
     {

@@ -91,16 +91,50 @@ internal static class WorkOrderEndpoints
         // Planning (D-018): these also carry the order's jobs, so they are not plain status changes.
         // Orders from the ERP (D-066), one or many per call, each in its own transaction; rows at sites where the caller may not manage
         // work orders are refused.
+        // ?dryRun=true works out each order and saves nothing (D-102).
         group.MapPost("/import", async Task<Ok<ImportWorkOrdersResponse>> (
             ImportWorkOrdersRequest request,
+            bool? dryRun,
             HttpContext http,
             ICommandHandler<ImportWorkOrdersCommand, ImportWorkOrdersResponse> handler,
             CancellationToken ct) =>
         {
             var sites = await Visible.SitesAsync(http, Permissions.WorkOrderManage);
-            return TypedResults.Ok(await handler.HandleAsync(new ImportWorkOrdersCommand(request.Orders, sites?.ToHashSet()), ct));
+            return TypedResults.Ok(await handler.HandleAsync(new ImportWorkOrdersCommand(request.Orders, sites?.ToHashSet(), dryRun ?? false), ct));
         })
         .RequirePermission(Permissions.WorkOrderManage);
+
+        // A B2MML production schedule to start from (D-102).
+        group.MapGet("/import/b2mml/template", () =>
+            TypedResults.File(System.Text.Encoding.UTF8.GetBytes(WorkOrderB2mml.Template), "application/xml", "production-schedule.xml"))
+        .RequirePermission(Permissions.WorkOrderManage);
+
+        // A B2MML production schedule's requests as ERP work orders (D-102): the body is the XML; ?externalSystem= names the ERP, ?siteCode= the
+        // site for requests whose schedule names none, ?dryRun=true saves nothing.
+        group.MapPost("/import/b2mml", async Task<Ok<ImportWorkOrdersResponse>> (
+            string externalSystem,
+            string? siteCode,
+            bool? dryRun,
+            HttpContext http,
+            ICommandHandler<ImportB2mmlWorkOrdersCommand, ImportWorkOrdersResponse> handler,
+            CancellationToken ct) =>
+        {
+            const int MaxBytes = 5 * 1024 * 1024;
+            using var reader = new StreamReader(http.Request.Body);
+            var text = http.Request.ContentLength > MaxBytes ? null : await reader.ReadToEndAsync(ct);
+            if (text is null || text.Length > MaxBytes)
+            {
+                throw new Pulaski.Application.Errors.ValidationException(new Dictionary<string, string[]>
+                {
+                    ["file"] = ["The file is larger than 5 MB; split it."],
+                });
+            }
+
+            var sites = await Visible.SitesAsync(http, Permissions.WorkOrderManage);
+            return TypedResults.Ok(await handler.HandleAsync(new ImportB2mmlWorkOrdersCommand(text, externalSystem, siteCode, sites?.ToHashSet(), dryRun ?? false), ct));
+        })
+        .RequirePermission(Permissions.WorkOrderManage)
+        .Accepts<string>("application/xml", "text/xml", "text/plain");
 
         // The rule for ERP quantities that aren't whole batches (D-066): the site's default, and a material's own.
         routes.MapPut("/sites/{siteId:guid}/erp-batch-rule", async Task<Ok<VersionResponse>> (

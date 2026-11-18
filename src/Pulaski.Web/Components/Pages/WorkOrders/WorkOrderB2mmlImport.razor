@@ -1,0 +1,170 @@
+@inject PulaskiApiClient Api
+
+@* ERP work orders from a B2MML production schedule (D-102): checked first (a dry run), then imported order by order, as the ERP order import
+   does (D-066). A request that can't be read, or that the import refuses, is left out with why; the others are imported. *@
+<section class="inv-facts mb-3" aria-labelledby="wo-b2mml">
+    <h2 class="h6" id="wo-b2mml">Import work orders from a B2MML file</h2>
+    <p class="small text-muted mb-2">
+        Each <code>ProductionRequest</code> is one order: its <code>ID</code> the order number and the ERP's key, the material its
+        <code>SegmentRequirement</code> produces (<code>MaterialProducedRequirement</code>, or a <code>MaterialRequirement</code> used as
+        <code>Produced</code>) with its <code>Quantity</code>, from its <code>StartTime</code> to its <code>EndTime</code>. The site is its
+        <code>HierarchyScope</code>, or its schedule's. Importing the same file again changes nothing; a changed order is updated as the ERP's
+        orders always are.
+        <a href="@TemplateHref" download="production-schedule.xml">Download a template</a>
+    </p>
+    <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold" for="wo-b2mml-system">External system</label>
+            <input id="wo-b2mml-system" class="form-control form-control-sm" maxlength="100" placeholder="SAP-PRD" aria-describedby="wo-b2mml-system-note"
+                   value="@_system" @onchange="SystemChangedAsync" />
+            <div class="form-text" id="wo-b2mml-system-note">The ERP the orders come from; its IDs are its keys.</div>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold" for="wo-b2mml-site">Site, where the file names none</label>
+            <select id="wo-b2mml-site" class="form-select form-select-sm" value="@(_siteCode ?? "")" @onchange="SiteChangedAsync">
+                <option value="">Named in the file</option>
+                @foreach (var site in Sites)
+                {
+                    <option value="@site.Code">@site.Code · @site.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label small fw-semibold" for="wo-b2mml-file">File</label>
+            <InputFile id="wo-b2mml-file" OnChange="PickAsync" accept=".xml,application/xml,text/xml" class="form-control form-control-sm" disabled="@_busy" />
+        </div>
+        <div class="col-md-2">
+            <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@ErpOrderImportView.Why(_check, _system)" OnClick="ImportAsync">Import</ActionButton>
+        </div>
+    </div>
+    <ProblemAlert Error="_error" />
+    @if (_check is { } c)
+    {
+        <p class="small mt-2 mb-1 @(c.FileProblems.Count > 0 ? "text-danger" : "")" role="status">@ErpOrderImportView.Summary(c)</p>
+        @if (c.Results.Count > 0)
+        {
+            <div class="table-panel" style="max-height: 20rem; overflow-y: auto;">
+                <table class="table table-sm align-middle small mb-0">
+                    <thead><tr><th>Order</th><th>Result</th><th>Why</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in c.Results)
+                        {
+                            <tr class="@(row.Action == "refused" ? "text-danger" : "")">
+                                <td class="fw-semibold">@(row.OrderNumber.Length > 0 ? row.OrderNumber : row.ExternalKey)</td>
+                                <td>@ErpOrderImportView.Action(row.Action, c.DryRun)</td>
+                                <td>@string.Join(" ", row.Messages)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</section>
+
+@code {
+    private const int MaxFileBytes = 5 * 1024 * 1024;
+
+    // Like the API's template (GET /api/work-orders/import/b2mml/template) without a process, so the material's default or only one is used.
+    private const string Template = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <ProductionSchedule xmlns="http://www.mesa.org/xml/B2MML">
+          <ID>WEEK-47</ID>
+          <HierarchyScope><EquipmentID>PLT1</EquipmentID><EquipmentElementLevel>Site</EquipmentElementLevel></HierarchyScope>
+          <ProductionRequest>
+            <ID>4500012345</ID>
+            <Description>Customer order 778, white profile</Description>
+            <StartTime>2026-11-23T06:00:00Z</StartTime>
+            <EndTime>2026-11-27T18:00:00Z</EndTime>
+            <Priority>2</Priority>
+            <SegmentRequirement>
+              <MaterialProducedRequirement>
+                <MaterialDefinitionID>PRF-4410-WH</MaterialDefinitionID>
+                <Quantity><QuantityString>12000</QuantityString><UnitOfMeasure>m</UnitOfMeasure></Quantity>
+              </MaterialProducedRequirement>
+            </SegmentRequirement>
+          </ProductionRequest>
+        </ProductionSchedule>
+
+        """;
+
+    /// <summary>The sites where the user may manage work orders.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<EquipmentDto> Sites { get; set; } = [];
+
+    /// <summary>After an import, so the list shows the new orders.</summary>
+    [Parameter] public EventCallback OnImported { get; set; }
+
+    private string? _system;
+    private string? _siteCode;
+    private string? _xml;
+    private ImportWorkOrdersResponse? _check;
+    private bool _busy;
+    private ApiException? _error;
+
+    private static string TemplateHref => $"data:application/xml;charset=utf-8,{Uri.EscapeDataString(Template)}";
+
+    private async Task SystemChangedAsync(ChangeEventArgs e)
+    {
+        _system = e.Value?.ToString()?.Trim();
+        await CheckAsync();
+    }
+
+    private async Task SiteChangedAsync(ChangeEventArgs e)
+    {
+        _siteCode = e.Value?.ToString() is { Length: > 0 } code ? code : null;
+        await CheckAsync();
+    }
+
+    private async Task PickAsync(InputFileChangeEventArgs e)
+    {
+        (_check, _xml, _error) = (null, null, null);
+        if (e.File.Size > MaxFileBytes)
+        {
+            _error = new ApiException(400, "Too large", $"{e.File.Name} is larger than 5 MB; split it.", null);
+            return;
+        }
+
+        using var reader = new StreamReader(e.File.OpenReadStream(MaxFileBytes));
+        _xml = await reader.ReadToEndAsync();
+        await CheckAsync();
+    }
+
+    // A dry run whenever the file, the ERP or the site changes, so what Import does is what the check showed.
+    private async Task CheckAsync()
+    {
+        _check = null;
+        if (_xml is null || string.IsNullOrWhiteSpace(_system))
+        {
+            return;
+        }
+
+        await RunAsync(dryRun: true);
+    }
+
+    private async Task ImportAsync()
+    {
+        await RunAsync(dryRun: false);
+        if (_check is { DryRun: false })
+        {
+            await OnImported.InvokeAsync();
+        }
+    }
+
+    private async Task RunAsync(bool dryRun)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _check = await Api.ImportB2mmlWorkOrdersAsync(_xml!, _system!, _siteCode, dryRun);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
