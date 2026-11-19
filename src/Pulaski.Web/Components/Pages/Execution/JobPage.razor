@@ -4,6 +4,7 @@
 @inject PulaskiApiClient Api
 @inject TimeProvider Clock
 @inject CurrentUser User
+@inject Downloads Downloads
 
 <PageTitle>@(_job?.JobNumber ?? "Job") · Pulaski</PageTitle>
 
@@ -35,6 +36,11 @@
             @if (j.JobType == "production")
             {
                 <ScreenLink Href="@($"inventory/jobs/{JobId}")" Permission="@PermissionCodes.InventoryView" Hide class="btn btn-outline-secondary">Materials and lots</ScreenLink>
+            }
+            @if (j.JobType == "production" && j.WorkOrderId is not null)
+            {
+                <button type="button" class="btn btn-outline-secondary" title="Download the job's totals as a B2MML production performance for the ERP"
+                        @onclick="DownloadPerformanceAsync">Production performance (B2MML)</button>
             }
             @if (j.JobType == "production" && User.Can(PermissionCodes.QualityView, j.SiteId))
             {
@@ -377,6 +383,20 @@ else if (_error is null)
     private Task CompleteAsync() => RunAsync(() => Api.CompleteJobAsync(JobId, _job!.Version));
 
     private Task ReopenAsync() => RunAsync(() => Api.ReopenJobAsync(JobId, _job!.Version));
+
+    private async Task DownloadPerformanceAsync()
+    {
+        _error = null;
+        try
+        {
+            var (content, type, name) = await Api.GetJobProductionPerformanceAsync(JobId);
+            await Downloads.FileAsync(name, content, type);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
 
     private async Task RunAsync(Func<Task<ExecutionResponse>> action)
     {

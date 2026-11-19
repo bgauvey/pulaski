@@ -26,6 +26,16 @@ internal static class ExecutionEndpoints
             TypedResults.Ok(await handler.HandleAsync(new GetMachineCountsQuery(id, runId), ct)))
         .RequireAny(Site.Of(SiteOf.Job), Permissions.FloorView);
 
+        // The job's totals as a B2MML production performance for the ERP (D-102).
+        jobs.MapGet("/{id:guid}/production-performance", async Task<FileContentHttpResult> (
+            Guid id, IQueryHandler<Pulaski.Application.WorkOrders.GetJobProductionPerformanceQuery, Pulaski.Application.WorkOrders.ProductionPerformanceDocument> handler,
+            CancellationToken ct) =>
+        {
+            var document = await handler.HandleAsync(new Pulaski.Application.WorkOrders.GetJobProductionPerformanceQuery(id), ct);
+            return TypedResults.File(System.Text.Encoding.UTF8.GetBytes(document.Xml), "application/xml", $"{document.JobNumber}-performance.xml");
+        })
+        .RequireAny(Site.Of(SiteOf.Job), Permissions.FloorView, Permissions.IntegrationsView);
+
         jobs.MapPost("/{id:guid}/start", async Task<Ok<ExecutionResponse>> (
             Guid id, StartJobRequest request, ICommandHandler<StartJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new StartJobCommand(id, request.Version, request.LineId, request.SkipChangeover), ct)))

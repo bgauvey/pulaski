@@ -7,7 +7,7 @@ using Pulaski.Domain.WorkOrders;
 
 namespace Pulaski.Testing;
 
-public sealed class InMemoryWorkOrders : IWorkOrderRepository, IWorkOrderReadStore
+public sealed class InMemoryWorkOrders : IWorkOrderRepository, IWorkOrderReadStore, IProductionPerformanceReadStore
 {
     private readonly Dictionary<Guid, Versioned<WorkOrder>> _rows = [];
     private readonly Lock _lock = new();
@@ -89,6 +89,12 @@ public sealed class InMemoryWorkOrders : IWorkOrderRepository, IWorkOrderReadSto
 
     public Task<WorkOrderDto?> GetAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(Find(id) is { } row ? ToDto(row) : null);
+
+    /// <summary>What a job's production performance adds to its execution (D-102), by job id.</summary>
+    public Dictionary<Guid, JobPerformanceFacts> PerformanceFacts { get; } = [];
+
+    public Task<JobPerformanceFacts?> GetJobFactsAsync(Guid jobId, CancellationToken cancellationToken) =>
+        Task.FromResult(PerformanceFacts.GetValueOrDefault(jobId));
 
     public Func<Guid, ShopOrderJobsRow?> ShopOrderJobs { get; set; } = _ => null;
 

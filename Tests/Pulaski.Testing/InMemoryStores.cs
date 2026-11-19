@@ -129,6 +129,7 @@ public sealed class InMemoryStores
         services.RemoveAll<IEquipmentReadStore>();
         services.RemoveAll<IWorkOrderRepository>();
         services.RemoveAll<IWorkOrderReadStore>();
+        services.RemoveAll<IProductionPerformanceReadStore>();
         services.RemoveAll<IMaterialRepository>();
         services.RemoveAll<IReferenceDataReadStore>();
         services.RemoveAll<ISchedulingReadStore>();
@@ -207,6 +208,7 @@ public sealed class InMemoryStores
         services.AddSingleton<IEquipmentReadStore>(Equipment);
         services.AddSingleton<IWorkOrderRepository>(WorkOrders);
         services.AddSingleton<IWorkOrderReadStore>(WorkOrders);
+        services.AddSingleton<IProductionPerformanceReadStore>(WorkOrders);
         services.AddSingleton<IMaterialRepository>(Materials);
         services.AddSingleton<IReferenceDataReadStore>(Materials);
         services.AddSingleton<ISchedulingReadStore>(Scheduling);

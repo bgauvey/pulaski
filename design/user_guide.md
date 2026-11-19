@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-17 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-19 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -681,6 +681,20 @@ Your ERP can send work orders to Pulaski (whoever runs the integration sets this
 - **What a B2MML file gives.** Each `ProductionRequest` is one order, wherever it is in the file (a `ProductionSchedule`, or one wrapped in `SyncProductionSchedule` or another verb). Its `ID` is the order number and the ERP's key; its `Description` the order's note; its `Priority` the priority. The material is what one of its `SegmentRequirement`s produces: a `MaterialProducedRequirement`, or a `MaterialRequirement` whose `MaterialUse` is `Produced`, with its `MaterialDefinitionID` and `Quantity` (`QuantityString` and `UnitOfMeasure`). One material per order. It runs from its `StartTime` (else the segment's `EarliestStartTime`) to its `EndTime` (else `LatestEndTime`); a time without an offset is UTC. The site is its `HierarchyScope`'s `EquipmentID`, else its schedule's, else the one you chose. `ProductProductionRuleID` (else a segment's `ProductSegmentID` or `ProcessSegmentID`) names the process by its code. `RequestState` `Cancelled` cancels the order. A B2MML request has no version, so every import compares the order with what Pulaski has, and the same order again changes nothing. An `ID` twice in one file is imported once.
 - **For the integration:** `POST /api/work-orders/import` with a list of orders (`externalSystem`, `externalKey`, `externalVersion`, `siteCode`, `orderNumber`, `materialCode`, `quantity`, `uomCode`, `plannedStart`, `dueAt`, `priority`, `processCode`, `notes`, `cancelled`). Each comes back `created`, `updated`, `unchanged`, `pending`, `cancelled` or `refused` with why, and each is saved on its own. `?dryRun=true` gives the same answers and saves nothing. A B2MML file goes to `POST /api/work-orders/import/b2mml?externalSystem=…&siteCode=…&dryRun=…` as the request body (at most 5 MB, 500 orders); `GET /api/work-orders/import/b2mml/template` is the template. The caller needs *work_order.manage* at the order's site.
 
+#### Production performance for the ERP
+
+Pulaski can give the ERP what a production job made and used, as an ISA-95 production performance in B2MML XML. Each document is the job's totals as they stand now, so a later one replaces an earlier one: a reversed or corrected report needs nothing special.
+
+1. Open the job (**Operate → Floor**, then the job).
+2. Click **Production performance (B2MML)**. The file downloads, named after the job.
+
+In detail:
+
+- **What it holds.** `ProductionPerformance/ID` and the `ProductionResponse` and `SegmentResponse` IDs are the job number. `ProductionRequestID` is the ERP's key for the order (its `ID` when it came from B2MML); for an order made in Pulaski, the order number. The site is the `HierarchyScope`, the job's operation number the `ProcessSegmentID`, and each line it ran on an `EquipmentActual`.
+- **Times and state.** `StartTime` is when its first run started; `EndTime` when it was completed, or when its last run ended if it isn't running. The state is `Ready` before it starts, `Running`, `Held` while paused, `Completed` (completed or closed) or `Aborted` (cancelled). Times are UTC.
+- **Quantities.** `SegmentData` `GoodQuantity` and `ScrapQuantity` are the job's totals in its unit; reversed reports are left out. Each lot it produced or consumed is a `MaterialActual` (`MaterialUse` `Produced` or `Consumed`) with what still stands of it in the material's base unit; a balance has no `MaterialLotID`, only its `StorageLocation`.
+- **For scripts:** `GET /api/jobs/{id}/production-performance` (needs *floor.view* or *integrations.view* at the job's site). Only production jobs have one.
+
 ### Print a shop order
 
 1. Find the work order and open its row's **Actions** menu.
@@ -871,7 +885,7 @@ The run's rate check still applies: an hour-long run can't take more than an hou
 
 ### The job page
 
-`jobs/<job>` shows the job's status, planned, good and scrap quantities, its **runs** (line, start, end, length, good, scrap, the most the run can hold, and why it ended) and its **production reports** (when entered, which run, good, scrap, scrap reason, who and any comment; a reversed report is marked *reversed*). The buttons offer what the job's status allows: **Start** or **Resume**, **Pause**, **Complete**, **Reopen** for a completed job whose order isn't closed, and **Report production**. **Materials and lots** opens the job's inventory page.
+`jobs/<job>` shows the job's status, planned, good and scrap quantities, its **runs** (line, start, end, length, good, scrap, the most the run can hold, and why it ended) and its **production reports** (when entered, which run, good, scrap, scrap reason, who and any comment; a reversed report is marked *reversed*). The buttons offer what the job's status allows: **Start** or **Resume**, **Pause**, **Complete**, **Reopen** for a completed job whose order isn't closed, and **Report production**. **Materials and lots** opens the job's inventory page. For a production job, **Production performance (B2MML)** downloads its totals as an ISA-95 production performance for the ERP (see [Production performance for the ERP](#production-performance-for-the-erp)).
 
 ### Reverse a production report
 
@@ -2860,6 +2874,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Only a number attribute standing for a quality characteristic is checked against specification limits. Balances' attribute values aren't in the values file.
 - **Reversing:** a chain undo follows a lot and the lots split off it, not merges into other lots, consumption into jobs or the output made from it; corrections made before this version can't be reversed.
 - **Genealogy through a silo is an estimate** from the declared movements. A level tag's readings confirm when it was empty and check the declared stock (see [How a silo flows](#how-a-silo-flows)), but they don't change how much each arrival gave. A reversed movement and its reversal are left out of the estimate, as if neither happened.
+- **Production performance** is a download and an API read only: it isn't yet sent to the ERP through a delivery feed. It carries no labor or machine time, and a job's lots are listed but not which lot each was made from.
 - **Sending to other systems** is by HTTPS webhook or MQTT; there is no Kafka or other message queue yet, and retention is the same for every feed. Receivers' acknowledgements are recorded on the delivery, but nothing compares what the ERP booked with what Pulaski sent; there is no adapter for a particular ERP's or document system's own API. A certificate's file goes inline in the event, up to 10 MB; there is no download link for a receiver to fetch it later. The delivery list shows at most 200 at a time, with no paging beyond that.
 - **Allocations:** the background refresh is all or nothing for a site, and any change anywhere makes it run. Preferences are per site, not per material. A picking list is printed, not confirmed: fetching the lot is still an ordinary move. Approved alternates show only in allocations and on consumption, not in an order's planned components, and only a BOM's approved alternates can be allocated.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
