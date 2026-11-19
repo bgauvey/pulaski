@@ -249,6 +249,60 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_b2mml_feed_queues_what_changes_a_production_job_under_the_job_and_sends_its_sync()
+    {
+        var plant = await PlantAsync();
+        var relay = db.Services.GetRequiredService<Pulaski.Infrastructure.Integrations.DeliveryRelay>();
+        var feed = "perf-" + _s.ToLowerInvariant();
+        await db.SendAsync(new Pulaski.Application.Integrations.CreateDeliveryFeedCommand(feed, "ERP performance", "webhook", "b2mml"));
+        var settings = await QueryAsync<Pulaski.Application.Integrations.GetDeliveryFeedSettingsQuery, Pulaski.Contracts.Integrations.DeliveryFeedSettingsDto>(
+            new Pulaski.Application.Integrations.GetDeliveryFeedSettingsQuery(feed));
+        Assert.Equal(("b2mml", 0), (settings.Format, settings.EventKinds.Count));
+        var sink = "webhook:" + feed;
+        var triggers = Pulaski.Domain.Integrations.DeliveryFormats.PerformanceTriggers;
+        await relay.CaptureAsync(sink, triggers, fromNow: true, 1000, CancellationToken.None, jobSubjects: true);
+
+        // Started, reported (job events), and the lot it made (a lot event naming the job): all under the job. A cleaning job isn't taken.
+        var started = await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
+        Guid cleaning = Guid.CreateVersion7();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE core.job_run SET started_at = started_at - interval '1 hour' WHERE id = @Id", new { Id = started.RunId });
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO core.job (id, site_id, job_number, job_type, equipment_id, status, planned_duration, dispatched_at)
+                VALUES (@cleaning, @site, 'CLN-' || @s, 'cleaning', @line, 'dispatched', interval '1 hour', now())
+                """,
+                new { cleaning, site = plant.Site, s = _s, line = plant.Packer });
+        }
+
+        await db.SendAsync(new StartJobCommand(cleaning, await VersionAsync(cleaning)));
+        await db.SendAsync(new ReportProductionCommand(plant.Extrude, null, 50m, 0m, null, null, plant.Staging));
+        await relay.CaptureAsync(sink, triggers, fromNow: true, 1000, CancellationToken.None, jobSubjects: true);
+
+        var due = (await relay.DueAsync(sink, TestTime.Now.AddYears(1), 1000, CancellationToken.None)).ToList();
+        Assert.All(due, d => Assert.Equal((plant.Extrude, "job"), (d.Subject, d.SubjectType)));
+        Assert.Contains(due, d => d.Type == "pulaski.job.started.v1");
+
+        // Held behind each other as one subject: only the first is due; the list names the job.
+        var listed = await QueryAsync<Pulaski.Application.Integrations.ListDeliveriesQuery, IReadOnlyList<Pulaski.Contracts.Integrations.DeliveryDto>>(
+            new Pulaski.Application.Integrations.ListDeliveriesQuery(Feed: feed) { Search = "J10-" + _s });
+        Assert.Contains(listed, d => d.EventType == "pulaski.job.production_reported.v1");
+        Assert.Contains(listed, d => d.EventType == "pulaski.lot.produced.v1");
+        Assert.All(listed, d => Assert.Equal("J10-" + _s, d.JobNumber));
+        Assert.Single(due);
+
+        // What it sends: the job's sync, keyed by the event.
+        var document = await QueryAsync<GetJobProductionPerformanceQuery, ProductionPerformanceDocument>(
+            new GetJobProductionPerformanceQuery(plant.Extrude, due[0].EventId));
+        System.Xml.Linq.XNamespace ns = ProductionPerformanceB2mml.Ns;
+        var root = System.Xml.Linq.XDocument.Parse(document.Xml).Root!;
+        Assert.Equal(ns + "SyncProductionPerformance", root.Name);
+        Assert.Equal(due[0].EventId.ToString(), (string)root.Element(ns + "ApplicationArea")!.Element(ns + "BODID")!);
+        Assert.Equal("J10-" + _s, (string)root.Element(ns + "DataArea")!.Element(ns + "ProductionPerformance")!.Element(ns + "ID")!);
+    }
+
+    [Fact]
     public async Task A_paused_job_frees_the_line_and_the_site_policy_sets_the_tolerance()
     {
         var plant = await PlantAsync();

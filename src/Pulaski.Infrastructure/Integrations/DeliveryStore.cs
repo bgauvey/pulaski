@@ -26,12 +26,13 @@ internal sealed class DeliveryStore(DbSession session, NpgsqlDataSource dataSour
                d.last_attempt_at, d.last_status_code, d.last_error, d.delivered_at, d.resolved_by, d.resolve_note, d.created_at,
                d.ack_status, d.ack_reference, d.ack_message, d.ack_source, d.ack_at,
                (d.status = 'pending' AND {DeliverySql.HeldBy}) AS is_held,
-               l.lot_number, coalesce(l.is_bulk, false) AS is_bulk, loc.code AS location_code
+               l.lot_number, coalesce(l.is_bulk, false) AS is_bulk, loc.code AS location_code, j.job_number
         FROM evt.delivery d
         LEFT JOIN core.lot l ON l.id = d.subject
         LEFT JOIN core.equipment loc ON loc.id = l.location_equipment_id
+        LEFT JOIN core.job j ON j.id = d.subject
         WHERE d.sink = @Sink AND (@Status::text IS NULL OR d.status = @Status)
-          AND (@Search::text IS NULL OR d.subject::text = lower(@Search) OR lower(l.lot_number) = lower(@Search))
+          AND (@Search::text IS NULL OR d.subject::text = lower(@Search) OR lower(l.lot_number) = lower(@Search) OR lower(j.job_number) = lower(@Search))
           AND (@Type::text IS NULL OR d.event_type ILIKE '%' || @Type || '%')
           AND (@From::timestamptz IS NULL OR d.event_recorded_at >= @From)
           AND (@To::timestamptz IS NULL OR d.event_recorded_at < @To)
@@ -178,17 +179,28 @@ public sealed class DeliveryRelay(NpgsqlDataSource dataSource)
         WITH cp AS (
             SELECT last_tx_id, last_position FROM evt.sink_checkpoint WHERE sink_name = @Sink FOR UPDATE),
         batch AS (
-            SELECT e.id, e.recorded_at, e.tx_id, e.position, e.type, e.subject
+            SELECT e.id, e.recorded_at, e.tx_id, e.position, e.type, e.subject, e.subject_type, e.data
             FROM evt.event e, cp
             WHERE (e.tx_id, e.position) > (cp.last_tx_id, cp.last_position)
               AND e.tx_id < pg_snapshot_xmin(pg_current_snapshot())
             ORDER BY e.tx_id, e.position
             LIMIT @Batch),
+        -- For a B2MML feed (D-102) the subject is the production job the event changes; an event of no production job isn't taken.
+        taken AS (
+            SELECT b.id, b.recorded_at, b.tx_id, b.position, b.type,
+                   CASE WHEN @JobSubjects THEN pj.id ELSE b.subject END AS subject
+            FROM batch b
+            LEFT JOIN LATERAL (
+                SELECT j.id FROM core.job j
+                WHERE j.job_type = 'production'
+                  AND j.id = CASE WHEN b.subject_type = 'job' THEN b.subject
+                                  WHEN b.subject_type = 'partial_batch' THEN (SELECT pb.job_id FROM core.partial_batch pb WHERE pb.id = b.subject)
+                                  WHEN jsonb_typeof(b.data->'jobId') = 'string' THEN (b.data->>'jobId')::uuid END) pj ON @JobSubjects
+            WHERE b.type LIKE ANY(@Patterns) AND (NOT @JobSubjects OR pj.id IS NOT NULL)),
         ins AS (
             INSERT INTO evt.delivery (sink, event_id, event_recorded_at, tx_id, position, event_type, subject)
-            SELECT @Sink, b.id, b.recorded_at, b.tx_id, b.position, b.type, b.subject
-            FROM batch b
-            WHERE b.type LIKE ANY(@Patterns)
+            SELECT @Sink, t.id, t.recorded_at, t.tx_id, t.position, t.type, t.subject
+            FROM taken t
             ON CONFLICT (sink, event_id) DO NOTHING
             RETURNING 1),
         upd AS (
@@ -200,7 +212,9 @@ public sealed class DeliveryRelay(NpgsqlDataSource dataSource)
         """;
 
     private const string Due = $"""
-        SELECT d.id AS delivery_id, d.attempts, e.id AS event_id, e.type, e.source, e.subject, e.subject_type, e.sequence, e.occurred_at,
+        -- The delivery's subject: the event's, or on a B2MML feed the job it changes (D-102).
+        SELECT d.id AS delivery_id, d.attempts, e.id AS event_id, e.type, e.source, d.subject,
+               CASE WHEN d.subject = e.subject THEN e.subject_type ELSE 'job' END AS subject_type, e.sequence, e.occurred_at,
                e.actor_id, e.correlation_id, e.reason, e.data::text AS data
         FROM evt.delivery d
         JOIN evt.event e ON e.id = d.event_id AND e.recorded_at = d.event_recorded_at
@@ -244,16 +258,19 @@ public sealed class DeliveryRelay(NpgsqlDataSource dataSource)
     /// <summary>
     /// Copies the next batch of events the sink takes (those whose type starts with one of <paramref name="typePrefixes"/>) into its
     /// queue; returns how many were looked at and taken. A sink seen for the first time starts after the events already logged when
-    /// <paramref name="fromNow"/>, else from the beginning.
+    /// <paramref name="fromNow"/>, else from the beginning. With <paramref name="jobSubjects"/> (a B2MML feed, D-102) each is queued under
+    /// the production job it changes (its subject, its partial batch's job, or the <c>jobId</c> in its data), and one of no production job
+    /// is passed over.
     /// </summary>
-    public async Task<(int Scanned, int Captured)> CaptureAsync(string sink, IReadOnlyList<string> typePrefixes, bool fromNow, int batch, CancellationToken cancellationToken)
+    public async Task<(int Scanned, int Captured)> CaptureAsync(
+        string sink, IReadOnlyList<string> typePrefixes, bool fromNow, int batch, CancellationToken cancellationToken, bool jobSubjects = false)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         await connection.ExecuteAsync(new CommandDefinition(EnsureCheckpoint, new { Sink = sink, FromNow = fromNow }, transaction, cancellationToken: cancellationToken));
         var patterns = typePrefixes.Select(p => p.Replace("%", @"\%", StringComparison.Ordinal).Replace("_", @"\_", StringComparison.Ordinal) + "%").ToArray();
         var row = await connection.QuerySingleAsync<CaptureRow>(new CommandDefinition(
-            Capture, new { Sink = sink, Patterns = patterns, Batch = batch }, transaction, cancellationToken: cancellationToken));
+            Capture, new { Sink = sink, Patterns = patterns, Batch = batch, JobSubjects = jobSubjects }, transaction, cancellationToken: cancellationToken));
         await transaction.CommitAsync(cancellationToken);
         return (row.Scanned, row.Captured);
     }

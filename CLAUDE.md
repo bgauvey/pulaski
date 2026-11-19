@@ -333,7 +333,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - B2MML for the ERP (D-102, proposed, in pieces): `WorkOrderB2mml` reads a production schedule's `ProductionRequest`s into `ErpWorkOrderRequest`s
   for the ERP import (`ImportB2mmlWorkOrdersCommand`, `POST /work-orders/import/b2mml?externalSystem=&siteCode=&dryRun=`; Work orders → Import
   from the ERP); `ImportWorkOrdersCommand.DryRun` runs each order uncommitted. 4b: `ProductionPerformanceB2mml.Write` (job totals as `SegmentData`, lots as
-  `MaterialActual`s; `IProductionPerformanceReadStore`), `GET /jobs/{id}/production-performance`. Next: the feed format (Sync, re-sent on change).
+  `MaterialActual`s; `IProductionPerformanceReadStore`), `GET /jobs/{id}/production-performance`. 4c: `delivery_feed.format` `b2mml` (fixed; `DeliveryFormats.PerformanceTriggers`), captured under the
+  job (`CaptureAsync(jobSubjects)`), sent as the job's `WriteSync` at send time (`FeedMessage`, BODID = event id).
 - ERP work orders (D-066, proposed): `POST /work-orders/import` (`ImportWorkOrdersCommand`, one transaction per order, idempotent on external
   system + key, same version = unchanged) makes orders via `CreateWorkOrderHandler.MakeAsync` (process named, else material default, else the
   only released one). `ErpBatchRule` (material `erp_batch_rule` > site `scheduling_policy.erp_batch_rule` > reject; round_up/down; hold →

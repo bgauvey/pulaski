@@ -29,7 +29,7 @@
         @foreach (var f in _feeds)
         {
             <button type="button" class="btn btn-sm @(_feed == f.Feed ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => SwitchAsync(f.Feed))"
-                    title="@($"{(f.Kind == "mqtt" ? "MQTT broker" : "Webhook")}{(f.Enabled ? $" to {f.TargetHost}" : ", off")}")">
+                    title="@($"{(f.Kind == "mqtt" ? "MQTT broker" : "Webhook")}{(f.Format == "b2mml" ? ", B2MML" : "")}{(f.Enabled ? $" to {f.TargetHost}" : ", off")}")">
                 @(f.Feed == "erp" ? "ERP" : f.Feed == "documents" ? "Document system" : f.Label)
             </button>
         }
@@ -58,12 +58,19 @@
                 <option value="mqtt">An MQTT broker</option>
             </select>
         </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small fw-semibold" for="new-feed-format">Format</label>
+            <select id="new-feed-format" class="form-select form-select-sm" @bind="_newFormat">
+                <option value="cloudevents">Events (CloudEvents JSON)</option>
+                <option value="b2mml">Production performance (B2MML)</option>
+            </select>
+        </div>
         <div class="col-6 col-md-3 d-flex gap-2">
             <button type="submit" class="btn btn-sm btn-primary" disabled="@_busy">Add</button>
             <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _adding = false">Cancel</button>
         </div>
         <div class="col-12 small text-muted">
-            The code and what it sends to can't change later. It starts switched off: set its address and what it sends under Settings. Its secret
+            The code, what it sends to and its format can't change later. A B2MML feed sends a production job's totals each time they change. It starts switched off: set its address and what it sends under Settings. Its secret
             (and a broker's username and password) go in the API's configuration under <code>Integrations:Feeds:&lt;code&gt;</code>.
         </div>
     </form>
@@ -143,7 +150,7 @@
         <option value="skipped">Skipped</option>
         <option value="">All</option>
     </select>
-    <input class="form-control w-auto" placeholder="Lot number or subject id" aria-label="Subject" @bind="_search" />
+    <input class="form-control w-auto" placeholder="Lot or job number, or subject id" aria-label="Subject" @bind="_search" />
     <input class="form-control w-auto" placeholder="Event type, e.g. consumed" aria-label="Event type" @bind="_type" />
     <input type="date" class="form-control w-auto" aria-label="From" @bind="_from" />
     <input type="date" class="form-control w-auto" aria-label="To" @bind="_to" />
@@ -176,7 +183,11 @@ else
                         <td class="text-nowrap">@Display.SiteTime(d.OccurredAt, null)</td>
                         <td>@DeliveryView.EventName(d.EventType)</td>
                         <td>
-                            @if (d.EventType.StartsWith("pulaski.lot.", StringComparison.Ordinal))
+                            @if (d.JobNumber is { } jobNumber)
+                            {
+                                <ScreenLink Href="@($"jobs/{d.Subject}")" Permission="@PermissionCodes.FloorView">Job @jobNumber</ScreenLink>
+                            }
+                            else if (d.EventType.StartsWith("pulaski.lot.", StringComparison.Ordinal))
                             {
                                 <ScreenLink Href="@($"inventory/lots/{d.Subject}")" Permission="@PermissionCodes.InventoryView">@InventoryView.LotLabel(d.LotNumber, d.IsBulk, d.LocationCode)</ScreenLink>
                             }
@@ -252,6 +263,7 @@ else
     private string? _newCode;
     private string? _newName;
     private string _newKind = "webhook";
+    private string _newFormat = "cloudevents";
     private string? _search;
     private string? _type;
     private DateOnly? _from;
@@ -313,7 +325,7 @@ else
     private Task AddFeedAsync() => RunAsync(async () =>
     {
         var code = (_newCode ?? "").Trim().ToLowerInvariant();
-        await Api.CreateDeliveryFeedAsync(new CreateDeliveryFeedRequest { Code = code, Name = _newName ?? "", Kind = _newKind });
+        await Api.CreateDeliveryFeedAsync(new CreateDeliveryFeedRequest { Code = code, Name = _newName ?? "", Kind = _newKind, Format = _newFormat });
         (_adding, _newCode, _newName, _feed) = (false, null, null, code);
         _message = $"Added {code}. Set its address and what it sends under Settings, then switch it on.";
     });

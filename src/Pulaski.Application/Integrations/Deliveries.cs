@@ -40,6 +40,9 @@ public sealed record DeliveryTarget(string Sink, bool Enabled, string? TargetHos
     /// <summary>An MQTT feed's topic template.</summary>
     public string? Topic { get; init; }
 
+    /// <summary><c>cloudevents</c> or <c>b2mml</c> (D-102); fixed. The built-in feeds send CloudEvents.</summary>
+    public string Format { get; init; } = DeliveryFormats.CloudEvents;
+
     /// <summary>ERP or document system: runs on its configuration until first saved; never removed.</summary>
     public bool IsBuiltIn { get; init; }
 }
@@ -125,11 +128,12 @@ public static class DeliveryFeeds
             // A built-in feed keeps its configured sink, whatever is saved; an added feed's sink is its kind and code.
             Sink = configured.IsBuiltIn ? configured.Sink : saved.Sink,
             Kind = configured.IsBuiltIn ? configured.Kind : saved.Kind,
+            Format = configured.IsBuiltIn ? configured.Format : saved.Format,
             Topic = saved.Topic,
             Label = saved.Name.Length > 0 ? saved.Name : configured.Label,
             Enabled = saved.Enabled && host is not null,
             TargetHost = host,
-            EventTypes = DeliveryKinds.PrefixesOf(saved.EventKinds),
+            EventTypes = configured.IsBuiltIn ? DeliveryKinds.PrefixesOf(saved.EventKinds) : saved.TypePrefixes,
             IncludesFiles = saved.IncludeFiles,
             Url = saved.Url,
             MaxAttempts = saved.MaxAttempts,
@@ -153,7 +157,7 @@ public static class DeliveryFeeds
     /// <summary>The configuration's values as settings, the starting point before the screen first saves.</summary>
     public static DeliveryFeedSettings FromConfiguration(DeliveryTarget configured) => new(
         configured.Feed, configured.Enabled, configured.Url, DeliveryKinds.KindsOf(configured.EventTypes), configured.IncludesFiles, configured.MaxAttempts,
-        configured.TimeoutSeconds, configured.PollSeconds, configured.StartFromNow, configured.Label, configured.Kind, configured.Topic);
+        configured.TimeoutSeconds, configured.PollSeconds, configured.StartFromNow, configured.Label, configured.Kind, configured.Topic, configured.Format);
 }
 
 public sealed record GetDeliveryStatusQuery(string Feed = "erp") : IQuery<DeliveryStatusDto>;

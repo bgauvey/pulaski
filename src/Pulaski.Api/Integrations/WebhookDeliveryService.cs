@@ -4,13 +4,26 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
 using Npgsql;
+using Pulaski.Application.Abstractions;
+using Pulaski.Application.Errors;
+using Pulaski.Application.WorkOrders;
 using Pulaski.Domain.Integrations;
 using Pulaski.Infrastructure.Integrations;
 
 namespace Pulaski.Api.Integrations;
 
+/// <summary>What goes to a receiver for one delivery: the body and its media type.</summary>
+public sealed record FeedMessage(string Body, string ContentType)
+{
+    public const string CloudEventsType = "application/cloudevents+json";
+    public const string XmlType = "application/xml";
+
+    /// <summary>The event as a CloudEvents 1.0 message in structured JSON (D-061).</summary>
+    public static FeedMessage CloudEvent(OutboundEvent e) => new(WebhookSender.Body(e), CloudEventsType);
+}
+
 /// <summary>
-/// Sends one event to a feed's webhook (D-061) as a CloudEvents 1.0 message in structured JSON. The event id is also the
+/// Sends one event to a feed's webhook (D-061) as a CloudEvents 1.0 message in structured JSON, or what its format makes of it (D-102). The event id is also the
 /// <c>Idempotency-Key</c>, so a receiver can drop a repeat; the body is signed with the shared secret as
 /// <c>X-Pulaski-Signature: sha256=hex(HMAC(secret, "{timestamp}.{body}"))</c> with the timestamp in <c>X-Pulaski-Timestamp</c>.
 /// </summary>
@@ -65,14 +78,19 @@ public sealed class WebhookSender(HttpClient http)
     /// The receiver's status code, or null with why when there was no answer; with a 2xx, any acknowledgement in its body (#73). The attempt
     /// gives up after <paramref name="timeout"/> (default: the client's own).
     /// </summary>
+    public Task<(int? StatusCode, string? Error, Acknowledgement? Acknowledgement)> SendAsync(
+        Uri url, string secret, OutboundEvent e, DateTimeOffset now, CancellationToken cancellationToken, TimeSpan? timeout = null) =>
+        SendAsync(url, secret, e, FeedMessage.CloudEvent(e), now, cancellationToken, timeout);
+
+    /// <summary>Sends <paramref name="message"/> for the event, keyed and signed as an event is.</summary>
     public async Task<(int? StatusCode, string? Error, Acknowledgement? Acknowledgement)> SendAsync(
-        Uri url, string secret, OutboundEvent e, DateTimeOffset now, CancellationToken cancellationToken, TimeSpan? timeout = null)
+        Uri url, string secret, OutboundEvent e, FeedMessage message, DateTimeOffset now, CancellationToken cancellationToken, TimeSpan? timeout = null)
     {
-        var body = Body(e);
+        var body = message.Body;
         var timestamp = now.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
         using var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
-            Content = new StringContent(body, Encoding.UTF8, new MediaTypeHeaderValue("application/cloudevents+json")),
+            Content = new StringContent(body, Encoding.UTF8, new MediaTypeHeaderValue(message.ContentType)),
         };
         request.Headers.Add("Idempotency-Key", e.EventId.ToString());
         request.Headers.Add("X-Pulaski-Timestamp", timestamp);
@@ -114,6 +132,7 @@ public sealed class WebhookDeliveryService(
     DeliveryRelay relay,
     IHttpClientFactory clients,
     MqttFeedSender mqtt,
+    IServiceScopeFactory scopes,
     IConfiguration configuration,
     TimeProvider time,
     ILogger<WebhookDeliveryService> logger) : BackgroundService
@@ -192,7 +211,8 @@ public sealed class WebhookDeliveryService(
         int scanned;
         do
         {
-            (scanned, _) = await relay.CaptureAsync(options.Sink, options.EventTypes, options.StartFromNow, Batch, cancellationToken);
+            (scanned, _) = await relay.CaptureAsync(
+                options.Sink, options.EventTypes, options.StartFromNow, Batch, cancellationToken, jobSubjects: options.SendsPerformance);
         }
         while (scanned == Batch);
 
@@ -213,9 +233,22 @@ public sealed class WebhookDeliveryService(
                 : due;
 
             var now = time.GetUtcNow();
-            var (code, error, acknowledgement) = options.Kind == DeliveryFeedKinds.Mqtt
-                ? await PublishAsync(options, url, e, now, cancellationToken)
-                : await webhook.SendAsync(url, options.Secret!, e, now, cancellationToken, TimeSpan.FromSeconds(options.TimeoutSeconds));
+            var (message, problem) = options.SendsPerformance ? await PerformanceAsync(e, cancellationToken) : (FeedMessage.CloudEvent(e), null);
+            int? code;
+            string? error;
+            Acknowledgement? acknowledgement = null;
+            if (message is null)
+            {
+                // Nothing to send that trying again would mend: it fails, holding the job's later documents until retried or skipped.
+                (code, error) = (422, problem);
+            }
+            else
+            {
+                (code, error, acknowledgement) = options.Kind == DeliveryFeedKinds.Mqtt
+                    ? await PublishAsync(options, url, e, message, now, cancellationToken)
+                    : await webhook.SendAsync(url, options.Secret!, e, message, now, cancellationToken, TimeSpan.FromSeconds(options.TimeoutSeconds));
+            }
+
             var outcome = DeliveryPolicy.AfterAttempt(e.Attempts + 1, code, error, now, options.MaxAttempts);
 
             // Delivered but rejected in the answer (#73): it fails as a refused delivery does, holding the subject's later events.
@@ -235,10 +268,29 @@ public sealed class WebhookDeliveryService(
 
     // A broker gives no acknowledgement in its answer; a receiver behind it can still post one back.
     private async Task<(int? StatusCode, string? Error, Acknowledgement? Acknowledgement)> PublishAsync(
-        WebhookFeedOptions options, Uri url, OutboundEvent e, DateTimeOffset now, CancellationToken cancellationToken)
+        WebhookFeedOptions options, Uri url, OutboundEvent e, FeedMessage message, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        var (code, error) = await mqtt.SendAsync(options, url, e, now, cancellationToken);
+        var (code, error) = await mqtt.SendAsync(options, url, e, message, now, cancellationToken);
         return (code, error, null);
+    }
+
+    /// <summary>
+    /// For a B2MML feed (D-102): the delivery's job (its subject) as it stands now, as a <c>SyncProductionPerformance</c> whose BODID is the
+    /// event's id. Null with why when the job can't be written.
+    /// </summary>
+    private async Task<(FeedMessage? Message, string? Problem)> PerformanceAsync(OutboundEvent e, CancellationToken cancellationToken)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var handler = scope.ServiceProvider.GetRequiredService<IQueryHandler<GetJobProductionPerformanceQuery, ProductionPerformanceDocument>>();
+        try
+        {
+            var document = await handler.HandleAsync(new GetJobProductionPerformanceQuery(e.Subject, e.EventId), cancellationToken);
+            return (new FeedMessage(document.Xml, FeedMessage.XmlType), null);
+        }
+        catch (Exception ex) when (ex is NotFoundException or ValidationException)
+        {
+            return (null, $"Couldn't write job {e.Subject}'s production performance: {ex.Message}");
+        }
     }
 }
 

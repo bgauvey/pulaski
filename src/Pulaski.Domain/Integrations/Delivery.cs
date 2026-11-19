@@ -189,17 +189,49 @@ public static class DeliveryFeedKinds
 }
 
 /// <summary>
+/// What a feed sends (D-102). Chosen when the feed is added and fixed after, as its kind is: a feed's queue holds events of one shape.
+/// </summary>
+public static class DeliveryFormats
+{
+    /// <summary>Each event as it was recorded, a CloudEvents 1.0 message in structured JSON (D-061).</summary>
+    public const string CloudEvents = "cloudevents";
+
+    /// <summary>
+    /// For every event that changes a production job's totals, the job's B2MML <c>SyncProductionPerformance</c> as it stands when sent: a
+    /// whole document, which replaces the one before.
+    /// </summary>
+    public const string B2mml = "b2mml";
+
+    public static IReadOnlyList<string> All { get; } = [CloudEvents, B2mml];
+
+    /// <summary>
+    /// The events that change what a job's production performance says (D-102): its runs and state, its reports, its lots produced or
+    /// consumed (and their reversals), its partial batches. Planning changes don't. Type prefixes, as a feed's event types are.
+    /// </summary>
+    public static IReadOnlyList<string> PerformanceTriggers { get; } =
+    [
+        "pulaski.job.started.", "pulaski.job.paused.", "pulaski.job.completed.", "pulaski.job.reopened.", "pulaski.job.closed.",
+        "pulaski.job.cancelled.", "pulaski.job.production_", "pulaski.lot.produced.", "pulaski.lot.consumed.", "pulaski.lot.reversed.",
+        "pulaski.partial_batch.",
+    ];
+}
+
+/// <summary>
 /// A feed's settings as kept from the screen (#73, #74): everything but the secrets. Checked here: an address that fits the kind (https for a
 /// webhook, plain http only for this machine; mqtt:// or mqtts:// for a broker), an MQTT topic without wildcards, known event kinds, and attempts,
 /// timeout and poll within range.
 /// </summary>
 public sealed record DeliveryFeedSettings(
     string Feed, bool Enabled, string? Url, IReadOnlyList<string> EventKinds, bool IncludeFiles, int MaxAttempts, int TimeoutSeconds, int PollSeconds,
-    bool StartFromNow, string Name = "", string Kind = DeliveryFeedKinds.Webhook, string? Topic = null)
+    bool StartFromNow, string Name = "", string Kind = DeliveryFeedKinds.Webhook, string? Topic = null, string Format = DeliveryFormats.CloudEvents)
 {
     public const int MaxName = 100;
 
     public string Sink => DeliveryFeedKinds.Sink(Kind, Feed);
+
+    /// <summary>The event types it takes: its kinds' for CloudEvents; for B2MML, the events that change a job's production performance.</summary>
+    public IReadOnlyList<string> TypePrefixes =>
+        Format == DeliveryFormats.B2mml ? DeliveryFormats.PerformanceTriggers : DeliveryKinds.PrefixesOf(EventKinds);
 
     public IReadOnlyList<string> Problems()
     {
@@ -212,6 +244,11 @@ public sealed record DeliveryFeedSettings(
         if (!DeliveryFeedKinds.All.Contains(Kind))
         {
             problems.Add("A feed is a webhook or an MQTT broker.");
+        }
+
+        if (!DeliveryFormats.All.Contains(Format))
+        {
+            problems.Add("A feed sends CloudEvents or B2MML.");
         }
 
         if (Url is { } url)
@@ -243,7 +280,7 @@ public sealed record DeliveryFeedSettings(
             problems.Add($"'{unknown}' isn't a kind of event.");
         }
 
-        if (Enabled && EventKinds.Count == 0)
+        if (Enabled && EventKinds.Count == 0 && Format == DeliveryFormats.CloudEvents)
         {
             problems.Add("Choose at least one kind of event to send.");
         }

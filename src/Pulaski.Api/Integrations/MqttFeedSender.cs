@@ -21,18 +21,23 @@ public sealed class MqttFeedSender : IAsyncDisposable
     private readonly MqttFactory _factory = new();
 
     /// <summary>The broker's answer as an HTTP-like code for the delivery policy (200 delivered, 4xx refused, 5xx retried), or null with why.</summary>
-    public async Task<(int? StatusCode, string? Error)> SendAsync(WebhookFeedOptions options, Uri url, OutboundEvent e, DateTimeOffset now, CancellationToken cancellationToken)
+    public Task<(int? StatusCode, string? Error)> SendAsync(WebhookFeedOptions options, Uri url, OutboundEvent e, DateTimeOffset now, CancellationToken cancellationToken) =>
+        SendAsync(options, url, e, FeedMessage.CloudEvent(e), now, cancellationToken);
+
+    /// <summary>Publishes <paramref name="feedMessage"/> for the event (a B2MML document for a B2MML feed, D-102), keyed and signed as an event is.</summary>
+    public async Task<(int? StatusCode, string? Error)> SendAsync(
+        WebhookFeedOptions options, Uri url, OutboundEvent e, FeedMessage feedMessage, DateTimeOffset now, CancellationToken cancellationToken)
     {
         using var attempt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         attempt.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds)));
         try
         {
             var client = await ConnectedAsync(options, url, attempt.Token);
-            var body = WebhookSender.Body(e);
+            var body = feedMessage.Body;
             var message = new MqttApplicationMessageBuilder()
                 .WithTopic(DeliveryFeedKinds.Topic(options.Topic ?? "pulaski/{type}", e.Type, e.SubjectType, e.Subject))
                 .WithPayload(Encoding.UTF8.GetBytes(body))
-                .WithContentType("application/cloudevents+json")
+                .WithContentType(feedMessage.ContentType)
                 .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
                 .WithUserProperty("Idempotency-Key", e.EventId.ToString());
             if (!string.IsNullOrEmpty(options.Secret))
