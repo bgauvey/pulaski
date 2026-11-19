@@ -1462,6 +1462,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         return await ReadAsync<ImportMaterialsResponse>(response, ct);
     }
 
+    /// <summary>A production job's totals as a B2MML production performance for the ERP (D-102).</summary>
+    public Task<(byte[] Content, string ContentType, string FileName)> GetJobProductionPerformanceAsync(Guid jobId, CancellationToken ct = default) =>
+        GetFileAsync($"api/jobs/{jobId}/production-performance", ct);
+
     /// <summary>Every class and material as B2MML (#72), which the B2MML import reads back.</summary>
     public Task<(byte[] Content, string ContentType, string FileName)> GetMaterialsB2mmlAsync(CancellationToken ct = default) =>
         GetFileAsync("api/materials/export/b2mml", ct);

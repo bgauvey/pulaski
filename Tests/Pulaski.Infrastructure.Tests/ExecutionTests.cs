@@ -195,6 +195,60 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Production_performance_answers_the_erp_order_with_what_stands()
+    {
+        var plant = await PlantAsync();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                "UPDATE core.work_order SET origin = 'erp', external_system = 'SAP', external_key = '45-' || @s WHERE id = @Id", new { s = _s, Id = plant.Order });
+        }
+
+        var started = await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE core.job_run SET started_at = started_at - interval '1 hour' WHERE id = @Id", new { Id = started.RunId });
+        }
+
+        var first = await db.SendAsync(new ReportProductionCommand(plant.Extrude, null, 60m, 5m, null, plant.Scrap, plant.Staging));
+        var second = await db.SendAsync(new ReportProductionCommand(plant.Extrude, null, 30m, 0m, null, null, plant.Staging));
+        var count = await ScalarAsync<Guid>(
+            "SELECT id FROM core.reason_code WHERE site_id IS NULL AND reason_kind = 'inventory_adjustment' AND code = 'COUNT'", new { });
+        await db.SendAsync(new ReverseProductionReportCommand(plant.Extrude, second.ReportId, count, "Counted twice"));
+
+        var document = await QueryAsync<GetJobProductionPerformanceQuery, ProductionPerformanceDocument>(new GetJobProductionPerformanceQuery(plant.Extrude));
+        Assert.Equal("J10-" + _s, document.JobNumber);
+
+        System.Xml.Linq.XNamespace ns = ProductionPerformanceB2mml.Ns;
+        var response = System.Xml.Linq.XDocument.Parse(document.Xml).Root!.Element(ns + "ProductionResponse")!;
+        Assert.Equal(("45-" + _s, "Running"), ((string)response.Element(ns + "ProductionRequestID")!, (string)response.Element(ns + "ResponseState")!));
+        var segment = response.Element(ns + "SegmentResponse")!;
+        Assert.Equal("10", (string)segment.Element(ns + "ProcessSegmentID")!);
+        Assert.Equal(["60", "5"], segment.Elements(ns + "SegmentData").Select(d => (string)d.Element(ns + "Value")!.Element(ns + "ValueString")!));
+
+        // The reversed report's lot is gone; the first report's lot stands with what it made.
+        var material = Assert.Single(segment.Elements(ns + "MaterialActual"));
+        Assert.Equal(("Produced", first.Lot!.LotNumber, "60"),
+            ((string)material.Element(ns + "MaterialUse")!, (string?)material.Element(ns + "MaterialLotID"),
+             (string)material.Element(ns + "Quantity")!.Element(ns + "QuantityString")!));
+
+        // Only production jobs have production performance.
+        Guid cleaning = Guid.CreateVersion7();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO core.job (id, site_id, job_number, job_type, equipment_id, status, planned_duration)
+                VALUES (@cleaning, @site, 'CLN-' || @s, 'cleaning', @line, 'planned', interval '1 hour')
+                """,
+                new { cleaning, site = plant.Site, s = _s, line = plant.Packer });
+        }
+
+        await Assert.ThrowsAsync<Pulaski.Application.Errors.ValidationException>(() =>
+            QueryAsync<GetJobProductionPerformanceQuery, ProductionPerformanceDocument>(new GetJobProductionPerformanceQuery(cleaning)));
+    }
+
+    [Fact]
     public async Task A_paused_job_frees_the_line_and_the_site_policy_sets_the_tolerance()
     {
         var plant = await PlantAsync();

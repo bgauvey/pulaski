@@ -51,6 +51,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IEquipmentReadStore, EquipmentQueries>();
         services.AddSingleton<IWorkOrderReadStore, WorkOrderQueries>();
+        services.AddSingleton<IProductionPerformanceReadStore, ProductionPerformanceQueries>();
         services.AddSingleton<IReferenceDataReadStore, ReferenceDataQueries>();
         services.AddSingleton<ISchedulingReadStore, SchedulingQueries>();
         services.AddSingleton<IProcessReadStore, ProcessQueries>();

@@ -2798,6 +2798,17 @@ import) runs each order's transaction and doesn't commit, so it answers as the i
 create). `POST /api/work-orders/import/b2mml?externalSystem=&siteCode=&dryRun=` (XML body, 5 MB), `GET …/b2mml/template`; Work orders → **Import
 from the ERP** (`WorkOrderB2mmlImport`, `ErpOrderImportView`): checks on every change, imports what the check accepted.
 
+**Production performance out (piece 4b).** `ProductionPerformanceB2mml.Write` (pure, Application/WorkOrders) makes one `ProductionPerformance`
+from the job's execution (`IExecutionReadStore.GetJobAsync`) and `JobPerformanceFacts` (`IProductionPerformanceReadStore`: site code, the
+order's ERP key, operation number, and each lot's standing produced/consumed quantity netted over `LotEventSql.NotReversed`). The job number is
+the performance, response and segment `ID`; `ProductionRequestID` the order's `external_key`, else its number; `HierarchyScope` the site,
+`ProcessSegmentID` the operation number, an `EquipmentActual` per line run on. Start = first run's start; end = `completed_at`, else the last
+run's end once none is open and the job isn't running. State Ready / Running / Held (paused) / Completed (completed, closed) / Aborted
+(cancelled). Good and scrap in the job's unit are `SegmentData` `GoodQuantity`/`ScrapQuantity` (not `MaterialActual`s, so summing material
+actuals never counts output twice); each lot a `MaterialActual` `Produced`/`Consumed` in the base unit, a balance by `StorageLocation`. Times UTC
+to the microsecond. Production jobs only (422 otherwise). `GET /api/jobs/{id}/production-performance` (`floor.view` or `integrations.view` at the
+job's site), **Production performance (B2MML)** on the job page. Labor, machine time and per-lot genealogy aren't in it yet.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
