@@ -147,6 +147,24 @@ public sealed class IntegrationEndpointTests(ApiFactory factory) : IClassFixture
     }
 
     [Fact]
+    public async Task A_b2mml_message_goes_as_xml_keyed_and_signed_as_its_event()
+    {
+        var e = new OutboundEvent { DeliveryId = Guid.CreateVersion7(), EventId = Guid.CreateVersion7(), Type = "pulaski.job.started.v1", Subject = Guid.CreateVersion7() };
+        var handler = new Capture();
+        var sender = new WebhookSender(new HttpClient(handler));
+        var xml = "<SyncProductionPerformance xmlns=\"http://www.mesa.org/xml/B2MML\" />";
+        var now = new DateTimeOffset(2026, 11, 19, 14, 0, 0, TimeSpan.Zero);
+
+        await sender.SendAsync(new Uri("https://erp.test/hook"), "s3cret", e, new FeedMessage(xml, FeedMessage.XmlType), now, CancellationToken.None);
+
+        var request = handler.Request!;
+        Assert.Equal((xml, "application/xml"), (handler.Body, request.Content!.Headers.ContentType!.MediaType));
+        Assert.Equal(e.EventId.ToString(), request.Headers.GetValues("Idempotency-Key").Single());
+        var timestamp = request.Headers.GetValues("X-Pulaski-Timestamp").Single();
+        Assert.Equal(WebhookSender.Signature("s3cret", timestamp, xml), request.Headers.GetValues("X-Pulaski-Signature").Single());
+    }
+
+    [Fact]
     public void Configured_event_types_replace_the_default_rather_than_adding_to_it()
     {
         static WebhookFeedOptions Bind(params (string Key, string Value)[] settings) => WebhookFeedOptions.From(

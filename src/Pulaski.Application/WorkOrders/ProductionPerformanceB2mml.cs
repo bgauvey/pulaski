@@ -43,8 +43,11 @@ public interface IProductionPerformanceReadStore
     Task<JobPerformanceFacts?> GetJobFactsAsync(Guid jobId, CancellationToken cancellationToken);
 }
 
-/// <summary>A job's totals as a B2MML production performance document (D-102).</summary>
-public sealed record GetJobProductionPerformanceQuery(Guid JobId) : IQuery<ProductionPerformanceDocument>;
+/// <summary>
+/// A job's totals as a B2MML production performance document (D-102); with <paramref name="SyncId"/>, wrapped as the
+/// <c>SyncProductionPerformance</c> a B2MML feed sends, that id its <c>BODID</c>.
+/// </summary>
+public sealed record GetJobProductionPerformanceQuery(Guid JobId, Guid? SyncId = null) : IQuery<ProductionPerformanceDocument>;
 
 public sealed record ProductionPerformanceDocument(string JobNumber, string Xml);
 
@@ -65,7 +68,9 @@ internal sealed class GetJobProductionPerformanceHandler(
         }
 
         var facts = await store.GetJobFactsAsync(query.JobId, cancellationToken) ?? throw new NotFoundException($"Job {query.JobId} not found.");
-        return new ProductionPerformanceDocument(job.JobNumber, ProductionPerformanceB2mml.Write(job, facts, now));
+        return new ProductionPerformanceDocument(
+            job.JobNumber,
+            query.SyncId is { } id ? ProductionPerformanceB2mml.WriteSync(job, facts, now, id) : ProductionPerformanceB2mml.Write(job, facts, now));
     }
 }
 
@@ -90,11 +95,27 @@ public static class ProductionPerformanceB2mml
 {
     public static readonly XNamespace Ns = "http://www.mesa.org/xml/B2MML";
 
-    public static string Write(JobExecutionDto job, JobPerformanceFacts facts, DateTimeOffset publishedAt)
-    {
-        var root = Document(job, facts, publishedAt);
-        return new XDocument(new XDeclaration("1.0", "utf-8", null), root).Declaration + Environment.NewLine + root + Environment.NewLine;
-    }
+    public static string Write(JobExecutionDto job, JobPerformanceFacts facts, DateTimeOffset publishedAt) =>
+        Text(Document(job, facts, publishedAt));
+
+    /// <summary>
+    /// The document as a B2MML verb, <c>SyncProductionPerformance</c>, which a B2MML feed sends: <c>ApplicationArea</c> with the sender
+    /// (<c>Pulaski</c>), the time and <paramref name="bodId"/> (the event's id, also the delivery's <c>Idempotency-Key</c>), and a
+    /// <c>Sync</c> whose action is <c>Replace</c>: each document replaces the one before for the job.
+    /// </summary>
+    public static string WriteSync(JobExecutionDto job, JobPerformanceFacts facts, DateTimeOffset publishedAt, Guid bodId) =>
+        Text(new XElement(Ns + "SyncProductionPerformance",
+            new XElement(Ns + "ApplicationArea",
+                new XElement(Ns + "Sender", new XElement(Ns + "LogicalID", "Pulaski")),
+                new XElement(Ns + "CreationDateTime", Time(publishedAt)),
+                new XElement(Ns + "BODID", bodId.ToString())),
+            new XElement(Ns + "DataArea",
+                new XElement(Ns + "Sync",
+                    new XElement(Ns + "ActionCriteria", new XElement(Ns + "ActionExpression", new XAttribute("actionCode", "Replace")))),
+                Document(job, facts, publishedAt))));
+
+    private static string Text(XElement root) =>
+        new XDocument(new XDeclaration("1.0", "utf-8", null), root).Declaration + Environment.NewLine + root + Environment.NewLine;
 
     /// <summary>The <c>ProductionPerformance</c> element, for a verb to wrap.</summary>
     public static XElement Document(JobExecutionDto job, JobPerformanceFacts facts, DateTimeOffset publishedAt)

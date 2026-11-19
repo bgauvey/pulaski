@@ -2809,6 +2809,17 @@ actuals never counts output twice); each lot a `MaterialActual` `Produced`/`Cons
 to the microsecond. Production jobs only (422 otherwise). `GET /api/jobs/{id}/production-performance` (`floor.view` or `integrations.view` at the
 job's site), **Production performance (B2MML)** on the job page. Labor, machine time and per-lot genealogy aren't in it yet.
 
+**The feed format (piece 4c).** `core.delivery_feed.format` `cloudevents` / `b2mml` (`DeliveryFormats`, migration 0068), chosen when a feed is added and
+fixed after, like its kind (the queue's subjects depend on it); the built-in feeds stay CloudEvents. A B2MML feed takes
+`DeliveryFormats.PerformanceTriggers` (job started/paused/completed/reopened/closed/cancelled, `job.production_*`, lot produced/consumed/reversed,
+partial batches; not planning events) instead of event kinds (`DeliveryFeedSettings.TypePrefixes`). Capture (`DeliveryRelay.CaptureAsync(jobSubjects)`)
+queues each under the production job it changes (the job subject, the partial batch's job, or `data.jobId`) and passes over one of no production
+job, so `evt.delivery.subject` is the job and a job's documents are held in order. Sending (`WebhookDeliveryService.PerformanceAsync`) writes the
+job as it stands then (`GetJobProductionPerformanceQuery(JobId, SyncId)` → `ProductionPerformanceB2mml.WriteSync`): `SyncProductionPerformance`
+with `ApplicationArea` (sender `Pulaski`, time, `BODID` = event id = `Idempotency-Key`) and `Sync/ActionCriteria/ActionExpression@actionCode="Replace"`,
+`application/xml` (`FeedMessage`), signed and retried as any delivery, by webhook or MQTT. One document per change, not coalesced: identical ones are
+harmless under Replace. The delivery list names the job (`DeliveryDto.JobNumber`) and searches by job number.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

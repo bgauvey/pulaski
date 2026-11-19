@@ -32,6 +32,11 @@ public sealed class WebhookFeedOptions
     public string Sink => DeliveryFeedKinds.Sink(Kind, Feed);
     public string? Name { get; set; }
 
+    /// <summary><c>cloudevents</c> or <c>b2mml</c> (D-102): a B2MML feed sends each changed production job's performance.</summary>
+    public string Format { get; set; } = DeliveryFormats.CloudEvents;
+
+    public bool SendsPerformance => Format == DeliveryFormats.B2mml;
+
     /// <summary>What the feed is for, in messages.</summary>
     public string Label => !string.IsNullOrWhiteSpace(Name) ? Name : Feed switch
     {
@@ -83,7 +88,8 @@ public sealed class WebhookFeedOptions
         {
             Enabled = saved.Enabled;
             Url = saved.Url;
-            EventTypes = [.. DeliveryKinds.PrefixesOf(saved.EventKinds)];
+            EventTypes = [.. IsBuiltIn ? DeliveryKinds.PrefixesOf(saved.EventKinds) : saved.TypePrefixes];
+            Format = IsBuiltIn ? DeliveryFormats.CloudEvents : saved.Format;
             IncludeFiles = saved.IncludeFiles;
             MaxAttempts = saved.MaxAttempts;
             TimeoutSeconds = saved.TimeoutSeconds;

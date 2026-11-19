@@ -15,7 +15,7 @@ public sealed record SaveDeliveryFeedSettingsCommand(
     int TimeoutSeconds, int PollSeconds, bool StartFromNow, string? Name = null, string? Topic = null) : ICommand<VersionResponse>;
 
 /// <summary>Adds a feed (#74): a code (fixed), a name and a kind (webhook or MQTT, fixed). It starts switched off, sending inventory movements.</summary>
-public sealed record CreateDeliveryFeedCommand(string Code, string Name, string Kind) : ICommand<VersionResponse>;
+public sealed record CreateDeliveryFeedCommand(string Code, string Name, string Kind, string Format = DeliveryFormats.CloudEvents) : ICommand<VersionResponse>;
 
 /// <summary>Every feed, built-in and added, for the Integrations screen's tabs (#74).</summary>
 public sealed record ListDeliveryFeedsQuery : IQuery<IReadOnlyList<DeliveryFeedSummaryDto>>;
@@ -44,6 +44,7 @@ internal sealed class GetDeliveryFeedSettingsHandler(IDeliveryTargets targets, I
             Feed = configured.Feed,
             Label = settings.Name.Length > 0 ? settings.Name : configured.Label,
             Kind = settings.Kind,
+            Format = settings.Format,
             Topic = settings.Topic,
             IsBuiltIn = configured.IsBuiltIn,
             IsSaved = saved is not null,
@@ -81,7 +82,7 @@ internal sealed class SaveDeliveryFeedSettingsHandler(
 
         var current = await feeds.GetForUpdateAsync(configured.Feed, DeliveryFeeds.FromConfiguration(configured), cancellationToken);
 
-        // The code and kind never change: the sink, and so what is queued, depends on them.
+        // The code, kind and format never change: the sink, and so what is queued, depends on them.
         var after = current.Settings with
         {
             Enabled = command.Enabled,
@@ -158,19 +159,21 @@ internal sealed class CreateDeliveryFeedHandler(
     {
         var code = (command.Code ?? "").Trim().ToLowerInvariant();
         var kind = (command.Kind ?? "").Trim().ToLowerInvariant();
+        var format = (command.Format ?? "").Trim().ToLowerInvariant();
         new Validator()
             .Require(DeliveryFeedKinds.CodeProblem(code) is null, nameof(command.Code), DeliveryFeedKinds.CodeProblem(code) ?? "")
             .Require(!DeliveryFeedKinds.BuiltIn.Contains(code), nameof(command.Code), "That code belongs to a built-in feed.")
             .Require(DeliveryFeedKinds.All.Contains(kind), nameof(command.Kind), "webhook or mqtt.")
+            .Require(DeliveryFormats.All.Contains(format), nameof(command.Format), "cloudevents or b2mml.")
             .RequireText((command.Name ?? "").Trim(), nameof(command.Name), DeliveryFeedSettings.MaxName)
             .ThrowIfInvalid();
         var configured = DeliveryFeeds.Target(targets, code);
         var feed = new DeliveryFeedSettings(
-            code, false, null, [DeliveryKinds.Inventory], false, DeliveryPolicy.DefaultMaxAttempts, 15, 5, true, command.Name!.Trim(), kind,
-            kind == DeliveryFeedKinds.Mqtt ? DefaultTopic : null);
+            code, false, null, format == DeliveryFormats.B2mml ? [] : [DeliveryKinds.Inventory], false, DeliveryPolicy.DefaultMaxAttempts, 15, 5, true, command.Name!.Trim(), kind,
+            kind == DeliveryFeedKinds.Mqtt ? DefaultTopic : null, format);
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
-        var envelope = events.Create(EventTypes.DeliveryFeedCreated, "delivery_feed", Guid.Empty, new { Feed = code, feed.Name, feed.Kind, SecretConfigured = configured.SecretConfigured });
+        var envelope = events.Create(EventTypes.DeliveryFeedCreated, "delivery_feed", Guid.Empty, new { Feed = code, feed.Name, feed.Kind, feed.Format, SecretConfigured = configured.SecretConfigured });
         if (!await feeds.InsertAsync(feed, envelope.ActorId, time.GetUtcNow(), cancellationToken))
         {
             throw new ConflictException($"There is already a feed '{code}'.");
@@ -191,7 +194,7 @@ internal sealed class ListDeliveryFeedsHandler(IDeliveryTargets targets, IDelive
         return [.. codes.Select(code =>
         {
             var target = DeliveryFeeds.Effective(DeliveryFeeds.Target(targets, code), saved.GetValueOrDefault(code)?.Settings);
-            return new DeliveryFeedSummaryDto(code, target.Label, target.Kind, target.IsBuiltIn, target.Enabled, target.TargetHost);
+            return new DeliveryFeedSummaryDto(code, target.Label, target.Kind, target.IsBuiltIn, target.Enabled, target.TargetHost, target.Format);
         })];
     }
 }

@@ -38,6 +38,9 @@ public sealed record DeliveryDto
     /// <summary>True when the subject is a balance (D-031).</summary>
     public bool IsBulk { get; init; }
 
+    /// <summary>The subject job's number, when the subject is a job (as it is on a B2MML feed, D-102).</summary>
+    public string? JobNumber { get; init; }
+
     /// <summary>Where the subject lot is now.</summary>
     public string? LocationCode { get; init; }
 }
@@ -87,6 +90,9 @@ public sealed record DeliveryFeedSettingsDto
 
     /// <summary><c>webhook</c> or <c>mqtt</c> (#74), fixed; an MQTT feed has a topic template.</summary>
     public string Kind { get; init; } = "webhook";
+
+    /// <summary><c>cloudevents</c> or <c>b2mml</c> (D-102), fixed; a B2MML feed sends production performance and has no event kinds.</summary>
+    public string Format { get; init; } = "cloudevents";
     public string? Topic { get; init; }
     public bool IsBuiltIn { get; init; }
     public bool IsSaved { get; init; }
@@ -127,13 +133,16 @@ public sealed record SaveDeliveryFeedSettingsRequest
 }
 
 /// <summary>A feed in the Integrations screen's list (#74).</summary>
-public sealed record DeliveryFeedSummaryDto(string Feed, string Label, string Kind, bool IsBuiltIn, bool Enabled, string? TargetHost);
+public sealed record DeliveryFeedSummaryDto(string Feed, string Label, string Kind, bool IsBuiltIn, bool Enabled, string? TargetHost, string Format = "cloudevents");
 
 public sealed record CreateDeliveryFeedRequest
 {
     public string Code { get; init; } = "";
     public string Name { get; init; } = "";
     public string Kind { get; init; } = "webhook";
+
+    /// <summary><c>cloudevents</c> (the default) or <c>b2mml</c> (D-102).</summary>
+    public string Format { get; init; } = "cloudevents";
 }
 
 /// <summary>

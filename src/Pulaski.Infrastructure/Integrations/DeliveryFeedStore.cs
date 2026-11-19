@@ -10,7 +10,7 @@ namespace Pulaski.Infrastructure.Integrations;
 internal sealed class DeliveryFeedStore(DbSession session, NpgsqlDataSource dataSource) : IDeliveryFeedStore
 {
     internal const string Columns = """
-        feed, name, kind, enabled, url, topic, event_kinds, include_files, max_attempts, timeout_seconds, poll_seconds, start_from_now, updated_at, updated_by,
+        feed, name, kind, format, enabled, url, topic, event_kinds, include_files, max_attempts, timeout_seconds, poll_seconds, start_from_now, updated_at, updated_by,
         xmin::text::bigint AS version
         """;
 
@@ -19,18 +19,18 @@ internal sealed class DeliveryFeedStore(DbSession session, NpgsqlDataSource data
     internal const string All = $"SELECT {Columns} FROM core.delivery_feed ORDER BY feed";
 
     private const string Insert = """
-        INSERT INTO core.delivery_feed (feed, name, kind, enabled, url, topic, event_kinds, include_files, max_attempts, timeout_seconds, poll_seconds,
-                                        start_from_now, created_at, updated_at, updated_by)
-        VALUES (@Feed, @Name, @Kind, @Enabled, @Url, @Topic, @EventKinds, @IncludeFiles, @MaxAttempts, @TimeoutSeconds, @PollSeconds,
+        INSERT INTO core.delivery_feed (feed, name, kind, format, enabled, url, topic, event_kinds, include_files, max_attempts, timeout_seconds,
+                                        poll_seconds, start_from_now, created_at, updated_at, updated_by)
+        VALUES (@Feed, @Name, @Kind, @Format, @Enabled, @Url, @Topic, @EventKinds, @IncludeFiles, @MaxAttempts, @TimeoutSeconds, @PollSeconds,
                 @StartFromNow, @At, @At, @Actor)
         ON CONFLICT (feed) DO NOTHING
         RETURNING true
         """;
 
     private const string Ensure = """
-        INSERT INTO core.delivery_feed (feed, name, kind, enabled, url, topic, event_kinds, include_files, max_attempts, timeout_seconds, poll_seconds,
-                                        start_from_now)
-        VALUES (@Feed, @Name, @Kind, @Enabled, @Url, @Topic, @EventKinds, @IncludeFiles, @MaxAttempts, @TimeoutSeconds, @PollSeconds, @StartFromNow)
+        INSERT INTO core.delivery_feed (feed, name, kind, format, enabled, url, topic, event_kinds, include_files, max_attempts, timeout_seconds,
+                                        poll_seconds, start_from_now)
+        VALUES (@Feed, @Name, @Kind, @Format, @Enabled, @Url, @Topic, @EventKinds, @IncludeFiles, @MaxAttempts, @TimeoutSeconds, @PollSeconds, @StartFromNow)
         ON CONFLICT (feed) DO NOTHING
         RETURNING true
         """;
@@ -91,6 +91,7 @@ internal sealed class DeliveryFeedStore(DbSession session, NpgsqlDataSource data
                 settings.Feed,
                 settings.Name,
                 settings.Kind,
+                settings.Format,
                 settings.Enabled,
                 settings.Url,
                 settings.Topic,
@@ -110,6 +111,7 @@ internal sealed class DeliveryFeedStore(DbSession session, NpgsqlDataSource data
         s.Feed,
         s.Name,
         s.Kind,
+        s.Format,
         s.Enabled,
         s.Url,
         s.Topic,
@@ -126,6 +128,7 @@ internal sealed class DeliveryFeedStore(DbSession session, NpgsqlDataSource data
         public string Feed { get; init; } = "";
         public string Name { get; init; } = "";
         public string Kind { get; init; } = DeliveryFeedKinds.Webhook;
+        public string Format { get; init; } = DeliveryFormats.CloudEvents;
         public bool Enabled { get; init; }
         public string? Url { get; init; }
         public string? Topic { get; init; }
@@ -140,7 +143,7 @@ internal sealed class DeliveryFeedStore(DbSession session, NpgsqlDataSource data
         public long Version { get; init; }
 
         public DeliveryFeedSettings ToSettings() =>
-            new(Feed, Enabled, Url, EventKinds, IncludeFiles, MaxAttempts, TimeoutSeconds, PollSeconds, StartFromNow, Name, Kind, Topic);
+            new(Feed, Enabled, Url, EventKinds, IncludeFiles, MaxAttempts, TimeoutSeconds, PollSeconds, StartFromNow, Name, Kind, Topic, Format);
 
         public StoredFeedSettings ToStored() => new(ToSettings(), Version, UpdatedAt, UpdatedBy);
     }

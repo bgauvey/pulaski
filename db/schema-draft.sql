@@ -2389,6 +2389,7 @@ CREATE TABLE core.delivery_feed (
     feed                text PRIMARY KEY,
     name                text NOT NULL DEFAULT '',
     kind                text NOT NULL DEFAULT 'webhook' CHECK (kind IN ('webhook','mqtt')),
+    format              text NOT NULL DEFAULT 'cloudevents' CONSTRAINT delivery_feed_format_ck CHECK (format IN ('cloudevents','b2mml')),  -- D-102; fixed
     enabled             boolean NOT NULL DEFAULT false,
     url                 text,                                       -- https:// for a webhook, mqtt:// or mqtts:// for a broker
     topic               text,                                       -- an MQTT feed's topic template, e.g. pulaski/{type}
@@ -2623,7 +2624,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0064_control_limits'),
     ('0065_run_rules'),
     ('0066_spc_alerts'),
-    ('0067_tag_sampling');
+    ('0067_tag_sampling'),
+    ('0068_delivery_feed_format');
 
 -- =====================================================================
 -- 17. SEED DATA

@@ -1948,8 +1948,8 @@ Every command appends its CloudEvents event here in the same transaction as the 
 ### core.delivery_feed — a delivery feed and its settings (#73, #74, D-087, D-088) · *In use*
 
 Kept from Configure → Integrations: everything but the secrets (signing, a broker's sign-in), which stay in the API's configuration. The built-in
-`erp` and `documents` feeds may have no row and then run on their configuration; a feed added on the screen always has one. Code and kind are
-fixed: the feed's sink, and so its queue and checkpoint, is `kind:code`.
+`erp` and `documents` feeds may have no row and then run on their configuration; a feed added on the screen always has one. Code, kind and
+format are fixed: the feed's sink, and so its queue and checkpoint, is `kind:code`, and what its queue holds depends on the format.
 The relay reads the row each round, so a change takes effect without a restart. Saved with an event (`pulaski.delivery_feed.settings_saved.v1`,
 before and after). Version by `xmin`, 0 while there is no row.
 
@@ -1958,7 +1958,8 @@ before and after). Version by `xmin`, 0 while there is no row.
 | `feed` | text | no | Primary key: the feed's code, 2 to 30 lower-case letters, digits, `-` and `_` (`delivery_feed_code_ck`); `erp` and `documents` are built in. |
 | `name` | text | no | What the screen calls it; blank for a built-in feed's default name. |
 | `kind` | text | no | `webhook` (an HTTPS receiver) or `mqtt` (a broker, D-088). Fixed. |
-| `enabled` | boolean | no | Send to the receiver. Needs an address and at least one kind. |
+| `format` | text | no | `cloudevents` (each event as recorded) or `b2mml` (D-102: for each event that changes a production job's totals, the job's `SyncProductionPerformance` as it stands when sent; `event_kinds` don't apply). Fixed. Default `cloudevents`. |
+| `enabled` | boolean | no | Send to the receiver. Needs an address and, for CloudEvents, at least one kind. |
 | `url` | text | yes | A webhook's address (https, or plain http only to this machine), or a broker's (`mqtt://` or `mqtts://` host and port). |
 | `topic` | text | yes | An MQTT feed's topic template, such as `pulaski/{type}`; `{type}` (dots as slashes), `{subjectType}` and `{subject}` are filled in. |
 | `event_kinds` | text[] | no | What it sends: `inventory`, `certificates`, `orders`, `production`, `labor`, `stops`, `quality` (`DeliveryKinds`, each a set of event type prefixes). |
@@ -1993,7 +1994,7 @@ The queue and record of what was sent where. A row is added for each matching ev
 | `event_recorded_at` | timestamptz | no | The event's `recorded_at`, to find it in its partition. |
 | `tx_id`, `position` | xid8, bigint | no | The event's order, copied so the queue sorts and holds without the join. |
 | `event_type` | text | no | The event's type: `pulaski.lot.received.v1`. |
-| `subject` | uuid | no | The event's subject (a lot); what later deliveries are held behind. |
+| `subject` | uuid | no | The event's subject (a lot, say); for a B2MML feed the production job it changes (D-102). What later deliveries are held behind. |
 | `status` | text | no | `pending` (to send, or retrying), `delivered`, `failed` (gave up: refused, or attempts ran out) or `skipped` (an operator decided it won't go). |
 | `attempts` | integer | no | Attempts so far. A retry carries on counting. |
 | `next_attempt_at` | timestamptz | no | When a pending row is next due; growing waits after each failure, now after a retry. |

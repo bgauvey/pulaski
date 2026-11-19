@@ -42,27 +42,38 @@
                     <div class="small text-muted">{type} (its dots as slashes), {subjectType} and {subject} are filled in for each event.</div>
                 </div>
             }
-            <div class="col-12">
-                <div class="small fw-semibold mb-1">What it sends</div>
-                @foreach (var kind in _settings.Kinds)
-                {
-                    <div class="form-check form-check-inline" @key="kind.Code">
-                        <input id="@($"kind-{kind.Code}")" type="checkbox" class="form-check-input" checked="@_kinds.Contains(kind.Code)"
-                               @onchange="e => Toggle(kind.Code, e.Value is true)" />
-                        <label class="form-check-label small" for="@($"kind-{kind.Code}")" title="@string.Join(", ", kind.Prefixes)">@kind.Label</label>
-                    </div>
-                }
-                @if (_settings.OtherEventTypes.Count > 0)
-                {
-                    <div class="small text-warning-strong mt-1">
-                        The configuration also sends @string.Join(", ", _settings.OtherEventTypes), which no kind covers; saving keeps only the kinds ticked.
-                    </div>
-                }
-            </div>
-            <div class="col-12 form-check ms-2">
-                <input id="feed-files" type="checkbox" class="form-check-input" @bind="_includeFiles" />
-                <label class="form-check-label small" for="feed-files">Send a certificate's file with its event</label>
-            </div>
+            @if (B2mml)
+            {
+                <div class="col-12 small">
+                    <span class="fw-semibold">What it sends:</span> each time a production job's totals change (it starts, pauses, completes, is
+                    reopened, closed or cancelled; a report is entered, corrected or reversed; a lot is produced or consumed for it; a partial batch is
+                    decided), the job's B2MML <code>SyncProductionPerformance</code> as it stands then.
+                </div>
+            }
+            else
+            {
+                <div class="col-12">
+                    <div class="small fw-semibold mb-1">What it sends</div>
+                    @foreach (var kind in _settings.Kinds)
+                    {
+                        <div class="form-check form-check-inline" @key="kind.Code">
+                            <input id="@($"kind-{kind.Code}")" type="checkbox" class="form-check-input" checked="@_kinds.Contains(kind.Code)"
+                                   @onchange="e => Toggle(kind.Code, e.Value is true)" />
+                            <label class="form-check-label small" for="@($"kind-{kind.Code}")" title="@string.Join(", ", kind.Prefixes)">@kind.Label</label>
+                        </div>
+                    }
+                    @if (_settings.OtherEventTypes.Count > 0)
+                    {
+                        <div class="small text-warning-strong mt-1">
+                            The configuration also sends @string.Join(", ", _settings.OtherEventTypes), which no kind covers; saving keeps only the kinds ticked.
+                        </div>
+                    }
+                </div>
+                <div class="col-12 form-check ms-2">
+                    <input id="feed-files" type="checkbox" class="form-check-input" @bind="_includeFiles" />
+                    <label class="form-check-label small" for="feed-files">Send a certificate's file with its event</label>
+                </div>
+            }
             <div class="col-4 col-md-2">
                 <label class="form-label small fw-semibold" for="feed-attempts">Attempts</label>
                 <input id="feed-attempts" type="number" min="1" max="50" class="form-control form-control-sm" @bind="_attempts" />
@@ -107,6 +118,7 @@
     private string? _topic;
 
     private bool Mqtt => _settings?.Kind == "mqtt";
+    private bool B2mml => _settings?.Format == "b2mml";
     private HashSet<string> _kinds = [];
     private bool _includeFiles;
     private int _attempts;

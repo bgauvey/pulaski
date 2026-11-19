@@ -140,6 +140,21 @@ public class ProductionPerformanceB2mmlTests
         Assert.Equal("WO-1", (string)response.Element(Ns + "ProductionRequestID")!);
     }
 
+    [Fact]
+    public void A_feed_sends_it_as_a_sync_that_replaces_the_one_before()
+    {
+        var bodId = Guid.CreateVersion7();
+        var root = XDocument.Parse(ProductionPerformanceB2mml.WriteSync(Job(), Facts(), Now, bodId)).Root!;
+
+        Assert.Equal(Ns + "SyncProductionPerformance", root.Name);
+        var area = root.Element(Ns + "ApplicationArea")!;
+        Assert.Equal(("Pulaski", "2026-11-19T14:00:00Z", bodId.ToString()),
+            ((string)area.Element(Ns + "Sender")!.Element(Ns + "LogicalID")!, (string)area.Element(Ns + "CreationDateTime")!, (string)area.Element(Ns + "BODID")!));
+        var data = root.Element(Ns + "DataArea")!;
+        Assert.Equal("Replace", (string)data.Element(Ns + "Sync")!.Element(Ns + "ActionCriteria")!.Element(Ns + "ActionExpression")!.Attribute("actionCode")!);
+        Assert.Equal("WO-1-10", (string)data.Element(Ns + "ProductionPerformance")!.Element(Ns + "ID")!);
+    }
+
     [Theory]
     [InlineData("planned", "Ready")]
     [InlineData("firmed", "Ready")]

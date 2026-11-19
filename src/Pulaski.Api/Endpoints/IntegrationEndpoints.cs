@@ -28,7 +28,7 @@ internal static class IntegrationEndpoints
 
         routes.MapPost("/integrations", async Task<Ok<VersionResponse>> (
             CreateDeliveryFeedRequest request, ICommandHandler<CreateDeliveryFeedCommand, VersionResponse> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new CreateDeliveryFeedCommand(request.Code, request.Name, request.Kind), ct)))
+            TypedResults.Ok(await handler.HandleAsync(new CreateDeliveryFeedCommand(request.Code, request.Name, request.Kind, request.Format), ct)))
             .WithTags("Integrations")
         .RequirePermission(Permissions.Integrations);
 

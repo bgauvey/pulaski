@@ -683,7 +683,7 @@ Your ERP can send work orders to Pulaski (whoever runs the integration sets this
 
 #### Production performance for the ERP
 
-Pulaski can give the ERP what a production job made and used, as an ISA-95 production performance in B2MML XML. Each document is the job's totals as they stand now, so a later one replaces an earlier one: a reversed or corrected report needs nothing special.
+Pulaski can give the ERP what a production job made and used, as an ISA-95 production performance in B2MML XML. Each document is the job's totals as they stand now, so a later one replaces an earlier one: a reversed or corrected report needs nothing special. To have them sent as they change, add a [production performance feed](#send-movements-to-the-erp-and-certificates-to-a-document-system) on **Configure → Integrations**.
 
 1. Open the job (**Operate → Floor**, then the job).
 2. Click **Production performance (B2MML)**. The file downloads, named after the job.
@@ -1446,18 +1446,23 @@ The feed uses the new settings within seconds; nothing needs restarting. The sha
 **Add another feed** (another system, or a message broker):
 
 1. Click **Add a feed**.
-2. Type a **Code** (2 to 30 lower-case letters, digits, `-` or `_`, such as `wms`) and a **Name**, and choose what it **Sends to**: *A webhook (HTTPS)* or *An MQTT broker*. Neither can change later.
+2. Type a **Code** (2 to 30 lower-case letters, digits, `-` or `_`, such as `wms`) and a **Name**, and choose what it **Sends to**: *A webhook (HTTPS)* or *An MQTT broker*, and its **Format**: *Events (CloudEvents JSON)* or *Production performance (B2MML)* (see below). None of these can change later.
 3. Click **Add**. The new feed gets its own tab, switched off.
-4. Under **Settings**, give the address (`https://…` for a webhook, `mqtt://host:1883` or `mqtts://host:8883` for a broker) and, for a broker, the **Topic**, then choose what it sends and switch it on.
+4. Under **Settings**, give the address (`https://…` for a webhook, `mqtt://host:1883` or `mqtts://host:8883` for a broker) and, for a broker, the **Topic**, then choose what it sends (an events feed only) and switch it on.
 
 Whoever runs Pulaski puts the feed's secret (and a broker's username and password) in the API's configuration under `Integrations:Feeds:<code>`. Each feed keeps its own queue and place in the event log, so feeds never hold each other up.
+
+**A production performance feed (B2MML)** gives the ERP each production job's totals, as [Production performance for the ERP](#production-performance-for-the-erp) describes, every time they change: when the job starts, pauses, completes, is reopened, closed or cancelled; when a report is entered, corrected or reversed; when a lot is produced or consumed for it, or such a movement is reversed; and when one of its partial batches is reported or decided. Its deliveries are listed by job (**Job** *number*, which opens the job), and a search by job number finds them. Planning changes, and jobs other than production, send nothing.
+
+- **The message** is the job's `SyncProductionPerformance` as it stands when it is sent (not when the change happened), `application/xml`, with the change's event id as both the `Idempotency-Key` and the document's `BODID`, signed as an event is. Its `Sync` action is `Replace`: each document replaces the job's last one, so a document sent twice, or two in a row that say the same, do no harm.
+- **In order per job.** A job's documents wait behind its undelivered one, as a lot's events do; retry or skip it to let them go. The answer is treated as for any webhook or broker, acknowledgements included.
 
 1. Open **Configure → Integrations** and choose the feed: **ERP** or **Document system**. The top panel says whether the ERP webhook is **On** and where it sends, how many movements are waiting, how many have **failed**, and how many were delivered in the last 24 hours.
 2. The list starts on **Failed**. Each row shows the movement, the lot, how many attempts were made and the ERP's last answer (its status code and message).
 3. Put the cause right (the ERP rejected an unknown material, say, or a lot it doesn't know), then choose **Retry** on the row, or **Retry all failed** in the panel. It goes again within a few seconds.
 4. If it shouldn't be sent at all (you have booked it in the ERP by hand, for example), choose **Skip…**, give the reason and choose **Skip it**. The ERP won't get that movement.
 5. Choose **Refresh** to see the latest; switch the list to **Queued, retrying or held**, **Delivered**, **Skipped** or **All** to see the rest.
-6. To find a particular delivery, type a **lot number** (or a subject's id), part of the **event type** (such as `consumed`), and dates, then click **Search**.
+6. To find a particular delivery, type a **lot number**, a **job number** (for a production performance feed) or a subject's id, part of the **event type** (such as `consumed`), and dates, then click **Search**.
 
 **In detail**
 
@@ -2874,7 +2879,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Only a number attribute standing for a quality characteristic is checked against specification limits. Balances' attribute values aren't in the values file.
 - **Reversing:** a chain undo follows a lot and the lots split off it, not merges into other lots, consumption into jobs or the output made from it; corrections made before this version can't be reversed.
 - **Genealogy through a silo is an estimate** from the declared movements. A level tag's readings confirm when it was empty and check the declared stock (see [How a silo flows](#how-a-silo-flows)), but they don't change how much each arrival gave. A reversed movement and its reversal are left out of the estimate, as if neither happened.
-- **Production performance** is a download and an API read only: it isn't yet sent to the ERP through a delivery feed. It carries no labor or machine time, and a job's lots are listed but not which lot each was made from.
+- **Production performance** carries no labor or machine time, and a job's lots are listed but not which lot each was made from. A production performance feed sends one document per change, even when several changes come together; the built-in ERP feed sends only events (add a feed for B2MML).
 - **Sending to other systems** is by HTTPS webhook or MQTT; there is no Kafka or other message queue yet, and retention is the same for every feed. Receivers' acknowledgements are recorded on the delivery, but nothing compares what the ERP booked with what Pulaski sent; there is no adapter for a particular ERP's or document system's own API. A certificate's file goes inline in the event, up to 10 MB; there is no download link for a receiver to fetch it later. The delivery list shows at most 200 at a time, with no paging beyond that.
 - **Allocations:** the background refresh is all or nothing for a site, and any change anywhere makes it run. Preferences are per site, not per material. A picking list is printed, not confirmed: fetching the lot is still an ordinary move. Approved alternates show only in allocations and on consumption, not in an order's planned components, and only a BOM's approved alternates can be allocated.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.

@@ -135,6 +135,26 @@ public class DeliveryTests
         Assert.Contains((Mqtt() with { Kind = "kafka" }).Problems(), p => p.Contains("webhook or an MQTT broker", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void A_b2mml_feed_takes_what_changes_a_jobs_performance_and_needs_no_kinds()
+    {
+        var feed = new DeliveryFeedSettings("perf", true, "https://erp.example.com/in", [], false, 12, 15, 5, true, "Performance", Format: DeliveryFormats.B2mml);
+
+        Assert.Empty(feed.Problems());
+        Assert.Equal(DeliveryFormats.PerformanceTriggers, feed.TypePrefixes);
+        Assert.Contains("pulaski.job.production_", feed.TypePrefixes);
+        Assert.DoesNotContain(feed.TypePrefixes, p => "pulaski.job.created.v1".StartsWith(p, StringComparison.Ordinal));
+        Assert.Contains((feed with { Format = "csv" }).Problems(), p => p.Contains("CloudEvents or B2MML", StringComparison.Ordinal));
+        Assert.Equal(["pulaski.labor."], (feed with { Format = DeliveryFormats.CloudEvents, EventKinds = ["labor"] }).TypePrefixes);
+
+        // An added feed runs on its format; a built-in one stays CloudEvents.
+        var added = DeliveryFeeds.Effective(new DeliveryTarget("webhook:perf", false, null, []) { Feed = "perf" }, feed);
+        Assert.Equal((DeliveryFormats.B2mml, "webhook:perf"), (added.Format, added.Sink));
+        Assert.Equal(DeliveryFormats.PerformanceTriggers, added.EventTypes);
+        var builtIn = DeliveryFeeds.Effective(new DeliveryTarget("webhook:erp", false, null, []) { IsBuiltIn = true }, feed with { Feed = "erp" });
+        Assert.Equal(DeliveryFormats.CloudEvents, builtIn.Format);
+    }
+
     internal sealed class Targets : IDeliveryTargets
     {
         public DeliveryTarget Erp { get; } = new(Sink, true, "erp.test", ["pulaski.lot."]) { IsBuiltIn = true };
