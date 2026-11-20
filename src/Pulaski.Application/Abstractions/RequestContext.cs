@@ -9,4 +9,7 @@ public interface IRequestContext
     Guid? UserId => null;
 
     Guid CorrelationId { get; }
+
+    /// <summary>The CloudEvents <c>source</c> of what this request records: the API, or an operator station through it (#150).</summary>
+    string Source => EventSources.Api;
 }

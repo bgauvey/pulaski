@@ -36,14 +36,14 @@ internal sealed class EventFactory(
     IRequestContext request) : IEventFactory
 {
     /// <summary>CloudEvents <c>source</c> for changes made through the API.</summary>
-    public const string Source = "pulaski-api";
+    public const string Source = EventSources.Api;
 
     public EventEnvelope Create(string type, string subjectType, Guid subject, object data, string? reason = null) =>
         new(
             ids.NewId(),
             timeProvider.GetUtcNow(),
             type,
-            Source,
+            request.Source,
             subject,
             subjectType,
             ActorType: "user",
@@ -52,6 +52,16 @@ internal sealed class EventFactory(
             CausationId: null,
             reason,
             data);
+}
+
+/// <summary>CloudEvents <c>source</c> values.</summary>
+public static class EventSources
+{
+    /// <summary>Changes made through the API.</summary>
+    public const string Api = "pulaski-api";
+
+    /// <summary>Changes made at an operator station (#150), by the badged person's user.</summary>
+    public static string Station(string terminalCode) => $"{Api}/terminal/{terminalCode}";
 }
 
 /// <summary>Versioned CloudEvents types. Add a new version rather than changing a payload.</summary>

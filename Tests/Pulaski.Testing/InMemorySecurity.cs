@@ -96,6 +96,12 @@ public sealed class InMemorySecurity : ISecurityReadStore, ISecurityRepository, 
         }
     }
 
+    /// <summary>What a badged person's user may do (#150), by person; none unless set.</summary>
+    public Dictionary<Guid, UserAccess> PersonAccess { get; } = [];
+
+    public Task<UserAccess?> GetPersonAccessAsync(Guid personId, DateTimeOffset now, CancellationToken cancellationToken) =>
+        Task.FromResult(PersonAccess.GetValueOrDefault(personId));
+
     public Task<UserAccess?> GetAccessAsync(string issuer, string subject, DateTimeOffset now, CancellationToken cancellationToken)
     {
         lock (_lock)

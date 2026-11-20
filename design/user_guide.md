@@ -843,6 +843,11 @@ In detail: the station always uses the [touch layout](#use-a-touch-screen) and r
 while they use it; after 15 minutes with nothing done there, it signs them off and waits for a badge. A terminal with no first line offered
 asks which of its lines the station is for (`/terminal/station?line=EXT-01` chooses one). Switching the terminal off stops it at once.
 
+**Who may do what at a station.** What someone may do there is what their Pulaski user may do at the station's site, as if they had signed
+in: an operator's role lets them start, pause and complete jobs, report production and code stops; a planner's doesn't. Link a person to their
+user on **People** (their user name). Someone with no user can still clock on and off at the badge terminal, and the station tells them what it
+can't do for them. Everything done at a station is recorded under the person's user, with the station named as where it was done.
+
 ### Show a line board on a TV
 
 A TV on the floor can show each line's state, running job, output, down time and OEE for the shift, in large type, without anyone signing in.

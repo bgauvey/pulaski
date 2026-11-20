@@ -18,6 +18,12 @@ internal sealed class HttpRequestContext(IHttpContextAccessor accessor, IIdGener
     {
         get
         {
+            // At an operator station (#150) the badged person's user acts; the terminal is the source.
+            if (accessor.HttpContext?.Items[Security.StationActing.ItemKey] is Domain.Security.UserAccess acting)
+            {
+                return acting.ActorId;
+            }
+
             // At a shop-floor terminal (D-049) the terminal records the time, for the person who badged.
             if (accessor.HttpContext?.Items[Security.TerminalFilter.ItemKey] is Application.Labor.TerminalRecord terminal)
             {
@@ -50,6 +56,13 @@ internal sealed class HttpRequestContext(IHttpContextAccessor accessor, IIdGener
             : Guid.TryParse(accessor.HttpContext?.User.FindFirst(TokenIssuer.UserIdClaim)?.Value, out var id) ? id : null;
 
     public Guid CorrelationId => _correlationId ??= ReadHeader() ?? ids.NewId();
+
+    /// <summary>The API, or the operator station through which a badged person's user acted (#150): <c>pulaski-api/terminal/CODE</c>.</summary>
+    public string Source =>
+        accessor.HttpContext is { } http && http.Items[Security.StationActing.ItemKey] is not null
+            && http.Items[Security.TerminalFilter.ItemKey] is Application.Labor.TerminalRecord station
+            ? EventSources.Station(station.Code)
+            : EventSources.Api;
 
     private Guid? ReadHeader() =>
         Guid.TryParse(accessor.HttpContext?.Request.Headers[CorrelationHeader], out var id) ? id : null;

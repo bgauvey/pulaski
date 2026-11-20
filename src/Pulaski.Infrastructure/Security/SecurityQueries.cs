@@ -49,6 +49,26 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
 
     private const string SiteCodes = "SELECT id, code FROM core.equipment WHERE id = ANY(@Ids)";
 
+    private const string PersonUser = """
+        SELECT u.idp_issuer AS issuer, u.idp_subject AS subject
+        FROM core.person p
+        JOIN sec.app_user u ON u.id = p.app_user_id
+        WHERE p.id = @Id
+        """;
+
+    public async Task<UserAccess?> GetPersonAccessAsync(Guid personId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var user = await connection.QuerySingleOrDefaultAsync<IdentityRow>(new CommandDefinition(PersonUser, new { Id = personId }, cancellationToken: cancellationToken));
+        return user is null ? null : await GetAccessAsync(user.Issuer, user.Subject, now, cancellationToken);
+    }
+
+    private sealed class IdentityRow
+    {
+        public string Issuer { get; init; } = "";
+        public string Subject { get; init; } = "";
+    }
+
     public async Task<UserAccess?> GetAccessAsync(string issuer, string subject, DateTimeOffset now, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
