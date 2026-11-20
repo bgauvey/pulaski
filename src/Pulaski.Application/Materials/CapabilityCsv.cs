@@ -24,6 +24,11 @@ public sealed record CapabilityImportRow
     /// <summary>The line's own batch tolerance in percent (#85); blank for the material's.</summary>
     public Supplied<decimal?>? BatchTolerancePct { get; init; }
 
+    /// <summary>When the line's production lots are full (D-104): a size in base units and an age in hours (blank: none), and at a shift change.</summary>
+    public Supplied<decimal?>? LotSize { get; init; }
+    public Supplied<decimal?>? LotHours { get; init; }
+    public Supplied<bool>? LotByShift { get; init; }
+
     /// <summary>False ends the capability in effect now; true or left out keeps or adds one.</summary>
     public Supplied<bool>? IsActive { get; init; }
 
@@ -62,6 +67,9 @@ public static class CapabilityCsv
         ["preferred"] = ["is_preferred"],
         ["batch_size"] = ["line_batch_size"],
         ["batch_tolerance"] = ["batch_tolerance_pct", "line_batch_tolerance"],
+        ["lot_size"] = ["line_lot_size"],
+        ["lot_hours"] = ["lot_age_hours", "lot_age"],
+        ["lot_by_shift"] = ["lot_per_shift", "new_lot_each_shift"],
         ["active"] = ["is_active"],
         ["effective_from"] = ["from", "valid_from", "start"],
         ["effective_to"] = ["to", "valid_to", "end"],
@@ -212,6 +220,9 @@ public static class CapabilityCsv
             IsPreferred = Flag("preferred"),
             BatchSize = Cell("batch_size") is { } batch ? new(batch.Length == 0 ? null : Number(batch, "batch_size")) : null,
             BatchTolerancePct = Cell("batch_tolerance") is { } tolerance ? new(tolerance.Length == 0 ? null : Number(tolerance, "batch_tolerance")) : null,
+            LotSize = Cell("lot_size") is { } lotSize ? new(lotSize.Length == 0 ? null : Number(lotSize, "lot_size")) : null,
+            LotHours = Cell("lot_hours") is { } lotHours ? new(lotHours.Length == 0 ? null : Number(lotHours, "lot_hours")) : null,
+            LotByShift = Flag("lot_by_shift"),
             IsActive = Flag("active"),
             EffectiveFrom = from,
             EffectiveTo = to,

@@ -146,6 +146,24 @@ public class ImportCapabilitiesHandlerTests
     }
 
     [Fact]
+    public async Task A_lines_lot_rule_is_read_changed_column_by_column_and_cleared_by_a_blank()
+    {
+        const string LotHeader = "material,line,ideal_rate,rate_unit,lot_size,lot_hours,lot_by_shift\n";
+        await RunAsync(LotHeader + "PRF-1,EXT-01,900,m,1000,8,yes\n");
+        var rule = Assert.Single(Capabilities.On(_line.Id, _profile.Id)).LotCuts;
+        Assert.Equal((1000m, 8m, true), (rule.Size!.Value, rule.Hours!.Value, rule.ByShift));
+
+        // Only the columns given change; a blank size clears it, and the rest is kept.
+        var changed = await RunAsync("material,line,ideal_rate,rate_unit,lot_size\nPRF-1,EXT-01,900,m,\n");
+        Assert.Equal(["lot_size"], Assert.Single(changed.Rows).Changes);
+        rule = Assert.Single(Capabilities.On(_line.Id, _profile.Id)).LotCuts;
+        Assert.Equal(((decimal?)null, 8m, true), (rule.Size, rule.Hours!.Value, rule.ByShift));
+
+        var bad = await RunAsync(LotHeader + "PRF-1,EXT-01,900,m,,721,\n");
+        Assert.Contains("720", Assert.Single(bad.Rows).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_dry_run_reports_without_committing()
     {
         var result = await RunAsync(Header + "PRF-1,EXT-01,900,m,,,,\n", dryRun: true);

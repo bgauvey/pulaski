@@ -2855,7 +2855,8 @@ the site-local day). `LotCutting.Parts` (pure) splits the good quantity: what fi
 100 per report), each through `ProductionOutput.ProduceAsync` in the base unit with the report's id, so reversal and correction work per lot as
 before (a reversal takes back only its share; a full lot isn't reopened once a later lot exists). Notes `lot_cut` say what was started and why.
 `StartNewLotCommand` (`POST /jobs/{id}/new-lot`, `production.report`) closes the lots the job is filling (its latest fillable one per location) by setting `core.lot.produced_to` (there for
-this, unused) and appends `pulaski.job.lots_closed.v1`. Not in the capability CSV import yet.
+this, unused) and appends `pulaski.job.lots_closed.v1`. The capability CSV (`CapabilityCsv`) reads `lot_size`, `lot_hours`, `lot_by_shift`: a column left out
+keeps each part, a blank size or age clears it.
 
 ## Application architecture
 

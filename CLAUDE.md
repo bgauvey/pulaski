@@ -377,7 +377,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Lots filled by reports (D-104, proposed, in pieces): capability `lot_size`/`lot_hours`/`lot_by_shift` (`LotCutRule`, `Capability.LotCuts`); a report
   with no lot number, counting now, at a location keeping lots apart, fills the job's open lot (`ILotFillingStore`, computed: latest, untouched but
   for the job's production on the line) and starts new ones (`LotCutting.Parts`, `LotFilling.PlanAsync` in `ProductionReporter`). `StartNewLotCommand`
-  (`POST /jobs/{id}/new-lot`) sets `core.lot.produced_to`. Batch and non-lot-tracked materials refused.
+  (`POST /jobs/{id}/new-lot`) sets `core.lot.produced_to`. Batch and non-lot-tracked materials refused. Capability CSV `lot_size`/`lot_hours`/`lot_by_shift`.
 - Changeover rules (D-074, proposed): Configure → Changeovers maintains `core.changeover_rule` (`changeovers.manage`, Planner and Process engineer;
   seen with `schedule.view`/`materials.view`). `ChangeoverRules` checks sides, minutes (≤ 7 days) and one active rule per pattern (fixed once
   made; switched off, never deleted). Writes lock the site's row first; CSV import (`ChangeoverRuleCsv`) is all or nothing with a dry run.

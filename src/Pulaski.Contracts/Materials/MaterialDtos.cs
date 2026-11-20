@@ -327,5 +327,5 @@ public sealed record SetBatchingRequest
 /// <summary>The capabilities CSV file (D-055): its header line with every column, for a template.</summary>
 public static class CapabilityCsvFormat
 {
-    public const string Header = "material,site,line,ideal_rate,rate_unit,changeover_minutes,crew_size,preferred,batch_size,batch_tolerance,active,effective_from,effective_to";
+    public const string Header = "material,site,line,ideal_rate,rate_unit,changeover_minutes,crew_size,preferred,batch_size,batch_tolerance,lot_size,lot_hours,lot_by_shift,active,effective_from,effective_to";
 }
