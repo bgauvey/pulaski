@@ -1,0 +1,75 @@
+@using Pulaski.Web.Services.Execution
+
+@* A reason (D-062): a dropdown with a mouse, large buttons by reason group in the touch layout (#119). One value, so both stay in step. *@
+<select id="@Id" class="form-select @SelectClass mouse-only" value="@(Value?.ToString() ?? "")" @onchange="OnSelectAsync" aria-label="@AriaLabel">
+    <option value="">@Placeholder</option>
+    @foreach (var reason in Reasons)
+    {
+        <option value="@reason.Id">@((OptionLabel ?? Display.ReasonLabel)(reason))</option>
+    }
+</select>
+<div class="touch-only" role="group" aria-label="@(AriaLabel ?? Placeholder)">
+    @if (NoneLabel is { } none)
+    {
+        <div class="reason-grid mb-2">
+            <button type="button" class="btn btn-outline-secondary" aria-pressed="@(Value is null ? "true" : "false")" @onclick="() => PickAsync(null)">@none</button>
+        </div>
+    }
+    @foreach (var group in ReasonPickerView.Groups(Reasons))
+    {
+        <div class="reason-grid-group">
+            @if (group.Title is { } title)
+            {
+                <div class="reason-grid-title">@title</div>
+            }
+            <div class="reason-grid">
+                @foreach (var reason in group.Reasons)
+                {
+                    <button type="button" class="btn btn-outline-secondary" aria-pressed="@(Value == reason.Id ? "true" : "false")"
+                            @key="reason.Id" @onclick="() => PickAsync(reason.Id)">@reason.Name</button>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ReasonCodeDto> Reasons { get; set; } = [];
+
+    [Parameter]
+    public Guid? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> ValueChanged { get; set; }
+
+    /// <summary>The dropdown's id, for its label.</summary>
+    [Parameter]
+    public string? Id { get; set; }
+
+    [Parameter]
+    public string Placeholder { get; set; } = "Reason…";
+
+    /// <summary>A button for choosing no reason, where none is allowed; null when a reason is required.</summary>
+    [Parameter]
+    public string? NoneLabel { get; set; }
+
+    [Parameter]
+    public string? AriaLabel { get; set; }
+
+    /// <summary>How the dropdown names a reason; its group path and name when not given.</summary>
+    [Parameter]
+    public Func<ReasonCodeDto, string>? OptionLabel { get; set; }
+
+    /// <summary>Extra classes for the dropdown, such as form-select-sm or w-auto.</summary>
+    [Parameter]
+    public string? SelectClass { get; set; }
+
+    private Task OnSelectAsync(ChangeEventArgs e) => PickAsync(Guid.TryParse(e.Value?.ToString(), out var id) ? id : null);
+
+    private async Task PickAsync(Guid? id)
+    {
+        Value = id;
+        await ValueChanged.InvokeAsync(id);
+    }
+}

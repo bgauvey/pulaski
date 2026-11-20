@@ -44,7 +44,7 @@
                     @for (var i = 0; i < _goodBatches.Count; i++)
                     {
                         var index = i;
-                        <input type="number" min="0" step="any" class="form-control" style="width: 7rem" aria-label="Good batch @(index + 1)"
+                        <input type="number" inputmode="decimal" min="0" step="any" class="form-control" style="width: 7rem" aria-label="Good batch @(index + 1)"
                                value="@_goodBatches[index]" @oninput="e => SetBatch(_goodBatches, index, e)" />
                     }
                     <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _goodBatches.Add(BatchSize)">Add batch</button>
@@ -60,7 +60,7 @@
                     @for (var i = 0; i < _scrapBatches.Count; i++)
                     {
                         var index = i;
-                        <input type="number" min="0" step="any" class="form-control" style="width: 7rem" aria-label="Rejected batch @(index + 1)"
+                        <input type="number" inputmode="decimal" min="0" step="any" class="form-control" style="width: 7rem" aria-label="Rejected batch @(index + 1)"
                                value="@_scrapBatches[index]" @oninput="e => SetBatch(_scrapBatches, index, e)" />
                     }
                     <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _scrapBatches.Add(BatchSize)">Add rejected batch</button>
@@ -74,7 +74,7 @@
             {
                 <div class="col-6">
                     <label class="form-label" for="rep-partial-@Job.JobId">Partial batch, @Job.BaseUomCode</label>
-                    <input id="rep-partial-@Job.JobId" type="number" min="0" step="any" class="form-control" placeholder="None" @bind="_partial" @bind:event="oninput" />
+                    <input id="rep-partial-@Job.JobId" type="number" inputmode="decimal" min="0" step="any" class="form-control" placeholder="None" @bind="_partial" @bind:event="oninput" />
                     <div class="form-text">
                         @(Job.PartialBatchPlanned ? "This job was planned with a partial last batch; report it here when it is made." : "This run stopped with a reason, so the batch it was making can be added.")
                         @(Job.BatchRule == "exact" ? " It waits on hold for approval." : "")
@@ -118,11 +118,11 @@
             </div>
             <div class="col-6">
                 <label class="form-label" for="rep-good-@Job.JobId">Good, @UnitCode</label>
-                <input id="rep-good-@Job.JobId" type="number" min="0" step="any" class="form-control" @bind="_good" @bind:event="oninput" />
+                <input id="rep-good-@Job.JobId" type="number" inputmode="decimal" min="0" step="any" class="form-control" @bind="_good" @bind:event="oninput" />
             </div>
             <div class="col-6">
                 <label class="form-label" for="rep-scrap-@Job.JobId">Scrap, @UnitCode</label>
-                <input id="rep-scrap-@Job.JobId" type="number" min="0" step="any" class="form-control" @bind="_scrap" @bind:event="oninput" />
+                <input id="rep-scrap-@Job.JobId" type="number" inputmode="decimal" min="0" step="any" class="form-control" @bind="_scrap" @bind:event="oninput" />
             </div>
         }
         @if (GoodTotal > 0)
@@ -167,15 +167,10 @@
         }
         @if (ScrapTotal > 0)
         {
-            <div class="col-sm-6">
+            <div class="col-sm-6 touch-full">
                 <label class="form-label" for="rep-reason-@Job.JobId">Scrap reason</label>
-                <select id="rep-reason-@Job.JobId" class="form-select" @bind="_reasonId">
-                    <option value="@Guid.Empty">Choose a reason…</option>
-                    @foreach (var r in _reasons)
-                    {
-                        <option value="@r.Id">@Display.ReasonLabel(r)</option>
-                    }
-                </select>
+                <ReasonPicker Id="@($"rep-reason-{Job.JobId}")" Reasons="_reasons" Placeholder="Choose a reason…" AriaLabel="Scrap reason"
+                              Value="@(_reasonId == Guid.Empty ? null : _reasonId)" ValueChanged="v => _reasonId = v ?? Guid.Empty" />
             </div>
         }
         <div class="col-12">
@@ -184,7 +179,7 @@
         </div>
     </div>
 
-    <div class="d-flex gap-2 mt-3">
+    <div class="d-flex gap-2 mt-3 form-actions">
         <button type="submit" class="btn btn-primary" disabled="@(!CanSubmit)">Report</button>
         <button type="button" class="btn btn-outline-secondary" @onclick="OnCancel">Cancel</button>
     </div>

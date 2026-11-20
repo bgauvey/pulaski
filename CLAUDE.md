@@ -381,6 +381,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Changeover rules (D-074, proposed): Configure → Changeovers maintains `core.changeover_rule` (`changeovers.manage`, Planner and Process engineer;
   seen with `schedule.view`/`materials.view`). `ChangeoverRules` checks sides, minutes (≤ 7 days) and one active rule per pattern (fixed once
   made; switched off, never deleted). Writes lock the site's row first; CSV import (`ChangeoverRuleCsv`) is all or nothing with a dry run.
+- Touch layout (D-105, proposed): `data-touch` on `<html>` (`js/theme.js`: `pointer: coarse`, or the header's hand button per device);
+  rules only in `css/touch.css` under `:root[data-touch]`; layout-specific markup via `.mouse-only`/`.touch-only` (e.g. `ReasonPicker`);
+  quantities `inputmode="decimal"`, form buttons in `.form-actions`, floor card buttons in `.floor-actions`.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

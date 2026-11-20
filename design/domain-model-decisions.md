@@ -2859,6 +2859,22 @@ before (a reversal takes back only its share; a full lot isn't reopened once a l
 this, unused) and appends `pulaski.job.lots_closed.v1`. The capability CSV (`CapabilityCsv`) reads `lot_size`, `lot_hours`, `lot_by_shift`: a column left out
 keeps each part, a blank size or age clears it.
 
+## Touch layout (D-105, proposed)
+
+The floor screens were built for a desk and a mouse; operators at a line use tablets and touch panels (#119, from the gap analysis of
+2026-11-19). Decided: **one app with a touch layout**, not a separate set of pages, so every floor action keeps one implementation.
+- `data-touch` on `<html>` (`js/theme.js`) turns it on: by itself where `(pointer: coarse)`, and switched per device from the header (the
+  hand button, stored as `pulaski.touch` on|off), since many industrial panels report a mouse. The button carries `aria-pressed`.
+- `css/touch.css` holds every rule, under `:root[data-touch]`: targets at least `--touch-target` (44 px), fields 48 px, quantities larger,
+  `.form-actions` sticky at the foot, `.floor-actions` filling the card, a card with a form open spanning the board, a page's primary
+  action first. Nothing changes without `data-touch`.
+- Markup that differs by layout is rendered once for each and hidden by `.mouse-only` / `.touch-only`, so the server needn't know the
+  layout. `ReasonPicker` (shared) is the first: a dropdown with a mouse, buttons grouped by reason group (`ReasonPickerView.Groups`) for the
+  finger, one value. Used for pause/complete reasons, scrap reasons and stop coding.
+- Quantity inputs carry `inputmode="decimal"` for a number keypad.
+
+The dedicated operator station (#118) builds on these conventions.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

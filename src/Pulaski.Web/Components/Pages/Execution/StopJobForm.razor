@@ -8,13 +8,10 @@
     <div class="row g-2">
         <div class="col-12">
             <label class="form-label small" for="stop-reason-@JobId">@(Complete ? "Why did it stop short? (optional)" : "Why is it stopping?") @(NeedsReason ? "(required)" : "")</label>
-            <select id="stop-reason-@JobId" class="form-select form-select-sm" @bind="_reasonId">
-                <option value="@Guid.Empty">@(NeedsReason ? "Choose a reason…" : "No reason")</option>
-                @foreach (var reason in _reasons)
-                {
-                    <option value="@reason.Id">@Display.ReasonLabel(reason)</option>
-                }
-            </select>
+            <ReasonPicker Id="@($"stop-reason-{JobId}")" Reasons="_reasons" SelectClass="form-select-sm"
+                          Value="@(_reasonId == Guid.Empty ? null : _reasonId)" ValueChanged="v => _reasonId = v ?? Guid.Empty"
+                          Placeholder="@(NeedsReason ? "Choose a reason…" : "No reason")" NoneLabel="@(NeedsReason ? null : "No reason")"
+                          AriaLabel="@(Complete ? "Why did it stop short?" : "Why is it stopping?")" />
         </div>
         @if (BatchSize is not null)
         {
@@ -28,7 +25,7 @@
             {
                 <div class="col-4">
                     <label class="form-label small" for="stop-qty-@JobId">Quantity, @BaseUomCode</label>
-                    <input id="stop-qty-@JobId" type="number" min="0" step="any" class="form-control form-control-sm" @bind="_quantity" @bind:event="oninput" />
+                    <input id="stop-qty-@JobId" type="number" inputmode="decimal" min="0" step="any" class="form-control form-control-sm" @bind="_quantity" @bind:event="oninput" />
                 </div>
                 <div class="col-8">
                     <label class="form-label small" for="stop-loc-@JobId">Goes to</label>
@@ -51,7 +48,7 @@
             <input id="stop-comment-@JobId" class="form-control form-control-sm" maxlength="1000" @bind="_comment" />
         </div>
     </div>
-    <div class="d-flex gap-2 mt-2">
+    <div class="d-flex gap-2 mt-2 form-actions">
         <button type="button" class="btn btn-sm btn-primary" disabled="@(!CanSubmit)" @onclick="SubmitAsync">@(Complete ? "Complete" : "Pause")</button>
         <button type="button" class="btn btn-sm btn-link" @onclick="OnCancel">Cancel</button>
     </div>

@@ -1,0 +1,166 @@
+/* Touch layout (#119): on where the main pointer is a finger, or switched on from the header (data-touch on <html>, js/theme.js).
+   Every control a finger presses is at least --touch-target high, quantities get room for gloved fingers, and a form's actions
+   stay in reach at the foot of the screen. Nothing changes for a mouse. */
+
+/* The header switch shows its state. */
+:root[data-touch] .touch-toggle {
+    color: var(--accent);
+    background: var(--accent-soft);
+}
+
+/* Shown only in one layout: a reason dropdown for the mouse, a grid of buttons for the finger. */
+:root[data-touch] .mouse-only,
+:root:not([data-touch]) .touch-only {
+    display: none !important;
+}
+
+/* ---- Controls ---- */
+
+:root[data-touch] .btn,
+:root[data-touch] .btn-sm {
+    min-height: var(--touch-target);
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+}
+
+:root[data-touch] .btn-link {
+    min-width: var(--touch-target);
+}
+
+:root[data-touch] .icon-button {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+}
+
+:root[data-touch] .form-control,
+:root[data-touch] .form-control-sm,
+:root[data-touch] .form-select,
+:root[data-touch] .form-select-sm {
+    min-height: 48px;
+    font-size: 1.0625rem;
+}
+
+:root[data-touch] .form-label,
+:root[data-touch] .form-label.small {
+    font-size: 0.9375rem;
+}
+
+:root[data-touch] .form-check {
+    min-height: var(--touch-target);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+:root[data-touch] .form-check-input {
+    width: 1.5rem;
+    height: 1.5rem;
+    margin-top: 0;
+}
+
+/* Quantities: wide enough to read and correct at arm's length. */
+:root[data-touch] input[inputmode="decimal"] {
+    font-size: 1.375rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Table rows a finger can hit, and links inside them. */
+:root[data-touch] .table > :not(caption) > * > * {
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
+}
+
+/* ---- Forms on the floor ---- */
+
+/* A form's actions stay at the foot of the screen while its fields scroll. */
+:root[data-touch] .form-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    padding: var(--space-3) 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+}
+
+    :root[data-touch] .form-actions > .btn-primary {
+        flex: 1 1 12rem;
+    }
+
+/* A field that needs the row's width for its buttons (a reason picker beside a narrower field). */
+:root[data-touch] .touch-full {
+    flex: 0 0 100%;
+    max-width: 100%;
+}
+
+/* A page's main action comes first among its header buttons, where the hand reaches first. */
+:root[data-touch] .inv-head-tools > .btn-primary {
+    order: -1;
+}
+
+/* ---- Floor board ---- */
+
+:root[data-touch] .floor-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr));
+}
+
+/* A line with a form open takes the board's whole width, so the form isn't squeezed into one column. */
+:root[data-touch] .floor-card:has(form, .floor-inline) {
+    grid-column: 1 / -1;
+}
+
+/* Readable at arm's length: the card's detail lines and the line's name. */
+:root[data-touch] .floor-card .small {
+    font-size: 0.9375rem;
+}
+
+:root[data-touch] .floor-card h2 {
+    font-size: 1.25rem;
+}
+
+/* The running job's actions share the row, primary first. */
+:root[data-touch] .floor-actions > .btn {
+    flex: 1 1 8rem;
+}
+
+:root[data-touch] .floor-next > li {
+    padding: var(--space-3) 0;
+}
+
+/* ---- Reason picker ---- */
+
+.reason-grid-group + .reason-grid-group {
+    margin-top: var(--space-3);
+}
+
+.reason-grid-title {
+    font: var(--type-label);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: var(--space-1);
+}
+
+.reason-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    gap: var(--space-2);
+}
+
+    .reason-grid > .btn {
+        min-height: 56px;
+        white-space: normal;
+        text-align: left;
+        line-height: 1.2;
+    }
+
+        .reason-grid > .btn[aria-pressed="true"] {
+            background: var(--accent-soft);
+            border-color: var(--accent);
+            color: var(--text);
+            box-shadow: inset 0 0 0 1px var(--accent);
+            font-weight: 600;
+        }
