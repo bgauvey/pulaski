@@ -448,6 +448,8 @@ Treat these as working assumptions; confirm with Bill before building anything t
   `tools/Pulaski.ProcessSimulator` publishes EXT-01-EXT's melt temperature and profile width, with a shift every 30 min; the setup also
   charts them, MELT-TEMP and PROFILE-WIDTH with a spec and manual limits, and runs work order DEMO-0001 on EXT-01 so they are sampled);
   sign in as `admin` / `Pulaski-demo-1` once the setup has finished. `docker compose down -v` drops its data.
+- Network-outage test (D-103): `deploy/outage-test/run.sh` (`OUTAGE_MINUTES`, default 10; `KEEP_UP=1`) runs the demo with Toxiproxy between edge and
+  API, cuts that link and checks nothing was lost; CI runs it nightly and by hand (`.github/workflows/outage.yml`), not on every push.
 - Run: `dotnet run --project src/Pulaski.Api` (http://localhost:5080, OpenAPI at
   `/openapi/v1.json`) and `dotnet run --project src/Pulaski.Web` (http://localhost:5090).
 - Machine data demo: `docker compose -f deploy/simulator/compose.yaml up -d` (broker + PackML simulators for EXT-01-EXT,

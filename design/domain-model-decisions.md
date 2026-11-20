@@ -2820,6 +2820,23 @@ with `ApplicationArea` (sender `Pulaski`, time, `BODID` = event id = `Idempotenc
 `application/xml` (`FeedMessage`), signed and retried as any delivery, by webhook or MQTT. One document per change, not coalesced: identical ones are
 harmless under Replace. The delivery list names the job (`DeliveryDto.JobNumber`) and searches by job number.
 
+## Network-outage test (D-103, proposed)
+
+The charter promises that a line keeps its data through a network outage: the edge buffers (D-050) and forwards once Pulaski is back. Decided
+(the user's choices): **an end-to-end test on the demo stack, in its own workflow** (`.github/workflows/outage.yml`, nightly on main and by hand,
+since it takes about 20 minutes; not in `ci.yml`), with **Toxiproxy between the edge and the API**, so only that link goes while the API, the
+broker and the simulators carry on.
+
+`deploy/outage-test/compose.yaml` adds `toxiproxy` and points the demo's edge at it (`PULASKI_EDGE_API_URL`); `deploy/outage-test/run.sh` (also
+for local use, project `pulaski-outage`) makes the proxy `pulaski-api` (8081 → api:8080), waits for a steady demo, then drops every byte both
+ways (`timeout` toxics with timeout 0: a pulled cable, so requests hang until the edge's 30 s client timeout, not a refused connection) for
+`OUTAGE_MINUTES` (10), restores it and waits for readings from after the restore. It passes when:
+- the cut held: `edge_node.last_seen_at` is no later than 15 s after the cut;
+- the edge kept its stream (`edge_node.stream_id` unchanged: the buffer wasn't lost);
+- each process value of EXT-01-EXT has a reading for every minute cut off and no gap over the heartbeat + 30 s across the outage;
+- each counter (EXT-01-SAW, PACK1) counted during the outage, and its machine counts from the last one before the cut add up exactly to how far
+  its `raw_counter` moved.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

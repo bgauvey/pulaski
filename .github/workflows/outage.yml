@@ -1,0 +1,34 @@
+# The network-outage test (D-103): the demo runs, the edge node's link to the API is cut for 10 minutes while the machines carry on, and
+# nothing the edge collected meanwhile may be lost (deploy/outage-test/run.sh says exactly what is checked). It takes about 20 minutes, so it
+# runs nightly on main and when started by hand, not on every push or pull request (ci.yml).
+name: Outage test
+
+on:
+  schedule:
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: Minutes the edge is cut off from the API
+        default: "10"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: outage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  outage:
+    name: Edge cut off from the API
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Run the outage test
+        env:
+          OUTAGE_MINUTES: ${{ github.event.inputs.minutes || '10' }}
+        run: deploy/outage-test/run.sh

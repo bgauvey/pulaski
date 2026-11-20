@@ -1,0 +1,15 @@
+# The demo with Toxiproxy between the edge node and the API, for the network-outage test (D-103, deploy/outage-test/run.sh). Used on top of
+# the demo: docker compose -f compose.yaml -f deploy/outage-test/compose.yaml. The edge reaches the API only through the proxy, so cutting
+# the proxy cuts just that link: the API, the broker and the simulators carry on, and the edge keeps collecting into its buffer.
+services:
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.9.0
+    ports:
+      - "${PULASKI_TOXIPROXY_PORT:-8474}:8474"
+
+  # The setup writes the address the edge uses into its environment file; the proxy named pulaski-api listens on 8081 (run.sh makes it).
+  demo-setup:
+    environment:
+      PULASKI_EDGE_API_URL: http://toxiproxy:8081/
+    depends_on:
+      - toxiproxy
