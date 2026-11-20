@@ -139,6 +139,10 @@ else
             {
                 <h2 id="station-who" class="h3 mb-1">@name</h2>
                 <p class="text-muted">Signed on at @_station.TerminalName. Badge again to switch person; after @_station.IdleMinutes minutes without anything done here, the station signs you off.</p>
+                @if (StationView.Limits(_station) is { } limits)
+                {
+                    <div class="drawer-alert mb-3" role="status"><Icon Name="info" Size="20" /><span>@limits</span></div>
+                }
                 <EditForm Model="Input" FormName="station" OnSubmit="SignOff" method="post">
                     <div class="station-actions">
                         <button type="submit" name="Input.Action" value="sign-off" class="btn btn-outline-secondary">Sign off</button>

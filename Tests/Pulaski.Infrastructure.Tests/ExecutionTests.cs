@@ -441,6 +441,35 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task At_a_station_a_badged_person_acts_with_their_users_role_and_someone_without_a_user_only_records_time()
+    {
+        var plant = await PlantAsync();
+        var terminal = new Pulaski.Application.Labor.TerminalRecord(
+            Guid.CreateVersion7(), plant.Site, "ST-" + _s, "Extruder station", plant.Site, plant.Extruder, "badge", true, TestTime.Now);
+        await db.SendAsync(new Pulaski.Application.Security.CreateUserCommand(
+            "op." + _s, "Olu " + _s, null, "Temporary-pass-1", Pulaski.Domain.Security.Roles.Operator, plant.Site));
+        await db.SendAsync(new Pulaski.Application.Security.CreateUserCommand(
+            "pl." + _s, "Pia " + _s, null, "Temporary-pass-1", Pulaski.Domain.Security.Roles.Planner, plant.Site));
+        CreatedResponse operatorPerson = await db.SendAsync(new Pulaski.Application.Labor.CreatePersonCommand(plant.Site, "800-" + _s, "Olu " + _s, null, "op." + _s));
+        CreatedResponse plannerPerson = await db.SendAsync(new Pulaski.Application.Labor.CreatePersonCommand(plant.Site, "801-" + _s, "Pia " + _s, null, "pl." + _s));
+        CreatedResponse noUser = await db.SendAsync(new Pulaski.Application.Labor.CreatePersonCommand(plant.Site, "802-" + _s, "Noa " + _s, null, null));
+
+        // The operator's role runs jobs, reports and codes stops here; the access is the same the signed-in app uses.
+        var olu = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, operatorPerson.Id, null));
+        Assert.Equal(("Olu " + _s, true, true, true, true), (olu.PersonName, olu.PersonIsUser, olu.CanRunJobs, olu.CanReport, olu.CanCodeStops));
+        var security = db.Services.GetRequiredService<Pulaski.Application.Security.ISecurityReadStore>();
+        var access = await security.GetPersonAccessAsync(operatorPerson.Id, TestTime.Now, CancellationToken.None);
+        Assert.Equal(("op." + _s).ToLowerInvariant(), access!.Username);
+
+        // A planner's role does none of them on the floor; someone without a user only records time.
+        var pia = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, plannerPerson.Id, null));
+        Assert.Equal((true, false, false, false), (pia.PersonIsUser, pia.CanRunJobs, pia.CanReport, pia.CanCodeStops));
+        var noa = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, noUser.Id, null));
+        Assert.Equal((false, false, false, false), (noa.PersonIsUser, noa.CanRunJobs, noa.CanReport, noa.CanCodeStops));
+        Assert.Null(await security.GetPersonAccessAsync(noUser.Id, TestTime.Now, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task A_paused_job_frees_the_line_and_the_site_policy_sets_the_tolerance()
     {
         var plant = await PlantAsync();

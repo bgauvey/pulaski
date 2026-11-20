@@ -2896,6 +2896,13 @@ user's role permissions at the terminal's site; a person without one may only re
 `POST /api/terminal/station` reads the station for a ticket, an expired or foreign one reading as no one (`BadgeTickets.PersonOrNull`). The web
 keeps the ticket in `.Pulaski.Station` (path `/terminal`, expiring with it). Reads don't renew the ticket; actions will (#147–#149).
 
+**Who acts (#150).** `ISecurityReadStore.GetPersonAccessAsync` gives the person's user's `UserAccess` (null without a user), the same the
+signed-in app checks. The station shows `PersonIsUser`, `CanRunJobs` (`job.execute`), `CanReport` (`production.report`), `CanCodeStops`
+(`downtime.code`) at the terminal's site. Station actions call `StationActing.BeginAsync` (API): ticket → person → access, refused
+(`ForbiddenException`) without a user, permission or active user; then the request acts as that user (`HttpRequestContext.ActorId` = the
+user's actor, `UserId` = theirs, `IRequestContext.Source` = `EventSources.Station(code)`, `pulaski-api/terminal/CODE`) and the ticket is
+renewed for another `StationIdle`. Kiosk labor keeps acting as `terminal:<code>`.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

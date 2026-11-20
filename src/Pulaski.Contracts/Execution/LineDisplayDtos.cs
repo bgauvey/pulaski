@@ -86,6 +86,15 @@ public sealed record StationDto
     public Guid? PersonId { get; init; }
     public string? PersonName { get; init; }
 
+    /// <summary>
+    /// Whether the signed-on person has a Pulaski user (#150), and what that user may do at the terminal's site: run jobs (start, pause,
+    /// complete), report production, code stops. Without a user, only labor.
+    /// </summary>
+    public bool PersonIsUser { get; init; }
+    public bool CanRunJobs { get; init; }
+    public bool CanReport { get; init; }
+    public bool CanCodeStops { get; init; }
+
     /// <summary>Minutes without anything done before the station signs its person off.</summary>
     public int IdleMinutes { get; init; }
 }

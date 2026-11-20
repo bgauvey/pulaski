@@ -1,5 +1,7 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Labor;
+using Pulaski.Application.Security;
+using Pulaski.Domain.Security;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Labor;
 
@@ -14,7 +16,9 @@ public sealed record GetStationQuery(TerminalRecord Terminal, Guid? PersonId, st
 internal sealed class GetStationHandler(
     IQueryHandler<GetLineDisplayQuery, LineDisplayDto> display,
     IQueryHandler<GetLineBoardQuery, IReadOnlyList<LineBoardRowDto>> board,
-    IQueryHandler<GetTerminalStatusQuery, TerminalStatusDto> status) : IQueryHandler<GetStationQuery, StationDto>
+    IQueryHandler<GetTerminalStatusQuery, TerminalStatusDto> status,
+    ISecurityReadStore security,
+    TimeProvider timeProvider) : IQueryHandler<GetStationQuery, StationDto>
 {
     public async Task<StationDto> HandleAsync(GetStationQuery query, CancellationToken cancellationToken)
     {
@@ -26,6 +30,10 @@ internal sealed class GetStationHandler(
             : (await board.HandleAsync(new GetLineBoardQuery(terminal.SiteId), cancellationToken)).FirstOrDefault(r => r.LineId == line.LineId)?.Next ?? [];
         var person = query.PersonId is { } personId ? await status.HandleAsync(new GetTerminalStatusQuery(terminal, personId), cancellationToken) : null;
 
+        // What they may do here is their user's role at the terminal's site (#150); without a user, only labor.
+        var access = query.PersonId is { } id ? await security.GetPersonAccessAsync(id, timeProvider.GetUtcNow(), cancellationToken) : null;
+        bool May(string permission) => access?.Can(permission, terminal.SiteId) == true;
+
         return new StationDto
         {
             TerminalName = terminal.Name,
@@ -36,6 +44,10 @@ internal sealed class GetStationHandler(
             Next = next,
             PersonId = person?.PersonId,
             PersonName = person?.PersonName,
+            PersonIsUser = access is not null,
+            CanRunJobs = May(Permissions.JobExecute),
+            CanReport = May(Permissions.ProductionReport),
+            CanCodeStops = May(Permissions.DowntimeCode),
             IdleMinutes = (int)Domain.Labor.TerminalRules.StationIdle.TotalMinutes,
         };
     }

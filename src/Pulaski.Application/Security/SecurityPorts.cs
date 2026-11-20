@@ -86,6 +86,12 @@ public interface ISecurityReadStore
     /// <summary>What the user an identity provider vouched for may do now; null when Pulaski doesn't know them.</summary>
     Task<UserAccess?> GetAccessAsync(string issuer, string subject, DateTimeOffset now, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// What the user a person is linked to (<c>core.person.app_user_id</c>) may do now, for someone who badged at an operator station (#150);
+    /// null when the person has no user.
+    /// </summary>
+    Task<UserAccess?> GetPersonAccessAsync(Guid personId, DateTimeOffset now, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<UserDto>> ListUsersAsync(DateTimeOffset now, CancellationToken cancellationToken);
 
     Task<UserDto?> GetUserAsync(Guid id, DateTimeOffset now, CancellationToken cancellationToken);
