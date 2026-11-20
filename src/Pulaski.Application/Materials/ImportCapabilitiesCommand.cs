@@ -3,6 +3,7 @@ using Pulaski.Application.Errors;
 using Pulaski.Application.Units;
 using Pulaski.Contracts.Materials;
 using Pulaski.Domain;
+using Pulaski.Domain.Inventory;
 using Pulaski.Domain.Materials;
 
 namespace Pulaski.Application.Materials;
@@ -145,7 +146,10 @@ internal sealed class ImportCapabilitiesHandler(
             row.BatchSize is { } batch ? batch.Value : current?.BatchSize,
             row.BatchTolerancePct is { } tolerance ? tolerance.Value : current?.BatchTolerancePct,
             current?.UnitsPerCount,
-            current?.LotRule);
+            new LotCutRule(
+                row.LotSize is { } lotSize ? lotSize.Value : current?.LotCuts.Size,
+                row.LotHours is { } lotHours ? lotHours.Value : current?.LotCuts.Hours,
+                row.LotByShift?.Value ?? current?.LotCuts.ByShift ?? false));
         await writes.MaterialForRateAsync(material.Id, unit.Id, current?.RateUomId, cancellationToken);
         var unitCode = await AddCapabilityHandler.UnitCodeAsync(units, unit.Id, cancellationToken);
 
@@ -289,6 +293,9 @@ internal sealed class ImportCapabilitiesHandler(
         Add(before.IsPreferred != after.IsPreferred, "preferred");
         Add(before.BatchSize != after.BatchSize, "batch_size");
         Add(before.BatchTolerancePct != after.BatchTolerancePct, "batch_tolerance");
+        Add(before.LotCuts.Size != after.LotCuts.Size, "lot_size");
+        Add(before.LotCuts.Hours != after.LotCuts.Hours, "lot_hours");
+        Add(before.LotCuts.ByShift != after.LotCuts.ByShift, "lot_by_shift");
         Add(before.EffectiveTo != after.EffectiveTo, "effective_to");
         return changes;
     }
