@@ -333,14 +333,9 @@ else
                             <tr @key="(s.Id, 1)">
                                 <td colspan="@Columns">
                                     <form class="d-flex flex-wrap gap-2 align-items-center" @onsubmit="SaveCodeAsync" @onsubmit:preventDefault>
-                                        <select class="form-select w-auto" aria-label="Reason for the stop" value="@(_reasonId?.ToString() ?? "")"
-                                                @onchange="@(e => _reasonId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
-                                            <option value="">Reason…</option>
-                                            @foreach (var r in _reasons)
-                                            {
-                                                <option value="@r.Id">@MachineProfileView.ReasonLabel(r)</option>
-                                            }
-                                        </select>
+                                        <div class="touch-full">
+                                            <ReasonPicker Reasons="_reasons" SelectClass="w-auto" AriaLabel="Reason for the stop" OptionLabel="MachineProfileView.ReasonLabel" @bind-Value="_reasonId" />
+                                        </div>
                                         <input class="form-control inv-grow" maxlength="1000" aria-label="Comment" placeholder="@(NeedsComment ? "Comment (needed for this reason)" : "Comment (optional)")"
                                                @bind="_comment" @bind:event="oninput" />
                                         @if (s.MappedReasonId is { } mapped && _reasons.Any(r => r.Id == mapped))

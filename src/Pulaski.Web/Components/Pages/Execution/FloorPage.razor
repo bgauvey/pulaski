@@ -148,7 +148,7 @@ else
                                 }
                             </div>
                         }
-                        <div class="d-flex flex-wrap gap-2 mt-2">
+                        <div class="d-flex flex-wrap gap-2 mt-2 floor-actions">
                             @if (r.JobType == "production" && CanReport)
                             {
                                 <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => OpenReportAsync(r.JobId)">Report</button>

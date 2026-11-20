@@ -88,6 +88,7 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
   - **Configure:** **Equipment**, **Materials**, **Processes**, **BOMs**, **Units**, **Reasons**, **Shifts**, **Site settings**, **Integrations**, **People** (and **Users**, for administrators, with tabs for users, roles and permissions): the setup you do once and change now and then.
   - The ☰ button at the top left collapses the menu to icons, to make room on small screens.
 - **You (top right).** Your name and roles; the padlock changes your password, and the door signs you out.
+- **Touch layout (top right).** The hand button switches to larger buttons and fields for a touch screen; see [Use a touch screen](#use-a-touch-screen).
 - **Theme (top right).** The sun/moon button switches between light and dark.
 - **Main area.** The page you picked.
 
@@ -827,6 +828,26 @@ Pulaski lays work end to end on each line, so two jobs on a line only overlap wh
 ### The board
 
 Each line is a card. A running line shows its job with the run's length, good quantity against the plan (with a bar), scrap, and how much more the run can hold at the line's rate. Below it, **Next** lists the line's other open jobs in sequence, each with its status and, when it can't start yet, why (*Waiting for operation 10 Extrude to end*) and when (*Ready at 14:30*). Departments with jobs waiting on them have a card of their own. The board refreshes every 15 seconds while no form is open.
+
+### Use a touch screen
+
+On a tablet or a touch panel at the line, the floor screens switch to a **touch layout**: larger buttons and fields, a number keypad for
+quantities, and reasons as buttons instead of a list.
+
+1. On a tablet the touch layout comes on by itself. On a touch panel that works like a mouse (many industrial screens do), click the hand
+   button at the top right to switch it on; it is highlighted while on.
+2. The choice is kept on that device, so a line's panel stays in touch layout and a desk computer stays as it was.
+3. Click the hand button again to switch back.
+
+In detail:
+
+- **The floor board.** A line's **Report**, **Pause** and **Complete** fill the card's width; a line with a form open takes the whole board's
+  width.
+- **Forms.** **Report production** and **Pause** or **Complete** keep their buttons at the foot of the screen while you scroll. Quantity
+  boxes open a number keypad on tablets.
+- **Reasons as buttons.** Why a job stops, why output was scrapped and why a machine stopped (**Machines**, stops to code) are large buttons,
+  grouped as the reason tree groups them; the chosen one is highlighted. With a mouse they stay a dropdown.
+- **Everywhere else** buttons, fields and table rows are larger too, and a page's main action comes first among its buttons.
 
 ### Start a job
 
