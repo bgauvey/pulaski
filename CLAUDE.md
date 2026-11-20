@@ -391,7 +391,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   production actions (people without a user: labor only): `GetPersonAccessAsync`, actions through `StationActing.BeginAsync` (actor = user,
   event source `EventSources.Station(code)`, ticket renewed). Jobs: `/api/terminal/station/{start|pause|complete}`, only the line's
   running or next jobs (`StationJobs.IsOnLine`), the floor's own commands. Report: `/api/terminal/station/report` (`StationReportDto`; from the
-  machine = the figures shown + their `MachineThrough`).
+  machine = the figures shown + their `MachineThrough`). Stops: `StopsToCode` (line + below, uncoded, 12 h, open first), coded through
+  `/api/terminal/station/code-stop`.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

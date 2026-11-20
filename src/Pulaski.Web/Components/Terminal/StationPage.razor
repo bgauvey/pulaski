@@ -89,6 +89,80 @@ else
             {
                 <div class="drawer-alert is-warning mb-3" role="status"><Icon Name="stop" Size="20" /><span>@stop</span></div>
             }
+            @if (_station.StopsToCode.Count > 0)
+            {
+                @* Stops waiting for a reason (#149): asked for here, at the line, while it is fresh. *@
+                <section class="station-panel station-stops" aria-labelledby="station-stops">
+                    <h2 id="station-stops" class="h5">@StationView.StopsTitle(_station.StopsToCode.Count)</h2>
+                    @if (_station.PersonName is null)
+                    {
+                        <p class="mb-0">Badge in to give @(_station.StopsToCode.Count == 1 ? "its reason" : "their reasons").</p>
+                    }
+                    else if (!_station.CanCodeStops)
+                    {
+                        <p class="text-muted mb-0">Your role doesn't code stops; ask someone who does.</p>
+                    }
+                    <ul class="station-next">
+                        @foreach (var s in _station.StopsToCode.Take(5))
+                        {
+                            <li @key="s.Id">
+                                <div class="d-flex justify-content-between gap-2">
+                                    <span><span class="fw-semibold">@s.EquipmentCode</span> · @StationView.StopWhen(s, DateTimeOffset.UtcNow)</span>
+                                    @if (s.MappedReasonName is { } mapped)
+                                    {
+                                        <span class="text-muted">the machine says @mapped</span>
+                                    }
+                                    else if (s.StopCodeText is { } text)
+                                    {
+                                        <span class="text-muted">@text</span>
+                                    }
+                                </div>
+                                @if (_station.CanCodeStops && _station.CodingReasons.TryGetValue(s.EquipmentId, out var choices))
+                                {
+                                    <EditForm Model="Input" FormName="@($"station-stop-{s.Id:N}")" OnSubmit="ActAsync" method="post" class="mt-2">
+                                        <input type="hidden" name="Input.StopId" value="@s.Id" />
+                                        @if (_codingStop == s.Id)
+                                        {
+                                            <label class="form-label" for="station-stop-comment">Comment <span class="text-muted">(reasons marked * need one)</span></label>
+                                            <InputText id="station-stop-comment" class="form-control mb-2" maxlength="1000" @bind-Value="Input.Comment" />
+                                            <div class="station-actions mb-2">
+                                                @if (s.MappedReasonId is { } mappedId && choices.Any(r => r.Id == mappedId))
+                                                {
+                                                    <button type="submit" name="Input.Reason" value="@($"code:{mappedId}")" class="btn btn-primary">Confirm @s.MappedReasonName</button>
+                                                }
+                                                <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">Back</button>
+                                            </div>
+                                            @foreach (var group in ReasonPickerView.Groups(choices))
+                                            {
+                                                <div class="reason-grid-group">
+                                                    @if (group.Title is { } title)
+                                                    {
+                                                        <div class="reason-grid-title">@title</div>
+                                                    }
+                                                    <div class="reason-grid">
+                                                        @foreach (var reason in group.Reasons)
+                                                        {
+                                                            <button type="submit" name="Input.Reason" value="@($"code:{reason.Id}")" class="btn btn-outline-secondary" @key="reason.Id">
+                                                                @reason.Name@(reason.RequiresComment ? " *" : "")
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <div class="station-actions">
+                                                <button type="submit" name="Input.Action" value="choose-stop" class="btn btn-primary">Give the reason</button>
+                                            </div>
+                                        }
+                                    </EditForm>
+                                }
+                            </li>
+                        }
+                    </ul>
+                </section>
+            }
             <section class="station-panel" aria-labelledby="station-job">
                 @if (line.Running is { } job)
                 {
@@ -322,6 +396,7 @@ else
     private string? _stopping;
     private string? _actionError;
     private bool _reporting;
+    private Guid? _codingStop;
     private IReadOnlyList<string> _notes = [];
 
     private string? Secret => TerminalCookie.Get(HttpContext);
@@ -387,10 +462,40 @@ else
     /// <summary>Signing off, choosing to pause or complete, and the job actions themselves (#147), as the person signed on.</summary>
     private async Task ActAsync()
     {
-        // A reason button carries what it stops and the reason: "pause:<id>" or "complete:<id>".
+        // A reason button carries what it is for and the reason: "pause:<id>", "complete:<id>" or "code:<id>" (a stop's).
         var (action, reasonId) = Input.Reason?.Split(':') is [var stop, var id] && Guid.TryParse(id, out var reason) ? (stop, (Guid?)reason) : (Input.Action, null);
         switch (action)
         {
+            case "choose-stop":
+                _codingStop = Input.StopId;
+                return;
+            case "code" when Input.StopId is { } stopId && reasonId is { } stopReason:
+                try
+                {
+                    var coded = await Api.StationCodeStopAsync(Secret!, new StationStopRequest
+                    {
+                        Ticket = TerminalCookie.GetStation(HttpContext),
+                        Line = LineCode,
+                        StopId = stopId,
+                        ReasonCodeId = stopReason,
+                        Comment = Input.Comment,
+                    });
+                    TerminalCookie.SetStation(HttpContext, coded.Ticket, coded.TicketExpiresAt);
+                    _station = coded.Station;
+                    _notes = coded.Notes;
+                }
+                catch (ApiException ex)
+                {
+                    _actionError = StationView.Problem(ex.Detail ?? ex.Title, ex.Errors);
+                    _codingStop = ex.Status == 401 ? null : stopId;
+                    if (ex.Status == 401)
+                    {
+                        TerminalCookie.ClearStation(HttpContext);
+                        await LoadAsync(null);
+                    }
+                }
+
+                return;
             case "sign-off":
                 TerminalCookie.ClearStation(HttpContext);
                 Navigation.NavigateTo(Here, forceLoad: true);
@@ -485,6 +590,7 @@ else
         public decimal? Scrap { get; set; }
         public Guid? ScrapReasonId { get; set; }
         public Guid? LocationId { get; set; }
+        public Guid? StopId { get; set; }
         public decimal? MachineGood { get; set; }
         public decimal? MachineScrap { get; set; }
         public Guid? MachineUomId { get; set; }

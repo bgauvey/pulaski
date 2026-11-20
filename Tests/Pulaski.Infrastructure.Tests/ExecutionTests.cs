@@ -491,6 +491,47 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_station_lists_its_lines_stops_without_a_reason_and_offers_reasons_to_whoever_may_code_them()
+    {
+        var plant = await PlantAsync();
+        var terminal = new Pulaski.Application.Labor.TerminalRecord(
+            Guid.CreateVersion7(), plant.Site, "ST-" + _s, "Extruder station", plant.Site, plant.Extruder, "badge", true, TestTime.Now);
+        await db.SendAsync(new Pulaski.Application.Security.CreateUserCommand(
+            "op." + _s, "Olu " + _s, null, "Temporary-pass-1", Pulaski.Domain.Security.Roles.Operator, plant.Site));
+        CreatedResponse olu = await db.SendAsync(new Pulaski.Application.Labor.CreatePersonCommand(plant.Site, "810-" + _s, "Olu " + _s, null, "op." + _s));
+        CreatedResponse noa = await db.SendAsync(new Pulaski.Application.Labor.CreatePersonCommand(plant.Site, "811-" + _s, "Noa " + _s, null, null));
+
+        // An ended stop an hour ago and one still open on the extruder, neither coded; one on the packer, another line.
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO ts.downtime (started_at, ended_at, equipment_id, packml_state) VALUES
+                    (now() - interval '70 minutes', now() - interval '60 minutes', @Extruder, 2),
+                    (now() - interval '5 minutes', NULL, @Extruder, 2),
+                    (now() - interval '20 minutes', now() - interval '10 minutes', @Packer, 2)
+                """,
+                new { plant.Extruder, plant.Packer });
+        }
+
+        // Waiting, the station already lists them, open first, but offers no reasons; nor to someone without a user.
+        var waiting = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, null));
+        Assert.Equal(2, waiting.StopsToCode.Count);
+        Assert.Null(waiting.StopsToCode[0].EndedAt);
+        Assert.All(waiting.StopsToCode, s => Assert.Equal(plant.Extruder, s.EquipmentId));
+        Assert.Empty(waiting.CodingReasons);
+        Assert.Empty((await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, noa.Id, null))).CodingReasons);
+
+        // An operator gets the extruder's reasons; once coded, a stop leaves the list.
+        var signedOn = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, olu.Id, null));
+        var reasons = signedOn.CodingReasons[plant.Extruder];
+        Assert.NotEmpty(reasons);
+        var ended = signedOn.StopsToCode[1];
+        await db.SendAsync(new Pulaski.Application.MachineData.CodeDowntimeCommand(ended.Id, ended.StartedAt, reasons[0].Id, "jam cleared"));
+        Assert.Single((await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, olu.Id, null))).StopsToCode);
+    }
+
+    [Fact]
     public async Task A_paused_job_frees_the_line_and_the_site_policy_sets_the_tolerance()
     {
         var plant = await PlantAsync();

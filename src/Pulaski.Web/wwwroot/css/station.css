@@ -93,3 +93,9 @@
     letter-spacing: 0.1em;
     text-align: center;
 }
+
+/* Stops waiting for a reason (#149) stand out at the top of the line's column. */
+.station-shell .station-stops {
+    border-color: var(--warning);
+    border-width: 2px;
+}

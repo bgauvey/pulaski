@@ -69,4 +69,14 @@ public class StationViewTests
         Assert.Null(StationView.LotHint(job with { LotSize = null }, "FG"));
         Assert.Null(StationView.LotHint(job, null));
     }
+
+    [Fact]
+    public void Stops_say_how_long_and_how_long_ago()
+    {
+        var now = new DateTimeOffset(2026, 11, 20, 14, 0, 0, TimeSpan.Zero);
+        var open = new Pulaski.Contracts.MachineData.DowntimeDto { Id = Guid.NewGuid(), EquipmentId = Guid.NewGuid(), EquipmentCode = "EXT-01-SAW", PackMlName = "Stopped", StartedAt = now.AddMinutes(-4) };
+        Assert.Equal("stopped 4 min ago, still stopped", StationView.StopWhen(open, now));
+        Assert.Equal("stopped for 12 min, 35 min ago", StationView.StopWhen(open with { StartedAt = now.AddMinutes(-47), EndedAt = now.AddMinutes(-35) }, now));
+        Assert.Equal(("A stop needs its reason", "3 stops need their reasons"), (StationView.StopsTitle(1), StationView.StopsTitle(3)));
+    }
 }

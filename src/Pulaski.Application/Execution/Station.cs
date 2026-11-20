@@ -1,11 +1,13 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.Labor;
+using Pulaski.Application.MachineData;
 using Pulaski.Application.Security;
 using Pulaski.Domain.Security;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Labor;
+using Pulaski.Contracts.MachineData;
 
 namespace Pulaski.Application.Execution;
 
@@ -23,6 +25,8 @@ internal sealed class GetStationHandler(
     IQueryHandler<GetJobExecutionQuery, JobExecutionDto> execution,
     IQueryHandler<GetMachineCountsQuery, MachineCountsDto> machine,
     IQueryHandler<ListInventoryLocationsQuery, IReadOnlyList<InventoryLocationDto>> locations,
+    IQueryHandler<ListStopsQuery, StopPageDto> stops,
+    IQueryHandler<ListCodingReasonsQuery, IReadOnlyList<ReasonCodeDto>> codingReasons,
     ISecurityReadStore security,
     TimeProvider timeProvider) : IQueryHandler<GetStationQuery, StationDto>
 {
@@ -40,6 +44,22 @@ internal sealed class GetStationHandler(
         var access = query.PersonId is { } id ? await security.GetPersonAccessAsync(id, timeProvider.GetUtcNow(), cancellationToken) : null;
         bool May(string permission) => access?.Can(permission, terminal.SiteId) == true;
 
+        // Stops waiting for a reason on the line (#149), open first, and the reasons to code them with for someone who may.
+        var now = timeProvider.GetUtcNow();
+        var toCode = line is null
+            ? []
+            : (await stops.HandleAsync(
+                new ListStopsQuery(new StopFilter(terminal.SiteId, line.LineId, now - StationStops.Window, now.AddMinutes(1), UncodedOnly: true, IncludeMicroStops: false)),
+                cancellationToken)).Stops.OrderBy(StationStops.Order).ToList();
+        var reasonsByMachine = new Dictionary<Guid, IReadOnlyList<ReasonCodeDto>>();
+        if (May(Permissions.DowntimeCode))
+        {
+            foreach (var equipmentId in toCode.Select(s => s.EquipmentId).Distinct())
+            {
+                reasonsByMachine[equipmentId] = await codingReasons.HandleAsync(new ListCodingReasonsQuery(equipmentId), cancellationToken);
+            }
+        }
+
         return new StationDto
         {
             TerminalName = terminal.Name,
@@ -49,6 +69,8 @@ internal sealed class GetStationHandler(
             Line = line,
             RunningJob = row?.Running,
             Next = row?.Next ?? [],
+            StopsToCode = toCode,
+            CodingReasons = reasonsByMachine,
             RunEndReasons = query.PersonId is null ? [] : await reasons.HandleAsync(new ListReasonCodesQuery("run_end", terminal.SiteId), cancellationToken),
             Report = row?.Running is { JobType: "production" } running && May(Permissions.ProductionReport)
                 ? await ReportAsync(running.JobId, terminal.SiteId, cancellationToken)
@@ -118,4 +140,14 @@ public static class StationReporting
             _ => $"Reported {made}; good output in lots {string.Join(", ", lots)}.",
         };
     }
+}
+
+/// <summary>The stops a station asks to code (#149). Pure.</summary>
+public static class StationStops
+{
+    /// <summary>How far back a station looks for stops without a reason: a long shift.</summary>
+    public static readonly TimeSpan Window = TimeSpan.FromHours(12);
+
+    /// <summary>The open stop first, then the most recent.</summary>
+    public static long Order(DowntimeDto stop) => stop.EndedAt is null ? long.MinValue : -stop.StartedAt.UtcTicks;
 }
