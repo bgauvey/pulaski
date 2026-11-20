@@ -333,6 +333,12 @@ public sealed class ExecutionTests(DatabaseFixture db)
         Assert.Equal((100m, 15m), (await QuantityAsync(first.Lot.LotId), await QuantityAsync(third.Lots[1].LotId)));
         Assert.Contains(third.Warnings, w => w.Code == "lot_cut" && w.Message.Contains("is full", StringComparison.Ordinal));
 
+        // The job page shows the rule and the lot being filled: the second, at staging.
+        var page = await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(plant.Extrude));
+        Assert.Equal((100m, (decimal?)null, false), (page.LotSize!.Value, page.LotHours, page.LotByShift));
+        var filling = Assert.Single(page.FillingLots);
+        Assert.Equal((third.Lots[1].LotId, 15m), (filling.LotId, filling.Quantity));
+
         // Reversing the 30 takes only its share back; the full lot isn't reopened, as the second is now the latest.
         var count = await ScalarAsync<Guid>(
             "SELECT id FROM core.reason_code WHERE site_id IS NULL AND reason_kind = 'inventory_adjustment' AND code = 'COUNT'", new { });
@@ -343,7 +349,7 @@ public sealed class ExecutionTests(DatabaseFixture db)
 
         // The operator starts a new lot: the next report goes into a third one. A number typed by hand still makes its own lot.
         var closed = await db.SendAsync(new StartNewLotCommand(plant.Extrude, "New pallet"));
-        Assert.Contains(third.Lots[1].LotNumber, closed.ClosedLots);
+        Assert.Equal([third.Lots[1].LotNumber!], closed.ClosedLots);
         var fifth = await Report(5m);
         Assert.NotEqual(third.Lots[1].LotId, fifth.Lot!.LotId);
         var typed = await Report(5m, "HAND-" + _s);

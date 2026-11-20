@@ -211,6 +211,15 @@ internal sealed partial class ExecutionQueries(NpgsqlDataSource dataSource, IUni
         return rows;
     }
 
+    // The job's latest lot at each location, where it can still be filled (D-104).
+    private const string FillingLotsSql = $"""
+        SELECT c.id AS lot_id, c.lot_number, loc.code AS location_code, c.quantity, {LotFillingSql.StartedAt} AS started_at
+        FROM ({LotFillingSql.LatestPerLocation}) c
+        LEFT JOIN core.equipment loc ON loc.id = c.location_equipment_id
+        WHERE {LotFillingSql.Fillable}
+        ORDER BY c.lot_number
+        """;
+
     public async Task<JobExecutionDto?> GetJobAsync(Guid jobId, DateTimeOffset now, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -227,6 +236,16 @@ internal sealed partial class ExecutionQueries(NpgsqlDataSource dataSource, IUni
         var reports = (await connection.QueryAsync<ProductionReportDto>(new CommandDefinition(Reports, args, cancellationToken: cancellationToken))).AsList();
         var partials = (await connection.QueryAsync<PartialBatchDto>(new CommandDefinition(JobPartials, args, cancellationToken: cancellationToken))).AsList();
         var readiness = JobStatusIsStarted(job.Status) ? Readiness.Ready : await ReadinessAsync(connection, job, now, cancellationToken);
+
+        // Lots filled by reports (D-104): the line's rule now, and what its reports are filling.
+        var lotArgs = new { JobId = jobId, LineId = job.EquipmentId, job.MaterialId, At = now };
+        var lotRule = job.MaterialId is null
+            ? null
+            : await connection.QuerySingleOrDefaultAsync<LotFillingSql.RuleRow>(new CommandDefinition(LotFillingSql.Rule, lotArgs, cancellationToken: cancellationToken));
+        var lotRuleOn = lotRule is { Size: not null } or { Hours: not null } or { ByShift: true };
+        var filling = lotRuleOn
+            ? (await connection.QueryAsync<FillingLotDto>(new CommandDefinition(FillingLotsSql, lotArgs, cancellationToken: cancellationToken))).AsList()
+            : [];
 
         decimal? idealRate = null;
         if (runRows.Count > 0)
@@ -273,6 +292,10 @@ internal sealed partial class ExecutionQueries(NpgsqlDataSource dataSource, IUni
             BaseUomId = job.BaseUomId,
             BaseUomCode = job.BaseUomCode,
             PartialBatches = partials,
+            LotSize = lotRule?.Size,
+            LotHours = lotRule?.Hours,
+            LotByShift = lotRule?.ByShift ?? false,
+            FillingLots = filling,
             Runs = [.. runRows.Select(r => new JobRunDto
             {
                 Id = r.Id,

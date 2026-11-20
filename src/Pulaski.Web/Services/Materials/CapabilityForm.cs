@@ -27,6 +27,15 @@ public sealed class CapabilityForm
 
     /// <summary>Base units of the material per machine count (#27); blank for one.</summary>
     public decimal? UnitsPerCount { get; set; }
+
+    /// <summary>The line's production lots are full at this many base units (D-104); blank: no size.</summary>
+    public decimal? LotSize { get; set; }
+
+    /// <summary>... or this many hours after their first production; blank: no age.</summary>
+    public decimal? LotHours { get; set; }
+
+    /// <summary>... or at a change of shift.</summary>
+    public bool LotByShift { get; set; }
     public DateTime? From { get; set; }
     public DateTime? EndsOn { get; set; }
 
@@ -61,6 +70,9 @@ public sealed class CapabilityForm
             BatchSize = c.BatchSize is { } batch ? Trim(batch) : null,
             BatchTolerancePct = c.BatchTolerancePct is { } tolerance ? Trim(tolerance) : null,
             UnitsPerCount = c.UnitsPerCount is { } units ? Trim(units) : null,
+            LotSize = c.LotSize is { } lotSize ? Trim(lotSize) : null,
+            LotHours = c.LotHours is { } lotHours ? Trim(lotHours) : null,
+            LotByShift = c.LotByShift,
             From = fromDay,
             EndsOn = endsOn,
             _originalFrom = c.EffectiveFrom,
@@ -68,6 +80,30 @@ public sealed class CapabilityForm
             _originalFromDay = fromDay,
             _originalEndsOn = endsOn,
         };
+    }
+
+    /// <summary>
+    /// How a capability's production lots are cut (D-104), for its row: "lots of 1000 m, 8 h, a shift"; null when each report makes its own lot.
+    /// </summary>
+    public static string? LotRule(MaterialCapabilityDto c, string baseUomCode)
+    {
+        var parts = new List<string>();
+        if (c.LotSize is { } size)
+        {
+            parts.Add($"{Trim(size).ToString(System.Globalization.CultureInfo.InvariantCulture)} {baseUomCode}");
+        }
+
+        if (c.LotHours is { } hours)
+        {
+            parts.Add($"{Trim(hours).ToString(System.Globalization.CultureInfo.InvariantCulture)} h");
+        }
+
+        if (c.LotByShift)
+        {
+            parts.Add("a shift");
+        }
+
+        return parts.Count == 0 ? null : "Lots of at most " + string.Join(", ", parts);
     }
 
     /// <summary>The value without the trailing zeros of its stored scale (900.000000 becomes 900), for an input box.</summary>
@@ -101,6 +137,9 @@ public sealed class CapabilityForm
         BatchSize = BatchSize,
         BatchTolerancePct = BatchTolerancePct,
         UnitsPerCount = UnitsPerCount,
+        LotSize = LotSize,
+        LotHours = LotHours,
+        LotByShift = LotByShift,
         EffectiveFrom = From == Display.ToSite(now, timeZone).Date ? null : Display.FromSiteLocal(From, timeZone),
         EffectiveTo = Display.FromSiteLocal(EndsOn, timeZone),
     };
@@ -116,6 +155,9 @@ public sealed class CapabilityForm
         BatchSize = BatchSize,
         BatchTolerancePct = BatchTolerancePct,
         UnitsPerCount = UnitsPerCount,
+        LotSize = LotSize,
+        LotHours = LotHours,
+        LotByShift = LotByShift,
         EffectiveFrom = From == _originalFromDay && _originalFrom is { } f ? f : Display.FromSiteLocal(From, timeZone) ?? DateTimeOffset.MinValue,
         EffectiveTo = EndsOn == _originalEndsOn ? _originalTo : Display.FromSiteLocal(EndsOn, timeZone),
     };
