@@ -36,6 +36,22 @@ public static class LotFillingView
         return $"On {job.LineCode} reports fill a lot until {until}, then start the next.";
     }
 
+    /// <summary>
+    /// What a report with no lot number does on a line that fills lots, at the location chosen: "Goes into lot X (30 of 100 m); a full lot
+    /// starts the next."; null when the line doesn't fill lots or no location is chosen yet.
+    /// </summary>
+    public static string? Hint(JobExecutionDto job, string? locationCode)
+    {
+        if (!FillsLots(job) || locationCode is null)
+        {
+            return null;
+        }
+
+        return job.FillingLots.FirstOrDefault(l => string.Equals(l.LocationCode, locationCode, StringComparison.Ordinal)) is { } lot
+            ? $"Left blank, it goes into lot {lot.LotNumber} ({Holds(job, lot)}){(job.LotSize is null ? "" : "; what doesn't fit starts the next lot")}."
+            : "Left blank, it starts a new lot, which later reports fill.";
+    }
+
     /// <summary>How full a lot is: "700 of 1000 m", or "700 m" when lots have no size.</summary>
     public static string Holds(JobExecutionDto job, FillingLotDto lot) =>
         job.LotSize is { } size ? $"{FloorView.Qty(lot.Quantity)} of {FloorView.Qty(size)} {job.BaseUomCode}" : $"{FloorView.Qty(lot.Quantity)} {job.BaseUomCode}";

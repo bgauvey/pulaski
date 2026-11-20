@@ -368,6 +368,37 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task After_a_report_that_starts_several_lots_the_next_fills_the_last_one()
+    {
+        var plant = await PlantAsync();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE core.equipment_capability SET lot_size = 100 WHERE equipment_id = @Line", new { Line = plant.Extruder });
+        }
+
+        var started = await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE core.job_run SET started_at = started_at - interval '5 hours' WHERE id = @Id", new { Id = started.RunId });
+        }
+
+        // One report, three lots made in one transaction: 100, 100 and 50. The last one made is the one being filled, whatever their times and ids.
+        var big = await db.SendAsync(new ReportProductionCommand(plant.Extrude, null, 250m, 0m, null, null, plant.Staging));
+        Assert.Equal(3, big.Lots.Count);
+        Assert.Contains(big.Warnings, w => w.Code == "lot_cut" && w.Message.Contains("3 new lots", StringComparison.Ordinal));
+        var page = await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(plant.Extrude));
+        Assert.Equal(big.Lots[2].LotId, Assert.Single(page.FillingLots).LotId);
+
+        var next = await db.SendAsync(new ReportProductionCommand(plant.Extrude, null, 30m, 0m, null, null, plant.Staging));
+        Assert.Equal(big.Lots[2].LotId, Assert.Single(next.Lots).LotId);
+        Assert.Equal(80m, await ScalarAsync<decimal>("SELECT quantity FROM core.lot WHERE id = @Id", new { Id = big.Lots[2].LotId }));
+
+        // Filled to its size, it is off the page: the next report starts a new lot.
+        await db.SendAsync(new ReportProductionCommand(plant.Extrude, null, 20m, 0m, null, null, plant.Staging));
+        Assert.Empty((await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(plant.Extrude))).FillingLots);
+    }
+
+    [Fact]
     public async Task A_paused_job_frees_the_line_and_the_site_policy_sets_the_tolerance()
     {
         var plant = await PlantAsync();

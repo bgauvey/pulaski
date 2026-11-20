@@ -140,7 +140,12 @@
             <div class="col-sm-6">
                 <label class="form-label" for="rep-lot-@Job.JobId">Lot number</label>
                 <input id="rep-lot-@Job.JobId" class="form-control" maxlength="100" placeholder="Blank: @Job.JobNumber-01, -02…" @bind="_lotNumber"
-                       disabled="@(IsBatch && _goodBatches.Count + (_partial > 0 ? 1 : 0) > 1)" title="@(IsBatch ? "Each batch is numbered after the job" : null)" />
+                       disabled="@(IsBatch && _goodBatches.Count + (_partial > 0 ? 1 : 0) > 1)" title="@(IsBatch ? "Each batch is numbered after the job" : null)"
+                       aria-describedby="rep-lot-hint-@Job.JobId" />
+                @if (string.IsNullOrWhiteSpace(_lotNumber) && LotFillingView.Hint(Job, _locations.FirstOrDefault(l => l.Id == _locationId)?.Code) is { } lotHint)
+                {
+                    <div id="rep-lot-hint-@Job.JobId" class="form-text">@lotHint</div>
+                }
             </div>
         }
         @if (GoodTotal > 0 && _used.Count > 0)

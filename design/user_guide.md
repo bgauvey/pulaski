@@ -854,13 +854,14 @@ a number of hours after its first output, or at a change of shift.
    the line (or **Add line**).
 2. Under **Production lots on this line**, fill in any of **Lot size** (in the material's base unit), **Lot age, hours** and **New lot each
    shift**, and click **Save**. The line's row then says *Lots of at most …*.
-3. Report as usual, leaving **Lot number** blank. Each report adds to the job's lot being filled at that location; when it is full, the rest goes
+3. Report as usual, leaving **Lot number** blank: under it the form says which lot the output goes into. Each report adds to the job's lot being filled at that location; when it is full, the rest goes
    into new lots, each up to the size, and the report says which lots it filled and why a new one was started.
 4. The job's page shows **Lots being filled**: the rule, each lot, how much it holds and when it started. To start a new lot sooner (a new pallet,
    a quality break), click **Start a new lot**; the next report starts one.
 
 In detail:
 
+- A lot that is full or past its age is no longer listed under **Lots being filled**; at a change of shift it stays listed until the next report starts a new one.
 - A lot carries on only while nothing else has happened to it: once it is moved, held, split, packed or used, the next report starts a new one.
   A lot that was full stays full even if a report into it is reversed later.
 - A shift is the one on the line's schedule (its production day and shift); with no schedule, or between shifts, it is the site's calendar day.

@@ -39,4 +39,16 @@ public class LotFillingViewTests
         Assert.Equal("700 of 1,000 m", LotFillingView.Holds(Job(1000m), lot));
         Assert.Equal("700 m", LotFillingView.Holds(Job(hours: 8m), lot));
     }
+
+    [Fact]
+    public void The_report_form_says_where_output_with_no_lot_number_goes()
+    {
+        var lot = new FillingLotDto { LotId = Guid.NewGuid(), LotNumber = "WO-1-10-02", LocationCode = "FG", Quantity = 30m };
+        var job = Job(100m) with { FillingLots = [lot] };
+
+        Assert.Equal("Left blank, it goes into lot WO-1-10-02 (30 of 100 m); what doesn't fit starts the next lot.", LotFillingView.Hint(job, "FG"));
+        Assert.Equal("Left blank, it starts a new lot, which later reports fill.", LotFillingView.Hint(job, "RM"));
+        Assert.Null(LotFillingView.Hint(job, null));
+        Assert.Null(LotFillingView.Hint(Job(), "FG"));
+    }
 }

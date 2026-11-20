@@ -2848,7 +2848,8 @@ D-097), and no lot is made without a report.
 Only for a lot-tracked material not made in batches (each batch stays its own lot, D-036); refused on the capability otherwise.
 A report fills when it gives no lot number, counts now (a back-dated one makes its own lot), and goes to a location that keeps lots apart
 (where lots mix they join the balance, D-031). The lot being filled is computed, not stored (`ILotFillingStore.GetOpenLotForUpdateAsync`): the
-job's latest lot at the location, if it is available, loose, not closed, and has had nothing but the job's production on that line and
+job's latest lot at the location (by `label_no`, a sequence: lots one report makes can share a time, and UUIDv7 ids aren't ordered within a
+millisecond), locked first and then judged, if it is available, loose, not closed, and has had nothing but the job's production on that line and
 reversals of it; anything else (moved, held, split, packed, consumed) means a new lot. It is full at its size, after its hours since its first
 production, or once the shift differs (production day + shift code, `ShiftSchedule.ShiftAt` with no lead; between shifts or with no schedule
 the site-local day). `LotCutting.Parts` (pure) splits the good quantity: what fits into that lot, then new lots of at most the size (at most

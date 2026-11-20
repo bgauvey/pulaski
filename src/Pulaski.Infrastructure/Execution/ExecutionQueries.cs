@@ -243,8 +243,12 @@ internal sealed partial class ExecutionQueries(NpgsqlDataSource dataSource, IUni
             ? null
             : await connection.QuerySingleOrDefaultAsync<LotFillingSql.RuleRow>(new CommandDefinition(LotFillingSql.Rule, lotArgs, cancellationToken: cancellationToken));
         var lotRuleOn = lotRule is { Size: not null } or { Hours: not null } or { ByShift: true };
+        // A lot already full or past its age isn't filled any more: the next report starts a new one. (A change of shift is left to the report.)
+        var rule = new Pulaski.Domain.Inventory.LotCutRule(lotRule?.Size, lotRule?.Hours, false);
         var filling = lotRuleOn
-            ? (await connection.QueryAsync<FillingLotDto>(new CommandDefinition(FillingLotsSql, lotArgs, cancellationToken: cancellationToken))).AsList()
+            ? (await connection.QueryAsync<FillingLotDto>(new CommandDefinition(FillingLotsSql, lotArgs, cancellationToken: cancellationToken)))
+                .Where(l => Pulaski.Domain.Inventory.LotCutting.WhyCut(rule, new(l.LotId, l.LotNumber, l.Quantity, l.StartedAt), now, null, null) is null)
+                .ToList()
             : [];
 
         decimal? idealRate = null;

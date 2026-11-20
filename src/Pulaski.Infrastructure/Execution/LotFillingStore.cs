@@ -24,12 +24,15 @@ internal static class LotFillingSql
               AND NOT (e.reverses_event_id IS NOT NULL AND e.job_id = @JobId))
         """;
 
-    /// <summary>The job <c>@JobId</c>'s latest lot at each location.</summary>
+    /// <summary>
+    /// The job <c>@JobId</c>'s latest lot at each location. Latest by label number: a sequence, so strictly in the order lots were made, where
+    /// lots made by one report can share a time and UUIDv7 ids aren't ordered within a millisecond.
+    /// </summary>
     public const string LatestPerLocation = """
         SELECT DISTINCT ON (l.location_equipment_id) l.*
         FROM core.lot l
         WHERE l.produced_by_job_id = @JobId
-        ORDER BY l.location_equipment_id, l.created_at DESC, l.id DESC
+        ORDER BY l.location_equipment_id, l.label_no DESC
         """;
 
     /// <summary>When the lot <c>c</c>'s first production counted.</summary>
@@ -55,20 +58,22 @@ internal static class LotFillingSql
 /// <summary>Lots filled by reports (D-104): the line's rule, the lot being filled, and closing it; in the caller's transaction.</summary>
 internal sealed class LotFillingStore(DbSession session) : ILotFillingStore
 {
-    // The job's latest lot at the location, if it can still be filled.
-    private const string Open = $"""
-        WITH latest AS (
-            SELECT l.id, l.lot_number, l.quantity, l.status, l.container_id, l.produced_to, l.is_bulk
-            FROM core.lot l
-            WHERE l.produced_by_job_id = @JobId AND l.location_equipment_id = @LocationId
-            ORDER BY l.created_at DESC, l.id DESC
-            LIMIT 1)
-        SELECT c.id AS lot_id, c.lot_number, c.quantity, {LotFillingSql.StartedAt} AS started_at
-        FROM latest c
-        WHERE {LotFillingSql.Fillable}
+    // The job's latest lot at the location (by label number, see LatestPerLocation), locked before it is judged, so a move or hold committed
+    // meanwhile is seen: the next statement reads after the lock.
+    private const string LockLatest = """
+        SELECT l.id FROM core.lot l
+        WHERE l.produced_by_job_id = @JobId AND l.location_equipment_id = @LocationId
+        ORDER BY l.label_no DESC
+        LIMIT 1
+        FOR UPDATE
         """;
 
-    private const string Lock = "SELECT id FROM core.lot WHERE id = @Id FOR UPDATE";
+    // That lot, if it can still be filled.
+    private const string Open = $"""
+        SELECT c.id AS lot_id, c.lot_number, c.quantity, {LotFillingSql.StartedAt} AS started_at
+        FROM core.lot c
+        WHERE c.id = @Id AND {LotFillingSql.Fillable}
+        """;
 
     // Only the lots the job is filling: its latest at each location that can still be filled, as the job page shows them.
     private const string Close = $"""
@@ -86,14 +91,14 @@ internal sealed class LotFillingStore(DbSession session) : ILotFillingStore
 
     public async Task<OpenLot?> GetOpenLotForUpdateAsync(Guid jobId, Guid lineId, Guid locationId, CancellationToken cancellationToken)
     {
-        var row = await session.QuerySingleOrDefaultAsync<OpenRow>(Open, new { JobId = jobId, LineId = lineId, LocationId = locationId }, cancellationToken);
-        if (row is null)
+        var latest = await session.QuerySingleOrDefaultAsync<Guid?>(LockLatest, new { JobId = jobId, LocationId = locationId }, cancellationToken);
+        if (latest is not { } id)
         {
             return null;
         }
 
-        await session.ExecuteScalarAsync<Guid>(Lock, new { Id = row.LotId }, cancellationToken);
-        return new OpenLot(row.LotId, row.LotNumber, row.Quantity, row.StartedAt);
+        var row = await session.QuerySingleOrDefaultAsync<OpenRow>(Open, new { Id = id, JobId = jobId, LineId = lineId }, cancellationToken);
+        return row is null ? null : new OpenLot(row.LotId, row.LotNumber, row.Quantity, row.StartedAt);
     }
 
     public async Task<EquipmentShifts?> GetShiftsAsync(Guid lineId, CancellationToken cancellationToken) =>
