@@ -129,12 +129,13 @@ internal sealed class ReportProductionHandler(
     TimeProvider timeProvider,
     ILineBatchSizes? lineBatches = null,
     IFeedRepository? feeds = null,
-    IAllocationRepository? allocations = null) : ICommandHandler<ReportProductionCommand, ReportProductionResponse>
+    IAllocationRepository? allocations = null,
+    ILotFillingStore? lotFilling = null) : ICommandHandler<ReportProductionCommand, ReportProductionResponse>
 {
     public async Task<ReportProductionResponse> HandleAsync(ReportProductionCommand command, CancellationToken cancellationToken)
     {
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
-        var result = await new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds, allocations)
+        var result = await new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds, allocations, lotFilling)
             .ReportAsync(command, onStop: false, timeProvider.GetUtcNow(), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return result;
@@ -155,7 +156,8 @@ internal sealed class ProductionReporter(
     IIdGenerator ids,
     ILineBatchSizes? lineBatches = null,
     IFeedRepository? feeds = null,
-    IAllocationRepository? allocations = null)
+    IAllocationRepository? allocations = null,
+    ILotFillingStore? lotFilling = null)
 {
     /// <param name="command">The report.</param>
     /// <param name="onStop">The report is the partial batch of a run being ended now, by a pause or completion with a reason.</param>
@@ -295,9 +297,24 @@ internal sealed class ProductionReporter(
 
         await eventLog.AppendAsync(envelope, cancellationToken);
 
-        // Good output into lots: one for a quantity, one per batch, and one for a partial batch.
+        // Good output into lots: one for a quantity, one per batch, and one for a partial batch. On a line that fills lots (D-104), a quantity
+        // with no lot number typed and counting now goes into the lot being filled, and new ones as each fills.
         var lots = new List<LotTransactionResponse>();
-        var outputs = lineBatching is null
+        var filled = lineBatching is null && goodEntered > 0 && lotNumber is null && backdated is null && lotFilling is not null
+            ? await LotFilling.PlanAsync(lotFilling, inventory, job, material, run.EquipmentId, command.LocationId!.Value,
+                converter.Convert(goodEntered, unit, material.BaseUomId), occurredAt, cancellationToken)
+            : null;
+        if (filled is { } plan)
+        {
+            foreach (var part in plan.Parts)
+            {
+                lots.Add(await ProduceAsync(job, command, part.Quantity, material.BaseUomId, part.LotNumber, comment, run, now, reportId, cancellationToken));
+            }
+
+            warnings.AddRange(plan.Notes);
+        }
+
+        var outputs = filled is not null ? [] : lineBatching is null
             ? (goodEntered > 0 ? [goodEntered] : [])
             : command.GoodBatches.ToList();
         foreach (var quantity in outputs)

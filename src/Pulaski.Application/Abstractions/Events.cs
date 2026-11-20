@@ -148,6 +148,9 @@ public static class EventTypes
     public const string ProductionReported = "pulaski.job.production_reported.v1";
     public const string ProductionReversed = "pulaski.job.production_reversed.v1";
     public const string ProductionCorrected = "pulaski.job.production_corrected.v1";
+
+    /// <summary>An operator closed the lot a job was filling (D-104): its next report starts a new one.</summary>
+    public const string JobLotsClosed = "pulaski.job.lots_closed.v1";
     public const string ExecutionPolicyChanged = "pulaski.execution_policy.changed.v1";
     public const string WorkOrderDispatched = "pulaski.work_order.dispatched.v1";
     public const string WorkOrderUndispatched = "pulaski.work_order.undispatched.v1";

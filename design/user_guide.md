@@ -847,6 +847,15 @@ If the material changes on a line in automatic changeover mode, Pulaski starts a
 
 If the report is more than the run can hold, Pulaski refuses it and says how much more fits.
 
+**Lots filled by reports.** A line can fill a lot over many reports instead of making one per report, until the lot is full: at a size, a number
+of hours after its first output, or at a change of shift. This is set per line and material (the line's capability for the material; for now
+only through the API, `lotSize`, `lotHours` and `lotByShift` on `POST /api/materials/{id}/capabilities` and `PUT /api/capabilities/{id}`). Then a
+report with the **Lot number** left blank adds to the job's lot being filled there, and when that lot is full the rest goes into new lots, each up
+to the size; the report says which lots it filled and why a new one was started. A lot carries on only while nothing else has happened to it: once
+it is moved, held, split, packed or used, the next report starts a new one. A lot number typed by hand, a back-dated report, and a location where
+lots mix work as before. To start a new lot early (a new pallet, say), `POST /api/jobs/{id}/new-lot` closes the one being filled. It works only for a
+lot-tracked material that isn't made in batches.
+
 ### Report production from the machine
 
 When an [edge node](#20-edge-nodes-collecting-machine-data) collects the line's counters, a report can take its figures from them.
@@ -2879,6 +2888,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Only a number attribute standing for a quality characteristic is checked against specification limits. Balances' attribute values aren't in the values file.
 - **Reversing:** a chain undo follows a lot and the lots split off it, not merges into other lots, consumption into jobs or the output made from it; corrections made before this version can't be reversed.
 - **Genealogy through a silo is an estimate** from the declared movements. A level tag's readings confirm when it was empty and check the declared stock (see [How a silo flows](#how-a-silo-flows)), but they don't change how much each arrival gave. A reversed movement and its reversal are left out of the estimate, as if neither happened.
+- **Lots filled by reports** are set, and a new lot started, only through the API so far: the capability form and the job page don't offer them yet, and the capability CSV import doesn't read them.
 - **Production performance** carries no labor or machine time, and a job's lots are listed but not which lot each was made from. A production performance feed sends one document per change, even when several changes come together; the built-in ERP feed sends only events (add a feed for B2MML).
 - **Sending to other systems** is by HTTPS webhook or MQTT; there is no Kafka or other message queue yet, and retention is the same for every feed. Receivers' acknowledgements are recorded on the delivery, but nothing compares what the ERP booked with what Pulaski sent; there is no adapter for a particular ERP's or document system's own API. A certificate's file goes inline in the event, up to 10 MB; there is no download link for a receiver to fetch it later. The delivery list shows at most 200 at a time, with no paging beyond that.
 - **Allocations:** the background refresh is all or nothing for a site, and any change anywhere makes it run. Preferences are per site, not per material. A picking list is printed, not confirmed: fetching the lot is still an ordinary move. Approved alternates show only in allocations and on consumption, not in an order's planned components, and only a BOM's approved alternates can be allocated.

@@ -337,6 +337,12 @@ public sealed record ReportProductionRequest
     public DateTimeOffset? MachineThrough { get; init; }
 }
 
+/// <summary>Start a new lot (D-104): closes the one the job is filling.</summary>
+public sealed record StartNewLotRequest
+{
+    public string? Comment { get; init; }
+}
+
 /// <summary>What a start, pause, completion or reopening did, with notes such as downstream jobs now ready.</summary>
 /// <param name="JobId">The job that started: the changeover put in front of it when one was needed.</param>
 /// <param name="Version">That job's new version.</param>

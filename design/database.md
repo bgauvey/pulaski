@@ -559,6 +559,9 @@ The list of which material can run on which equipment. A production job may only
 | `batch_size` | qty | yes | The line's own batch size in the material's base unit (D-065); null uses the material's `batch_size`. Set only for a material made in batches; the rule stays the material's. Planning, moves, replacements and reports on the line use it. |
 | `batch_tolerance_pct` | numeric(5,2) | yes | The line's own batch tolerance, 0 to 50 percent (#85, D-075); null uses the material's `batch_tolerance_pct`. Set only for a material made in batches; counts under the near rule. Reports and partial batches on the line use it. |
 | `units_per_count` | numeric(18,6) | yes | Base units of the material one machine count makes on the line, after the tag's scale (#27, D-097); null is 1. Greater than zero (`capability_units_per_count_ck`). Reports from the machine use the capability in force when the run started. |
+| `lot_size` | qty | yes | Its production lots are full at this many base units (D-104, `capability_lot_size_ck`). A report fills the job's open lot up to it and starts new ones for the rest. |
+| `lot_hours` | numeric(6,2) | yes | Its production lots are full this many hours after their first production, over 0 and at most 720 (`capability_lot_hours_ck`). |
+| `lot_by_shift` | boolean | no | Its production lots end at a change of shift (the site-local day without a schedule). With none of the three, each report makes its own lot. Only for a lot-tracked material not made in batches. |
 | `effective_from` | timestamptz | no | When the capability starts (included). |
 | `effective_to` | timestamptz | yes | When it stops applying (not included); null means open-ended. Later than `effective_from`. Periods for the same equipment and material may not overlap (`capability_no_overlap`). |
 
@@ -1236,7 +1239,8 @@ A balance (`is_bulk`) is the one quantity of a material at a location: for a mat
 | `external_key` | text | yes | ERP key. |
 | `container_id` | uuid → container | yes | The container it is in (D-059), at the container's location; null when loose. Cleared when the lot moves alone, is split off or reaches zero. |
 | `label_no` | bigint | no | Its label number from `core.label_seq`, unique; the barcode carries `PUL1L` + this (D-059). |
-| `produced_from`, `produced_to` | timestamptz | yes | The production window, for output lots cut by time or quantity. |
+| `produced_from` | timestamptz | yes | The start of the production window, for output lots cut by time or quantity. Not yet used. |
+| `produced_to` | timestamptz | yes | When the lot was closed to further reports (D-104): an operator started a new lot, so reports on a line that fills lots no longer add to it. Null while open. |
 | `expires_at` | timestamptz | yes | Expiry. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 

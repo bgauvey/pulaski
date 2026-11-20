@@ -40,7 +40,8 @@ internal sealed class CorrectProductionReportHandler(
     TimeProvider timeProvider,
     ILineBatchSizes? lineBatches = null,
     IFeedRepository? feeds = null,
-    IAllocationRepository? allocations = null) : ICommandHandler<CorrectProductionReportCommand, CorrectProductionResponse>
+    IAllocationRepository? allocations = null,
+    ILotFillingStore? lotFilling = null) : ICommandHandler<CorrectProductionReportCommand, CorrectProductionResponse>
 {
     public async Task<CorrectProductionResponse> HandleAsync(CorrectProductionReportCommand command, CancellationToken cancellationToken)
     {
@@ -76,7 +77,7 @@ internal sealed class CorrectProductionReportHandler(
             .ReverseAsync(new ReverseProductionReportCommand(command.JobId, command.ReportId, command.ReasonCodeId, command.Comment), cancellationToken);
 
         // The new figures, at the report's own time: back-dated only when that is not just now.
-        var reported = await new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds, allocations).ReportAsync(
+        var reported = await new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds, allocations, lotFilling).ReportAsync(
             new ReportProductionCommand(command.JobId, report.RunId, command.GoodQty, command.ScrapQty, uom, command.ScrapQty > 0 ? command.ScrapReasonCodeId : null,
                 location, Comment: command.Comment)
             {

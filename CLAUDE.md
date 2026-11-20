@@ -374,6 +374,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   polled). Alarm/warning tags are code-valued (0 = none), several per machine; ingest raises/clears `ts.equipment_alarm` per tag
   (`AlarmRules`). Process values and levels go to `ts.process_value` (scaled, deadband at the edge, 1-min heartbeat), dropped by month
   after `Retention:ProcessValueDays` (90) via `ts.drop_old_process_values`. Machines → Alarms and Process values.
+- Lots filled by reports (D-104, proposed, in pieces): capability `lot_size`/`lot_hours`/`lot_by_shift` (`LotCutRule`, `Capability.LotCuts`); a report
+  with no lot number, counting now, at a location keeping lots apart, fills the job's open lot (`ILotFillingStore`, computed: latest, untouched but
+  for the job's production on the line) and starts new ones (`LotCutting.Parts`, `LotFilling.PlanAsync` in `ProductionReporter`). `StartNewLotCommand`
+  (`POST /jobs/{id}/new-lot`) sets `core.lot.produced_to`. Batch and non-lot-tracked materials refused.
 - Changeover rules (D-074, proposed): Configure → Changeovers maintains `core.changeover_rule` (`changeovers.manage`, Planner and Process engineer;
   seen with `schedule.view`/`materials.view`). `ChangeoverRules` checks sides, minutes (≤ 7 days) and one active rule per pattern (fixed once
   made; switched off, never deleted). Writes lock the site's row first; CSV import (`ChangeoverRuleCsv`) is all or nothing with a dry run.

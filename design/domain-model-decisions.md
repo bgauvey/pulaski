@@ -2837,6 +2837,26 @@ ways (`timeout` toxics with timeout 0: a pulled cable, so requests hang until th
 - each counter (EXT-01-SAW, PACK1) counted during the outage, and its machine counts from the last one before the cut add up exactly to how far
   its `raw_counter` moved.
 
+## Lots filled by reports (D-104, proposed, in pieces)
+
+Every production report made its own lot (D-035). Continuous lines want lots of a size, an hour count or a shift, filled by many reports.
+Decided (the user's choice): **reports fill a lot until it is full**; operators still confirm every quantity (machine counts only prefill,
+D-097), and no lot is made without a report.
+
+**The rule (piece 6a)** is per line and material on the capability (`lot_size` in base units, `lot_hours` ≤ 720, `lot_by_shift`;
+`LotCutRule`, migration 0069), so it is versioned with the capability's periods and read at the report's time. All unset: one lot per report.
+Only for a lot-tracked material not made in batches (each batch stays its own lot, D-036); refused on the capability otherwise.
+A report fills when it gives no lot number, counts now (a back-dated one makes its own lot), and goes to a location that keeps lots apart
+(where lots mix they join the balance, D-031). The lot being filled is computed, not stored (`ILotFillingStore.GetOpenLotForUpdateAsync`): the
+job's latest lot at the location, if it is available, loose, not closed, and has had nothing but the job's production on that line and
+reversals of it; anything else (moved, held, split, packed, consumed) means a new lot. It is full at its size, after its hours since its first
+production, or once the shift differs (production day + shift code, `ShiftSchedule.ShiftAt` with no lead; between shifts or with no schedule
+the site-local day). `LotCutting.Parts` (pure) splits the good quantity: what fits into that lot, then new lots of at most the size (at most
+100 per report), each through `ProductionOutput.ProduceAsync` in the base unit with the report's id, so reversal and correction work per lot as
+before (a reversal takes back only its share; a full lot isn't reopened once a later lot exists). Notes `lot_cut` say what was started and why.
+`StartNewLotCommand` (`POST /jobs/{id}/new-lot`, `production.report`) closes the job's open lots by setting `core.lot.produced_to` (there for
+this, unused) and appends `pulaski.job.lots_closed.v1`. Not in the capability CSV import yet.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

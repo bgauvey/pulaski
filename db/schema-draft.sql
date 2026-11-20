@@ -556,6 +556,9 @@ CREATE TABLE core.equipment_capability (
     batch_size              core.qty CHECK (batch_size > 0),    -- this line's batch size in the material's base unit (D-065); null: the material's
     batch_tolerance_pct     numeric(5,2) CHECK (batch_tolerance_pct >= 0 AND batch_tolerance_pct <= 50),  -- this line's batch tolerance (#85); null: the material's
     units_per_count         numeric(18,6) CONSTRAINT capability_units_per_count_ck CHECK (units_per_count > 0), -- base units per machine count (#27); null: 1
+    lot_size                core.qty CONSTRAINT capability_lot_size_ck CHECK (lot_size > 0),  -- production lots full at this many base units (D-104)
+    lot_hours               numeric(6,2) CONSTRAINT capability_lot_hours_ck CHECK (lot_hours > 0 AND lot_hours <= 720),  -- ... or this long after their first production
+    lot_by_shift            boolean NOT NULL DEFAULT false,      -- ... or at a change of shift; all unset: one lot per report
     effective_from          timestamptz NOT NULL,
     effective_to            timestamptz,
     CONSTRAINT capability_no_overlap EXCLUDE USING gist (
@@ -1381,8 +1384,8 @@ CREATE TABLE core.lot (
     external_key            text,
     container_id            uuid REFERENCES core.container(id),  -- the container it is in (D-059), at the container's location
     label_no                bigint NOT NULL DEFAULT nextval('core.label_seq') UNIQUE,   -- what its label's barcode carries (D-059)
-    produced_from           timestamptz,                        -- output lot boundaries (cut by time or quantity)
-    produced_to             timestamptz,
+    produced_from           timestamptz,                        -- output lot boundaries (cut by time or quantity); not yet used
+    produced_to             timestamptz,                        -- closed to further reports (D-104): an operator started a new lot
     expires_at              timestamptz,
     created_at              timestamptz NOT NULL DEFAULT now(),
     updated_at              timestamptz NOT NULL DEFAULT now(),
@@ -2625,7 +2628,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0065_run_rules'),
     ('0066_spc_alerts'),
     ('0067_tag_sampling'),
-    ('0068_delivery_feed_format');
+    ('0068_delivery_feed_format'),
+    ('0069_lot_cutting');
 
 -- =====================================================================
 -- 17. SEED DATA

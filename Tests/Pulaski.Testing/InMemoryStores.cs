@@ -37,6 +37,8 @@ public sealed class InMemoryStores
 
     public InMemoryEventLog Events { get; } = new();
 
+    public InMemoryLotFilling LotFilling { get; } = new();
+
     public InMemoryEquipment Equipment { get; } = new();
 
     public InMemoryWorkOrders WorkOrders { get; } = new();
@@ -159,6 +161,7 @@ public sealed class InMemoryStores
         services.RemoveAll<ICapabilityRepository>();
         services.RemoveAll<IExecutionRepository>();
         services.RemoveAll<IExecutionReadStore>();
+        services.RemoveAll<ILotFillingStore>();
         services.RemoveAll<ISecurityReadStore>();
         services.RemoveAll<ISecurityRepository>();
         services.RemoveAll<ISiteLookup>();
@@ -238,6 +241,7 @@ public sealed class InMemoryStores
         services.AddSingleton<ICapabilityRepository>(Capabilities);
         services.AddSingleton<IExecutionRepository>(Execution);
         services.AddSingleton<IExecutionReadStore>(Execution);
+        services.AddSingleton<ILotFillingStore>(LotFilling);
         services.AddSingleton<ISecurityReadStore>(Security);
         services.AddSingleton<ISecurityRepository>(Security);
         services.AddSingleton<ISiteLookup>(Security);
