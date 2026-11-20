@@ -829,6 +829,20 @@ Pulaski lays work end to end on each line, so two jobs on a line only overlap wh
 
 Each line is a card. A running line shows its job with the run's length, good quantity against the plan (with a bar), scrap, and how much more the run can hold at the line's rate. Below it, **Next** lists the line's other open jobs in sequence, each with its status and, when it can't start yet, why (*Waiting for operation 10 Extrude to end*) and when (*Ready at 14:30*). Departments with jobs waiting on them have a card of their own. The board refreshes every 15 seconds while no form is open.
 
+### Use an operator station
+
+An operator station is a touch screen at one line: it shows the line's state, running job and next jobs, and the person working there signs on
+with their badge. (Starting, pausing, reporting and coding stops at the station come next.)
+
+1. On **Labor → Terminals**, register a terminal for the station and set **First line offered** to its line.
+2. Click **Enrolment code**, open `/terminal/enrol` on the station and type the code, then open `/terminal/station` and leave it there.
+3. To sign on, hold your badge to the reader (or type its number and press Enter), and your PIN if the terminal asks for one.
+4. Click **Sign off** when you leave. Badging with someone else's badge switches to them.
+
+In detail: the station always uses the [touch layout](#use-a-touch-screen) and refreshes every 30 seconds. Someone signed on stays signed on
+while they use it; after 15 minutes with nothing done there, it signs them off and waits for a badge. A terminal with no first line offered
+asks which of its lines the station is for (`/terminal/station?line=EXT-01` chooses one). Switching the terminal off stops it at once.
+
 ### Show a line board on a TV
 
 A TV on the floor can show each line's state, running job, output, down time and OEE for the shift, in large type, without anyone signing in.

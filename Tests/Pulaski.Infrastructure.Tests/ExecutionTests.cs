@@ -422,6 +422,25 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_station_shows_its_line_and_whats_next_and_offers_the_lines_when_it_has_no_line()
+    {
+        var plant = await PlantAsync();
+        var terminal = new Pulaski.Application.Labor.TerminalRecord(
+            Guid.CreateVersion7(), plant.Site, "ST-" + _s, "Extruder station", plant.Site, plant.Extruder, "badge", true, TestTime.Now);
+
+        // Bound to its first line offered: the extruder, with Extrude next; no one signed on.
+        var station = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, null));
+        Assert.Equal(("EXT-" + _s, "J10-" + _s, (string?)null), (station.Line!.Code, Assert.Single(station.Next).JobNumber, station.PersonName));
+        Assert.True(station.IdleMinutes > 0);
+
+        // Asked for the packer; and with no first line, it offers both.
+        Assert.Equal("PCK-" + _s, (await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, "pck-" + _s.ToLowerInvariant()))).Line!.Code);
+        var unbound = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal with { DefaultEquipmentId = null }, null, null));
+        Assert.Null(unbound.Line);
+        Assert.Equal(2, unbound.Lines.Count);
+    }
+
+    [Fact]
     public async Task A_paused_job_frees_the_line_and_the_site_policy_sets_the_tolerance()
     {
         var plant = await PlantAsync();

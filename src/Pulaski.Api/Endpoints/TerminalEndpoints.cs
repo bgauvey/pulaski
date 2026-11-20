@@ -8,6 +8,7 @@ using Pulaski.Application.Security;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Labor;
+using Pulaski.Domain.Labor;
 using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
@@ -80,6 +81,40 @@ internal static class TerminalEndpoints
         {
             var current = TerminalFilter.Current(http);
             return TypedResults.Ok(await handler.HandleAsync(new GetLineDisplayQuery(current.SiteId, current.ScopeEquipmentId, current.Name, line), ct));
+        });
+
+        // An operator station (#146): sign on by badge for StationIdle, then read the station by that ticket. An expired or foreign ticket
+        // reads as waiting rather than failing, so the screen goes back to its badge prompt by itself.
+        terminal.MapPost("/station/sign-on", async Task<Ok<StationResponse>> (
+            StationSignOnRequest request, HttpContext http, BadgeTickets tickets, ICommandHandler<IdentifyBadgeCommand, BadgeIdentity> identify,
+            IQueryHandler<GetStationQuery, StationDto> station, CancellationToken ct) =>
+        {
+            var current = TerminalFilter.Current(http);
+            var who = await identify.HandleAsync(new IdentifyBadgeCommand(current, request.BadgeValue, request.Pin), ct);
+            if (who.PersonId is not { } personId)
+            {
+                return TypedResults.Ok(new StationResponse { NeedsPin = true });
+            }
+
+            var (ticket, expires) = tickets.Issue(current.Id, personId, TerminalRules.StationIdle);
+            return TypedResults.Ok(new StationResponse
+            {
+                Ticket = ticket,
+                TicketExpiresAt = expires,
+                Station = await station.HandleAsync(new GetStationQuery(current, personId, request.Line), ct),
+            });
+        });
+
+        terminal.MapPost("/station", async Task<Ok<StationResponse>> (
+            StationRequest request, HttpContext http, BadgeTickets tickets, IQueryHandler<GetStationQuery, StationDto> station, CancellationToken ct) =>
+        {
+            var current = TerminalFilter.Current(http);
+            var personId = request.Ticket is { Length: > 0 } ticket ? tickets.PersonOrNull(ticket, current.Id) : null;
+            return TypedResults.Ok(new StationResponse
+            {
+                Ticket = personId is null ? null : request.Ticket,
+                Station = await station.HandleAsync(new GetStationQuery(current, personId, request.Line), ct),
+            });
         });
 
         terminal.MapPost("/identify", async Task<Ok<BadgeIdentityResponse>> (

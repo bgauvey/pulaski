@@ -1,0 +1,267 @@
+@page "/terminal/station"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout StationLayout
+@using Pulaski.Web.Services.Execution
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+
+@* An operator station (#146) on an enrolled terminal (D-049): one line's job and what comes next, at the line. Someone badges to sign on and
+   stays signed on until they sign off or leave it alone for a while (StationIdle); their ticket sits in a short-lived cookie on this device.
+   ?line=CODE chooses the line when the terminal offers several. *@
+<PageTitle>@(_station?.Line?.Code ?? _station?.TerminalName ?? "Station") · Pulaski</PageTitle>
+@* Always the touch layout (D-105): a station is worked by finger, whatever the screen says about its pointer. One HeadContent: a page keeps
+   only its last. It reloads to stay current, except while a PIN is being typed. *@
+<HeadContent>
+    <meta name="pulaski-touch" content="always" />
+    @if (!_needsPin)
+    {
+        <meta http-equiv="refresh" content="@RefreshSeconds" />
+    }
+</HeadContent>
+
+@if (_station is null)
+{
+    <div class="station-panel">
+        <h1 class="h3">@(_enrolled ? "The station can't be shown" : "This station isn't enrolled")</h1>
+        <p>@(_error ?? "Enrol it as a terminal, then open this page again.")</p>
+        @if (!_enrolled)
+        {
+            <a class="btn btn-primary btn-lg" href="@TerminalCookie.EnrolPath">Enrol it</a>
+        }
+    </div>
+}
+else if (_station.Line is null)
+{
+    <div class="station-panel">
+        <h1 class="h3">@_station.TerminalName: which line is this station for?</h1>
+        @if (_station.Lines.Count == 0)
+        {
+            <p>No lines that run jobs are in this terminal's area. Ask a supervisor to change what it offers on Labor → Terminals.</p>
+        }
+        else
+        {
+            @if (Line is not null)
+            {
+                <p class="text-warning-strong">There is no line @Line here.</p>
+            }
+            <div class="station-actions">
+                @foreach (var l in _station.Lines)
+                {
+                    <a class="btn btn-outline-primary" href="@($"{TerminalCookie.StationPath}?line={Uri.EscapeDataString(l.Code)}")">
+                        @l.Code<span class="d-block small fw-normal">@l.Name</span>
+                    </a>
+                }
+            </div>
+            <p class="text-muted mt-3 mb-0">To skip this choice, set the terminal's first line offered on Labor → Terminals.</p>
+        }
+    </div>
+}
+else
+{
+    var line = _station.Line;
+    var since = LineDisplayView.Duration(line.StateSince, DateTimeOffset.UtcNow);
+    <header class="station-head">
+        <div>
+            <span class="station-line-code">@line.Code</span>
+            <span class="text-muted ms-2">@line.Name</span>
+        </div>
+        <div class="text-end">
+            <span class="station-status @LineDisplayView.StatusClass(line.Status)">@LineDisplayView.StatusLabel(line.Status)</span>
+            @if (since is not null && line.Status != "idle")
+            {
+                <div class="small text-muted">for @since</div>
+            }
+        </div>
+    </header>
+
+    <div class="station-grid">
+        <div>
+            @if (line.Status is "down" or "waiting" && line.StopText is { } stop)
+            {
+                <div class="drawer-alert is-warning mb-3" role="status"><Icon Name="stop" Size="20" /><span>@stop</span></div>
+            }
+            <section class="station-panel" aria-labelledby="station-job">
+                @if (line.Running is { } job)
+                {
+                    var progress = LineDisplayView.Progress(job);
+                    <h2 id="station-job" class="h4 mb-1">@job.JobNumber <span class="text-muted fw-normal">· @job.MaterialCode</span></h2>
+                    <div>
+                        <span class="station-big">@LineDisplayView.Qty(job.GoodQty)</span>
+                        @if (job.PlannedQty is { } planned)
+                        {
+                            <span class="text-muted"> of @LineDisplayView.Qty(planned) @job.UomCode good</span>
+                        }
+                    </div>
+                    @if (progress is { } pct)
+                    {
+                        <div class="floor-bar mt-2" role="img" aria-label="@pct% of the planned quantity"><span style="width: @pct%"></span></div>
+                    }
+                }
+                else
+                {
+                    <h2 id="station-job" class="h4 mb-0">No job running</h2>
+                }
+            </section>
+
+            <section class="station-panel" aria-labelledby="station-next">
+                <h2 id="station-next" class="h5">Next</h2>
+                @if (_station.Next.Count == 0)
+                {
+                    <p class="text-muted mb-0">Nothing planned on @line.Code.</p>
+                }
+                else
+                {
+                    <ul class="station-next">
+                        @foreach (var next in _station.Next.Take(4))
+                        {
+                            <li @key="next.JobId">
+                                <span class="fw-semibold">@next.JobNumber</span>
+                                <span class="@Display.JobStatusChip(next.Status) ms-1">@Display.Label(next.Status)</span>
+                                <div class="text-muted">@(next.MaterialCode ?? Display.Label(next.JobType))@(next.PlannedQty is { } q ? $" · {FloorView.Qty(q)} {next.UomCode}" : "")</div>
+                                @if (!next.IsReady && next.Waiting is { } waiting)
+                                {
+                                    <div class="small text-muted">@waiting</div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+        </div>
+
+        <section class="station-panel" aria-labelledby="station-who">
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger" role="alert">@_error</div>
+            }
+            @if (_station.PersonName is { } name)
+            {
+                <h2 id="station-who" class="h3 mb-1">@name</h2>
+                <p class="text-muted">Signed on at @_station.TerminalName. Badge again to switch person; after @_station.IdleMinutes minutes without anything done here, the station signs you off.</p>
+                <EditForm Model="Input" FormName="station" OnSubmit="SignOff" method="post">
+                    <div class="station-actions">
+                        <button type="submit" name="Input.Action" value="sign-off" class="btn btn-outline-secondary">Sign off</button>
+                    </div>
+                </EditForm>
+            }
+            else
+            {
+                <h2 id="station-who" class="h4">@(_needsPin ? "Your PIN" : "Badge in")</h2>
+            }
+
+            @* A badge signs on, or switches person when someone is already signed on. *@
+            <EditForm Model="Input" FormName="station-badge" OnSubmit="SignOnAsync" method="post" class="mt-3">
+                @if (_needsPin)
+                {
+                    <input type="hidden" name="Input.Badge" value="@Input.Badge" />
+                    <InputText id="station-pin" type="password" inputmode="numeric" class="form-control form-control-lg station-badge mb-3" autocomplete="off" autofocus
+                               aria-label="Your PIN" @bind-Value="Input.Pin" />
+                    <button type="submit" class="btn btn-primary btn-lg w-100">Sign on</button>
+                }
+                else
+                {
+                    <InputText id="station-badge" type="password" class="form-control form-control-lg station-badge" autocomplete="off" autofocus="@(_station.PersonName is null)"
+                               aria-label="@(_station.PersonName is null ? "Badge" : "Badge to switch person")" @bind-Value="Input.Badge" />
+                    <p class="text-muted small mt-2 mb-0">Hold your badge to the reader, or type its number and press Enter.</p>
+                }
+            </EditForm>
+        </section>
+    </div>
+}
+
+@code {
+    private const int RefreshSeconds = 30;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "line")]
+    private string? Line { get; set; }
+
+    [SupplyParameterFromForm]
+    private StationForm Input { get; set; } = new();
+
+    private StationDto? _station;
+    private string? _error;
+    private bool _enrolled;
+    private bool _needsPin;
+
+    private string? Secret => TerminalCookie.Get(HttpContext);
+
+    private string? LineCode => string.IsNullOrWhiteSpace(Line) ? null : Line.Trim();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _enrolled = Secret is not null;
+        if (Secret is null)
+        {
+            return;
+        }
+
+        await LoadAsync(TerminalCookie.GetStation(HttpContext));
+    }
+
+    private async Task LoadAsync(string? ticket)
+    {
+        try
+        {
+            var response = await Api.GetStationAsync(Secret!, ticket, LineCode);
+            _station = response.Station;
+            if (ticket is not null && response.Ticket is null && !HttpContext.Response.HasStarted)
+            {
+                TerminalCookie.ClearStation(HttpContext);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _enrolled = ex.Status != 401;
+            _error = ex.Detail ?? ex.Title;
+        }
+    }
+
+    private async Task SignOnAsync()
+    {
+        if (_station is null || string.IsNullOrWhiteSpace(Input.Badge))
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await Api.StationSignOnAsync(Secret!, new StationSignOnRequest { BadgeValue = Input.Badge.Trim(), Pin = Input.Pin, Line = LineCode });
+            if (response.NeedsPin)
+            {
+                _needsPin = true;
+                return;
+            }
+
+            TerminalCookie.SetStation(HttpContext, response.Ticket!, response.TicketExpiresAt!.Value);
+            Navigation.NavigateTo(Here, forceLoad: true);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Detail ?? ex.Title;
+            Input.Pin = null;
+            _needsPin = false;
+        }
+    }
+
+    private void SignOff()
+    {
+        if (Input.Action == "sign-off")
+        {
+            TerminalCookie.ClearStation(HttpContext);
+            Navigation.NavigateTo(Here, forceLoad: true);
+        }
+    }
+
+    private string Here => LineCode is { } code ? $"{TerminalCookie.StationPath}?line={Uri.EscapeDataString(code)}" : TerminalCookie.StationPath;
+
+    public sealed class StationForm
+    {
+        public string? Badge { get; set; }
+        public string? Pin { get; set; }
+        public string? Action { get; set; }
+    }
+}

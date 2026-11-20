@@ -2883,6 +2883,20 @@ sits in the device's cookie, and `sec.terminal.scope_equipment_id` decides the l
 disagree with them; `LineDisplayStatus.Of` maps state to running / down / waiting / no_signal / idle. Web: static SSR `/terminal/board`
 (`BoardLayout`, `css/board.css`, its own dark palette, colour only for the abnormal), reloaded every 15 s by a meta refresh. Live push is #143.
 
+## Operator station (D-107, proposed, in pieces)
+
+The operator station (#118, split into #146–#150) is a touch screen at one line. Decided (the user's choices): it is an **enrolled terminal**
+(D-049, as boards are, D-106), and **who may act is the badged person's user**: a person linked to a user (`core.person.app_user_id`) gets that
+user's role permissions at the terminal's site; a person without one may only record labor.
+
+**The shell (#146).** Static SSR `/terminal/station` (`StationLayout`, `css/station.css`, always the touch layout through
+`<meta name="pulaski-touch" content="always">`; a page keeps only its last `HeadContent`, so one holds both it and the 30 s refresh). Its line:
+`?line=` among the terminal's lines, else the terminal's first line offered, else its only line, else a choice (`StationLine.Choose`).
+`POST /api/terminal/station/sign-on` (badge, PIN) issues a badge ticket for `TerminalRules.StationIdle` (15 min) instead of the kiosk's 2;
+`POST /api/terminal/station` reads the station for a ticket, an expired or foreign one reading as no one (`BadgeTickets.PersonOrNull`). The web
+keeps the ticket in `.Pulaski.Station` (path `/terminal`, expiring with it). Reads don't renew the ticket; actions will (#147–#149).
+
+## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
 

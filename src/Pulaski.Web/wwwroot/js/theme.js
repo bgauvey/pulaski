@@ -28,7 +28,11 @@
     systemDark.addEventListener("change", sync);
 
     const coarse = window.matchMedia("(pointer: coarse)");
+    // A page made only for touch (the operator station, #146) asks for it with <meta name="pulaski-touch" content="always">.
     const touchOn = () => {
+        if (document.querySelector('meta[name="pulaski-touch"][content="always"]')) {
+            return true;
+        }
         const stored = read("pulaski.touch");
         return stored === "on" || (stored !== "off" && coarse.matches);
     };

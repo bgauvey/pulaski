@@ -1,0 +1,90 @@
+/* Operator station (#146): one line, at the line, read at arm's length and worked by finger. Always in the touch layout (css/touch.css). */
+
+.station-shell {
+    min-height: 100vh;
+    padding: var(--space-4);
+    background: var(--bg);
+    font-size: 18px;
+}
+
+.station-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+.station-line-code {
+    font-size: 2.25rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.station-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(18rem, 2fr);
+    gap: var(--space-4);
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .station-grid { grid-template-columns: 1fr; }
+}
+
+.station-panel {
+    padding: var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+    .station-panel + .station-panel { margin-top: var(--space-4); }
+
+.station-status {
+    display: inline-block;
+    padding: 0.2em 0.7em;
+    border-radius: var(--radius-md);
+    font-weight: 700;
+    font-size: 1.25rem;
+    background: var(--surface-2);
+}
+
+    .station-status.is-down { background: var(--danger); color: #fff; }
+    .station-status.is-waiting { background: var(--warning); color: #1a1300; }
+    .station-status.is-nosignal { background: var(--state-held); color: #fff; }
+
+.station-big {
+    font-size: 2.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+
+.station-next {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+    .station-next > li {
+        padding: var(--space-3) 0;
+        border-top: 1px solid var(--border);
+    }
+
+        .station-next > li:first-child { border-top: 0; }
+
+.station-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: var(--space-3);
+}
+
+    /* Bigger than the touch layout's own buttons (css/touch.css), so scoped to the shell to win over it. */
+    .station-shell .station-actions .btn { min-height: 4rem; font-size: 1.15rem; }
+
+.station-shell .station-badge {
+    font-size: 1.75rem;
+    letter-spacing: 0.1em;
+    text-align: center;
+}
