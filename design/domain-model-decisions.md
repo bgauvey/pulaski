@@ -2875,7 +2875,14 @@ The floor screens were built for a desk and a mouse; operators at a line use tab
 
 The dedicated operator station (#118) builds on these conventions.
 
-## Application architecture
+## Line display boards (D-106, proposed)
+
+A TV on the floor shows its lines (#120). Decided (the user's choice): **a board is an enrolled terminal** (D-049): no one signs in, its secret
+sits in the device's cookie, and `sec.terminal.scope_equipment_id` decides the lines. `GET /api/terminal/board?line=` (`TerminalFilter`) →
+`GetLineDisplayQuery` builds each line from the Overview (D-070), the floor board (D-035) and the current shift's OEE row (D-052), so it can't
+disagree with them; `LineDisplayStatus.Of` maps state to running / down / waiting / no_signal / idle. Web: static SSR `/terminal/board`
+(`BoardLayout`, `css/board.css`, its own dark palette, colour only for the abnormal), reloaded every 15 s by a meta refresh. Live push is #143.
+
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
 

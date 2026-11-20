@@ -1,0 +1,167 @@
+@page "/terminal/board"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout BoardLayout
+@using Pulaski.Web.Services.Execution
+@inject PulaskiApiClient Api
+
+@* A line display board (#120) for a TV on the floor: read-only, no one signs in. The device is enrolled as a terminal (D-049), and its
+   secret in this device's cookie decides the lines shown: those in the terminal's scope. It reloads itself every few seconds, so it
+   recovers by itself after a network drop. ?line=CODE shows one line. *@
+<PageTitle>@(_board?.Title ?? "Line board") · Pulaski</PageTitle>
+<HeadContent><meta http-equiv="refresh" content="@LineDisplayView.RefreshSeconds" /></HeadContent>
+
+@if (_board is null)
+{
+    <div class="board-message">
+        <h1>@(_enrolled ? "The board can't be shown" : "This screen isn't enrolled")</h1>
+        <p>@(_error ?? "Enrol it as a terminal, then open this page again.")</p>
+        @if (!_enrolled)
+        {
+            <a class="btn btn-primary btn-lg" href="@TerminalCookie.EnrolPath">Enrol it</a>
+        }
+    </div>
+}
+else if (_board.Lines.Count == 0)
+{
+    <div class="board-message">
+        <h1>@_board.Title</h1>
+        <p>@(Line is null ? "No lines that run jobs are in this terminal's area." : $"There is no line {Line} in this terminal's area.")</p>
+    </div>
+}
+else
+{
+    <header class="board-head">
+        <span class="board-title">@_board.Title</span>
+        <span class="board-updated">Updates every @LineDisplayView.RefreshSeconds s</span>
+    </header>
+    <main class="board-grid @LineDisplayView.GridClass(_board.Lines.Count)">
+        @foreach (var line in _board.Lines)
+        {
+            var since = LineDisplayView.Duration(line.StateSince, _board.AsOf);
+            <section class="board-line @LineDisplayView.StatusClass(line.Status)" aria-label="@line.Code">
+                <div class="board-line-head">
+                    <div>
+                        <div class="board-code">@line.Code</div>
+                        <div class="board-name">@line.Name</div>
+                    </div>
+                    <div class="board-status">
+                        <span class="board-status-word">@LineDisplayView.StatusLabel(line.Status)</span>
+                        @if (since is not null && line.Status != "idle")
+                        {
+                            <span class="board-status-for">for @since</span>
+                        }
+                    </div>
+                </div>
+
+                @if (line.Status is "down" or "waiting" && line.StopText is { } stop)
+                {
+                    <div class="board-stop">@stop</div>
+                }
+
+                @if (line.Running is { } job)
+                {
+                    var progress = LineDisplayView.Progress(job);
+                    <div class="board-job">
+                        <div class="board-job-name">@job.JobNumber<span class="board-quiet"> · @job.MaterialCode</span></div>
+                        <div class="board-job-qty">
+                            <span class="board-big">@LineDisplayView.Qty(job.GoodQty)</span>
+                            @if (job.PlannedQty is { } planned)
+                            {
+                                <span class="board-quiet"> of @LineDisplayView.Qty(planned) @job.UomCode</span>
+                            }
+                        </div>
+                        @if (progress is { } pct)
+                        {
+                            <div class="board-bar" role="img" aria-label="@pct% of the planned quantity"><span style="width: @pct%"></span></div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="board-job board-quiet">No job running</div>
+                }
+
+                <dl class="board-figures">
+                    <div>
+                        <dt>OEE@(line.ShiftName is { } s ? $" · {s}" : " · today")</dt>
+                        <dd class="@(LineDisplayView.BelowTarget(line) ? "is-below" : "")">
+                            @LineDisplayView.Pct(line.OeePct)
+                            @if (line.OeeTargetPct is { } target)
+                            {
+                                <span class="board-quiet board-target">target @LineDisplayView.Pct(target)</span>
+                            }
+                        </dd>
+                    </div>
+                    @foreach (var output in line.Output)
+                    {
+                        <div>
+                            <dt>Good, @output.UomCode</dt>
+                            <dd>@LineDisplayView.Qty(output.GoodQty)</dd>
+                        </div>
+                        <div>
+                            <dt>Scrap, @output.UomCode</dt>
+                            <dd>@LineDisplayView.Qty(output.ScrapQty)</dd>
+                        </div>
+                    }
+                    @if (line.DownMinutes is { } down)
+                    {
+                        <div>
+                            <dt>Down</dt>
+                            <dd>@LineDisplayView.Minutes(down)</dd>
+                        </div>
+                    }
+                    @if (line.UncodedStops is > 0)
+                    {
+                        <div>
+                            <dt>Stops to code</dt>
+                            <dd class="is-below">@line.UncodedStops</dd>
+                        </div>
+                    }
+                </dl>
+
+                @if (line.Next is { } next)
+                {
+                    <div class="board-next"><span class="board-quiet">Next</span> @next.JobNumber<span class="board-quiet"> · @next.MaterialCode</span></div>
+                }
+                @if (LineDisplayView.Duration(_board.AsOf, line.ShiftEnd ?? _board.AsOf) is { } left && line.ShiftEnd is not null)
+                {
+                    <div class="board-shift board-quiet">@line.ShiftName ends in @left</div>
+                }
+            </section>
+        }
+    </main>
+}
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    /// <summary>One line's code, to show it alone.</summary>
+    [SupplyParameterFromQuery(Name = "line")]
+    private string? Line { get; set; }
+
+    private LineDisplayDto? _board;
+    private string? _error;
+    private bool _enrolled;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var secret = TerminalCookie.Get(HttpContext);
+        _enrolled = secret is not null;
+        if (secret is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _board = await Api.GetLineDisplayAsync(secret, string.IsNullOrWhiteSpace(Line) ? null : Line.Trim());
+        }
+        catch (ApiException ex)
+        {
+            _enrolled = ex.Status != 401;
+            _error = ex.Detail ?? ex.Title;
+        }
+    }
+}

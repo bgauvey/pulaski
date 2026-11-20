@@ -1523,6 +1523,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<TerminalEnrolledResponse> EnrolTerminalAsync(EnrolTerminalRequest request, CancellationToken ct = default) =>
         TerminalSendAsync<TerminalEnrolledResponse>(null, HttpMethod.Post, "api/terminal/enrol", request, ct);
 
+    /// <summary>The line display board for the terminal's lines (#120); <paramref name="line"/> narrows it to one.</summary>
+    public Task<LineDisplayDto> GetLineDisplayAsync(string secret, string? line, CancellationToken ct = default) =>
+        TerminalSendAsync<LineDisplayDto>(secret, HttpMethod.Get, line is null ? "api/terminal/board" : $"api/terminal/board?line={Uri.EscapeDataString(line)}", null, ct);
+
     public Task<TerminalStatusDto> GetTerminalStatusAsync(string secret, CancellationToken ct = default) =>
         TerminalSendAsync<TerminalStatusDto>(secret, HttpMethod.Get, "api/terminal", null, ct);
 

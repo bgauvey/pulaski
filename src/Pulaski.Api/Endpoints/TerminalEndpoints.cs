@@ -2,9 +2,11 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Execution;
 using Pulaski.Application.Labor;
 using Pulaski.Application.Security;
 using Pulaski.Contracts.Common;
+using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Labor;
 using Pulaski.Domain.Security;
 
@@ -72,6 +74,13 @@ internal static class TerminalEndpoints
 
         terminal.MapGet("/", async Task<Ok<TerminalStatusDto>> (HttpContext http, IQueryHandler<GetTerminalStatusQuery, TerminalStatusDto> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new GetTerminalStatusQuery(TerminalFilter.Current(http), null), ct)));
+
+        // The line display board (#120): the terminal's lines as they stand now, read-only; ?line= narrows it to one line.
+        terminal.MapGet("/board", async Task<Ok<LineDisplayDto>> (string? line, HttpContext http, IQueryHandler<GetLineDisplayQuery, LineDisplayDto> handler, CancellationToken ct) =>
+        {
+            var current = TerminalFilter.Current(http);
+            return TypedResults.Ok(await handler.HandleAsync(new GetLineDisplayQuery(current.SiteId, current.ScopeEquipmentId, current.Name, line), ct));
+        });
 
         terminal.MapPost("/identify", async Task<Ok<BadgeIdentityResponse>> (
             IdentifyBadgeRequest request, HttpContext http, BadgeTickets tickets, ICommandHandler<IdentifyBadgeCommand, BadgeIdentity> identify,

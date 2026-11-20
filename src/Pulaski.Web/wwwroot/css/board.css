@@ -1,0 +1,184 @@
+/* Line display boards (#120): a TV on the floor, read from across the line. Its own dark, high-contrast palette whatever the device's
+   theme; type scales with the screen. ISA-101 habits: grey for normal, colour only for what needs someone (down, no signal, waiting,
+   below target). */
+
+.board-shell {
+    --board-bg: #0e1116;
+    --board-panel: #171b22;
+    --board-line: #2a303b;
+    --board-text: #f2f4f7;
+    --board-quiet: #9aa3b2;
+    --board-run: #3fb27f;
+    --board-down: #e5484d;
+    --board-wait: #f5a524;
+    --board-nosignal: #8e4ec6;
+
+    min-height: 100vh;
+    padding: clamp(12px, 1.5vw, 32px);
+    background: var(--board-bg);
+    color: var(--board-text);
+    font-size: clamp(16px, 1.25vw, 40px);
+    line-height: 1.25;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(8px, 1vw, 24px);
+}
+
+.board-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    color: var(--board-quiet);
+}
+
+.board-title {
+    font-size: 1.4em;
+    font-weight: 600;
+    color: var(--board-text);
+}
+
+.board-grid {
+    flex: 1;
+    display: grid;
+    gap: clamp(8px, 1vw, 24px);
+}
+
+.board-grid-1 { grid-template-columns: 1fr; font-size: 1.6em; }
+.board-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.board-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); font-size: 0.85em; }
+
+@media (max-width: 900px) {
+    .board-grid-2, .board-grid-3 { grid-template-columns: 1fr; }
+}
+
+.board-line {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6em;
+    padding: 0.9em 1.1em;
+    background: var(--board-panel);
+    border: 2px solid var(--board-line);
+    border-left-width: 0.5em;
+    border-radius: 12px;
+    min-width: 0;
+}
+
+    .board-line.is-running { border-left-color: var(--board-run); }
+    .board-line.is-down { border-color: var(--board-down); }
+    .board-line.is-waiting { border-left-color: var(--board-wait); }
+    .board-line.is-nosignal { border-color: var(--board-nosignal); }
+
+.board-line-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1em;
+}
+
+.board-code {
+    font-size: 2.2em;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.board-name,
+.board-quiet {
+    color: var(--board-quiet);
+}
+
+.board-status {
+    text-align: right;
+}
+
+.board-status-word {
+    display: inline-block;
+    padding: 0.15em 0.6em;
+    border-radius: 8px;
+    font-size: 1.5em;
+    font-weight: 700;
+    background: var(--board-line);
+}
+
+    .is-running .board-status-word { color: var(--board-run); }
+    .is-down .board-status-word { background: var(--board-down); color: #fff; }
+    .is-waiting .board-status-word { background: var(--board-wait); color: #1a1300; }
+    .is-nosignal .board-status-word { background: var(--board-nosignal); color: #fff; }
+
+.board-status-for {
+    display: block;
+    margin-top: 0.2em;
+    color: var(--board-quiet);
+}
+
+.board-stop {
+    font-size: 1.3em;
+    font-weight: 600;
+}
+
+.board-job-name {
+    font-size: 1.2em;
+    font-weight: 600;
+}
+
+.board-big {
+    font-size: 2.6em;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+
+.board-bar {
+    height: 0.6em;
+    margin-top: 0.3em;
+    background: var(--board-line);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+    .board-bar > span {
+        display: block;
+        height: 100%;
+        background: var(--board-quiet);
+    }
+
+.board-figures {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7em, 1fr));
+    gap: 0.6em 1.2em;
+    margin: 0;
+    padding-top: 0.6em;
+    border-top: 1px solid var(--board-line);
+}
+
+    .board-figures dt {
+        font-weight: 400;
+        color: var(--board-quiet);
+        font-size: 0.85em;
+    }
+
+    .board-figures dd {
+        margin: 0;
+        font-size: 1.6em;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+        .board-figures dd.is-below { color: var(--board-wait); }
+
+.board-target {
+    display: block;
+    font-size: 0.5em;
+    font-weight: 400;
+}
+
+.board-next,
+.board-shift {
+    margin-top: auto;
+}
+
+.board-message {
+    margin: auto;
+    max-width: 40em;
+    text-align: center;
+}
