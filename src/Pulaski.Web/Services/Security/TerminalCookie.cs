@@ -10,6 +10,9 @@ public static class TerminalCookie
     public const string EnrolPath = "/terminal/enrol";
     public const string HomePath = "/terminal";
 
+    /// <summary>The line display board (#120), under the cookie's path so the device's secret is sent.</summary>
+    public const string BoardPath = "/terminal/board";
+
     public static string? Get(HttpContext http) => http.Request.Cookies.TryGetValue(Name, out var secret) && !string.IsNullOrWhiteSpace(secret) ? secret : null;
 
     public static void Set(HttpContext http, string secret) => http.Response.Cookies.Append(Name, secret, new CookieOptions

@@ -399,6 +399,29 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_line_board_shows_the_lines_in_its_scope_with_their_running_and_next_jobs()
+    {
+        var plant = await PlantAsync();
+        await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
+
+        // The whole site: both lines; the extruder running Extrude, the packer with Pack next. Both track machine state and no machine is
+        // connected here, so the board says so rather than "running".
+        var site = await QueryAsync<GetLineDisplayQuery, LineDisplayDto>(new GetLineDisplayQuery(plant.Site, plant.Site, "Hall A"));
+        Assert.Equal("Hall A", site.Title);
+        Assert.Equal(["EXT-" + _s, "PCK-" + _s], site.Lines.Select(l => l.Code).Order(StringComparer.Ordinal));
+        var extruder = Assert.Single(site.Lines, l => l.LineId == plant.Extruder);
+        Assert.Equal(("J10-" + _s, "no_signal"), (extruder.Running!.JobNumber, extruder.Status));
+        var packer = Assert.Single(site.Lines, l => l.LineId == plant.Packer);
+        Assert.Equal(("J20-" + _s, "no_signal"), (packer.Next!.JobNumber, packer.Status));
+        Assert.Null(packer.Running);
+
+        // A terminal scoped to the packer sees only it; ?line= narrows the site to one line, in any case.
+        Assert.Equal([plant.Packer], (await QueryAsync<GetLineDisplayQuery, LineDisplayDto>(new GetLineDisplayQuery(plant.Site, plant.Packer, "Pack"))).Lines.Select(l => l.LineId));
+        Assert.Equal([plant.Extruder], (await QueryAsync<GetLineDisplayQuery, LineDisplayDto>(
+            new GetLineDisplayQuery(plant.Site, plant.Site, "Hall A", ("ext-" + _s).ToLowerInvariant()))).Lines.Select(l => l.LineId));
+    }
+
+    [Fact]
     public async Task A_paused_job_frees_the_line_and_the_site_policy_sets_the_tolerance()
     {
         var plant = await PlantAsync();

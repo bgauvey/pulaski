@@ -15,6 +15,7 @@
         <p class="text-muted mb-0">
             Shared tablets and panel PCs where people badge to record their time. Register one here, then open
             <code>@TerminalUrl</code> on the device and type its enrolment code. Badges are issued on <ScreenLink Href="people" Permission="@PermissionCodes.People">People</ScreenLink>.
+            A TV enrolled the same way shows a line display board at <code>@BoardUrl</code>: the lines this terminal offers, read only.
         </p>
     </div>
     @if (Sites.Sites.Count > 1)
@@ -163,6 +164,7 @@ else
     private bool _busy;
 
     private string TerminalUrl => Navigation.ToAbsoluteUri(TerminalCookie.EnrolPath).ToString();
+    private string BoardUrl => Navigation.ToAbsoluteUri(TerminalCookie.BoardPath).ToString();
 
     // The site itself, its areas, and its lines: what a terminal can offer the lines of.
     private IEnumerable<EquipmentDto> Scopes =>

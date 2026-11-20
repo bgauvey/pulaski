@@ -384,6 +384,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Touch layout (D-105, proposed): `data-touch` on `<html>` (`js/theme.js`: `pointer: coarse`, or the header's hand button per device);
   rules only in `css/touch.css` under `:root[data-touch]`; layout-specific markup via `.mouse-only`/`.touch-only` (e.g. `ReasonPicker`);
   quantities `inputmode="decimal"`, form buttons in `.form-actions`, floor card buttons in `.floor-actions`.
+- Line boards (D-106, proposed): an enrolled terminal opens `/terminal/board` (`?line=`); `GET /api/terminal/board` → `GetLineDisplayQuery`
+  (Overview + floor board + current-shift OEE, filtered to the terminal's scope); `css/board.css`, meta refresh 15 s.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

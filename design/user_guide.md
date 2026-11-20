@@ -829,6 +829,18 @@ Pulaski lays work end to end on each line, so two jobs on a line only overlap wh
 
 Each line is a card. A running line shows its job with the run's length, good quantity against the plan (with a bar), scrap, and how much more the run can hold at the line's rate. Below it, **Next** lists the line's other open jobs in sequence, each with its status and, when it can't start yet, why (*Waiting for operation 10 Extrude to end*) and when (*Ready at 14:30*). Departments with jobs waiting on them have a card of their own. The board refreshes every 15 seconds while no form is open.
 
+### Show a line board on a TV
+
+A TV on the floor can show each line's state, running job, output, down time and OEE for the shift, in large type, without anyone signing in.
+
+1. On **Labor → Terminals**, register a terminal for the TV; **Offers the lines of** decides which lines it shows (an area, or one line).
+2. Click **Enrolment code**, open `/terminal/enrol` in the TV's browser and type the code.
+3. Open `/terminal/board` on the TV (add `?line=EXT-01` to show one line full screen) and leave it running.
+
+In detail: the board reloads every 15 seconds, so it recovers by itself after a network drop. Its figures are the Overview's: a line that tracks
+machine state but has no signal shows **No signal**, and down time counts no-signal time. Colour is kept for what needs attention: down, no
+signal, waiting, OEE below target, stops to code. Switching the terminal off stops the board at once.
+
 ### Use a touch screen
 
 On a tablet or a touch panel at the line, the floor screens switch to a **touch layout**: larger buttons and fields, a number keypad for
