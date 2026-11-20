@@ -1,3 +1,5 @@
+using Pulaski.Domain.Inventory;
+
 namespace Pulaski.Domain.Materials;
 
 /// <summary>Everything a person sets on a capability (D-020, D-034).</summary>
@@ -11,11 +13,13 @@ public sealed record CapabilityChange(
     DateTimeOffset? EffectiveTo,
     decimal? BatchSize = null,
     decimal? BatchTolerancePct = null,
-    decimal? UnitsPerCount = null);
+    decimal? UnitsPerCount = null,
+    LotCutRule? LotRule = null);
 
 /// <summary>
 /// A line's permission to run a material over a period, with its ideal rate (D-020) and, for a material made in batches, the line's
-/// own batch size and tolerance when they differ from the material's (D-065, #85), and how much of the material one machine count is (#27, D-097). Capabilities are never deleted: one that no longer applies is ended,
+/// own batch size and tolerance when they differ from the material's (D-065, #85), how much of the material one machine count is (#27, D-097), and
+/// when its production lots are cut (D-104). Capabilities are never deleted: one that no longer applies is ended,
 /// so history still says what could run where.
 /// </summary>
 public sealed record Capability(
@@ -31,7 +35,8 @@ public sealed record Capability(
     DateTimeOffset? EffectiveTo,
     decimal? BatchSize = null,
     decimal? BatchTolerancePct = null,
-    decimal? UnitsPerCount = null)
+    decimal? UnitsPerCount = null,
+    LotCutRule? LotRule = null)
 {
     /// <summary>Longest standard changeover accepted: a week.</summary>
     public static readonly TimeSpan MaxChangeover = TimeSpan.FromDays(7);
@@ -45,7 +50,7 @@ public sealed record Capability(
         Ensure(change);
         return new Capability(
             id, equipmentId, materialId, change.IdealRatePerHour, change.RateUomId, change.StandardChangeover, change.StandardCrewSize,
-            change.IsPreferred, change.EffectiveFrom, change.EffectiveTo, change.BatchSize, change.BatchTolerancePct, change.UnitsPerCount);
+            change.IsPreferred, change.EffectiveFrom, change.EffectiveTo, change.BatchSize, change.BatchTolerancePct, change.UnitsPerCount, Rule(change.LotRule));
     }
 
     /// <exception cref="DomainRuleException">A value is out of range, or the period ends before it starts.</exception>
@@ -64,6 +69,7 @@ public sealed record Capability(
             BatchSize = change.BatchSize,
             BatchTolerancePct = change.BatchTolerancePct,
             UnitsPerCount = change.UnitsPerCount,
+            LotRule = Rule(change.LotRule),
         };
     }
 
@@ -83,6 +89,12 @@ public sealed record Capability(
 
         return this with { EffectiveTo = at };
     }
+
+    /// <summary>How the line's production lots of the material are cut (D-104); off: one lot per report.</summary>
+    public LotCutRule LotCuts => LotRule ?? LotCutRule.Off;
+
+    // Kept as null when off, so a capability without a rule equals one whose rule was cleared.
+    private static LotCutRule? Rule(LotCutRule? rule) => rule is { IsOn: true } ? rule : null;
 
     public bool IsInEffect(DateTimeOffset at) => EffectiveFrom <= at && (EffectiveTo is null || EffectiveTo > at);
 
@@ -120,6 +132,11 @@ public sealed record Capability(
         if (change.UnitsPerCount is <= 0)
         {
             throw new DomainRuleException("Units per count must be greater than zero, or blank for one.");
+        }
+
+        if (change.LotRule?.Problem() is { } lotProblem)
+        {
+            throw new DomainRuleException(lotProblem);
         }
 
         if (change.EffectiveTo is { } to && to <= change.EffectiveFrom)

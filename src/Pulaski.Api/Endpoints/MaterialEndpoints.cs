@@ -146,7 +146,7 @@ internal static class MaterialEndpoints
             var created = await handler.HandleAsync(
                 new AddCapabilityCommand(id, request.EquipmentId, request.IdealRatePerHour, request.RateUomId, request.StandardChangeoverMinutes,
                     request.StandardCrewSize, request.IsPreferred, request.EffectiveFrom, request.EffectiveTo, request.BatchSize, request.BatchTolerancePct,
-                    request.UnitsPerCount),
+                    request.UnitsPerCount, LotRule(request.LotSize, request.LotHours, request.LotByShift)),
                 ct);
             return TypedResults.Created($"/api/materials/{id}", created);
         })
@@ -191,7 +191,7 @@ internal static class MaterialEndpoints
             TypedResults.Ok(await handler.HandleAsync(
                 new UpdateCapabilityCommand(id, request.Version, request.IdealRatePerHour, request.RateUomId, request.StandardChangeoverMinutes,
                     request.StandardCrewSize, request.IsPreferred, request.EffectiveFrom, request.EffectiveTo, request.BatchSize, request.BatchTolerancePct,
-                    request.UnitsPerCount),
+                    request.UnitsPerCount, LotRule(request.LotSize, request.LotHours, request.LotByShift)),
                 ct)))
         .RequirePermission(Permissions.Processes, Site.Of(SiteOf.Capability));
 
@@ -225,4 +225,6 @@ internal static class MaterialEndpoints
 
         return routes;
     }
+
+    private static Pulaski.Domain.Inventory.LotCutRule LotRule(decimal? size, decimal? hours, bool byShift) => new(size, hours, byShift);
 }

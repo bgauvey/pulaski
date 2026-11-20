@@ -116,6 +116,7 @@ public static class DependencyInjection
         services.AddScoped<IMaterialAdminRepository, MaterialAdminRepository>();
         services.AddScoped<ICapabilityRepository, CapabilityRepository>();
         services.AddScoped<IExecutionRepository, ExecutionRepository>();
+        services.AddScoped<ILotFillingStore, LotFillingStore>();
         services.AddScoped<ISecurityRepository, SecurityRepository>();
         services.AddScoped<IShiftRepository, ShiftRepository>();
         services.AddScoped<ICalendarExceptionRepository, CalendarExceptionRepository>();

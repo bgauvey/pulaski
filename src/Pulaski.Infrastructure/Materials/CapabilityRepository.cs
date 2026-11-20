@@ -1,5 +1,6 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Materials;
+using Pulaski.Domain.Inventory;
 using Pulaski.Domain.Materials;
 using Pulaski.Domain.Scheduling;
 using Pulaski.Infrastructure.Persistence;
@@ -26,7 +27,7 @@ internal sealed class CapabilityRepository(DbSession session) : ICapabilityRepos
 
     private const string Columns = """
         id, equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, standard_changeover, standard_crew_size,
-        is_preferred, effective_from, effective_to, batch_size, batch_tolerance_pct, units_per_count
+        is_preferred, effective_from, effective_to, batch_size, batch_tolerance_pct, units_per_count, lot_size, lot_hours, lot_by_shift
         """;
 
     private const string GetForUpdate = $"SELECT {Columns}, xmin::text::bigint AS version FROM core.equipment_capability WHERE id = @Id FOR UPDATE";
@@ -41,9 +42,10 @@ internal sealed class CapabilityRepository(DbSession session) : ICapabilityRepos
     private const string Insert = """
         INSERT INTO core.equipment_capability (id, equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, standard_changeover,
                                                standard_crew_size, is_preferred, effective_from, effective_to, batch_size, batch_tolerance_pct,
-                                               units_per_count)
+                                               units_per_count, lot_size, lot_hours, lot_by_shift)
         VALUES (@Id, @EquipmentId, @MaterialId, @IdealRatePerHour, @RateUomId, @StandardChangeover,
-                @StandardCrewSize, @IsPreferred, @EffectiveFrom, @EffectiveTo, @BatchSize, @BatchTolerancePct, @UnitsPerCount)
+                @StandardCrewSize, @IsPreferred, @EffectiveFrom, @EffectiveTo, @BatchSize, @BatchTolerancePct, @UnitsPerCount,
+                @LotSize, @LotHours, @LotByShift)
         RETURNING xmin::text::bigint
         """;
 
@@ -51,7 +53,8 @@ internal sealed class CapabilityRepository(DbSession session) : ICapabilityRepos
         UPDATE core.equipment_capability
         SET ideal_rate_per_hour = @IdealRatePerHour, rate_uom_id = @RateUomId, standard_changeover = @StandardChangeover,
             standard_crew_size = @StandardCrewSize, is_preferred = @IsPreferred, effective_from = @EffectiveFrom, effective_to = @EffectiveTo,
-            batch_size = @BatchSize, batch_tolerance_pct = @BatchTolerancePct, units_per_count = @UnitsPerCount
+            batch_size = @BatchSize, batch_tolerance_pct = @BatchTolerancePct, units_per_count = @UnitsPerCount,
+            lot_size = @LotSize, lot_hours = @LotHours, lot_by_shift = @LotByShift
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -104,16 +107,36 @@ internal sealed class CapabilityRepository(DbSession session) : ICapabilityRepos
         [.. (await session.QueryAsync<CapabilityRow>(ListOnLine, new { EquipmentId = equipmentId, MaterialId = materialId }, cancellationToken))
             .Select(r => r.ToDomain())];
 
+    private static object Args(Capability c) => new
+    {
+        c.Id,
+        c.EquipmentId,
+        c.MaterialId,
+        c.IdealRatePerHour,
+        c.RateUomId,
+        c.StandardChangeover,
+        c.StandardCrewSize,
+        c.IsPreferred,
+        c.EffectiveFrom,
+        c.EffectiveTo,
+        c.BatchSize,
+        c.BatchTolerancePct,
+        c.UnitsPerCount,
+        LotSize = c.LotCuts.Size,
+        LotHours = c.LotCuts.Hours,
+        LotByShift = c.LotCuts.ByShift,
+    };
+
     public async Task<long> InsertAsync(Capability capability, CancellationToken cancellationToken)
     {
-        var version = await session.ExecuteScalarAsync<long>(Insert, capability, cancellationToken);
+        var version = await session.ExecuteScalarAsync<long>(Insert, Args(capability), cancellationToken);
         await OeeRollupMarks.SiteOfEquipmentChangedAsync(session, capability.EquipmentId, cancellationToken);
         return version;
     }
 
     public async Task<long> UpdateAsync(Capability capability, CancellationToken cancellationToken)
     {
-        var version = await session.ExecuteScalarAsync<long>(Update, capability, cancellationToken);
+        var version = await session.ExecuteScalarAsync<long>(Update, Args(capability), cancellationToken);
         await OeeRollupMarks.SiteOfEquipmentChangedAsync(session, capability.EquipmentId, cancellationToken);
         return version;
     }
@@ -171,11 +194,14 @@ internal sealed class CapabilityRepository(DbSession session) : ICapabilityRepos
         public decimal? BatchSize { get; init; }
         public decimal? BatchTolerancePct { get; init; }
         public decimal? UnitsPerCount { get; init; }
+        public decimal? LotSize { get; init; }
+        public decimal? LotHours { get; init; }
+        public bool LotByShift { get; init; }
         public long Version { get; init; }
 
         public Capability ToDomain() => new(
             Id, EquipmentId, MaterialId, IdealRatePerHour, RateUomId, StandardChangeover, StandardCrewSize, IsPreferred, EffectiveFrom, EffectiveTo, BatchSize,
-            BatchTolerancePct, UnitsPerCount);
+            BatchTolerancePct, UnitsPerCount, new LotCutRule(LotSize, LotHours, LotByShift) is { IsOn: true } rule ? rule : null);
     }
 
     private sealed class RunStandardRow

@@ -303,6 +303,65 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Reports_fill_the_lines_lot_until_it_is_full_and_an_operator_can_start_a_new_one()
+    {
+        var plant = await PlantAsync();
+        var capabilityId = await ScalarAsync<Guid>("SELECT id FROM core.equipment_capability WHERE equipment_id = @Line", new { Line = plant.Extruder });
+        var from = await ScalarAsync<DateTimeOffset>("SELECT effective_from FROM core.equipment_capability WHERE id = @Id", new { Id = capabilityId });
+        var version = await ScalarAsync<long>("SELECT xmin::text::bigint FROM core.equipment_capability WHERE id = @Id", new { Id = capabilityId });
+        await db.SendAsync(new UpdateCapabilityCommand(
+            capabilityId, version, 100m, db.UomId, null, null, false, from, null, LotRule: new Pulaski.Domain.Inventory.LotCutRule(100m, null, false)));
+        Assert.Equal(100m, await ScalarAsync<decimal>("SELECT lot_size FROM core.equipment_capability WHERE id = @Id", new { Id = capabilityId }));
+
+        var started = await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE core.job_run SET started_at = started_at - interval '3 hours' WHERE id = @Id", new { Id = started.RunId });
+        }
+
+        Task<ReportProductionResponse> Report(decimal good, string? lotNumber = null) =>
+            db.SendAsync(new ReportProductionCommand(plant.Extrude, null, good, 0m, null, null, plant.Staging, lotNumber));
+        Task<decimal> QuantityAsync(Guid lot) => ScalarAsync<decimal>("SELECT quantity FROM core.lot WHERE id = @Id", new { Id = lot });
+
+        // 60 then 30 into one lot; 25 fills it to 100 and starts a second with 15.
+        var first = await Report(60m);
+        var second = await Report(30m);
+        Assert.Equal(first.Lot!.LotId, second.Lot!.LotId);
+        var third = await Report(25m);
+        Assert.Equal(2, third.Lots.Count);
+        Assert.Equal(first.Lot.LotId, third.Lots[0].LotId);
+        Assert.Equal((100m, 15m), (await QuantityAsync(first.Lot.LotId), await QuantityAsync(third.Lots[1].LotId)));
+        Assert.Contains(third.Warnings, w => w.Code == "lot_cut" && w.Message.Contains("is full", StringComparison.Ordinal));
+
+        // Reversing the 30 takes only its share back; the full lot isn't reopened, as the second is now the latest.
+        var count = await ScalarAsync<Guid>(
+            "SELECT id FROM core.reason_code WHERE site_id IS NULL AND reason_kind = 'inventory_adjustment' AND code = 'COUNT'", new { });
+        await db.SendAsync(new ReverseProductionReportCommand(plant.Extrude, second.ReportId, count, "Counted twice"));
+        Assert.Equal(70m, await QuantityAsync(first.Lot.LotId));
+        var fourth = await Report(10m);
+        Assert.Equal((third.Lots[1].LotId, 25m), (fourth.Lot!.LotId, await QuantityAsync(third.Lots[1].LotId)));
+
+        // The operator starts a new lot: the next report goes into a third one. A number typed by hand still makes its own lot.
+        var closed = await db.SendAsync(new StartNewLotCommand(plant.Extrude, "New pallet"));
+        Assert.Contains(third.Lots[1].LotNumber, closed.ClosedLots);
+        var fifth = await Report(5m);
+        Assert.NotEqual(third.Lots[1].LotId, fifth.Lot!.LotId);
+        var typed = await Report(5m, "HAND-" + _s);
+        Assert.Equal("HAND-" + _s, typed.Lot!.LotNumber);
+        Assert.Equal(5m, await QuantityAsync(fifth.Lot.LotId));
+        await Assert.ThrowsAsync<DomainRuleException>(async () =>
+        {
+            await db.SendAsync(new StartNewLotCommand(plant.Extrude));
+            await db.SendAsync(new StartNewLotCommand(plant.Extrude));
+        });
+
+        // A material that isn't lot-tracked can't have lots cut.
+        var bulk = await db.SendAsync(new CreateMaterialCommand("BULK-" + _s, "Regrind", null, "raw", null, db.UomId, false, null));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new AddCapabilityCommand(
+            bulk.Id, plant.Packer, 100m, db.UomId, null, null, false, null, null, LotRule: new Pulaski.Domain.Inventory.LotCutRule(null, 8m, false))));
+    }
+
+    [Fact]
     public async Task A_paused_job_frees_the_line_and_the_site_policy_sets_the_tolerance()
     {
         var plant = await PlantAsync();

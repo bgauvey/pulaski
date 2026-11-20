@@ -36,6 +36,12 @@ internal static class ExecutionEndpoints
         })
         .RequireAny(Site.Of(SiteOf.Job), Permissions.FloorView, Permissions.IntegrationsView);
 
+        // Closes the lot the job is filling (D-104): on a line that fills lots by size, age or shift, its next report starts a new one.
+        jobs.MapPost("/{id:guid}/new-lot", async Task<Ok<StartNewLotResponse>> (
+            Guid id, StartNewLotRequest request, ICommandHandler<StartNewLotCommand, StartNewLotResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new StartNewLotCommand(id, request.Comment), ct)))
+        .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.Job));
+
         jobs.MapPost("/{id:guid}/start", async Task<Ok<ExecutionResponse>> (
             Guid id, StartJobRequest request, ICommandHandler<StartJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new StartJobCommand(id, request.Version, request.LineId, request.SkipChangeover), ct)))

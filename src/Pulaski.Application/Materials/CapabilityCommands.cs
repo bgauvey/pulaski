@@ -4,6 +4,7 @@ using Pulaski.Application.Errors;
 using Pulaski.Application.Units;
 using Pulaski.Contracts.Materials;
 using Pulaski.Domain;
+using Pulaski.Domain.Inventory;
 using Pulaski.Domain.Materials;
 using Pulaski.Domain.Scheduling;
 
@@ -22,7 +23,8 @@ public sealed record AddCapabilityCommand(
     DateTimeOffset? EffectiveTo,
     decimal? BatchSize = null,
     decimal? BatchTolerancePct = null,
-    decimal? UnitsPerCount = null) : ICommand<CapabilityResponse>;
+    decimal? UnitsPerCount = null,
+    LotCutRule? LotRule = null) : ICommand<CapabilityResponse>;
 
 /// <summary>New values for a capability; a new ideal rate recalculates the planning rate while it is still based on it.</summary>
 public sealed record UpdateCapabilityCommand(
@@ -37,7 +39,8 @@ public sealed record UpdateCapabilityCommand(
     DateTimeOffset? EffectiveTo,
     decimal? BatchSize = null,
     decimal? BatchTolerancePct = null,
-    decimal? UnitsPerCount = null) : ICommand<CapabilityResponse>;
+    decimal? UnitsPerCount = null,
+    LotCutRule? LotRule = null) : ICommand<CapabilityResponse>;
 
 /// <summary>Stops a capability now. It is never deleted.</summary>
 public sealed record EndCapabilityCommand(Guid Id, long ExpectedVersion) : ICommand<CapabilityResponse>;
@@ -55,7 +58,7 @@ internal sealed class CapabilityWrites(
 
     public static CapabilityChange Change(
         decimal rate, Guid rateUomId, int? changeoverMinutes, decimal? crewSize, bool isPreferred, DateTimeOffset from, DateTimeOffset? to,
-        decimal? batchSize = null, decimal? batchTolerancePct = null, decimal? unitsPerCount = null)
+        decimal? batchSize = null, decimal? batchTolerancePct = null, decimal? unitsPerCount = null, LotCutRule? lotRule = null)
     {
         new Validator()
             .Require(rate > 0, "IdealRatePerHour", "Must be greater than zero.")
@@ -66,9 +69,11 @@ internal sealed class CapabilityWrites(
             .Require(batchSize is null or > 0, "BatchSize", "Greater than zero, or blank for the material's batch size.")
             .Require(batchTolerancePct is null or (>= 0 and <= 50), "BatchTolerancePct", "Between 0 and 50 percent, or blank for the material's tolerance.")
             .Require(unitsPerCount is null or > 0, "UnitsPerCount", "Greater than zero, or blank for one.")
+            .Require(lotRule?.Problem() is null, "LotRule", lotRule?.Problem() ?? "")
             .ThrowIfInvalid();
         return new CapabilityChange(
-            rate, rateUomId, changeoverMinutes is { } m ? TimeSpan.FromMinutes(m) : null, crewSize, isPreferred, from, to, batchSize, batchTolerancePct, unitsPerCount);
+            rate, rateUomId, changeoverMinutes is { } m ? TimeSpan.FromMinutes(m) : null, crewSize, isPreferred, from, to, batchSize, batchTolerancePct, unitsPerCount,
+            lotRule);
     }
 
     /// <summary>The line, locked first (D-017), so the change serializes with the scheduling commands that check eligibility.</summary>
@@ -109,6 +114,14 @@ internal sealed class CapabilityWrites(
     /// </summary>
     public async Task<string?> CheckBatchSizeAsync(Capability capability, Capability? before, Material material, string lineCode, CancellationToken cancellationToken)
     {
+        // Lots are cut by size, age or shift only where a report's output goes into lots by quantity (D-104).
+        if (capability.LotCuts.IsOn && (!material.IsLotTracked || (await materials.GetBatchingAsync(material.Id, cancellationToken)).Size is not null))
+        {
+            throw new DomainRuleException(material.IsLotTracked
+                ? $"{material.Code} is made in batches, and each good batch is its own lot; leave {lineCode}'s lot size, age and shift blank."
+                : $"{material.Code} isn't lot-tracked, so it is kept as one balance per location; leave {lineCode}'s lot size, age and shift blank.");
+        }
+
         if (capability.BatchSize is null && capability.BatchTolerancePct is null)
         {
             return before is { BatchSize: null, BatchTolerancePct: null } or null ? null : $"{lineCode} now uses {material.Code}'s own batch size and tolerance.";
@@ -215,7 +228,7 @@ internal sealed class AddCapabilityHandler(
         var now = timeProvider.GetUtcNow();
         var change = CapabilityWrites.Change(
             command.IdealRatePerHour, command.RateUomId, command.StandardChangeoverMinutes, command.StandardCrewSize, command.IsPreferred,
-            command.EffectiveFrom ?? now, command.EffectiveTo, command.BatchSize, command.BatchTolerancePct, command.UnitsPerCount);
+            command.EffectiveFrom ?? now, command.EffectiveTo, command.BatchSize, command.BatchTolerancePct, command.UnitsPerCount, command.LotRule);
         var writes = new CapabilityWrites(capabilities, materials, units, eventLog, events, ids);
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -266,7 +279,7 @@ internal sealed class UpdateCapabilityHandler(
         var now = timeProvider.GetUtcNow();
         var change = CapabilityWrites.Change(
             command.IdealRatePerHour, command.RateUomId, command.StandardChangeoverMinutes, command.StandardCrewSize, command.IsPreferred,
-            command.EffectiveFrom, command.EffectiveTo, command.BatchSize, command.BatchTolerancePct, command.UnitsPerCount);
+            command.EffectiveFrom, command.EffectiveTo, command.BatchSize, command.BatchTolerancePct, command.UnitsPerCount, command.LotRule);
         var writes = new CapabilityWrites(capabilities, materials, units, eventLog, events, ids);
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);

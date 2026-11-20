@@ -49,6 +49,11 @@ public sealed record MaterialCapabilityDto
     /// <summary>The material's base units one machine count makes on this line (#27), after the tag's scale; null: 1.</summary>
     public decimal? UnitsPerCount { get; init; }
 
+    /// <summary>When its production lots are cut (D-104): at a size in base units, an age in hours, a change of shift; all blank: one lot per report.</summary>
+    public decimal? LotSize { get; init; }
+    public decimal? LotHours { get; init; }
+    public bool LotByShift { get; init; }
+
     /// <summary>True when it applies now: jobs for the material can be placed on the line.</summary>
     public bool IsInEffect { get; init; }
 
@@ -93,6 +98,15 @@ public sealed record AddCapabilityRequest
     /// <summary>Base units of the material per machine count on this line (#27); blank for one.</summary>
     public decimal? UnitsPerCount { get; init; }
 
+    /// <summary>Its production lots are full at this many base units (D-104); blank: no size.</summary>
+    public decimal? LotSize { get; init; }
+
+    /// <summary>Its production lots are full this many hours after their first production (D-104); blank: no age.</summary>
+    public decimal? LotHours { get; init; }
+
+    /// <summary>Its production lots end at a change of shift (D-104).</summary>
+    public bool LotByShift { get; init; }
+
     /// <summary>When it starts; now when left out.</summary>
     public DateTimeOffset? EffectiveFrom { get; init; }
 
@@ -120,6 +134,15 @@ public sealed record UpdateCapabilityRequest
 
     /// <summary>Base units of the material per machine count on this line (#27); blank for one.</summary>
     public decimal? UnitsPerCount { get; init; }
+
+    /// <summary>Its production lots are full at this many base units (D-104); blank: no size.</summary>
+    public decimal? LotSize { get; init; }
+
+    /// <summary>Its production lots are full this many hours after their first production (D-104); blank: no age.</summary>
+    public decimal? LotHours { get; init; }
+
+    /// <summary>Its production lots end at a change of shift (D-104).</summary>
+    public bool LotByShift { get; init; }
 }
 
 public sealed record EndCapabilityRequest
