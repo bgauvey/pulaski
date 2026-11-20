@@ -473,6 +473,16 @@ public sealed class ExecutionTests(DatabaseFixture db)
         Assert.Equal(("op." + _s).ToLowerInvariant(), access!.Username);
 
         // A planner's role does none of them on the floor; someone without a user only records time.
+        // With a production job running, the operator gets the report form's data (#148): the job, the machine's count, locations and scrap
+        // reasons; a planner doesn't.
+        Assert.Null(olu.Report);
+        await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
+        var running = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, operatorPerson.Id, null));
+        Assert.Equal((plant.Extrude, (decimal?)null), (running.Report!.Job.JobId, running.Report.Job.BatchSize));
+        Assert.Contains(running.Report.Locations, l => l.Id == plant.Staging);
+        Assert.NotNull(running.Report.Machine);
+        Assert.Null((await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, plannerPerson.Id, null))).Report);
+
         var pia = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, plannerPerson.Id, null));
         Assert.Equal((true, false, false, false), (pia.PersonIsUser, pia.CanRunJobs, pia.CanReport, pia.CanCodeStops));
         var noa = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, noUser.Id, null));

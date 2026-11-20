@@ -20,6 +20,9 @@ internal sealed class GetStationHandler(
     IQueryHandler<GetLineBoardQuery, IReadOnlyList<LineBoardRowDto>> board,
     IQueryHandler<GetTerminalStatusQuery, TerminalStatusDto> status,
     IQueryHandler<ListReasonCodesQuery, IReadOnlyList<ReasonCodeDto>> reasons,
+    IQueryHandler<GetJobExecutionQuery, JobExecutionDto> execution,
+    IQueryHandler<GetMachineCountsQuery, MachineCountsDto> machine,
+    IQueryHandler<ListInventoryLocationsQuery, IReadOnlyList<InventoryLocationDto>> locations,
     ISecurityReadStore security,
     TimeProvider timeProvider) : IQueryHandler<GetStationQuery, StationDto>
 {
@@ -47,6 +50,9 @@ internal sealed class GetStationHandler(
             RunningJob = row?.Running,
             Next = row?.Next ?? [],
             RunEndReasons = query.PersonId is null ? [] : await reasons.HandleAsync(new ListReasonCodesQuery("run_end", terminal.SiteId), cancellationToken),
+            Report = row?.Running is { JobType: "production" } running && May(Permissions.ProductionReport)
+                ? await ReportAsync(running.JobId, terminal.SiteId, cancellationToken)
+                : null,
             PersonId = person?.PersonId,
             PersonName = person?.PersonName,
             PersonIsUser = access is not null,
@@ -54,6 +60,22 @@ internal sealed class GetStationHandler(
             CanReport = May(Permissions.ProductionReport),
             CanCodeStops = May(Permissions.DowntimeCode),
             IdleMinutes = (int)Domain.Labor.TerminalRules.StationIdle.TotalMinutes,
+        };
+    }
+
+    // Reporting at the station (#148): the job as the Floor sees it, the machine's count since the last report, locations and scrap reasons.
+    private async Task<StationReportDto> ReportAsync(Guid jobId, Guid siteId, CancellationToken cancellationToken)
+    {
+        var job = await execution.HandleAsync(new GetJobExecutionQuery(jobId), cancellationToken);
+        var places = (await locations.HandleAsync(new ListInventoryLocationsQuery(siteId), cancellationToken)).Where(l => l.IsActive).ToList();
+        var filling = job.FillingLots.Count > 0 ? job.FillingLots[0].LocationCode : null;
+        return new StationReportDto
+        {
+            Job = job,
+            Machine = job.BatchSize is null ? await machine.HandleAsync(new GetMachineCountsQuery(jobId, null), cancellationToken) : null,
+            Locations = places,
+            ScrapReasons = await reasons.HandleAsync(new ListReasonCodesQuery("scrap", siteId), cancellationToken),
+            DefaultLocationId = places.FirstOrDefault(l => l.Code == filling)?.Id,
         };
     }
 }
@@ -78,4 +100,22 @@ public static class StationJobs
     /// <summary>The job running on the station's line, or one of its next jobs: nothing else can be started or stopped from there.</summary>
     public static bool IsOnLine(StationDto station, Guid jobId) =>
         station.RunningJob?.JobId == jobId || station.Next.Any(j => j.JobId == jobId);
+}
+
+/// <summary>What a report at a station did, in words (#148). Pure.</summary>
+public static class StationReporting
+{
+    /// <summary>"Reported 1,200 m good and 12 m scrap; good output in lot WO-1-10-03."</summary>
+    public static string Done(decimal good, decimal scrap, string? unit, ReportProductionResponse result)
+    {
+        string Qty(decimal value) => value.ToString("#,0.###", System.Globalization.CultureInfo.InvariantCulture) + (unit is null ? "" : " " + unit);
+        var made = good > 0 && scrap > 0 ? $"{Qty(good)} good and {Qty(scrap)} scrap" : good > 0 ? $"{Qty(good)} good" : $"{Qty(scrap)} scrap";
+        var lots = result.Lots.Select(l => l.LotNumber ?? "the balance").ToList();
+        return lots.Count switch
+        {
+            0 => $"Reported {made}.",
+            1 => $"Reported {made}; good output in lot {lots[0]}.",
+            _ => $"Reported {made}; good output in lots {string.Join(", ", lots)}.",
+        };
+    }
 }

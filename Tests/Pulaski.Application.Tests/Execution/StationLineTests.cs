@@ -36,4 +36,18 @@ public class StationLineTests
         Assert.True(StationJobs.IsOnLine(station, next));
         Assert.False(StationJobs.IsOnLine(station, Guid.NewGuid()));
     }
+
+    [Fact]
+    public void A_station_report_says_what_it_made_and_where_it_went()
+    {
+        ReportProductionResponse Result(params string?[] lots) => new()
+        {
+            RunId = Guid.NewGuid(),
+            Lots = [.. lots.Select(l => new Pulaski.Contracts.Inventory.LotTransactionResponse { LotId = Guid.NewGuid(), LotNumber = l, Status = "available" })],
+        };
+
+        Assert.Equal("Reported 1,200 m good and 12 m scrap; good output in lot J-03.", StationReporting.Done(1200m, 12m, "m", Result("J-03")));
+        Assert.Equal("Reported 250 m good; good output in lots J-03, J-04.", StationReporting.Done(250m, 0m, "m", Result("J-03", "J-04")));
+        Assert.Equal("Reported 5 m scrap.", StationReporting.Done(0m, 5m, "m", Result()));
+    }
 }

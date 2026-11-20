@@ -2910,6 +2910,13 @@ floor's own `StartJobCommand` / `PauseJobCommand` / `CompleteJobCommand`; the an
 The page is static forms: Pause/Complete open a reason step (buttons by reason group, comment, no reason, back). Partial batches and starting a
 department's job stay on the Floor.
 
+**Reporting (#148).** For a person whose role reports and a running production job, the station carries `StationReportDto`: the job's
+`JobExecutionDto` (unit, batches, lots being filled), its `MachineCountsDto` since the last report, the site's active locations and `scrap`
+reasons, and a default location (where its lot is being filled). `POST /api/terminal/station/report` (`production.report`, the running job only,
+not a batch material) runs the Floor's `ReportProductionCommand`: typed figures in the job's unit, or with `FromMachine` the figures the station
+showed in their unit with their `MachineThrough`, which the command checks against the run's coverage (D-097). The figures are the screen's, not
+re-read when sent, so what is reported is what the button said. Notes say what was reported and into which lots (`StationReporting.Done`).
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

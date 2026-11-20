@@ -43,4 +43,30 @@ public class StationViewTests
             StationView.Problem("One or more fields are invalid.", new Dictionary<string, string[]> { ["comment"] = ["Reason Other needs a comment."] }));
         Assert.Equal("Pause or complete EXT-01's job first.", StationView.Problem("Pause or complete EXT-01's job first.", new Dictionary<string, string[]>()));
     }
+
+    [Fact]
+    public void Reporting_words_name_the_machine_figures_and_the_lot_at_the_location()
+    {
+        var counts = new MachineCountsDto { GoodQty = 1200m, ScrapQty = 12m, UomCode = "m" };
+        Assert.Equal("1,200 m good · 12 m scrap", StationView.MachineFigures(counts));
+        Assert.Equal("1,200 m good", StationView.MachineFigures(counts with { ScrapQty = 0 }));
+
+        var job = new JobExecutionDto
+        {
+            JobId = Guid.NewGuid(),
+            JobNumber = "WO-1-10",
+            JobType = "production",
+            Status = "running",
+            SiteId = Guid.NewGuid(),
+            LineId = Guid.NewGuid(),
+            LineCode = "EXT-01",
+            BaseUomCode = "m",
+            LotSize = 100m,
+            FillingLots = [new FillingLotDto { LotId = Guid.NewGuid(), LotNumber = "WO-1-10-02", LocationCode = "FG", Quantity = 30m }],
+        };
+        Assert.Equal("At FG it goes into lot WO-1-10-02 (30 of 100 m).", StationView.LotHint(job, "FG"));
+        Assert.Equal("At RM it starts a new lot.", StationView.LotHint(job, "RM"));
+        Assert.Null(StationView.LotHint(job with { LotSize = null }, "FG"));
+        Assert.Null(StationView.LotHint(job, null));
+    }
 }

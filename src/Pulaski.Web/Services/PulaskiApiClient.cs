@@ -1531,6 +1531,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<StationActionResponse> StationJobAsync(string secret, string action, StationJobRequest request, CancellationToken ct = default) =>
         TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, $"api/terminal/station/{action}", request, ct);
 
+    /// <summary>A production report at the station (#148).</summary>
+    public Task<StationActionResponse> StationReportAsync(string secret, StationReportRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, "api/terminal/station/report", request, ct);
+
     public Task<StationResponse> StationSignOnAsync(string secret, StationSignOnRequest request, CancellationToken ct = default) =>
         TerminalSendAsync<StationResponse>(secret, HttpMethod.Post, "api/terminal/station/sign-on", request, ct);
 
