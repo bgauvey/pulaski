@@ -91,6 +91,16 @@ public sealed record StationDto
     /// </summary>
     public StationReportDto? Report { get; init; }
 
+    /// <summary>
+    /// The line's stops waiting for a reason (#149): on the line and the machines below it, over the last hours, the open one first. Shown
+    /// even while the station waits, so it can ask for a badge.
+    /// </summary>
+    public IReadOnlyList<Pulaski.Contracts.MachineData.DowntimeDto> StopsToCode { get; init; } = [];
+
+    /// <summary>The reasons each machine's stops may be coded with, by equipment, for a signed-on person whose role codes stops.</summary>
+    public IReadOnlyDictionary<Guid, IReadOnlyList<Pulaski.Contracts.Inventory.ReasonCodeDto>> CodingReasons { get; init; } =
+        new Dictionary<Guid, IReadOnlyList<Pulaski.Contracts.Inventory.ReasonCodeDto>>();
+
     /// <summary>Why a run ends (reasons of kind <c>run_end</c> at the site), offered when pausing or completing at the station (#147).</summary>
     public IReadOnlyList<Pulaski.Contracts.Inventory.ReasonCodeDto> RunEndReasons { get; init; } = [];
 
@@ -195,5 +205,15 @@ public sealed record StationReportRequest
     public decimal ScrapQty { get; init; }
     public Guid? ScrapReasonCodeId { get; init; }
     public Guid? LocationId { get; init; }
+    public string? Comment { get; init; }
+}
+
+/// <summary>Code a stop at a station (#149), as the signed-on person: one of the station's stops to code, with its reason.</summary>
+public sealed record StationStopRequest
+{
+    public string? Ticket { get; init; }
+    public string? Line { get; init; }
+    public Guid StopId { get; init; }
+    public Guid ReasonCodeId { get; init; }
     public string? Comment { get; init; }
 }

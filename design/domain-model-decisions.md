@@ -2917,6 +2917,11 @@ not a batch material) runs the Floor's `ReportProductionCommand`: typed figures 
 showed in their unit with their `MachineThrough`, which the command checks against the run's coverage (D-097). The figures are the screen's, not
 re-read when sent, so what is reported is what the button said. Notes say what was reported and into which lots (`StationReporting.Done`).
 
+**Stops (#149).** The station carries `StopsToCode`: `ListStopsQuery` for its line and the machines below, uncoded, no micro-stops, over
+`StationStops.Window` (12 h), the open one first (`StationStops.Order`); shown even with no one signed on, so it can ask for a badge. For a person
+whose role codes stops, `CodingReasons` holds each machine's offered reasons (`ListCodingReasonsQuery`). `POST /api/terminal/station/code-stop`
+(`downtime.code`) codes only one of those stops through `CodeDowntimeCommand`. With it, #118's pieces are all in place.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

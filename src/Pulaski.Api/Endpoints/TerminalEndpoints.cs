@@ -4,10 +4,12 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Execution;
 using Pulaski.Application.Labor;
+using Pulaski.Application.MachineData;
 using Pulaski.Application.Security;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Labor;
+using Pulaski.Contracts.MachineData;
 using Pulaski.Domain;
 using Pulaski.Domain.Labor;
 using Pulaski.Domain.Security;
@@ -166,6 +168,28 @@ internal static class TerminalEndpoints
             return TypedResults.Ok(new StationActionResponse
             {
                 Notes = [StationReporting.Done(good, scrap, request.FromMachine ? form.Machine?.UomCode : form.Job.UomCode, result), .. result.Warnings.Select(w => w.Message)],
+                Ticket = ticket,
+                TicketExpiresAt = expires,
+                Station = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct),
+            });
+        });
+
+        // Coding a stop at the station (#149): only one of its stops to code, as the signed-on person.
+        terminal.MapPost("/station/code-stop", async Task<Ok<StationActionResponse>> (
+            StationStopRequest request, HttpContext http, StationServices station, ICommandHandler<CodeDowntimeCommand, DowntimeCodedResponse> code,
+            CancellationToken ct) =>
+        {
+            var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
+                http, station.Tickets, station.Security, station.Time, request.Ticket, Domain.Security.Permissions.DowntimeCode, "code stops");
+            var personId = station.Tickets.PersonOf(ticket, terminal.Id);
+            var before = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct);
+            var stop = before.StopsToCode.FirstOrDefault(s => s.Id == request.StopId)
+                ?? throw new DomainRuleException("That stop isn't waiting for a reason on this station's line; code it on Machines.");
+            await code.HandleAsync(new CodeDowntimeCommand(stop.Id, stop.StartedAt, request.ReasonCodeId, Text(request.Comment)), ct);
+            var reason = before.CodingReasons.GetValueOrDefault(stop.EquipmentId)?.FirstOrDefault(r => r.Id == request.ReasonCodeId)?.Name;
+            return TypedResults.Ok(new StationActionResponse
+            {
+                Notes = [$"{stop.EquipmentCode}'s stop is coded{(reason is null ? "" : $" as {reason}")}."],
                 Ticket = ticket,
                 TicketExpiresAt = expires,
                 Station = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct),

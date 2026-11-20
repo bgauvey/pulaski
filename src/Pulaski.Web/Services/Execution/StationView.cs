@@ -81,4 +81,11 @@ public static class StationView
             ? $"At {locationCode} it goes into lot {lot.LotNumber} ({LotFillingView.Holds(job, lot)})."
             : $"At {locationCode} it starts a new lot.";
     }
+
+    public static string StopsTitle(int count) => count == 1 ? "A stop needs its reason" : $"{count} stops need their reasons";
+
+    /// <summary>"stopped 4 min ago, still stopped" for the open stop; "stopped for 12 min, 35 min ago" for an ended one.</summary>
+    public static string StopWhen(Pulaski.Contracts.MachineData.DowntimeDto stop, DateTimeOffset now) => stop.EndedAt is { } ended
+        ? $"stopped for {LineDisplayView.Duration(stop.StartedAt, ended)}, {LineDisplayView.Duration(ended, now)} ago"
+        : $"stopped {LineDisplayView.Duration(stop.StartedAt, now)} ago, still stopped";
 }

@@ -864,6 +864,17 @@ asks which of its lines the station is for (`/terminal/station?line=EXT-01` choo
 Only the running job and the line's next jobs can be acted on at a station; a partial batch when stopping, starting a department's job on
 a line, reporting a material made in batches, choosing a lot number or what output was made from, and back-dating are done on the Floor for now.
 
+**Give a stop its reason at a station.** When a machine on the line has stopped and nobody has said why, the station asks, at the top of the
+screen, even before anyone badges in (*A stop needs its reason · EXT-01-SAW · stopped 4 min ago, still stopped*).
+
+1. Badge in, with a role that codes stops.
+2. Click **Give the reason** on the stop, and tap its reason. **Confirm** takes the reason the machine's stop code points to, when there is
+   one; a reason marked * needs a comment typed first.
+3. The station says the stop is coded and drops it from the list.
+
+In detail: it lists the stops of the line and its machines from the last 12 hours that have no reason, the one still going first, without
+micro-stops. Splitting, merging or changing a stop's times is done on **Machines**.
+
 **Who may do what at a station.** What someone may do there is what their Pulaski user may do at the station's site, as if they had signed
 in: an operator's role lets them start, pause and complete jobs, report production and code stops; a planner's doesn't. Link a person to their
 user on **People** (their user name). Someone with no user can still clock on and off at the badge terminal, and the station tells them what it
