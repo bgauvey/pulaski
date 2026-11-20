@@ -79,8 +79,14 @@ public sealed record StationDto
     public IReadOnlyList<StationLineDto> Lines { get; init; } = [];
     public LineDisplayLineDto? Line { get; init; }
 
+    /// <summary>The job running on the line, to act on (#147); null when none is.</summary>
+    public RunningJobDto? RunningJob { get; init; }
+
     /// <summary>The line's open jobs after the running one, in sequence.</summary>
     public IReadOnlyList<BoardJobDto> Next { get; init; } = [];
+
+    /// <summary>Why a run ends (reasons of kind <c>run_end</c> at the site), offered when pausing or completing at the station (#147).</summary>
+    public IReadOnlyList<Pulaski.Contracts.Inventory.ReasonCodeDto> RunEndReasons { get; init; } = [];
 
     /// <summary>Who is signed on; null while it waits for a badge.</summary>
     public Guid? PersonId { get; init; }
@@ -126,4 +132,27 @@ public sealed record StationResponse
     public string? Ticket { get; init; }
     public DateTimeOffset? TicketExpiresAt { get; init; }
     public StationDto? Station { get; init; }
+}
+
+/// <summary>
+/// Start, pause or complete a job at an operator station (#147), as the person the ticket signs on: the job must be the one running on the
+/// station's line or one of its next jobs.
+/// </summary>
+public sealed record StationJobRequest
+{
+    public string? Ticket { get; init; }
+    public string? Line { get; init; }
+    public Guid JobId { get; init; }
+    public long Version { get; init; }
+    public Guid? ReasonCodeId { get; init; }
+    public string? Comment { get; init; }
+}
+
+/// <summary>What a station action did: its notes (a downstream job now ready, a changeover started), the renewed ticket and the station now.</summary>
+public sealed record StationActionResponse
+{
+    public IReadOnlyList<string> Notes { get; init; } = [];
+    public required string Ticket { get; init; }
+    public DateTimeOffset TicketExpiresAt { get; init; }
+    public required StationDto Station { get; init; }
 }

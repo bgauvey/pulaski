@@ -150,7 +150,9 @@
     gap: var(--space-2);
 }
 
-    .reason-grid > .btn {
+    /* Scoped under the touch layout like its other button rules, so these taller targets win over its 44 px. */
+    .reason-grid > .btn,
+    :root[data-touch] .reason-grid > .btn {
         min-height: 56px;
         white-space: normal;
         text-align: left;

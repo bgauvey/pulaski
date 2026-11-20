@@ -83,6 +83,11 @@
     /* Bigger than the touch layout's own buttons (css/touch.css), so scoped to the shell to win over it. */
     .station-shell .station-actions .btn { min-height: 4rem; font-size: 1.15rem; }
 
+.station-shell .reason-grid > .btn {
+    min-height: 4rem;
+    font-size: 1.1rem;
+}
+
 .station-shell .station-badge {
     font-size: 1.75rem;
     letter-spacing: 0.1em;

@@ -77,6 +77,14 @@ else
 
     <div class="station-grid">
         <div>
+            @if (_notes.Count > 0)
+            {
+                <div class="drawer-alert mb-3" role="status"><Icon Name="info" Size="20" /><span>@string.Join(" ", _notes)</span></div>
+            }
+            @if (_actionError is not null)
+            {
+                <div class="alert alert-danger" role="alert">@_actionError</div>
+            }
             @if (line.Status is "down" or "waiting" && line.StopText is { } stop)
             {
                 <div class="drawer-alert is-warning mb-3" role="status"><Icon Name="stop" Size="20" /><span>@stop</span></div>
@@ -96,6 +104,48 @@ else
                     @if (progress is { } pct)
                     {
                         <div class="floor-bar mt-2" role="img" aria-label="@pct% of the planned quantity"><span style="width: @pct%"></span></div>
+                    }
+                    @if (_station.CanRunJobs && _station.RunningJob is { } running)
+                    {
+                        <EditForm Model="Input" FormName="station" OnSubmit="ActAsync" method="post" class="mt-3">
+                            <input type="hidden" name="Input.JobId" value="@running.JobId" />
+                            <input type="hidden" name="Input.Version" value="@running.Version" />
+                            @if (_stopping is { } stopping)
+                            {
+                                @* Why it stops (#147): one tap on a reason pauses or completes it; a reason that asks for a comment needs one typed first. *@
+                                <h3 class="h5">@(stopping == "complete" ? "Complete it: why did it stop, if short?" : "Pause it: why is it stopping?")</h3>
+                                <label class="form-label" for="station-comment">Comment <span class="text-muted">(reasons marked * need one)</span></label>
+                                <InputText id="station-comment" class="form-control mb-3" maxlength="1000" @bind-Value="Input.Comment" />
+                                <div class="station-actions mb-3">
+                                    <button type="submit" name="Input.Action" value="@stopping" class="btn btn-primary">@(stopping == "complete" ? "Complete" : "Pause") with no reason</button>
+                                    <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">Back</button>
+                                </div>
+                                @foreach (var group in ReasonPickerView.Groups(_station.RunEndReasons))
+                                {
+                                    <div class="reason-grid-group">
+                                        @if (group.Title is { } title)
+                                        {
+                                            <div class="reason-grid-title">@title</div>
+                                        }
+                                        <div class="reason-grid">
+                                            @foreach (var reason in group.Reasons)
+                                            {
+                                                <button type="submit" name="Input.Reason" value="@($"{stopping}:{reason.Id}")" class="btn btn-outline-secondary" @key="reason.Id">
+                                                    @reason.Name@(reason.RequiresComment ? " *" : "")
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="station-actions">
+                                    <button type="submit" name="Input.Action" value="choose-pause" class="btn btn-outline-primary">Pause</button>
+                                    <button type="submit" name="Input.Action" value="choose-complete" class="btn btn-outline-primary">Complete</button>
+                                </div>
+                            }
+                        </EditForm>
                     }
                 }
                 else
@@ -123,6 +173,16 @@ else
                                 {
                                     <div class="small text-muted">@waiting</div>
                                 }
+                                @if (_station.CanRunJobs && _station.RunningJob is null && next.IsReady)
+                                {
+                                    <EditForm Model="Input" FormName="@($"station-start-{next.JobId:N}")" OnSubmit="ActAsync" method="post" class="mt-2">
+                                        <input type="hidden" name="Input.JobId" value="@next.JobId" />
+                                        <input type="hidden" name="Input.Version" value="@next.Version" />
+                                        <div class="station-actions">
+                                            <button type="submit" name="Input.Action" value="start" class="btn btn-primary">@(next.Status == "paused" ? "Resume" : "Start") @next.JobNumber</button>
+                                        </div>
+                                    </EditForm>
+                                }
                             </li>
                         }
                     </ul>
@@ -143,7 +203,7 @@ else
                 {
                     <div class="drawer-alert mb-3" role="status"><Icon Name="info" Size="20" /><span>@limits</span></div>
                 }
-                <EditForm Model="Input" FormName="station" OnSubmit="SignOff" method="post">
+                <EditForm Model="Input" FormName="station-sign-off" OnSubmit="ActAsync" method="post">
                     <div class="station-actions">
                         <button type="submit" name="Input.Action" value="sign-off" class="btn btn-outline-secondary">Sign off</button>
                     </div>
@@ -190,6 +250,9 @@ else
     private string? _error;
     private bool _enrolled;
     private bool _needsPin;
+    private string? _stopping;
+    private string? _actionError;
+    private IReadOnlyList<string> _notes = [];
 
     private string? Secret => TerminalCookie.Get(HttpContext);
 
@@ -251,12 +314,50 @@ else
         }
     }
 
-    private void SignOff()
+    /// <summary>Signing off, choosing to pause or complete, and the job actions themselves (#147), as the person signed on.</summary>
+    private async Task ActAsync()
     {
-        if (Input.Action == "sign-off")
+        // A reason button carries what it stops and the reason: "pause:<id>" or "complete:<id>".
+        var (action, reasonId) = Input.Reason?.Split(':') is [var stop, var id] && Guid.TryParse(id, out var reason) ? (stop, (Guid?)reason) : (Input.Action, null);
+        switch (action)
         {
-            TerminalCookie.ClearStation(HttpContext);
-            Navigation.NavigateTo(Here, forceLoad: true);
+            case "sign-off":
+                TerminalCookie.ClearStation(HttpContext);
+                Navigation.NavigateTo(Here, forceLoad: true);
+                return;
+            case "choose-pause" or "choose-complete":
+                _stopping = action["choose-".Length..];
+                return;
+            case "cancel":
+                return;
+            case "start" or "pause" or "complete" when Input.JobId is { } jobId:
+                try
+                {
+                    var result = await Api.StationJobAsync(Secret!, action, new StationJobRequest
+                    {
+                        Ticket = TerminalCookie.GetStation(HttpContext),
+                        Line = LineCode,
+                        JobId = jobId,
+                        Version = Input.Version,
+                        ReasonCodeId = reasonId,
+                        Comment = Input.Comment,
+                    });
+                    TerminalCookie.SetStation(HttpContext, result.Ticket, result.TicketExpiresAt);
+                    _station = result.Station;
+                    _notes = [StationView.Done(action, _station), .. result.Notes];
+                }
+                catch (ApiException ex)
+                {
+                    _actionError = StationView.Problem(ex.Detail ?? ex.Title, ex.Errors);
+                    _stopping = action is "pause" or "complete" ? action : null;
+                    if (ex.Status == 401)
+                    {
+                        TerminalCookie.ClearStation(HttpContext);
+                        await LoadAsync(null);
+                    }
+                }
+
+                return;
         }
     }
 
@@ -267,5 +368,9 @@ else
         public string? Badge { get; set; }
         public string? Pin { get; set; }
         public string? Action { get; set; }
+        public string? Reason { get; set; }
+        public Guid? JobId { get; set; }
+        public long Version { get; set; }
+        public string? Comment { get; set; }
     }
 }

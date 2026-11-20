@@ -19,4 +19,21 @@ public class StationLineTests
         Assert.Null(StationLine.Choose([a, b], null, null));
         Assert.Same(a, StationLine.Choose([a], " ", null));
     }
+
+    [Fact]
+    public void A_station_acts_only_on_its_lines_running_or_next_jobs()
+    {
+        Guid running = Guid.NewGuid(), next = Guid.NewGuid();
+        var station = new StationDto
+        {
+            TerminalName = "S",
+            TerminalCode = "S",
+            RunningJob = new RunningJobDto { JobId = running, JobNumber = "J1", JobType = "production", RunId = Guid.NewGuid() },
+            Next = [new BoardJobDto { JobId = next, JobNumber = "J2", JobType = "production", Status = "dispatched" }],
+        };
+
+        Assert.True(StationJobs.IsOnLine(station, running));
+        Assert.True(StationJobs.IsOnLine(station, next));
+        Assert.False(StationJobs.IsOnLine(station, Guid.NewGuid()));
+    }
 }

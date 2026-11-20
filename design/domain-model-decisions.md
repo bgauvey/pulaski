@@ -2903,6 +2903,13 @@ signed-in app checks. The station shows `PersonIsUser`, `CanRunJobs` (`job.execu
 user's actor, `UserId` = theirs, `IRequestContext.Source` = `EventSources.Station(code)`, `pulaski-api/terminal/CODE`) and the ticket is
 renewed for another `StationIdle`. Kiosk labor keeps acting as `terminal:<code>`.
 
+**Running the job (#147).** The station carries its line's `RunningJob` (id, version) and the site's `run_end` reasons (a terminal can't call
+the signed-in lists). `POST /api/terminal/station/{start|pause|complete}` (`StationJobRequest`: ticket, line, job, version, reason, comment)
+acts through `StationActing` (`job.execute`) and refuses a job that isn't the line's running or next one (`StationJobs.IsOnLine`), then runs the
+floor's own `StartJobCommand` / `PauseJobCommand` / `CompleteJobCommand`; the answer carries their notes, the renewed ticket and the station.
+The page is static forms: Pause/Complete open a reason step (buttons by reason group, comment, no reason, back). Partial batches and starting a
+department's job stay on the Floor.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

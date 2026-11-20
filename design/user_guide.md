@@ -843,6 +843,16 @@ In detail: the station always uses the [touch layout](#use-a-touch-screen) and r
 while they use it; after 15 minutes with nothing done there, it signs them off and waits for a badge. A terminal with no first line offered
 asks which of its lines the station is for (`/terminal/station?line=EXT-01` chooses one). Switching the terminal off stops it at once.
 
+**Run the job at a station.** Signed on with a role that runs jobs:
+
+1. **Start** (or **Resume**) is on the line's next job that is ready, while nothing runs.
+2. **Pause** or **Complete** on the running job shows why it stops: tap a reason, or **Pause with no reason** / **Complete with no reason**.
+   A reason marked * needs a comment typed first. **Back** returns without stopping.
+3. The station says what happened (*Paused. Run 1 of WO-5001-10 ended after 2 h 05 min.*), as the Floor does.
+
+Only the running job and the line's next jobs can be acted on at a station; a partial batch when stopping, and starting a department's job on
+a line, are done on the Floor for now.
+
 **Who may do what at a station.** What someone may do there is what their Pulaski user may do at the station's site, as if they had signed
 in: an operator's role lets them start, pause and complete jobs, report production and code stops; a planner's doesn't. Link a person to their
 user on **People** (their user name). Someone with no user can still clock on and off at the badge terminal, and the station tells them what it
