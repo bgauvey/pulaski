@@ -130,6 +130,48 @@ internal static class TerminalEndpoints
             StationJobAsync(http, station, request, "complete jobs",
                 () => handler.HandleAsync(new CompleteJobCommand(request.JobId, request.Version, request.ReasonCodeId, Text(request.Comment)), ct), ct));
 
+        // Reporting at the station (#148): the running job only; from the machine, the figures the station showed, counted to their time,
+        // which the report checks against the run's machine coverage as the Floor's does (D-097).
+        terminal.MapPost("/station/report", async Task<Ok<StationActionResponse>> (
+            StationReportRequest request, HttpContext http, StationServices station, ICommandHandler<ReportProductionCommand, ReportProductionResponse> report,
+            CancellationToken ct) =>
+        {
+            var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
+                http, station.Tickets, station.Security, station.Time, request.Ticket, Domain.Security.Permissions.ProductionReport, "report production");
+            var personId = station.Tickets.PersonOf(ticket, terminal.Id);
+            var before = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct);
+            if (before.RunningJob?.JobId != request.JobId || before.Report is not { } form)
+            {
+                throw new DomainRuleException("That job isn't running on this station's line; report it from the Floor.");
+            }
+
+            if (form.Job.BatchSize is not null)
+            {
+                throw new DomainRuleException($"{form.Job.MaterialCode} is made in batches; report its batches on the Floor.");
+            }
+
+            if (request.FromMachine && request.MachineThrough is null)
+            {
+                throw new DomainRuleException("The machine's count has no time; count again.");
+            }
+
+            var (good, scrap) = (request.GoodQty, request.ScrapQty);
+            var command = new ReportProductionCommand(
+                request.JobId, null, good, scrap, request.FromMachine ? request.UomId : null, scrap > 0 ? request.ScrapReasonCodeId : null,
+                good > 0 ? request.LocationId : null, Comment: Text(request.Comment))
+            {
+                MachineThrough = request.FromMachine ? request.MachineThrough : null,
+            };
+            var result = await report.HandleAsync(command, ct);
+            return TypedResults.Ok(new StationActionResponse
+            {
+                Notes = [StationReporting.Done(good, scrap, request.FromMachine ? form.Machine?.UomCode : form.Job.UomCode, result), .. result.Warnings.Select(w => w.Message)],
+                Ticket = ticket,
+                TicketExpiresAt = expires,
+                Station = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct),
+            });
+        });
+
         terminal.MapPost("/identify", async Task<Ok<BadgeIdentityResponse>> (
             IdentifyBadgeRequest request, HttpContext http, BadgeTickets tickets, ICommandHandler<IdentifyBadgeCommand, BadgeIdentity> identify,
             IQueryHandler<GetTerminalStatusQuery, TerminalStatusDto> status, CancellationToken ct) =>

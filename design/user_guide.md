@@ -850,8 +850,19 @@ asks which of its lines the station is for (`/terminal/station?line=EXT-01` choo
    A reason marked * needs a comment typed first. **Back** returns without stopping.
 3. The station says what happened (*Paused. Run 1 of WO-5001-10 ended after 2 h 05 min.*), as the Floor does.
 
-Only the running job and the line's next jobs can be acted on at a station; a partial batch when stopping, and starting a department's job on
-a line, are done on the Floor for now.
+**Report production at a station.** Signed on with a role that reports:
+
+1. Click **Report** on the running job.
+2. When the line's machine counts, the station shows what it counted since the last report. Choose a **Scrap reason** if it counted scrap,
+   and where **Good output goes to**, then click **Report the machine's count**: exactly the figures on the button are reported, as a report
+   from the machine.
+3. Otherwise type **Good** and **Scrap** in the job's unit, with a scrap reason when there is scrap and the location, and click **Report these
+   figures**.
+4. The station says what was reported and which lot the good output went into. On a line that fills lots, the form says which lot it goes into
+   at the location shown, and the location defaults to where that lot is.
+
+Only the running job and the line's next jobs can be acted on at a station; a partial batch when stopping, starting a department's job on
+a line, reporting a material made in batches, choosing a lot number or what output was made from, and back-dating are done on the Floor for now.
 
 **Who may do what at a station.** What someone may do there is what their Pulaski user may do at the station's site, as if they had signed
 in: an operator's role lets them start, pause and complete jobs, report production and code stops; a planner's doesn't. Link a person to their

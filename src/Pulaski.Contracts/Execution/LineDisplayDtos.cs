@@ -85,6 +85,12 @@ public sealed record StationDto
     /// <summary>The line's open jobs after the running one, in sequence.</summary>
     public IReadOnlyList<BoardJobDto> Next { get; init; } = [];
 
+    /// <summary>
+    /// What reporting the running job at the station needs (#148), for a signed-on person whose role reports; null otherwise, or when no
+    /// production job runs.
+    /// </summary>
+    public StationReportDto? Report { get; init; }
+
     /// <summary>Why a run ends (reasons of kind <c>run_end</c> at the site), offered when pausing or completing at the station (#147).</summary>
     public IReadOnlyList<Pulaski.Contracts.Inventory.ReasonCodeDto> RunEndReasons { get; init; } = [];
 
@@ -155,4 +161,39 @@ public sealed record StationActionResponse
     public required string Ticket { get; init; }
     public DateTimeOffset TicketExpiresAt { get; init; }
     public required StationDto Station { get; init; }
+}
+
+/// <summary>
+/// Reporting the running job at a station (#148): the job as the Floor sees it (its unit, batches and the lots being filled), what its
+/// machine counted since the last report, and where output can go and why it was scrapped.
+/// </summary>
+public sealed record StationReportDto
+{
+    public required JobExecutionDto Job { get; init; }
+    public MachineCountsDto? Machine { get; init; }
+    public IReadOnlyList<Pulaski.Contracts.Inventory.InventoryLocationDto> Locations { get; init; } = [];
+    public IReadOnlyList<Pulaski.Contracts.Inventory.ReasonCodeDto> ScrapReasons { get; init; } = [];
+
+    /// <summary>Where good output goes unless chosen: where the job's lot is being filled, if one is.</summary>
+    public Guid? DefaultLocationId { get; init; }
+}
+
+/// <summary>
+/// A production report at a station (#148), as the signed-on person: <see cref="GoodQty"/> and <see cref="ScrapQty"/> in the job's unit, or
+/// with <see cref="FromMachine"/> the machine's figures as the station showed them, in <see cref="UomId"/> and counted to
+/// <see cref="MachineThrough"/> (D-097), so what is reported is what the operator saw.
+/// </summary>
+public sealed record StationReportRequest
+{
+    public string? Ticket { get; init; }
+    public string? Line { get; init; }
+    public Guid JobId { get; init; }
+    public bool FromMachine { get; init; }
+    public Guid? UomId { get; init; }
+    public DateTimeOffset? MachineThrough { get; init; }
+    public decimal GoodQty { get; init; }
+    public decimal ScrapQty { get; init; }
+    public Guid? ScrapReasonCodeId { get; init; }
+    public Guid? LocationId { get; init; }
+    public string? Comment { get; init; }
 }

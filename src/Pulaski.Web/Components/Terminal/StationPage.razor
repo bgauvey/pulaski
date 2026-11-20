@@ -105,7 +105,7 @@ else
                     {
                         <div class="floor-bar mt-2" role="img" aria-label="@pct% of the planned quantity"><span style="width: @pct%"></span></div>
                     }
-                    @if (_station.CanRunJobs && _station.RunningJob is { } running)
+                    @if ((_station.CanRunJobs || _station.Report is not null) && _station.RunningJob is { } running)
                     {
                         <EditForm Model="Input" FormName="station" OnSubmit="ActAsync" method="post" class="mt-3">
                             <input type="hidden" name="Input.JobId" value="@running.JobId" />
@@ -138,11 +138,80 @@ else
                                     </div>
                                 }
                             }
+                            else if (_reporting && _station.Report is { } form)
+                            {
+                                var job = form.Job;
+                                var machine = form.Machine;
+                                <h3 class="h5">Report production</h3>
+                                @if (machine is not null)
+                                {
+                                    <p class="mb-2">@MachineCountView.Since(machine, job.SiteTimeZone)</p>
+                                }
+                                <div class="row g-3 mb-3">
+                                    <div class="col-6">
+                                        <label class="form-label" for="station-good">Good, @job.UomCode</label>
+                                        <InputNumber id="station-good" class="form-control" inputmode="decimal" @bind-Value="Input.Good" />
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label" for="station-scrap">Scrap, @job.UomCode</label>
+                                        <InputNumber id="station-scrap" class="form-control" inputmode="decimal" @bind-Value="Input.Scrap" />
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label" for="station-scrap-reason">Scrap reason <span class="text-muted">(when there is scrap)</span></label>
+                                        <InputSelect id="station-scrap-reason" class="form-select" @bind-Value="Input.ScrapReasonId">
+                                            <option value="">Choose…</option>
+                                            @foreach (var reason in form.ScrapReasons)
+                                            {
+                                                <option value="@reason.Id">@Display.ReasonLabel(reason)</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label" for="station-location">Good output goes to</label>
+                                        <InputSelect id="station-location" class="form-select" @bind-Value="Input.LocationId">
+                                            <option value="">Choose…</option>
+                                            @foreach (var place in form.Locations)
+                                            {
+                                                <option value="@place.Id">@place.Code · @place.Name</option>
+                                            }
+                                        </InputSelect>
+                                        @if (StationView.LotHint(job, form.Locations.FirstOrDefault(l => l.Id == Input.LocationId)?.Code) is { } hint)
+                                        {
+                                            <div class="form-text">@hint</div>
+                                        }
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="station-report-comment">Comment</label>
+                                        <InputText id="station-report-comment" class="form-control" maxlength="1000" @bind-Value="Input.Comment" />
+                                    </div>
+                                </div>
+                                <div class="station-actions">
+                                    @if (machine is not null && MachineCountView.CanUse(machine))
+                                    {
+                                        <input type="hidden" name="Input.MachineGood" value="@machine.GoodQty.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                                        <input type="hidden" name="Input.MachineScrap" value="@machine.ScrapQty.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                                        <input type="hidden" name="Input.MachineUomId" value="@machine.UomId" />
+                                        <input type="hidden" name="Input.MachineThrough" value="@machine.Through!.Value.ToString("O", System.Globalization.CultureInfo.InvariantCulture)" />
+                                        <button type="submit" name="Input.Action" value="report-machine" class="btn btn-primary">
+                                            Report the machine's count<span class="d-block small fw-normal">@StationView.MachineFigures(machine)</span>
+                                        </button>
+                                    }
+                                    <button type="submit" name="Input.Action" value="report" class="btn @(machine is not null && MachineCountView.CanUse(machine) ? "btn-outline-primary" : "btn-primary")">Report these figures</button>
+                                    <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">Back</button>
+                                </div>
+                            }
                             else
                             {
                                 <div class="station-actions">
-                                    <button type="submit" name="Input.Action" value="choose-pause" class="btn btn-outline-primary">Pause</button>
-                                    <button type="submit" name="Input.Action" value="choose-complete" class="btn btn-outline-primary">Complete</button>
+                                    @if (_station.Report is { Job.BatchSize: null })
+                                    {
+                                        <button type="submit" name="Input.Action" value="choose-report" class="btn btn-primary">Report</button>
+                                    }
+                                    @if (_station.CanRunJobs)
+                                    {
+                                        <button type="submit" name="Input.Action" value="choose-pause" class="btn btn-outline-primary">Pause</button>
+                                        <button type="submit" name="Input.Action" value="choose-complete" class="btn btn-outline-primary">Complete</button>
+                                    }
                                 </div>
                             }
                         </EditForm>
@@ -252,6 +321,7 @@ else
     private bool _needsPin;
     private string? _stopping;
     private string? _actionError;
+    private bool _reporting;
     private IReadOnlyList<string> _notes = [];
 
     private string? Secret => TerminalCookie.Get(HttpContext);
@@ -330,6 +400,45 @@ else
                 return;
             case "cancel":
                 return;
+            case "choose-report":
+                _reporting = true;
+                Input.LocationId ??= _station?.Report?.DefaultLocationId;
+                return;
+            case "report" or "report-machine" when Input.JobId is { } reportJob:
+                try
+                {
+                    // From the machine: the figures shown, counted to their time, exactly as the button said them.
+                    var fromMachine = action == "report-machine";
+                    var result = await Api.StationReportAsync(Secret!, new StationReportRequest
+                    {
+                        Ticket = TerminalCookie.GetStation(HttpContext),
+                        Line = LineCode,
+                        JobId = reportJob,
+                        FromMachine = fromMachine,
+                        UomId = fromMachine ? Input.MachineUomId : null,
+                        MachineThrough = fromMachine ? Input.MachineThrough : null,
+                        GoodQty = fromMachine ? Input.MachineGood ?? 0 : Input.Good ?? 0,
+                        ScrapQty = fromMachine ? Input.MachineScrap ?? 0 : Input.Scrap ?? 0,
+                        ScrapReasonCodeId = Input.ScrapReasonId,
+                        LocationId = Input.LocationId,
+                        Comment = Input.Comment,
+                    });
+                    TerminalCookie.SetStation(HttpContext, result.Ticket, result.TicketExpiresAt);
+                    _station = result.Station;
+                    _notes = result.Notes;
+                }
+                catch (ApiException ex)
+                {
+                    _actionError = StationView.Problem(ex.Detail ?? ex.Title, ex.Errors);
+                    _reporting = ex.Status != 401;
+                    if (ex.Status == 401)
+                    {
+                        TerminalCookie.ClearStation(HttpContext);
+                        await LoadAsync(null);
+                    }
+                }
+
+                return;
             case "start" or "pause" or "complete" when Input.JobId is { } jobId:
                 try
                 {
@@ -372,5 +481,13 @@ else
         public Guid? JobId { get; set; }
         public long Version { get; set; }
         public string? Comment { get; set; }
+        public decimal? Good { get; set; }
+        public decimal? Scrap { get; set; }
+        public Guid? ScrapReasonId { get; set; }
+        public Guid? LocationId { get; set; }
+        public decimal? MachineGood { get; set; }
+        public decimal? MachineScrap { get; set; }
+        public Guid? MachineUomId { get; set; }
+        public DateTimeOffset? MachineThrough { get; set; }
     }
 }

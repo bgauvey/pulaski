@@ -56,4 +56,29 @@ public static class StationView
     /// <summary>A refusal in words: the API's messages for its fields when it gives them ("Reason Other needs a comment."), else its title.</summary>
     public static string Problem(string title, IReadOnlyDictionary<string, string[]> errors) =>
         errors.Count == 0 ? title : string.Join(" ", errors.SelectMany(e => e.Value));
+
+    /// <summary>The machine's count as the one-tap report gives it: "1,200 m good · 12 m scrap".</summary>
+    public static string MachineFigures(MachineCountsDto counts)
+    {
+        var unit = counts.UomCode is { } code ? " " + code : "";
+        return counts.ScrapQty > 0
+            ? $"{FloorView.Qty(counts.GoodQty)}{unit} good · {FloorView.Qty(counts.ScrapQty)}{unit} scrap"
+            : $"{FloorView.Qty(counts.GoodQty)}{unit} good";
+    }
+
+    /// <summary>
+    /// Where good output goes on a line that fills lots (D-104), for the location shown: "At FG-STAGE it goes into lot WO-1-10-02 (30 of 100 m)."
+    /// or "At FG-STAGE it starts a new lot."; null when the line makes a lot per report or no location is chosen.
+    /// </summary>
+    public static string? LotHint(JobExecutionDto job, string? locationCode)
+    {
+        if (!LotFillingView.FillsLots(job) || locationCode is null)
+        {
+            return null;
+        }
+
+        return job.FillingLots.FirstOrDefault(l => string.Equals(l.LocationCode, locationCode, StringComparison.Ordinal)) is { } lot
+            ? $"At {locationCode} it goes into lot {lot.LotNumber} ({LotFillingView.Holds(job, lot)})."
+            : $"At {locationCode} it starts a new lot.";
+    }
 }
