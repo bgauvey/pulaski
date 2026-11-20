@@ -1200,6 +1200,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ExecutionResponse> CompleteJobAsync(Guid jobId, CompleteJobRequest request, CancellationToken ct = default) =>
         SendAsync<ExecutionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/complete", request, ct);
 
+    /// <summary>Closes the lot the job is filling (D-104), so its next report starts a new one.</summary>
+    public Task<StartNewLotResponse> StartNewLotAsync(Guid jobId, string? comment, CancellationToken ct = default) =>
+        SendAsync<StartNewLotResponse>(HttpMethod.Post, $"api/jobs/{jobId}/new-lot", new StartNewLotRequest { Comment = comment }, ct);
+
     public Task<ExecutionResponse> ReopenJobAsync(Guid jobId, long version, CancellationToken ct = default) =>
         SendAsync<ExecutionResponse>(HttpMethod.Post, $"api/jobs/{jobId}/reopen", new JobVersionRequest { Version = version }, ct);
 

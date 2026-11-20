@@ -91,6 +91,29 @@
                         }
                     </div>
                 }
+                @if (Material.IsLotTracked && Material.BatchSize is null)
+                {
+                    <div class="col-12">
+                        <div class="small fw-semibold">Production lots on this line</div>
+                        <div class="form-text mt-0" id="cap-lot-help">
+                            Left blank, each production report makes its own lot. Set any of these and reports fill one lot until it is full, then start the next.
+                        </div>
+                    </div>
+                    <div class="col-sm-3">
+                        <label class="form-label" for="cap-lot-size">Lot size, @Material.BaseUomCode</label>
+                        <input id="cap-lot-size" type="number" class="form-control" min="0" step="any" placeholder="No size" @bind="form.LotSize" aria-describedby="cap-lot-help" />
+                    </div>
+                    <div class="col-sm-3">
+                        <label class="form-label" for="cap-lot-hours">Lot age, hours</label>
+                        <input id="cap-lot-hours" type="number" class="form-control" min="0" max="720" step="0.5" placeholder="No limit" @bind="form.LotHours" aria-describedby="cap-lot-help" />
+                    </div>
+                    <div class="col-sm-3 d-flex align-items-end">
+                        <div class="form-check mb-2">
+                            <input id="cap-lot-shift" type="checkbox" class="form-check-input" @bind="form.LotByShift" />
+                            <label class="form-check-label" for="cap-lot-shift">New lot each shift</label>
+                        </div>
+                    </div>
+                }
                 <div class="col-sm-3">
                     <label class="form-label" for="cap-from">Starts</label>
                     <input id="cap-from" type="date" class="form-control" @bind="form.From" />
@@ -172,6 +195,10 @@
                                 @if (!c.IsInEffect)
                                 {
                                     <span class="chip chip-muted ms-1">@(c.EffectiveFrom > Clock.GetUtcNow() ? "Not started" : "Ended")</span>
+                                }
+                                @if (CapabilityForm.LotRule(c, Material.BaseUomCode) is { } lotRule)
+                                {
+                                    <div class="small text-muted">@lotRule</div>
                                 }
                             </td>
                             <td class="inv-num">

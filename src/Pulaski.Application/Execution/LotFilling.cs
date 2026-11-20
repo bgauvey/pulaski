@@ -3,6 +3,7 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.Labor;
+using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Domain;
 using Pulaski.Domain.Inventory;
@@ -24,7 +25,7 @@ public interface ILotFillingStore
     /// <summary>The line's shifts, to tell one shift from the next.</summary>
     Task<EquipmentShifts?> GetShiftsAsync(Guid lineId, CancellationToken cancellationToken);
 
-    /// <summary>Closes every lot the job made that isn't closed yet (<c>produced_to</c>); returns their numbers, in order.</summary>
+    /// <summary>Closes the lots the job is filling on its line (<c>produced_to</c>), one per location; returns their numbers, in order.</summary>
     Task<IReadOnlyList<string>> CloseOpenLotsAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken);
 }
 
@@ -93,8 +94,6 @@ internal static class LotFilling
 /// operator wants a new lot sooner (a new pallet, a quality break).
 /// </summary>
 public sealed record StartNewLotCommand(Guid JobId, string? Comment = null) : ICommand<StartNewLotResponse>;
-
-public sealed record StartNewLotResponse(Guid JobId, IReadOnlyList<string> ClosedLots);
 
 internal sealed class StartNewLotHandler(
     IUnitOfWork unitOfWork, IInventoryRepository inventory, ILotFillingStore store, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)

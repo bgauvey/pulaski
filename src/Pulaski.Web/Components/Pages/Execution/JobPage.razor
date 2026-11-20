@@ -116,6 +116,44 @@
         <ReportProductionForm Job="job" OnReported="OnReportedAsync" OnCancel="() => _reporting = false" />
     }
 
+    @if (LotFillingView.Rule(job) is { } lotRule)
+    {
+        <section class="inv-section" aria-labelledby="filling-title">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <h2 id="filling-title" class="mb-0">Lots being filled</h2>
+                @if (job.FillingLots.Count > 0 && May(PermissionCodes.ProductionReport))
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="StartNewLotAsync"
+                            title="Close the lot being filled, so the next report starts a new one">Start a new lot</button>
+                }
+            </div>
+            <p class="small text-muted mt-1">@lotRule A lot that is moved, held, split, packed or used isn't filled any more.</p>
+            @if (job.FillingLots.Count == 0)
+            {
+                <p class="small mb-0">No lot is being filled: the next report starts one.</p>
+            }
+            else
+            {
+                <div class="table-panel">
+                    <table class="table table-sm align-middle">
+                        <thead><tr><th>Lot</th><th>Location</th><th class="inv-num">Holds</th><th>Started</th></tr></thead>
+                        <tbody>
+                            @foreach (var lot in job.FillingLots)
+                            {
+                                <tr @key="lot.LotId">
+                                    <td><ScreenLink Href="@($"inventory/lots/{lot.LotId}")" Permission="@PermissionCodes.InventoryView">@lot.LotNumber</ScreenLink></td>
+                                    <td>@lot.LocationCode</td>
+                                    <td class="inv-num">@LotFillingView.Holds(job, lot)</td>
+                                    <td class="small">@Display.SiteTime(lot.StartedAt, job.SiteTimeZone)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+
     @if (job.PartialBatches.Count > 0)
     {
         <section class="inv-section" aria-labelledby="partials-title">
@@ -384,6 +422,26 @@ else if (_error is null)
 
     private Task ReopenAsync() => RunAsync(() => Api.ReopenJobAsync(JobId, _job!.Version));
 
+    private async Task StartNewLotAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var closed = await Api.StartNewLotAsync(JobId, null);
+            _notes = [$"Closed {(closed.ClosedLots.Count == 1 ? "lot " : "lots ")}{string.Join(", ", closed.ClosedLots)}; the next report starts a new lot."];
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
     private async Task DownloadPerformanceAsync()
     {
         _error = null;
@@ -540,7 +598,7 @@ else if (_error is null)
     private async Task OnReportedAsync(ReportProductionResponse result)
     {
         _reporting = false;
-        _notes = [$"Reported: run now has {FloorView.Qty(result.RunGoodQty)} good and {FloorView.Qty(result.RunScrapQty)} scrap{(result.Lot is { } lot ? $"; good output in lot {lot.LotNumber ?? "balance"}" : "")}.",
+        _notes = [$"Reported: run now has {FloorView.Qty(result.RunGoodQty)} good and {FloorView.Qty(result.RunScrapQty)} scrap{(result.Lots.Count > 1 ? $"; good output in lots {string.Join(", ", result.Lots.Select(l => l.LotNumber ?? "balance"))}" : result.Lot is { } lot ? $"; good output in lot {lot.LotNumber ?? "balance"}" : "")}.",
             .. result.Warnings.Select(w => w.Message)];
         await LoadAsync();
     }

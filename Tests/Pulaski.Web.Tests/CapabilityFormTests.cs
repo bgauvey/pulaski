@@ -40,6 +40,21 @@ public class CapabilityFormTests
     }
 
     [Fact]
+    public void A_lines_lot_rule_is_edited_and_described_on_its_row()
+    {
+        Assert.Null(CapabilityForm.LotRule(Existing, "m"));
+        var filling = Existing with { LotSize = 1000.000000m, LotHours = 8.00m, LotByShift = true };
+        Assert.Equal("Lots of at most 1000 m, 8 h, a shift", CapabilityForm.LotRule(filling, "m"));
+
+        var form = CapabilityForm.For(filling);
+        Assert.Equal((1000m, 8m, true), (form.LotSize!.Value, form.LotHours!.Value, form.LotByShift));
+        form.LotHours = null;
+        var update = form.ToUpdate(Chicago);
+        Assert.Equal((1000m, (decimal?)null, true), (update.LotSize!.Value, update.LotHours, update.LotByShift));
+        Assert.Equal(1000m, form.ToAdd(Chicago, DateTimeOffset.UtcNow).LotSize);
+    }
+
+    [Fact]
     public void A_new_form_starts_today_in_the_base_unit_and_needs_a_line_and_a_rate()
     {
         var kg = Guid.CreateVersion7();

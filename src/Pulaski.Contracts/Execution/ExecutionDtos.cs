@@ -120,6 +120,27 @@ public sealed record JobExecutionDto
     public IReadOnlyList<JobRunDto> Runs { get; init; } = [];
     public IReadOnlyList<ProductionReportDto> Reports { get; init; } = [];
     public IReadOnlyList<PartialBatchDto> PartialBatches { get; init; } = [];
+
+    /// <summary>
+    /// How the line cuts the material's production lots now (D-104): at a size in the base unit, an age in hours, a change of shift; all
+    /// unset when each report makes its own lot.
+    /// </summary>
+    public decimal? LotSize { get; init; }
+    public decimal? LotHours { get; init; }
+    public bool LotByShift { get; init; }
+
+    /// <summary>The lots its reports are filling on the line, one per location, when the line fills lots (D-104).</summary>
+    public IReadOnlyList<FillingLotDto> FillingLots { get; init; } = [];
+}
+
+/// <summary>A lot a job's reports are filling (D-104): how much it holds, in the base unit, and since when.</summary>
+public sealed record FillingLotDto
+{
+    public required Guid LotId { get; init; }
+    public required string LotNumber { get; init; }
+    public string? LocationCode { get; init; }
+    public decimal Quantity { get; init; }
+    public DateTimeOffset StartedAt { get; init; }
 }
 
 /// <summary>A batch cut short when a line stopped (D-036), and whether it is approved.</summary>
@@ -336,6 +357,9 @@ public sealed record ReportProductionRequest
     /// </summary>
     public DateTimeOffset? MachineThrough { get; init; }
 }
+
+/// <summary>The lots closed by starting a new lot (D-104).</summary>
+public sealed record StartNewLotResponse(Guid JobId, IReadOnlyList<string> ClosedLots);
 
 /// <summary>Start a new lot (D-104): closes the one the job is filling.</summary>
 public sealed record StartNewLotRequest

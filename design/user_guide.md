@@ -847,14 +847,29 @@ If the material changes on a line in automatic changeover mode, Pulaski starts a
 
 If the report is more than the run can hold, Pulaski refuses it and says how much more fits.
 
-**Lots filled by reports.** A line can fill a lot over many reports instead of making one per report, until the lot is full: at a size, a number
-of hours after its first output, or at a change of shift. This is set per line and material (the line's capability for the material; for now
-only through the API, `lotSize`, `lotHours` and `lotByShift` on `POST /api/materials/{id}/capabilities` and `PUT /api/capabilities/{id}`). Then a
-report with the **Lot number** left blank adds to the job's lot being filled there, and when that lot is full the rest goes into new lots, each up
-to the size; the report says which lots it filled and why a new one was started. A lot carries on only while nothing else has happened to it: once
-it is moved, held, split, packed or used, the next report starts a new one. A lot number typed by hand, a back-dated report, and a location where
-lots mix work as before. To start a new lot early (a new pallet, say), `POST /api/jobs/{id}/new-lot` closes the one being filled. It works only for a
-lot-tracked material that isn't made in batches.
+**Lots filled by reports.** A line can fill one lot over many reports instead of making a lot per report, until the lot is full: at a size,
+a number of hours after its first output, or at a change of shift.
+
+1. To set it up, open the material on **Materials** and, under [Where it can run](#where-it-can-run-capabilities-and-rates), click **Change** on
+   the line (or **Add line**).
+2. Under **Production lots on this line**, fill in any of **Lot size** (in the material's base unit), **Lot age, hours** and **New lot each
+   shift**, and click **Save**. The line's row then says *Lots of at most …*.
+3. Report as usual, leaving **Lot number** blank. Each report adds to the job's lot being filled at that location; when it is full, the rest goes
+   into new lots, each up to the size, and the report says which lots it filled and why a new one was started.
+4. The job's page shows **Lots being filled**: the rule, each lot, how much it holds and when it started. To start a new lot sooner (a new pallet,
+   a quality break), click **Start a new lot**; the next report starts one.
+
+In detail:
+
+- A lot carries on only while nothing else has happened to it: once it is moved, held, split, packed or used, the next report starts a new one.
+  A lot that was full stays full even if a report into it is reversed later.
+- A shift is the one on the line's schedule (its production day and shift); with no schedule, or between shifts, it is the site's calendar day.
+- A lot number typed by hand, a back-dated report, and a location where lots mix work as before: they don't fill a lot. One report starts at
+  most 100 lots.
+- Only for a lot-tracked material that isn't made in batches (each batch is already its own lot); the capability refuses it otherwise. The rule
+  is part of the capability, so a capability starting later can change it.
+- For scripts: `lotSize`, `lotHours` and `lotByShift` on `POST /api/materials/{id}/capabilities` and `PUT /api/capabilities/{id}`, and
+  `POST /api/jobs/{id}/new-lot` (needs *production.report*) to start a new lot.
 
 ### Report production from the machine
 
@@ -1819,6 +1834,7 @@ The **Where it can run** table lists each line that can run the material: its id
 3. Enter the **Ideal rate, per hour**, the best the line can do, and its **Rate unit**. The unit must convert to the material's base unit; for metres of profile on a line rated in kilograms, add a [conversion](#6-units-and-conversions) first.
 4. Optionally enter the **Standard changeover** in minutes (used when no changeover rule matches), the **Crew size**, and tick **Preferred line**. For a material made in batches, enter the **Batch size on this line** when the line's equipment makes a different amount at a time (a 200 kg mixer next to the 50 kg ones), and the **Batch tolerance on this line, %** when its batches may vary more or less than the material's; leave either blank for the material's.
    **… per machine count** is how much of the material one count of the line's counter makes, in the material's base unit: *2.4* when each cut of the saw is 2.4 m of profile. Leave it blank for one. [Reports from the machine](#report-production-from-the-machine) use it; the counter tag's own scale applies first. The rate column shows it as *2.4 m a count*.
+   For a lot-tracked material not made in batches, **Production lots on this line** (**Lot size**, **Lot age, hours**, **New lot each shift**) makes reports fill a lot until it is full instead of making one each; see [Lots filled by reports](#report-production). The line's row shows it as *Lots of at most 1000 m, 8 h*.
 5. **Starts** is today unless you pick another day. **Ends on** is optional: leave it empty for a capability with no end.
 6. Click **Add**. If the line has no planning rate for the material yet, the ideal rate becomes it, and a note says so.
 
@@ -2888,7 +2904,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Only a number attribute standing for a quality characteristic is checked against specification limits. Balances' attribute values aren't in the values file.
 - **Reversing:** a chain undo follows a lot and the lots split off it, not merges into other lots, consumption into jobs or the output made from it; corrections made before this version can't be reversed.
 - **Genealogy through a silo is an estimate** from the declared movements. A level tag's readings confirm when it was empty and check the declared stock (see [How a silo flows](#how-a-silo-flows)), but they don't change how much each arrival gave. A reversed movement and its reversal are left out of the estimate, as if neither happened.
-- **Lots filled by reports** are set, and a new lot started, only through the API so far: the capability form and the job page don't offer them yet, and the capability CSV import doesn't read them.
+- **Lots filled by reports** aren't read by the capability CSV import: set them on the material's capability.
 - **Production performance** carries no labor or machine time, and a job's lots are listed but not which lot each was made from. A production performance feed sends one document per change, even when several changes come together; the built-in ERP feed sends only events (add a feed for B2MML).
 - **Sending to other systems** is by HTTPS webhook or MQTT; there is no Kafka or other message queue yet, and retention is the same for every feed. Receivers' acknowledgements are recorded on the delivery, but nothing compares what the ERP booked with what Pulaski sent; there is no adapter for a particular ERP's or document system's own API. A certificate's file goes inline in the event, up to 10 MB; there is no download link for a receiver to fetch it later. The delivery list shows at most 200 at a time, with no paging beyond that.
 - **Allocations:** the background refresh is all or nothing for a site, and any change anywhere makes it run. Preferences are per site, not per material. A picking list is printed, not confirmed: fetching the lot is still an ordinary move. Approved alternates show only in allocations and on consumption, not in an order's planned components, and only a BOM's approved alternates can be allocated.
