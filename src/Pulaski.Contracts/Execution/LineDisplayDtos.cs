@@ -62,3 +62,59 @@ public sealed record LineDisplayJobDto
 }
 
 public sealed record LineDisplayOutputDto(string UomCode, decimal GoodQty, decimal ScrapQty);
+
+/// <summary>
+/// An operator station (#146): one line of an enrolled terminal, with who is signed on by badge. <see cref="Line"/> is null until the station
+/// knows its line: the terminal's first line offered, the one asked for, or the only one; otherwise <see cref="Lines"/> offers them.
+/// </summary>
+public sealed record StationDto
+{
+    public required string TerminalName { get; init; }
+    public required string TerminalCode { get; init; }
+
+    /// <summary><c>badge</c> or <c>badge_plus_pin</c>.</summary>
+    public string AuthMode { get; init; } = "badge";
+
+    /// <summary>The lines the station can serve, to choose from.</summary>
+    public IReadOnlyList<StationLineDto> Lines { get; init; } = [];
+    public LineDisplayLineDto? Line { get; init; }
+
+    /// <summary>The line's open jobs after the running one, in sequence.</summary>
+    public IReadOnlyList<BoardJobDto> Next { get; init; } = [];
+
+    /// <summary>Who is signed on; null while it waits for a badge.</summary>
+    public Guid? PersonId { get; init; }
+    public string? PersonName { get; init; }
+
+    /// <summary>Minutes without anything done before the station signs its person off.</summary>
+    public int IdleMinutes { get; init; }
+}
+
+public sealed record StationLineDto(Guid Id, string Code, string? Name);
+
+/// <summary>A badge at the station, with its PIN on a terminal that asks for one; <see cref="Line"/> the line's code when chosen.</summary>
+public sealed record StationSignOnRequest
+{
+    public string BadgeValue { get; init; } = "";
+    public string? Pin { get; init; }
+    public string? Line { get; init; }
+}
+
+/// <summary>The station as it stands, for the ticket of whoever is signed on (none: waiting).</summary>
+public sealed record StationRequest
+{
+    public string? Ticket { get; init; }
+    public string? Line { get; init; }
+}
+
+/// <summary>
+/// The station, and the ticket that keeps its person signed on (#146): issued at sign-on for <c>StationIdle</c>; null when no one is signed on,
+/// or their ticket ran out.
+/// </summary>
+public sealed record StationResponse
+{
+    public bool NeedsPin { get; init; }
+    public string? Ticket { get; init; }
+    public DateTimeOffset? TicketExpiresAt { get; init; }
+    public StationDto? Station { get; init; }
+}

@@ -29,10 +29,10 @@ internal sealed class BadgeTickets(IOptions<SecurityOptions> options, TimeProvid
     public const string Audience = "pulaski-terminal";
     private const string TerminalClaim = "term";
 
-    public (string Ticket, DateTimeOffset ExpiresAt) Issue(Guid terminalId, Guid personId)
+    public (string Ticket, DateTimeOffset ExpiresAt) Issue(Guid terminalId, Guid personId, TimeSpan? lifetime = null)
     {
         var now = timeProvider.GetUtcNow();
-        var expires = now + TerminalRules.TicketLifetime;
+        var expires = now + (lifetime ?? TerminalRules.TicketLifetime);
         var token = new JwtSecurityToken(
             issuer: Application.Security.Issuers.Local,
             audience: Audience,
@@ -41,6 +41,19 @@ internal sealed class BadgeTickets(IOptions<SecurityOptions> options, TimeProvid
             expires: expires.UtcDateTime,
             signingCredentials: new SigningCredentials(TokenIssuer.Key(options.Value), SecurityAlgorithms.HmacSha256));
         return (new JwtSecurityTokenHandler().WriteToken(token), expires);
+    }
+
+    /// <summary>The person the ticket names, or null when it isn't valid for this terminal or has run out (a station then waits again).</summary>
+    public Guid? PersonOrNull(string ticket, Guid terminalId)
+    {
+        try
+        {
+            return PersonOf(ticket, terminalId);
+        }
+        catch (UnauthorizedException)
+        {
+            return null;
+        }
     }
 
     /// <summary>The person the ticket names, when it is valid and was given to this terminal.</summary>

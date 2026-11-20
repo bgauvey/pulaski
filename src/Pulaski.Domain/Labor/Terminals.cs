@@ -27,6 +27,12 @@ public static class TerminalRules
     /// <summary>How long a badge scan identifies its person at the terminal: long enough to choose what to do.</summary>
     public static readonly TimeSpan TicketLifetime = TimeSpan.FromMinutes(2);
 
+    /// <summary>
+    /// How long a badge keeps someone signed on at an operator station (#146) without them acting: then it goes back to waiting, so a
+    /// station left alone doesn't act as whoever badged last.
+    /// </summary>
+    public static readonly TimeSpan StationIdle = TimeSpan.FromMinutes(15);
+
     private const string CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
     /// <returns>What is wrong with a badge value as scanned; null when it can be used.</returns>

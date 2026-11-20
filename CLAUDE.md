@@ -386,6 +386,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   quantities `inputmode="decimal"`, form buttons in `.form-actions`, floor card buttons in `.floor-actions`.
 - Line boards (D-106, proposed): an enrolled terminal opens `/terminal/board` (`?line=`); `GET /api/terminal/board` → `GetLineDisplayQuery`
   (Overview + floor board + current-shift OEE, filtered to the terminal's scope); `css/board.css`, meta refresh 15 s.
+- Operator station (D-107, proposed, in pieces #146–#150): enrolled terminal at `/terminal/station`, line by `StationLine.Choose`; badge →
+  `/api/terminal/station/sign-on` ticket for `TerminalRules.StationIdle` in cookie `.Pulaski.Station`; the badged person's user and role decide
+  production actions (people without a user: labor only).
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
