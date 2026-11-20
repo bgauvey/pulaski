@@ -27,4 +27,20 @@ public class StationViewTests
         Assert.Equal("Your role doesn't let you start or stop jobs or report production at this site.", StationView.Limits(Station("Ann", run: false, report: false)));
         Assert.Equal("Your role doesn't let you run jobs, report production or code stops at this site.", StationView.Limits(Station("Pia", run: false, report: false, stops: false)));
     }
+
+    [Fact]
+    public void It_says_what_an_action_did()
+    {
+        var started = Station("Olu") with { RunningJob = new RunningJobDto { JobId = Guid.NewGuid(), JobNumber = "WO-1-10", JobType = "production", RunId = Guid.NewGuid() } };
+        Assert.Equal("WO-1-10 is running.", StationView.Done("start", started));
+        Assert.Equal(("Paused.", "Completed."), (StationView.Done("pause", started), StationView.Done("complete", started)));
+    }
+
+    [Fact]
+    public void A_refusal_names_its_fields()
+    {
+        Assert.Equal("Reason Other needs a comment.",
+            StationView.Problem("One or more fields are invalid.", new Dictionary<string, string[]> { ["comment"] = ["Reason Other needs a comment."] }));
+        Assert.Equal("Pause or complete EXT-01's job first.", StationView.Problem("Pause or complete EXT-01's job first.", new Dictionary<string, string[]>()));
+    }
 }

@@ -44,4 +44,16 @@ public static class StationView
             _ => $"Your role doesn't let you {string.Join(" or ", cannot)} at this site.",
         };
     }
+
+    /// <summary>What a station action did, first of its notes: "WO-1-10 is running." (started or resumed), "Paused.", "Completed."</summary>
+    public static string Done(string action, StationDto station) => action switch
+    {
+        "start" => station.RunningJob is { } job ? $"{job.JobNumber} is running." : "Started.",
+        "pause" => "Paused.",
+        _ => "Completed.",
+    };
+
+    /// <summary>A refusal in words: the API's messages for its fields when it gives them ("Reason Other needs a comment."), else its title.</summary>
+    public static string Problem(string title, IReadOnlyDictionary<string, string[]> errors) =>
+        errors.Count == 0 ? title : string.Join(" ", errors.SelectMany(e => e.Value));
 }

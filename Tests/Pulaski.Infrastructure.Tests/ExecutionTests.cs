@@ -433,6 +433,17 @@ public sealed class ExecutionTests(DatabaseFixture db)
         Assert.Equal(("EXT-" + _s, "J10-" + _s, (string?)null), (station.Line!.Code, Assert.Single(station.Next).JobNumber, station.PersonName));
         Assert.True(station.IdleMinutes > 0);
 
+        // Signed on, it carries the running job to act on and the site's run-end reasons (#147); waiting, no reasons.
+        Assert.Null(station.RunningJob);
+        Assert.Empty(station.RunEndReasons);
+        await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
+        CreatedResponse person = await db.SendAsync(new Pulaski.Application.Labor.CreatePersonCommand(plant.Site, "900-" + _s, "Ola " + _s, null, null));
+        var signedOn = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, person.Id, null));
+        Assert.Equal(plant.Extrude, signedOn.RunningJob!.JobId);
+        Assert.True(StationJobs.IsOnLine(signedOn, plant.Extrude));
+        Assert.False(StationJobs.IsOnLine(signedOn, plant.Pack));
+        Assert.All(signedOn.RunEndReasons, r => Assert.Equal("run_end", r.Kind));
+
         // Asked for the packer; and with no first line, it offers both.
         Assert.Equal("PCK-" + _s, (await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, "pck-" + _s.ToLowerInvariant()))).Line!.Code);
         var unbound = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal with { DefaultEquipmentId = null }, null, null));

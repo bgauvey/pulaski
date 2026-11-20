@@ -52,6 +52,7 @@ builder.Services.AddSingleton<IMailSender, SmtpMailSender>();
 builder.Services.AddHostedService<MailSenderService>();
 builder.Services.AddHttpClient(IdentityProviderClient.ClientName, client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton<BadgeTickets>();
+builder.Services.AddScoped<StationServices>();
 builder.Services.AddSingleton<Pulaski.Application.Labor.IBadgeHasher, BadgeHasher>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(jwt =>

@@ -8,6 +8,7 @@ using Pulaski.Application.Security;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Labor;
+using Pulaski.Domain;
 using Pulaski.Domain.Labor;
 using Pulaski.Domain.Security;
 
@@ -117,6 +118,18 @@ internal static class TerminalEndpoints
             });
         });
 
+        // Running jobs at the station (#147): as the badged person's user (#150), only a job of the station's line.
+        terminal.MapPost("/station/start", (StationJobRequest request, HttpContext http, StationServices station, ICommandHandler<StartJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
+            StationJobAsync(http, station, request, "start jobs", () => handler.HandleAsync(new StartJobCommand(request.JobId, request.Version), ct), ct));
+
+        terminal.MapPost("/station/pause", (StationJobRequest request, HttpContext http, StationServices station, ICommandHandler<PauseJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
+            StationJobAsync(http, station, request, "pause jobs",
+                () => handler.HandleAsync(new PauseJobCommand(request.JobId, request.Version, request.ReasonCodeId, Text(request.Comment)), ct), ct));
+
+        terminal.MapPost("/station/complete", (StationJobRequest request, HttpContext http, StationServices station, ICommandHandler<CompleteJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
+            StationJobAsync(http, station, request, "complete jobs",
+                () => handler.HandleAsync(new CompleteJobCommand(request.JobId, request.Version, request.ReasonCodeId, Text(request.Comment)), ct), ct));
+
         terminal.MapPost("/identify", async Task<Ok<BadgeIdentityResponse>> (
             IdentifyBadgeRequest request, HttpContext http, BadgeTickets tickets, ICommandHandler<IdentifyBadgeCommand, BadgeIdentity> identify,
             IQueryHandler<GetTerminalStatusQuery, TerminalStatusDto> status, CancellationToken ct) =>
@@ -166,6 +179,30 @@ internal static class TerminalEndpoints
         var terminal = TerminalFilter.Current(http);
         return TypedResults.Ok(await act(terminal, tickets.PersonOf(request.Ticket, terminal.Id)));
     }
+
+    private static async Task<Ok<StationActionResponse>> StationJobAsync(
+        HttpContext http, StationServices services, StationJobRequest request, string what, Func<Task<ExecutionResponse>> act, CancellationToken ct)
+    {
+        var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
+            http, services.Tickets, services.Security, services.Time, request.Ticket, Domain.Security.Permissions.JobExecute, what);
+        var personId = services.Tickets.PersonOf(ticket, terminal.Id);
+        var before = await services.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct);
+        if (before.Line is null || !StationJobs.IsOnLine(before, request.JobId))
+        {
+            throw new DomainRuleException("That job isn't on this station's line; act on it from the Floor.");
+        }
+
+        var result = await act();
+        return TypedResults.Ok(new StationActionResponse
+        {
+            Notes = result.Notes,
+            Ticket = ticket,
+            TicketExpiresAt = expires,
+            Station = await services.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct),
+        });
+    }
+
+    private static string? Text(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static ValidationException Missing(string field) => new(new Dictionary<string, string[]> { [field] = ["Choose one."] });
 }

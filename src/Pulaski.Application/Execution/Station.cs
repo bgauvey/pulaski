@@ -1,8 +1,10 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Inventory;
 using Pulaski.Application.Labor;
 using Pulaski.Application.Security;
 using Pulaski.Domain.Security;
 using Pulaski.Contracts.Execution;
+using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Labor;
 
 namespace Pulaski.Application.Execution;
@@ -17,6 +19,7 @@ internal sealed class GetStationHandler(
     IQueryHandler<GetLineDisplayQuery, LineDisplayDto> display,
     IQueryHandler<GetLineBoardQuery, IReadOnlyList<LineBoardRowDto>> board,
     IQueryHandler<GetTerminalStatusQuery, TerminalStatusDto> status,
+    IQueryHandler<ListReasonCodesQuery, IReadOnlyList<ReasonCodeDto>> reasons,
     ISecurityReadStore security,
     TimeProvider timeProvider) : IQueryHandler<GetStationQuery, StationDto>
 {
@@ -25,9 +28,9 @@ internal sealed class GetStationHandler(
         var terminal = query.Terminal;
         var lines = (await display.HandleAsync(new GetLineDisplayQuery(terminal.SiteId, terminal.ScopeEquipmentId, terminal.Name), cancellationToken)).Lines;
         var line = StationLine.Choose(lines, query.LineCode, terminal.DefaultEquipmentId);
-        var next = line is null
-            ? []
-            : (await board.HandleAsync(new GetLineBoardQuery(terminal.SiteId), cancellationToken)).FirstOrDefault(r => r.LineId == line.LineId)?.Next ?? [];
+        var row = line is null
+            ? null
+            : (await board.HandleAsync(new GetLineBoardQuery(terminal.SiteId), cancellationToken)).FirstOrDefault(r => r.LineId == line.LineId);
         var person = query.PersonId is { } personId ? await status.HandleAsync(new GetTerminalStatusQuery(terminal, personId), cancellationToken) : null;
 
         // What they may do here is their user's role at the terminal's site (#150); without a user, only labor.
@@ -41,7 +44,9 @@ internal sealed class GetStationHandler(
             AuthMode = terminal.AuthMode,
             Lines = [.. lines.Select(l => new StationLineDto(l.LineId, l.Code, l.Name))],
             Line = line,
-            Next = next,
+            RunningJob = row?.Running,
+            Next = row?.Next ?? [],
+            RunEndReasons = query.PersonId is null ? [] : await reasons.HandleAsync(new ListReasonCodesQuery("run_end", terminal.SiteId), cancellationToken),
             PersonId = person?.PersonId,
             PersonName = person?.PersonName,
             PersonIsUser = access is not null,
@@ -65,4 +70,12 @@ public static class StationLine
 
         return lines.FirstOrDefault(l => l.LineId == defaultLineId) ?? (lines.Count == 1 ? lines[0] : null);
     }
+}
+
+/// <summary>Which jobs a station may act on (#147). Pure.</summary>
+public static class StationJobs
+{
+    /// <summary>The job running on the station's line, or one of its next jobs: nothing else can be started or stopped from there.</summary>
+    public static bool IsOnLine(StationDto station, Guid jobId) =>
+        station.RunningJob?.JobId == jobId || station.Next.Any(j => j.JobId == jobId);
 }

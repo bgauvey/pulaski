@@ -389,7 +389,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Operator station (D-107, proposed, in pieces #146–#150): enrolled terminal at `/terminal/station`, line by `StationLine.Choose`; badge →
   `/api/terminal/station/sign-on` ticket for `TerminalRules.StationIdle` in cookie `.Pulaski.Station`; the badged person's user and role decide
   production actions (people without a user: labor only): `GetPersonAccessAsync`, actions through `StationActing.BeginAsync` (actor = user,
-  event source `EventSources.Station(code)`, ticket renewed).
+  event source `EventSources.Station(code)`, ticket renewed). Jobs: `/api/terminal/station/{start|pause|complete}`, only the line's
+  running or next jobs (`StationJobs.IsOnLine`), the floor's own commands.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
