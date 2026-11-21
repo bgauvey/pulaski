@@ -29,7 +29,6 @@ internal sealed class GetStationHandler(
     IQueryHandler<ListInventoryLocationsQuery, IReadOnlyList<InventoryLocationDto>> locations,
     IQueryHandler<ListStopsQuery, StopPageDto> stops,
     IQueryHandler<ListCodingReasonsQuery, IReadOnlyList<ReasonCodeDto>> codingReasons,
-    IQueryHandler<ListAndonCallsQuery, IReadOnlyList<AndonCallDto>> andonCalls,
     IQueryHandler<ListAndonTypesQuery, IReadOnlyList<AndonTypeDto>> andonTypes,
     ISecurityReadStore security,
     TimeProvider timeProvider) : IQueryHandler<GetStationQuery, StationDto>
@@ -64,10 +63,7 @@ internal sealed class GetStationHandler(
             }
         }
 
-        // The line's calls for help (#157), the longest waiting first, and what may be called for by someone who may call.
-        var calls = line is null
-            ? []
-            : (await andonCalls.HandleAsync(new ListAndonCallsQuery(terminal.SiteId, true, LineId: line.LineId), cancellationToken)).OrderBy(c => c.RaisedAt).ToList();
+        // What may be called for (#157), by someone who may call; the line's calls come with it from the display (#158).
         var types = line is not null && May(Permissions.AndonCall)
             ? (await andonTypes.HandleAsync(new ListAndonTypesQuery(terminal.SiteId), cancellationToken)).Where(t => t.IsActive).ToList()
             : [];
@@ -83,7 +79,7 @@ internal sealed class GetStationHandler(
             Next = row?.Next ?? [],
             StopsToCode = toCode,
             CodingReasons = reasonsByMachine,
-            AndonCalls = calls,
+            AndonCalls = line?.Calls ?? [],
             AndonTypes = types,
             RunEndReasons = query.PersonId is null ? [] : await reasons.HandleAsync(new ListReasonCodesQuery("run_end", terminal.SiteId), cancellationToken),
             Report = row?.Running is { JobType: "production" } running && May(Permissions.ProductionReport)

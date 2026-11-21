@@ -167,7 +167,7 @@ else
             {
                 @* Andon (#157): the line's calls waiting or being answered, escalated ones marked; whoever may calls for help or answers. *@
                 <section class="station-panel station-andon" aria-labelledby="station-andon">
-                    <h2 id="station-andon" class="h5">@(_station.AndonCalls.Count == 0 ? "Need help?" : StationView.CallsTitle(_station.AndonCalls.Count))</h2>
+                    <h2 id="station-andon" class="h5">@(_station.AndonCalls.Count == 0 ? "Need help?" : AndonCallView.Title(_station.AndonCalls.Count))</h2>
                     @if (_station.AndonCalls.Count > 0)
                     {
                         @if (_station.PersonName is null)
@@ -180,7 +180,7 @@ else
                                 <li @key="c.Id" class="@(c.IsEscalated ? "is-escalated" : "")">
                                     <div class="d-flex justify-content-between gap-2">
                                         <span class="fw-semibold">@c.TypeName</span>
-                                        <span class="@(c.IsEscalated ? "station-escalated" : "text-muted")">@StationView.CallState(c, DateTimeOffset.UtcNow)</span>
+                                        <span class="@(c.IsEscalated ? "station-escalated" : "text-muted")">@AndonCallView.State(c, DateTimeOffset.UtcNow)</span>
                                     </div>
                                     @if (c.Note is { } note)
                                     {

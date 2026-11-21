@@ -906,7 +906,21 @@ A TV on the floor can show each line's state, running job, output, down time and
 
 In detail: the board reloads every 15 seconds, so it recovers by itself after a network drop. Its figures are the Overview's: a line that tracks
 machine state but has no signal shows **No signal**, and down time counts no-signal time. Colour is kept for what needs attention: down, no
-signal, waiting, OEE below target, stops to code. Switching the terminal off stops the board at once.
+signal, waiting, OEE below target, stops to code. Switching the terminal off stops the board at once. A line's calls for help that aren't
+resolved show under its name: amber while waiting, quiet once someone is on it, and red, with the line's frame, once escalated.
+
+### Answer calls for help from the Andon page
+
+**Operate → Andon** lists every call for help at the site that isn't resolved, for supervisors and responders away from the line.
+
+1. Open **Operate → Andon**. Each call shows its line, what help is wanted and the caller's note, who called and from which station, and
+   where it stands: *waiting 4 min*, *waiting 12 min: escalated* (red) or *Lee Ong is on it*.
+2. Click **I'm on it** when you go to a call.
+3. When it's done, click **Resolve**, say what was done, and click **Resolved**.
+
+In detail: the page refreshes itself every 30 seconds (the live pill says when it last did). Below, **Resolved in the last day** lists the calls
+resolved in the last 24 hours, with who resolved them, how long they took to answer and to resolve, and what was done. Seeing the page needs
+**floor: view**; answering needs **andon: respond**. Calls are raised at the line's [operator station](#use-an-operator-station).
 
 ### Use a touch screen
 
@@ -3017,7 +3031,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Planning rates from run history:** the scheduled recalculation looks at every line of a site at once, on whole days; it can't be limited to some lines or materials, or run at a set time of day. Stops can be taken out only on lines that record machine state, and a proposal accepted without review is worked out once, not again when it is accepted.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts of their own on screen (a characteristic sampled from one has a [control chart](#control-charts)).
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
-- **Andon** calls are raised and answered only at an operator station: the line boards don't show them yet, there is no Andon page to answer them from a desk, and no report of response times. Calls escalate only on screen; nobody is e-mailed.
+- **Andon** calls are raised only at an operator station, and there is no report of response times beyond the last day's list on the Andon page. Calls escalate only on screen; nobody is e-mailed.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
 - **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Only a number attribute standing for a quality characteristic is checked against specification limits. Balances' attribute values aren't in the values file.

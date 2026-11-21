@@ -397,6 +397,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `core.andon_call` for a line: open → acknowledged → resolved, one not resolved per line + type (raising again returns it, `AlreadyOpen`), line
   locked first. Escalation on read (`AndonRules`), no job; e-mail with #121. Permissions `andon.call` / `andon.respond`; `/api/andon/*`. Station
   (#157): `StationDto.AndonCalls`/`AndonTypes`, `/api/terminal/station/andon/{call|acknowledge|resolve}`; calls carry users' names (`*ByName`).
+  Boards (#158): `LineDisplayLineDto.Calls` (the station's come from it); Operate → Andon (`/andon`) answers them, `AndonCallView` words them.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.
