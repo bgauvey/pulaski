@@ -2974,7 +2974,12 @@ answer, average time to resolve; and the ten longest waits. Computed on read, no
   caught up. Without a mail server (`CanSend`) nothing is sent or recorded.
 - **Kinds now:** `long_stop` (a stop reaching its minutes, going or not), `uncoded_stop` (still without a reason that many minutes after it
   ended), `andon_escalated` (still open past its type's time). Stops are current, not micro, of source machine or manual (pieces of
-  adjustments don't alert again). #165 adds SPC alerts, holds and shortages.
+  adjustments don't alert again).
+- **More kinds (#165):** `spc_alert` (a `core.spc_alert` raised, on a line at or below the scope; without a line only for whole-site
+  subscriptions), `lot_hold` (a `status_changed` → `on_hold` lot event, not a reversal, by where the lot is now; reason and comment), and
+  `shortage` (the site's `GetShortagesQuery` for the scope, its lines with `Uncovered` > 0 needed within the minutes: `AlertShortages.Due`,
+  pure; subject = a hash of job and material, so once per job and component). Shortages project the schedule, so the service works them out
+  every 10 minutes (`AlertSender.ShortageEvery`), the rest every round.
 - **Messages** (`AlertMessages.Compose`, pure): what happened in site time, a link to Machines or Andon from `Alerts:UiBaseUrl` (else the
   password reset's UI address), and how to switch it off.
 

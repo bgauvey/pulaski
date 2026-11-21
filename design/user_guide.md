@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-20 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-21 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -2258,23 +2258,29 @@ Where whoever runs Pulaski has switched it on, the sign-in page shows **Forgotte
 
 ### Get e-mails when something needs you (My alerts)
 
-Pulaski can e-mail you when a machine has been stopped too long, when a stop is still without a reason, or when an andon call is waiting
-past its time, so you don't have to keep looking.
+Pulaski can e-mail you when a machine has been stopped too long, when a stop is still without a reason, when an andon call is waiting past
+its time, when a control chart signals, when a lot is put on hold, or when a job will be short of a component, so you don't have to keep looking.
 
 1. Click the warning-triangle button at the top right (**My alerts**).
-2. Under **Add an alert**, choose what to be told about (**Tell me when**), the **Site**, and **Where**: the whole site, or one area or line.
-3. For stops, set the **Minutes**: how long a stop must last, or how long after it ended it may stay without a reason. Click **Add**.
+2. Under **Add an alert**, choose what to be told about (**Tell me when**), the **Site**, and **Where**: the whole site, or one area, line
+   or stock location.
+3. Where it asks for **Minutes**, set them: how long a stop must last, how long after it ended it may stay without a reason, or how long
+   before a job needs a component you want to know it will be short (480, a shift, unless you change it). Click **Add**.
 4. **Change** sets other minutes; **Switch off** stops an alert without losing it.
 
 **In detail**
 
-- You get one e-mail for each stop or call, with a link to **Machines** or **Andon** when your organisation has told Pulaski its web address.
-  Times in the e-mail are the site's.
+- You get one e-mail for each stop, call, SPC alert, hold or shortage, with a link to it (**Machines**, **Andon**, **SPC alerts**, the lot,
+  **Shortages**) when your organisation has told Pulaski its web address. Times in the e-mail are the site's.
 - *A machine stopped longer than*: a stop of a machine or line at or below **Where**, still going or not, once it has lasted the minutes.
   *A stop still without a reason*: that many minutes after it ended. Micro-stops don't count, and pieces of a stop someone split, merged or
   retimed don't alert again. *An andon call escalated*: once a call is still unanswered past its kind of help's time.
-- You can only add alerts about what you can see at the site (machines for stops, the floor for andon), and they are only sent while you
-  still can; the list says when one isn't.
+- *A control chart signalled*: when an SPC alert opens for a line at or below **Where** (an alert for results without a line only for the
+  whole site); further breaks while it stays open don't e-mail again. *A lot put on hold*: when someone holds a lot that is at or below
+  **Where** now, with the reason and comment. *A job will be short of a component*: what the **Shortages** check shows as not covered by
+  stock or supply due in time, for jobs needing it within the minutes; checked every 10 minutes, and once per job and component.
+- You can only add alerts about what you can see at the site (machines for stops, the floor for andon, quality for SPC alerts, inventory for
+  holds and shortages), and they are only sent while you still can; the list says when one isn't.
 - E-mails go to the address on your user. Without a mail server, or without an address, nothing is sent; the page says so. An alert added
   now is about what happens from now on, not before.
 
@@ -3063,8 +3069,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Planning rates from run history:** the scheduled recalculation looks at every line of a site at once, on whole days; it can't be limited to some lines or materials, or run at a set time of day. Stops can be taken out only on lines that record machine state, and a proposal accepted without review is worked out once, not again when it is accepted.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts of their own on screen (a characteristic sampled from one has a [control chart](#control-charts)).
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
-- **Alerts** come by e-mail only, for long stops, stops without a reason and escalated andon calls; SPC alerts, holds and shortages come
-  next. Each person keeps their own; nobody can subscribe others.
+- **Alerts** come by e-mail only. Each person keeps their own; nobody can subscribe others. A lot made on hold (rather than put on hold
+  later) doesn't alert, and a shortage that clears and comes back for the same job isn't e-mailed again.
 - **Andon** calls are raised only at an operator station. Response times cover at most 90 days on screen and can't be exported. Escalated calls are e-mailed only to those who added that alert under **My alerts**.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).

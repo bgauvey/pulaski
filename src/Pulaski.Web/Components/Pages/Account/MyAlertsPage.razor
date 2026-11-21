@@ -178,10 +178,10 @@ else
 
     private async Task LoadAsync() => _alerts = await Api.GetMyAlertsAsync();
 
-    // The site's areas and lines, to narrow an alert to.
+    // The site's areas, lines and stock locations, to narrow an alert to (holds go by where the lot is).
     private async Task LoadPlacesAsync() =>
         _places = _siteId is { } site
-            ? [.. (await Api.ListEquipmentAsync(site)).Where(e => e.IsActive && (e.Level == "area" || e.CanRunJob)).OrderBy(e => e.Code, StringComparer.Ordinal)]
+            ? [.. (await Api.ListEquipmentAsync(site)).Where(e => e.IsActive && (e.Level == "area" || e.CanRunJob || e.HoldsInventory)).OrderBy(e => e.Code, StringComparer.Ordinal)]
             : [];
 
     private void OnKindChanged(ChangeEventArgs e)
