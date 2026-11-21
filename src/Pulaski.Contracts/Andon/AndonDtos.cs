@@ -86,3 +86,37 @@ public sealed record ResolveAndonCallRequest
 
 /// <summary>A call as it stands after a change, and whether raising it found one already open (the same call).</summary>
 public sealed record AndonCallResponse(Guid Id, string Status, bool AlreadyOpen = false);
+
+/// <summary>How fast calls for help were answered over a period (#159): by line and kind of help, and the slowest calls.</summary>
+public sealed record AndonResponseTimesDto
+{
+    public DateTimeOffset From { get; init; }
+    public DateTimeOffset To { get; init; }
+
+    /// <summary>One row per line and kind of help with calls in the period, by line then the kind's order; then <see cref="Total"/>.</summary>
+    public IReadOnlyList<AndonResponseRowDto> Rows { get; init; } = [];
+    public AndonResponseRowDto? Total { get; init; }
+
+    /// <summary>The calls that waited longest for someone, longest first (at most ten).</summary>
+    public IReadOnlyList<AndonCallDto> Slowest { get; init; } = [];
+}
+
+/// <summary>
+/// Calls raised in the period on one line for one kind of help (or all of them, for the total): how many, how many escalated, and the times
+/// to answer (raised → acknowledged) and to resolve (raised → resolved), in seconds, over the calls that got there.
+/// </summary>
+public sealed record AndonResponseRowDto
+{
+    public Guid? LineId { get; init; }
+    public string? LineCode { get; init; }
+    public Guid? TypeId { get; init; }
+    public string? TypeName { get; init; }
+    public int Calls { get; init; }
+    public int Escalated { get; init; }
+
+    /// <summary>Not yet resolved at the time of the report.</summary>
+    public int StillOpen { get; init; }
+    public int? AverageAnswerSeconds { get; init; }
+    public int? LongestAnswerSeconds { get; init; }
+    public int? AverageResolveSeconds { get; init; }
+}

@@ -43,6 +43,12 @@ internal static class AndonEndpoints
             TypedResults.Ok(await handler.HandleAsync(new ListAndonCallsQuery(siteId, open ?? true, from, to, lineId), ct)))
         .RequireAny(Site.Query(), Permissions.FloorView);
 
+        // How fast calls were answered (#159), over calls raised in [from, to): at most 92 days.
+        andon.MapGet("/response-times", async Task<Ok<AndonResponseTimesDto>> (
+            Guid siteId, DateTimeOffset from, DateTimeOffset to, IQueryHandler<GetAndonResponseTimesQuery, AndonResponseTimesDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetAndonResponseTimesQuery(siteId, from, to), ct)))
+        .RequireAny(Site.Query(), Permissions.FloorView);
+
         andon.MapPost("/calls", async Task<Ok<AndonCallResponse>> (
             RaiseAndonCallRequest request, ICommandHandler<RaiseAndonCallCommand, AndonCallResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new RaiseAndonCallCommand(request.LineId, request.TypeId, request.Note), ct)))

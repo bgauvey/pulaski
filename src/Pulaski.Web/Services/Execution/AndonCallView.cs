@@ -23,4 +23,10 @@ public static class AndonCallView
     public static string? Took(AndonCallDto call) => call is { AcknowledgedAt: { } ack, ResolvedAt: { } done }
         ? $"answered in {LineDisplayView.Duration(call.RaisedAt, ack)}, resolved in {LineDisplayView.Duration(call.RaisedAt, done)}"
         : null;
+
+    /// <summary>A time in seconds as a duration: "45 s", "12 min", "1 h 05 min"; "—" when there is none.</summary>
+    public static string Time(int? seconds) => seconds is { } s ? LineDisplayView.Duration(DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddSeconds(s)) ?? "—" : "—";
+
+    /// <summary>The periods the response times offer, in days.</summary>
+    public static readonly IReadOnlyList<int> Periods = [7, 30, 90];
 }

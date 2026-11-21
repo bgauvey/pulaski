@@ -129,10 +129,90 @@ else
             </tbody>
         </table>
     </div>
+
+    @* Response times (#159): how fast calls were answered and resolved, by line and kind of help, over the calls raised in the period. *@
+    <section class="mb-3" aria-labelledby="andon-times">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <h2 class="h6 mb-0" id="andon-times">Response times</h2>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Period">
+                @foreach (var days in AndonCallView.Periods)
+                {
+                    <button type="button" class="btn @(_days == days ? "btn-secondary" : "btn-outline-secondary")" aria-pressed="@(_days == days)"
+                            @onclick="() => ChoosePeriodAsync(days)">Last @days days</button>
+                }
+            </div>
+        </div>
+        @if (_times is null)
+        {
+            <p class="text-muted small">Loading…</p>
+        }
+        else if (_times.Total is not { } total)
+        {
+            <p class="text-muted small">No calls in the last @_days days.</p>
+        }
+        else
+        {
+            <div class="table-panel mb-2">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Line</th><th>Call</th><th class="inv-num">Calls</th><th class="inv-num">Escalated</th><th class="inv-num">Answered in, on average</th>
+                            <th class="inv-num">Longest</th><th class="inv-num">Resolved in, on average</th><th class="inv-num">Not resolved</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _times.Rows)
+                        {
+                            <tr @key="(r.LineId, r.TypeId)">
+                                <td class="fw-semibold">@r.LineCode</td>
+                                <td>@r.TypeName</td>
+                                @TimesCells(r)
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr class="fw-semibold"><td colspan="2">All calls</td>@TimesCells(total)</tr>
+                    </tfoot>
+                </table>
+            </div>
+            <h3 class="h6 small text-muted">Longest waits</h3>
+            <div class="table-panel">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Line</th><th>Call</th><th>Called</th><th class="inv-num">Waited</th><th>Answered by</th><th>What was done</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _times.Slowest)
+                        {
+                            <tr @key="c.Id">
+                                <td class="fw-semibold">@c.LineCode</td>
+                                <td>@c.TypeName@if (c.Note is { } note) {<div class="small text-muted">@note</div>}</td>
+                                <td class="small">@Display.SiteTime(c.RaisedAt, Zone)<div class="text-muted">@AndonCallView.Caller(c)</div></td>
+                                <td class="inv-num @(c.WaitedSeconds >= c.EscalateAfterMinutes * 60 ? "text-danger fw-semibold" : "")">@AndonCallView.Time(c.WaitedSeconds)@(c.AcknowledgedAt is null ? ", still waiting" : "")</td>
+                                <td class="small">@(c.AcknowledgedByName ?? c.AcknowledgedBy ?? "—")</td>
+                                <td class="small">@(c.Resolution ?? (c.ResolvedAt is null ? "not resolved" : "—"))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
 }
 
 @code {
     private static readonly TimeSpan ResolvedWindow = TimeSpan.FromHours(24);
+
+    private static RenderFragment TimesCells(AndonResponseRowDto r) =>
+        @<text>
+            <td class="inv-num">@r.Calls</td>
+            <td class="inv-num @(r.Escalated > 0 ? "text-danger fw-semibold" : "")">@r.Escalated</td>
+            <td class="inv-num">@AndonCallView.Time(r.AverageAnswerSeconds)</td>
+            <td class="inv-num">@AndonCallView.Time(r.LongestAnswerSeconds)</td>
+            <td class="inv-num">@AndonCallView.Time(r.AverageResolveSeconds)</td>
+            <td class="inv-num">@r.StillOpen</td>
+        </text>;
+
+    private AndonResponseTimesDto? _times;
+    private int _days = 7;
 
     private IReadOnlyList<AndonCallDto>? _open;
     private IReadOnlyList<AndonCallDto> _resolved = [];
@@ -164,7 +244,7 @@ else
     private async Task OnSiteChangedAsync(ChangeEventArgs e)
     {
         Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
-        (_open, _resolved, _resolving, _message, _loadedAt) = (null, [], null, null, null);
+        (_open, _resolved, _resolving, _message, _loadedAt, _times) = (null, [], null, null, null, null);
         await LoadAsync();
     }
 
@@ -173,6 +253,7 @@ else
         try
         {
             await FetchAsync();
+            await FetchTimesAsync();
         }
         catch (ApiException ex)
         {
@@ -222,6 +303,34 @@ else
         _loadedAt = loadedAt;
     }
 
+    private async Task ChoosePeriodAsync(int days)
+    {
+        (_days, _times, _error) = (days, null, null);
+        try
+        {
+            await FetchTimesAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task FetchTimesAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            return;
+        }
+
+        var (days, now) = (_days, Clock.GetUtcNow());
+        var times = await Api.GetAndonResponseTimesAsync(site, now.AddDays(-days), now.AddMinutes(1));
+        if (Sites.SiteId == site && _days == days)
+        {
+            _times = times;
+        }
+    }
+
     private void ChooseResolve(AndonCallDto call) => (_resolving, _resolution, _message, _error) = (call, null, null, null);
 
     private Task AcknowledgeAsync(AndonCallDto call) => ActAsync(async () =>
@@ -245,6 +354,7 @@ else
         {
             _message = await action();
             await FetchAsync();
+            await FetchTimesAsync();
         }
         catch (ApiException ex)
         {

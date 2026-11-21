@@ -87,4 +87,50 @@ public class AndonTests
         var figured = AndonView.Figure(dto, T0.AddMinutes(6));
         Assert.Equal((true, 360), (figured.IsEscalated, figured.WaitedSeconds));
     }
+
+    [Fact]
+    public void Response_times_are_by_line_and_kind_with_a_total_and_the_longest_waits()
+    {
+        var (ext, pack, maint, qa) = (Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+        var now = T0.AddHours(2);
+        AndonCallDto Call(Guid line, string lineCode, Guid type, string typeName, int answerMin, int? resolveMin) => AndonView.Figure(new AndonCallDto
+        {
+            Id = Guid.CreateVersion7(),
+            SiteId = Site,
+            LineId = line,
+            LineCode = lineCode,
+            TypeId = type,
+            TypeCode = typeName.ToUpperInvariant(),
+            TypeName = typeName,
+            EscalateAfterMinutes = 10,
+            Status = resolveMin is null ? AndonStatuses.Acknowledged : AndonStatuses.Resolved,
+            RaisedAt = T0,
+            RaisedBy = "dana",
+            AcknowledgedAt = T0.AddMinutes(answerMin),
+            AcknowledgedBy = "lee",
+            ResolvedAt = resolveMin is { } r ? T0.AddMinutes(r) : null,
+        }, now);
+
+        var calls = new[]
+        {
+            Call(ext, "EXT-01", maint, "Maintenance", 2, 20),
+            Call(ext, "EXT-01", maint, "Maintenance", 12, 40),
+            Call(ext, "EXT-01", qa, "Quality", 4, null),
+            Call(pack, "PACK1", maint, "Maintenance", 6, 30),
+        };
+        var open = AndonView.Figure(calls[0] with { Id = Guid.CreateVersion7(), Status = AndonStatuses.Open, AcknowledgedAt = null, AcknowledgedBy = null, ResolvedAt = null, RaisedAt = now.AddMinutes(-90) }, now);
+
+        var times = AndonResponseTimes.Summarize([.. calls, open], T0.AddDays(-7), now);
+
+        Assert.Equal(["EXT-01 Maintenance", "EXT-01 Quality", "PACK1 Maintenance"], times.Rows.Select(r => $"{r.LineCode} {r.TypeName}"));
+        var extMaint = times.Rows[0];
+        Assert.Equal((3, 2, 1), (extMaint.Calls, extMaint.Escalated, extMaint.StillOpen));
+        Assert.Equal((7 * 60, 12 * 60, 30 * 60), (extMaint.AverageAnswerSeconds, extMaint.LongestAnswerSeconds, extMaint.AverageResolveSeconds));
+        Assert.Null(times.Rows[1].AverageResolveSeconds);
+        Assert.Equal((5, 2, 2), (times.Total!.Calls, times.Total.Escalated, times.Total.StillOpen));
+
+        // The open call, still waiting after 90 minutes, waited longest; then the 12-minute answer.
+        Assert.Equal([open.Id, calls[1].Id], times.Slowest.Take(2).Select(c => c.Id));
+        Assert.Null(AndonResponseTimes.Summarize([], T0, now).Total);
+    }
 }

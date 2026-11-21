@@ -186,3 +186,66 @@ public static class AndonView
         };
     }
 }
+
+/// <summary>How fast the site's calls for help were answered (#159), over calls raised in [From, To): at most 92 days.</summary>
+public sealed record GetAndonResponseTimesQuery(Guid SiteId, DateTimeOffset From, DateTimeOffset To) : IQuery<AndonResponseTimesDto>;
+
+internal sealed class GetAndonResponseTimesHandler(IAndonReadStore store, TimeProvider time) : IQueryHandler<GetAndonResponseTimesQuery, AndonResponseTimesDto>
+{
+    public async Task<AndonResponseTimesDto> HandleAsync(GetAndonResponseTimesQuery query, CancellationToken cancellationToken)
+    {
+        if (query.To <= query.From || query.To - query.From > AndonResponseTimes.LongestPeriod)
+        {
+            throw new DomainRuleException($"Choose a period of at most {AndonResponseTimes.LongestPeriod.TotalDays:0} days.");
+        }
+
+        var now = time.GetUtcNow();
+        var calls = await store.ListCallsRaisedAsync(query.SiteId, query.From, query.To, cancellationToken);
+        return AndonResponseTimes.Summarize([.. calls.Select(c => AndonView.Figure(c, now))], query.From, query.To);
+    }
+}
+
+/// <summary>Response times from a period's calls (#159). Pure.</summary>
+public static class AndonResponseTimes
+{
+    public static readonly TimeSpan LongestPeriod = TimeSpan.FromDays(92);
+
+    public const int SlowestShown = 10;
+
+    /// <summary>Rows by line and kind of help, the total and the slowest calls.</summary>
+    /// <param name="calls">The period's calls, figured as of now (<see cref="AndonView.Figure"/>): their waiting time is to now while open.</param>
+    /// <param name="from">The period's start, as asked.</param>
+    /// <param name="to">The period's end, as asked.</param>
+    public static AndonResponseTimesDto Summarize(IReadOnlyList<AndonCallDto> calls, DateTimeOffset from, DateTimeOffset to)
+    {
+        var rows = calls
+            .GroupBy(c => (c.LineId, c.TypeId))
+            .Select(g => Row([.. g]) with { LineId = g.Key.LineId, LineCode = g.First().LineCode, TypeId = g.Key.TypeId, TypeName = g.First().TypeName })
+            .OrderBy(r => r.LineCode, StringComparer.Ordinal)
+            .ThenBy(r => r.TypeName, StringComparer.Ordinal)
+            .ToList();
+        return new AndonResponseTimesDto
+        {
+            From = from,
+            To = to,
+            Rows = rows,
+            Total = calls.Count == 0 ? null : Row(calls),
+            Slowest = [.. calls.OrderByDescending(c => c.WaitedSeconds).ThenBy(c => c.RaisedAt).Take(SlowestShown)],
+        };
+    }
+
+    private static AndonResponseRowDto Row(IReadOnlyList<AndonCallDto> calls)
+    {
+        var answered = calls.Where(c => c.AcknowledgedAt is not null).Select(c => (c.AcknowledgedAt!.Value - c.RaisedAt).TotalSeconds).ToList();
+        var resolved = calls.Where(c => c.ResolvedAt is not null).Select(c => (c.ResolvedAt!.Value - c.RaisedAt).TotalSeconds).ToList();
+        return new AndonResponseRowDto
+        {
+            Calls = calls.Count,
+            Escalated = calls.Count(c => c.WaitedSeconds >= c.EscalateAfterMinutes * 60),
+            StillOpen = calls.Count(c => c.ResolvedAt is null),
+            AverageAnswerSeconds = answered.Count == 0 ? null : (int)Math.Round(answered.Average()),
+            LongestAnswerSeconds = answered.Count == 0 ? null : (int)Math.Round(answered.Max()),
+            AverageResolveSeconds = resolved.Count == 0 ? null : (int)Math.Round(resolved.Average()),
+        };
+    }
+}

@@ -106,6 +106,7 @@ public class StationViewTests
         Assert.Equal("dana", AndonCallView.Caller(call));
         Assert.Equal("Dana Ito at ST-1", AndonCallView.Caller(call with { RaisedByName = "Dana Ito", RaisedFrom = "ST-1" }));
         Assert.Null(AndonCallView.Took(call));
+        Assert.Equal(("—", "45 s", "12 min"), (AndonCallView.Time(null), AndonCallView.Time(45), AndonCallView.Time(720)));
         Assert.Equal("answered in 3 min, resolved in 25 min",
             AndonCallView.Took(call with { AcknowledgedAt = call.RaisedAt.AddMinutes(3), ResolvedAt = call.RaisedAt.AddMinutes(25) }));
     }

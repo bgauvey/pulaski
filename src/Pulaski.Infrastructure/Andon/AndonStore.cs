@@ -107,7 +107,8 @@ internal sealed class AndonQueries(NpgsqlDataSource dataSource) : IAndonReadStor
         ORDER BY is_active DESC, sort_order, code
         """;
 
-    private const string Calls = """
+    // A call with its line, kind of help, and the names of the users who raised, acknowledged and resolved it.
+    private const string CallSelect = """
         SELECT c.id, c.site_id, c.line_id, l.code AS line_code, l.name AS line_name, c.andon_type_id AS type_id, t.code AS type_code, t.name AS type_name,
                t.escalate_after_minutes, c.status, c.note, c.raised_at, c.raised_by, c.raised_from, c.acknowledged_at, c.acknowledged_by,
                c.resolved_at, c.resolved_by, c.resolution,
@@ -117,6 +118,10 @@ internal sealed class AndonQueries(NpgsqlDataSource dataSource) : IAndonReadStor
         FROM core.andon_call c
         JOIN core.andon_type t ON t.id = c.andon_type_id
         JOIN core.equipment l ON l.id = c.line_id
+        """;
+
+    private const string Calls = CallSelect + """
+
         WHERE c.site_id = @SiteId
           AND (@LineId::uuid IS NULL OR c.line_id = @LineId)
           AND (CASE WHEN @OpenOnly THEN c.status <> 'resolved'
@@ -125,10 +130,24 @@ internal sealed class AndonQueries(NpgsqlDataSource dataSource) : IAndonReadStor
         LIMIT 1000
         """;
 
+    // Every call raised in the period, for response times (#159): the query bounds the period, so no row limit.
+    private const string CallsRaised = CallSelect + """
+
+        WHERE c.site_id = @SiteId AND c.raised_at >= @From AND c.raised_at < @To
+        ORDER BY c.raised_at
+        """;
+
     public async Task<IReadOnlyList<AndonTypeDto>> ListTypesAsync(Guid siteId, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         return [.. await connection.QueryAsync<AndonTypeDto>(new CommandDefinition(Types, new { SiteId = siteId }, cancellationToken: cancellationToken))];
+    }
+
+    public async Task<IReadOnlyList<AndonCallDto>> ListCallsRaisedAsync(Guid siteId, DateTimeOffset from, DateTimeOffset until, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. await connection.QueryAsync<AndonCallDto>(new CommandDefinition(
+            CallsRaised, new { SiteId = siteId, From = from, To = until }, cancellationToken: cancellationToken))];
     }
 
     public async Task<IReadOnlyList<AndonCallDto>> ListCallsAsync(
