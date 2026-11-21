@@ -875,6 +875,22 @@ screen, even before anyone badges in (*A stop needs its reason · EXT-01-SAW · 
 In detail: it lists the stops of the line and its machines from the last 12 hours that have no reason, the one still going first, without
 micro-stops. Splitting, merging or changing a stop's times is done on **Machines**.
 
+**Call for help at a station.** When the line needs maintenance, quality, materials or a supervisor, call them from the station.
+
+1. Badge in, with a role that calls for help (Operator and Supervisor do).
+2. Tap **Call for help**, type a note if it helps (*belt slipping on the puller*), and tap the kind of help.
+3. The call shows at the top of the station with how long it has waited, and in red once nobody has come within its type's time.
+
+**Answer a call at a station.** Whoever comes badges in at the line's station (Supervisor and Quality may answer calls):
+
+1. Tap **I'm here**: the station shows that you're on it, and the call stops waiting.
+2. When it's done, tap **Resolve**, say what was done, and tap **Resolved**. The call leaves the station.
+
+In detail: the station lists every call of its line that isn't resolved, even before anyone badges in, the longest waiting first. Calling again
+for a kind of help that is still waiting doesn't make a second call; the station says it was called already. **Resolve** works on a call nobody
+acknowledged too: it counts as answered then. The kinds of help and their times are kept on **Site settings** (see [Andon: calls for
+help](#andon-calls-for-help)).
+
 **Who may do what at a station.** What someone may do there is what their Pulaski user may do at the station's site, as if they had signed
 in: an operator's role lets them start, pause and complete jobs, report production and code stops; a planner's doesn't. Link a person to their
 user on **People** (their user name). Someone with no user can still clock on and off at the badge terminal, and the station tells them what it
@@ -3001,7 +3017,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Planning rates from run history:** the scheduled recalculation looks at every line of a site at once, on whole days; it can't be limited to some lines or materials, or run at a set time of day. Stops can be taken out only on lines that record machine state, and a proposal accepted without review is worked out once, not again when it is accepted.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts of their own on screen (a characteristic sampled from one has a [control chart](#control-charts)).
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
-- **Andon** call types are kept on Site settings, but there is no screen yet to call for help or answer a call: that comes at the operator station, on the line boards and on an Andon page. Calls escalate only on screen; nobody is e-mailed.
+- **Andon** calls are raised and answered only at an operator station: the line boards don't show them yet, there is no Andon page to answer them from a desk, and no report of response times. Calls escalate only on screen; nobody is e-mailed.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
 - **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Only a number attribute standing for a quality characteristic is checked against specification limits. Balances' attribute values aren't in the values file.

@@ -99,3 +99,14 @@
     border-color: var(--warning);
     border-width: 2px;
 }
+
+/* Calls for help (#157): an escalated call, still waiting past its type's time, is marked in the danger colour. */
+.station-shell .station-andon:has(.is-escalated) {
+    border-color: var(--danger);
+    border-width: 2px;
+}
+
+.station-shell .station-escalated {
+    color: var(--danger);
+    font-weight: 600;
+}

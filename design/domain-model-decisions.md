@@ -2939,8 +2939,14 @@ waiting too long and how fast they are answered.
   subscribe; no background job.
 - **Permissions** `andon.call` (Operator, Supervisor) and `andon.respond` (Supervisor, Quality), both implying `floor.view`; lists need
   `floor.view`. `/api/andon/types`, `/api/andon/calls` (open by default, or `open=false` with a period), `/calls/{id}/acknowledge|resolve`.
-- **Pieces:** #156 types and calls (this), #157 calls at the operator station (responders badge in there), #158 open calls on the line boards and
+- **Pieces:** #156 types and calls, #157 calls at the operator station (responders badge in there), #158 open calls on the line boards and
   an Operate → Andon page, #159 response times.
+
+**At the station (#157).** `StationDto.AndonCalls` is the line's calls not yet resolved, the longest waiting first, shown even while the station
+waits; `AndonTypes` the site's active types for a signed-on person who may call (`CanCallForHelp`, `CanAnswerCalls`). `POST
+/api/terminal/station/andon/call|acknowledge|resolve` act as the badged person's user (`StationActing`), only on that line: a call of one of the
+offered types (raised from the terminal's code), or one of the line's listed calls. Calls carry the users' names for who raised, acknowledged and
+resolved them (`*ByName`, from `sec.app_user` by actor id), so the station says *Lee Ong is on it*.
 
 ## Application architecture
 

@@ -532,6 +532,50 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_station_shows_its_lines_calls_and_offers_calling_and_answering_by_role()
+    {
+        var plant = await PlantAsync();
+        var terminal = new Pulaski.Application.Labor.TerminalRecord(
+            Guid.CreateVersion7(), plant.Site, "ST-" + _s, "Extruder station", plant.Site, plant.Extruder, "badge", true, TestTime.Now);
+        await db.SendAsync(new Pulaski.Application.Security.CreateUserCommand(
+            "op." + _s, "Olu " + _s, null, "Temporary-pass-1", Pulaski.Domain.Security.Roles.Operator, plant.Site));
+        await db.SendAsync(new Pulaski.Application.Security.CreateUserCommand(
+            "sup." + _s, "Sam " + _s, null, "Temporary-pass-1", Pulaski.Domain.Security.Roles.Supervisor, plant.Site));
+        CreatedResponse olu = await db.SendAsync(new Pulaski.Application.Labor.CreatePersonCommand(plant.Site, "820-" + _s, "Olu " + _s, null, "op." + _s));
+        CreatedResponse sam = await db.SendAsync(new Pulaski.Application.Labor.CreatePersonCommand(plant.Site, "821-" + _s, "Sam " + _s, null, "sup." + _s));
+        CreatedResponse maint = await db.SendAsync(new Pulaski.Application.Andon.CreateAndonTypeCommand(plant.Site, "M" + _s, "Maintenance", 10, 1));
+        CreatedResponse off = await db.SendAsync(new Pulaski.Application.Andon.CreateAndonTypeCommand(plant.Site, "Q" + _s, "Quality", 10, 2));
+        await db.SendAsync(new Pulaski.Application.Andon.UpdateAndonTypeCommand(off.Id, off.Version, "Quality", 10, 2, false));
+
+        // A call on the extruder and one on the packer, another line.
+        var raised = await db.SendAsync(new Pulaski.Application.Andon.RaiseAndonCallCommand(plant.Extruder, maint.Id, "Belt", "ST-" + _s));
+        await db.SendAsync(new Pulaski.Application.Andon.RaiseAndonCallCommand(plant.Packer, maint.Id, null));
+
+        // Waiting, the station shows only its line's call and offers nothing.
+        var waiting = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, null));
+        Assert.Equal(raised.Id, Assert.Single(waiting.AndonCalls).Id);
+
+        // Answered by a user, the station names them.
+        var lee = ("sup." + _s).ToLowerInvariant();
+        await db.SendAsAsync(lee, new Pulaski.Application.Andon.AcknowledgeAndonCallCommand(raised.Id));
+        var answered = Assert.Single((await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, null))).AndonCalls);
+        Assert.Equal((lee, "Sam " + _s), (answered.AcknowledgedBy, answered.AcknowledgedByName));
+        Assert.Empty(waiting.AndonTypes);
+
+        // An operator may call (switched-off types aren't offered) but not answer; a supervisor may do both.
+        var operatorView = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, olu.Id, null));
+        Assert.Equal((true, false), (operatorView.CanCallForHelp, operatorView.CanAnswerCalls));
+        Assert.DoesNotContain(operatorView.AndonTypes, t => t.Id == off.Id);
+        Assert.Contains(operatorView.AndonTypes, t => t.Id == maint.Id);
+        var supervisorView = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, sam.Id, null));
+        Assert.Equal((true, true), (supervisorView.CanCallForHelp, supervisorView.CanAnswerCalls));
+
+        // Resolved, it leaves the station.
+        await db.SendAsync(new Pulaski.Application.Andon.ResolveAndonCallCommand(raised.Id, "Tensioned"));
+        Assert.Empty((await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, sam.Id, null))).AndonCalls);
+    }
+
+    [Fact]
     public async Task A_line_calls_for_help_once_per_type_and_the_call_escalates_until_someone_answers_it()
     {
         var plant = await PlantAsync();
