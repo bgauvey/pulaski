@@ -532,6 +532,93 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Alerts_go_once_to_subscribers_who_may_see_them_for_long_stops_uncoded_stops_and_escalated_calls()
+    {
+        var plant = await PlantAsync();
+        var username = ("lee." + _s).ToLowerInvariant();
+        var email = $"lee-{_s}@example.com".ToLowerInvariant();
+        await db.SendAsync(new Pulaski.Application.Security.CreateUserCommand(
+            username, "Lee " + _s, email, "Temporary-pass-1", Pulaski.Domain.Security.Roles.Supervisor, plant.Site));
+        Pulaski.Domain.Security.UserAccess lee;
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            lee = (await scope.ServiceProvider.GetRequiredService<Pulaski.Application.Security.ISecurityReadStore>()
+                .GetAccessAsync("pulaski-local", username, DateTimeOffset.UtcNow, CancellationToken.None))!;
+        }
+
+        // Someone who can't see machines can't subscribe to stops.
+        var nobody = lee with { Grants = [] };
+        await Assert.ThrowsAsync<Application.Errors.ForbiddenException>(() => db.SendAsync(
+            new Pulaski.Application.Alerts.CreateAlertSubscriptionCommand(nobody, plant.Site, null, Pulaski.Domain.Alerts.AlertKind.LongStop, 10)));
+
+        var longStops = await db.SendAsync(new Pulaski.Application.Alerts.CreateAlertSubscriptionCommand(lee, plant.Site, null, Pulaski.Domain.Alerts.AlertKind.LongStop, 10));
+        await db.SendAsync(new Pulaski.Application.Alerts.CreateAlertSubscriptionCommand(lee, plant.Site, null, Pulaski.Domain.Alerts.AlertKind.UncodedStop, 5));
+        await db.SendAsync(new Pulaski.Application.Alerts.CreateAlertSubscriptionCommand(lee, plant.Site, plant.Packer, Pulaski.Domain.Alerts.AlertKind.AndonEscalated, null));
+        await Assert.ThrowsAsync<Application.Errors.ConflictException>(() => db.SendAsync(
+            new Pulaski.Application.Alerts.CreateAlertSubscriptionCommand(lee, plant.Site, null, Pulaski.Domain.Alerts.AlertKind.LongStop, 30)));
+
+        // A stop going for 15 minutes (long); one of 5 minutes that ended 35 minutes ago without a reason (uncoded, not long); a call on the
+        // packer and one on the extruder, both unanswered past their minute. The subscriptions are an hour old.
+        CreatedResponse maint = await db.SendAsync(new Pulaski.Application.Andon.CreateAndonTypeCommand(plant.Site, "A" + _s, "Maintenance", 1, 1));
+        var packerCall = await db.SendAsync(new Pulaski.Application.Andon.RaiseAndonCallCommand(plant.Packer, maint.Id, "Jam"));
+        await db.SendAsync(new Pulaski.Application.Andon.RaiseAndonCallCommand(plant.Extruder, maint.Id, null));
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                """
+                UPDATE core.alert_subscription SET created_at = now() - interval '1 hour' WHERE user_id = @UserId;
+                UPDATE core.andon_call SET raised_at = now() - interval '5 minutes' WHERE site_id = @Site;
+                INSERT INTO ts.downtime (started_at, ended_at, equipment_id, packml_state) VALUES
+                    (now() - interval '15 minutes', NULL, @Extruder, 2),
+                    (now() - interval '40 minutes', now() - interval '35 minutes', @Extruder, 2);
+                """,
+                new { lee.UserId, plant.Site, plant.Extruder });
+        }
+
+        async Task<List<(string Recipient, string Subject, string Body)>> SendAsync()
+        {
+            var before = db.Mail.Sent.Count;
+            await using var scope = db.Services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<Pulaski.Application.Alerts.AlertSender>().SendDueAsync(CancellationToken.None);
+            return [.. db.Mail.Sent.Skip(before).Where(m => m.Recipient == email)];
+        }
+
+        var sent = await SendAsync();
+        Assert.Equal(3, sent.Count);
+        Assert.Contains(sent, m => m.Subject.Contains("has been stopped for", StringComparison.Ordinal));
+        Assert.Contains(sent, m => m.Subject.Contains("stop needs a reason", StringComparison.Ordinal));
+        Assert.Contains(sent, m => m.Subject.Contains("call on", StringComparison.Ordinal) && m.Body.Contains("Note: Jam", StringComparison.Ordinal));
+        Assert.Equal(3, await ScalarAsync<int>(
+            "SELECT count(*) FROM core.alert_sent a JOIN core.alert_subscription s ON s.id = a.subscription_id WHERE s.user_id = @UserId", new { lee.UserId }));
+        Assert.True(await ScalarAsync<bool>("SELECT EXISTS (SELECT 1 FROM core.alert_sent WHERE subject_id = @Id)", new { packerCall.Id }));
+
+        // Once only; and nothing for a subscription switched off.
+        Assert.Empty(await SendAsync());
+        var version = await ScalarAsync<long>("SELECT xmin::text::bigint FROM core.alert_subscription WHERE id = @Id", new { longStops.Id });
+        await db.SendAsync(new Pulaski.Application.Alerts.UpdateAlertSubscriptionCommand(lee, longStops.Id, version, 10, false));
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                "INSERT INTO ts.downtime (started_at, ended_at, equipment_id, packml_state) VALUES (now() - interval '20 minutes', NULL, @Packer, 2)",
+                new { plant.Packer });
+        }
+
+        Assert.DoesNotContain(await SendAsync(), m => m.Subject.Contains("has been stopped", StringComparison.Ordinal));
+
+        // Without a mail server nothing is sent or recorded.
+        db.Mail.CanSend = false;
+        try
+        {
+            await using var scope = db.Services.CreateAsyncScope();
+            Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<Pulaski.Application.Alerts.AlertSender>().SendDueAsync(CancellationToken.None));
+        }
+        finally
+        {
+            db.Mail.CanSend = true;
+        }
+    }
+
+    [Fact]
     public async Task A_station_shows_its_lines_calls_and_offers_calling_and_answering_by_role()
     {
         var plant = await PlantAsync();

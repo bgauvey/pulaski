@@ -42,6 +42,7 @@ Orders & scheduling                       Execution & inventory
       └─ job ── job_material               labor_session, labor_break, labor_approval
           └─ job_run                       quality_characteristic ─ material_spec(_version, _item), control_limit,
  scheduling_policy, run_standard,             spc_rule, spc_alert, andon_type ─ andon_call,
+ alert_subscription ─ alert_sent,
  changeover_rule                              ts.quality_sample, ts.spc_violation
 
 People & access                            History & events
@@ -1690,6 +1691,31 @@ A call for help from a line: raised, acknowledged by whoever comes, resolved wit
 | `resolved_at`, `resolved_by` | timestamptz, text | yes | When and by whom it was resolved. |
 | `resolution` | text | yes | What was done, at most 1000 characters. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.alert_subscription — e-mail alerts (#121, D-109) · *In use*
+
+A user's own subscription to an alert at a site. Changed only in its minutes and whether it is on; switched off, never deleted.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `user_id` | uuid → sec.app_user | no | Whose it is; alerts go to their e-mail address. |
+| `site_id` | uuid → equipment | no | The site. |
+| `equipment_id` | uuid → equipment | yes | Only what happens at or below this area or line; null = the whole site. One per user, site, kind and scope (`alert_subscription_uq`). |
+| `kind` | text | no | `long_stop`, `uncoded_stop`, `andon_escalated`; `spc_alert`, `lot_hold`, `shortage` reserved for #165. |
+| `minutes` | integer | yes | 1–10080: how long a stop lasts (`long_stop`), how long after it ended it stays without a reason (`uncoded_stop`); null for kinds without. |
+| `is_active` | boolean | no | Sent while on. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions; nothing that reached its moment before `created_at` is sent. |
+
+### core.alert_sent — alerts sent (#121, D-109) · *In use*
+
+One row per alert e-mailed, written in the same transaction that decides to send it, so each goes once however many API instances look.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `subscription_id` | uuid → alert_subscription | no | Whose alert. |
+| `subject_id` | uuid | no | What it was about: a stop (`ts.downtime`, no FK into history) or an andon call. With `subscription_id`, the primary key. |
+| `sent_at` | timestamptz | no | When it was sent. |
 
 ## 12. Time-partitioned history (`ts`)
 

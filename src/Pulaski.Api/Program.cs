@@ -47,6 +47,7 @@ builder.Services.AddSingleton<IdentityProviderClient>();
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));
 builder.Services.AddSingleton<Pulaski.Application.Security.IPasswordResetSettings, PasswordResetSettings>();
 builder.Services.AddSingleton<MailOutbox>();
+builder.Services.AddSingleton<Pulaski.Application.Alerts.IAlertSettings, AlertSettings>();
 builder.Services.AddSingleton<Pulaski.Application.Security.IMailOutbox>(sp => sp.GetRequiredService<MailOutbox>());
 builder.Services.AddSingleton<IMailSender, SmtpMailSender>();
 builder.Services.AddHostedService<MailSenderService>();
@@ -83,6 +84,7 @@ if (builder.Configuration.GetValue("Pulaski:DatabaseMaintenance", true))
     builder.Services.AddHostedService<TagSamplingService>();
     builder.Services.AddHostedService<ConnectionScheduleService>();
     builder.Services.AddHostedService<QualificationNoticeService>();
+    builder.Services.AddHostedService<AlertService>();
 }
 
 // The ERP feed (D-061): its settings for screens, and the HTTP client it sends with.
@@ -127,6 +129,7 @@ api.MapEdgeEndpoints();
 api.MapMachineEndpoints();
 api.MapOverviewEndpoints();
 api.MapAndonEndpoints();
+api.MapAlertEndpoints();
 api.MapQualityEndpoints();
 api.MapTerminalAdminEndpoints();
 

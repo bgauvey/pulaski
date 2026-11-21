@@ -399,6 +399,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (#157): `StationDto.AndonCalls`/`AndonTypes`, `/api/terminal/station/andon/{call|acknowledge|resolve}`; calls carry users' names (`*ByName`).
   Boards (#158): `LineDisplayLineDto.Calls` (the station's come from it); Operate → Andon (`/andon`) answers them, `AndonCallView` words them.
   Response times (#159): `AndonResponseTimes.Summarize` (pure) over `GetAndonResponseTimesQuery` (≤ 92 days), on the Andon page.
+- E-mail alerts (D-109, proposed, in pieces #164–#165): `core.alert_subscription` (each user's own, per site + optional area/line, `AlertKind`
+  with its view permission) on My alerts (`/my-alerts`, `/api/me/alerts`). `AlertService` → `AlertSender`: due within 24 h, access re-read,
+  `core.alert_sent` insert-once then queue after commit; nothing without `IMailOutbox.CanSend`. Kinds: long_stop, uncoded_stop, andon_escalated.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Pulaski.Contracts.Alerts;
 using Pulaski.Contracts.Andon;
 using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
@@ -1486,6 +1487,15 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     }
 
     // OEE targets (D-073)
+
+    /// <summary>The signed-in user's e-mail alerts (#121).</summary>
+    public Task<MyAlertsDto> GetMyAlertsAsync(CancellationToken ct = default) => GetAsync<MyAlertsDto>("api/me/alerts", ct);
+
+    public Task<CreatedResponse> CreateAlertSubscriptionAsync(CreateAlertSubscriptionRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/me/alerts", request, ct);
+
+    public Task<VersionResponse> UpdateAlertSubscriptionAsync(Guid id, UpdateAlertSubscriptionRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/me/alerts/{id}", request, ct);
 
     /// <summary>The site's andon call types (#125), in their order.</summary>
     public Task<IReadOnlyList<AndonTypeDto>> ListAndonTypesAsync(Guid siteId, CancellationToken ct = default) =>

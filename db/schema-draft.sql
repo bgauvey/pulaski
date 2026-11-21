@@ -2447,6 +2447,32 @@ CREATE TABLE core.andon_call (
 CREATE UNIQUE INDEX andon_call_open_uq ON core.andon_call (line_id, andon_type_id) WHERE status <> 'resolved';
 CREATE INDEX andon_call_site_ix ON core.andon_call (site_id, raised_at DESC);
 
+-- E-mail alerts (#121, D-109): each user's subscriptions per site (optionally narrowed to a line or area), and the alerts sent, so each goes
+-- once per subscription and subject however many API instances look.
+CREATE TABLE core.alert_subscription (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    user_id             uuid NOT NULL REFERENCES sec.app_user(id),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    equipment_id        uuid REFERENCES core.equipment(id),         -- only what happens at or below it; null = the whole site
+    kind                text NOT NULL CONSTRAINT alert_subscription_kind_ck
+                            CHECK (kind IN ('long_stop', 'uncoded_stop', 'andon_escalated', 'spc_alert', 'lot_hold', 'shortage')),
+    minutes             integer CONSTRAINT alert_subscription_minutes_ck CHECK (minutes IS NULL OR minutes BETWEEN 1 AND 10080),
+    is_active           boolean NOT NULL DEFAULT true,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX alert_subscription_uq
+    ON core.alert_subscription (user_id, site_id, kind, (coalesce(equipment_id, '00000000-0000-0000-0000-000000000000'::uuid)));
+CREATE INDEX alert_subscription_kind_ix ON core.alert_subscription (kind) WHERE is_active;
+
+-- One row per alert sent: the subscription and what it was about (a stop, a call, ...; no FK, it may be history).
+CREATE TABLE core.alert_sent (
+    subscription_id     uuid NOT NULL REFERENCES core.alert_subscription(id),
+    subject_id          uuid NOT NULL,
+    sent_at             timestamptz NOT NULL,
+    PRIMARY KEY (subscription_id, subject_id)
+);
+
 -- Grants (role names are deployment-specific):
 --   GRANT INSERT, SELECT ON evt.event TO pulaski_app;
 --   REVOKE UPDATE, DELETE, TRUNCATE ON evt.event FROM pulaski_app;
@@ -2669,7 +2695,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0067_tag_sampling'),
     ('0068_delivery_feed_format'),
     ('0069_lot_cutting'),
-    ('0070_andon');
+    ('0070_andon'),
+    ('0071_alert_subscriptions');
 
 -- =====================================================================
 -- 17. SEED DATA

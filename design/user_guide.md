@@ -2256,6 +2256,28 @@ Where whoever runs Pulaski has switched it on, the sign-in page shows **Forgotte
 - Resetting this way also unlocks you. A link stops working when an administrator resets your password, when you change it, or when you are switched off.
 - Machines' accounts (service accounts) never get links. When only administrators use Pulaski passwords, only administrators can reset theirs this way. Without the link on the sign-in page, ask an administrator.
 
+### Get e-mails when something needs you (My alerts)
+
+Pulaski can e-mail you when a machine has been stopped too long, when a stop is still without a reason, or when an andon call is waiting
+past its time, so you don't have to keep looking.
+
+1. Click the warning-triangle button at the top right (**My alerts**).
+2. Under **Add an alert**, choose what to be told about (**Tell me when**), the **Site**, and **Where**: the whole site, or one area or line.
+3. For stops, set the **Minutes**: how long a stop must last, or how long after it ended it may stay without a reason. Click **Add**.
+4. **Change** sets other minutes; **Switch off** stops an alert without losing it.
+
+**In detail**
+
+- You get one e-mail for each stop or call, with a link to **Machines** or **Andon** when your organisation has told Pulaski its web address.
+  Times in the e-mail are the site's.
+- *A machine stopped longer than*: a stop of a machine or line at or below **Where**, still going or not, once it has lasted the minutes.
+  *A stop still without a reason*: that many minutes after it ended. Micro-stops don't count, and pieces of a stop someone split, merged or
+  retimed don't alert again. *An andon call escalated*: once a call is still unanswered past its kind of help's time.
+- You can only add alerts about what you can see at the site (machines for stops, the floor for andon), and they are only sent while you
+  still can; the list says when one isn't.
+- E-mails go to the address on your user. Without a mail server, or without an address, nothing is sent; the page says so. An alert added
+  now is about what happens from now on, not before.
+
 ### What each role can change
 
 A new Pulaski starts with these roles. Your administrator may have changed them or added others: the **Roles** and **Permissions** tabs of **Configure → Users** show what each role may do today.
@@ -3041,7 +3063,9 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Planning rates from run history:** the scheduled recalculation looks at every line of a site at once, on whole days; it can't be limited to some lines or materials, or run at a set time of day. Stops can be taken out only on lines that record machine state, and a proposal accepted without review is worked out once, not again when it is accepted.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts of their own on screen (a characteristic sampled from one has a [control chart](#control-charts)).
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
-- **Andon** calls are raised only at an operator station. Response times cover at most 90 days on screen and can't be exported. Calls escalate only on screen; nobody is e-mailed.
+- **Alerts** come by e-mail only, for long stops, stops without a reason and escalated andon calls; SPC alerts, holds and shortages come
+  next. Each person keeps their own; nobody can subscribe others.
+- **Andon** calls are raised only at an operator station. Response times cover at most 90 days on screen and can't be exported. Escalated calls are e-mailed only to those who added that alert under **My alerts**.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
 - **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Only a number attribute standing for a quality characteristic is checked against specification limits. Balances' attribute values aren't in the values file.
