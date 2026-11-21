@@ -2953,6 +2953,11 @@ the station takes its line's from there. Boards mark waiting / answered / escala
 (`/andon`, `floor.view`) lists the site's open calls, the longest waiting first, to acknowledge or resolve (`andon.respond`), and the calls
 resolved in the last 24 hours with how long they took (`AndonCallView`); it refreshes itself (`LiveStatus`).
 
+**Response times (#159).** `GetAndonResponseTimesQuery` (`GET /api/andon/response-times?siteId=&from=&to=`, `floor.view`, at most 92 days) reads
+every call raised in the period (`ListCallsRaisedAsync`, no row limit), figures it as of now and `AndonResponseTimes.Summarize` (pure) gives a row
+per line and type plus a total: calls, escalated (waited at least the type's time, answered or not), still open, average and longest time to
+answer, average time to resolve; and the ten longest waits. Computed on read, nothing stored. With it, #125 is complete.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

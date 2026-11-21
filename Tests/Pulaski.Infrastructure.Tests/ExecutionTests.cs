@@ -624,6 +624,15 @@ public sealed class ExecutionTests(DatabaseFixture db)
         Assert.Equal(3, await ScalarAsync<int>(
             "SELECT count(*) FROM evt.event WHERE subject = @Id AND type LIKE 'pulaski.andon.call_%'", new { raised.Id }));
 
+        // Its response times (#159): answered after about 15 minutes, so escalated.
+        var times = await QueryAsync<Pulaski.Application.Andon.GetAndonResponseTimesQuery, Contracts.Andon.AndonResponseTimesDto>(
+            new Pulaski.Application.Andon.GetAndonResponseTimesQuery(plant.Site, TestTime.Now.AddDays(-1), TestTime.Now.AddDays(1)));
+        var row = Assert.Single(times.Rows);
+        Assert.Equal((1, 1, 0), (row.Calls, row.Escalated, row.StillOpen));
+        Assert.InRange(row.AverageAnswerSeconds!.Value, 15 * 60, 16 * 60);
+        await Assert.ThrowsAsync<DomainRuleException>(() => QueryAsync<Pulaski.Application.Andon.GetAndonResponseTimesQuery, Contracts.Andon.AndonResponseTimesDto>(
+            new Pulaski.Application.Andon.GetAndonResponseTimesQuery(plant.Site, TestTime.Now.AddDays(-100), TestTime.Now)));
+
         // A new call once it is resolved; none once the type is switched off, which needs the current version.
         Assert.NotEqual(raised.Id, (await db.SendAsync(new Pulaski.Application.Andon.RaiseAndonCallCommand(plant.Extruder, maint.Id, null))).Id);
         await Assert.ThrowsAsync<Application.Errors.ConflictException>(

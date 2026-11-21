@@ -100,6 +100,9 @@ public sealed class InMemoryAndon : IAndonRepository, IAndonReadStore
         }
     }
 
+    public async Task<IReadOnlyList<AndonCallDto>> ListCallsRaisedAsync(Guid siteId, DateTimeOffset from, DateTimeOffset until, CancellationToken cancellationToken) =>
+        [.. (await ListCallsAsync(siteId, false, from, until, null, cancellationToken)).OrderBy(c => c.RaisedAt)];
+
     public Task<IReadOnlyList<AndonCallDto>> ListCallsAsync(
         Guid siteId, bool openOnly, DateTimeOffset? from, DateTimeOffset? until, Guid? lineId, CancellationToken cancellationToken)
     {

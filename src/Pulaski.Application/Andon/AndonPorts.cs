@@ -44,4 +44,7 @@ public interface IAndonReadStore
     /// </summary>
     Task<IReadOnlyList<AndonCallDto>> ListCallsAsync(
         Guid siteId, bool openOnly, DateTimeOffset? from, DateTimeOffset? until, Guid? lineId, CancellationToken cancellationToken);
+
+    /// <summary>Every call raised in [from, until) at the site, oldest first, without a limit (#159).</summary>
+    Task<IReadOnlyList<AndonCallDto>> ListCallsRaisedAsync(Guid siteId, DateTimeOffset from, DateTimeOffset until, CancellationToken cancellationToken);
 }

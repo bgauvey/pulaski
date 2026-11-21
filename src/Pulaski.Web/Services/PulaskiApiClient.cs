@@ -1509,6 +1509,12 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         return GetAsync<IReadOnlyList<AndonCallDto>>(query, ct);
     }
 
+    /// <summary>How fast the site's calls were answered (#159), over calls raised in [from, until).</summary>
+    public Task<AndonResponseTimesDto> GetAndonResponseTimesAsync(Guid siteId, DateTimeOffset from, DateTimeOffset until, CancellationToken ct = default) =>
+        GetAsync<AndonResponseTimesDto>(
+            $"api/andon/response-times?siteId={siteId}&from={Uri.EscapeDataString(from.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}" +
+            $"&to={Uri.EscapeDataString(until.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}", ct);
+
     public Task<AndonCallResponse> AcknowledgeAndonCallAsync(Guid id, CancellationToken ct = default) =>
         SendAsync<AndonCallResponse>(HttpMethod.Post, $"api/andon/calls/{id}/acknowledge", new { }, ct);
 
