@@ -627,6 +627,67 @@ public sealed class InventoryTests(DatabaseFixture db)
         return await scope.ServiceProvider.GetRequiredService<IQueryHandler<TQuery, TResult>>().HandleAsync(query, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task Alerts_go_for_lots_put_on_hold_and_spc_alerts_to_subscribers_who_may_see_them()
+    {
+        var plant = await CreatePlantAsync();
+        var hold = await ReasonAsync("hold", "QA-HOLD");
+        var username = ("qa." + _suffix).ToLowerInvariant();
+        var email = $"qa-{_suffix}@example.com";
+        await db.SendAsync(new Pulaski.Application.Security.CreateUserCommand(
+            username, "Quinn " + _suffix, email, "Temporary-pass-1", Pulaski.Domain.Security.Roles.Quality, plant.Site));
+        Pulaski.Domain.Security.UserAccess quinn;
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            quinn = (await scope.ServiceProvider.GetRequiredService<Pulaski.Application.Security.ISecurityReadStore>()
+                .GetAccessAsync("pulaski-local", username, DateTimeOffset.UtcNow, CancellationToken.None))!;
+        }
+
+        // Holds at the stores only; SPC alerts at the site.
+        await db.SendAsync(new Pulaski.Application.Alerts.CreateAlertSubscriptionCommand(quinn, plant.Site, plant.Stores, Pulaski.Domain.Alerts.AlertKind.LotHold, null));
+        await db.SendAsync(new Pulaski.Application.Alerts.CreateAlertSubscriptionCommand(quinn, plant.Site, null, Pulaski.Domain.Alerts.AlertKind.SpcAlert, null));
+        await db.SendAsync(new Pulaski.Application.Alerts.CreateAlertSubscriptionCommand(quinn, plant.Site, null, Pulaski.Domain.Alerts.AlertKind.Shortage, 60 * 24 * 7));
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE core.alert_subscription SET created_at = now() - interval '1 hour' WHERE user_id = @UserId", new { quinn.UserId });
+        }
+
+        var atStores = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "H-A-" + _suffix, 100m, plant.Kg));
+        var atStaging = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Staging, "H-B-" + _suffix, 100m, plant.Kg));
+        await db.SendAsync(new ChangeLotStatusCommand(atStores.LotId, await VersionAsync(atStores.LotId), LotStatus.OnHold, hold, "Pending melt-flow test"));
+        await db.SendAsync(new ChangeLotStatusCommand(atStaging.LotId, await VersionAsync(atStaging.LotId), LotStatus.OnHold, hold, "Elsewhere"));
+
+        var alertId = Guid.CreateVersion7();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                """
+                WITH q AS (
+                    INSERT INTO core.quality_characteristic (id, site_id, code, name, data_kind, chart_type)
+                    VALUES (uuidv7(), @Site, 'MT' || @Suffix, 'Melt temperature', 'variable', 'i_mr') RETURNING id)
+                INSERT INTO core.spc_alert (id, site_id, characteristic_id, material_id, equipment_id, rules, first_sample_id, first_sample_at,
+                                            last_sample_id, last_sample_at, raised_at)
+                SELECT @AlertId, @Site, q.id, @Resin, @Line, '{1}', uuidv7(), now(), uuidv7(), now(), now() FROM q
+                """,
+                new { plant.Site, Suffix = _suffix.ToUpperInvariant(), AlertId = alertId, plant.Resin, plant.Line });
+        }
+
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            var before = db.Mail.Sent.Count;
+            // The site's shortage check runs too; whatever it finds is the plant's, so only the hold and the SPC alert are counted.
+            await scope.ServiceProvider.GetRequiredService<Pulaski.Application.Alerts.AlertSender>().SendDueAsync(CancellationToken.None);
+            var sent = db.Mail.Sent.Skip(before).Where(m => m.Recipient == email && !m.Subject.Contains("will be short", StringComparison.Ordinal)).ToList();
+            Assert.Equal(2, sent.Count);
+            var held = Assert.Single(sent, m => m.Subject.Contains("put on hold", StringComparison.Ordinal));
+            Assert.Contains("H-A-" + _suffix, held.Subject, StringComparison.Ordinal);
+            Assert.Contains("Pending melt-flow test", held.Body, StringComparison.Ordinal);
+            Assert.Contains(sent, m => m.Subject.StartsWith("[Pulaski] SPC alert: MT", StringComparison.Ordinal));
+        }
+
+        Assert.True(await db.AdminDataSource.CreateCommand($"SELECT EXISTS (SELECT 1 FROM core.alert_sent WHERE subject_id = '{alertId}')").ExecuteScalarAsync() is true);
+    }
+
     private async Task<long> VersionAsync(Guid lotId) =>
         (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lotId))).Lot.Version;
 

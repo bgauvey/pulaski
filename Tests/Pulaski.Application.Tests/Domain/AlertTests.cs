@@ -22,7 +22,8 @@ public class AlertTests
 
         Assert.Null(AlertSubscription.Create(Guid.CreateVersion7(), user, site, null, AlertKind.AndonEscalated, 30).Minutes);
         Assert.Throws<DomainRuleException>(() => AlertSubscription.Create(Guid.CreateVersion7(), user, site, null, "nonsense", null));
-        Assert.Throws<DomainRuleException>(() => AlertSubscription.Create(Guid.CreateVersion7(), user, site, null, AlertKind.SpcAlert, null));
+        Assert.Null(AlertSubscription.Create(Guid.CreateVersion7(), user, site, null, AlertKind.SpcAlert, 5).Minutes);
+        Assert.Equal(480, AlertSubscription.Create(Guid.CreateVersion7(), user, site, null, AlertKind.Shortage, null).Minutes);
     }
 
     private static AlertDue Due(string kind, DateTimeOffset start, DateTimeOffset? end, string? what = null, string? note = null) => new(
@@ -52,5 +53,64 @@ public class AlertTests
         Assert.Contains("Note: Belt slipping", call.Body, StringComparison.Ordinal);
         Assert.Contains("https://mes.example.com/andon", call.Body, StringComparison.Ordinal);
         Assert.Contains("My alerts", call.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Spc_hold_and_shortage_messages_say_what_and_link_to_it()
+    {
+        var spc = AlertMessages.Compose(Due(AlertKind.SpcAlert, T0, null, "MELT-TEMP Melt temperature", "PRF-4410") with { EquipmentCode = "EXT-01" }, T0, "https://mes.example.com");
+        Assert.Equal("[Pulaski] SPC alert: MELT-TEMP Melt temperature on PRF-4410 (EXT-01)", spc.Subject);
+        Assert.Contains("https://mes.example.com/quality/alerts", spc.Body, StringComparison.Ordinal);
+        Assert.Equal("[Pulaski] SPC alert: MELT-TEMP Melt temperature on PRF-4410",
+            AlertMessages.Compose(Due(AlertKind.SpcAlert, T0, null, "MELT-TEMP Melt temperature", "PRF-4410") with { EquipmentCode = null }, T0, null).Subject);
+
+        var lot = Guid.CreateVersion7();
+        var hold = AlertMessages.Compose(
+            Due(AlertKind.LotHold, T0, null, "QA hold: Pending test", "RESIN") with { EquipmentCode = "STORES", Item = "R-001", ItemId = lot }, T0, "https://mes.example.com");
+        Assert.Equal("[Pulaski] Lot R-001 put on hold", hold.Subject);
+        Assert.Contains("Reason: QA hold: Pending test.", hold.Body, StringComparison.Ordinal);
+        Assert.Contains($"https://mes.example.com/inventory/lots/{lot}", hold.Body, StringComparison.Ordinal);
+
+        var shortage = AlertMessages.Compose(
+            Due(AlertKind.Shortage, T0.AddHours(3), null, "RESIN Resin", "WO-1-10") with { EquipmentCode = "EXT-01", Item = "40 kg" }, T0, null);
+        Assert.Equal("[Pulaski] WO-1-10 will be short of RESIN Resin", shortage.Subject);
+        Assert.Contains("needs RESIN Resin from 2026-11-20 11:00, and 40 kg of it", shortage.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Shortages_are_due_when_uncovered_and_needed_within_the_minutes_once_per_job_and_component()
+    {
+        var subscriber = new AlertSubscriber(Guid.CreateVersion7(), AlertKind.Shortage, 120, null, Guid.CreateVersion7(), "pulaski-local", "lee",
+            "lee@example.com", "Lee", Guid.CreateVersion7(), "PLT1", null);
+        var (resin, soon, later, covered) = (Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+        Contracts.Inventory.ShortageLineDto Line(Guid job, string number, double hours, decimal uncovered) => new()
+        {
+            JobId = job,
+            JobNumber = number,
+            JobStatus = "dispatched",
+            LineCode = "EXT-01",
+            NeededFrom = T0.AddHours(hours),
+            Uncovered = uncovered,
+        };
+        var report = new Contracts.Inventory.ShortageReportDto
+        {
+            SiteId = subscriber.SiteId,
+            Materials =
+            [
+                new Contracts.Inventory.MaterialShortageDto
+                {
+                    MaterialId = resin,
+                    MaterialCode = "RESIN",
+                    MaterialName = "Resin",
+                    BaseUomCode = "kg",
+                    Lines = [Line(soon, "J-1", 1, 40m), Line(later, "J-2", 3, 10m), Line(covered, "J-3", 0.5, 0m)],
+                },
+            ],
+        };
+
+        var due = Assert.Single(AlertShortages.Due(subscriber, report, T0));
+        Assert.Equal(("J-1", "40 kg", AlertShortages.SubjectOf(soon, resin)), (due.Note, due.Item, due.SubjectId));
+        Assert.Equal(AlertShortages.SubjectOf(soon, resin), AlertShortages.SubjectOf(soon, resin));
+        Assert.NotEqual(AlertShortages.SubjectOf(soon, resin), AlertShortages.SubjectOf(resin, soon));
     }
 }

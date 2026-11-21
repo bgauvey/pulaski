@@ -6,8 +6,8 @@ using Pulaski.Application.Alerts;
 namespace Pulaski.Api.Infrastructure;
 
 /// <summary>
-/// Sends e-mail alerts (#121, D-109) every <c>Alerts:PollSeconds</c> (60, at least 15); <c>Alerts:Enabled</c> = false stops it. Without a mail
-/// server nothing is sent or recorded.
+/// Sends e-mail alerts (#121, D-109) every <c>Alerts:PollSeconds</c> (60, at least 15), shortages every 10 minutes (#165);
+/// <c>Alerts:Enabled</c> = false stops it. Without a mail server nothing is sent or recorded.
 /// </summary>
 internal sealed partial class AlertService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<AlertService> logger) : BackgroundService
 {
@@ -20,12 +20,21 @@ internal sealed partial class AlertService(IServiceScopeFactory scopes, IConfigu
 
         var poll = TimeSpan.FromSeconds(Math.Max(15, configuration.GetValue("Alerts:PollSeconds", 60)));
         using var timer = new PeriodicTimer(poll);
+        var shortagesAt = DateTimeOffset.MinValue;
         do
         {
             try
             {
+                // Shortages project the schedule, so they are worked out every AlertSender.ShortageEvery, not every round.
+                var now = TimeProvider.System.GetUtcNow();
+                var withShortages = now - shortagesAt >= AlertSender.ShortageEvery;
                 await using var scope = scopes.CreateAsyncScope();
-                var sent = await scope.ServiceProvider.GetRequiredService<AlertSender>().SendDueAsync(stoppingToken);
+                var sent = await scope.ServiceProvider.GetRequiredService<AlertSender>().SendDueAsync(stoppingToken, withShortages);
+                if (withShortages)
+                {
+                    shortagesAt = now;
+                }
+
                 if (sent > 0)
                 {
                     LogSent(logger, sent);

@@ -71,6 +71,9 @@ public sealed class InMemoryAlerts : IAlertRepository, IAlertReadStore
         }
     }
 
+    public Task<IReadOnlyList<AlertSubscriber>> ListSubscribersAsync(string kind, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<AlertSubscriber>>([]);
+
     public Task<IReadOnlyList<AlertDue>> ListDueAsync(DateTimeOffset since, DateTimeOffset now, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<AlertDue>>([]);
 }

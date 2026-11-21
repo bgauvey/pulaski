@@ -15,15 +15,15 @@ public sealed record AlertKind(string Code, string Name, string? MinutesMeans, i
     public const string LotHold = "lot_hold";
     public const string Shortage = "shortage";
 
-    /// <summary>Every kind, in the order offered; those not yet sent (#165) are kept so their rows stay valid, but not offered.</summary>
+    /// <summary>Every kind, in the order offered; one not offered (<see cref="IsBuilt"/> false) keeps its rows valid but takes no new ones.</summary>
     public static readonly IReadOnlyList<AlertKind> All =
     [
         new(LongStop, "A machine stopped longer than", "minutes stopped", 15, Permissions.MachinesView, true),
         new(UncodedStop, "A stop still without a reason", "minutes after it ended", 30, Permissions.MachinesView, true),
         new(AndonEscalated, "An andon call escalated", null, null, Permissions.FloorView, true),
-        new(SpcAlert, "An SPC alert", null, null, Permissions.QualityView, false),
-        new(LotHold, "A lot put on hold", null, null, Permissions.InventoryView, false),
-        new(Shortage, "A shortage due soon", "minutes ahead", 240, Permissions.InventoryView, false),
+        new(SpcAlert, "A control chart signalled (SPC alert)", null, null, Permissions.QualityView, true),
+        new(LotHold, "A lot put on hold", null, null, Permissions.InventoryView, true),
+        new(Shortage, "A job will be short of a component", "minutes before it is needed", 480, Permissions.InventoryView, true),
     ];
 
     public static AlertKind? Find(string? code) => All.FirstOrDefault(k => k.Code == code);

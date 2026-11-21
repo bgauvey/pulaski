@@ -1702,8 +1702,8 @@ A user's own subscription to an alert at a site. Changed only in its minutes and
 | `user_id` | uuid → sec.app_user | no | Whose it is; alerts go to their e-mail address. |
 | `site_id` | uuid → equipment | no | The site. |
 | `equipment_id` | uuid → equipment | yes | Only what happens at or below this area or line; null = the whole site. One per user, site, kind and scope (`alert_subscription_uq`). |
-| `kind` | text | no | `long_stop`, `uncoded_stop`, `andon_escalated`; `spc_alert`, `lot_hold`, `shortage` reserved for #165. |
-| `minutes` | integer | yes | 1–10080: how long a stop lasts (`long_stop`), how long after it ended it stays without a reason (`uncoded_stop`); null for kinds without. |
+| `kind` | text | no | `long_stop`, `uncoded_stop`, `andon_escalated`, `spc_alert`, `lot_hold`, `shortage`. |
+| `minutes` | integer | yes | 1–10080: how long a stop lasts (`long_stop`), how long after it ended it stays without a reason (`uncoded_stop`), how long before a job needs a short component (`shortage`); null for kinds without. |
 | `is_active` | boolean | no | Sent while on. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions; nothing that reached its moment before `created_at` is sent. |
 
@@ -1714,7 +1714,7 @@ One row per alert e-mailed, written in the same transaction that decides to send
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
 | `subscription_id` | uuid → alert_subscription | no | Whose alert. |
-| `subject_id` | uuid | no | What it was about: a stop (`ts.downtime`, no FK into history) or an andon call. With `subscription_id`, the primary key. |
+| `subject_id` | uuid | no | What it was about: a stop (`ts.downtime`), an andon call, an SPC alert, a hold (`ts.lot_event`), or a job's need of a component (a hash of job and material, `AlertShortages.SubjectOf`); no FK. With `subscription_id`, the primary key. |
 | `sent_at` | timestamptz | no | When it was sent. |
 
 ## 12. Time-partitioned history (`ts`)

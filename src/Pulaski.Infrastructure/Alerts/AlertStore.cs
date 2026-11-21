@@ -92,12 +92,12 @@ internal sealed class AlertQueries(NpgsqlDataSource dataSource) : IAlertReadStor
             FROM core.alert_subscription s
             JOIN sec.app_user u ON u.id = s.user_id AND u.is_active AND coalesce(u.email, '') <> ''
             JOIN core.equipment site ON site.id = s.site_id
-            WHERE s.is_active AND s.kind IN ('long_stop', 'uncoded_stop', 'andon_escalated')
+            WHERE s.is_active AND s.kind IN ('long_stop', 'uncoded_stop', 'andon_escalated', 'spc_alert', 'lot_hold')
         )
         -- A stop that reached the minutes, still going or not.
         SELECT s.id AS subscription_id, s.kind, s.minutes, d.id AS subject_id, s.user_id, s.idp_issuer AS issuer, s.idp_subject AS subject, s.email,
                s.display_name AS user_name, s.site_id, s.site_code, s.time_zone, e.code AS equipment_code, r.name AS what, NULL::text AS note,
-               d.started_at AS start, d.ended_at AS "end"
+               d.started_at AS start, d.ended_at AS "end", NULL::text AS item, NULL::uuid AS item_id
         FROM subs s
         JOIN ts.downtime d ON d.started_at >= @Since - interval '7 days'
         JOIN core.equipment e ON e.id = d.equipment_id AND e.site_id = s.site_id
@@ -112,7 +112,7 @@ internal sealed class AlertQueries(NpgsqlDataSource dataSource) : IAlertReadStor
         UNION ALL
         -- A stop still without a reason that many minutes after it ended.
         SELECT s.id, s.kind, s.minutes, d.id, s.user_id, s.idp_issuer, s.idp_subject, s.email, s.display_name, s.site_id, s.site_code, s.time_zone,
-               e.code, NULL, NULL, d.started_at, d.ended_at
+               e.code, NULL, NULL, d.started_at, d.ended_at, NULL, NULL
         FROM subs s
         JOIN ts.downtime d ON d.started_at >= @Since - interval '7 days'
         JOIN core.equipment e ON e.id = d.equipment_id AND e.site_id = s.site_id
@@ -125,7 +125,7 @@ internal sealed class AlertQueries(NpgsqlDataSource dataSource) : IAlertReadStor
         UNION ALL
         -- A call for help still unanswered past its kind's escalation time.
         SELECT s.id, s.kind, s.minutes, c.id, s.user_id, s.idp_issuer, s.idp_subject, s.email, s.display_name, s.site_id, s.site_code, s.time_zone,
-               l.code, t.name, c.note, c.raised_at, NULL
+               l.code, t.name, c.note, c.raised_at, NULL, NULL, NULL
         FROM subs s
         JOIN core.andon_call c ON c.site_id = s.site_id AND c.status = 'open'
         JOIN core.andon_type t ON t.id = c.andon_type_id
@@ -135,6 +135,45 @@ internal sealed class AlertQueries(NpgsqlDataSource dataSource) : IAlertReadStor
           AND (s.equipment_id IS NULL OR c.line_id = s.equipment_id
                OR c.line_id IN (SELECT descendant_id FROM core.equipment_closure WHERE ancestor_id = s.equipment_id))
           AND NOT EXISTS (SELECT 1 FROM core.alert_sent a WHERE a.subscription_id = s.id AND a.subject_id = c.id)
+        UNION ALL
+        -- An SPC alert raised (#165): on its line, or on the site for results without one (then only whole-site subscriptions).
+        SELECT s.id, s.kind, s.minutes, a.id, s.user_id, s.idp_issuer, s.idp_subject, s.email, s.display_name, s.site_id, s.site_code, s.time_zone,
+               l.code, q.code || ' ' || q.name, m.code, a.raised_at, NULL, NULL, NULL
+        FROM subs s
+        JOIN core.spc_alert a ON a.site_id = s.site_id
+        JOIN core.quality_characteristic q ON q.id = a.characteristic_id
+        JOIN core.material m ON m.id = a.material_id
+        LEFT JOIN core.equipment l ON l.id = a.equipment_id
+        WHERE s.kind = 'spc_alert'
+          AND a.raised_at BETWEEN greatest(@Since, s.created_at) AND @Now
+          AND (s.equipment_id IS NULL OR a.equipment_id = s.equipment_id
+               OR a.equipment_id IN (SELECT descendant_id FROM core.equipment_closure WHERE ancestor_id = s.equipment_id))
+          AND NOT EXISTS (SELECT 1 FROM core.alert_sent x WHERE x.subscription_id = s.id AND x.subject_id = a.id)
+        UNION ALL
+        -- A lot put on hold (#165): the status change, by where the lot is now.
+        SELECT s.id, s.kind, s.minutes, ev.id, s.user_id, s.idp_issuer, s.idp_subject, s.email, s.display_name, s.site_id, s.site_code, s.time_zone,
+               loc.code, concat_ws(': ', r.name, ev.comment), m.code, ev.occurred_at, NULL, coalesce(lot.lot_number, 'balance at ' || loc.code), lot.id
+        FROM subs s
+        JOIN ts.lot_event ev ON ev.occurred_at >= @Since AND ev.event_kind = 'status_changed' AND ev.to_status = 'on_hold' AND ev.reverses_event_id IS NULL
+        JOIN core.lot lot ON lot.id = ev.lot_id AND lot.site_id = s.site_id
+        JOIN core.material m ON m.id = lot.material_id
+        LEFT JOIN core.equipment loc ON loc.id = lot.location_equipment_id
+        LEFT JOIN core.reason_code r ON r.id = ev.reason_code_id
+        WHERE s.kind = 'lot_hold'
+          AND ev.occurred_at BETWEEN greatest(@Since, s.created_at) AND @Now
+          AND (s.equipment_id IS NULL OR lot.location_equipment_id = s.equipment_id
+               OR lot.location_equipment_id IN (SELECT descendant_id FROM core.equipment_closure WHERE ancestor_id = s.equipment_id))
+          AND NOT EXISTS (SELECT 1 FROM core.alert_sent x WHERE x.subscription_id = s.id AND x.subject_id = ev.id)
+        """;
+
+    private const string SubscribersSql = """
+        SELECT s.id AS subscription_id, s.kind, s.minutes, s.equipment_id, u.id AS user_id, u.idp_issuer AS issuer, u.idp_subject AS subject, u.email,
+               u.display_name AS user_name, s.site_id, site.code AS site_code, site.time_zone
+        FROM core.alert_subscription s
+        JOIN sec.app_user u ON u.id = s.user_id AND u.is_active AND coalesce(u.email, '') <> ''
+        JOIN core.equipment site ON site.id = s.site_id
+        WHERE s.is_active AND s.kind = @Kind
+        ORDER BY s.site_id, s.equipment_id, s.id
         """;
 
     public async Task<string?> GetEmailAsync(Guid userId, CancellationToken cancellationToken)
@@ -148,6 +187,12 @@ internal sealed class AlertQueries(NpgsqlDataSource dataSource) : IAlertReadStor
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         return [.. await connection.QueryAsync<AlertSubscriptionDto>(new CommandDefinition(Mine, new { UserId = userId }, cancellationToken: cancellationToken))];
+    }
+
+    public async Task<IReadOnlyList<AlertSubscriber>> ListSubscribersAsync(string kind, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. await connection.QueryAsync<AlertSubscriber>(new CommandDefinition(SubscribersSql, new { Kind = kind }, cancellationToken: cancellationToken))];
     }
 
     public async Task<IReadOnlyList<AlertDue>> ListDueAsync(DateTimeOffset since, DateTimeOffset now, CancellationToken cancellationToken)
