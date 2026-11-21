@@ -106,6 +106,8 @@ public sealed class InMemoryStores
 
     public InMemoryAndon Andon { get; } = new();
 
+    public InMemoryAlerts Alerts { get; } = new();
+
     public InMemoryOverview Overview { get; } = new();
 
     public InMemoryMachineHistory MachineHistory { get; } = new();
@@ -194,6 +196,8 @@ public sealed class InMemoryStores
         services.RemoveAll<Application.Scheduling.IChangeoverRuleReadStore>();
         services.RemoveAll<Application.Andon.IAndonRepository>();
         services.RemoveAll<Application.Andon.IAndonReadStore>();
+        services.RemoveAll<Application.Alerts.IAlertRepository>();
+        services.RemoveAll<Application.Alerts.IAlertReadStore>();
         services.RemoveAll<IOverviewReadStore>();
         services.RemoveAll<IMachineHistoryReadStore>();
         services.RemoveAll<IQualificationRepository>();
@@ -276,6 +280,8 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Scheduling.IChangeoverRuleReadStore>(ChangeoverRules);
         services.AddSingleton<Application.Andon.IAndonRepository>(Andon);
         services.AddSingleton<Application.Andon.IAndonReadStore>(Andon);
+        services.AddSingleton<Application.Alerts.IAlertRepository>(Alerts);
+        services.AddSingleton<Application.Alerts.IAlertReadStore>(Alerts);
         services.AddSingleton<IOverviewReadStore>(Overview);
         services.AddSingleton<IMachineHistoryReadStore>(MachineHistory);
         services.AddSingleton<IQualificationRepository>(Labor);

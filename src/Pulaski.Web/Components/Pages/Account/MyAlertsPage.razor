@@ -1,0 +1,252 @@
+@page "/my-alerts"
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+
+<PageTitle>My alerts · Pulaski</PageTitle>
+
+@* My alerts (#121, D-109): the e-mails this user asks for, per site and optionally a line or area. Their own only; each needs its view
+   permission at the site, checked again when it is sent. *@
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">My alerts</h1>
+        <p class="text-muted mb-0">E-mails Pulaski sends you when something needs you: one for each stop or call, with a link to it.</p>
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+@if (_message is { } message)
+{
+    <div class="alert alert-success small" role="status">@message</div>
+}
+
+@if (_alerts is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    @if (!_alerts.CanSend)
+    {
+        <div class="alert alert-warning small" role="status">Pulaski has no mail server set up, so no alerts are sent. Ask your administrator.</div>
+    }
+    else if (_alerts.Email is null)
+    {
+        <div class="alert alert-warning small" role="status">You have no e-mail address in Pulaski, so your alerts can't reach you. Ask an administrator to add it on Configure → Users.</div>
+    }
+    else
+    {
+        <p class="small">Alerts go to <span class="fw-semibold">@_alerts.Email</span>.</p>
+    }
+
+    <div class="table-panel mb-3">
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Alert</th><th>Where</th><th class="inv-num">Minutes</th><th>On</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var s in _alerts.Subscriptions)
+                {
+                    var kind = _alerts.Kinds.FirstOrDefault(k => k.Code == s.Kind);
+                    <tr @key="s.Id" class="@(s.IsActive ? "" : "text-muted")">
+                        <td>
+                            @(kind?.Name ?? s.Kind)
+                            @if (!s.CanSee)
+                            {
+                                <div class="small text-warning-strong">You can't see this at @s.SiteCode any more, so it isn't sent.</div>
+                            }
+                        </td>
+                        <td>@s.SiteCode@(s.EquipmentCode is { } e ? $" · {e}" : "")</td>
+                        <td class="inv-num">
+                            @if (kind?.MinutesMeans is { } means && _editing == s.Id)
+                            {
+                                <input type="number" inputmode="numeric" class="form-control form-control-sm d-inline-block w-auto" min="1" max="10080" aria-label="@means" @bind="_editMinutes" />
+                            }
+                            else if (kind?.MinutesMeans is { } m)
+                            {
+                                <span title="@m">@s.Minutes</span>
+                            }
+                        </td>
+                        <td>@(s.IsActive ? "Yes" : "Switched off")</td>
+                        <td class="text-end text-nowrap">
+                            @if (_editing == s.Id)
+                            {
+                                <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => SaveAsync(s, s.IsActive)">Save</button>
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => _editing = null">Cancel</button>
+                            }
+                            else
+                            {
+                                @if (kind?.MinutesMeans is not null)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => (_editing, _editMinutes) = (s.Id, s.Minutes)">Change</button>
+                                }
+                                <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => SwitchAsync(s)">@(s.IsActive ? "Switch off" : "Switch on")</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (_alerts.Subscriptions.Count == 0)
+                {
+                    <tr><td colspan="5" class="text-muted small">No alerts yet; add one below.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <section class="inv-facts" aria-labelledby="add-alert">
+        <h2 class="h6" id="add-alert">Add an alert</h2>
+        <form class="row g-2 align-items-end" @onsubmit="AddAsync" @onsubmit:preventDefault>
+            <div class="col-12 col-md-4">
+                <label class="form-label small fw-semibold" for="alert-kind">Tell me when</label>
+                <select id="alert-kind" class="form-select form-select-sm" value="@_kind" @onchange="OnKindChanged">
+                    @foreach (var k in _alerts.Kinds)
+                    {
+                        <option value="@k.Code">@k.Name</option>
+                    }
+                </select>
+            </div>
+            @if (Sites.Sites.Count > 1)
+            {
+                <div class="col-6 col-md-2">
+                    <label class="form-label small fw-semibold" for="alert-site">Site</label>
+                    <select id="alert-site" class="form-select form-select-sm" value="@_siteId" @onchange="OnSiteChangedAsync">
+                        @foreach (var site in Sites.Sites)
+                        {
+                            <option value="@site.Id">@site.Code</option>
+                        }
+                    </select>
+                </div>
+            }
+            <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold" for="alert-where">Where</label>
+                <select id="alert-where" class="form-select form-select-sm" @bind="_equipmentId">
+                    <option value="@Guid.Empty">The whole site</option>
+                    @foreach (var e in _places)
+                    {
+                        <option value="@e.Id">@e.Code · @e.Name</option>
+                    }
+                </select>
+            </div>
+            @if (SelectedKind?.MinutesMeans is { } minutesMeans)
+            {
+                <div class="col-6 col-md-2">
+                    <label class="form-label small fw-semibold" for="alert-minutes">Minutes <span class="fw-normal text-muted">(@minutesMeans)</span></label>
+                    <input id="alert-minutes" type="number" inputmode="numeric" class="form-control form-control-sm" min="1" max="10080" @bind="_minutes" />
+                </div>
+            }
+            <div class="col-12 col-md-1 form-actions">
+                <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy" Reason="@(_siteId is null ? "There is no site." : null)">Add</ActionButton>
+            </div>
+        </form>
+    </section>
+}
+
+@code {
+    private MyAlertsDto? _alerts;
+    private IReadOnlyList<EquipmentDto> _places = [];
+    private string _kind = "";
+    private Guid? _siteId;
+    private Guid _equipmentId;
+    private int? _minutes;
+    private Guid? _editing;
+    private int? _editMinutes;
+    private bool _busy;
+    private string? _message;
+    private ApiException? _error;
+
+    private AlertKindDto? SelectedKind => _alerts?.Kinds.FirstOrDefault(k => k.Code == _kind);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            _siteId = Sites.SiteId;
+            await LoadAsync();
+            if (_alerts?.Kinds.FirstOrDefault() is { } first)
+            {
+                (_kind, _minutes) = (first.Code, first.DefaultMinutes);
+            }
+
+            await LoadPlacesAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task LoadAsync() => _alerts = await Api.GetMyAlertsAsync();
+
+    // The site's areas and lines, to narrow an alert to.
+    private async Task LoadPlacesAsync() =>
+        _places = _siteId is { } site
+            ? [.. (await Api.ListEquipmentAsync(site)).Where(e => e.IsActive && (e.Level == "area" || e.CanRunJob)).OrderBy(e => e.Code, StringComparer.Ordinal)]
+            : [];
+
+    private void OnKindChanged(ChangeEventArgs e)
+    {
+        _kind = e.Value?.ToString() ?? "";
+        _minutes = SelectedKind?.DefaultMinutes;
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        (_siteId, _equipmentId) = (Guid.TryParse(e.Value?.ToString(), out var id) ? id : null, Guid.Empty);
+        await LoadPlacesAsync();
+    }
+
+    private Task AddAsync() => _siteId is not { } site ? Task.CompletedTask : ActAsync(async () =>
+    {
+        await Api.CreateAlertSubscriptionAsync(new CreateAlertSubscriptionRequest
+        {
+            SiteId = site,
+            EquipmentId = _equipmentId == Guid.Empty ? null : _equipmentId,
+            Kind = _kind,
+            Minutes = SelectedKind?.MinutesMeans is null ? null : _minutes,
+        });
+        return $"Added: {SelectedKind?.Name ?? _kind}.";
+    });
+
+    private Task SaveAsync(AlertSubscriptionDto subscription, bool isActive) => ActAsync(async () =>
+    {
+        await Api.UpdateAlertSubscriptionAsync(subscription.Id, new UpdateAlertSubscriptionRequest
+        {
+            Version = subscription.Version,
+            Minutes = _editing == subscription.Id ? _editMinutes : subscription.Minutes,
+            IsActive = isActive,
+        });
+        _editing = null;
+        return "Saved.";
+    });
+
+    private Task SwitchAsync(AlertSubscriptionDto subscription) => ActAsync(async () =>
+    {
+        await Api.UpdateAlertSubscriptionAsync(subscription.Id, new UpdateAlertSubscriptionRequest
+        {
+            Version = subscription.Version,
+            Minutes = subscription.Minutes,
+            IsActive = !subscription.IsActive,
+        });
+        return subscription.IsActive ? "Switched off; nothing more is sent for it." : "Switched on again.";
+    });
+
+    private async Task ActAsync(Func<Task<string>> action)
+    {
+        _busy = true;
+        (_error, _message) = (null, null);
+        try
+        {
+            _message = await action();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

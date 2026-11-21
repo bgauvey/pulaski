@@ -2958,6 +2958,26 @@ every call raised in the period (`ListCallsRaisedAsync`, no row limit), figures 
 per line and type plus a total: calls, escalated (waited at least the type's time, answered or not), still open, average and longest time to
 answer, average time to resolve; and the ten longest waits. Computed on read, nothing stored. With it, #125 is complete.
 
+### D-109 · E-mail alerts (#121) · *Proposed, in pieces*
+
+**Context.** Supervisors have to go and look; nothing tells them when something needs them. Mail already goes out through `IMailOutbox`
+(password resets, qualification notices).
+
+**Decision.**
+- **Subscriptions are each user's own** (`core.alert_subscription`): per site, optionally narrowed to an area or line (closure), a kind
+  (`AlertKind`: code, name, what its minutes mean and default, the view permission it needs) and minutes. Kept on **My alerts** (`/my-alerts`,
+  `GET/POST/PUT /api/me/alerts`, any user with a role, their own only). Subscribing needs the kind's view permission at the site.
+- **Sending** is `AlertSender` run by `AlertService` (API, every `Alerts:PollSeconds`, 60): one query finds, per kind, what reached its moment
+  between now − 24 h (and not before the subscription was made) and now and isn't in `core.alert_sent`; the subscriber's access is read again
+  (`GetAccessAsync`) and only what they may still see goes; `alert_sent` rows are inserted (`ON CONFLICT DO NOTHING`) in one transaction and
+  only those inserted are queued after commit, so each alert goes once across instances, and a restart or late machine data within a day is
+  caught up. Without a mail server (`CanSend`) nothing is sent or recorded.
+- **Kinds now:** `long_stop` (a stop reaching its minutes, going or not), `uncoded_stop` (still without a reason that many minutes after it
+  ended), `andon_escalated` (still open past its type's time). Stops are current, not micro, of source machine or manual (pieces of
+  adjustments don't alert again). #165 adds SPC alerts, holds and shortages.
+- **Messages** (`AlertMessages.Compose`, pure): what happened in site time, a link to Machines or Andon from `Alerts:UiBaseUrl` (else the
+  password reset's UI address), and how to switch it off.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
