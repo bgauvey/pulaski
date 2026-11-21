@@ -551,6 +551,11 @@ public sealed class ExecutionTests(DatabaseFixture db)
         var raised = await db.SendAsync(new Pulaski.Application.Andon.RaiseAndonCallCommand(plant.Extruder, maint.Id, "Belt", "ST-" + _s));
         await db.SendAsync(new Pulaski.Application.Andon.RaiseAndonCallCommand(plant.Packer, maint.Id, null));
 
+        // The board shows each line its own call (#158).
+        var board = await QueryAsync<GetLineDisplayQuery, LineDisplayDto>(new GetLineDisplayQuery(plant.Site, plant.Site, "Hall"));
+        Assert.Equal(raised.Id, Assert.Single(board.Lines.Single(l => l.LineId == plant.Extruder).Calls).Id);
+        Assert.Single(board.Lines.Single(l => l.LineId == plant.Packer).Calls);
+
         // Waiting, the station shows only its line's call and offers nothing.
         var waiting = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, null));
         Assert.Equal(raised.Id, Assert.Single(waiting.AndonCalls).Id);

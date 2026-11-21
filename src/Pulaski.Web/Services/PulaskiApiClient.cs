@@ -1491,6 +1491,30 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<IReadOnlyList<AndonTypeDto>> ListAndonTypesAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<AndonTypeDto>>($"api/andon/types?siteId={siteId}", ct);
 
+    /// <summary>The site's calls not yet resolved (#158), or with <paramref name="openOnly"/> false those raised in [from, until).</summary>
+    public Task<IReadOnlyList<AndonCallDto>> ListAndonCallsAsync(
+        Guid siteId, bool openOnly = true, DateTimeOffset? from = null, DateTimeOffset? until = null, CancellationToken ct = default)
+    {
+        var query = $"api/andon/calls?siteId={siteId}&open={(openOnly ? "true" : "false")}";
+        if (from is { } f)
+        {
+            query += $"&from={Uri.EscapeDataString(f.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}";
+        }
+
+        if (until is { } u)
+        {
+            query += $"&to={Uri.EscapeDataString(u.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}";
+        }
+
+        return GetAsync<IReadOnlyList<AndonCallDto>>(query, ct);
+    }
+
+    public Task<AndonCallResponse> AcknowledgeAndonCallAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<AndonCallResponse>(HttpMethod.Post, $"api/andon/calls/{id}/acknowledge", new { }, ct);
+
+    public Task<AndonCallResponse> ResolveAndonCallAsync(Guid id, ResolveAndonCallRequest request, CancellationToken ct = default) =>
+        SendAsync<AndonCallResponse>(HttpMethod.Post, $"api/andon/calls/{id}/resolve", request, ct);
+
     public Task<CreatedResponse> CreateAndonTypeAsync(CreateAndonTypeRequest request, CancellationToken ct = default) =>
         SendAsync<CreatedResponse>(HttpMethod.Post, "api/andon/types", request, ct);
 

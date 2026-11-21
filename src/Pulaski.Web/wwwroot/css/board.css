@@ -182,3 +182,27 @@
     max-width: 40em;
     text-align: center;
 }
+
+/* Calls for help (#158): a waiting call in the waiting colour, an answered one quiet, an escalated one red and the line's frame with it. */
+.board-call {
+    display: flex;
+    justify-content: space-between;
+    gap: 1em;
+    padding: 0.35em 0.6em;
+    border-radius: 8px;
+    border: 2px solid var(--board-wait);
+    font-weight: 600;
+}
+
+    .board-call.is-answered {
+        border-color: var(--board-line);
+        color: var(--board-quiet);
+        font-weight: 400;
+    }
+
+    .board-call.is-escalated {
+        border-color: var(--board-down);
+        background: color-mix(in srgb, var(--board-down) 22%, var(--board-panel));
+    }
+
+.board-line.has-escalated-call { border-color: var(--board-down); }

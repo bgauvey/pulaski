@@ -1,7 +1,9 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Andon;
 using Pulaski.Application.MachineData;
 using Pulaski.Application.Overview;
 using Pulaski.Application.WorkOrders;
+using Pulaski.Contracts.Andon;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.MachineData;
 using Pulaski.Contracts.Overview;
@@ -19,6 +21,7 @@ internal sealed class GetLineDisplayHandler(
     IQueryHandler<GetOverviewQuery, OverviewDto> overview,
     IQueryHandler<GetLineBoardQuery, IReadOnlyList<LineBoardRowDto>> board,
     IQueryHandler<GetOeeReportQuery, OeeReportDto> oee,
+    IQueryHandler<ListAndonCallsQuery, IReadOnlyList<AndonCallDto>> andon,
     IWorkOrderReadStore scopes,
     TimeProvider timeProvider) : IQueryHandler<GetLineDisplayQuery, LineDisplayDto>
 {
@@ -34,10 +37,14 @@ internal sealed class GetLineDisplayHandler(
         var report = await oee.HandleAsync(new GetOeeReportQuery(query.SiteId, today.AddDays(-1), today.AddDays(1), null), cancellationToken);
         var shiftOee = report.Shifts.Where(s => s.Start <= now && now < s.End).GroupBy(s => s.EquipmentId).ToDictionary(g => g.Key, g => g.First());
 
+        // Calls for help not yet resolved (#158), the longest waiting first.
+        var calls = (await andon.HandleAsync(new ListAndonCallsQuery(query.SiteId, true), cancellationToken))
+            .OrderBy(c => c.RaisedAt).ToLookup(c => c.LineId);
+
         var lines = live.Lines
             .Where(l => inScope.Contains(l.EquipmentId) && jobs.TryGetValue(l.EquipmentId, out var row) && !row.IsGroup)
             .Where(l => query.LineCode is null || string.Equals(l.Code, query.LineCode, StringComparison.OrdinalIgnoreCase))
-            .Select(l => Line(l, jobs[l.EquipmentId], shiftOee.GetValueOrDefault(l.EquipmentId)))
+            .Select(l => Line(l, jobs[l.EquipmentId], shiftOee.GetValueOrDefault(l.EquipmentId)) with { Calls = [.. calls[l.EquipmentId]] })
             .ToList();
 
         return new LineDisplayDto { Title = query.Title, AsOf = now, Lines = lines };

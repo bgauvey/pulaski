@@ -2948,6 +2948,11 @@ waits; `AndonTypes` the site's active types for a signed-on person who may call 
 offered types (raised from the terminal's code), or one of the line's listed calls. Calls carry the users' names for who raised, acknowledged and
 resolved them (`*ByName`, from `sec.app_user` by actor id), so the station says *Lee Ong is on it*.
 
+**Boards and the Andon page (#158).** `LineDisplayLineDto.Calls` carries each line's unresolved calls (one `ListAndonCallsQuery` for the site);
+the station takes its line's from there. Boards mark waiting / answered / escalated, the line's frame red with an escalated call. Operate → Andon
+(`/andon`, `floor.view`) lists the site's open calls, the longest waiting first, to acknowledge or resolve (`andon.respond`), and the calls
+resolved in the last 24 hours with how long they took (`AndonCallView`); it refreshes itself (`LiveStatus`).
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

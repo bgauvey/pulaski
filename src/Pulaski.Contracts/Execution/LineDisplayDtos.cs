@@ -50,6 +50,9 @@ public sealed record LineDisplayLineDto
     public decimal? PerformancePct { get; init; }
     public decimal? QualityPct { get; init; }
     public decimal? OeeTargetPct { get; init; }
+
+    /// <summary>Its calls for help not yet resolved (#158), the longest waiting first, figured as of the board's time.</summary>
+    public IReadOnlyList<Pulaski.Contracts.Andon.AndonCallDto> Calls { get; init; } = [];
 }
 
 public sealed record LineDisplayJobDto

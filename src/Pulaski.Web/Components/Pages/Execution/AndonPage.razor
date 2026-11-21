@@ -1,0 +1,271 @@
+@page "/andon"
+@attribute [RequiresView(PermissionCodes.FloorView)]
+@using Pulaski.Web.Services.Execution
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+@inject TimeProvider Clock
+
+<PageTitle>Andon · Pulaski</PageTitle>
+
+@* Andon (#158, D-108): every call for help at the site not yet resolved, the longest waiting first, to answer from a desk or a tablet as at the
+   line's station; and those resolved in the last day. Refreshes itself; escalation is worked out when read. *@
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Andon</h1>
+        <p class="text-muted mb-0">
+            Calls for help from the lines. Say you're on a call when you go to it, and resolve it with what was done. A call nobody has answered within
+            its time is escalated.
+        </p>
+    </div>
+    <div class="inv-head-tools">
+        @if (_open is not null)
+        {
+            <LiveStatus OnRefresh="RefreshAsync" LoadedAt="_loadedAt" TimeZone="@Zone" />
+        }
+        @if (Sites.Sites.Count > 1)
+        {
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.AndonRespond" What="answer calls" SiteId="Sites.SiteId" />
+@if (_message is { } message)
+{
+    <div class="alert alert-success small" role="status">@message</div>
+}
+
+@if (Sites.SiteId is null)
+{
+    <p class="text-muted">There is no site yet.</p>
+}
+else if (_open is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else
+{
+    var now = Clock.GetUtcNow();
+    <h2 class="h6">@(_open.Count == 0 ? "No calls waiting" : AndonCallView.Title(_open.Count))</h2>
+    <div class="table-panel mb-3">
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Line</th><th>Call</th><th>Called</th><th>Now</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _open)
+                {
+                    <tr @key="c.Id">
+                        <td class="fw-semibold">@c.LineCode<div class="small text-muted fw-normal">@c.LineName</div></td>
+                        <td>@c.TypeName@if (c.Note is { } note) {<div class="small text-muted">@note</div>}</td>
+                        <td class="small">@Display.SiteTime(c.RaisedAt, Zone)<div class="text-muted">@AndonCallView.Caller(c)</div></td>
+                        <td>
+                            <span class="chip @(c.IsEscalated ? "chip-danger" : c.AcknowledgedAt is null ? "chip-warn" : "chip-ok")">@AndonCallView.State(c, now)</span>
+                        </td>
+                        <td class="text-end text-nowrap">
+                            @if (CanAnswer)
+                            {
+                                @if (c.AcknowledgedAt is null)
+                                {
+                                    <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => AcknowledgeAsync(c)">I'm on it</button>
+                                }
+                                <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => ChooseResolve(c)">Resolve</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (_open.Count == 0)
+                {
+                    <tr><td colspan="5" class="text-muted small">Nothing is waiting. Lines call for help from their operator stations.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (_resolving is { } call && CanAnswer)
+    {
+        <section class="inv-facts mb-3" aria-labelledby="resolve-heading">
+            <h2 class="h6" id="resolve-heading">Resolve @call.TypeName on @call.LineCode</h2>
+            <form class="row g-2 align-items-end" @onsubmit="ResolveAsync" @onsubmit:preventDefault>
+                <div class="col-md-9">
+                    <label class="form-label small fw-semibold" for="andon-resolution">What was done</label>
+                    <input id="andon-resolution" class="form-control form-control-sm" maxlength="1000" @bind="_resolution" @bind:event="oninput" />
+                </div>
+                <div class="col-md-3 form-actions">
+                    <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy">Resolved</ActionButton>
+                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _resolving = null">Cancel</button>
+                </div>
+            </form>
+        </section>
+    }
+
+    <h2 class="h6">Resolved in the last day</h2>
+    <div class="table-panel mb-3">
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Line</th><th>Call</th><th>Called</th><th>Resolved</th><th>What was done</th></tr></thead>
+            <tbody>
+                @foreach (var c in _resolved)
+                {
+                    <tr @key="c.Id">
+                        <td class="fw-semibold">@c.LineCode</td>
+                        <td>@c.TypeName@if (c.Note is { } note) {<div class="small text-muted">@note</div>}</td>
+                        <td class="small">@Display.SiteTime(c.RaisedAt, Zone)<div class="text-muted">@AndonCallView.Caller(c)</div></td>
+                        <td class="small">@(c.ResolvedByName ?? c.ResolvedBy)<div class="text-muted">@AndonCallView.Took(c)</div></td>
+                        <td class="small">@(c.Resolution ?? "—")</td>
+                    </tr>
+                }
+                @if (_resolved.Count == 0)
+                {
+                    <tr><td colspan="5" class="text-muted small">None in the last 24 hours.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private static readonly TimeSpan ResolvedWindow = TimeSpan.FromHours(24);
+
+    private IReadOnlyList<AndonCallDto>? _open;
+    private IReadOnlyList<AndonCallDto> _resolved = [];
+    private AndonCallDto? _resolving;
+    private string? _resolution;
+    private DateTimeOffset? _loadedAt;
+    private bool _busy;
+    private string? _message;
+    private ApiException? _error;
+
+    private string? Zone => Sites.Site?.TimeZone;
+
+    private bool CanAnswer => User.Can(PermissionCodes.AndonRespond, Sites.SiteId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        (_open, _resolved, _resolving, _message, _loadedAt) = (null, [], null, null, null);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            await FetchAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    // New calls and answers appear without reloading the page; a resolution being typed stays. A failed reload keeps the lists; the pill turns stale.
+    private async Task RefreshAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        try
+        {
+            await FetchAsync();
+        }
+        catch (ApiException)
+        {
+        }
+    }
+
+    private async Task FetchAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            return;
+        }
+
+        var loadedAt = Clock.GetUtcNow();
+        var open = await Api.ListAndonCallsAsync(site);
+        var recent = await Api.ListAndonCallsAsync(site, openOnly: false, from: loadedAt - ResolvedWindow);
+        if (Sites.SiteId != site)
+        {
+            return;
+        }
+
+        _open = [.. open.OrderBy(c => c.RaisedAt)];
+        _resolved = [.. recent.Where(c => c.ResolvedAt is not null).OrderByDescending(c => c.ResolvedAt)];
+        if (_resolving is { } resolving && !_open.Any(c => c.Id == resolving.Id))
+        {
+            _resolving = null;
+        }
+
+        _loadedAt = loadedAt;
+    }
+
+    private void ChooseResolve(AndonCallDto call) => (_resolving, _resolution, _message, _error) = (call, null, null, null);
+
+    private Task AcknowledgeAsync(AndonCallDto call) => ActAsync(async () =>
+    {
+        await Api.AcknowledgeAndonCallAsync(call.Id);
+        return $"You're on the {call.TypeName} call on {call.LineCode}.";
+    });
+
+    private Task ResolveAsync() => _resolving is not { } call ? Task.CompletedTask : ActAsync(async () =>
+    {
+        await Api.ResolveAndonCallAsync(call.Id, new ResolveAndonCallRequest { Resolution = _resolution });
+        _resolving = null;
+        return $"The {call.TypeName} call on {call.LineCode} is resolved.";
+    });
+
+    private async Task ActAsync(Func<Task<string>> action)
+    {
+        _busy = true;
+        (_error, _message) = (null, null);
+        try
+        {
+            _message = await action();
+            await FetchAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            await RefreshAfterRefusalAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Someone else may have answered it first: show the call as it is now.
+    private async Task RefreshAfterRefusalAsync()
+    {
+        try
+        {
+            await FetchAsync();
+        }
+        catch (ApiException)
+        {
+        }
+    }
+}

@@ -97,10 +97,16 @@ public class StationViewTests
             RaisedAt = now.AddMinutes(-4),
             RaisedBy = "dana",
         };
-        Assert.Equal("waiting 4 min", StationView.CallState(call, now));
-        Assert.Equal("waiting 12 min: escalated", StationView.CallState(call with { RaisedAt = now.AddMinutes(-12), IsEscalated = true }, now));
-        Assert.Equal("lee is on it", StationView.CallState(call with { Status = "acknowledged", AcknowledgedAt = now, AcknowledgedBy = "lee" }, now));
-        Assert.Equal("Lee Ong is on it", StationView.CallState(call with { Status = "acknowledged", AcknowledgedAt = now, AcknowledgedBy = "lee", AcknowledgedByName = "Lee Ong" }, now));
-        Assert.Equal(("A call for help", "2 calls for help"), (StationView.CallsTitle(1), StationView.CallsTitle(2)));
+        Assert.Equal("waiting 4 min", AndonCallView.State(call, now));
+        Assert.Equal("waiting 12 min: escalated", AndonCallView.State(call with { RaisedAt = now.AddMinutes(-12), IsEscalated = true }, now));
+        Assert.Equal("lee is on it", AndonCallView.State(call with { Status = "acknowledged", AcknowledgedAt = now, AcknowledgedBy = "lee" }, now));
+        Assert.Equal("Lee Ong is on it", AndonCallView.State(call with { Status = "acknowledged", AcknowledgedAt = now, AcknowledgedBy = "lee", AcknowledgedByName = "Lee Ong" }, now));
+        Assert.Equal(("A call for help", "2 calls for help"), (AndonCallView.Title(1), AndonCallView.Title(2)));
+
+        Assert.Equal("dana", AndonCallView.Caller(call));
+        Assert.Equal("Dana Ito at ST-1", AndonCallView.Caller(call with { RaisedByName = "Dana Ito", RaisedFrom = "ST-1" }));
+        Assert.Null(AndonCallView.Took(call));
+        Assert.Equal("answered in 3 min, resolved in 25 min",
+            AndonCallView.Took(call with { AcknowledgedAt = call.RaisedAt.AddMinutes(3), ResolvedAt = call.RaisedAt.AddMinutes(25) }));
     }
 }

@@ -39,7 +39,7 @@ else
         @foreach (var line in _board.Lines)
         {
             var since = LineDisplayView.Duration(line.StateSince, _board.AsOf);
-            <section class="board-line @LineDisplayView.StatusClass(line.Status)" aria-label="@line.Code">
+            <section class="board-line @LineDisplayView.StatusClass(line.Status) @(line.Calls.Any(c => c.IsEscalated) ? "has-escalated-call" : "")" aria-label="@line.Code">
                 <div class="board-line-head">
                     <div>
                         <div class="board-code">@line.Code</div>
@@ -57,6 +57,14 @@ else
                 @if (line.Status is "down" or "waiting" && line.StopText is { } stop)
                 {
                     <div class="board-stop">@stop</div>
+                }
+                @* Calls for help (#158): what each waits for, the escalated ones in red. *@
+                @foreach (var call in line.Calls)
+                {
+                    <div class="board-call @(call.IsEscalated ? "is-escalated" : call.AcknowledgedAt is null ? "" : "is-answered")" @key="call.Id">
+                        <span class="board-call-type">@call.TypeName</span>
+                        <span class="board-call-state">@AndonCallView.State(call, _board.AsOf)</span>
+                    </div>
                 }
 
                 @if (line.Running is { } job)
