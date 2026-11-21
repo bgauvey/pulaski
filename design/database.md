@@ -1197,10 +1197,14 @@ One row per site, made with the defaults the first time it is changed or a conta
 | `site_id` | uuid → equipment | no | Its site. |
 | `code` | text | no | Upper case, unique per site (`label_printer_uq`); fixed once made. |
 | `name` | text | no | |
-| `method` | text | no | `raw_tcp` (sent to host and port) or `drop_folder` (a file per label in a folder of the API's configuration); `label_printer_target_ck` keeps exactly that method's target set. |
+| `method` | text | no | `raw_tcp` (sent to host and port), `drop_folder` (a file per label in a folder of the API's configuration) or `bartender` (a BTXML script per label posted to a BarTender web service, #168); `label_printer_target_ck` keeps exactly that method's target set. |
 | `host`, `port` | text, integer | yes | For `raw_tcp`: the printer's address and port (usually 9100). |
 | `drop_folder` | text | yes | For `drop_folder`: the name of a folder in `Labels:DropFolders`, never a path. |
-| `template_set` | text | no | The folder of templates under `Labels:TemplateDirectory`, such as `zpl` or `csv`. |
+| `template_set` | text | yes | The folder of templates under `Labels:TemplateDirectory`, such as `zpl` or `csv`; set exactly for `raw_tcp` and `drop_folder`. |
+| `endpoint_url` | text | yes | For `bartender`: the web service the script is posted to, http(s), at most 500 characters. |
+| `btxml_template` | text | yes | For `bartender`: the BTXML script with placeholders (`Btxml`), at most 20,000 characters. |
+| `bartender_printer` | text | yes | For `bartender`: the printer as BarTender names it; null prints to each document's own. |
+| `btw_files` | jsonb | no | For `bartender`: the .btw document by operation, `{"default": "...", "lot": "...", "lot.produced": "..."}`; `{}` for the others. Credentials stay in `Labels:BarTender:<code>`. |
 | `is_active` | boolean | no | Switched off rather than deleted. |
 | `created_at`, `updated_at` | timestamptz | no | |
 

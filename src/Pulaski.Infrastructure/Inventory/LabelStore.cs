@@ -26,19 +26,23 @@ internal sealed class LabelRepository(DbSession session) : ILabelRepository
         """;
 
     private const string PrinterForUpdate = """
-        SELECT id, site_id, code, name, method, host, port, drop_folder, template_set, is_active, xmin::text::bigint AS version
+        SELECT id, site_id, code, name, method, host, port, drop_folder, template_set, is_active, endpoint_url, btxml_template, bartender_printer,
+               btw_files::text AS btw_files_json, xmin::text::bigint AS version
         FROM core.label_printer WHERE id = @Id FOR UPDATE
         """;
 
     private const string InsertPrinter = """
-        INSERT INTO core.label_printer (id, site_id, code, name, method, host, port, drop_folder, template_set, is_active, created_at, updated_at)
-        VALUES (@Id, @SiteId, @Code, @Name, @Method, @Host, @Port, @DropFolder, @TemplateSet, @IsActive, @At, @At)
+        INSERT INTO core.label_printer (id, site_id, code, name, method, host, port, drop_folder, template_set, is_active, endpoint_url, btxml_template,
+                                        bartender_printer, btw_files, created_at, updated_at)
+        VALUES (@Id, @SiteId, @Code, @Name, @Method, @Host, @Port, @DropFolder, @TemplateSet, @IsActive, @EndpointUrl, @BtxmlTemplate,
+                @BartenderPrinter, @BtwFiles::jsonb, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     private const string UpdatePrinter = """
         UPDATE core.label_printer
-        SET name = @Name, method = @Method, host = @Host, port = @Port, drop_folder = @DropFolder, template_set = @TemplateSet, is_active = @IsActive, updated_at = @At
+        SET name = @Name, method = @Method, host = @Host, port = @Port, drop_folder = @DropFolder, template_set = @TemplateSet, is_active = @IsActive,
+            endpoint_url = @EndpointUrl, btxml_template = @BtxmlTemplate, bartender_printer = @BartenderPrinter, btw_files = @BtwFiles::jsonb, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -82,7 +86,8 @@ internal sealed class LabelRepository(DbSession session) : ILabelRepository
 
     public async Task<Versioned<LabelPrinter>?> GetPrinterForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
         await session.QuerySingleOrDefaultAsync<PrinterRow>(PrinterForUpdate, new { Id = id }, cancellationToken) is { } r
-            ? new(new LabelPrinter(r.Id, r.SiteId, r.Code, r.Name, r.Method, r.Host, r.Port, r.DropFolder, r.TemplateSet, r.IsActive), r.Version)
+            ? new(new LabelPrinter(r.Id, r.SiteId, r.Code, r.Name, r.Method, r.Host, r.Port, r.DropFolder, r.TemplateSet, r.IsActive,
+                r.EndpointUrl, r.BtxmlTemplate, r.BartenderPrinter, BtwFiles.Read(r.BtwFilesJson)), r.Version)
             : null;
 
     public Task<long> InsertPrinterAsync(LabelPrinter printer, DateTimeOffset at, CancellationToken cancellationToken) =>
@@ -103,7 +108,24 @@ internal sealed class LabelRepository(DbSession session) : ILabelRepository
         session.ExecuteScalarAsync<long>(UpdateFormat, FormatArgs(format, at), cancellationToken);
 
     private static object PrinterArgs(LabelPrinter p, DateTimeOffset at) =>
-        new { p.Id, p.SiteId, p.Code, p.Name, p.Method, p.Host, p.Port, p.DropFolder, p.TemplateSet, p.IsActive, At = at };
+        new
+        {
+            p.Id,
+            p.SiteId,
+            p.Code,
+            p.Name,
+            p.Method,
+            p.Host,
+            p.Port,
+            p.DropFolder,
+            p.TemplateSet,
+            p.IsActive,
+            p.EndpointUrl,
+            p.BtxmlTemplate,
+            p.BartenderPrinter,
+            BtwFiles = BtwFiles.Write(p.BtwFiles),
+            At = at,
+        };
 
     private static object FormatArgs(SupplierFormat f, DateTimeOffset at) =>
         new { f.Id, f.SiteId, f.Code, f.Name, f.Pattern, f.ExpiryFormat, f.SortOrder, f.IsActive, At = at };
@@ -129,9 +151,32 @@ internal sealed class LabelRepository(DbSession session) : ILabelRepository
         public string? Host { get; init; }
         public int? Port { get; init; }
         public string? DropFolder { get; init; }
-        public string TemplateSet { get; init; } = "";
+        public string? TemplateSet { get; init; }
         public bool IsActive { get; init; }
+        public string? EndpointUrl { get; init; }
+        public string? BtxmlTemplate { get; init; }
+        public string? BartenderPrinter { get; init; }
+        public string? BtwFilesJson { get; init; }
         public long Version { get; init; }
+
+        public LabelPrinterDto ToDto() => new()
+        {
+            Id = Id,
+            SiteId = SiteId,
+            Code = Code,
+            Name = Name,
+            Method = Method,
+            Host = Host,
+            Port = Port,
+            DropFolder = DropFolder,
+            TemplateSet = TemplateSet,
+            EndpointUrl = EndpointUrl,
+            BtxmlTemplate = BtxmlTemplate,
+            BartenderPrinter = BartenderPrinter,
+            BtwFiles = BtwFiles.Read(BtwFilesJson),
+            IsActive = IsActive,
+            Version = Version,
+        };
     }
 
     internal sealed class FormatRow
@@ -156,7 +201,10 @@ internal sealed class LabelQueries(NpgsqlDataSource dataSource) : ILabelReadStor
         FROM core.label_settings WHERE site_id = @SiteId
         """;
 
-    private const string PrinterColumns = "id, site_id, code, name, method, host, port, drop_folder, template_set, is_active, xmin::text::bigint AS version";
+    private const string PrinterColumns = """
+        id, site_id, code, name, method, host, port, drop_folder, template_set, is_active, endpoint_url, btxml_template, bartender_printer,
+        btw_files::text AS btw_files_json, xmin::text::bigint AS version
+        """;
 
     private const string Printers = $"SELECT {PrinterColumns} FROM core.label_printer WHERE site_id = @SiteId ORDER BY is_active DESC, code";
 
@@ -173,7 +221,8 @@ internal sealed class LabelQueries(NpgsqlDataSource dataSource) : ILabelReadStor
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         var args = new { SiteId = siteId };
         var settings = await connection.QuerySingleOrDefaultAsync<SettingsRow>(new CommandDefinition(Settings, args, cancellationToken: cancellationToken));
-        var printers = await connection.QueryAsync<LabelPrinterDto>(new CommandDefinition(Printers, args, cancellationToken: cancellationToken));
+        var printers = (await connection.QueryAsync<LabelRepository.PrinterRow>(new CommandDefinition(Printers, args, cancellationToken: cancellationToken)))
+            .Select(r => r.ToDto()).ToList();
         var formats = await connection.QueryAsync<SupplierBarcodeFormatDto>(new CommandDefinition(Formats, args, cancellationToken: cancellationToken));
         return new LabelSetupDto
         {
@@ -183,7 +232,7 @@ internal sealed class LabelQueries(NpgsqlDataSource dataSource) : ILabelReadStor
             SsccExtension = settings?.SsccExtension ?? 0,
             SsccNextSerial = settings?.SsccNextSerial ?? 1,
             DefaultPrinterId = settings?.DefaultPrinterId,
-            Printers = printers.AsList(),
+            Printers = printers,
             SupplierFormats = formats.AsList(),
             Version = settings?.Version ?? 0,
         };
@@ -192,7 +241,7 @@ internal sealed class LabelQueries(NpgsqlDataSource dataSource) : ILabelReadStor
     public async Task<LabelPrinterDto?> GetPrinterAsync(Guid id, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        return await connection.QuerySingleOrDefaultAsync<LabelPrinterDto>(new CommandDefinition(Printer, new { Id = id }, cancellationToken: cancellationToken));
+        return (await connection.QuerySingleOrDefaultAsync<LabelRepository.PrinterRow>(new CommandDefinition(Printer, new { Id = id }, cancellationToken: cancellationToken)))?.ToDto();
     }
 
     public async Task<IReadOnlyList<SupplierFormat>> ListActiveFormatsAsync(Guid siteId, CancellationToken cancellationToken)
@@ -211,4 +260,15 @@ internal sealed class LabelQueries(NpgsqlDataSource dataSource) : ILabelReadStor
         public Guid? DefaultPrinterId { get; init; }
         public long Version { get; init; }
     }
+}
+
+/// <summary>A BarTender printer's .btw documents by operation (#168), as stored in <c>core.label_printer.btw_files</c>.</summary>
+internal static class BtwFiles
+{
+    public static IReadOnlyDictionary<string, string> Read(string? json) =>
+        string.IsNullOrEmpty(json)
+            ? new Dictionary<string, string>()
+            : System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
+
+    public static string Write(IReadOnlyDictionary<string, string>? files) => System.Text.Json.JsonSerializer.Serialize(files ?? new Dictionary<string, string>());
 }

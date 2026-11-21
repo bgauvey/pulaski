@@ -274,6 +274,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `material.gtin` (own command), `container.sscc` from `core.label_settings` (prefix, extension, next serial, locked). Site `label_format`
   pulaski/gs1_128/gs1_datamatrix; no GTIN/SSCC → Pulaski label. `core.label_printer` raw_tcp or drop_folder (name in `Labels:DropFolders`), rendered
   from `Labels:TemplateDirectory/{set}/{kind}[.{format}].{ext}` (`LabelTemplates`, `LabelPrinting`); scans read GS1, then supplier formats (`receivable`).
+- BarTender printing (D-110, proposed, #168): printer method `bartender` (`endpoint_url`, `btxml_template`, `bartender_printer`, `btw_files`
+  jsonb by operation: default / kind / `kind.what`, `Btxml.BtwFor`). `Btxml` (pure) fills `{{BtwPath}}`/`{{NamedSubStrings}}`/`{{PrintSetup}}`,
+  checks templates and reads errors from BarTender's answer; `LabelPrinting` POSTs one script per label; credentials in `Labels:BarTender:<code>`.
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the

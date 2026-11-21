@@ -1427,6 +1427,24 @@ public sealed class InventoryTests(DatabaseFixture db)
         setup = await QueryAsync<GetLabelSetupQuery, LabelSetupDto>(new GetLabelSetupQuery(plant.Site));
         Assert.Equal(("ZEB-1", printer.Id), (Assert.Single(setup.Printers).Code, setup.DefaultPrinterId!.Value));
         await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new SetLabelSettingsCommand(plant.Site, setup.Version - 1, LabelFormats.Pulaski, null, 0, null)));
+
+        // A BarTender printer (#168): its address, template, printer and documents by operation are kept; a template that isn't BTXML isn't.
+        var documents = new Dictionary<string, string> { ["default"] = @"C:\Labels\Any.btw", ["lot"] = @"C:\Labels\Lot.btw" };
+        CreatedResponse bartender = await db.SendAsync(new SaveLabelPrinterCommand(
+            plant.Site, null, 0, "bt-1", "BarTender", PrintMethods.BarTender, null, null, null, null, true,
+            "https://bartender.test/Integration/Print/Execute", Btxml.StandardTemplate, "Zebra ZT411", documents));
+        var saved = (await QueryAsync<GetLabelSetupQuery, LabelSetupDto>(new GetLabelSetupQuery(plant.Site))).Printers.Single(p => p.Id == bartender.Id);
+        Assert.Equal(("bartender", null, "Zebra ZT411", @"C:\Labels\Lot.btw"), (saved.Method, saved.TemplateSet, saved.BartenderPrinter, saved.BtwFiles["lot"]));
+        Assert.Equal(Btxml.StandardTemplate, saved.BtxmlTemplate);
+        await db.SendAsync(new SaveLabelPrinterCommand(
+            plant.Site, bartender.Id, saved.Version, "BT-1", "BarTender", PrintMethods.BarTender, null, null, null, null, true,
+            saved.EndpointUrl, saved.BtxmlTemplate, null, new Dictionary<string, string> { ["default"] = @"C:\Labels\Any.btw" }));
+        saved = (await QueryAsync<GetLabelSetupQuery, LabelSetupDto>(new GetLabelSetupQuery(plant.Site))).Printers.Single(p => p.Id == bartender.Id);
+        Assert.Equal((null, 1), (saved.BartenderPrinter, saved.BtwFiles.Count));
+        var refused = await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new SaveLabelPrinterCommand(
+            plant.Site, null, 0, "bt-2", "BarTender", PrintMethods.BarTender, null, null, null, null, true,
+            "ftp://bartender.test", "<Print>", null, new Dictionary<string, string> { ["lot"] = "Lot.txt" })));
+        Assert.True(refused.Errors.ContainsKey("EndpointUrl") && refused.Errors.ContainsKey("BtxmlTemplate") && refused.Errors.ContainsKey("BtwFiles"));
     }
 
     [Fact]

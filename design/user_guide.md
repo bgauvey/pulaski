@@ -2663,8 +2663,24 @@ Under **Labels** on Site settings (you need permission to change site settings):
 
 - **Raw TCP:** the label goes straight to the printer's **Host** and **Port** (label printers usually listen on 9100). The API server must be able to reach it.
 - **Drop folder:** the label is written as a file into a folder the API is configured with, for label software (BarTender and the like) that watches it. The choice lists the folders in the API's configuration; the path never comes from the screen.
+- **BarTender (web service):** each label is sent to BarTender as a BTXML script, and BarTender prints it with one of its own documents (see below).
 
-and the **Templates** it uses: a set of template files on the API server (*zpl* for 4 × 6 in labels at 203 dpi, *csv* for label software, or your own). **Change** a printer to edit it or switch it off.
+and, for raw TCP and drop folders, the **Templates** it uses: a set of template files on the API server (*zpl* for 4 × 6 in labels at 203 dpi, *csv* for label software, or your own). **Change** a printer to edit it or switch it off.
+
+**Print through BarTender.** In BarTender's Integration Builder, make an integration with a web service trigger and a **Print BTXML Script** action that runs the script it receives, and deploy it. Then add a printer in Pulaski:
+
+1. Choose **Sends: BarTender (web service)**.
+2. Type the integration's **BarTender web service address**, such as `https://bartender.example.com:8080/Integration/Print/Execute`.
+3. Optionally type the **Printer in BarTender** (its Windows name); left empty, each document prints to its own printer.
+4. Under **BarTender document (.btw) for each kind of label**, give the path BarTender opens for each: **Default (any label)**, and, where they differ, **Lot labels**, **Container labels** and **Location labels**. A kind without its own document uses the default.
+5. Keep the **BTXML template** as it is, or adapt it (**Use the standard template** puts it back). Click **Save printer**.
+
+In detail:
+
+- Pulaski sends one script per label, and the copies as BarTender's own copy count. It reads BarTender's answer: an error message in it, or a refused request, is shown to whoever printed, saying how many labels went before it.
+- The standard template fills the document's **named data sources** from the label: `Code` (what the barcode carries), `Title`, `Line1` to `Line10`, `Kind`, `Format`, `Gs1Hri` (GS1 data with its AIs in brackets, for a GS1 barcode in BarTender) and every value of the label's kind, such as `LotNumber`, `MaterialCode`, `MaterialName`, `Quantity`, `Uom`, `Expiry`, `SupplierLot`, `Gtin`, `ContainerCode`, `Sscc` or `LocationCode`. Name the document's data sources the same way.
+- In your own template, `{{BtwPath}}`, `{{NamedSubStrings}}`, `{{PrintSetup}}`, `{{Printer}}`, `{{Copies}}`, `{{JobName}}` and any value by name (`{{LotNumber}}`) are filled in, escaped for XML. Saving checks that the template is a BTXML print script and that each document ends in `.btw`.
+- If the web service asks for a user name and password, or a key in a header, whoever runs Pulaski sets them in the API's configuration (`Labels:BarTender:<printer code>`); they are never kept in the database or shown here.
 
 **Supplier barcodes.** GS1 barcodes are always read. For a supplier's own, click **Add a supplier format**:
 
@@ -3071,6 +3087,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
 - **Alerts** come by e-mail only. Each person keeps their own; nobody can subscribe others. A lot made on hold (rather than put on hold
   later) doesn't alert, and a shortage that clears and comes back for the same job isn't e-mailed again.
+- **BarTender** printing sends one script per label and stops at the first one BarTender refuses; it doesn't use BarTender's print queue or
+  report when the printer itself has finished. Documents are named per kind of label only, until printing from other places (#122) adds more.
 - **Andon** calls are raised only at an operator station. Response times cover at most 90 days on screen and can't be exported. Escalated calls are e-mailed only to those who added that alert under **My alerts**.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).

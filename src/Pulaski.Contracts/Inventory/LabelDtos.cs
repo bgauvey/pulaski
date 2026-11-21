@@ -30,7 +30,7 @@ public sealed record LabelPrinterDto
     public required string Code { get; init; }
     public required string Name { get; init; }
 
-    /// <summary><c>raw_tcp</c> or <c>drop_folder</c>.</summary>
+    /// <summary><c>raw_tcp</c>, <c>drop_folder</c> or <c>bartender</c> (#168).</summary>
     public required string Method { get; init; }
     public string? Host { get; init; }
     public int? Port { get; init; }
@@ -38,8 +38,17 @@ public sealed record LabelPrinterDto
     /// <summary>The name of a folder in the API's configuration (<c>Labels:DropFolders</c>), never a path.</summary>
     public string? DropFolder { get; init; }
 
-    /// <summary>The folder of label templates under <c>Labels:TemplateDirectory</c>, such as <c>zpl</c>.</summary>
-    public required string TemplateSet { get; init; }
+    /// <summary>The folder of label templates under <c>Labels:TemplateDirectory</c>, such as <c>zpl</c>; null for BarTender.</summary>
+    public string? TemplateSet { get; init; }
+
+    /// <summary>
+    /// BarTender (#168): the web service the BTXML script is posted to, the script's template, the printer as BarTender names it (null: the
+    /// document's own), and the .btw document by operation (<c>default</c>, <c>lot</c>, <c>container</c>, <c>location</c>, …).
+    /// </summary>
+    public string? EndpointUrl { get; init; }
+    public string? BtxmlTemplate { get; init; }
+    public string? BartenderPrinter { get; init; }
+    public IReadOnlyDictionary<string, string> BtwFiles { get; init; } = new Dictionary<string, string>();
     public bool IsActive { get; init; }
     public long Version { get; init; }
 }
@@ -65,6 +74,10 @@ public sealed record LabelOptionsDto
 {
     public IReadOnlyList<string> TemplateSets { get; init; } = [];
     public IReadOnlyList<string> DropFolders { get; init; } = [];
+
+    /// <summary>BarTender (#168): the standard BTXML template, and the operations a printer can name a .btw document for.</summary>
+    public string BtxmlTemplate { get; init; } = "";
+    public IReadOnlyList<string> BtwOperations { get; init; } = [];
 }
 
 /// <summary>What a scanned GS1 or supplier code said (#75).</summary>
@@ -103,7 +116,11 @@ public sealed record SaveLabelPrinterRequest
     public string? Host { get; init; }
     public int? Port { get; init; } = 9100;
     public string? DropFolder { get; init; }
-    public string TemplateSet { get; init; } = "zpl";
+    public string? TemplateSet { get; init; } = "zpl";
+    public string? EndpointUrl { get; init; }
+    public string? BtxmlTemplate { get; init; }
+    public string? BartenderPrinter { get; init; }
+    public IReadOnlyDictionary<string, string>? BtwFiles { get; init; }
     public bool IsActive { get; init; } = true;
 }
 

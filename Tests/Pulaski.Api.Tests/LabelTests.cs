@@ -64,7 +64,7 @@ public sealed class LabelTests : IDisposable
     [Fact]
     public async Task Labels_go_to_a_drop_folder_as_whole_files_or_to_a_printer_over_raw_tcp()
     {
-        var printing = new LabelPrinting(Templates(), Options(), TimeProvider.System);
+        var printing = new LabelPrinting(Templates(), Options(), new BarTenderService(), TimeProvider.System);
         var label = new LabelContent("Lot", "R-1", "PUL1L7", ["PVC"]) { Fields = new Dictionary<string, string?> { ["MaterialName"] = "PVC, white" } };
 
         var dropped = await printing.PrintAsync(Printer("drop_folder", templateSet: "t") with { DropFolder = "bt", Method = "drop_folder" }, "lot", [label], 2, default);
@@ -87,6 +87,65 @@ public sealed class LabelTests : IDisposable
 
         await Assert.ThrowsAsync<Pulaski.Domain.DomainRuleException>(() =>
             printing.PrintAsync(Printer("drop_folder", templateSet: "t") with { DropFolder = "nowhere", Method = "drop_folder" }, "lot", [label], 1, default));
+    }
+
+    [Fact]
+    public async Task BarTender_gets_one_btxml_script_per_label_with_the_operations_document_and_its_errors_come_back()
+    {
+        var bartender = new BarTenderService();
+        var options = Options();
+        options.Value.BarTender["BT-1"] = new BarTenderCredentials { Username = "labels", Password = "secret", Headers = { ["X-Api-Key"] = "k1" } };
+        var printing = new LabelPrinting(Templates(), options, bartender, TimeProvider.System);
+        var printer = Printer("bartender", templateSet: "t") with
+        {
+            Code = "BT-1",
+            TemplateSet = null,
+            EndpointUrl = "https://bartender.test/Integration/Print/Execute",
+            BtxmlTemplate = Pulaski.Application.Inventory.Btxml.StandardTemplate,
+            BartenderPrinter = "Zebra ZT411",
+            BtwFiles = new Dictionary<string, string> { ["default"] = @"C:\Labels\Any.btw", ["lot"] = @"C:\Labels\Lot.btw" },
+        };
+        var a = new LabelContent("Lot", "R-1 <A&B>", "PUL1L7", ["PVC"]);
+        var b = a with { Title = "R-2", Barcode = "PUL1L8" };
+
+        var printed = await printing.PrintAsync(printer, "lot", [a, b], 3, default);
+        Assert.Equal((6, "bartender"), (printed.Labels, printed.Method));
+        Assert.Equal(2, bartender.Requests.Count);
+        var (first, request) = bartender.Requests[0];
+        var script = System.Xml.Linq.XDocument.Parse(first);
+        string Of(string name) => script.Descendants(name).Single().Value;
+        Assert.Equal((@"C:\Labels\Lot.btw", "Zebra ZT411", "3"), (Of("Format"), Of("Printer"), Of("IdenticalCopiesOfLabel")));
+        Assert.Equal("R-1 <A&B>", script.Descendants("NamedSubString").Single(e => (string?)e.Attribute("Name") == "Title").Element("Value")!.Value);
+        Assert.Equal("Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes("labels:secret")), request.Authorization);
+        Assert.Equal("k1", request.ApiKey);
+
+        // Another operation without its own document uses the default; BarTender's error message, or a refusal, comes back.
+        await printing.PrintAsync(printer, "container", [a], 1, default);
+        Assert.Contains(@"C:\Labels\Any.btw", bartender.Requests[^1].Body, StringComparison.Ordinal);
+        bartender.Answer = (HttpStatusCode.OK, """<XMLScript Version="2.0"><Command><Print><Message ID="3201" Severity="Error"><Text>The format could not be opened.</Text></Message></Print></Command></XMLScript>""");
+        var error = await Assert.ThrowsAsync<Pulaski.Domain.DomainRuleException>(() => printing.PrintAsync(printer, "lot", [a], 1, default));
+        Assert.Contains("The format could not be opened.", error.Message, StringComparison.Ordinal);
+        bartender.Answer = (HttpStatusCode.InternalServerError, "");
+        await Assert.ThrowsAsync<Pulaski.Domain.DomainRuleException>(() => printing.PrintAsync(printer, "lot", [a], 1, default));
+        await Assert.ThrowsAsync<Pulaski.Domain.DomainRuleException>(() =>
+            printing.PrintAsync(printer with { BtwFiles = new Dictionary<string, string> { ["lot"] = @"C:\Labels\Lot.btw" } }, "location", [a], 1, default));
+    }
+
+    /// <summary>A BarTender web service that records what it was sent and answers as told.</summary>
+    private sealed class BarTenderService : HttpMessageHandler, IHttpClientFactory
+    {
+        public List<(string Body, (string? Authorization, string? ApiKey) Headers)> Requests { get; } = [];
+
+        public (HttpStatusCode Status, string Body) Answer { get; set; } = (HttpStatusCode.OK, """<XMLScript Version="2.0"><Command><Print><Message ID="0" Severity="Information"><Text>Done.</Text></Message></Print></Command></XMLScript>""");
+
+        public HttpClient CreateClient(string name) => new(this, disposeHandler: false);
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests.Add((await request.Content!.ReadAsStringAsync(cancellationToken),
+                (request.Headers.Authorization?.ToString(), request.Headers.TryGetValues("X-Api-Key", out var key) ? key.Single() : null)));
+            return new HttpResponseMessage(Answer.Status) { Content = new StringContent(Answer.Body) };
+        }
     }
 
     private LabelTemplates Templates() => new(Options(), new Environment(_root));

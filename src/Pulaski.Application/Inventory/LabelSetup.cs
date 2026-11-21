@@ -12,7 +12,8 @@ public sealed record LabelSettings(Guid SiteId, string LabelFormat, string? Gs1C
 
 /// <summary>A label printer as stored.</summary>
 public sealed record LabelPrinter(
-    Guid Id, Guid SiteId, string Code, string Name, string Method, string? Host, int? Port, string? DropFolder, string TemplateSet, bool IsActive);
+    Guid Id, Guid SiteId, string Code, string Name, string Method, string? Host, int? Port, string? DropFolder, string? TemplateSet, bool IsActive,
+    string? EndpointUrl = null, string? BtxmlTemplate = null, string? BartenderPrinter = null, IReadOnlyDictionary<string, string>? BtwFiles = null);
 
 /// <summary>A supplier barcode format as stored.</summary>
 public sealed record SupplierFormat(Guid Id, Guid SiteId, string Code, string Name, string Pattern, string? ExpiryFormat, int SortOrder, bool IsActive);
@@ -57,7 +58,8 @@ public sealed record SetLabelSettingsCommand(Guid SiteId, long ExpectedVersion, 
 
 /// <summary>Adds (no id) or changes a label printer.</summary>
 public sealed record SaveLabelPrinterCommand(
-    Guid SiteId, Guid? Id, long ExpectedVersion, string Code, string Name, string Method, string? Host, int? Port, string? DropFolder, string TemplateSet, bool IsActive)
+    Guid SiteId, Guid? Id, long ExpectedVersion, string Code, string Name, string Method, string? Host, int? Port, string? DropFolder, string? TemplateSet, bool IsActive,
+    string? EndpointUrl = null, string? BtxmlTemplate = null, string? BartenderPrinter = null, IReadOnlyDictionary<string, string>? BtwFiles = null)
     : ICommand<CreatedResponse>;
 
 /// <summary>Adds (no id) or changes a supplier barcode format.</summary>
@@ -82,7 +84,10 @@ public static class PrintMethods
     public const string RawTcp = "raw_tcp";
     public const string DropFolder = "drop_folder";
 
-    public static IReadOnlyList<string> All { get; } = [RawTcp, DropFolder];
+    /// <summary>A BTXML script posted to a BarTender web service (#168).</summary>
+    public const string BarTender = "bartender";
+
+    public static IReadOnlyList<string> All { get; } = [RawTcp, DropFolder, BarTender];
 }
 
 internal static class LabelRules
@@ -93,6 +98,9 @@ internal static class LabelRules
         && code.All(c => char.IsAsciiLetterUpper(c) || char.IsAsciiDigit(c) || c is '_' or '-');
 
     public static bool IsName(string? name) => name is { Length: >= 1 and <= 50 } && name.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
+
+    public static bool IsWebAddress(string? url) => url is { Length: <= 500 } && Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) && url.StartsWith(uri.Scheme + "://", StringComparison.Ordinal);
 
     /// <summary>
     /// The SSCC for a new container (#75): from the site's company prefix and the next serial, which it takes (the settings row is locked);
@@ -183,20 +191,48 @@ internal sealed class SaveLabelPrinterHandler(IUnitOfWork unitOfWork, ILabelRepo
         var host = LabelRules.Text(command.Host);
         var folder = LabelRules.Text(command.DropFolder);
         var tcp = command.Method == PrintMethods.RawTcp;
-        new Validator()
+        var drop = command.Method == PrintMethods.DropFolder;
+        var bartender = command.Method == PrintMethods.BarTender;
+        var endpoint = LabelRules.Text(command.EndpointUrl);
+        var bartenderPrinter = LabelRules.Text(command.BartenderPrinter);
+        var files = (command.BtwFiles ?? new Dictionary<string, string>())
+            .Where(f => !string.IsNullOrWhiteSpace(f.Value))
+            .ToDictionary(f => f.Key.Trim().ToLowerInvariant(), f => f.Value.Trim(), StringComparer.Ordinal);
+        var validator = new Validator()
             .Require(command.Id is not null || LabelRules.IsCode(code), "Code", "1 to 30 letters, digits, - or _.")
             .RequireText(name, "Name", 100)
-            .Require(PrintMethods.All.Contains(command.Method), "Method", "raw_tcp or drop_folder.")
+            .Require(PrintMethods.All.Contains(command.Method), "Method", "raw_tcp, drop_folder or bartender.")
             .Require(!tcp || host is { Length: <= 255 }, "Host", "The printer's host name or address.")
             .Require(!tcp || command.Port is >= 1 and <= 65535, "Port", "1 to 65535; label printers usually listen on 9100.")
-            .Require(tcp || LabelRules.IsName(folder), "DropFolder", "The name of a drop folder in the API's configuration.")
-            .Require(LabelRules.IsName(command.TemplateSet), "TemplateSet", "The name of a template set: letters, digits, - or _.")
-            .ThrowIfInvalid();
+            .Require(!drop || LabelRules.IsName(folder), "DropFolder", "The name of a drop folder in the API's configuration.")
+            .Require(bartender || LabelRules.IsName(command.TemplateSet), "TemplateSet", "The name of a template set: letters, digits, - or _.")
+            .Require(!bartender || LabelRules.IsWebAddress(endpoint), "EndpointUrl", "The BarTender web service's address: http:// or https://, at most 500 characters.")
+            .Require(!bartender || bartenderPrinter is null or { Length: <= 200 }, "BartenderPrinter", "At most 200 characters; leave it empty for the document's own printer.")
+            .Require(!bartender || files.Count > 0, "BtwFiles", "Give the .btw document for at least one operation, such as default.");
+        if (bartender)
+        {
+            foreach (var problem in Btxml.Problems(command.BtxmlTemplate))
+            {
+                validator.Require(false, "BtxmlTemplate", problem);
+            }
+
+            foreach (var (operation, path) in files)
+            {
+                validator.Require(Btxml.IsOperation(operation), "BtwFiles", $"'{operation}' isn't an operation: such as default, lot or lot.produced.");
+                if (Btxml.PathProblem(path) is { } pathProblem)
+                {
+                    validator.Require(false, "BtwFiles", $"{operation}: {pathProblem}");
+                }
+            }
+        }
+
+        validator.ThrowIfInvalid();
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var printer = new LabelPrinter(
-            command.Id ?? ids.NewId(), command.SiteId, code, name, command.Method, tcp ? host : null, tcp ? command.Port : null, tcp ? null : folder,
-            command.TemplateSet, command.IsActive);
+            command.Id ?? ids.NewId(), command.SiteId, code, name, command.Method, tcp ? host : null, tcp ? command.Port : null, drop ? folder : null,
+            bartender ? null : command.TemplateSet, command.IsActive,
+            bartender ? endpoint : null, bartender ? command.BtxmlTemplate : null, bartender ? bartenderPrinter : null, bartender ? files : new Dictionary<string, string>());
         long version;
         if (command.Id is { } id)
         {
