@@ -126,6 +126,7 @@ api.MapMachineDataEndpoints();
 api.MapEdgeEndpoints();
 api.MapMachineEndpoints();
 api.MapOverviewEndpoints();
+api.MapAndonEndpoints();
 api.MapQualityEndpoints();
 api.MapTerminalAdminEndpoints();
 

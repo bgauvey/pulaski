@@ -223,6 +223,13 @@ public static class EventTypes
     public const string SpcAlertRaised = "pulaski.spc_alert.raised.v1";
     public const string SpcAlertSignalled = "pulaski.spc_alert.signalled.v1";
     public const string SpcAlertClosed = "pulaski.spc_alert.closed.v1";
+
+    /// <summary>Andon (#125, D-108): call types kept per site, and calls raised, acknowledged and resolved.</summary>
+    public const string AndonTypeCreated = "pulaski.andon_type.created.v1";
+    public const string AndonTypeChanged = "pulaski.andon_type.changed.v1";
+    public const string AndonCallRaised = "pulaski.andon.call_raised.v1";
+    public const string AndonCallAcknowledged = "pulaski.andon.call_acknowledged.v1";
+    public const string AndonCallResolved = "pulaski.andon.call_resolved.v1";
     public const string CharacteristicTagBound = "pulaski.quality_characteristic.tag_bound.v1";
     public const string CharacteristicTagChanged = "pulaski.quality_characteristic.tag_changed.v1";
     public const string LabelPrinterSaved = "pulaski.label_printer.saved.v1";

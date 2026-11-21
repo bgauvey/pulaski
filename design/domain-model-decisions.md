@@ -2922,6 +2922,26 @@ re-read when sent, so what is reported is what the button said. Notes say what w
 whose role codes stops, `CodingReasons` holds each machine's offered reasons (`ListCodingReasonsQuery`). `POST /api/terminal/station/code-stop`
 (`downtime.code`) codes only one of those stops through `CodeDowntimeCommand`. With it, #118's pieces are all in place.
 
+### D-108 · Andon calls (#125) · *Proposed, in pieces*
+
+**Context.** Operators need a quick way to call maintenance, quality, materials or a supervisor to their line, and the plant needs to see calls
+waiting too long and how fast they are answered.
+
+**Decision.**
+- **Call types** (`core.andon_type`) per site: code (fixed), name, escalation minutes (1–480), order, switched off rather than deleted. Kept on
+  Site settings (`site_settings.manage`).
+- **Calls** (`core.andon_call`, in `core` since they change as they are answered, D-010) are raised for a line (`can_run_job`, active) and a type
+  of its site: open → acknowledged (someone has come) → resolved (with what was done). Resolving an unanswered call acknowledges it at the same
+  moment. One not resolved per line and type: calling again returns the same call (`AlreadyOpen`), recording nothing. Raising locks the line
+  first (`FOR NO KEY UPDATE`, as ingest). Each step is an event (`pulaski.andon.call_raised/acknowledged/resolved.v1`).
+- **Escalation is worked out on read**, never stored: a call still open past its type's time is escalated (`AndonRules.IsEscalated`); waiting time
+  runs to the acknowledgement (`AndonRules.Waited`). E-mail and other notifications come with alert subscriptions (#121), so there is one way to
+  subscribe; no background job.
+- **Permissions** `andon.call` (Operator, Supervisor) and `andon.respond` (Supervisor, Quality), both implying `floor.view`; lists need
+  `floor.view`. `/api/andon/types`, `/api/andon/calls` (open by default, or `open=false` with a period), `/calls/{id}/acknowledge|resolve`.
+- **Pieces:** #156 types and calls (this), #157 calls at the operator station (responders badge in there), #158 open calls on the line boards and
+  an Operate → Andon page, #159 response times.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

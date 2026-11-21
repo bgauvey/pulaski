@@ -60,6 +60,8 @@ public static class Permissions
     public const string LaborApprove = "labor.approve";
     public const string DowntimeCode = "downtime.code";
     public const string DowntimeAdjust = "downtime.adjust";
+    public const string AndonCall = "andon.call";
+    public const string AndonRespond = "andon.respond";
     public const string People = "people.manage";
     public const string Terminals = "terminals.manage";
     public const string LotAttributes = "lot_attributes.manage";
@@ -107,6 +109,8 @@ public static class Permissions
         new(LaborApprove, "Labor", "Approve a shift's labor and correct approved labor"),
         new(DowntimeCode, "Floor", "Code machine stops: confirm or change their reason"),
         new(DowntimeAdjust, "Floor", "Enter machine stops by hand, and split or merge stops"),
+        new(AndonCall, "Floor", "Call for help from a line: maintenance, quality, materials or a supervisor"),
+        new(AndonRespond, "Floor", "Answer andon calls: acknowledge them on arrival and resolve them"),
         new(QualityRecord, "Quality", "Record quality results against runs and lots"),
         new(QualityDecide, "Quality", "Exclude quality results and reject held lots on quality"),
         new(LotReceive, "Inventory", "Receive lots"),
@@ -188,6 +192,8 @@ public static class Permissions
         [People] = [LaborView],
         [DowntimeCode] = [MachinesView],
         [DowntimeAdjust] = [MachinesView],
+        [AndonCall] = [FloorView],
+        [AndonRespond] = [FloorView],
         // Terminals are placed on lines; their screen lists the site's equipment.
         [Terminals] = [EquipmentView],
         [Integrations] = [IntegrationsView],
@@ -239,19 +245,19 @@ public static class Roles
              Permissions.JobExecute, Permissions.JobReopen, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove,
              Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide, Permissions.ProductionCorrect,
              Permissions.LotAllocate, Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode,
-             Permissions.DowntimeAdjust, Permissions.QualityView, Permissions.QualityRecord],
-            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops; records quality results. Doesn't correct inventory."),
+             Permissions.DowntimeAdjust, Permissions.QualityView, Permissions.QualityRecord, Permissions.AndonCall, Permissions.AndonRespond],
+            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops; records quality results; calls for and answers andon calls. Doesn't correct inventory."),
         new(Operator, "Operator", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
              Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove, Permissions.LaborRecordOwn,
-             Permissions.MachinesView, Permissions.DowntimeCode, Permissions.QualityView, Permissions.QualityRecord],
-            "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops, records quality results."),
+             Permissions.MachinesView, Permissions.DowntimeCode, Permissions.QualityView, Permissions.QualityRecord, Permissions.AndonCall],
+            "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops, records quality results, calls for help."),
         new(Quality, "Quality", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView, Permissions.MachinesView,
              Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide, Permissions.LotRecords, Permissions.LotAttributes,
              Permissions.InventoryBackdate, Permissions.LotAllocate, Permissions.QualityView, Permissions.QualityRecord, Permissions.QualityDecide,
-             Permissions.Specs],
-            "Holds and releases lots, corrects inventory, decides on partial batches, keeps lot attributes and certificates, maintains specifications, records quality results, excludes them and rejects lots on quality."),
+             Permissions.Specs, Permissions.AndonRespond],
+            "Holds and releases lots, corrects inventory, decides on partial batches, keeps lot attributes and certificates, maintains specifications, records quality results, excludes them and rejects lots on quality, answers andon calls."),
         new(Manager, "Manager", false,
             [.. Permissions.Views, Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts,
              Permissions.People, Permissions.Terminals, Permissions.LaborApprove, Permissions.LotAttributes],

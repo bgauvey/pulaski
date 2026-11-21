@@ -219,6 +219,10 @@ public enum SiteOf
 
     /// <summary>A role assignment (D-092): its site, none when it is held at every site.</summary>
     RoleAssignment,
+
+    /// <summary>An andon call type or call (#125): its site.</summary>
+    AndonType,
+    AndonCall,
 }
 
 /// <summary>Finds the site something belongs to, so a role held at that site can be checked (D-037).</summary>

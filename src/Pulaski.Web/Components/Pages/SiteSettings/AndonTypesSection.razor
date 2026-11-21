@@ -1,0 +1,183 @@
+@inject PulaskiApiClient Api
+
+@* Andon call types (#125, D-108): the kinds of help a line can call for, each with how long a call may wait before it is escalated. Codes are
+   fixed once made; a type is switched off rather than deleted, since calls refer to it. *@
+<section class="inv-facts mb-3" id="andon-types" aria-labelledby="andon-heading">
+    <h2 class="h6" id="andon-heading">Andon: calls for help</h2>
+    <p class="small text-muted">
+        The kinds of help an operator can call for from a line, such as maintenance, quality or a supervisor. A call nobody has answered within its
+        escalation time is shown as escalated. Switch a type off to stop offering it; its calls stay in the history.
+    </p>
+    <ProblemAlert Error="_error" />
+
+    @if (_types is null)
+    {
+        <p class="small text-muted mb-0">Loading…</p>
+    }
+    else
+    {
+        @if (_types.Count == 0)
+        {
+            <p class="small text-muted">No call types yet@(CanManage ? "; add the first below" : "").</p>
+        }
+        else
+        {
+            <div class="table-panel mb-2">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Code</th><th>Name</th><th class="text-end">Escalates after</th><th class="text-end">Order</th><th>Offered</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var t in _types)
+                        {
+                            <tr @key="t.Id" class="@(t.IsActive ? "" : "text-muted")">
+                                <td class="fw-semibold">@t.Code</td>
+                                <td>@t.Name</td>
+                                <td class="text-end">@t.EscalateAfterMinutes min</td>
+                                <td class="text-end">@t.SortOrder</td>
+                                <td>@(t.IsActive ? "Yes" : "Switched off")</td>
+                                <td class="text-end text-nowrap">
+                                    @if (CanManage)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => Edit(t)">Change</button>
+                                        <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => SwitchAsync(t)">@(t.IsActive ? "Switch off" : "Switch on")</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (CanManage)
+        {
+            <form class="row g-2 align-items-end" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small fw-semibold" for="andon-code">Code</label>
+                    <input id="andon-code" class="form-control form-control-sm" maxlength="20" disabled="@(_editing is not null)" placeholder="MAINT" @bind="_code" />
+                </div>
+                <div class="col-6 col-md-4">
+                    <label class="form-label small fw-semibold" for="andon-name">Name</label>
+                    <input id="andon-name" class="form-control form-control-sm" maxlength="100" placeholder="Maintenance" @bind="_name" />
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small fw-semibold" for="andon-escalate">Escalates after (min)</label>
+                    <input id="andon-escalate" type="number" inputmode="numeric" class="form-control form-control-sm" min="1" max="480" step="1" @bind="_escalate" />
+                </div>
+                <div class="col-6 col-md-1">
+                    <label class="form-label small fw-semibold" for="andon-order">Order</label>
+                    <input id="andon-order" type="number" inputmode="numeric" class="form-control form-control-sm" step="1" @bind="_order" />
+                </div>
+                <div class="col-12 col-md-3 form-actions">
+                    <button type="submit" class="btn btn-sm btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_name) || (_editing is null && string.IsNullOrWhiteSpace(_code)))">
+                        @(_editing is null ? "Add call type" : $"Save {_editing.Code}")
+                    </button>
+                    @if (_editing is not null)
+                    {
+                        <button type="button" class="btn btn-sm btn-link" @onclick="Clear">Cancel</button>
+                    }
+                </div>
+            </form>
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Guid SiteId { get; set; }
+
+    [Parameter] public bool CanManage { get; set; }
+
+    /// <summary>Says what was saved, in the page's message.</summary>
+    [Parameter] public EventCallback<string> Saved { get; set; }
+
+    private IReadOnlyList<AndonTypeDto>? _types;
+    private Guid? _loadedFor;
+    private AndonTypeDto? _editing;
+    private string _code = "";
+    private string _name = "";
+    private int _escalate = 10;
+    private int _order;
+    private bool _saving;
+    private ApiException? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == SiteId)
+        {
+            return;
+        }
+
+        _loadedFor = SiteId;
+        _types = null;
+        await LoadAsync();
+        Clear();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _types = await Api.ListAndonTypesAsync(SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private void Edit(AndonTypeDto type) => (_editing, _code, _name, _escalate, _order) = (type, type.Code, type.Name, type.EscalateAfterMinutes, type.SortOrder);
+
+    private void Clear() => (_editing, _code, _name, _escalate, _order) = (null, "", "", 10, (_types?.Count ?? 0) + 1);
+
+    private async Task SaveAsync() => await RunAsync(async () =>
+    {
+        if (_editing is { } type)
+        {
+            await Api.UpdateAndonTypeAsync(type.Id, new UpdateAndonTypeRequest
+            {
+                Version = type.Version,
+                Name = _name,
+                EscalateAfterMinutes = _escalate,
+                SortOrder = _order,
+                IsActive = type.IsActive,
+            });
+            return $"Saved call type {type.Code}.";
+        }
+
+        await Api.CreateAndonTypeAsync(new CreateAndonTypeRequest { SiteId = SiteId, Code = _code, Name = _name, EscalateAfterMinutes = _escalate, SortOrder = _order });
+        return $"Added call type {_code.Trim().ToUpperInvariant()}.";
+    });
+
+    private async Task SwitchAsync(AndonTypeDto type) => await RunAsync(async () =>
+    {
+        await Api.UpdateAndonTypeAsync(type.Id, new UpdateAndonTypeRequest
+        {
+            Version = type.Version,
+            Name = type.Name,
+            EscalateAfterMinutes = type.EscalateAfterMinutes,
+            SortOrder = type.SortOrder,
+            IsActive = !type.IsActive,
+        });
+        return type.IsActive ? $"Switched off call type {type.Code}; its calls stay in the history." : $"Switched call type {type.Code} back on.";
+    });
+
+    private async Task RunAsync(Func<Task<string>> action)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var message = await action();
+            await LoadAsync();
+            Clear();
+            await Saved.InvokeAsync(message);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

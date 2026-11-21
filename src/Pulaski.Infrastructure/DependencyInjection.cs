@@ -116,6 +116,8 @@ public static class DependencyInjection
         services.AddScoped<IMaterialAdminRepository, MaterialAdminRepository>();
         services.AddScoped<ICapabilityRepository, CapabilityRepository>();
         services.AddScoped<IExecutionRepository, ExecutionRepository>();
+        services.AddScoped<Application.Andon.IAndonRepository, Andon.AndonRepository>();
+        services.AddSingleton<Application.Andon.IAndonReadStore, Andon.AndonQueries>();
         services.AddScoped<ILotFillingStore, LotFillingStore>();
         services.AddScoped<ISecurityRepository, SecurityRepository>();
         services.AddScoped<IShiftRepository, ShiftRepository>();

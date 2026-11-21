@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-19 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-20 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -2649,6 +2649,22 @@ Formats are tried in their **Order**, after GS1; the whole scan must match.
 - **The file.** One rule per row: `line` (blank for every line), `from_material` or `from_class`, `to_material` or `to_class` (blank for anything), `minutes` (required), `note`, `active` (*no* switches the rule off). A row changes the site's rule with the same line and sides, or adds one. A blank `note` cell clears the note; leave the column out to keep notes as they are. Nothing is saved until every row is valid.
 - **The schedule** works changeovers out every time it is shown, so a change appears on its next refresh.
 
+### Andon: calls for help
+
+Andon lets an operator call for help to their line: maintenance, quality, materials, a supervisor. Here you choose which kinds of help a line can
+call for at the site, and how long a call may wait for someone before it is escalated.
+
+1. On **Configure → Site settings**, find **Andon: calls for help**.
+2. Type a **Code** (such as MAINT), a **Name** (such as Maintenance), the minutes after which an unanswered call **Escalates**, and its
+   **Order** in the list, then click **Add call type**.
+3. **Change** a type to rename it or change its time or order; **Switch off** stops offering it.
+
+In detail: a code is up to 20 letters, digits, `-` and `_`, kept in capitals and fixed once made; escalation is 1 to 480 minutes. A switched-off
+type keeps its calls in the history and can be switched on again. Changing these needs **site settings: manage**. A line has at most one waiting
+call of each type: calling again while it waits is the same call. A call is open until someone acknowledges it (they have come), then resolved
+with what was done; it is escalated while it is still open past its type's time. Calling needs **andon: call** (Operator, Supervisor), answering
+**andon: respond** (Supervisor, Quality).
+
 ### Calendar exceptions: holidays and shutdowns
 
 1. Under **Calendar exceptions**, the list shows those from now on; **Show past and removed ones too** shows the rest.
@@ -2985,6 +3001,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Planning rates from run history:** the scheduled recalculation looks at every line of a site at once, on whole days; it can't be limited to some lines or materials, or run at a set time of day. Stops can be taken out only on lines that record machine state, and a proposal accepted without review is worked out once, not again when it is accepted.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts of their own on screen (a characteristic sampled from one has a [control chart](#control-charts)).
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
+- **Andon** call types are kept on Site settings, but there is no screen yet to call for help or answer a call: that comes at the operator station, on the line boards and on an Andon page. Calls escalate only on screen; nobody is e-mailed.
 - **Batches:** a rejected partial batch shows in the job's reports as a correction (good down, scrap up). The order form lists each line's batch size but doesn't work out the quantities that share into them exactly; the refusal names the nearest ones.
 - **Automated consumption is at feed points only.** Backflush, time-window and counter consumption work from the line's [feed points](#feed-points). Production isn't counted into lots from machines. Lots are paired by when they were declared, not from machine data (see [Trace a lot](#trace-a-lot)).
 - **Not in inventory yet:** GTINs are set on the material page only; the material import doesn't fill them. A container made before its site had a GS1 company prefix keeps no SSCC. Printing to a label printer reports a failure to reach it, but not whether the printer then printed. A back-dated move, hold or release must be the lot's latest movement, and back-dating is limited to 31 days. Only a number attribute standing for a quality characteristic is checked against specification limits. Balances' attribute values aren't in the values file.

@@ -65,6 +65,8 @@ public static class PermissionCodes
     public const string SecurityGrantEverywhere = "security.grant_everywhere";
     public const string EdgeIngest = "edge.ingest";
     public const string DowntimeCode = "downtime.code";
+    public const string AndonCall = "andon.call";
+    public const string AndonRespond = "andon.respond";
     public const string DowntimeAdjust = "downtime.adjust";
     public const string QualityRecord = "quality.record";
     public const string QualityDecide = "quality.decide";
