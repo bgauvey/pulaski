@@ -31,7 +31,8 @@ internal static class LabelEndpoints
         labels.MapPost("/sites/{siteId:guid}/printers", async Task<Ok<CreatedResponse>> (
             Guid siteId, SaveLabelPrinterRequest r, ICommandHandler<SaveLabelPrinterCommand, CreatedResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
-                new SaveLabelPrinterCommand(siteId, null, 0, r.Code, r.Name, r.Method, r.Host, r.Port, r.DropFolder, r.TemplateSet, r.IsActive), ct)))
+                new SaveLabelPrinterCommand(siteId, null, 0, r.Code, r.Name, r.Method, r.Host, r.Port, r.DropFolder, r.TemplateSet, r.IsActive,
+                    r.EndpointUrl, r.BtxmlTemplate, r.BartenderPrinter, r.BtwFiles), ct)))
         .RequirePermission(Permissions.SiteSettings, Site.Route());
 
         labels.MapPut("/printers/{id:guid}", async Task<Ok<CreatedResponse>> (
@@ -39,7 +40,8 @@ internal static class LabelEndpoints
         {
             var printer = await store.GetPrinterAsync(id, ct) ?? throw new NotFoundException($"Printer {id} not found.");
             return TypedResults.Ok(await handler.HandleAsync(
-                new SaveLabelPrinterCommand(printer.SiteId, id, r.Version, printer.Code, r.Name, r.Method, r.Host, r.Port, r.DropFolder, r.TemplateSet, r.IsActive), ct));
+                new SaveLabelPrinterCommand(printer.SiteId, id, r.Version, printer.Code, r.Name, r.Method, r.Host, r.Port, r.DropFolder, r.TemplateSet, r.IsActive,
+                    r.EndpointUrl, r.BtxmlTemplate, r.BartenderPrinter, r.BtwFiles), ct));
         })
         .RequirePermission(Permissions.SiteSettings, Site.Of(SiteOf.LabelPrinter));
 
@@ -58,9 +60,15 @@ internal static class LabelEndpoints
             TypedResults.Ok(await handler.HandleAsync(new TestSupplierFormatQuery(r.Pattern, r.ExpiryFormat, r.Sample), ct)))
         .RequireAnyView();
 
-        // The template sets and drop folders this API is configured with.
+        // The template sets and drop folders this API is configured with, and BarTender's standard script and operations (#168).
         labels.MapGet("/options", Ok<LabelOptionsDto> (LabelTemplates templates) =>
-            TypedResults.Ok(new LabelOptionsDto { TemplateSets = templates.Sets(), DropFolders = templates.DropFolders() }))
+            TypedResults.Ok(new LabelOptionsDto
+            {
+                TemplateSets = templates.Sets(),
+                DropFolders = templates.DropFolders(),
+                BtxmlTemplate = Btxml.StandardTemplate,
+                BtwOperations = Btxml.Operations,
+            }))
         .RequireAnyView();
 
         labels.MapPost("/print", async Task<Ok<PrintLabelsResponse>> (

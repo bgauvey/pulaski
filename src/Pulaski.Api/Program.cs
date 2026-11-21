@@ -24,6 +24,7 @@ builder.Services.AddSingleton<LabelPdfRenderer>();
 builder.Services.Configure<LabelPrintingOptions>(builder.Configuration.GetSection("Labels"));
 builder.Services.AddSingleton<LabelTemplates>();
 builder.Services.AddSingleton<LabelPrinting>();
+builder.Services.AddHttpClient(LabelPrinting.BarTenderClient, client => client.Timeout = TimeSpan.FromSeconds(120));
 builder.Services.AddScoped<LabelBuilder>();
 
 builder.Services.AddHttpContextAccessor();

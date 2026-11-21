@@ -1,3 +1,4 @@
+@using Pulaski.Web.Services.Inventory
 @inject PulaskiApiClient Api
 
 @* Labels (#75): the site's label format and GS1 numbering, its label printers and how its suppliers' barcodes read. *@
@@ -68,8 +69,8 @@
                         {
                             <tr @key="p.Id" class="@(p.IsActive ? "" : "text-muted")">
                                 <td><span class="fw-semibold">@p.Code</span> <div class="small">@p.Name@(p.IsActive ? "" : " · off")</div></td>
-                                <td class="small">@(p.Method == "raw_tcp" ? $"Raw TCP to {p.Host}:{p.Port}" : $"Files to the '{p.DropFolder}' drop folder")</td>
-                                <td class="small">@p.TemplateSet</td>
+                                <td class="small">@LabelPrinterView.Sends(p)</td>
+                                <td class="small">@LabelPrinterView.Templates(p)</td>
                                 <td class="text-end">
                                     @if (CanManage)
                                     {
@@ -104,9 +105,48 @@
                         <select id="prn-method" class="form-select form-select-sm" @bind="_printer.Method">
                             <option value="raw_tcp">Raw TCP</option>
                             <option value="drop_folder">Drop folder</option>
+                            <option value="bartender">BarTender (web service)</option>
                         </select>
                     </div>
-                    @if (_printer.Method == "raw_tcp")
+                    @if (_printer.Method == "bartender")
+                    {
+                        @* BarTender (#168): a BTXML script per label, posted to a BarTender Integration web service that runs it (Print BTXML Script). *@
+                        <div class="col-sm-5">
+                            <label class="form-label small" for="prn-endpoint">BarTender web service address</label>
+                            <input id="prn-endpoint" type="url" class="form-control form-control-sm" maxlength="500" placeholder="https://bartender.example.com:8080/Integration/Print/Execute" @bind="_printer.EndpointUrl" />
+                        </div>
+                        <div class="col-sm-3">
+                            <label class="form-label small" for="prn-btprinter">Printer in BarTender <span class="text-muted">(optional)</span></label>
+                            <input id="prn-btprinter" class="form-control form-control-sm" maxlength="200" placeholder="The document's own" @bind="_printer.BartenderPrinter" />
+                        </div>
+                        <div class="col-12">
+                            <div class="small fw-semibold mb-1">BarTender document (.btw) for each kind of label</div>
+                            <div class="row g-2">
+                                @foreach (var operation in LabelPrinterView.Operations(_options.BtwOperations, _printer.BtwFiles))
+                                {
+                                    <div class="col-sm-6" @key="operation">
+                                        <label class="form-label small mb-0" for="@($"prn-btw-{operation}")">@LabelPrinterView.OperationName(operation)</label>
+                                        <input id="@($"prn-btw-{operation}")" class="form-control form-control-sm" maxlength="260" placeholder="@(operation == "default" ? @"C:\Labels\Lot.btw" : "The default document")"
+                                               value="@_printer.BtwFiles.GetValueOrDefault(operation)" @onchange="@(e => _printer.BtwFiles[operation] = e.Value?.ToString() ?? "")" />
+                                    </div>
+                                }
+                            </div>
+                            <div class="form-text">A path BarTender can open. A kind without its own document uses the default.</div>
+                        </div>
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between align-items-end">
+                                <label class="form-label small mb-1" for="prn-btxml">BTXML template</label>
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => _printer.BtxmlTemplate = _options.BtxmlTemplate">Use the standard template</button>
+                            </div>
+                            <textarea id="prn-btxml" class="form-control form-control-sm font-monospace" rows="12" maxlength="20000" spellcheck="false" @bind="_printer.BtxmlTemplate"></textarea>
+                            <div class="form-text">
+                                Pulaski fills in <code>{{BtwPath}}</code> (the document), <code>{{NamedSubStrings}}</code> (every label value as a named data source),
+                                <code>{{PrintSetup}}</code> (the printer and copies), <code>{{Printer}}</code>, <code>{{Copies}}</code>, <code>{{JobName}}</code>, and
+                                any label value by name, such as <code>{{Code}}</code>, <code>{{Title}}</code>, <code>{{Line1}}</code> or <code>{{Gs1Hri}}</code>.
+                            </div>
+                        </div>
+                    }
+                    else if (_printer.Method == "raw_tcp")
                     {
                         <div class="col-sm-2">
                             <label class="form-label small" for="prn-host">Host</label>
@@ -130,15 +170,18 @@
                             </select>
                         </div>
                     }
-                    <div class="col-sm-2">
-                        <label class="form-label small" for="prn-set">Templates</label>
-                        <select id="prn-set" class="form-select form-select-sm" @bind="_printer.TemplateSet">
-                            @foreach (var t in _options.TemplateSets)
-                            {
-                                <option value="@t">@t</option>
-                            }
-                        </select>
-                    </div>
+                    @if (_printer.Method != "bartender")
+                    {
+                        <div class="col-sm-2">
+                            <label class="form-label small" for="prn-set">Templates</label>
+                            <select id="prn-set" class="form-select form-select-sm" @bind="_printer.TemplateSet">
+                                @foreach (var t in _options.TemplateSets)
+                                {
+                                    <option value="@t">@t</option>
+                                }
+                            </select>
+                        </div>
+                    }
                     <div class="col-12 d-flex gap-2 align-items-center">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="prn-active" @bind="_printer.IsActive" />
@@ -282,7 +325,11 @@
         public string? Host { get; set; }
         public int? Port { get; set; } = 9100;
         public string? DropFolder { get; set; }
-        public string TemplateSet { get; set; } = "zpl";
+        public string? TemplateSet { get; set; } = "zpl";
+        public string? EndpointUrl { get; set; }
+        public string? BartenderPrinter { get; set; }
+        public string? BtxmlTemplate { get; set; }
+        public Dictionary<string, string> BtwFiles { get; set; } = new(StringComparer.Ordinal);
         public bool IsActive { get; set; } = true;
     }
 
@@ -343,7 +390,7 @@
     {
         _printerId = p?.Id;
         _printer = p is null
-            ? new PrinterForm { TemplateSet = _options.TemplateSets.FirstOrDefault() ?? "zpl" }
+            ? new PrinterForm { TemplateSet = _options.TemplateSets.FirstOrDefault() ?? "zpl", BtxmlTemplate = _options.BtxmlTemplate }
             : new PrinterForm
             {
                 Version = p.Version,
@@ -353,7 +400,11 @@
                 Host = p.Host,
                 Port = p.Port,
                 DropFolder = p.DropFolder,
-                TemplateSet = p.TemplateSet,
+                TemplateSet = p.TemplateSet ?? _options.TemplateSets.FirstOrDefault() ?? "zpl",
+                EndpointUrl = p.EndpointUrl,
+                BartenderPrinter = p.BartenderPrinter,
+                BtxmlTemplate = p.BtxmlTemplate ?? _options.BtxmlTemplate,
+                BtwFiles = new Dictionary<string, string>(p.BtwFiles, StringComparer.Ordinal),
                 IsActive = p.IsActive,
             };
     }
@@ -389,7 +440,11 @@
             Host = p.Host,
             Port = p.Port,
             DropFolder = string.IsNullOrEmpty(p.DropFolder) ? null : p.DropFolder,
-            TemplateSet = p.TemplateSet,
+            TemplateSet = p.Method == "bartender" ? null : p.TemplateSet,
+            EndpointUrl = p.EndpointUrl,
+            BartenderPrinter = p.BartenderPrinter,
+            BtxmlTemplate = p.BtxmlTemplate,
+            BtwFiles = p.BtwFiles.Where(f => !string.IsNullOrWhiteSpace(f.Value)).ToDictionary(f => f.Key, f => f.Value.Trim(), StringComparer.Ordinal),
             IsActive = p.IsActive,
         };
         return RunAsync(

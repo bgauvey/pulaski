@@ -1326,17 +1326,25 @@ CREATE TABLE core.label_printer (
     site_id             uuid NOT NULL REFERENCES core.equipment(id),
     code                text NOT NULL CHECK (code ~ '^[A-Z0-9][A-Z0-9_-]{0,29}$'),
     name                text NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
-    method              text NOT NULL CHECK (method IN ('raw_tcp','drop_folder')),
+    method              text NOT NULL CONSTRAINT label_printer_method_check CHECK (method IN ('raw_tcp','drop_folder','bartender')),
     host                text CHECK (length(host) <= 255),
     port                integer CHECK (port BETWEEN 1 AND 65535),
     drop_folder         text CHECK (drop_folder ~ '^[A-Za-z0-9_-]{1,50}$'),   -- a name in Labels:DropFolders, never a path
-    template_set        text NOT NULL CHECK (template_set ~ '^[A-Za-z0-9_-]{1,50}$'), -- a folder under Labels:TemplateDirectory
+    template_set        text CHECK (template_set ~ '^[A-Za-z0-9_-]{1,50}$'),  -- a folder under Labels:TemplateDirectory; not for BarTender
+    -- BarTender (#168): the web service the BTXML script is posted to, the script's template, the printer as BarTender names it (else the
+    -- document's own), and the .btw document by operation ({"default": "...", "lot": "...", ...}). Credentials stay in configuration.
+    endpoint_url        text CONSTRAINT label_printer_endpoint_ck CHECK (endpoint_url ~ '^https?://' AND length(endpoint_url) <= 500),
+    btxml_template      text CONSTRAINT label_printer_btxml_ck CHECK (length(btxml_template) <= 20000),
+    bartender_printer   text CONSTRAINT label_printer_bartender_printer_ck CHECK (length(bartender_printer) BETWEEN 1 AND 200),
+    btw_files           jsonb NOT NULL DEFAULT '{}'::jsonb CONSTRAINT label_printer_btw_files_ck CHECK (jsonb_typeof(btw_files) = 'object'),
     is_active           boolean NOT NULL DEFAULT true,
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT label_printer_uq UNIQUE (site_id, code),
-    CONSTRAINT label_printer_target_ck CHECK (CASE method WHEN 'raw_tcp' THEN host IS NOT NULL AND port IS NOT NULL AND drop_folder IS NULL
-                                                          ELSE drop_folder IS NOT NULL AND host IS NULL AND port IS NULL END)
+    CONSTRAINT label_printer_target_ck CHECK (CASE method
+        WHEN 'raw_tcp' THEN host IS NOT NULL AND port IS NOT NULL AND drop_folder IS NULL AND endpoint_url IS NULL AND template_set IS NOT NULL
+        WHEN 'drop_folder' THEN drop_folder IS NOT NULL AND host IS NULL AND port IS NULL AND endpoint_url IS NULL AND template_set IS NOT NULL
+        ELSE endpoint_url IS NOT NULL AND btxml_template IS NOT NULL AND host IS NULL AND port IS NULL AND drop_folder IS NULL END)
 );
 
 -- A site's labels (#75): the format, its GS1 company prefix and the next SSCC serial (locked to give one out), and its default printer.
@@ -2696,7 +2704,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0068_delivery_feed_format'),
     ('0069_lot_cutting'),
     ('0070_andon'),
-    ('0071_alert_subscriptions');
+    ('0071_alert_subscriptions'),
+    ('0072_bartender_printers');
 
 -- =====================================================================
 -- 17. SEED DATA

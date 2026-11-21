@@ -2983,7 +2983,24 @@ answer, average time to resolve; and the ten longest waits. Computed on read, no
 - **Messages** (`AlertMessages.Compose`, pure): what happened in site time, a link to Machines or Andon from `Alerts:UiBaseUrl` (else the
   password reset's UI address), and how to switch it off.
 
-## Application architecture
+### D-110 · Printing labels through BarTender (#168) · *Proposed*
+
+**Context.** Plants that design labels in Seagull BarTender want Pulaski to print through it, choosing the BarTender document by what is
+being printed. A drop folder (D-080) works but gives no answer back.
+
+**Decision.**
+- **A printer method `bartender`** (`core.label_printer`): the address of a BarTender Integration web service whose integration runs a *Print
+  BTXML Script* action, a BTXML template, the printer as BarTender names it (optional), and the .btw document by operation (`btw_files`).
+  Kept on Site settings → Labels like the other printers (`site_settings.manage`).
+- **Operations** are `default`, a label kind (`lot`, `container`, `location`) or a kind and what printed it (`lot.produced`, for #122):
+  `Btxml.BtwFor` takes the operation's own, else its kind's, else the default.
+- **Scripts** (`Btxml`, pure): the template (`Btxml.StandardTemplate`: `XMLScript` → `Command` → `Print` with `Format`, a `NamedSubString`
+  per label value and `PrintSetup` with the printer and `IdenticalCopiesOfLabel`) is filled per label, values XML-escaped and control
+  characters dropped (`Gs1Data` and the ZPL values aren't sent; `Gs1Hri` is). Saving checks it parses as a print script, paths end in .btw.
+- **Sending** (`LabelPrinting`, API): one POST per label (`text/xml`, client `bartender`, `Labels:BarTenderTimeoutSeconds`, 30); a non-2xx
+  answer or a `Message` of severity Error in BarTender's BTXML answer (`Btxml.ErrorIn`) stops the print with its text. Credentials (basic
+  user and password, extra headers such as an API key) are in `Labels:BarTender:<printer code>`, never in the database.
+
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
 
