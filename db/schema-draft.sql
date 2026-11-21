@@ -2408,6 +2408,45 @@ CREATE TABLE core.delivery_feed (
     CONSTRAINT delivery_feed_code_ck CHECK (feed ~ '^[a-z][a-z0-9_-]{1,29}$')
 );
 
+-- Andon (#125, D-108): call types per site with an escalation time, and calls raised for a line, acknowledged on arrival and resolved.
+-- A call changes as it is answered and is referred to, so it lives here, like SPC alerts (D-010).
+CREATE TABLE core.andon_type (
+    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
+    code                    text NOT NULL,                              -- upper case; fixed once made
+    name                    text NOT NULL,
+    escalate_after_minutes  integer NOT NULL CONSTRAINT andon_type_escalate_ck CHECK (escalate_after_minutes BETWEEN 1 AND 480),
+    sort_order              integer NOT NULL DEFAULT 0,
+    is_active               boolean NOT NULL DEFAULT true,
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    updated_at              timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT andon_type_uq UNIQUE (site_id, code)
+);
+
+CREATE TABLE core.andon_call (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    line_id             uuid NOT NULL REFERENCES core.equipment(id),
+    andon_type_id       uuid NOT NULL REFERENCES core.andon_type(id),
+    status              text NOT NULL DEFAULT 'open' CONSTRAINT andon_call_status_ck CHECK (status IN ('open', 'acknowledged', 'resolved')),
+    note                text,
+    raised_at           timestamptz NOT NULL,
+    raised_by           text NOT NULL,                              -- as on evt.event
+    raised_from         text,                                       -- the operator station's code, when raised there
+    acknowledged_at     timestamptz,
+    acknowledged_by     text,
+    resolved_at         timestamptz,
+    resolved_by         text,
+    resolution          text,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT andon_call_acknowledged_ck CHECK ((status = 'open') = (acknowledged_at IS NULL)),
+    CONSTRAINT andon_call_resolved_ck CHECK ((status = 'resolved') = (resolved_at IS NOT NULL))
+);
+-- One open call per line and type: calling again while it waits is the same call.
+CREATE UNIQUE INDEX andon_call_open_uq ON core.andon_call (line_id, andon_type_id) WHERE status <> 'resolved';
+CREATE INDEX andon_call_site_ix ON core.andon_call (site_id, raised_at DESC);
+
 -- Grants (role names are deployment-specific):
 --   GRANT INSERT, SELECT ON evt.event TO pulaski_app;
 --   REVOKE UPDATE, DELETE, TRUNCATE ON evt.event FROM pulaski_app;
@@ -2629,7 +2668,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0066_spc_alerts'),
     ('0067_tag_sampling'),
     ('0068_delivery_feed_format'),
-    ('0069_lot_cutting');
+    ('0069_lot_cutting'),
+    ('0070_andon');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2693,7 +2733,9 @@ INSERT INTO sec.permission (code, description) VALUES
     ('quality.view', 'See specifications, characteristics and quality results'),
     ('quality.record', 'Record quality results against runs and lots'),
     ('quality.decide', 'Exclude quality results and reject held lots on quality'),
-    ('specs.manage', 'Maintain quality characteristics and material specifications')
+    ('specs.manage', 'Maintain quality characteristics and material specifications'),
+    ('andon.call', 'Call for help from a line: maintenance, quality, materials or a supervisor'),
+    ('andon.respond', 'Answer andon calls: acknowledge them on arrival and resolve them')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
 -- The roles a new database starts with (Roles.Defaults); after that they are the administrator's to change.
@@ -2701,9 +2743,9 @@ ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 INSERT INTO sec.role (code, name, description, is_system) VALUES
     ('administrator', 'Administrator', 'Everything, everywhere, including users and roles.', true),
     ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates, changeover times and materials. Sees the floor, inventory and processes.', true),
-    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops; records quality results. Doesn''t correct inventory.', true),
-    ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops, records quality results.', true),
-    ('quality', 'Quality', 'Holds and releases lots, corrects inventory, decides on partial batches, keeps lot attributes and certificates, maintains specifications, records quality results, excludes them and rejects lots on quality.', true),
+    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops; records quality results; calls for and answers andon calls. Doesn''t correct inventory.', true),
+    ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops, records quality results, calls for help.', true),
+    ('quality', 'Quality', 'Holds and releases lots, corrects inventory, decides on partial batches, keeps lot attributes and certificates, maintains specifications, records quality results, excludes them and rejects lots on quality, answers andon calls.', true),
     ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people, lot attributes and the site''s settings.', true),
     ('auditor', 'Auditor', 'Views everything, corrects inventory and reverses production reports; counts stock. Doesn''t plan or run jobs.', true),
     ('process_engineer', 'Process engineer', 'Maintains processes, BOMs, capabilities, changeover times and specifications. Sees equipment, materials, units and the schedule.', true),
@@ -2712,6 +2754,10 @@ ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO sec.role_permission (role_id, permission_code)
 SELECT r.id, v.permission_code FROM (VALUES
+    ('operator', 'andon.call'),
+    ('supervisor', 'andon.call'),
+    ('supervisor', 'andon.respond'),
+    ('quality', 'andon.respond'),
     ('planner', 'overview.view'),
     ('planner', 'work_orders.view'),
     ('planner', 'schedule.view'),

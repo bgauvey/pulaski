@@ -41,7 +41,7 @@ Orders & scheduling                       Execution & inventory
                                                 lot_attribute(_class, _value), lot_document(_content, _link)
       └─ job ── job_material               labor_session, labor_break, labor_approval
           └─ job_run                       quality_characteristic ─ material_spec(_version, _item), control_limit,
- scheduling_policy, run_standard,             spc_rule, spc_alert,
+ scheduling_policy, run_standard,             spc_rule, spc_alert, andon_type ─ andon_call,
  changeover_rule                              ts.quality_sample, ts.spc_violation
 
 People & access                            History & events
@@ -1654,6 +1654,41 @@ action taken; the next break opens a new one. Rebuilt by migration 0066 (the dra
 | `closed_at`, `closed_by` | timestamptz, text | yes | When and by whom it was closed. |
 | `cause_reason_code_id` | uuid → reason_code | yes | The cause, a reason of kind `spc_cause`; with `action`, set exactly when closed (`spc_alert_closed_ck`). |
 | `action` | text | yes | What was done, at most 1000 characters. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.andon_type — andon call types (#125, D-108) · *In use*
+
+The kinds of help a line can call for at a site. Kept on Site settings; switched off rather than deleted, since calls refer to them.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The site. |
+| `code` | text | no | Upper case, 1–20 letters, digits, `-` and `_`; unique per site (`andon_type_uq`); fixed once made. |
+| `name` | text | no | What operators see, at most 100 characters. |
+| `escalate_after_minutes` | integer | no | 1–480: a call still unanswered this long is escalated (worked out on read). |
+| `sort_order` | integer | no | Order offered. |
+| `is_active` | boolean | no | Offered for new calls. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.andon_call — andon calls (#125, D-108) · *In use*
+
+A call for help from a line: raised, acknowledged by whoever comes, resolved with what was done. One not resolved per line and type
+(`andon_call_open_uq`); calling again while it waits is the same call. Never deleted. Lives in `core` because it changes as it is answered (D-010).
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The line's site. |
+| `line_id` | uuid → equipment | no | The line that called (`can_run_job`). |
+| `andon_type_id` | uuid → andon_type | no | What kind of help. |
+| `status` | text | no | `open`, `acknowledged` or `resolved`; `acknowledged_at` is set exactly when not open, `resolved_at` exactly when resolved. |
+| `note` | text | yes | What the caller said, at most 1000 characters. |
+| `raised_at`, `raised_by` | timestamptz, text | no | When and by whom (actor as on `evt.event`). |
+| `raised_from` | text | yes | The operator station's code, when raised there. |
+| `acknowledged_at`, `acknowledged_by` | timestamptz, text | yes | When someone came; resolving an unanswered call sets them to the resolution. |
+| `resolved_at`, `resolved_by` | timestamptz, text | yes | When and by whom it was resolved. |
+| `resolution` | text | yes | What was done, at most 1000 characters. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ## 12. Time-partitioned history (`ts`)

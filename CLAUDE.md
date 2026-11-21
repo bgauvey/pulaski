@@ -393,6 +393,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   running or next jobs (`StationJobs.IsOnLine`), the floor's own commands. Report: `/api/terminal/station/report` (`StationReportDto`; from the
   machine = the figures shown + their `MachineThrough`). Stops: `StopsToCode` (line + below, uncoded, 12 h, open first), coded through
   `/api/terminal/station/code-stop`.
+- Andon (D-108, proposed, in pieces #156–#159): `core.andon_type` per site (Site settings; code fixed, escalation minutes, switched off) and
+  `core.andon_call` for a line: open → acknowledged → resolved, one not resolved per line + type (raising again returns it, `AlreadyOpen`), line
+  locked first. Escalation on read (`AndonRules`), no job; e-mail with #121. Permissions `andon.call` / `andon.respond`; `/api/andon/*`.
 - Scheduling writes lock lines, then the work order, then jobs (D-017), so they serialize without
   deadlocks. Read the plan inside the transaction after the lock.
 - Outbox relay reads by `(tx_id, position)` below `pg_snapshot_xmin(pg_current_snapshot())`.

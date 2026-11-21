@@ -147,6 +147,8 @@ internal sealed class SecurityQueries(NpgsqlDataSource dataSource) : ISecurityRe
             SiteOf.LotDocument => "SELECT site_id FROM core.lot_document WHERE id = @Id",
             SiteOf.Connection => "SELECT site_id FROM core.material_connection WHERE id = @Id",
             SiteOf.RoleAssignment => "SELECT scope_equipment_id FROM sec.role_assignment WHERE id = @Id",
+            SiteOf.AndonType => "SELECT site_id FROM core.andon_type WHERE id = @Id",
+            SiteOf.AndonCall => "SELECT site_id FROM core.andon_call WHERE id = @Id",
             SiteOf.ExpectedReceipt => "SELECT site_id FROM core.expected_receipt WHERE id = @Id",
             SiteOf.Container => "SELECT site_id FROM core.container WHERE id = @Id",
             SiteOf.LaborBreak => "SELECT site_id FROM core.labor_break WHERE id = @Id",

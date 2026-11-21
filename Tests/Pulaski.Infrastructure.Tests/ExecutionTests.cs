@@ -532,6 +532,58 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_line_calls_for_help_once_per_type_and_the_call_escalates_until_someone_answers_it()
+    {
+        var plant = await PlantAsync();
+        CreatedResponse maint = await db.SendAsync(new Pulaski.Application.Andon.CreateAndonTypeCommand(plant.Site, "maint", "Maintenance", 10, 1));
+        await Assert.ThrowsAsync<Application.Errors.ConflictException>(
+            () => db.SendAsync(new Pulaski.Application.Andon.CreateAndonTypeCommand(plant.Site, "MAINT", "Again", 5, 2)));
+
+        // Calling twice while it waits is the same call; only lines call.
+        var raised = await db.SendAsync(new Pulaski.Application.Andon.RaiseAndonCallCommand(plant.Extruder, maint.Id, "Belt slipping", "ST-" + _s));
+        var again = await db.SendAsync(new Pulaski.Application.Andon.RaiseAndonCallCommand(plant.Extruder, maint.Id, null));
+        Assert.Equal((raised.Id, true), (again.Id, again.AlreadyOpen));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Andon.RaiseAndonCallCommand(plant.Site, maint.Id, null)));
+
+        async Task<IReadOnlyList<Contracts.Andon.AndonCallDto>> OpenAsync() =>
+            await QueryAsync<Pulaski.Application.Andon.ListAndonCallsQuery, IReadOnlyList<Contracts.Andon.AndonCallDto>>(
+                new Pulaski.Application.Andon.ListAndonCallsQuery(plant.Site, true));
+
+        var open = Assert.Single(await OpenAsync());
+        Assert.Equal(("open", "Belt slipping", "ST-" + _s, false), (open.Status, open.Note, open.RaisedFrom, open.IsEscalated));
+
+        // Unanswered past its type's ten minutes, it is escalated.
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE core.andon_call SET raised_at = raised_at - interval '15 minutes' WHERE id = @Id", new { raised.Id });
+        }
+
+        Assert.True(Assert.Single(await OpenAsync()).IsEscalated);
+
+        await db.SendAsync(new Pulaski.Application.Andon.AcknowledgeAndonCallCommand(raised.Id));
+        var acknowledged = Assert.Single(await OpenAsync());
+        Assert.Equal(("acknowledged", false), (acknowledged.Status, acknowledged.IsEscalated));
+        Assert.InRange(acknowledged.WaitedSeconds, 15 * 60, 16 * 60);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Andon.AcknowledgeAndonCallCommand(raised.Id)));
+
+        var resolved = await db.SendAsync(new Pulaski.Application.Andon.ResolveAndonCallCommand(raised.Id, "Belt tensioned"));
+        Assert.Equal("resolved", resolved.Status);
+        Assert.Empty(await OpenAsync());
+        var history = await QueryAsync<Pulaski.Application.Andon.ListAndonCallsQuery, IReadOnlyList<Contracts.Andon.AndonCallDto>>(
+            new Pulaski.Application.Andon.ListAndonCallsQuery(plant.Site, false, TestTime.Now.AddDays(-1), null, plant.Extruder));
+        Assert.Equal("Belt tensioned", Assert.Single(history).Resolution);
+        Assert.Equal(3, await ScalarAsync<int>(
+            "SELECT count(*) FROM evt.event WHERE subject = @Id AND type LIKE 'pulaski.andon.call_%'", new { raised.Id }));
+
+        // A new call once it is resolved; none once the type is switched off, which needs the current version.
+        Assert.NotEqual(raised.Id, (await db.SendAsync(new Pulaski.Application.Andon.RaiseAndonCallCommand(plant.Extruder, maint.Id, null))).Id);
+        await Assert.ThrowsAsync<Application.Errors.ConflictException>(
+            () => db.SendAsync(new Pulaski.Application.Andon.UpdateAndonTypeCommand(maint.Id, 0, "Maintenance", 10, 1, false)));
+        await db.SendAsync(new Pulaski.Application.Andon.UpdateAndonTypeCommand(maint.Id, maint.Version, "Maintenance", 10, 1, false));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Andon.RaiseAndonCallCommand(plant.Packer, maint.Id, null)));
+    }
+
+    [Fact]
     public async Task A_paused_job_frees_the_line_and_the_site_policy_sets_the_tolerance()
     {
         var plant = await PlantAsync();

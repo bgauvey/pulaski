@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Pulaski.Contracts.Andon;
 using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
@@ -1485,6 +1486,16 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     }
 
     // OEE targets (D-073)
+
+    /// <summary>The site's andon call types (#125), in their order.</summary>
+    public Task<IReadOnlyList<AndonTypeDto>> ListAndonTypesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<AndonTypeDto>>($"api/andon/types?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> CreateAndonTypeAsync(CreateAndonTypeRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/andon/types", request, ct);
+
+    public Task<VersionResponse> UpdateAndonTypeAsync(Guid id, UpdateAndonTypeRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/andon/types/{id}", request, ct);
 
     public Task<IReadOnlyList<OeeTargetDto>> ListOeeTargetsAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<OeeTargetDto>>($"api/oee-targets/sites/{siteId}", ct);
