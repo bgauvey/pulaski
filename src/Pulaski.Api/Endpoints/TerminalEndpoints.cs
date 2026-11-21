@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Andon;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Execution;
 using Pulaski.Application.Labor;
 using Pulaski.Application.MachineData;
 using Pulaski.Application.Security;
+using Pulaski.Contracts.Andon;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Labor;
@@ -196,6 +198,43 @@ internal static class TerminalEndpoints
             });
         });
 
+        // Andon at the station (#157): call for help on its line, or answer one of its line's calls, as the signed-on person.
+        terminal.MapPost("/station/andon/call", async Task<Ok<StationActionResponse>> (
+            StationAndonRequest request, HttpContext http, StationServices station, ICommandHandler<RaiseAndonCallCommand, AndonCallResponse> raise,
+            CancellationToken ct) =>
+        {
+            var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
+                http, station.Tickets, station.Security, station.Time, request.Ticket, Domain.Security.Permissions.AndonCall, "call for help");
+            var personId = station.Tickets.PersonOf(ticket, terminal.Id);
+            var before = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct);
+            var type = before.AndonTypes.FirstOrDefault(t => t.Id == request.TypeId);
+            if (before.Line is null || type is null)
+            {
+                throw new DomainRuleException("This station doesn't offer that call; choose one of its buttons.");
+            }
+
+            var result = await raise.HandleAsync(new RaiseAndonCallCommand(before.Line.LineId, type.Id, Text(request.Text), terminal.Code), ct);
+            return await StationAndonAsync(station, terminal, personId, request.Line, ticket, expires, StationAndon.Called(type.Name, result), ct);
+        });
+
+        terminal.MapPost("/station/andon/acknowledge", async Task<Ok<StationActionResponse>> (
+            StationAndonRequest request, HttpContext http, StationServices station,
+            ICommandHandler<AcknowledgeAndonCallCommand, AndonCallResponse> acknowledge, CancellationToken ct) =>
+        {
+            var (terminal, personId, call, ticket, expires) = await StationCallAsync(http, station, request, "answer calls for help", ct);
+            await acknowledge.HandleAsync(new AcknowledgeAndonCallCommand(call.Id), ct);
+            return await StationAndonAsync(station, terminal, personId, request.Line, ticket, expires, $"You're on the {call.TypeName} call.", ct);
+        });
+
+        terminal.MapPost("/station/andon/resolve", async Task<Ok<StationActionResponse>> (
+            StationAndonRequest request, HttpContext http, StationServices station,
+            ICommandHandler<ResolveAndonCallCommand, AndonCallResponse> resolve, CancellationToken ct) =>
+        {
+            var (terminal, personId, call, ticket, expires) = await StationCallAsync(http, station, request, "answer calls for help", ct);
+            await resolve.HandleAsync(new ResolveAndonCallCommand(call.Id, Text(request.Text)), ct);
+            return await StationAndonAsync(station, terminal, personId, request.Line, ticket, expires, $"The {call.TypeName} call is resolved.", ct);
+        });
+
         terminal.MapPost("/identify", async Task<Ok<BadgeIdentityResponse>> (
             IdentifyBadgeRequest request, HttpContext http, BadgeTickets tickets, ICommandHandler<IdentifyBadgeCommand, BadgeIdentity> identify,
             IQueryHandler<GetTerminalStatusQuery, TerminalStatusDto> status, CancellationToken ct) =>
@@ -267,6 +306,29 @@ internal static class TerminalEndpoints
             Station = await services.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct),
         });
     }
+
+    // A call to answer must be one of the station's line's calls.
+    private static async Task<(TerminalRecord Terminal, Guid PersonId, AndonCallDto Call, string Ticket, DateTimeOffset Expires)> StationCallAsync(
+        HttpContext http, StationServices services, StationAndonRequest request, string what, CancellationToken ct)
+    {
+        var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
+            http, services.Tickets, services.Security, services.Time, request.Ticket, Domain.Security.Permissions.AndonRespond, what);
+        var personId = services.Tickets.PersonOf(ticket, terminal.Id);
+        var before = await services.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct);
+        var call = before.AndonCalls.FirstOrDefault(c => c.Id == request.CallId)
+            ?? throw new DomainRuleException("That call isn't waiting on this station's line any more.");
+        return (terminal, personId, call, ticket, expires);
+    }
+
+    private static async Task<Ok<StationActionResponse>> StationAndonAsync(
+        StationServices services, TerminalRecord terminal, Guid personId, string? line, string ticket, DateTimeOffset expires, string note, CancellationToken ct) =>
+        TypedResults.Ok(new StationActionResponse
+        {
+            Notes = [note],
+            Ticket = ticket,
+            TicketExpiresAt = expires,
+            Station = await services.Station.HandleAsync(new GetStationQuery(terminal, personId, line), ct),
+        });
 
     private static string? Text(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 

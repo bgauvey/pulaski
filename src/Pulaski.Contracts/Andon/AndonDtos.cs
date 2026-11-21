@@ -42,6 +42,11 @@ public sealed record AndonCallDto
     public string? ResolvedBy { get; init; }
     public string? Resolution { get; init; }
 
+    /// <summary>The users' names for <see cref="RaisedBy"/>, <see cref="AcknowledgedBy"/> and <see cref="ResolvedBy"/>, when they are users.</summary>
+    public string? RaisedByName { get; init; }
+    public string? AcknowledgedByName { get; init; }
+    public string? ResolvedByName { get; init; }
+
     /// <summary>Still open past its type's escalation time.</summary>
     public bool IsEscalated { get; init; }
 

@@ -88,4 +88,14 @@ public static class StationView
     public static string StopWhen(Pulaski.Contracts.MachineData.DowntimeDto stop, DateTimeOffset now) => stop.EndedAt is { } ended
         ? $"stopped for {LineDisplayView.Duration(stop.StartedAt, ended)}, {LineDisplayView.Duration(ended, now)} ago"
         : $"stopped {LineDisplayView.Duration(stop.StartedAt, now)} ago, still stopped";
+
+    public static string CallsTitle(int count) => count == 1 ? "A call for help" : $"{count} calls for help";
+
+    /// <summary>
+    /// Where a call stands (#157): "waiting 4 min", "waiting 12 min: escalated" while nobody has come, "Lee Ong is on it" once acknowledged (the
+    /// user's name, else who history says).
+    /// </summary>
+    public static string CallState(Pulaski.Contracts.Andon.AndonCallDto call, DateTimeOffset now) => call.AcknowledgedBy is { } who
+        ? $"{call.AcknowledgedByName ?? who} is on it"
+        : $"waiting {LineDisplayView.Duration(call.RaisedAt, now)}{(call.IsEscalated ? ": escalated" : "")}";
 }

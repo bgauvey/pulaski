@@ -101,6 +101,14 @@ public sealed record StationDto
     public IReadOnlyDictionary<Guid, IReadOnlyList<Pulaski.Contracts.Inventory.ReasonCodeDto>> CodingReasons { get; init; } =
         new Dictionary<Guid, IReadOnlyList<Pulaski.Contracts.Inventory.ReasonCodeDto>>();
 
+    /// <summary>
+    /// The line's andon calls not yet resolved (#157), the longest waiting first, each figured as of now. Shown even while the station waits.
+    /// </summary>
+    public IReadOnlyList<Pulaski.Contracts.Andon.AndonCallDto> AndonCalls { get; init; } = [];
+
+    /// <summary>The kinds of help the site offers, in their order, for a signed-on person whose role calls for help; empty otherwise.</summary>
+    public IReadOnlyList<Pulaski.Contracts.Andon.AndonTypeDto> AndonTypes { get; init; } = [];
+
     /// <summary>Why a run ends (reasons of kind <c>run_end</c> at the site), offered when pausing or completing at the station (#147).</summary>
     public IReadOnlyList<Pulaski.Contracts.Inventory.ReasonCodeDto> RunEndReasons { get; init; } = [];
 
@@ -116,6 +124,10 @@ public sealed record StationDto
     public bool CanRunJobs { get; init; }
     public bool CanReport { get; init; }
     public bool CanCodeStops { get; init; }
+
+    /// <summary>Whether the signed-on person may call for help (<c>andon.call</c>) and answer calls (<c>andon.respond</c>) here (#157).</summary>
+    public bool CanCallForHelp { get; init; }
+    public bool CanAnswerCalls { get; init; }
 
     /// <summary>Minutes without anything done before the station signs its person off.</summary>
     public int IdleMinutes { get; init; }
@@ -206,6 +218,19 @@ public sealed record StationReportRequest
     public Guid? ScrapReasonCodeId { get; init; }
     public Guid? LocationId { get; init; }
     public string? Comment { get; init; }
+}
+
+/// <summary>
+/// Andon at a station (#157), as the signed-on person: call for help of <see cref="TypeId"/> with a note, or acknowledge or resolve
+/// <see cref="CallId"/>, one of the line's calls, with <see cref="Text"/> as what was done.
+/// </summary>
+public sealed record StationAndonRequest
+{
+    public string? Ticket { get; init; }
+    public string? Line { get; init; }
+    public Guid? TypeId { get; init; }
+    public Guid? CallId { get; init; }
+    public string? Text { get; init; }
 }
 
 /// <summary>Code a stop at a station (#149), as the signed-on person: one of the station's stops to code, with its reason.</summary>

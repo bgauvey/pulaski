@@ -163,6 +163,85 @@ else
                     </ul>
                 </section>
             }
+            @if (_station.AndonCalls.Count > 0 || _station.AndonTypes.Count > 0)
+            {
+                @* Andon (#157): the line's calls waiting or being answered, escalated ones marked; whoever may calls for help or answers. *@
+                <section class="station-panel station-andon" aria-labelledby="station-andon">
+                    <h2 id="station-andon" class="h5">@(_station.AndonCalls.Count == 0 ? "Need help?" : StationView.CallsTitle(_station.AndonCalls.Count))</h2>
+                    @if (_station.AndonCalls.Count > 0)
+                    {
+                        @if (_station.PersonName is null)
+                        {
+                            <p class="mb-2">Badge in to answer @(_station.AndonCalls.Count == 1 ? "it" : "them").</p>
+                        }
+                        <ul class="station-next">
+                            @foreach (var c in _station.AndonCalls)
+                            {
+                                <li @key="c.Id" class="@(c.IsEscalated ? "is-escalated" : "")">
+                                    <div class="d-flex justify-content-between gap-2">
+                                        <span class="fw-semibold">@c.TypeName</span>
+                                        <span class="@(c.IsEscalated ? "station-escalated" : "text-muted")">@StationView.CallState(c, DateTimeOffset.UtcNow)</span>
+                                    </div>
+                                    @if (c.Note is { } note)
+                                    {
+                                        <div class="text-muted">@note</div>
+                                    }
+                                    @if (_station.CanAnswerCalls)
+                                    {
+                                        <EditForm Model="Input" FormName="@($"station-call-{c.Id:N}")" OnSubmit="ActAsync" method="post" class="mt-2">
+                                            <input type="hidden" name="Input.CallId" value="@c.Id" />
+                                            @if (_resolvingCall == c.Id)
+                                            {
+                                                <label class="form-label" for="station-resolution">What was done</label>
+                                                <InputText id="station-resolution" class="form-control mb-2" maxlength="1000" @bind-Value="Input.Comment" />
+                                                <div class="station-actions">
+                                                    <button type="submit" name="Input.Action" value="resolve" class="btn btn-primary">Resolved</button>
+                                                    <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">Back</button>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="station-actions">
+                                                    @if (c.AcknowledgedAt is null)
+                                                    {
+                                                        <button type="submit" name="Input.Action" value="acknowledge" class="btn btn-primary">I'm here</button>
+                                                    }
+                                                    <button type="submit" name="Input.Action" value="choose-resolve" class="btn @(c.AcknowledgedAt is null ? "btn-outline-primary" : "btn-primary")">Resolve</button>
+                                                </div>
+                                            }
+                                        </EditForm>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                    @if (_station.AndonTypes.Count > 0)
+                    {
+                        <EditForm Model="Input" FormName="station-andon" OnSubmit="ActAsync" method="post" class="mt-2">
+                            @if (_calling)
+                            {
+                                <label class="form-label" for="station-andon-note">Note <span class="text-muted">(optional)</span></label>
+                                <InputText id="station-andon-note" class="form-control mb-2" maxlength="1000" @bind-Value="Input.Comment" />
+                                <div class="reason-grid mb-2">
+                                    @foreach (var t in _station.AndonTypes)
+                                    {
+                                        <button type="submit" name="Input.Reason" value="@($"call:{t.Id}")" class="btn btn-outline-danger" @key="t.Id">@t.Name</button>
+                                    }
+                                </div>
+                                <div class="station-actions">
+                                    <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">Back</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="station-actions">
+                                    <button type="submit" name="Input.Action" value="choose-call" class="btn btn-outline-danger">Call for help</button>
+                                </div>
+                            }
+                        </EditForm>
+                    }
+                </section>
+            }
             <section class="station-panel" aria-labelledby="station-job">
                 @if (line.Running is { } job)
                 {
@@ -397,6 +476,8 @@ else
     private string? _actionError;
     private bool _reporting;
     private Guid? _codingStop;
+    private bool _calling;
+    private Guid? _resolvingCall;
     private IReadOnlyList<string> _notes = [];
 
     private string? Secret => TerminalCookie.Get(HttpContext);
@@ -462,10 +543,43 @@ else
     /// <summary>Signing off, choosing to pause or complete, and the job actions themselves (#147), as the person signed on.</summary>
     private async Task ActAsync()
     {
-        // A reason button carries what it is for and the reason: "pause:<id>", "complete:<id>" or "code:<id>" (a stop's).
+        // A reason button carries what it is for and the reason: "pause:<id>", "complete:<id>", "code:<id>" (a stop's) or "call:<id>" (andon).
         var (action, reasonId) = Input.Reason?.Split(':') is [var stop, var id] && Guid.TryParse(id, out var reason) ? (stop, (Guid?)reason) : (Input.Action, null);
         switch (action)
         {
+            case "choose-call":
+                _calling = true;
+                return;
+            case "choose-resolve":
+                _resolvingCall = Input.CallId;
+                return;
+            case "call" or "acknowledge" or "resolve":
+                try
+                {
+                    var answered = await Api.StationAndonAsync(Secret!, action, new StationAndonRequest
+                    {
+                        Ticket = TerminalCookie.GetStation(HttpContext),
+                        Line = LineCode,
+                        TypeId = reasonId,
+                        CallId = Input.CallId,
+                        Text = Input.Comment,
+                    });
+                    TerminalCookie.SetStation(HttpContext, answered.Ticket, answered.TicketExpiresAt);
+                    _station = answered.Station;
+                    _notes = answered.Notes;
+                }
+                catch (ApiException ex)
+                {
+                    _actionError = StationView.Problem(ex.Detail ?? ex.Title, ex.Errors);
+                    (_calling, _resolvingCall) = ex.Status == 401 ? (false, null) : (action == "call", action == "resolve" ? Input.CallId : null);
+                    if (ex.Status == 401)
+                    {
+                        TerminalCookie.ClearStation(HttpContext);
+                        await LoadAsync(null);
+                    }
+                }
+
+                return;
             case "choose-stop":
                 _codingStop = Input.StopId;
                 return;
@@ -591,6 +705,7 @@ else
         public Guid? ScrapReasonId { get; set; }
         public Guid? LocationId { get; set; }
         public Guid? StopId { get; set; }
+        public Guid? CallId { get; set; }
         public decimal? MachineGood { get; set; }
         public decimal? MachineScrap { get; set; }
         public Guid? MachineUomId { get; set; }

@@ -110,7 +110,10 @@ internal sealed class AndonQueries(NpgsqlDataSource dataSource) : IAndonReadStor
     private const string Calls = """
         SELECT c.id, c.site_id, c.line_id, l.code AS line_code, l.name AS line_name, c.andon_type_id AS type_id, t.code AS type_code, t.name AS type_name,
                t.escalate_after_minutes, c.status, c.note, c.raised_at, c.raised_by, c.raised_from, c.acknowledged_at, c.acknowledged_by,
-               c.resolved_at, c.resolved_by, c.resolution
+               c.resolved_at, c.resolved_by, c.resolution,
+               (SELECT u.display_name FROM sec.app_user u WHERE (CASE WHEN u.idp_issuer = 'pulaski-local' THEN u.idp_subject ELSE u.idp_issuer || '|' || u.idp_subject END) = c.raised_by) AS raised_by_name,
+               (SELECT u.display_name FROM sec.app_user u WHERE (CASE WHEN u.idp_issuer = 'pulaski-local' THEN u.idp_subject ELSE u.idp_issuer || '|' || u.idp_subject END) = c.acknowledged_by) AS acknowledged_by_name,
+               (SELECT u.display_name FROM sec.app_user u WHERE (CASE WHEN u.idp_issuer = 'pulaski-local' THEN u.idp_subject ELSE u.idp_issuer || '|' || u.idp_subject END) = c.resolved_by) AS resolved_by_name
         FROM core.andon_call c
         JOIN core.andon_type t ON t.id = c.andon_type_id
         JOIN core.equipment l ON l.id = c.line_id

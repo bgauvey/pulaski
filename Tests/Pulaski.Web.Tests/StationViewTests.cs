@@ -79,4 +79,28 @@ public class StationViewTests
         Assert.Equal("stopped for 12 min, 35 min ago", StationView.StopWhen(open with { StartedAt = now.AddMinutes(-47), EndedAt = now.AddMinutes(-35) }, now));
         Assert.Equal(("A stop needs its reason", "3 stops need their reasons"), (StationView.StopsTitle(1), StationView.StopsTitle(3)));
     }
+
+    [Fact]
+    public void Calls_say_how_long_they_have_waited_and_who_is_on_them()
+    {
+        var now = new DateTimeOffset(2026, 11, 20, 14, 0, 0, TimeSpan.Zero);
+        var call = new Pulaski.Contracts.Andon.AndonCallDto
+        {
+            Id = Guid.NewGuid(),
+            SiteId = Guid.NewGuid(),
+            LineId = Guid.NewGuid(),
+            LineCode = "EXT-01",
+            TypeId = Guid.NewGuid(),
+            TypeCode = "MAINT",
+            TypeName = "Maintenance",
+            Status = "open",
+            RaisedAt = now.AddMinutes(-4),
+            RaisedBy = "dana",
+        };
+        Assert.Equal("waiting 4 min", StationView.CallState(call, now));
+        Assert.Equal("waiting 12 min: escalated", StationView.CallState(call with { RaisedAt = now.AddMinutes(-12), IsEscalated = true }, now));
+        Assert.Equal("lee is on it", StationView.CallState(call with { Status = "acknowledged", AcknowledgedAt = now, AcknowledgedBy = "lee" }, now));
+        Assert.Equal("Lee Ong is on it", StationView.CallState(call with { Status = "acknowledged", AcknowledgedAt = now, AcknowledgedBy = "lee", AcknowledgedByName = "Lee Ong" }, now));
+        Assert.Equal(("A call for help", "2 calls for help"), (StationView.CallsTitle(1), StationView.CallsTitle(2)));
+    }
 }

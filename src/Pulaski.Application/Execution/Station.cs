@@ -1,9 +1,11 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Andon;
 using Pulaski.Application.Inventory;
 using Pulaski.Application.Labor;
 using Pulaski.Application.MachineData;
 using Pulaski.Application.Security;
 using Pulaski.Domain.Security;
+using Pulaski.Contracts.Andon;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Labor;
@@ -27,6 +29,8 @@ internal sealed class GetStationHandler(
     IQueryHandler<ListInventoryLocationsQuery, IReadOnlyList<InventoryLocationDto>> locations,
     IQueryHandler<ListStopsQuery, StopPageDto> stops,
     IQueryHandler<ListCodingReasonsQuery, IReadOnlyList<ReasonCodeDto>> codingReasons,
+    IQueryHandler<ListAndonCallsQuery, IReadOnlyList<AndonCallDto>> andonCalls,
+    IQueryHandler<ListAndonTypesQuery, IReadOnlyList<AndonTypeDto>> andonTypes,
     ISecurityReadStore security,
     TimeProvider timeProvider) : IQueryHandler<GetStationQuery, StationDto>
 {
@@ -60,6 +64,14 @@ internal sealed class GetStationHandler(
             }
         }
 
+        // The line's calls for help (#157), the longest waiting first, and what may be called for by someone who may call.
+        var calls = line is null
+            ? []
+            : (await andonCalls.HandleAsync(new ListAndonCallsQuery(terminal.SiteId, true, LineId: line.LineId), cancellationToken)).OrderBy(c => c.RaisedAt).ToList();
+        var types = line is not null && May(Permissions.AndonCall)
+            ? (await andonTypes.HandleAsync(new ListAndonTypesQuery(terminal.SiteId), cancellationToken)).Where(t => t.IsActive).ToList()
+            : [];
+
         return new StationDto
         {
             TerminalName = terminal.Name,
@@ -71,6 +83,8 @@ internal sealed class GetStationHandler(
             Next = row?.Next ?? [],
             StopsToCode = toCode,
             CodingReasons = reasonsByMachine,
+            AndonCalls = calls,
+            AndonTypes = types,
             RunEndReasons = query.PersonId is null ? [] : await reasons.HandleAsync(new ListReasonCodesQuery("run_end", terminal.SiteId), cancellationToken),
             Report = row?.Running is { JobType: "production" } running && May(Permissions.ProductionReport)
                 ? await ReportAsync(running.JobId, terminal.SiteId, cancellationToken)
@@ -81,6 +95,8 @@ internal sealed class GetStationHandler(
             CanRunJobs = May(Permissions.JobExecute),
             CanReport = May(Permissions.ProductionReport),
             CanCodeStops = May(Permissions.DowntimeCode),
+            CanCallForHelp = May(Permissions.AndonCall),
+            CanAnswerCalls = May(Permissions.AndonRespond),
             IdleMinutes = (int)Domain.Labor.TerminalRules.StationIdle.TotalMinutes,
         };
     }
@@ -150,4 +166,13 @@ public static class StationStops
 
     /// <summary>The open stop first, then the most recent.</summary>
     public static long Order(DowntimeDto stop) => stop.EndedAt is null ? long.MinValue : -stop.StartedAt.UtcTicks;
+}
+
+/// <summary>What andon at a station did, in words (#157). Pure.</summary>
+public static class StationAndon
+{
+    /// <summary>"Maintenance is called." or, when one was waiting already, "Maintenance was called already; that call is still waiting."</summary>
+    public static string Called(string typeName, AndonCallResponse result) => result.AlreadyOpen
+        ? $"{typeName} was called already; that call is still {(result.Status == Domain.Andon.AndonStatuses.Open ? "waiting" : "being answered")}."
+        : $"{typeName} is called.";
 }

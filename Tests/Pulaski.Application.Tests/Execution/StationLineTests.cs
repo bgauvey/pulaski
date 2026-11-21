@@ -50,4 +50,15 @@ public class StationLineTests
         Assert.Equal("Reported 250 m good; good output in lots J-03, J-04.", StationReporting.Done(250m, 0m, "m", Result("J-03", "J-04")));
         Assert.Equal("Reported 5 m scrap.", StationReporting.Done(0m, 5m, "m", Result()));
     }
+
+    [Fact]
+    public void A_call_at_the_station_says_whether_it_was_already_waiting()
+    {
+        var id = Guid.NewGuid();
+        Assert.Equal("Maintenance is called.", StationAndon.Called("Maintenance", new Pulaski.Contracts.Andon.AndonCallResponse(id, "open")));
+        Assert.Equal("Maintenance was called already; that call is still waiting.",
+            StationAndon.Called("Maintenance", new Pulaski.Contracts.Andon.AndonCallResponse(id, "open", AlreadyOpen: true)));
+        Assert.Equal("Maintenance was called already; that call is still being answered.",
+            StationAndon.Called("Maintenance", new Pulaski.Contracts.Andon.AndonCallResponse(id, "acknowledged", AlreadyOpen: true)));
+    }
 }
