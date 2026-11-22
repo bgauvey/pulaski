@@ -918,3 +918,10 @@ a.ov-att:hover {
             display: none;
         }
 }
+
+/* A line's open handover items (#124), under its name. */
+.ov-handover {
+    display: block;
+    color: var(--warning);
+    font-weight: 600;
+}

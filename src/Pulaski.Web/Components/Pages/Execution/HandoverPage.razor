@@ -1,0 +1,247 @@
+@page "/handover"
+@attribute [RequiresView(PermissionCodes.FloorView)]
+@using Pulaski.Web.Services.Execution
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+@inject TimeProvider Clock
+
+<PageTitle>Handover · Pulaski</PageTitle>
+
+@* Shift handover (#124, D-113): per line, what is still open (carried from shift to shift until closed) and the notes of this shift and the
+   last, so whoever comes on sees what happened and what they must see to. *@
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Handover</h1>
+        <p class="text-muted mb-0">What each line's shifts hand on: open items stay until someone closes them; notes stay with their shift.</p>
+    </div>
+    <div class="inv-head-tools">
+        @if (_handover is not null)
+        {
+            <LiveStatus OnRefresh="RefreshAsync" LoadedAt="_loadedAt" TimeZone="@_handover.TimeZone" />
+        }
+        @if (Sites.Sites.Count > 1)
+        {
+            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Handover" What="write handover notes" SiteId="Sites.SiteId" />
+
+@if (Sites.SiteId is null)
+{
+    <p class="text-muted">There is no site yet.</p>
+}
+else if (_handover is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_handover.Lines.Count == 0)
+{
+    <p class="text-muted">No lines run jobs at this site.</p>
+}
+else
+{
+    var now = Clock.GetUtcNow();
+    var zone = _handover.TimeZone;
+    @foreach (var line in _handover.Lines)
+    {
+        <section class="inv-facts mb-3" id="line-@line.LineCode" aria-labelledby="ho-@line.LineId" @key="line.LineId">
+            <h2 class="h5 mb-2" id="ho-@line.LineId">@line.LineCode <span class="text-muted fw-normal small">@line.LineName</span></h2>
+
+            <h3 class="h6">@(line.OpenItems.Count == 0 ? "No open items" : HandoverView.OpenItems(line.OpenItems.Count))</h3>
+            @if (line.OpenItems.Count > 0)
+            {
+                <ul class="list-unstyled mb-3">
+                    @foreach (var item in line.OpenItems)
+                    {
+                        <li class="handover-item mb-2" @key="item.Id">
+                            <div class="fw-semibold">@item.Body</div>
+                            <div class="small text-muted">@HandoverView.Who(item, zone, now)</div>
+                            @if (CanWrite)
+                            {
+                                @if (_closing == item.Id)
+                                {
+                                    <div class="d-flex flex-wrap gap-2 mt-1">
+                                        <input class="form-control form-control-sm flex-grow-1" style="min-width: 14rem" maxlength="1000" placeholder="What was done (optional)"
+                                               aria-label="What was done" @bind="_closingNote" />
+                                        <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => CloseAsync(item)">Close it</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _closing = null">Cancel</button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-sm btn-link px-0" disabled="@_busy" @onclick="() => (_closing, _closingNote) = (item.Id, null)">Close</button>
+                                }
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+
+            <div class="row g-3">
+                @foreach (var (title, shift) in new[] { ("This shift", line.Current), ("Last shift", line.Previous) })
+                {
+                    <div class="col-12 col-lg-6">
+                        <h3 class="h6 mb-1">@title <span class="text-muted fw-normal small">· @HandoverView.Shift(shift, zone)</span></h3>
+                        @if (shift.Entries.Count == 0)
+                        {
+                            <p class="small text-muted mb-0">Nothing written.</p>
+                        }
+                        else
+                        {
+                            <ul class="list-unstyled small mb-0">
+                                @foreach (var e in shift.Entries)
+                                {
+                                    <li class="mb-1" @key="e.Id">
+                                        @if (e.Kind == "open_item")
+                                        {
+                                            <span class="chip @(e.ClosedAt is null ? "chip-warn" : "chip-ok") me-1">@(e.ClosedAt is null ? "Open" : "Closed")</span>
+                                        }
+                                        @e.Body <span class="text-muted">· @HandoverView.Who(e, zone, now)</span>
+                                        @if (e.ClosedAt is not null && e.ClosingNote is { } closing)
+                                        {
+                                            <div class="text-muted">Closed by @(e.ClosedByName ?? e.ClosedBy): @closing</div>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (CanWrite)
+            {
+                <div class="mt-3">
+                    <label class="form-label small fw-semibold" for="ho-new-@line.LineId">Hand on to the next shift</label>
+                    <textarea id="ho-new-@line.LineId" class="form-control form-control-sm mb-2" rows="2" maxlength="1000"
+                              value="@_drafts.GetValueOrDefault(line.LineId)" @oninput="e => _drafts[line.LineId] = e.Value?.ToString() ?? string.Empty"></textarea>
+                    <div class="form-actions d-flex gap-2">
+                        <ActionButton Class="btn btn-sm btn-outline-primary" Busy="_busy"
+                                      Reason="@(string.IsNullOrWhiteSpace(_drafts.GetValueOrDefault(line.LineId)) ? "Write the note first." : null)"
+                                      OnClick="() => AddAsync(line, HandoverNote)">Add a note</ActionButton>
+                        <ActionButton Class="btn btn-sm btn-primary" Busy="_busy"
+                                      Reason="@(string.IsNullOrWhiteSpace(_drafts.GetValueOrDefault(line.LineId)) ? "Write the item first." : null)"
+                                      OnClick="() => AddAsync(line, HandoverItem)">Add an open item</ActionButton>
+                    </div>
+                </div>
+            }
+        </section>
+    }
+}
+
+@code {
+    private const string HandoverNote = "note";
+    private const string HandoverItem = "open_item";
+
+    private HandoverDto? _handover;
+    private DateTimeOffset? _loadedAt;
+    private readonly Dictionary<Guid, string> _drafts = [];
+    private Guid? _closing;
+    private string? _closingNote;
+    private bool _busy;
+    private ApiException? _error;
+
+    private bool CanWrite => User.Can(PermissionCodes.Handover, Sites.SiteId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        (_handover, _loadedAt, _closing) = (null, null, null);
+        _drafts.Clear();
+        try
+        {
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            return;
+        }
+
+        var loadedAt = Clock.GetUtcNow();
+        var handover = await Api.GetHandoverAsync(site);
+        if (Sites.SiteId == site)
+        {
+            (_handover, _loadedAt) = (handover, loadedAt);
+        }
+    }
+
+    // New entries from others appear by themselves; a note being typed stays. A failed reload keeps the page; the pill turns stale.
+    private async Task RefreshAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        try
+        {
+            await LoadAsync();
+        }
+        catch (ApiException)
+        {
+        }
+    }
+
+    private Task AddAsync(HandoverLineDto line, string kind) => RunAsync(async () =>
+    {
+        await Api.AddHandoverEntryAsync(new AddHandoverEntryRequest { LineId = line.LineId, Kind = kind, Body = _drafts.GetValueOrDefault(line.LineId) ?? "" });
+        _drafts.Remove(line.LineId);
+    });
+
+    private Task CloseAsync(HandoverEntryDto item) => RunAsync(async () =>
+    {
+        await Api.CloseHandoverItemAsync(item.Id, new CloseHandoverItemRequest { Note = _closingNote });
+        (_closing, _closingNote) = (null, null);
+    });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        (_busy, _error) = (true, null);
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

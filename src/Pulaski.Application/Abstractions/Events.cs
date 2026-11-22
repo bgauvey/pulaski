@@ -224,6 +224,10 @@ public static class EventTypes
     public const string SpcAlertSignalled = "pulaski.spc_alert.signalled.v1";
     public const string SpcAlertClosed = "pulaski.spc_alert.closed.v1";
 
+    /// <summary>Shift handover (#124): an entry written, an open item closed.</summary>
+    public const string HandoverEntryAdded = "pulaski.handover.entry_added.v1";
+    public const string HandoverItemClosed = "pulaski.handover.item_closed.v1";
+
     /// <summary>A line's report defaults (#122): its default output location and label printer.</summary>
     public const string LineOutputSet = "pulaski.equipment.output_set.v1";
 

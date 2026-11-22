@@ -223,6 +223,9 @@ public enum SiteOf
     /// <summary>An andon call type or call (#125): its site.</summary>
     AndonType,
     AndonCall,
+
+    /// <summary>A shift handover entry (#124): its site.</summary>
+    HandoverEntry,
 }
 
 /// <summary>Finds the site something belongs to, so a role held at that site can be checked (D-037).</summary>

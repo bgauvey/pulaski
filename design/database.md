@@ -42,7 +42,7 @@ Orders & scheduling                       Execution & inventory
       └─ job ── job_material               labor_session, labor_break, labor_approval
           └─ job_run                       quality_characteristic ─ material_spec(_version, _item), control_limit,
  scheduling_policy, run_standard,             spc_rule, spc_alert, andon_type ─ andon_call,
- alert_subscription ─ alert_sent,
+ alert_subscription ─ alert_sent, handover_entry,
  changeover_rule                              ts.quality_sample, ts.spc_violation
 
 People & access                            History & events
@@ -1722,6 +1722,25 @@ One row per alert e-mailed, written in the same transaction that decides to send
 | `subscription_id` | uuid → alert_subscription | no | Whose alert. |
 | `subject_id` | uuid | no | What it was about: a stop (`ts.downtime`), an andon call, an SPC alert, a hold (`ts.lot_event`), or a job's need of a component (a hash of job and material, `AlertShortages.SubjectOf`); no FK. With `subscription_id`, the primary key. |
 | `sent_at` | timestamptz | no | When it was sent. |
+
+### core.handover_entry — shift handover (#124, D-113) · *In use*
+
+A note or an open item for a line, in the shift running on it when written. Notes stay with their shift; open items are carried until closed.
+Never deleted; only an open item changes, when it is closed.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The line's site. |
+| `line_id` | uuid → equipment | no | The line (`can_run_job`). |
+| `production_date` | date | no | The shift's production day, else the site-local day. |
+| `shift_code` | text | yes | The shift's code; null without a shift. |
+| `kind` | text | no | `note` or `open_item`. |
+| `body` | text | no | 1–1000 characters. |
+| `written_at`, `written_by` | timestamptz, text | no | When and by whom (actor as on `evt.event`). |
+| `closed_at`, `closed_by` | timestamptz, text | yes | When an open item was closed and by whom; both or neither, only for `open_item` (`handover_entry_closed_ck`). |
+| `closing_note` | text | yes | What was done, at most 1000 characters. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ## 12. Time-partitioned history (`ts`)
 

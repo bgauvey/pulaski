@@ -40,5 +40,17 @@ internal sealed class OverviewQueries(NpgsqlDataSource dataSource) : IOverviewRe
             "SELECT count(*)::int FROM core.spc_alert WHERE site_id = @SiteId AND status = 'open'", new { SiteId = siteId }, cancellationToken: cancellationToken));
     }
 
+    public async Task<IReadOnlyList<(Guid LineId, string Body)>> ListOpenHandoverItemsAsync(Guid siteId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. await connection.QueryAsync<(Guid, string)>(new CommandDefinition(
+            """
+            SELECT line_id, body FROM core.handover_entry
+            WHERE site_id = @SiteId AND kind = 'open_item' AND closed_at IS NULL
+            ORDER BY written_at
+            """,
+            new { SiteId = siteId }, cancellationToken: cancellationToken))];
+    }
+
     private sealed record HeldRow(int OnHold, int Quarantine);
 }

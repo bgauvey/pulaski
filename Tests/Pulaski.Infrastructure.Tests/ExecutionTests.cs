@@ -681,6 +681,39 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Handover_keeps_notes_with_their_shift_and_shows_open_items_on_the_overview_and_board_until_closed()
+    {
+        var plant = await PlantAsync();
+        var lead = ("lead." + _s).ToLowerInvariant();
+        await db.SendAsync(new Pulaski.Application.Security.CreateUserCommand(
+            lead, "Lee " + _s, null, "Temporary-pass-1", Pulaski.Domain.Security.Roles.Supervisor, plant.Site));
+        CreatedResponse note = await db.SendAsAsync(lead, new Pulaski.Application.Handover.AddHandoverEntryCommand(plant.Extruder, "note", "Die changed"));
+        CreatedResponse item = await db.SendAsAsync(lead, new Pulaski.Application.Handover.AddHandoverEntryCommand(plant.Extruder, "open_item", "Puller belt slipping"));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Handover.AddHandoverEntryCommand(plant.Site, "note", "x")));
+
+        var handover = await QueryAsync<Pulaski.Application.Handover.GetHandoverQuery, Contracts.Handover.HandoverDto>(
+            new Pulaski.Application.Handover.GetHandoverQuery(plant.Site));
+        var extruder = handover.Lines.Single(l => l.LineId == plant.Extruder);
+        Assert.Equal(["Die changed", "Puller belt slipping"], extruder.Current.Entries.Select(e => e.Body));
+        Assert.Equal(("Lee " + _s, item.Id), (extruder.Current.Entries[0].WrittenByName, Assert.Single(extruder.OpenItems).Id));
+        Assert.Empty(handover.Lines.Single(l => l.LineId == plant.Packer).OpenItems);
+
+        var overview = await QueryAsync<Pulaski.Application.Overview.GetOverviewQuery, Contracts.Overview.OverviewDto>(new Pulaski.Application.Overview.GetOverviewQuery(plant.Site));
+        Assert.Equal(["Puller belt slipping"], overview.Lines.Single(l => l.EquipmentId == plant.Extruder).HandoverItems);
+        var board = await QueryAsync<GetLineDisplayQuery, LineDisplayDto>(new GetLineDisplayQuery(plant.Site, plant.Site, "Hall"));
+        Assert.Equal(["Puller belt slipping"], board.Lines.Single(l => l.LineId == plant.Extruder).HandoverItems);
+
+        await db.SendAsync(new Pulaski.Application.Handover.CloseHandoverItemCommand(item.Id, "Belt replaced"));
+        extruder = (await QueryAsync<Pulaski.Application.Handover.GetHandoverQuery, Contracts.Handover.HandoverDto>(
+            new Pulaski.Application.Handover.GetHandoverQuery(plant.Site, plant.Extruder))).Lines.Single();
+        Assert.Empty(extruder.OpenItems);
+        Assert.Equal("Belt replaced", extruder.Current.Entries.Single(e => e.Id == item.Id).ClosingNote);
+        Assert.Empty((await QueryAsync<Pulaski.Application.Overview.GetOverviewQuery, Contracts.Overview.OverviewDto>(
+            new Pulaski.Application.Overview.GetOverviewQuery(plant.Site))).Lines.Single(l => l.EquipmentId == plant.Extruder).HandoverItems);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Handover.CloseHandoverItemCommand(note.Id, null)));
+    }
+
+    [Fact]
     public async Task The_inbox_gathers_open_spc_alerts_erp_changes_and_rate_proposals_and_drops_them_once_decided()
     {
         var plant = await PlantAsync();

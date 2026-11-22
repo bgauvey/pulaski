@@ -63,6 +63,9 @@ public sealed record OverviewLineDto
     /// <summary>Stops in its shift with no reason yet (micro-stops left out).</summary>
     public int? UncodedStops { get; init; }
 
+    /// <summary>The line's open handover items (#124), oldest first: what the shifts have handed on and nobody has closed.</summary>
+    public IReadOnlyList<string> HandoverItems { get; init; } = [];
+
     /// <summary>What its time was used for from the window's start (or <see cref="From"/>, if earlier) to now; empty when it doesn't track state.</summary>
     public IReadOnlyList<OverviewStateSpanDto> States { get; init; } = [];
 }

@@ -44,6 +44,9 @@ public sealed record LineDisplayLineDto
     public decimal? DownMinutes { get; init; }
     public int? UncodedStops { get; init; }
 
+    /// <summary>The line's open handover items (#124), oldest first.</summary>
+    public IReadOnlyList<string> HandoverItems { get; init; } = [];
+
     /// <summary>OEE so far this shift and its parts, in percent, with the target in force (D-073); null when not measured.</summary>
     public decimal? OeePct { get; init; }
     public decimal? AvailabilityPct { get; init; }

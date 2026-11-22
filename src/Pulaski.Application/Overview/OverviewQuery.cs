@@ -20,6 +20,9 @@ public interface IOverviewReadStore
 
     /// <summary>The site's open SPC alerts (D-099).</summary>
     Task<int> CountOpenSpcAlertsAsync(Guid siteId, CancellationToken cancellationToken);
+
+    /// <summary>The site's open handover items (#124), oldest first, by line.</summary>
+    Task<IReadOnlyList<(Guid LineId, string Body)>> ListOpenHandoverItemsAsync(Guid siteId, CancellationToken cancellationToken);
 }
 
 /// <summary>The Overview's live figures for a site (D-070).</summary>
@@ -58,6 +61,7 @@ internal sealed class GetOverviewHandler(
         var reasonIds = down.Values.SelectMany(d => d).Where(r => r.ReasonCodeId is not null).Select(r => r.ReasonCodeId!.Value).Distinct().ToList();
         var reasons = reasonIds.Count == 0 ? [] : (await oee.ListReasonsAsync(reasonIds, cancellationToken)).ToDictionary(r => r.Id);
         var (onHold, quarantine) = await store.CountHeldLotsAsync(query.SiteId, cancellationToken);
+        var handover = (await store.ListOpenHandoverItemsAsync(query.SiteId, cancellationToken)).ToLookup(i => i.LineId, i => i.Body);
 
         return new OverviewDto
         {
@@ -120,6 +124,7 @@ internal sealed class GetOverviewHandler(
                         : [],
                     UncodedStops = tracks ? OverviewFigures.Uncoded(uses.StopsOf(line.Id), scope.From, now) : null,
                     States = tracks ? OverviewFigures.Lane(uses.Of(line.Id), scope.From < window.Start ? scope.From : window.Start) : [],
+                    HandoverItems = [.. handover[line.Id]],
                 };
             })],
         };
