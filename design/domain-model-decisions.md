@@ -3031,6 +3031,22 @@ the permission that decides it (`InboxKinds`: `partial_batch` / `partial_batch.d
 links to its page (relative to the UI). The menu shows **Inbox** with a count to anyone who decides any of them (`InboxView`), recounted every
 minute and on navigation. Deciding stays on the pages that own it.
 
+### D-113 · Shift handover (#124) · *Proposed*
+
+**Context.** Nothing kept the shift's story: what happened, what is open, what the next shift must know.
+
+**Decision.**
+- **Entries per line and shift** (`core.handover_entry`, in `core` since open items change when closed, D-010): a `note` or an `open_item`, placed
+  in the shift running on the line when written (`EquipmentShifts.ShiftAt`, D-038; else the site-local day). Notes stay with their shift; open
+  items are carried until someone closes them, with what was done. Nothing is edited or deleted; each step is an event.
+- **Reading** (`GetHandoverQuery`, `GET /api/handover?siteId=&lineId=`, `floor.view`): per active line, its open items and the entries of its
+  current and previous shift (`HandoverShifts.CurrentAndPrevious`, pure: between shifts the next is current, the one that ended last
+  previous; without a schedule today and yesterday). Writers' names come from `sec.app_user` by actor id.
+- **Shown** on Operate → Handover (`/handover`), on the Overview (`OverviewLineDto.HandoverItems`, linking to the line) and on the line boards
+  (`LineDisplayLineDto.HandoverItems`, the first three).
+- **Permission** `handover.write` (Operator, Supervisor, Quality; implies `floor.view`) to write and close: `POST /api/handover/entries`,
+  `/entries/{id}/close`.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

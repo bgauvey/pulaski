@@ -70,6 +70,7 @@ internal sealed class GetLineDisplayHandler(
         Output = [.. line.Output.Select(o => new LineDisplayOutputDto(o.UomCode, o.GoodQty, o.ScrapQty))],
         DownMinutes = line.DownMinutes,
         UncodedStops = line.UncodedStops,
+        HandoverItems = line.HandoverItems,
         OeePct = oee?.Figures.OeePct,
         AvailabilityPct = oee?.Figures.AvailabilityPct,
         PerformancePct = oee?.Figures.PerformancePct,

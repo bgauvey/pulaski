@@ -230,6 +230,13 @@
                             <span class="ov-line-code">@line.Code</span>
                         }
                         <span class="ov-line-name">@line.Name</span>
+                        @if (live is { HandoverItems.Count: > 0 } handed)
+                        {
+                            @* What the shifts have handed on and nobody has closed (#124). *@
+                            <a class="ov-handover small" href="@($"handover#line-{line.Code}")" title="@string.Join("\n", handed.HandoverItems)">
+                                @Pulaski.Web.Services.Execution.HandoverView.OpenItems(handed.HandoverItems.Count)
+                            </a>
+                        }
                     </span>
 
                     <span role="cell" class="ov-live-state">

@@ -33,4 +33,10 @@ public sealed class InMemoryOverview : IOverviewReadStore
     public int OpenSpcAlerts { get; set; }
 
     public Task<int> CountOpenSpcAlertsAsync(Guid siteId, CancellationToken cancellationToken) => Task.FromResult(OpenSpcAlerts);
+
+    /// <summary>What <see cref="ListOpenHandoverItemsAsync"/> answers.</summary>
+    public List<(Guid LineId, string Body)> HandoverItems { get; } = [];
+
+    public Task<IReadOnlyList<(Guid LineId, string Body)>> ListOpenHandoverItemsAsync(Guid siteId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<(Guid LineId, string Body)>>([.. HandoverItems]);
 }

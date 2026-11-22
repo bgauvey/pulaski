@@ -206,3 +206,16 @@
     }
 
 .board-line.has-escalated-call { border-color: var(--board-down); }
+
+/* Open handover items (#124): quiet, a marker each, the text clipped to a line. */
+.board-handover {
+    margin: 0;
+    padding-left: 1.1em;
+    color: var(--board-quiet);
+}
+
+    .board-handover li {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }

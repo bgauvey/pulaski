@@ -282,6 +282,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   filled to size, cut by age/shift; start new lot; job complete now closes filling lots) print after commit via `ILineLabels` (`lot.produced`).
 - Inbox (D-112, proposed, #123): `GetInboxQuery` (`/api/me/inbox`) gathers pending partial batches, open SPC alerts, unapproved labor, ERP work
   order changes and rate proposals where the user holds the deciding permission (`InboxKinds`); links to the deciding page; menu count (`InboxView`).
+- Shift handover (D-113, proposed, #124): `core.handover_entry` (note / open_item per line + shift via `EquipmentShifts.ShiftAt`; items carried
+  until closed). `GetHandoverQuery` (current + previous shift, `HandoverShifts`), `/api/handover`, permission `handover.write`; Overview and
+  boards carry `HandoverItems`.
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the

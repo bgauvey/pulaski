@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-21 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-22 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -958,6 +958,25 @@ resolved in the last 24 hours, with who resolved them, how long they took to ans
 In detail: a call belongs to the period it was raised in. *Answered* is from the call to **I'm here** / **I'm on it** (or to **Resolve**, when
 nobody acknowledged it first); *resolved* is from the call to **Resolved**. A call is counted as escalated when it waited for someone at least
 its type's time, whether it has been answered since or not.
+
+### Hand over to the next shift
+
+**Operate → Handover** keeps each line's story from shift to shift: notes on what happened, and open items the next shift must see to.
+
+1. Open **Operate → Handover**. Each line shows its **open items**, then what was written **This shift** and in the **Last shift**.
+2. Under **Hand on to the next shift**, write what happened and click **Add a note**, or write what someone must see to and click
+   **Add an open item**.
+3. When an open item is dealt with, click **Close**, optionally say what was done, and click **Close it**.
+
+In detail:
+
+- An entry belongs to the shift running on its line when it was written (the line's shift schedule); without shifts, to the site's day.
+  **Last shift** is the one that ended before the current one; between shifts, the next one to start counts as **This shift**.
+- Notes stay with their shift. Open items stay at the top of their line, shift after shift, until someone closes them; nothing is deleted.
+- The **Overview** shows *1 open item* (or more) under a line's name, linking here, and the [line boards](#show-a-line-board-on-a-tv) list a
+  line's first three open items.
+- Writing and closing needs *handover: write* (Operator, Supervisor and Quality have it); anyone who sees the Floor can read it. The page
+  refreshes every 30 seconds.
 
 ### Use a touch screen
 
@@ -3124,6 +3143,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Planning rates from run history:** the scheduled recalculation looks at every line of a site at once, on whole days; it can't be limited to some lines or materials, or run at a set time of day. Stops can be taken out only on lines that record machine state, and a proposal accepted without review is worked out once, not again when it is accepted.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts of their own on screen (a characteristic sampled from one has a [control chart](#control-charts)).
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
+- **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
+  another note, or close an item with what was done).
 - **The inbox** gathers five kinds of decision; failed deliveries to the ERP, stops to code and andon calls stay on their own pages. It
   links to the page where an item is decided rather than deciding it in place.
 - **Alerts** come by e-mail only. Each person keeps their own; nobody can subscribe others. A lot made on hold (rather than put on hold

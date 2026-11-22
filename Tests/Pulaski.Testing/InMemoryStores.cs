@@ -114,6 +114,8 @@ public sealed class InMemoryStores
 
     public InMemoryInbox Inbox { get; } = new();
 
+    public InMemoryHandover Handover { get; } = new();
+
     public InMemoryOverview Overview { get; } = new();
 
     public InMemoryMachineHistory MachineHistory { get; } = new();
@@ -207,6 +209,8 @@ public sealed class InMemoryStores
         services.RemoveAll<Application.Execution.ILineOutputRepository>();
         services.RemoveAll<Application.Execution.ILineLabels>();
         services.RemoveAll<Application.Inbox.IInboxReadStore>();
+        services.RemoveAll<Application.Handover.IHandoverRepository>();
+        services.RemoveAll<Application.Handover.IHandoverReadStore>();
         services.RemoveAll<IOverviewReadStore>();
         services.RemoveAll<IMachineHistoryReadStore>();
         services.RemoveAll<IQualificationRepository>();
@@ -294,6 +298,8 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Execution.ILineOutputRepository>(LineOutput);
         services.AddSingleton<Application.Execution.ILineLabels>(LineLabels);
         services.AddSingleton<Application.Inbox.IInboxReadStore>(Inbox);
+        services.AddSingleton<Application.Handover.IHandoverRepository>(Handover);
+        services.AddSingleton<Application.Handover.IHandoverReadStore>(Handover);
         services.AddSingleton<IOverviewReadStore>(Overview);
         services.AddSingleton<IMachineHistoryReadStore>(MachineHistory);
         services.AddSingleton<IQualificationRepository>(Labor);

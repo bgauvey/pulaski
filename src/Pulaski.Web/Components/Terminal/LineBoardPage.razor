@@ -58,6 +58,20 @@ else
                 {
                     <div class="board-stop">@stop</div>
                 }
+                @* Open handover items (#124): what the shifts have handed on and nobody has closed. *@
+                @if (line.HandoverItems.Count > 0)
+                {
+                    <ul class="board-handover">
+                        @foreach (var item in line.HandoverItems.Take(3))
+                        {
+                            <li>@item</li>
+                        }
+                        @if (line.HandoverItems.Count > 3)
+                        {
+                            <li class="board-quiet">and @(line.HandoverItems.Count - 3) more</li>
+                        }
+                    </ul>
+                }
                 @* Calls for help (#158): what each waits for, the escalated ones in red. *@
                 @foreach (var call in line.Calls)
                 {

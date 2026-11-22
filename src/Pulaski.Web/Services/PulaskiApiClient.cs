@@ -1492,6 +1492,16 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     // OEE targets (D-073)
 
+    /// <summary>A site's shift handover (#124): each line's open items, current and previous shift.</summary>
+    public Task<Pulaski.Contracts.Handover.HandoverDto> GetHandoverAsync(Guid siteId, Guid? lineId = null, CancellationToken ct = default) =>
+        GetAsync<Pulaski.Contracts.Handover.HandoverDto>(lineId is { } line ? $"api/handover?siteId={siteId}&lineId={line}" : $"api/handover?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> AddHandoverEntryAsync(Pulaski.Contracts.Handover.AddHandoverEntryRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/handover/entries", request, ct);
+
+    public Task<VersionResponse> CloseHandoverItemAsync(Guid id, Pulaski.Contracts.Handover.CloseHandoverItemRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/handover/entries/{id}/close", request, ct);
+
     /// <summary>What waits for the signed-in user to decide (#123).</summary>
     public Task<Pulaski.Contracts.Inbox.InboxDto> GetInboxAsync(CancellationToken ct = default) => GetAsync<Pulaski.Contracts.Inbox.InboxDto>("api/me/inbox", ct);
 
